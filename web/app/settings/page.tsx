@@ -135,6 +135,11 @@ const sections: SettingSection[] = [
   },
 ];
 
+const quickLinks = sections.map((section) => ({
+  id: section.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+  label: section.title,
+}));
+
 function renderField(field: SettingField) {
   if (field.kind === "toggle") {
     return (
@@ -205,12 +210,20 @@ export default function SettingsPage() {
             <span>Focus</span>
             <strong>Defaults + rules</strong>
           </div>
+          <div className="settings-nav">
+            <span className="settings-nav__label">Jump to</span>
+            {quickLinks.map((link) => (
+              <a key={link.id} href={`#${link.id}`}>
+                {link.label}
+              </a>
+            ))}
+          </div>
         </aside>
       </section>
 
       <section className="settings-grid">
         {sections.map((section) => (
-          <article key={section.title} className="settings-card glass">
+          <article key={section.title} id={section.title.toLowerCase().replace(/[^a-z0-9]+/g, "-")} className="settings-card glass">
             <div className="settings-card__head">
               <div>
                 <p className="eyebrow">{section.eyebrow}</p>
