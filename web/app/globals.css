@@ -706,23 +706,37 @@ label {
 }
 
 .transactions-topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
+  display: grid;
+  gap: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--stroke);
 }
 
-.transactions-top-actions {
+.transactions-toolbar-row {
+  display: grid;
+  gap: 12px;
+}
+
+.transactions-toolbar-row--top {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.transactions-toolbar-row--bottom {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.transactions-toolbar-group {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-.transactions-top-actions--right {
+.transactions-toolbar-group--right {
   justify-content: flex-end;
-  margin-left: auto;
+  justify-self: end;
 }
 
 .transactions-action-button {
@@ -1281,6 +1295,22 @@ label {
 
 .transactions-page .transactions-toolbar-chip.button-secondary .button-icon {
   color: #111111;
+}
+
+.transactions-summary-toggle-button {
+  width: 38px;
+  min-width: 38px;
+  padding-inline: 0;
+  justify-content: center;
+}
+
+.transactions-summary-toggle-button .button-icon {
+  margin-right: 0;
+}
+
+.transactions-summary-toggle-button .button-icon svg {
+  width: 15px;
+  height: 15px;
 }
 
 .transactions-page .transactions-toolbar-add.button-primary {

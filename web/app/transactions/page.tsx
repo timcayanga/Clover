@@ -366,6 +366,8 @@ function ActionIcon({
 export default function TransactionsPage() {
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const addMenuRef = useRef<HTMLDivElement>(null);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
@@ -454,6 +456,36 @@ export default function TransactionsPage() {
     setSelectedTransaction(null);
     setDetailDraft(null);
   }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (addMenuRef.current?.contains(target) || downloadMenuRef.current?.contains(target)) {
+        return;
+      }
+
+      setAddMenuOpen(false);
+      setDownloadMenuOpen(false);
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAddMenuOpen(false);
+        setDownloadMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   const ensureDefaultAccount = async (workspaceId: string) => {
     if (accounts.length > 0) {
@@ -860,159 +892,151 @@ export default function TransactionsPage() {
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`}>
         <div className="glass table-panel table-panel--full transactions-table-panel transactions-main-panel">
           <div className="transactions-topbar">
-            <div className="transactions-top-actions">
-              <div className="transactions-add-menu" id="transactions-add-menu">
+            <div className="transactions-toolbar-row transactions-toolbar-row--top">
+              <div className="transactions-toolbar-spacer" aria-hidden="true" />
+              <div className="transactions-toolbar-group transactions-toolbar-group--right">
                 <button
-                  className="button button-primary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
-                  style={toolbarAddStyle}
+                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-search-trigger"
+                  style={toolbarChipStyle}
                   type="button"
-                  onClick={() => setAddMenuOpen((current) => !current)}
-                  aria-expanded={addMenuOpen}
+                  onClick={() => searchInputRef.current?.focus()}
+                  title="Search"
                 >
                   <span className="button-icon" aria-hidden="true">
-                    <ActionIcon name="plus" />
+                    <ActionIcon name="search" />
                   </span>
-                  <span>Add</span>
-                  <span className="button-icon" aria-hidden="true">
-                    <ActionIcon name="chevron-down" />
-                  </span>
+                  <span>Search</span>
                 </button>
-                <div className="transactions-add-menu__panel" hidden={!addMenuOpen}>
-                  <button className="transactions-add-menu__item" type="button" onClick={openManualAdd}>
-                    Add transaction
-                  </button>
-                  <button className="transactions-add-menu__item" type="button" onClick={() => router.push("/imports")}>
-                    Import files
-                  </button>
-                </div>
-              </div>
-
-              {selectedTransactionIds.length > 0 ? (
                 <button
                   className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
                   style={toolbarChipStyle}
                   type="button"
-                  title={`Bulk edit ${selectedTransactionIds.length} selected transaction${selectedTransactionIds.length === 1 ? "" : "s"}`}
-                  onClick={openBulkEdit}
+                  title={dateFilterLabel}
+                  onClick={() => setDateFilterOpen(true)}
                 >
                   <span className="button-icon" aria-hidden="true">
-                    ☰
+                    <ActionIcon name="calendar" />
                   </span>
-                  <span>Bulk edit ({selectedTransactionIds.length})</span>
+                  <span>Date</span>
                 </button>
-              ) : null}
-
-              <button
-                className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
-                style={toolbarChipStyle}
-                type="button"
-                title="Undo"
-              >
-                <span className="button-icon" aria-hidden="true">
-                  <ActionIcon name="undo" />
-                </span>
-                Undo
-              </button>
-              <button
-                className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
-                style={toolbarChipStyle}
-                type="button"
-                title="Redo"
-              >
-                <span className="button-icon" aria-hidden="true">
-                  <ActionIcon name="redo" />
-                </span>
-                Redo
-              </button>
-            </div>
-
-            <div className="transactions-top-actions transactions-top-actions--right">
-              <button
-                className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-search-trigger"
-                style={toolbarChipStyle}
-                type="button"
-                onClick={() => searchInputRef.current?.focus()}
-                title="Search"
-              >
-                <span className="button-icon" aria-hidden="true">
-                  <ActionIcon name="search" />
-                </span>
-                <span>Search</span>
-              </button>
-              <button
-                className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
-                style={toolbarChipStyle}
-                type="button"
-                title={dateFilterLabel}
-                onClick={() => setDateFilterOpen(true)}
-              >
-                <span className="button-icon" aria-hidden="true">
-                  <ActionIcon name="calendar" />
-                </span>
-                <span>Date</span>
-              </button>
-              <button
-                className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
-                style={toolbarChipStyle}
-                type="button"
-                title="Filters"
-                onClick={() => setFilterOpen(true)}
-              >
-                <span className="button-icon" aria-hidden="true">
-                  <ActionIcon name="filters" />
-                </span>
-                <span>Filters</span>
-              </button>
-              <button
-                className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-summary-toggle-button"
-                style={toolbarChipStyle}
-                type="button"
-                aria-pressed={summaryOpen}
-                onClick={() => setSummaryOpen((current) => !current)}
-                title="Summary"
-              >
-                <span className="button-icon" aria-hidden="true">
-                  <ActionIcon name="summary" />
-                </span>
-                <span>Summary</span>
-              </button>
-              <button
-                className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
-                style={toolbarChipStyle}
-                type="button"
-                onClick={saveView}
-                title="Save view"
-              >
-                <span className="button-icon" aria-hidden="true">
-                  <ActionIcon name="save" />
-                </span>
-                <span>Save View</span>
-              </button>
-              <div className="transactions-download-menu" id="transactions-download-menu">
                 <button
-                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-download-menu__toggle"
+                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
                   style={toolbarChipStyle}
                   type="button"
-                  aria-haspopup="menu"
-                  aria-expanded={downloadMenuOpen}
-                  onClick={() => setDownloadMenuOpen((current) => !current)}
-                  title="Download"
+                  title="Filters"
+                  onClick={() => setFilterOpen(true)}
                 >
                   <span className="button-icon" aria-hidden="true">
-                    <ActionIcon name="download" />
+                    <ActionIcon name="filters" />
                   </span>
-                  <span>Download</span>
+                  <span>Filters</span>
+                </button>
+                <button
+                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-summary-toggle-button"
+                  style={toolbarChipStyle}
+                  type="button"
+                  aria-pressed={summaryOpen}
+                  onClick={() => setSummaryOpen((current) => !current)}
+                  title="Summary"
+                  aria-label="Summary"
+                >
                   <span className="button-icon" aria-hidden="true">
-                    <ActionIcon name="chevron-down" />
+                    <ActionIcon name="summary" />
                   </span>
                 </button>
-                <div className="transactions-download-menu__panel" hidden={!downloadMenuOpen}>
-                  <button className="transactions-download-menu__item" type="button" onClick={downloadCsv}>
-                    CSV
+              </div>
+            </div>
+
+            <div className="transactions-toolbar-row transactions-toolbar-row--bottom">
+              <div className="transactions-toolbar-group transactions-toolbar-group--left">
+                <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef}>
+                  <button
+                    className="button button-primary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
+                    style={toolbarAddStyle}
+                    type="button"
+                    onClick={() => setAddMenuOpen((current) => !current)}
+                    aria-expanded={addMenuOpen}
+                  >
+                    <span className="button-icon" aria-hidden="true">
+                      <ActionIcon name="plus" />
+                    </span>
+                    <span>Add</span>
+                    <span className="button-icon" aria-hidden="true">
+                      <ActionIcon name="chevron-down" />
+                    </span>
                   </button>
-                  <button className="transactions-download-menu__item" type="button" onClick={downloadPdf}>
-                    PDF
+                  <div className="transactions-add-menu__panel" hidden={!addMenuOpen}>
+                    <button className="transactions-add-menu__item" type="button" onClick={openManualAdd}>
+                      Add transaction
+                    </button>
+                    <button className="transactions-add-menu__item" type="button" onClick={() => router.push("/imports")}>
+                      Import files
+                    </button>
+                  </div>
+                </div>
+                <button
+                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+                  style={toolbarChipStyle}
+                  type="button"
+                  title="Undo"
+                >
+                  <span className="button-icon" aria-hidden="true">
+                    <ActionIcon name="undo" />
+                  </span>
+                  <span>Undo</span>
+                </button>
+                <button
+                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+                  style={toolbarChipStyle}
+                  type="button"
+                  title="Redo"
+                >
+                  <span className="button-icon" aria-hidden="true">
+                    <ActionIcon name="redo" />
+                  </span>
+                  <span>Redo</span>
+                </button>
+              </div>
+
+              <div className="transactions-toolbar-group transactions-toolbar-group--right">
+                <button
+                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+                  style={toolbarChipStyle}
+                  type="button"
+                  onClick={saveView}
+                  title="Save view"
+                >
+                  <span className="button-icon" aria-hidden="true">
+                    <ActionIcon name="save" />
+                  </span>
+                  <span>Save View</span>
+                </button>
+                <div className="transactions-download-menu" id="transactions-download-menu" ref={downloadMenuRef}>
+                  <button
+                    className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-download-menu__toggle"
+                    style={toolbarChipStyle}
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={downloadMenuOpen}
+                    onClick={() => setDownloadMenuOpen((current) => !current)}
+                    title="Download"
+                  >
+                    <span className="button-icon" aria-hidden="true">
+                      <ActionIcon name="download" />
+                    </span>
+                    <span>Download</span>
+                    <span className="button-icon" aria-hidden="true">
+                      <ActionIcon name="chevron-down" />
+                    </span>
                   </button>
+                  <div className="transactions-download-menu__panel" hidden={!downloadMenuOpen}>
+                    <button className="transactions-download-menu__item" type="button" onClick={downloadCsv}>
+                      CSV
+                    </button>
+                    <button className="transactions-download-menu__item" type="button" onClick={downloadPdf}>
+                      PDF
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1080,9 +1104,23 @@ export default function TransactionsPage() {
             </span>
             <div className="transactions-status-line__meta">
               {selectedTransactionIds.length > 0 ? (
-                <button className="pill pill-neutral transactions-clear-selection" type="button" onClick={clearSelection}>
-                  {selectedTransactionIds.length} selected · clear
-                </button>
+                <>
+                  <button className="pill pill-neutral transactions-clear-selection" type="button" onClick={clearSelection}>
+                    {selectedTransactionIds.length} selected · clear
+                  </button>
+                  <button
+                    className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+                    style={toolbarChipStyle}
+                    type="button"
+                    title={`Bulk edit ${selectedTransactionIds.length} selected transaction${selectedTransactionIds.length === 1 ? "" : "s"}`}
+                    onClick={openBulkEdit}
+                  >
+                    <span className="button-icon" aria-hidden="true">
+                      <ActionIcon name="filters" />
+                    </span>
+                    <span>Bulk edit</span>
+                  </button>
+                </>
               ) : null}
               <span className="pill pill-neutral">{imports.length} import file{imports.length === 1 ? "" : "s"}</span>
               <span className="pill pill-neutral">{dateFilterLabel}</span>
