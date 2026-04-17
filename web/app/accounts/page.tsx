@@ -416,11 +416,6 @@ export default function AccountsPage() {
   const accountGroups = useMemo(() => {
     const groups = [
       {
-        title: "Cash",
-        tone: "cash",
-        rows: searchedAccounts.filter((account) => account.type === "cash"),
-      },
-      {
         title: "Banks & savings",
         tone: "assets",
         rows: searchedAccounts.filter((account) => account.type === "bank" || account.type === "wallet" || account.type === "investment"),
@@ -434,6 +429,11 @@ export default function AccountsPage() {
         title: "Imported & other",
         tone: "neutral",
         rows: searchedAccounts.filter((account) => account.type === "other"),
+      },
+      {
+        title: "Cash",
+        tone: "cash",
+        rows: searchedAccounts.filter((account) => account.type === "cash"),
       },
     ];
 
@@ -994,10 +994,12 @@ export default function AccountsPage() {
                 <span>Last updated</span>
                 <strong>{formatDate(selectedAccount.updatedAt)}</strong>
               </div>
-              <div>
-                <span>Institution</span>
-                <strong>{selectedAccount.institution ?? "No institution"}</strong>
-              </div>
+              {selectedAccount.type !== "cash" ? (
+                <div>
+                  <span>Institution</span>
+                  <strong>{selectedAccount.institution ?? "No institution"}</strong>
+                </div>
+              ) : null}
               <div>
                 <span>Status</span>
                 <strong>{getAccountWarning(selectedAccount, duplicateCounts.get(`${selectedAccount.name.trim().toLowerCase()}::${(selectedAccount.institution ?? "").trim().toLowerCase()}`) ?? 0) ?? "Ready"}</strong>
