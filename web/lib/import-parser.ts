@@ -78,6 +78,22 @@ const splitLine = (line: string, delimiter: string) => {
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
+const normalizeBpiText = (text: string) =>
+  text
+    .split(/\r?\n/)
+    .map((line) => {
+      const normalized = normalizeWhitespace(line);
+      if (!normalized) {
+        return normalized;
+      }
+
+      const tokens = normalized.split(" ");
+      const singleCharacterTokens = tokens.filter((token) => /^[A-Za-z0-9]$/.test(token)).length;
+      const looksCharacterSpaced = tokens.length >= 6 && singleCharacterTokens / tokens.length >= 0.65;
+      return looksCharacterSpaced ? tokens.join("") : normalized;
+    })
+    .join("\n");
+
 const parseMoney = (value?: string | null) => {
   if (!value) return null;
   const parsed = Number(String(value).replace(/[^0-9.-]/g, ""));
@@ -174,8 +190,8 @@ const monthIndexByAbbr: Record<string, number> = {
 };
 
 const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null => {
-  const normalized = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
-  if (!/BANK OF THE PHILIPPINE ISLANDS|\bBPI\b/i.test(normalized)) {
+  const normalized = normalizeBpiText(text).trim();
+  if (!/BANK OF THE PHILIPPINE ISLANDS|\bBPI\b|FORBES\s*PARK\s*SAVINGS\s*BET\-?PHP/i.test(normalized)) {
     return null;
   }
 
@@ -228,7 +244,7 @@ const parseBpiTransactionLine = (
   }
 ) => {
   const normalized = normalizeWhitespace(line);
-  const match = normalized.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(.+)$/i);
+  const match = normalized.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2})\s*(.+)$/i);
 
   if (!match) {
     return null;
@@ -252,7 +268,7 @@ const parseBpiTransactionLine = (
   }
 
   const description = normalized
-    .replace(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+/i, "")
+    .replace(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*\d{1,2}\s*/i, "")
     .replace(/[0-9][0-9,]*\.\d{2}/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
@@ -295,12 +311,13 @@ const parseBpiTransactionLine = (
 };
 
 const parseBpiImportText = (text: string) => {
-  const metadata = bpiStatementMetadata(text);
+  const normalizedText = normalizeBpiText(text);
+  const metadata = bpiStatementMetadata(normalizedText);
   if (!metadata) {
     return null;
   }
 
-  const lines = text
+  const lines = normalizedText
     .split(/\r?\n/)
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
