@@ -26,7 +26,7 @@ export const processImportFileText = async (importFileId: string, text: string) 
   const template = await upsertStatementTemplate({
     workspaceId: importFile.workspaceId,
     fingerprint: statementFingerprint,
-    metadata,
+      metadata,
   });
 
   const rows = await enrichParsedRowsWithTraining({
@@ -54,7 +54,7 @@ export const processImportFileText = async (importFileId: string, text: string) 
       confidence: row.confidence ?? 0,
       categoryReason: row.categoryReason ?? null,
       parserVersion: row.parserVersion ?? DATA_ENGINE_VERSION,
-      statementFingerprint: template.fingerprint,
+      statementFingerprint: template?.fingerprint ?? statementFingerprint,
       rawPayload: (row.rawPayload ?? {}) as Prisma.InputJsonValue,
     })),
   });

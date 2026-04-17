@@ -154,6 +154,17 @@ export const detectStatementMetadataFromText = (text: string) => {
   };
 };
 
+export const isMissingDatabaseRelationError = (error: unknown, tableName: string) => {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const code = "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
+  const combined = `${code} ${message}`.toLowerCase();
+  return combined.includes(tableName.toLowerCase()) && (combined.includes("does not exist") || code === "p2021");
+};
+
 export const buildStatementFingerprint = (
   text: string,
   metadata: ReturnType<typeof detectStatementMetadataFromText>,
@@ -275,31 +286,39 @@ export const upsertStatementTemplate = async (params: {
   fingerprint: string;
   metadata: ReturnType<typeof detectStatementMetadataFromText>;
 }) => {
-  return prisma.statementTemplate.upsert({
-    where: {
-      workspaceId_fingerprint: {
+  try {
+    return await prisma.statementTemplate.upsert({
+      where: {
+        workspaceId_fingerprint: {
+          workspaceId: params.workspaceId,
+          fingerprint: params.fingerprint,
+        },
+      },
+      update: {
+        institution: params.metadata.institution,
+        accountNumber: params.metadata.accountNumber,
+        accountName: params.metadata.accountName,
+        metadata: params.metadata as Prisma.InputJsonValue,
+        exampleCount: { increment: 1 },
+        lastSeenAt: new Date(),
+      },
+      create: {
         workspaceId: params.workspaceId,
         fingerprint: params.fingerprint,
+        institution: params.metadata.institution,
+        accountNumber: params.metadata.accountNumber,
+        accountName: params.metadata.accountName,
+        metadata: params.metadata as Prisma.InputJsonValue,
+        parserVersion: DATA_ENGINE_VERSION,
       },
-    },
-    update: {
-      institution: params.metadata.institution,
-      accountNumber: params.metadata.accountNumber,
-      accountName: params.metadata.accountName,
-      metadata: params.metadata as Prisma.InputJsonValue,
-      exampleCount: { increment: 1 },
-      lastSeenAt: new Date(),
-    },
-    create: {
-      workspaceId: params.workspaceId,
-      fingerprint: params.fingerprint,
-      institution: params.metadata.institution,
-      accountNumber: params.metadata.accountNumber,
-      accountName: params.metadata.accountName,
-      metadata: params.metadata as Prisma.InputJsonValue,
-      parserVersion: DATA_ENGINE_VERSION,
-    },
-  });
+    });
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
+      return null;
+    }
+
+    throw error;
+  }
 };
 
 export const recordTrainingSignal = async (params: {
