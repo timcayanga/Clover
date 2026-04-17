@@ -262,14 +262,30 @@ export const classifyMerchant = (params: {
 };
 
 export const loadTrainingSignals = async (workspaceId: string) => {
-  const signals = await prisma.trainingSignal.findMany({
-    where: { workspaceId },
-    include: {
-      category: true,
-    },
-    orderBy: { createdAt: "desc" },
-    take: 500,
-  });
+  let signals: Array<{
+    categoryId: string;
+    categoryName: string | null;
+    merchantKey: string;
+    merchantTokens: Prisma.JsonValue | null;
+    source: string;
+    confidence: number;
+    category: { name: string };
+  }> = [];
+
+  try {
+    signals = await prisma.trainingSignal.findMany({
+      where: { workspaceId },
+      include: {
+        category: true,
+      },
+      orderBy: { createdAt: "desc" },
+      take: 500,
+    });
+  } catch (error) {
+    if (!isMissingDatabaseRelationError(error, "TrainingSignal")) {
+      throw error;
+    }
+  }
 
   return signals.map((signal) => ({
     categoryId: signal.categoryId,
@@ -336,21 +352,29 @@ export const recordTrainingSignal = async (params: {
   const merchantKey = normalizeMerchantText(params.merchantText);
   const merchantTokens = tokenizeMerchant(params.merchantText);
 
-  return prisma.trainingSignal.create({
-    data: {
-      workspaceId: params.workspaceId,
-      importFileId: params.importFileId ?? null,
-      transactionId: params.transactionId ?? null,
-      source: params.source,
-      merchantKey,
-      merchantTokens: merchantTokens as Prisma.InputJsonValue,
-      categoryId: params.categoryId,
-      categoryName: params.categoryName ?? null,
-      type: params.type,
-      confidence: params.confidence ?? 100,
-      notes: params.notes ?? null,
-    },
-  });
+  try {
+    return await prisma.trainingSignal.create({
+      data: {
+        workspaceId: params.workspaceId,
+        importFileId: params.importFileId ?? null,
+        transactionId: params.transactionId ?? null,
+        source: params.source,
+        merchantKey,
+        merchantTokens: merchantTokens as Prisma.InputJsonValue,
+        categoryId: params.categoryId,
+        categoryName: params.categoryName ?? null,
+        type: params.type,
+        confidence: params.confidence ?? 100,
+        notes: params.notes ?? null,
+      },
+    });
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "TrainingSignal")) {
+      return null;
+    }
+
+    throw error;
+  }
 };
 
 export const enrichParsedRowsWithTraining = async (params: {
