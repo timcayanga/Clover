@@ -250,6 +250,20 @@ const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => 
   isTransfer: transaction.isTransfer,
 });
 
+const toolbarChipStyle = {
+  backgroundColor: "#f2f5f7",
+  borderColor: "#b8c0c5",
+  color: "#111111",
+  boxShadow: "none",
+} as const;
+
+const toolbarAddStyle = {
+  backgroundColor: "#03a8c0",
+  borderColor: "#03a8c0",
+  color: "#ffffff",
+  boxShadow: "none",
+} as const;
+
 function ActionIcon({
   name,
 }: {
@@ -850,6 +864,7 @@ export default function TransactionsPage() {
               <div className="transactions-add-menu" id="transactions-add-menu">
                 <button
                   className="button button-primary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
+                  style={toolbarAddStyle}
                   type="button"
                   onClick={() => setAddMenuOpen((current) => !current)}
                   aria-expanded={addMenuOpen}
@@ -875,6 +890,7 @@ export default function TransactionsPage() {
               {selectedTransactionIds.length > 0 ? (
                 <button
                   className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+                  style={toolbarChipStyle}
                   type="button"
                   title={`Bulk edit ${selectedTransactionIds.length} selected transaction${selectedTransactionIds.length === 1 ? "" : "s"}`}
                   onClick={openBulkEdit}
@@ -886,13 +902,23 @@ export default function TransactionsPage() {
                 </button>
               ) : null}
 
-              <button className="button button-secondary button-small transactions-action-button transactions-toolbar-chip" type="button" title="Undo">
+              <button
+                className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+                style={toolbarChipStyle}
+                type="button"
+                title="Undo"
+              >
                 <span className="button-icon" aria-hidden="true">
                   <ActionIcon name="undo" />
                 </span>
                 Undo
               </button>
-              <button className="button button-secondary button-small transactions-action-button transactions-toolbar-chip" type="button" title="Redo">
+              <button
+                className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+                style={toolbarChipStyle}
+                type="button"
+                title="Redo"
+              >
                 <span className="button-icon" aria-hidden="true">
                   <ActionIcon name="redo" />
                 </span>
@@ -903,6 +929,7 @@ export default function TransactionsPage() {
             <div className="transactions-top-actions transactions-top-actions--right">
               <button
                 className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-search-trigger"
+                style={toolbarChipStyle}
                 type="button"
                 onClick={() => searchInputRef.current?.focus()}
                 title="Search"
@@ -914,6 +941,7 @@ export default function TransactionsPage() {
               </button>
               <button
                 className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+                style={toolbarChipStyle}
                 type="button"
                 title={dateFilterLabel}
                 onClick={() => setDateFilterOpen(true)}
@@ -925,6 +953,7 @@ export default function TransactionsPage() {
               </button>
               <button
                 className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+                style={toolbarChipStyle}
                 type="button"
                 title="Filters"
                 onClick={() => setFilterOpen(true)}
@@ -936,6 +965,7 @@ export default function TransactionsPage() {
               </button>
               <button
                 className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-summary-toggle-button"
+                style={toolbarChipStyle}
                 type="button"
                 aria-pressed={summaryOpen}
                 onClick={() => setSummaryOpen((current) => !current)}
@@ -946,7 +976,13 @@ export default function TransactionsPage() {
                 </span>
                 <span>Summary</span>
               </button>
-              <button className="button button-secondary button-small transactions-action-button transactions-toolbar-chip" type="button" onClick={saveView} title="Save view">
+              <button
+                className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+                style={toolbarChipStyle}
+                type="button"
+                onClick={saveView}
+                title="Save view"
+              >
                 <span className="button-icon" aria-hidden="true">
                   <ActionIcon name="save" />
                 </span>
@@ -955,6 +991,7 @@ export default function TransactionsPage() {
               <div className="transactions-download-menu" id="transactions-download-menu">
                 <button
                   className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-download-menu__toggle"
+                  style={toolbarChipStyle}
                   type="button"
                   aria-haspopup="menu"
                   aria-expanded={downloadMenuOpen}
