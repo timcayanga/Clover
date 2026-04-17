@@ -1,7 +1,7 @@
-import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { confirmImportFile } from "@/workers/import-processor";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { fetchImportFileCompat } from "@/lib/data-engine";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -17,12 +17,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ imp
     const { userId } = await requireAuth();
     const payload = confirmSchema.parse(await request.json());
 
-    const importFile = await prisma.importFile.findUnique({ where: { id: importId } });
+    const importFile = await fetchImportFileCompat(importId);
     if (!importFile) {
       return NextResponse.json({ error: "Import not found" }, { status: 404 });
     }
 
-    await assertWorkspaceAccess(userId, importFile.workspaceId);
+    await assertWorkspaceAccess(userId, importFile.workspaceId as string);
 
     const result = await confirmImportFile(importId, payload.accountId);
     return NextResponse.json({ ok: true, result });

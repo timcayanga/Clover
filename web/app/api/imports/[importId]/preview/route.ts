@@ -1,7 +1,6 @@
-import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { fetchParsedTransactionRows } from "@/lib/data-engine";
+import { fetchImportFileCompat, fetchParsedTransactionRows } from "@/lib/data-engine";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -11,15 +10,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     const { importId } = await params;
     const { userId } = await requireAuth();
 
-    const importFile = await prisma.importFile.findUnique({
-      where: { id: importId },
-    });
+    const importFile = await fetchImportFileCompat(importId);
 
     if (!importFile) {
       return NextResponse.json({ error: "Import not found" }, { status: 404 });
     }
 
-    await assertWorkspaceAccess(userId, importFile.workspaceId);
+    await assertWorkspaceAccess(userId, importFile.workspaceId as string);
     const parsedRows = await fetchParsedTransactionRows(importId);
 
     return NextResponse.json({

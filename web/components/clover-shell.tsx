@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 
 type CloverShellProps = {
-  active: "overview" | "accounts" | "transactions" | "reports" | "settings";
+  active: "overview" | "accounts" | "transactions" | "reports" | "insights" | "settings";
   title: string;
   kicker?: string;
   subtitle?: string;
@@ -16,9 +16,10 @@ const navItems = [
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/dashboard#analytics", label: "Reports", key: "reports" as const },
+  { href: "/dashboard#insights", label: "Insights", key: "insights" as const },
 ];
 
-type IconName = "overview" | "accounts" | "transactions" | "reports" | "settings";
+type IconName = "overview" | "accounts" | "transactions" | "reports" | "insights" | "settings";
 
 function MenuIcon({ name }: { name: IconName }) {
   const common = {
@@ -69,6 +70,13 @@ function MenuIcon({ name }: { name: IconName }) {
           <path d="M12 15.5V6.5" />
           <path d="M18 15.5v-5" />
           <path d="M6 15.5h12" />
+        </svg>
+      );
+    case "insights":
+      return (
+        <svg {...common}>
+          <path d="M12 3.5l1.87 4.63L18.5 10l-4.63 1.87L12 16.5l-1.87-4.63L5.5 10l4.63-1.87L12 3.5Z" />
+          <path d="M19.5 14l.95 2.35L22.5 17l-2.05.65L19.5 20l-.95-2.35L16.5 17l2.05-.65L19.5 14Z" />
         </svg>
       );
     case "settings":

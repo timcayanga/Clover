@@ -88,6 +88,21 @@ const PARSED_TRANSACTION_COLUMNS = [
   "createdAt",
 ] as const;
 
+const IMPORT_FILE_COLUMNS = [
+  "id",
+  "workspaceId",
+  "accountId",
+  "fileName",
+  "fileType",
+  "storageKey",
+  "status",
+  "confirmedAt",
+  "uploadedAt",
+  "deletedAt",
+  "createdAt",
+  "updatedAt",
+] as const;
+
 const fnv1a = (value: string) => {
   let hash = 0x811c9dc5;
 
@@ -234,6 +249,133 @@ export const getCompatibleParsedTransactionColumns = async () => {
   const compatible = PARSED_TRANSACTION_COLUMNS.filter((column) => existing.has(column));
   columnCache.set(cacheKey, compatible as string[]);
   return compatible as string[];
+};
+
+export const getCompatibleImportFileColumns = async () => {
+  const cacheKey = "ImportFile";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'ImportFile'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = IMPORT_FILE_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const buildImportFileInsertData = async (params: {
+  workspaceId: string;
+  accountId?: string | null;
+  fileName: string;
+  fileType: string;
+  storageKey: string;
+  status?: string;
+}) => {
+  const columns = new Set(await getCompatibleImportFileColumns());
+  const record: Record<string, unknown> = {};
+
+  if (columns.has("id")) record.id = crypto.randomUUID();
+  if (columns.has("workspaceId")) record.workspaceId = params.workspaceId;
+  if (columns.has("accountId")) record.accountId = params.accountId ?? null;
+  if (columns.has("fileName")) record.fileName = params.fileName;
+  if (columns.has("fileType")) record.fileType = params.fileType;
+  if (columns.has("storageKey")) record.storageKey = params.storageKey;
+  if (columns.has("status")) record.status = params.status ?? "processing";
+  if (columns.has("confirmedAt")) record.confirmedAt = null;
+  if (columns.has("uploadedAt")) record.uploadedAt = new Date();
+  if (columns.has("deletedAt")) record.deletedAt = null;
+  if (columns.has("createdAt")) record.createdAt = new Date();
+  if (columns.has("updatedAt")) record.updatedAt = new Date();
+
+  return record;
+};
+
+export const insertImportFileCompat = async (params: {
+  workspaceId: string;
+  accountId?: string | null;
+  fileName: string;
+  fileType: string;
+  storageKey: string;
+  status?: string;
+}): Promise<any> => {
+  const record = await buildImportFileInsertData(params);
+  const columns = Object.keys(record);
+  if (columns.length === 0) {
+    return null;
+  }
+
+  const values = columns.map((column) => record[column] ?? null);
+  const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "ImportFile" (${columns.map((column) => `"${column}"`).join(", ")}) VALUES (${placeholders})`,
+    ...values
+  );
+
+  return record;
+};
+
+export const fetchImportFileCompat = async (importFileId: string): Promise<any | null> => {
+  const columns = await getCompatibleImportFileColumns();
+  if (columns.length === 0) {
+    return null;
+  }
+
+  const selectColumns = columns.map((column) => `"${column}"`).join(", ");
+  const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT ${selectColumns} FROM "ImportFile" WHERE "id" = $1 LIMIT 1`,
+    importFileId
+  );
+
+  return rows[0] ?? null;
+};
+
+export const listImportFilesCompat = async (workspaceId: string): Promise<any[]> => {
+  const columns = await getCompatibleImportFileColumns();
+  if (columns.length === 0) {
+    return [];
+  }
+
+  const selectColumns = columns.map((column) => `"${column}"`).join(", ");
+  const orderBy = columns.includes("uploadedAt")
+    ? ' ORDER BY "uploadedAt" DESC'
+    : columns.includes("createdAt")
+      ? ' ORDER BY "createdAt" DESC'
+      : ' ORDER BY "id" DESC';
+
+  return prisma.$queryRawUnsafe<any[]>(
+    `SELECT ${selectColumns} FROM "ImportFile" WHERE "workspaceId" = $1${orderBy}`,
+    workspaceId
+  );
+};
+
+export const updateImportFileCompat = async (
+  importFileId: string,
+  data: Partial<Record<string, unknown>>
+): Promise<any | null> => {
+  const columns = new Set(await getCompatibleImportFileColumns());
+  const entries = Object.entries(data).filter(([key, value]) => columns.has(key) && value !== undefined);
+  if (columns.has("updatedAt")) {
+    entries.push(["updatedAt", new Date()]);
+  }
+
+  if (entries.length > 0) {
+    const setClause = entries.map(([key], index) => `"${key}" = $${index + 1}`).join(", ");
+    const values = entries.map(([, value]) => value);
+    await prisma.$executeRawUnsafe(
+      `UPDATE "ImportFile" SET ${setClause} WHERE "id" = $${entries.length + 1}`,
+      ...values,
+      importFileId
+    );
+  }
+
+  return fetchImportFileCompat(importFileId);
 };
 
 export const buildParsedTransactionInsertData = async (params: {

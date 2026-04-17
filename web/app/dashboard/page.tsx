@@ -203,7 +203,7 @@ export default async function DashboardPage() {
         </article>
       </section>
 
-      <section className="overview-insight-grid">
+      <section className="overview-insight-grid" id="insights">
         <article className="glass insight-card overview-panel overview-panel--large">
           <p className="eyebrow">Insights</p>
           <h4>What stands out right now</h4>

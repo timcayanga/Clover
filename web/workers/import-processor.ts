@@ -6,18 +6,18 @@ import {
   buildParsedTransactionInsertData,
   buildStatementFingerprint,
   detectStatementMetadataFromText,
+  fetchImportFileCompat,
   fetchParsedTransactionRows,
   enrichParsedRowsWithTraining,
   defaultCategoryForType,
   insertParsedTransactionsCompat,
   recordTrainingSignal,
+  updateImportFileCompat,
   upsertStatementTemplate,
 } from "@/lib/data-engine";
 
 export const processImportFileText = async (importFileId: string, text: string) => {
-  const importFile = await prisma.importFile.findUnique({
-    where: { id: importFileId },
-  });
+  const importFile = await fetchImportFileCompat(importFileId);
 
   if (!importFile) {
     throw new Error("Import file not found");
@@ -53,11 +53,8 @@ export const processImportFileText = async (importFileId: string, text: string) 
     rows: parsedTransactionData,
   });
 
-  await prisma.importFile.update({
-    where: { id: importFileId },
-    data: {
-      status: "done",
-    },
+  await updateImportFileCompat(importFileId, {
+    status: "done",
   });
 
   return { count: rows.length };
@@ -70,9 +67,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     throw new Error("No parsed rows available");
   }
 
-  const importFile = await prisma.importFile.findUnique({
-    where: { id: importFileId },
-  });
+  const importFile = await fetchImportFileCompat(importFileId);
 
   if (!importFile) {
     throw new Error("Import file not found");
@@ -89,12 +84,9 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     },
   });
 
-  await prisma.importFile.update({
-    where: { id: importFileId },
-    data: {
-      accountId,
-      confirmedAt: new Date(),
-    },
+  await updateImportFileCompat(importFileId, {
+    accountId,
+    confirmedAt: new Date(),
   });
 
   const existingCategories = await prisma.category.findMany({
@@ -160,12 +152,9 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     });
   }
 
-  await prisma.importFile.update({
-    where: { id: importFileId },
-    data: {
-      status: "done",
-      accountId,
-    },
+  await updateImportFileCompat(importFileId, {
+    status: "done",
+    accountId,
   });
 
   return { imported: transactions.length };
