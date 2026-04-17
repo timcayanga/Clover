@@ -1248,7 +1248,36 @@ label {
 }
 
 .transactions-action-button .button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.transactions-action-button .button-icon svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+.transactions-page .transactions-action-button.button-secondary {
+  background: rgba(242, 245, 247, 0.98);
+  border-color: rgba(176, 188, 194, 0.9);
+  color: #101820;
+  box-shadow: none;
+}
+
+.transactions-page .transactions-action-button.button-secondary:hover,
+.transactions-page .transactions-action-button.button-secondary:focus {
+  background: rgba(235, 239, 241, 0.98);
+  border-color: rgba(159, 171, 177, 0.95);
+}
+
+.transactions-action-button .button-icon {
   margin-right: 6px;
+}
+
+.transactions-page .transactions-action-button.button-secondary .button-icon {
+  color: #101820;
 }
 
 .dashboard-shell {

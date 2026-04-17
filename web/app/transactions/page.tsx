@@ -250,6 +250,105 @@ const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => 
   isTransfer: transaction.isTransfer,
 });
 
+function ActionIcon({
+  name,
+}: {
+  name: "plus" | "chevron-down" | "undo" | "redo" | "search" | "calendar" | "filters" | "summary" | "save" | "download";
+}) {
+  const common = {
+    width: 14,
+    height: 14,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  switch (name) {
+    case "plus":
+      return (
+        <svg {...common}>
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
+        </svg>
+      );
+    case "chevron-down":
+      return (
+        <svg {...common}>
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      );
+    case "undo":
+      return (
+        <svg {...common}>
+          <path d="M9 7H5v4" />
+          <path d="M5 11c1.8-3 5-5 8.5-5 4.4 0 8 3.6 8 8s-3.6 8-8 8c-3.1 0-5.8-1.7-7.1-4.2" />
+        </svg>
+      );
+    case "redo":
+      return (
+        <svg {...common}>
+          <path d="M15 7h4v4" />
+          <path d="M19 11c-1.8-3-5-5-8.5-5-4.4 0-8 3.6-8 8s3.6 8 8 8c3.1 0 5.8-1.7 7.1-4.2" />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg {...common}>
+          <circle cx="11" cy="11" r="5.5" />
+          <path d="m16 16 4 4" />
+        </svg>
+      );
+    case "calendar":
+      return (
+        <svg {...common}>
+          <rect x="4" y="5" width="16" height="15" rx="2" />
+          <path d="M8 3v4" />
+          <path d="M16 3v4" />
+          <path d="M4 9h16" />
+        </svg>
+      );
+    case "filters":
+      return (
+        <svg {...common}>
+          <path d="M4 7h16" />
+          <path d="M7 12h10" />
+          <path d="M10 17h4" />
+        </svg>
+      );
+    case "summary":
+      return (
+        <svg {...common}>
+          <rect x="5" y="4" width="14" height="16" rx="2" />
+          <path d="M8 8h8" />
+          <path d="M8 12h8" />
+          <path d="M8 16h5" />
+        </svg>
+      );
+    case "save":
+      return (
+        <svg {...common}>
+          <path d="M5 5h11l3 3v11H5z" />
+          <path d="M8 5v5h8V5" />
+          <path d="M9 19v-6h6v6" />
+        </svg>
+      );
+    case "download":
+      return (
+        <svg {...common}>
+          <path d="M12 4v10" />
+          <path d="m8 10 4 4 4-4" />
+          <path d="M5 19h14" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 export default function TransactionsPage() {
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -756,11 +855,11 @@ export default function TransactionsPage() {
                   aria-expanded={addMenuOpen}
                 >
                   <span className="button-icon" aria-hidden="true">
-                    ＋
+                    <ActionIcon name="plus" />
                   </span>
                   <span>Add</span>
                   <span className="button-icon" aria-hidden="true">
-                    ▾
+                    <ActionIcon name="chevron-down" />
                   </span>
                 </button>
                 <div className="transactions-add-menu__panel" hidden={!addMenuOpen}>
@@ -789,13 +888,13 @@ export default function TransactionsPage() {
 
               <button className="button button-secondary button-small transactions-action-button" type="button" title="Undo">
                 <span className="button-icon" aria-hidden="true">
-                  ↶
+                  <ActionIcon name="undo" />
                 </span>
                 Undo
               </button>
               <button className="button button-secondary button-small transactions-action-button" type="button" title="Redo">
                 <span className="button-icon" aria-hidden="true">
-                  ↷
+                  <ActionIcon name="redo" />
                 </span>
                 Redo
               </button>
@@ -809,7 +908,7 @@ export default function TransactionsPage() {
                 title="Search"
               >
                 <span className="button-icon" aria-hidden="true">
-                  ⌕
+                  <ActionIcon name="search" />
                 </span>
                 <span>Search</span>
               </button>
@@ -820,7 +919,7 @@ export default function TransactionsPage() {
                 onClick={() => setDateFilterOpen(true)}
               >
                 <span className="button-icon" aria-hidden="true">
-                  ⏲
+                  <ActionIcon name="calendar" />
                 </span>
                 <span>Date</span>
               </button>
@@ -831,7 +930,7 @@ export default function TransactionsPage() {
                 onClick={() => setFilterOpen(true)}
               >
                 <span className="button-icon" aria-hidden="true">
-                  ≡
+                  <ActionIcon name="filters" />
                 </span>
                 <span>Filters</span>
               </button>
@@ -843,13 +942,13 @@ export default function TransactionsPage() {
                 title="Summary"
               >
                 <span className="button-icon" aria-hidden="true">
-                  ▣
+                  <ActionIcon name="summary" />
                 </span>
                 <span>Summary</span>
               </button>
               <button className="button button-secondary button-small transactions-action-button" type="button" onClick={saveView} title="Save view">
                 <span className="button-icon" aria-hidden="true">
-                  ⌘
+                  <ActionIcon name="save" />
                 </span>
                 <span>Save View</span>
               </button>
@@ -863,11 +962,11 @@ export default function TransactionsPage() {
                   title="Download"
                 >
                   <span className="button-icon" aria-hidden="true">
-                    ⤓
+                    <ActionIcon name="download" />
                   </span>
                   <span>Download</span>
                   <span className="button-icon" aria-hidden="true">
-                    ▾
+                    <ActionIcon name="chevron-down" />
                   </span>
                 </button>
                 <div className="transactions-download-menu__panel" hidden={!downloadMenuOpen}>
