@@ -1905,6 +1905,7 @@ label {
 .accounts-summary-actions {
   display: grid;
   gap: 10px;
+  position: relative;
 }
 
 .accounts-summary-group {
@@ -1924,6 +1925,39 @@ label {
 
 .accounts-summary-download .button-icon {
   margin-right: 0;
+}
+
+.accounts-summary-download .button-icon:last-child {
+  margin-left: auto;
+}
+
+.accounts-summary-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 100%;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 18px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: var(--shadow);
+}
+
+.accounts-summary-dropdown button {
+  border: 0;
+  background: transparent;
+  border-radius: 14px;
+  min-height: 38px;
+  padding: 0 12px;
+  text-align: left;
+  color: var(--text);
+}
+
+.accounts-summary-dropdown button:hover {
+  background: rgba(3, 168, 192, 0.08);
 }
 
 .accounts-drawer-backdrop {

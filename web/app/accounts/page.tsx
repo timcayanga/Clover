@@ -272,6 +272,8 @@ export default function AccountsPage() {
   const [accountEditBusy, setAccountEditBusy] = useState(false);
   const [balanceDraft, setBalanceDraft] = useState("");
   const [drawerNotice, setDrawerNotice] = useState<string | null>(null);
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
@@ -342,12 +344,30 @@ export default function AccountsPage() {
         setAddOpen(false);
         setImportOpen(false);
         setDrawerAccountId(null);
+        setDownloadMenuOpen(false);
       }
     };
 
     document.addEventListener("keydown", handleEscape);
     return () => {
       document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!downloadMenuRef.current) {
+        return;
+      }
+
+      if (!downloadMenuRef.current.contains(event.target as Node)) {
+        setDownloadMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
     };
   }, []);
 
@@ -699,6 +719,16 @@ export default function AccountsPage() {
     report.document.close();
   };
 
+  const downloadSummary = (format: "csv" | "pdf") => {
+    setDownloadMenuOpen(false);
+    if (format === "csv") {
+      exportCsv();
+      return;
+    }
+
+    exportPdf();
+  };
+
   return (
     <CloverShell active="accounts" title="Accounts" showTopbar={false}>
       <div className="accounts-page">
@@ -922,15 +952,28 @@ export default function AccountsPage() {
               </div>
             </div>
 
-            <div className="accounts-summary-actions">
-              <button className="button button-secondary button-small accounts-summary-download" type="button" onClick={exportCsv}>
+            <div className="accounts-summary-actions" ref={downloadMenuRef}>
+              <button
+                className="button button-secondary button-small accounts-summary-download"
+                type="button"
+                onClick={() => setDownloadMenuOpen((current) => !current)}
+                aria-haspopup="menu"
+                aria-expanded={downloadMenuOpen}
+              >
                 <ActionIcon name="download" />
-                <span>Download CSV</span>
+                <span>Download</span>
+                <ActionIcon name="chevron-down" />
               </button>
-              <button className="button button-secondary button-small accounts-summary-download" type="button" onClick={exportPdf}>
-                <ActionIcon name="download" />
-                <span>Download PDF</span>
-              </button>
+              {downloadMenuOpen ? (
+                <div className="accounts-summary-dropdown" role="menu" aria-label="Download options">
+                  <button type="button" role="menuitem" onClick={() => downloadSummary("csv")}>
+                    Download CSV
+                  </button>
+                  <button type="button" role="menuitem" onClick={() => downloadSummary("pdf")}>
+                    Download PDF
+                  </button>
+                </div>
+              ) : null}
             </div>
           </aside>
         </section>
