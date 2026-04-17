@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { PulseShell } from "@/components/pulse-shell";
+import { CloverShell } from "@/components/clover-shell";
 
 export default function HomePage() {
   return (
-    <PulseShell
+    <CloverShell
       active="overview"
       kicker="Product direction"
       title="A calm, glass-like workspace for transactions, source tracking, and insight."
@@ -109,6 +109,6 @@ export default function HomePage() {
           </div>
         </article>
       </section>
-    </PulseShell>
+    </CloverShell>
   );
 }

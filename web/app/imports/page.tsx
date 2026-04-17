@@ -2,7 +2,7 @@
 
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
-import { PulseShell } from "@/components/pulse-shell";
+import { CloverShell } from "@/components/clover-shell";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 
 type Workspace = {
@@ -421,7 +421,7 @@ export default function ImportsPage() {
           : "status";
 
   return (
-    <PulseShell
+    <CloverShell
       active="transactions"
       title="Import statements"
       kicker="Import workflow"
@@ -550,6 +550,6 @@ export default function ImportsPage() {
           </div>
         </div>
       </section>
-    </PulseShell>
+    </CloverShell>
   );
 }

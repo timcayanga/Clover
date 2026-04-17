@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { syncClerkUser } from "@/lib/clerk";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
-import { PulseShell } from "@/components/pulse-shell";
+import { CloverShell } from "@/components/clover-shell";
 
 export const dynamic = "force-dynamic";
 
@@ -123,7 +123,7 @@ export default async function DashboardPage() {
   );
 
   return (
-    <PulseShell
+    <CloverShell
       active="overview"
       kicker="Workspace direction"
       title={`A calm, glass-like workspace for ${selectedWorkspace.name}.`}
@@ -270,6 +270,6 @@ export default async function DashboardPage() {
           </div>
         </article>
       </section>
-    </PulseShell>
+    </CloverShell>
   );
 }

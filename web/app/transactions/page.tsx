@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { PulseShell } from "@/components/pulse-shell";
+import { CloverShell } from "@/components/clover-shell";
 
 type Workspace = {
   id: string;
@@ -186,7 +186,7 @@ export default function TransactionsPage() {
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
 
   return (
-    <PulseShell
+    <CloverShell
       active="transactions"
       title="Transactions"
       kicker="Review and edit"
@@ -401,6 +401,6 @@ export default function TransactionsPage() {
           </table>
         </div>
       </section>
-    </PulseShell>
+    </CloverShell>
   );
 }

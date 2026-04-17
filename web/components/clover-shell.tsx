@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 
-type PulseShellProps = {
+type CloverShellProps = {
   active: "overview" | "transactions" | "analytics";
   title: string;
   kicker?: string;
@@ -17,7 +17,7 @@ const navItems = [
   { href: "/dashboard#analytics", label: "Analytics", key: "analytics" as const },
 ];
 
-export function PulseShell({
+export function CloverShell({
   active,
   title,
   kicker,
@@ -25,7 +25,7 @@ export function PulseShell({
   actions,
   showTopbar = true,
   children,
-}: PulseShellProps) {
+}: CloverShellProps) {
   return (
     <>
       <div className="background" aria-hidden="true">
@@ -37,10 +37,10 @@ export function PulseShell({
       <div className="app-shell">
         <aside className="sidebar glass">
           <div className="brand">
-            <div className="brand-mark">CL</div>
-            <div>
-              <p className="eyebrow">Clover</p>
-              <h1>Pulse</h1>
+            <img className="brand-mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
+            <div className="brand-copy">
+              <p className="eyebrow brand-eyebrow">Clover</p>
+              <h1>Clover</h1>
             </div>
           </div>
 
@@ -51,12 +51,6 @@ export function PulseShell({
               </Link>
             ))}
           </nav>
-
-          <div className="tier-card tier-free">
-            <span className="pill pill-accent">Import-first workflow</span>
-            <h2>Clarity for statements, transactions, and source tracking.</h2>
-            <p>Review cleanly, spot patterns early, and keep imports private by default.</p>
-          </div>
         </aside>
 
         <main className="content">
