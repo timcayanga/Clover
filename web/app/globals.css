@@ -2060,7 +2060,7 @@ label {
 }
 
 .accounts-import-modal {
-  width: min(980px, calc(100vw - 28px));
+  width: min(1080px, calc(100vw - 28px));
   display: grid;
   gap: 16px;
 }
@@ -2237,6 +2237,14 @@ label {
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
 }
 
+.accounts-import-dropzone--hero {
+  min-height: 320px;
+  padding: 28px;
+  justify-items: center;
+  align-content: center;
+  text-align: center;
+}
+
 .accounts-import-dropzone.is-active {
   border-color: rgba(3, 168, 192, 0.52);
   background: linear-gradient(180deg, rgba(3, 168, 192, 0.14), rgba(255, 255, 255, 0.94));
@@ -2250,6 +2258,20 @@ label {
 .accounts-import-dropzone span {
   color: var(--muted);
   line-height: 1.5;
+}
+
+.accounts-import-dropzone--hero strong {
+  font-size: clamp(1.6rem, 4vw, 2.4rem);
+  letter-spacing: -0.05em;
+}
+
+.accounts-import-dropzone--hero span {
+  max-width: 34ch;
+  font-size: 1rem;
+}
+
+.accounts-import-dropzone--hero .button {
+  min-width: 220px;
 }
 
 .accounts-import-target {
@@ -2274,6 +2296,17 @@ label {
   background: rgba(247, 249, 250, 0.9);
   color: var(--muted);
   line-height: 1.55;
+}
+
+.accounts-import-footer-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.accounts-import-footer-copy p {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 
 .accounts-import-files {

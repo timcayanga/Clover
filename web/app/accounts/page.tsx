@@ -620,11 +620,7 @@ export default function AccountsPage() {
       <div className="accounts-page">
         <div className="accounts-page__headline">
           <div className="accounts-page__headline-copy">
-            <p className="eyebrow">Accounts</p>
             <h1>Accounts</h1>
-            <p className="accounts-page__subtitle">
-              Keep a calm overview of balances, individual account history, and the imports that created each account.
-            </p>
           </div>
           <div className="accounts-page__headline-actions">
             <button
@@ -1074,7 +1070,6 @@ export default function AccountsPage() {
       <ImportFilesModal
         open={importOpen}
         workspaceId={selectedWorkspaceId}
-        workspaceName={selectedWorkspace?.name ?? null}
         accounts={accounts}
         defaultAccountId={selectedAccount?.id ?? accounts[0]?.id ?? null}
         onClose={() => setImportOpen(false)}

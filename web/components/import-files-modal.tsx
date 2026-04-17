@@ -1,7 +1,7 @@
 "use client";
 
 import type { ChangeEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 
 type AccountOption = {
@@ -14,7 +14,6 @@ type AccountOption = {
 type ImportFilesModalProps = {
   open: boolean;
   workspaceId: string;
-  workspaceName: string | null;
   accounts: AccountOption[];
   defaultAccountId?: string | null;
   onClose: () => void;
@@ -95,12 +94,9 @@ const fileTypeLabel = (file: File) => {
   return "File";
 };
 
-const normalizeAccountLabel = (account: AccountOption) => account.institution ? `${account.name} (${account.institution})` : account.name;
-
 export function ImportFilesModal({
   open,
   workspaceId,
-  workspaceName,
   accounts,
   defaultAccountId,
   onClose,
@@ -129,20 +125,6 @@ export function ImportFilesModal({
     });
     setMessage("Upload CSV or PDF files to import transactions and balances.");
   }, [accounts, defaultAccountId, open]);
-
-  const counts = useMemo(() => {
-    return items.reduce(
-      (accumulator, item) => {
-        accumulator.total += 1;
-        if (item.status === "done") accumulator.done += 1;
-        if (item.status === "needs_password") accumulator.needsPassword += 1;
-        if (item.status === "error") accumulator.error += 1;
-        if (item.status === "pending") accumulator.pending += 1;
-        return accumulator;
-      },
-      { total: 0, done: 0, needsPassword: 0, error: 0, pending: 0 }
-    );
-  }, [items]);
 
   const addFiles = (incoming: FileList | File[]) => {
     const nextFiles = Array.from(incoming);
@@ -372,104 +354,59 @@ export function ImportFilesModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="import-files-title"
-        aria-describedby="import-files-copy"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="modal-head">
           <div>
             <p className="eyebrow">Import files</p>
             <h4 id="import-files-title">Import files</h4>
-            <p id="import-files-copy" className="modal-copy">
-              Drop CSV or PDF statements here, unlock only the protected files, and we’ll parse the account and transaction data for you.
-            </p>
           </div>
           <button className="icon-button" type="button" onClick={onClose} aria-label="Close import files">
             ×
           </button>
         </div>
 
-        <div className="accounts-import-security">
-          <strong>Privacy note</strong>
-          <p>
-            We read the selected files locally in your browser, extract only the account and transaction details needed for import,
-            and send the parsed data to the app. The raw file stays on your device and is not stored by the import flow.
-          </p>
-        </div>
+        <label
+          className={`accounts-import-dropzone accounts-import-dropzone--hero ${dragActive ? "is-active" : ""}`}
+          onDragEnter={(event) => {
+            event.preventDefault();
+            setDragActive(true);
+          }}
+          onDragOver={(event) => {
+            event.preventDefault();
+            setDragActive(true);
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+          }}
+          onDrop={(event) => {
+            event.preventDefault();
+            setDragActive(false);
+            if (event.dataTransfer.files.length > 0) {
+              addFiles(event.dataTransfer.files);
+            }
+          }}
+        >
+          <input
+            ref={fileInputRef}
+            className="hidden-file-input"
+            type="file"
+            accept=".csv,.pdf"
+            multiple
+            onChange={handleInputChange}
+          />
+          <strong>Drop files here</strong>
+          <span>or browse for files from your computer.</span>
+          <button className="button button-secondary button-small" type="button" onClick={() => fileInputRef.current?.click()}>
+            Choose files
+          </button>
+        </label>
 
-        <div className="accounts-import-summary">
-          <div>
-            <span>Workspace</span>
-            <strong>{workspaceName ?? "Selected workspace"}</strong>
-          </div>
-          <div>
-            <span>Files queued</span>
-            <strong>{counts.total}</strong>
-          </div>
-          <div>
-            <span>Ready</span>
-            <strong>{counts.pending + counts.needsPassword}</strong>
-          </div>
-        </div>
-
-        <div className="accounts-import-toolbar">
-          <label
-            className={`accounts-import-dropzone ${dragActive ? "is-active" : ""}`}
-            onDragEnter={(event) => {
-              event.preventDefault();
-              setDragActive(true);
-            }}
-            onDragOver={(event) => {
-              event.preventDefault();
-              setDragActive(true);
-            }}
-            onDragLeave={(event) => {
-              event.preventDefault();
-              setDragActive(false);
-            }}
-            onDrop={(event) => {
-              event.preventDefault();
-              setDragActive(false);
-              if (event.dataTransfer.files.length > 0) {
-                addFiles(event.dataTransfer.files);
-              }
-            }}
-          >
-            <input
-              ref={fileInputRef}
-              className="hidden-file-input"
-              type="file"
-              accept=".csv,.pdf,.tsv,.txt"
-              multiple
-              onChange={handleInputChange}
-            />
-            <strong>Drop files here</strong>
-            <span>or browse for CSV and PDF statements from your disk.</span>
-            <button
-              className="button button-secondary button-small"
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              Choose files
-            </button>
-          </label>
-
-          <label className="accounts-import-target">
-            Target account
-            <span className="accounts-import-target__hint">If none exists yet, we’ll create a default account for this workspace.</span>
-            <select value={selectedAccountId} onChange={(event) => setSelectedAccountId(event.target.value)}>
-              <option value="">Select account</option>
-              {accounts.map((account) => (
-                <option key={account.id} value={account.id}>
-                  {normalizeAccountLabel(account)}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="accounts-import-note">
-          {message}
-          {selectedAccountId ? null : " If no account exists yet, we’ll create a default one for this workspace."}
+        <div className="accounts-import-footer-copy">
+          <p>{message}</p>
+          <p>Accepted files: CSV and PDF. Password-protected files are supported.</p>
+          <p>We parse the file for account and transaction data, do not store the raw upload, and remove it after processing to protect your privacy.</p>
         </div>
 
         <div className="accounts-import-files">
