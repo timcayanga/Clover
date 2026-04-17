@@ -1,12 +1,16 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { parseAmountValue, parseDateValue, parseImportText } from "@/lib/import-parser";
+import { parseImportText } from "@/lib/import-parser";
 import {
   DATA_ENGINE_VERSION,
+  buildParsedTransactionInsertData,
   buildStatementFingerprint,
   detectStatementMetadataFromText,
+  fetchParsedTransactionRows,
   enrichParsedRowsWithTraining,
   defaultCategoryForType,
+  extractMissingDatabaseColumn,
+  getCompatibleParsedTransactionColumns,
   recordTrainingSignal,
   upsertStatementTemplate,
 } from "@/lib/data-engine";
@@ -26,7 +30,7 @@ export const processImportFileText = async (importFileId: string, text: string) 
   const template = await upsertStatementTemplate({
     workspaceId: importFile.workspaceId,
     fingerprint: statementFingerprint,
-      metadata,
+    metadata,
   });
 
   const rows = await enrichParsedRowsWithTraining({
@@ -38,26 +42,39 @@ export const processImportFileText = async (importFileId: string, text: string) 
     where: { importFileId },
   });
 
-  await prisma.parsedTransaction.createMany({
-    data: rows.map((row) => ({
-      importFileId,
-      workspaceId: importFile.workspaceId,
-      institution: metadata.institution,
-      accountNumber: metadata.accountNumber,
-      accountName: row.accountName ?? null,
-      date: parseDateValue(row.date ?? null),
-      amount: parseAmountValue(row.amount ?? null),
-      merchantRaw: row.merchantRaw ?? null,
-      merchantClean: row.merchantClean ?? row.merchantRaw ?? null,
-      type: row.type ?? "expense",
-      categoryName: row.categoryName ?? defaultCategoryForType(row.type ?? "expense"),
-      confidence: row.confidence ?? 0,
-      categoryReason: row.categoryReason ?? null,
-      parserVersion: row.parserVersion ?? DATA_ENGINE_VERSION,
-      statementFingerprint: template?.fingerprint ?? statementFingerprint,
-      rawPayload: (row.rawPayload ?? {}) as Prisma.InputJsonValue,
-    })),
+  const parsedTransactionData = await buildParsedTransactionInsertData({
+    importFileId,
+    workspaceId: importFile.workspaceId,
+    rows,
+    metadata,
+    statementFingerprint: template?.fingerprint ?? statementFingerprint,
   });
+
+  let remainingColumns = await getCompatibleParsedTransactionColumns();
+  let insertData = parsedTransactionData;
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      await prisma.parsedTransaction.createMany({ data: insertData as never });
+      break;
+    } catch (error) {
+      const missingColumn = extractMissingDatabaseColumn(error);
+      if (!missingColumn || !remainingColumns.includes(missingColumn)) {
+        throw error;
+      }
+
+      remainingColumns = remainingColumns.filter((column) => column !== missingColumn);
+      insertData = parsedTransactionData.map((row) => {
+        const nextRow: Record<string, unknown> = {};
+        for (const column of remainingColumns) {
+          if (column in row) {
+            nextRow[column] = row[column];
+          }
+        }
+        return nextRow;
+      });
+    }
+  }
 
   await prisma.importFile.update({
     where: { id: importFileId },
@@ -70,9 +87,7 @@ export const processImportFileText = async (importFileId: string, text: string) 
 };
 
 export const confirmImportFile = async (importFileId: string, accountId: string) => {
-  const parsedRows = await prisma.parsedTransaction.findMany({
-    where: { importFileId },
-  });
+  const parsedRows = await fetchParsedTransactionRows(importFileId);
 
   if (parsedRows.length === 0) {
     throw new Error("No parsed rows available");
@@ -94,7 +109,9 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
   const transactions = [];
 
   for (const row of parsedRows) {
-    const categoryName = row.categoryName || defaultCategoryForType(row.type ?? "expense");
+    const rowType =
+      row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : undefined;
+    const categoryName = (typeof row.categoryName === "string" && row.categoryName) || defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense");
     let categoryId = categoryByName.get(categoryName.toLowerCase());
 
     if (!categoryId) {
@@ -102,7 +119,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
         data: {
           workspaceId: importFile.workspaceId,
           name: categoryName,
-          type: row.type ?? "expense",
+          type: (rowType ?? "expense") as "income" | "expense" | "transfer",
         },
       });
 
@@ -115,14 +132,14 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
         workspaceId: importFile.workspaceId,
         accountId,
         categoryId,
-        date: row.date ?? new Date(),
-        amount: row.amount ?? 0,
+        date: row.date instanceof Date ? row.date : row.date ? new Date(String(row.date)) : new Date(),
+        amount: typeof row.amount === "number" ? row.amount : Number(String(row.amount ?? "0").replace(/[^0-9.-]/g, "")) || 0,
         currency: "PHP",
-        type: row.type ?? "expense",
-        merchantRaw: row.merchantRaw ?? "Imported transaction",
-        merchantClean: row.merchantClean ?? row.merchantRaw ?? null,
-        description: typeof row.rawPayload === "object" ? JSON.stringify(row.rawPayload) : null,
-        isTransfer: row.type === "transfer",
+        type: (rowType ?? "expense") as TransactionType,
+        merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
+        merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+        description: typeof row.rawPayload === "object" && row.rawPayload !== null ? JSON.stringify(row.rawPayload) : null,
+        isTransfer: rowType === "transfer",
         isExcluded: typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance",
       },
     });
@@ -133,13 +150,16 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       workspaceId: importFile.workspaceId,
       importFileId,
       transactionId: transaction.id,
-      merchantText: row.merchantClean || row.merchantRaw || "Imported transaction",
+      merchantText:
+        (typeof row.merchantClean === "string" && row.merchantClean) ||
+        (typeof row.merchantRaw === "string" && row.merchantRaw) ||
+        "Imported transaction",
       categoryId,
       categoryName,
-      type: row.type ?? "expense",
+      type: rowType ?? "expense",
       source: "import_confirmation",
-      confidence: row.confidence ?? 100,
-      notes: row.categoryReason ?? null,
+      confidence: typeof row.confidence === "number" ? row.confidence : 100,
+      notes: typeof row.categoryReason === "string" ? row.categoryReason : null,
     });
   }
 

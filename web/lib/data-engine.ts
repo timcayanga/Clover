@@ -1,6 +1,6 @@
 import type { Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { detectStatementMetadata, type ParsedImportRow } from "@/lib/import-parser";
+import { detectStatementMetadata, parseAmountValue, parseDateValue, type ParsedImportRow } from "@/lib/import-parser";
 
 export const DATA_ENGINE_VERSION = "v2";
 
@@ -66,6 +66,27 @@ const KNOWN_INSTITUTIONS: Array<{ name: string; match: RegExp }> = [
   { name: "Wise", match: /\bWISE\b/i },
   { name: "PayPal", match: /\bPAYPAL\b/i },
 ];
+
+const PARSED_TRANSACTION_COLUMNS = [
+  "id",
+  "importFileId",
+  "workspaceId",
+  "institution",
+  "accountNumber",
+  "accountName",
+  "date",
+  "amount",
+  "merchantRaw",
+  "merchantClean",
+  "type",
+  "categoryName",
+  "confidence",
+  "categoryReason",
+  "parserVersion",
+  "statementFingerprint",
+  "rawPayload",
+  "createdAt",
+] as const;
 
 const fnv1a = (value: string) => {
   let hash = 0x811c9dc5;
@@ -163,6 +184,108 @@ export const isMissingDatabaseRelationError = (error: unknown, tableName: string
   const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
   const combined = `${code} ${message}`.toLowerCase();
   return combined.includes(tableName.toLowerCase()) && (combined.includes("does not exist") || code === "p2021");
+};
+
+export const isMissingDatabaseColumnError = (error: unknown) => {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+
+  const code = "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
+  const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
+  const combined = `${code} ${message}`.toLowerCase();
+  return combined.includes("does not exist") && combined.includes("column") || code === "p2022";
+};
+
+export const extractMissingDatabaseColumn = (error: unknown) => {
+  if (!error || typeof error !== "object") {
+    return null;
+  }
+
+  const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
+  const match =
+    message.match(/column\s+`([^`]+)`/i) ??
+    message.match(/column\s+"([^"]+)"/i) ??
+    message.match(/column\s+([A-Za-z0-9_]+)\s+of\s+relation/i);
+  const raw = match?.[1] ?? null;
+  if (!raw) {
+    return null;
+  }
+
+  return raw.split(" of relation")[0]?.trim() || null;
+};
+
+const columnCache = new Map<string, string[]>();
+
+export const getCompatibleParsedTransactionColumns = async () => {
+  const cacheKey = "ParsedTransaction";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'ParsedTransaction'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = PARSED_TRANSACTION_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const buildParsedTransactionInsertData = async (params: {
+  importFileId: string;
+  workspaceId: string;
+  rows: EnrichedParsedImportRow[];
+  metadata: ReturnType<typeof detectStatementMetadataFromText>;
+  statementFingerprint: string;
+}) => {
+  const columns = new Set(await getCompatibleParsedTransactionColumns());
+
+  return params.rows.map((row) => {
+    const record: Record<string, unknown> = {};
+    if (columns.has("importFileId")) record.importFileId = params.importFileId;
+    if (columns.has("workspaceId")) record.workspaceId = params.workspaceId;
+    if (columns.has("institution")) record.institution = params.metadata.institution;
+    if (columns.has("accountNumber")) record.accountNumber = params.metadata.accountNumber;
+    if (columns.has("accountName")) record.accountName = row.accountName ?? null;
+    if (columns.has("date")) record.date = parseDateValue(row.date ?? null);
+    if (columns.has("amount")) record.amount = parseAmountValue(row.amount ?? null);
+    if (columns.has("merchantRaw")) record.merchantRaw = row.merchantRaw ?? null;
+    if (columns.has("merchantClean")) record.merchantClean = row.merchantClean ?? row.merchantRaw ?? null;
+    if (columns.has("type")) record.type = row.type ?? "expense";
+    if (columns.has("categoryName")) record.categoryName = row.categoryName ?? defaultCategoryForType(row.type ?? "expense");
+    if (columns.has("confidence")) record.confidence = row.confidence ?? 0;
+    if (columns.has("categoryReason")) record.categoryReason = row.categoryReason ?? null;
+    if (columns.has("parserVersion")) record.parserVersion = row.parserVersion ?? DATA_ENGINE_VERSION;
+    if (columns.has("statementFingerprint")) record.statementFingerprint = params.statementFingerprint;
+    if (columns.has("rawPayload")) record.rawPayload = (row.rawPayload ?? {}) as Prisma.InputJsonValue;
+    return record;
+  });
+};
+
+export const fetchParsedTransactionRows = async (importFileId: string) => {
+  const columns = await getCompatibleParsedTransactionColumns();
+  if (columns.length === 0) {
+    return [];
+  }
+
+  const selectColumns = columns.map((column) => `"${column}"`).join(", ");
+  return prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
+    `SELECT ${selectColumns} FROM "ParsedTransaction" WHERE "importFileId" = $1 ORDER BY "createdAt" ASC`,
+    importFileId
+  );
+};
+
+export const countParsedTransactionRows = async (importFileId: string) => {
+  const result = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+    `SELECT COUNT(*)::bigint AS count FROM "ParsedTransaction" WHERE "importFileId" = $1`,
+    importFileId
+  );
+  return Number(result[0]?.count ?? 0n);
 };
 
 export const buildStatementFingerprint = (

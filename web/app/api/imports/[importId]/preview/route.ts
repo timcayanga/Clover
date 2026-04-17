@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { fetchParsedTransactionRows } from "@/lib/data-engine";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -12,9 +13,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
 
     const importFile = await prisma.importFile.findUnique({
       where: { id: importId },
-      include: {
-        parsedRows: { orderBy: { createdAt: "asc" } },
-      },
     });
 
     if (!importFile) {
@@ -22,10 +20,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     }
 
     await assertWorkspaceAccess(userId, importFile.workspaceId);
+    const parsedRows = await fetchParsedTransactionRows(importId);
 
     return NextResponse.json({
       importFile,
-      parsedRows: importFile.parsedRows,
+      parsedRows,
     });
   } catch {
     return NextResponse.json({ error: "Unable to load preview" }, { status: 400 });

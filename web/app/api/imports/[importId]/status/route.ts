@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { countParsedTransactionRows } from "@/lib/data-engine";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -12,9 +13,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
 
     const importFile = await prisma.importFile.findUnique({
       where: { id: importId },
-      include: {
-        parsedRows: { select: { id: true } },
-      },
     });
 
     if (!importFile) {
@@ -22,6 +20,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     }
 
     await assertWorkspaceAccess(userId, importFile.workspaceId);
+    const parsedRowsCount = await countParsedTransactionRows(importId);
 
     return NextResponse.json({
       importFile: {
@@ -33,7 +32,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         deletedAt: importFile.deletedAt?.toISOString() ?? null,
         updatedAt: importFile.updatedAt.toISOString(),
       },
-      parsedRowsCount: importFile.parsedRows.length,
+      parsedRowsCount,
     });
   } catch {
     return NextResponse.json({ error: "Unable to load import status" }, { status: 400 });
