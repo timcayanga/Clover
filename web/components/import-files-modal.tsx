@@ -382,6 +382,12 @@ export function ImportFilesModal({
   const activeItem = items.find((item) => item.status === "parsing" || item.status === "importing") ?? null;
   const activeItemIndex = activeItem ? items.findIndex((item) => item.id === activeItem.id) + 1 : null;
   const hasCompletedAllFiles = items.length > 0 && items.every((item) => item.status === "done");
+  const pendingProgressItem =
+    busy && !activeItem
+      ? items.find((item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim())) ?? null
+      : null;
+  const progressItem = activeItem ?? pendingProgressItem;
+  const progressItemIndex = progressItem ? items.findIndex((item) => item.id === progressItem.id) + 1 : null;
 
   useEffect(() => {
     if (!open || !hasCompletedAllFiles) {
@@ -469,16 +475,16 @@ export function ImportFilesModal({
     return null;
   }
 
-  if (activeItem) {
+  if (progressItem) {
     return (
       <ImportProgressModal
         open
         title="Importing file"
-        fileName={activeItem.file.name}
-        progress={activeItem.progress}
-        detail={activeItem.progressLabel}
-        statusLabel={activeItem.status === "importing" ? "Importing" : "Parsing"}
-        fileIndex={activeItemIndex}
+        fileName={progressItem.file.name}
+        progress={progressItem.progress}
+        detail={progressItem.progressLabel}
+        statusLabel={progressItem.status === "importing" ? "Importing" : busy ? "Importing" : "Parsing"}
+        fileIndex={progressItemIndex}
         fileTotal={items.length}
       />
     );
