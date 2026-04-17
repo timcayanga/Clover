@@ -1256,10 +1256,10 @@ label {
 }
 
 .transactions-action-button {
-  min-height: 38px;
+  min-height: 34px;
   border-radius: 999px;
-  padding-inline: 14px;
-  gap: 8px;
+  padding-inline: 12px;
+  gap: 6px;
 }
 
 .transactions-action-button .button-icon {
@@ -1270,8 +1270,8 @@ label {
 
 .transactions-action-button .button-icon svg {
   display: block;
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
 }
 
 .transactions-page .transactions-toolbar-chip.button-secondary {
@@ -1280,7 +1280,7 @@ label {
   color: #111111;
   box-shadow: none;
   font-weight: 600;
-  font-size: 0.92rem;
+  font-size: 0.84rem;
 }
 
 .transactions-page .transactions-toolbar-chip.button-secondary:hover,
@@ -1290,7 +1290,7 @@ label {
 }
 
 .transactions-action-button .button-icon {
-  margin-right: 6px;
+  margin-right: 5px;
 }
 
 .transactions-page .transactions-toolbar-chip.button-secondary .button-icon {
@@ -1298,8 +1298,8 @@ label {
 }
 
 .transactions-summary-toggle-button {
-  width: 38px;
-  min-width: 38px;
+  width: 34px;
+  min-width: 34px;
   padding-inline: 0;
   justify-content: center;
 }
@@ -1309,8 +1309,8 @@ label {
 }
 
 .transactions-summary-toggle-button .button-icon svg {
-  width: 15px;
-  height: 15px;
+  width: 13px;
+  height: 13px;
 }
 
 .transactions-page .transactions-toolbar-add.button-primary {
@@ -1319,7 +1319,7 @@ label {
   color: #ffffff;
   box-shadow: none;
   font-weight: 600;
-  font-size: 0.92rem;
+  font-size: 0.84rem;
 }
 
 .transactions-page .transactions-toolbar-add.button-primary:hover,
