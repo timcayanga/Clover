@@ -1,4 +1,4 @@
-import { Prisma, type TransactionType } from "@prisma/client";
+import type { TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseImportText } from "@/lib/import-parser";
 import {
@@ -9,8 +9,7 @@ import {
   fetchParsedTransactionRows,
   enrichParsedRowsWithTraining,
   defaultCategoryForType,
-  extractMissingDatabaseColumn,
-  getCompatibleParsedTransactionColumns,
+  insertParsedTransactionsCompat,
   recordTrainingSignal,
   upsertStatementTemplate,
 } from "@/lib/data-engine";
@@ -49,32 +48,10 @@ export const processImportFileText = async (importFileId: string, text: string) 
     metadata,
     statementFingerprint: template?.fingerprint ?? statementFingerprint,
   });
-
-  let remainingColumns = await getCompatibleParsedTransactionColumns();
-  let insertData = parsedTransactionData;
-
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    try {
-      await prisma.parsedTransaction.createMany({ data: insertData as never });
-      break;
-    } catch (error) {
-      const missingColumn = extractMissingDatabaseColumn(error);
-      if (!missingColumn || !remainingColumns.includes(missingColumn)) {
-        throw error;
-      }
-
-      remainingColumns = remainingColumns.filter((column) => column !== missingColumn);
-      insertData = parsedTransactionData.map((row) => {
-        const nextRow: Record<string, unknown> = {};
-        for (const column of remainingColumns) {
-          if (column in row) {
-            nextRow[column] = row[column];
-          }
-        }
-        return nextRow;
-      });
-    }
-  }
+  await insertParsedTransactionsCompat({
+    importFileId,
+    rows: parsedTransactionData,
+  });
 
   await prisma.importFile.update({
     where: { id: importFileId },

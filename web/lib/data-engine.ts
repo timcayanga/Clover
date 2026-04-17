@@ -267,6 +267,35 @@ export const buildParsedTransactionInsertData = async (params: {
   });
 };
 
+export const insertParsedTransactionsCompat = async (params: {
+  importFileId: string;
+  rows: Array<Record<string, unknown>>;
+}) => {
+  if (params.rows.length === 0) {
+    return;
+  }
+
+  const columns = await getCompatibleParsedTransactionColumns();
+  const requiredColumns = columns.filter((column) => column !== "createdAt");
+  if (requiredColumns.length === 0) {
+    return;
+  }
+
+  const values: unknown[] = [];
+  const tuples = params.rows.map((row) => {
+    const placeholders = requiredColumns.map((column) => {
+      values.push(row[column] ?? null);
+      return `$${values.length}`;
+    });
+    return `(${placeholders.join(", ")})`;
+  });
+
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "ParsedTransaction" (${requiredColumns.map((column) => `"${column}"`).join(", ")}) VALUES ${tuples.join(", ")}`,
+    ...values
+  );
+};
+
 export const fetchParsedTransactionRows = async (importFileId: string) => {
   const columns = await getCompatibleParsedTransactionColumns();
   if (columns.length === 0) {
@@ -274,8 +303,9 @@ export const fetchParsedTransactionRows = async (importFileId: string) => {
   }
 
   const selectColumns = columns.map((column) => `"${column}"`).join(", ");
+  const orderBy = columns.includes("createdAt") ? ' ORDER BY "createdAt" ASC' : "";
   return prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
-    `SELECT ${selectColumns} FROM "ParsedTransaction" WHERE "importFileId" = $1 ORDER BY "createdAt" ASC`,
+    `SELECT ${selectColumns} FROM "ParsedTransaction" WHERE "importFileId" = $1${orderBy}`,
     importFileId
   );
 };
