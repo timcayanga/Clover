@@ -396,6 +396,19 @@ export function ImportFilesModal({
     return null;
   }
 
+  if (activeItem) {
+    return (
+      <ImportProgressModal
+        open
+        title="Importing file"
+        fileName={activeItem.file.name}
+        progress={activeItem.progress}
+        detail={activeItem.progressLabel}
+        statusLabel={activeItem.status === "importing" ? "Importing" : "Parsing"}
+      />
+    );
+  }
+
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <section
@@ -457,15 +470,6 @@ export function ImportFilesModal({
           <p>Accepted files: CSV and PDF. Password-protected files are supported.</p>
           <p>We parse the file for account and transaction data, do not store the raw upload, and remove it after processing to protect your privacy.</p>
         </div>
-
-        <ImportProgressModal
-          open={Boolean(activeItem)}
-          title="Importing file"
-          fileName={activeItem?.file.name ?? ""}
-          progress={activeItem?.progress ?? 0}
-          detail={activeItem?.progressLabel ?? "Working"}
-          statusLabel={activeItem?.status === "importing" ? "Importing" : "Parsing"}
-        />
 
         <div className="accounts-import-files">
           {items.length > 0 ? (
