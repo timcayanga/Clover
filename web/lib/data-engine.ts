@@ -310,7 +310,7 @@ export const recordTrainingSignal = async (params: {
   categoryId: string;
   categoryName?: string | null;
   type: TransactionType;
-  source: "import_confirmation" | "manual_recategorization" | "training_upload";
+  source: "import_confirmation" | "manual_recategorization" | "training_upload" | "manual_transaction_creation";
   confidence?: number;
   notes?: string | null;
 }) => {

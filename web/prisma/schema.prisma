@@ -38,6 +38,7 @@ enum TrainingSignalSource {
   import_confirmation
   manual_recategorization
   training_upload
+  manual_transaction_creation
 }
 
 model User {

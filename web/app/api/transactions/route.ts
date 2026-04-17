@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { recordTrainingSignal } from "@/lib/data-engine";
 
 export const dynamic = "force-dynamic";
 
@@ -91,6 +92,26 @@ export async function POST(request: Request) {
         isExcluded: payload.isExcluded ?? false,
       },
     });
+
+    if (payload.categoryId) {
+      const category = await prisma.category.findUnique({
+        where: { id: payload.categoryId },
+      });
+
+      if (category) {
+        await recordTrainingSignal({
+          workspaceId: payload.workspaceId,
+          transactionId: transaction.id,
+          merchantText: payload.merchantClean ?? payload.merchantRaw,
+          categoryId: category.id,
+          categoryName: category.name,
+          type: payload.type,
+          source: "manual_transaction_creation",
+          confidence: 100,
+          notes: payload.accountId ? "Manual transaction created in the app." : null,
+        });
+      }
+    }
 
     return NextResponse.json({
       transaction: {

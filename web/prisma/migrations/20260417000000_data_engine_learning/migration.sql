@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "TrainingSignalSource" AS ENUM ('import_confirmation', 'manual_recategorization', 'training_upload');
+CREATE TYPE "TrainingSignalSource" AS ENUM ('import_confirmation', 'manual_recategorization', 'training_upload', 'manual_transaction_creation');
 
 -- AlterTable
 ALTER TABLE "ParsedTransaction" ADD COLUMN "institution" TEXT;
