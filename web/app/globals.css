@@ -2065,15 +2065,26 @@ label {
   gap: 16px;
 }
 
-.import-progress-backdrop {
-  backdrop-filter: blur(16px);
-}
-
 .import-progress-modal {
   width: min(560px, calc(100vw - 28px));
   display: grid;
   gap: 20px;
   padding: 26px;
+}
+
+.import-progress-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  pointer-events: none;
+}
+
+.import-progress-layer .import-progress-modal {
+  pointer-events: auto;
+  box-shadow: 0 22px 80px rgba(15, 23, 42, 0.26);
 }
 
 .import-progress-header {

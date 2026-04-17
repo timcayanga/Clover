@@ -29,7 +29,7 @@ export function ImportProgressModal({
   const donutStyle = { ["--progress" as any]: `${value}%` } as CSSProperties;
 
   return (
-    <div className="modal-backdrop import-progress-backdrop" role="presentation">
+    <div className="import-progress-layer" role="presentation">
       <section className="modal-card import-progress-modal glass" role="dialog" aria-modal="true" aria-labelledby="import-progress-title">
         <div className="import-progress-header">
           <div>
