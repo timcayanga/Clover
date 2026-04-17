@@ -423,7 +423,7 @@ export default function AccountsPage() {
     () => buildSamplePoints(chartFlow, totals.netWorth),
     [chartFlow, totals.netWorth]
   );
-  const performancePath = useMemo(() => makeSvgPath(performancePoints, 820, 280), [performancePoints]);
+  const performancePath = useMemo(() => makeSvgPath(performancePoints, 820, 220), [performancePoints]);
   const liabilityPoints = useMemo<Point[]>(() => {
     const values = chartFlow.map((entry, index) => ({
       label: entry.date,
@@ -431,7 +431,7 @@ export default function AccountsPage() {
     }));
     return values.length > 0 ? values : [{ label: "Liabilities", value: totals.liabilities }];
   }, [chartFlow, totals.liabilities]);
-  const liabilityPath = useMemo(() => makeSvgPath(liabilityPoints, 820, 280), [liabilityPoints]);
+  const liabilityPath = useMemo(() => makeSvgPath(liabilityPoints, 820, 220), [liabilityPoints]);
 
   const accountGroups = useMemo(() => {
     const groups = [
@@ -604,11 +604,11 @@ export default function AccountsPage() {
   return (
     <CloverShell
       active="accounts"
-      kicker="Accounts"
       title="Accounts"
-      subtitle="Manual balances, imported statements, and the net worth picture all live together."
-      actions={
-        <>
+      showTopbar={false}
+    >
+      <div className="accounts-page">
+        <div className="accounts-page__actions">
           <div className="accounts-toolbar-filters" ref={filtersRef}>
             <button className="button button-secondary button-small pill-link accounts-toolbar-button" type="button" onClick={() => setFiltersOpen((current) => !current)}>
               <ActionIcon name="filters" />
@@ -643,21 +643,19 @@ export default function AccountsPage() {
             <ActionIcon name="refresh" />
             <span>Refresh all</span>
           </button>
-              <button
-                className="button button-primary button-small accounts-toolbar-add"
-                type="button"
-                onClick={() => {
-                  setAddMode("manual");
-                  setAddOpen(true);
-                }}
-              >
+          <button
+            className="button button-primary button-small accounts-toolbar-add"
+            type="button"
+            onClick={() => {
+              setAddMode("manual");
+              setAddOpen(true);
+            }}
+          >
             <ActionIcon name="plus" />
             <span>Add account</span>
           </button>
-        </>
-      }
-    >
-      <div className="accounts-page">
+        </div>
+
         <section className="accounts-hero glass">
           <div className="accounts-hero__copy">
             <p className="eyebrow">Net worth</p>
@@ -668,9 +666,6 @@ export default function AccountsPage() {
               </span>
               <span className="accounts-hero__meta">1 month change</span>
             </div>
-            <p className="accounts-hero__copyline">
-              Track manual balances, imported account snapshots, and liabilities without losing the Clover tone.
-            </p>
           </div>
           <div className="accounts-hero__controls">
             <label>
@@ -704,7 +699,7 @@ export default function AccountsPage() {
               <div className="accounts-chart-card__pill">{selectedWorkspace?.name ?? "Workspace"}</div>
             </div>
             {chartMetric === "performance" ? (
-              <svg className="accounts-chart" viewBox="0 0 820 280" role="img" aria-label={chartTitle}>
+              <svg className="accounts-chart" viewBox="0 0 820 220" role="img" aria-label={chartTitle}>
                 <defs>
                   <linearGradient id="accountsFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="rgba(3,168,192,0.26)" />
@@ -712,9 +707,9 @@ export default function AccountsPage() {
                   </linearGradient>
                 </defs>
                 {[0, 1, 2, 3].map((line) => (
-                  <line key={line} x1="16" y1={40 + line * 60} x2="804" y2={40 + line * 60} stroke="rgba(13, 22, 29, 0.06)" />
+                  <line key={line} x1="16" y1={28 + line * 48} x2="804" y2={28 + line * 48} stroke="rgba(13, 22, 29, 0.06)" />
                 ))}
-                <path d={`${performancePath} L 804 264 L 16 264 Z`} fill="url(#accountsFill)" />
+                <path d={`${performancePath} L 804 204 L 16 204 Z`} fill="url(#accountsFill)" />
                 <path d={performancePath} fill="none" stroke="#03a8c0" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             ) : chartMetric === "breakdown" ? (
@@ -735,9 +730,9 @@ export default function AccountsPage() {
                 </div>
               </div>
             ) : (
-              <svg className="accounts-chart" viewBox="0 0 820 280" role="img" aria-label={chartTitle}>
+              <svg className="accounts-chart" viewBox="0 0 820 220" role="img" aria-label={chartTitle}>
                 {[0, 1, 2, 3].map((line) => (
-                  <line key={line} x1="16" y1={40 + line * 60} x2="804" y2={40 + line * 60} stroke="rgba(13, 22, 29, 0.06)" />
+                  <line key={line} x1="16" y1={28 + line * 48} x2="804" y2={28 + line * 48} stroke="rgba(13, 22, 29, 0.06)" />
                 ))}
                 <path d={liabilityPath} fill="none" stroke="#cf4f66" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
               </svg>

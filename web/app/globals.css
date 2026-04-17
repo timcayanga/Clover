@@ -1431,8 +1431,16 @@ label {
 
 .accounts-page {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
+}
+
+.accounts-page__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .accounts-toolbar-filters {
@@ -1441,22 +1449,27 @@ label {
 
 .accounts-toolbar-button {
   border-radius: 999px;
-  min-height: 38px;
+  min-height: 34px;
   padding: 0 14px;
+  background: #f7f9fa;
+  border-color: #d1d5db;
+  color: var(--text);
+  box-shadow: none;
 }
 
 .accounts-toolbar-button .button-icon {
   margin-right: 0;
+  color: var(--text);
 }
 
 .accounts-toolbar-button span:last-child {
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   font-weight: 600;
 }
 
 .accounts-toolbar-add {
   border-radius: 999px;
-  min-height: 38px;
+  min-height: 34px;
   padding: 0 16px;
 }
 
@@ -1484,10 +1497,10 @@ label {
 
 .accounts-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 240px;
-  gap: 16px;
-  padding: 18px;
-  border-radius: 30px;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 28px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow);
@@ -1495,7 +1508,7 @@ label {
 
 .accounts-hero__copy {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   align-content: start;
 }
 
@@ -1507,13 +1520,13 @@ label {
 }
 
 .accounts-hero__value-row strong {
-  font-size: clamp(2.2rem, 4vw, 3.35rem);
-  letter-spacing: -0.06em;
+  font-size: clamp(1.8rem, 3.2vw, 2.6rem);
+  letter-spacing: -0.055em;
   line-height: 0.92;
 }
 
 .accounts-hero__delta {
-  font-size: 0.96rem;
+  font-size: 0.88rem;
   font-weight: 700;
 }
 
@@ -1527,32 +1540,37 @@ label {
 
 .accounts-hero__meta {
   color: var(--muted);
-  font-size: 0.9rem;
-}
-
-.accounts-hero__copyline {
-  margin: 0;
-  color: var(--muted);
-  max-width: 54ch;
-  line-height: 1.65;
+  font-size: 0.8rem;
 }
 
 .accounts-hero__controls {
-  display: grid;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
   gap: 10px;
-  align-content: start;
+  flex-wrap: nowrap;
 }
 
 .accounts-hero__controls label {
-  gap: 6px;
+  gap: 5px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.accounts-hero__controls select {
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 12px;
+  font-size: 0.88rem;
 }
 
 .accounts-chart-card {
   grid-column: 1 / -1;
   display: grid;
   gap: 14px;
-  padding: 18px;
-  border-radius: 26px;
+  padding: 16px;
+  border-radius: 24px;
   background: rgba(248, 251, 252, 0.92);
   border: 1px solid rgba(199, 213, 219, 0.95);
 }
@@ -1566,7 +1584,7 @@ label {
 
 .accounts-chart-card__head h3 {
   margin: 0;
-  font-size: 1.16rem;
+  font-size: 1rem;
   letter-spacing: -0.03em;
 }
 
@@ -1579,17 +1597,18 @@ label {
 .accounts-chart-card__pill {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 30px;
+  padding: 0 10px;
   border-radius: 999px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.78);
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.76rem;
 }
 
 .accounts-chart {
   width: 100%;
+  height: 220px;
   height: auto;
   display: block;
 }
@@ -1597,7 +1616,7 @@ label {
 .accounts-breakdown {
   display: grid;
   gap: 16px;
-  min-height: 280px;
+  min-height: 220px;
 }
 
 .accounts-breakdown__bars {
@@ -1605,7 +1624,7 @@ label {
   align-items: flex-end;
   justify-content: center;
   gap: 18px;
-  min-height: 280px;
+  min-height: 220px;
   padding: 14px 0 4px;
 }
 
@@ -1835,7 +1854,7 @@ label {
 .accounts-summary-column {
   display: grid;
   gap: 16px;
-  padding: 18px;
+  padding: 16px;
   border-radius: 26px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.88);
