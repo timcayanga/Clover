@@ -437,11 +437,85 @@ export default async function ReportsPage() {
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 3);
 
+    const trendDirection = currentNet >= previousNet ? "improving" : "softening";
+    const spendDirection = spendDelta === null ? null : spendDelta > 0 ? "up" : spendDelta < 0 ? "down" : "flat";
+
     const goalSummary = goalLabel
       ? currentNet >= 0
         ? `Your ${goalLabel.toLowerCase()} goal has room to move forward because the last 30 days ended positive.`
         : `Your ${goalLabel.toLowerCase()} goal needs a tighter spending pattern or higher income to move faster.`
       : "Set a primary goal so Clover can compare your cash flow and spending against something specific.";
+
+    const aiHeadline = goalLabel
+      ? currentNet >= 0
+        ? `You are currently ${trendDirection}, and the numbers are supportive of ${goalLabel.toLowerCase()}.`
+        : `You are currently ${trendDirection}, but spending is still limiting ${goalLabel.toLowerCase()}.`
+      : currentNet >= 0
+        ? "Your cash flow is trending positively, and the next step is making that progress more intentional."
+        : "Your cash flow is under pressure, so the highest-impact move is to slow spending and clear the review queue.";
+
+    const aiSummary =
+      spendDirection === null
+        ? "There is enough fresh activity to identify direction, but a prior comparison period is missing in one or more areas."
+        : currentNet >= 0
+          ? `Spending is ${spendDirection} while net cash flow remains positive, which points to a stable month with room for optimization.`
+          : `Spending is ${spendDirection} and cash flow is negative, which suggests the fastest win is a tighter expense pattern.`;
+
+    const aiSignals = [
+      {
+        label: "Cash flow",
+        value: formatSignedCurrency(currentNet),
+        detail:
+          previousNet === 0
+            ? "No prior baseline to compare"
+            : `${currentNet >= previousNet ? "Ahead of" : "Behind"} the prior 30 days`,
+        tone: currentNet >= 0 ? "good" : "danger",
+      },
+      {
+        label: "Savings rate",
+        value: savingsRate === null ? "N/A" : formatPercent(savingsRate * 100),
+        detail: goalLabel ? `Evaluated against ${goalLabel.toLowerCase()}` : "Add a goal for a clearer target",
+        tone: savingsRate !== null && savingsRate >= 0.2 ? "good" : "subtle",
+      },
+      {
+        label: "Top spend share",
+        value: topCategoryShare === null ? "N/A" : formatPercent(topCategoryShare * 100),
+        detail: topCategories[0]?.[0] ?? "No top category yet",
+        tone: topCategoryShare !== null && topCategoryShare < 0.45 ? "good" : "subtle",
+      },
+      {
+        label: "Review load",
+        value: `${uncategorizedTransactions.length + possibleDuplicateGroups.length}`,
+        detail: `${uncategorizedTransactions.length} uncategorized, ${possibleDuplicateGroups.length} duplicate set${possibleDuplicateGroups.length === 1 ? "" : "s"}`,
+        tone:
+          uncategorizedTransactions.length + possibleDuplicateGroups.length > 0
+            ? "danger"
+            : "good",
+      },
+    ] as const;
+
+    const aiActions = [
+      {
+        title: goalLabel ? `Tighten the path toward ${goalLabel.toLowerCase()}` : "Set a goal to give this page a target",
+        body: goalLabel
+          ? "Use the goal as the benchmark when you judge spend, savings, and monthly momentum."
+          : "A target gives the page a clear direction, so insights can explain progress instead of only trends.",
+        href: goalLabel ? "/settings" : "/onboarding",
+        label: goalLabel ? "Review goal" : "Set goal",
+      },
+      {
+        title: "Clean the review queue",
+        body: "Fix uncategorized transactions and duplicate rows so the next round of insights stays sharper.",
+        href: "/transactions",
+        label: "Open transactions",
+      },
+      {
+        title: "Check the highest-spend category",
+        body: "If one category dominates, that is usually the easiest place to find a real improvement.",
+        href: "/transactions",
+        label: "Inspect spending",
+      },
+    ];
 
     const goalNextStep = goalLabel
       ? {
@@ -511,6 +585,62 @@ export default async function ReportsPage() {
                 {actionableCount} item{actionableCount === 1 ? "" : "s"} need attention
               </span>
               <span>{selectedWorkspace.accounts.length} account{selectedWorkspace.accounts.length === 1 ? "" : "s"}</span>
+            </div>
+          </article>
+        </section>
+
+        <section className="reports-ai-grid">
+          <article className="report-ai-card report-ai-card--featured glass">
+            <p className="eyebrow">AI brief</p>
+            <h3>{aiHeadline}</h3>
+            <p>{aiSummary}</p>
+            <div className="report-ai-card__actions">
+              <Link className="button button-primary button-pill" href={aiActions[0].href}>
+                {aiActions[0].label}
+              </Link>
+              <Link className="button button-secondary button-pill" href="/transactions">
+                Open transactions
+              </Link>
+            </div>
+          </article>
+
+          <article className="report-ai-card glass">
+            <div className="report-card__head">
+              <div>
+                <p className="eyebrow">Signals</p>
+                <h4>What the model is paying attention to</h4>
+              </div>
+            </div>
+            <div className="report-ai-signal-grid">
+              {aiSignals.map((signal) => (
+                <div key={signal.label} className={`report-ai-signal report-ai-signal--${signal.tone}`}>
+                  <span>{signal.label}</span>
+                  <strong>{signal.value}</strong>
+                  <small>{signal.detail}</small>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="report-ai-card glass">
+            <div className="report-card__head">
+              <div>
+                <p className="eyebrow">Next moves</p>
+                <h4>Suggested actions</h4>
+              </div>
+            </div>
+            <div className="report-list">
+              {aiActions.map((action) => (
+                <div key={action.title} className="report-list__item report-list__item--compact">
+                  <div className="report-list__meta">
+                    <strong>{action.title}</strong>
+                    <span>{action.body}</span>
+                  </div>
+                  <Link className="pill-link pill-link--inline" href={action.href}>
+                    {action.label}
+                  </Link>
+                </div>
+              ))}
             </div>
           </article>
         </section>
