@@ -9,6 +9,8 @@ const envSchema = z.object({
   R2_BUCKET_NAME: z.string().min(1).optional(),
   DATABASE_URL: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1).optional(),
+  STAGING_BASIC_AUTH_USERNAME: z.string().min(1).optional(),
+  STAGING_BASIC_AUTH_PASSWORD: z.string().min(1).optional(),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
