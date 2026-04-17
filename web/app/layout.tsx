@@ -6,8 +6,8 @@ import { BlankPage } from "./blank/blank-page";
 import { StagingGate } from "./staging-gate";
 
 export const metadata: Metadata = {
-  title: "Clover",
-  description: "Upload statements, understand cash flow, and act with clarity.",
+  title: "Clover | Visual money clarity",
+  description: "Clover helps you understand your money visually, review transactions faster, and get to action with less stress.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
