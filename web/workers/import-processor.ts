@@ -10,6 +10,8 @@ import {
   fetchParsedTransactionRows,
   enrichParsedRowsWithTraining,
   defaultCategoryForType,
+  deleteTransactionsByImportFileCompat,
+  insertTransactionCompat,
   insertParsedTransactionsCompat,
   recordTrainingSignal,
   updateImportFileCompat,
@@ -73,9 +75,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     throw new Error("Import file not found");
   }
 
-  await prisma.transaction.deleteMany({
-    where: { importFileId },
-  });
+  await deleteTransactionsByImportFileCompat(importFileId);
 
   await prisma.trainingSignal.deleteMany({
     where: {
@@ -115,22 +115,20 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       categoryByName.set(categoryName.toLowerCase(), categoryId);
     }
 
-    const transaction = await prisma.transaction.create({
-      data: {
-        workspaceId: importFile.workspaceId,
-        accountId,
-        importFileId,
-        categoryId,
-        date: row.date instanceof Date ? row.date : row.date ? new Date(String(row.date)) : new Date(),
-        amount: typeof row.amount === "number" ? row.amount : Number(String(row.amount ?? "0").replace(/[^0-9.-]/g, "")) || 0,
-        currency: "PHP",
-        type: (rowType ?? "expense") as TransactionType,
-        merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
-        merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
-        description: typeof row.rawPayload === "object" && row.rawPayload !== null ? JSON.stringify(row.rawPayload) : null,
-        isTransfer: rowType === "transfer",
-        isExcluded: typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance",
-      },
+    const transaction = await insertTransactionCompat({
+      workspaceId: String(importFile.workspaceId),
+      accountId,
+      importFileId,
+      categoryId,
+      date: row.date instanceof Date ? row.date : row.date ? new Date(String(row.date)) : new Date(),
+      amount: typeof row.amount === "number" ? row.amount : Number(String(row.amount ?? "0").replace(/[^0-9.-]/g, "")) || 0,
+      currency: "PHP",
+      type: (rowType ?? "expense") as TransactionType,
+      merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
+      merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+      description: typeof row.rawPayload === "object" && row.rawPayload !== null ? JSON.stringify(row.rawPayload) : null,
+      isTransfer: rowType === "transfer",
+      isExcluded: typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance",
     });
 
     transactions.push(transaction);
@@ -138,7 +136,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     await recordTrainingSignal({
       workspaceId: importFile.workspaceId,
       importFileId,
-      transactionId: transaction.id,
+      transactionId: typeof transaction?.id === "string" ? transaction.id : null,
       merchantText:
         (typeof row.merchantClean === "string" && row.merchantClean) ||
         (typeof row.merchantRaw === "string" && row.merchantRaw) ||

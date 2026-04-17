@@ -1,7 +1,6 @@
-import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { countParsedTransactionRows, fetchImportFileCompat } from "@/lib/data-engine";
+import { countParsedTransactionRows, countTransactionsByImportFileCompat, fetchImportFileCompat } from "@/lib/data-engine";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -19,11 +18,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
 
     await assertWorkspaceAccess(userId, importFile.workspaceId as string);
     const parsedRowsCount = await countParsedTransactionRows(importId);
-    const confirmedTransactionsResult = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
-      `SELECT COUNT(*)::bigint AS count FROM "Transaction" WHERE "importFileId" = $1`,
-      importId
-    );
-    const confirmedTransactionsCount = Number(confirmedTransactionsResult[0]?.count ?? 0n);
+    const confirmedTransactionsCount = await countTransactionsByImportFileCompat(importId);
     const confirmationStatus =
       importFile.status === "failed"
         ? "failed"

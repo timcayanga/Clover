@@ -103,6 +103,25 @@ const IMPORT_FILE_COLUMNS = [
   "updatedAt",
 ] as const;
 
+const TRANSACTION_COLUMNS = [
+  "id",
+  "workspaceId",
+  "accountId",
+  "importFileId",
+  "categoryId",
+  "date",
+  "amount",
+  "currency",
+  "type",
+  "merchantRaw",
+  "merchantClean",
+  "description",
+  "isTransfer",
+  "isExcluded",
+  "createdAt",
+  "updatedAt",
+] as const;
+
 const fnv1a = (value: string) => {
   let hash = 0x811c9dc5;
 
@@ -270,6 +289,25 @@ export const getCompatibleImportFileColumns = async () => {
   return compatible as string[];
 };
 
+export const getCompatibleTransactionColumns = async () => {
+  const cacheKey = "Transaction";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'Transaction'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = TRANSACTION_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
 export const buildImportFileInsertData = async (params: {
   workspaceId: string;
   accountId?: string | null;
@@ -376,6 +414,78 @@ export const updateImportFileCompat = async (
   }
 
   return fetchImportFileCompat(importFileId);
+};
+
+export const deleteTransactionsByImportFileCompat = async (importFileId: string) => {
+  const columns = new Set(await getCompatibleTransactionColumns());
+  if (!columns.has("importFileId")) {
+    return;
+  }
+
+  await prisma.$executeRawUnsafe(`DELETE FROM "Transaction" WHERE "importFileId" = $1`, importFileId);
+};
+
+export const countTransactionsByImportFileCompat = async (importFileId: string) => {
+  const columns = new Set(await getCompatibleTransactionColumns());
+  if (!columns.has("importFileId")) {
+    return 0;
+  }
+
+  const result = await prisma.$queryRawUnsafe<Array<{ count: bigint }>>(
+    `SELECT COUNT(*)::bigint AS count FROM "Transaction" WHERE "importFileId" = $1`,
+    importFileId
+  );
+  return Number(result[0]?.count ?? 0n);
+};
+
+export const insertTransactionCompat = async (params: {
+  workspaceId: string;
+  accountId: string;
+  importFileId?: string | null;
+  categoryId?: string | null;
+  date: Date;
+  amount: string | number;
+  currency: string;
+  type: TransactionType;
+  merchantRaw: string;
+  merchantClean?: string | null;
+  description?: string | null;
+  isTransfer?: boolean;
+  isExcluded?: boolean;
+}) => {
+  const columns = new Set(await getCompatibleTransactionColumns());
+  const record: Record<string, unknown> = {};
+
+  if (columns.has("id")) record.id = crypto.randomUUID();
+  if (columns.has("workspaceId")) record.workspaceId = params.workspaceId;
+  if (columns.has("accountId")) record.accountId = params.accountId;
+  if (columns.has("importFileId") && params.importFileId !== undefined) record.importFileId = params.importFileId ?? null;
+  if (columns.has("categoryId")) record.categoryId = params.categoryId ?? null;
+  if (columns.has("date")) record.date = params.date;
+  if (columns.has("amount")) record.amount = typeof params.amount === "number" ? params.amount : String(params.amount);
+  if (columns.has("currency")) record.currency = params.currency;
+  if (columns.has("type")) record.type = params.type;
+  if (columns.has("merchantRaw")) record.merchantRaw = params.merchantRaw;
+  if (columns.has("merchantClean")) record.merchantClean = params.merchantClean ?? null;
+  if (columns.has("description")) record.description = params.description ?? null;
+  if (columns.has("isTransfer")) record.isTransfer = params.isTransfer ?? false;
+  if (columns.has("isExcluded")) record.isExcluded = params.isExcluded ?? false;
+  if (columns.has("createdAt")) record.createdAt = new Date();
+  if (columns.has("updatedAt")) record.updatedAt = new Date();
+
+  const keys = Object.keys(record);
+  if (keys.length === 0) {
+    return null;
+  }
+
+  const values = keys.map((key) => record[key] ?? null);
+  const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "Transaction" (${keys.map((key) => `"${key}"`).join(", ")}) VALUES (${placeholders})`,
+    ...values
+  );
+
+  return record;
 };
 
 export const buildParsedTransactionInsertData = async (params: {
