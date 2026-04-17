@@ -121,6 +121,8 @@ type ProgressState = {
 const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
+const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
+
 export default function ImportsPage() {
   const router = useRouter();
   const [message, setMessage] = useState("Upload a PDF or CSV to begin.");
@@ -448,6 +450,12 @@ export default function ImportsPage() {
       return;
     }
 
+    if (file.size > MAX_IMPORT_FILE_SIZE) {
+      setIsUploading(false);
+      setMessage("Files must be 2 MB or smaller.");
+      return;
+    }
+
     try {
       setProgressState({
         open: true,
@@ -701,6 +709,8 @@ export default function ImportsPage() {
           progress={progressState?.progress ?? 0}
           detail={progressState?.detail ?? ""}
           statusLabel={progressState?.statusLabel ?? "Working"}
+          fileIndex={1}
+          fileTotal={1}
         />
       </section>
     </CloverShell>

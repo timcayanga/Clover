@@ -89,6 +89,8 @@ const isPasswordError = (error: unknown) => {
 };
 
 const fileKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
+const MAX_IMPORT_FILES = 10;
+const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
 
 const fileTypeLabel = (file: File) => {
   const lowerName = file.name.toLowerCase();
@@ -173,25 +175,64 @@ export function ImportFilesModal({
     const nextFiles = Array.from(incoming);
     if (nextFiles.length === 0) return;
 
+    let feedbackMessage = "";
     setItems((current) => {
       const existing = new Set(current.map((item) => fileKey(item.file)));
-      const additions = nextFiles
-        .filter((file) => !existing.has(fileKey(file)))
-        .map((file) => ({
-          id: crypto.randomUUID(),
-          file,
-          status: "pending" as ImportStatus,
-          error: null,
-          password: "",
-          passwordVisible: false,
-          importFileId: null,
-          importedRows: null,
-          progress: 0,
-          progressLabel: "Queued",
-        }));
+      const availableSlots = Math.max(0, MAX_IMPORT_FILES - current.length);
+      let skippedTooLarge = 0;
+      let skippedTooMany = 0;
+      let additionsCount = 0;
+
+      const additions = nextFiles.flatMap((file) => {
+        if (file.size > MAX_IMPORT_FILE_SIZE) {
+          skippedTooLarge += 1;
+          return [];
+        }
+
+        if (existing.has(fileKey(file))) {
+          return [];
+        }
+
+        if (additionsCount >= availableSlots) {
+          skippedTooMany += 1;
+          return [];
+        }
+
+        additionsCount += 1;
+        return [
+          {
+            id: crypto.randomUUID(),
+            file,
+            status: "pending" as ImportStatus,
+            error: null,
+            password: "",
+            passwordVisible: false,
+            importFileId: null,
+            importedRows: null,
+            progress: 0,
+            progressLabel: "Queued",
+          },
+        ];
+      });
+
+      if (skippedTooLarge > 0 && skippedTooMany > 0) {
+        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooLarge} over 2 MB and ${skippedTooMany} over the 10-file limit.`;
+      } else if (skippedTooLarge > 0) {
+        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooLarge} file${skippedTooLarge === 1 ? "" : "s"} over 2 MB.`;
+      } else if (skippedTooMany > 0) {
+        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the 10-file limit.`;
+      } else if (additions.length > 0) {
+        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"} to the queue.`;
+      } else {
+        feedbackMessage = "No files were added.";
+      }
 
       return [...current, ...additions];
     });
+
+    if (feedbackMessage) {
+      setMessage(feedbackMessage);
+    }
   };
 
   const updateItem = (id: string, patch: Partial<QueuedFile>) => {
@@ -360,6 +401,7 @@ export function ImportFilesModal({
   };
 
   const activeItem = items.find((item) => item.status === "parsing" || item.status === "importing") ?? null;
+  const activeItemIndex = activeItem ? items.findIndex((item) => item.id === activeItem.id) + 1 : null;
   const hasCompletedAllFiles = items.length > 0 && items.every((item) => item.status === "done");
 
   useEffect(() => {
@@ -463,6 +505,8 @@ export function ImportFilesModal({
         progress={activeItem.progress}
         detail={activeItem.progressLabel}
         statusLabel={activeItem.status === "importing" ? "Importing" : "Parsing"}
+        fileIndex={activeItemIndex}
+        fileTotal={items.length}
       />
     );
   }

@@ -2180,20 +2180,13 @@ label {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  gap: 4px;
   text-align: center;
 }
 
 .import-progress-donut__inner strong {
-  font-size: clamp(1.6rem, 4vw, 2.1rem);
+  font-size: clamp(1.9rem, 4.8vw, 2.6rem);
   letter-spacing: -0.06em;
-}
-
-.import-progress-donut__inner span {
-  color: var(--muted);
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  line-height: 1;
 }
 
 .import-progress-copy {

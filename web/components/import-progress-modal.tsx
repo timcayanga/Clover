@@ -9,6 +9,8 @@ type ImportProgressModalProps = {
   progress: number;
   detail: string;
   statusLabel?: string;
+  fileIndex?: number | null;
+  fileTotal?: number | null;
 };
 
 const clampProgress = (value: number) => Math.max(0, Math.min(100, value));
@@ -20,6 +22,8 @@ export function ImportProgressModal({
   progress,
   detail,
   statusLabel = "Working",
+  fileIndex = null,
+  fileTotal = null,
 }: ImportProgressModalProps) {
   if (!open) {
     return null;
@@ -27,6 +31,7 @@ export function ImportProgressModal({
 
   const value = clampProgress(progress);
   const donutStyle = { ["--progress" as any]: `${value}%` } as CSSProperties;
+  const batchTitle = fileIndex && fileTotal ? `${title} ${fileIndex} of ${fileTotal}` : title;
 
   return (
     <div className="import-progress-layer" role="presentation">
@@ -34,7 +39,7 @@ export function ImportProgressModal({
         <div className="import-progress-header">
           <div>
             <p className="eyebrow">Import progress</p>
-            <h4 id="import-progress-title">{title}</h4>
+            <h4 id="import-progress-title">{batchTitle}</h4>
             <p className="modal-copy">{fileName}</p>
           </div>
           <span className="import-progress-status">{statusLabel}</span>
@@ -44,7 +49,6 @@ export function ImportProgressModal({
           <div className="import-progress-donut" style={donutStyle}>
             <div className="import-progress-donut__inner">
               <strong>{Math.round(value)}%</strong>
-              <span>{statusLabel}</span>
             </div>
           </div>
 
