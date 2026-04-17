@@ -2319,6 +2319,51 @@ label {
   color: #a16207;
 }
 
+.accounts-warning-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.accounts-warning-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(4px);
+  z-index: 12;
+  min-width: 160px;
+  max-width: 220px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.26);
+  background: rgba(255, 250, 235, 0.98);
+  box-shadow: var(--shadow-soft);
+  color: #92400e;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  text-align: left;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.accounts-warning-tooltip::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translateX(-50%);
+  border: 7px solid transparent;
+  border-top-color: rgba(245, 158, 11, 0.26);
+}
+
+.accounts-warning-wrap:hover .accounts-warning-tooltip,
+.accounts-warning-wrap:focus-within .accounts-warning-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 .accounts-row-button {
   min-height: 32px;
   min-width: 32px;

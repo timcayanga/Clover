@@ -823,15 +823,20 @@ export default function AccountsPage() {
                             </div>
                             <div className="accounts-table__cell accounts-table__cell--status" role="cell">
                               {warning ? (
-                                <button
-                                  className="accounts-warning-icon"
-                                  type="button"
-                                  onClick={() => openDrawerForWarning(account, warning)}
-                                  title={warning}
-                                  aria-label={warning}
-                                >
-                                  <span aria-hidden="true">⚠</span>
-                                </button>
+                                <span className="accounts-warning-wrap">
+                                  <button
+                                    className="accounts-warning-icon"
+                                    type="button"
+                                    onClick={() => openDrawerForWarning(account, warning)}
+                                    title={warning}
+                                    aria-label={warning}
+                                  >
+                                    <span aria-hidden="true">⚠</span>
+                                  </button>
+                                  <span className="accounts-warning-tooltip" role="tooltip">
+                                    {warning}
+                                  </span>
+                                </span>
                               ) : (
                                 <span className="accounts-view-pill">Ready</span>
                               )}
