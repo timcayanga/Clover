@@ -1,22 +1,28 @@
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap");
+
 :root {
   color-scheme: light;
-  --bg: #ffffff;
-  --surface: #f8fbfc;
-  --surface-2: #eef7f9;
-  --surface-3: #e7f1f4;
-  --stroke: #d7e4e9;
-  --stroke-strong: #c5d5da;
-  --text: #0b1116;
-  --muted: #5d6b75;
-  --muted-2: #7f8d96;
+  --font-body: "Poppins", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-heading: "Poppins", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --bg: #f7f9fa;
+  --surface: #ffffff;
+  --surface-2: #f7f9fa;
+  --surface-3: #eef2f4;
+  --stroke: #e5e7eb;
+  --stroke-strong: #cfd6dc;
+  --text: #1f2933;
+  --muted: #6b7280;
+  --muted-2: #9ca3af;
   --accent: #03a8c0;
+  --accent-hover: #0295ab;
+  --accent-light: #5ed3e0;
   --accent-soft: rgba(3, 168, 192, 0.12);
   --accent-strong: rgba(3, 168, 192, 0.18);
-  --good: #0e9f6e;
-  --warn: #d08b00;
-  --bad: #c64f6e;
-  --shadow: 0 18px 40px rgba(10, 24, 35, 0.08);
-  --shadow-soft: 0 10px 24px rgba(10, 24, 35, 0.06);
+  --good: #22c55e;
+  --warn: #f59e0b;
+  --bad: #ef4444;
+  --shadow: 0 18px 36px rgba(31, 41, 51, 0.08);
+  --shadow-soft: 0 8px 18px rgba(31, 41, 51, 0.06);
   --radius: 28px;
   --radius-sm: 18px;
 }
@@ -34,12 +40,77 @@ body {
   margin: 0;
   min-height: 100vh;
   overflow: hidden;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.06), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(3, 168, 192, 0.05), transparent 24%),
-    var(--bg);
+    radial-gradient(circle at top left, rgba(94, 211, 224, 0.18), transparent 26%),
+    radial-gradient(circle at bottom right, rgba(3, 168, 192, 0.06), transparent 24%),
+    linear-gradient(180deg, #e6f7fa 0%, #ffffff 24%, var(--bg) 100%);
   color: var(--text);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-heading);
+  color: var(--text);
+}
+
+h1 {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+}
+
+h2 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+}
+
+h3 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+h4 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+
+h5,
+h6 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+small,
+.caption {
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 a {
@@ -51,11 +122,14 @@ button,
 input,
 select,
 textarea {
-  font: inherit;
+  font-family: inherit;
 }
 
 button {
   cursor: pointer;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.2;
 }
 
 input,
@@ -67,6 +141,7 @@ textarea {
   color: var(--text);
   min-height: 44px;
   padding: 0 14px;
+  font-size: 16px;
 }
 
 textarea {
@@ -78,6 +153,7 @@ label {
   display: grid;
   gap: 8px;
   color: var(--muted);
+  font-size: 14px;
 }
 
 .background {
@@ -205,7 +281,7 @@ label {
 .brand-eyebrow {
   margin-bottom: 0;
   color: var(--muted-2);
-  font-size: 0.68rem;
+  font-size: 12px;
   letter-spacing: 0.14em;
 }
 
@@ -213,7 +289,7 @@ label {
   margin: 0 0 6px;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  font-size: 0.72rem;
+  font-size: 12px;
   color: var(--muted-2);
 }
 
@@ -232,7 +308,7 @@ label {
   text-align: left;
   padding: 11px 14px;
   border-radius: 16px;
-  font-size: 0.94rem;
+  font-size: 15px;
   transition: background 160ms ease, color 160ms ease, transform 160ms ease, border-color 160ms ease;
 }
 
@@ -278,7 +354,7 @@ label {
   border-radius: 999px;
   background: rgba(248, 251, 252, 0.96);
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 14px;
   border: 1px solid var(--stroke);
 }
 
@@ -361,18 +437,19 @@ label {
 
 .hero-copy h3 {
   margin: 10px 0 14px;
-  font-size: clamp(2.5rem, 4.35vw, 4rem);
-  line-height: 0.94;
-  letter-spacing: -0.08em;
-  max-width: 11.2ch;
+  font-size: 32px;
+  line-height: 1.22;
+  font-weight: 600;
+  letter-spacing: -0.04em;
+  max-width: 14.5ch;
 }
 
 .hero-copy p {
   margin: 0;
   max-width: 58ch;
   color: var(--muted);
-  line-height: 1.62;
-  font-size: 0.98rem;
+  line-height: 1.5;
+  font-size: 16px;
 }
 
 .hero-actions {
@@ -403,13 +480,15 @@ label {
   display: block;
   color: var(--muted);
   margin-bottom: 6px;
-  font-size: 0.8rem;
+  font-size: 12px;
 }
 
 .metric strong {
   display: block;
-  font-size: 1.42rem;
-  letter-spacing: -0.045em;
+  font-size: 24px;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: -0.04em;
 }
 
 .metric small {
@@ -417,7 +496,7 @@ label {
   margin-top: 4px;
   color: var(--muted);
   line-height: 1.45;
-  font-size: 0.86rem;
+  font-size: 14px;
 }
 
 .metric.compact {
@@ -426,7 +505,7 @@ label {
 }
 
 .metric.compact strong {
-  font-size: 1.2rem;
+  font-size: 20px;
 }
 
 .feature-grid {
@@ -446,7 +525,7 @@ label {
   margin: 10px 0 0;
   color: var(--muted);
   line-height: 1.55;
-  font-size: 0.94rem;
+  font-size: 14px;
 }
 
 .overview-insight-grid,
@@ -502,14 +581,14 @@ label {
 }
 
 .overview-panel__item strong {
-  font-size: 0.88rem;
+  font-size: 14px;
   letter-spacing: -0.02em;
 }
 
 .overview-panel__item span {
   color: var(--muted);
   line-height: 1.55;
-  font-size: 0.9rem;
+  font-size: 14px;
 }
 
 .actions {
