@@ -745,11 +745,6 @@ export default function AccountsPage() {
             <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.liabilities)}</strong>
             <span>Credit cards and other negative balances</span>
           </article>
-          <article className="accounts-overview-card glass">
-            <p className="eyebrow">Needs review</p>
-            <strong>{accountsLoading ? "Loading..." : needsReviewCount}</strong>
-            <span>Potential duplicates or incomplete imports</span>
-          </article>
         </section>
 
         <section className="accounts-main-grid">
