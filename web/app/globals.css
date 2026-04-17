@@ -1245,6 +1245,7 @@ label {
   min-height: 38px;
   border-radius: 999px;
   padding-inline: 14px;
+  gap: 8px;
 }
 
 .transactions-action-button .button-icon {
@@ -1259,25 +1260,42 @@ label {
   height: 14px;
 }
 
-.transactions-page .transactions-action-button.button-secondary {
+.transactions-page .transactions-toolbar-chip.button-secondary {
   background: rgba(242, 245, 247, 0.98);
-  border-color: rgba(176, 188, 194, 0.9);
-  color: #101820;
+  border-color: rgba(182, 191, 197, 1);
+  color: #111111;
   box-shadow: none;
+  font-weight: 600;
+  font-size: 0.92rem;
 }
 
-.transactions-page .transactions-action-button.button-secondary:hover,
-.transactions-page .transactions-action-button.button-secondary:focus {
+.transactions-page .transactions-toolbar-chip.button-secondary:hover,
+.transactions-page .transactions-toolbar-chip.button-secondary:focus {
   background: rgba(235, 239, 241, 0.98);
-  border-color: rgba(159, 171, 177, 0.95);
+  border-color: rgba(160, 170, 176, 1);
 }
 
 .transactions-action-button .button-icon {
   margin-right: 6px;
 }
 
-.transactions-page .transactions-action-button.button-secondary .button-icon {
-  color: #101820;
+.transactions-page .transactions-toolbar-chip.button-secondary .button-icon {
+  color: #111111;
+}
+
+.transactions-page .transactions-toolbar-add.button-primary {
+  background: #03a8c0;
+  border-color: #03a8c0;
+  color: #ffffff;
+  box-shadow: none;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.transactions-page .transactions-toolbar-add.button-primary:hover,
+.transactions-page .transactions-toolbar-add.button-primary:focus {
+  background: #0394ab;
+  border-color: #0394ab;
 }
 
 .dashboard-shell {

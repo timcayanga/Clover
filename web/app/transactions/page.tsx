@@ -849,7 +849,7 @@ export default function TransactionsPage() {
             <div className="transactions-top-actions">
               <div className="transactions-add-menu" id="transactions-add-menu">
                 <button
-                  className="button button-primary button-small transactions-action-button transactions-add-menu__toggle"
+                  className="button button-primary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
                   type="button"
                   onClick={() => setAddMenuOpen((current) => !current)}
                   aria-expanded={addMenuOpen}
@@ -874,7 +874,7 @@ export default function TransactionsPage() {
 
               {selectedTransactionIds.length > 0 ? (
                 <button
-                  className="button button-secondary button-small transactions-action-button"
+                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
                   type="button"
                   title={`Bulk edit ${selectedTransactionIds.length} selected transaction${selectedTransactionIds.length === 1 ? "" : "s"}`}
                   onClick={openBulkEdit}
@@ -886,13 +886,13 @@ export default function TransactionsPage() {
                 </button>
               ) : null}
 
-              <button className="button button-secondary button-small transactions-action-button" type="button" title="Undo">
+              <button className="button button-secondary button-small transactions-action-button transactions-toolbar-chip" type="button" title="Undo">
                 <span className="button-icon" aria-hidden="true">
                   <ActionIcon name="undo" />
                 </span>
                 Undo
               </button>
-              <button className="button button-secondary button-small transactions-action-button" type="button" title="Redo">
+              <button className="button button-secondary button-small transactions-action-button transactions-toolbar-chip" type="button" title="Redo">
                 <span className="button-icon" aria-hidden="true">
                   <ActionIcon name="redo" />
                 </span>
@@ -902,7 +902,7 @@ export default function TransactionsPage() {
 
             <div className="transactions-top-actions transactions-top-actions--right">
               <button
-                className="button button-secondary button-small transactions-action-button transactions-search-trigger"
+                className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-search-trigger"
                 type="button"
                 onClick={() => searchInputRef.current?.focus()}
                 title="Search"
@@ -913,7 +913,7 @@ export default function TransactionsPage() {
                 <span>Search</span>
               </button>
               <button
-                className="button button-secondary button-small transactions-action-button"
+                className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
                 type="button"
                 title={dateFilterLabel}
                 onClick={() => setDateFilterOpen(true)}
@@ -924,7 +924,7 @@ export default function TransactionsPage() {
                 <span>Date</span>
               </button>
               <button
-                className="button button-secondary button-small transactions-action-button"
+                className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
                 type="button"
                 title="Filters"
                 onClick={() => setFilterOpen(true)}
@@ -935,7 +935,7 @@ export default function TransactionsPage() {
                 <span>Filters</span>
               </button>
               <button
-                className="button button-secondary button-small transactions-action-button transactions-summary-toggle-button"
+                className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-summary-toggle-button"
                 type="button"
                 aria-pressed={summaryOpen}
                 onClick={() => setSummaryOpen((current) => !current)}
@@ -946,7 +946,7 @@ export default function TransactionsPage() {
                 </span>
                 <span>Summary</span>
               </button>
-              <button className="button button-secondary button-small transactions-action-button" type="button" onClick={saveView} title="Save view">
+              <button className="button button-secondary button-small transactions-action-button transactions-toolbar-chip" type="button" onClick={saveView} title="Save view">
                 <span className="button-icon" aria-hidden="true">
                   <ActionIcon name="save" />
                 </span>
@@ -954,7 +954,7 @@ export default function TransactionsPage() {
               </button>
               <div className="transactions-download-menu" id="transactions-download-menu">
                 <button
-                  className="button button-secondary button-small transactions-action-button transactions-download-menu__toggle"
+                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-download-menu__toggle"
                   type="button"
                   aria-haspopup="menu"
                   aria-expanded={downloadMenuOpen}
