@@ -154,7 +154,7 @@ export default function ImportsPage() {
   if (onboardingStatus !== "ready") {
     return (
       <CloverShell
-        active="overview"
+        active="dashboard"
         title="Checking your setup..."
         kicker="One moment"
         subtitle="We’re confirming your onboarding status before opening Imports."

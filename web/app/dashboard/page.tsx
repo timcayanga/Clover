@@ -119,7 +119,7 @@ export default async function DashboardPage() {
 
   return (
     <CloverShell
-      active="overview"
+      active="dashboard"
       kicker="Workspace direction"
       title={`A calm, glass-like workspace for ${selectedWorkspace.name}.`}
       subtitle="Showing live data from the seeded workspace, imported transactions, and queued uploads."

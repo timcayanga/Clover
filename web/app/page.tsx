@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ScrollReveal } from "@/components/scroll-reveal";
 
 function LandingScene() {
   return (
@@ -136,17 +137,17 @@ export default function HomePage() {
         </nav>
       </header>
 
-      <section className="landing-hero">
+      <ScrollReveal as="section" className="landing-hero" delay={0}>
         <div className="landing-hero__copy">
-          <span className="pill pill-accent">Clarity for your money, not more noise</span>
-          <h1>See your finances clearly, and act on them with less stress.</h1>
+          <span className="pill pill-accent">Private money workspace</span>
+          <h1>Turn money chaos into a calm visual system.</h1>
           <p className="landing-hero__lede">
-            Clover turns transactions, imports, and insights into one visual workspace so you can understand what is happening, why it matters, and what to do next.
+            Clover brings transactions, imports, and insights into one polished workspace so you can see the story, trust the numbers, and move faster.
           </p>
 
           <div className="landing-hero__actions">
             <Link className="button button-primary button-pill" href="/sign-up">
-              Sign up free
+              Get started
             </Link>
             <Link className="button button-secondary button-pill" href="/sign-in">
               Log in
@@ -170,38 +171,38 @@ export default function HomePage() {
         </div>
 
         <LandingScene />
-      </section>
+      </ScrollReveal>
 
-      <section className="landing-benefits">
+      <ScrollReveal as="section" className="landing-benefits" delay={80}>
         <article className="landing-card glass">
           <p className="eyebrow">Understand</p>
-          <h2>Know what your money is doing at a glance.</h2>
+          <h2>See the shape of your money at a glance.</h2>
           <p>
-            Clover organizes your transactions, categories, and trends into a clear visual system, so the important stuff stands out immediately.
+            Clover organizes your transactions, categories, and trends into a visual system that makes the important stuff stand out immediately.
           </p>
         </article>
         <article className="landing-card glass">
           <p className="eyebrow">Review</p>
-          <h2>Catch issues before they become habits.</h2>
+          <h2>Spot issues before they turn into habits.</h2>
           <p>
-            Clean visuals and source-aware workflows make it easier to spot duplicates, odd spending, and missing details without digging.
+            Clean visuals and source-aware workflows make it easier to catch duplicates, odd spending, and missing details without digging.
           </p>
         </article>
         <article className="landing-card glass">
           <p className="eyebrow">Act</p>
-          <h2>Move from insight to action quickly.</h2>
+          <h2>Move from insight to action with less friction.</h2>
           <p>
-            When the next step is obvious, it is much easier to save, adjust, and keep your finances on track.
+            When the next step is obvious, it is easier to save, adjust, and keep your finances moving in the right direction.
           </p>
         </article>
-      </section>
+      </ScrollReveal>
 
-      <section className="landing-showcase">
+      <ScrollReveal as="section" className="landing-showcase" delay={120}>
         <article className="landing-showcase__copy glass">
-          <p className="eyebrow">Designed to be visual</p>
-          <h2>A landing page that feels like a product preview, not a brochure.</h2>
+          <p className="eyebrow">Designed to feel premium</p>
+          <h2>A product preview that feels deliberate, not decorative.</h2>
           <p>
-            Instead of relying on flat icons, Clover uses layered cards, soft depth, and illustration-driven scenes to make the experience feel tangible from the first glance.
+            Instead of relying on flat icons, Clover uses layered cards, soft depth, and illustration-driven scenes to make the experience feel tangible at first glance.
           </p>
           <div className="landing-stat-row">
             <div className="landing-stat">
@@ -247,12 +248,12 @@ export default function HomePage() {
             </div>
           </div>
         </article>
-      </section>
+      </ScrollReveal>
 
-      <section className="landing-cta glass">
+      <ScrollReveal as="section" className="landing-cta glass" delay={160}>
         <div>
           <p className="eyebrow">Ready to explore Clover?</p>
-          <h2>Start a new account or pick up where you left off.</h2>
+          <h2>Start a new account or pick up right where you left off.</h2>
         </div>
         <div className="landing-cta__actions">
           <Link className="button button-primary button-pill" href="/sign-up">
@@ -262,7 +263,7 @@ export default function HomePage() {
             Log in
           </Link>
         </div>
-      </section>
+      </ScrollReveal>
     </main>
   );
 }

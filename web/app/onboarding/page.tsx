@@ -20,7 +20,7 @@ export default async function OnboardingPage() {
 
   return (
     <CloverShell
-      active="overview"
+      active="dashboard"
       kicker="Quick setup"
       title="A few quick details, then you’re in."
       subtitle="Clover uses your choice to shape the first experience without slowing signup down."

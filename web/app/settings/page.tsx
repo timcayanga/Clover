@@ -36,7 +36,7 @@ const sections: SettingSection[] = [
     summary: "Tune how dense the app feels and which parts you see first.",
     fields: [
       { label: "Table density", kind: "select", value: "Comfortable", options: ["Comfortable", "Compact", "Spacious"] },
-      { label: "Landing page", kind: "select", value: "Overview", options: ["Overview", "Transactions", "Reports"] },
+      { label: "Landing page", kind: "select", value: "Dashboard", options: ["Dashboard", "Transactions", "Reports"] },
       { label: "Show balances by default", kind: "toggle", checked: true },
       { label: "Reduce sidebar chrome", kind: "toggle", checked: false },
     ],

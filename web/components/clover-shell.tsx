@@ -1,8 +1,11 @@
+"use client";
+
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { useUser } from "@clerk/nextjs";
 
 type CloverShellProps = {
-  active: "overview" | "accounts" | "transactions" | "reports" | "insights" | "settings";
+  active: "dashboard" | "accounts" | "transactions" | "reports" | "insights" | "settings";
   title: string;
   kicker?: string;
   subtitle?: string;
@@ -12,14 +15,23 @@ type CloverShellProps = {
 };
 
 const navItems = [
-  { href: "/", label: "Overview", key: "overview" as const },
+  { href: "/dashboard", label: "Dashboard", key: "dashboard" as const },
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/reports", label: "Reports", key: "reports" as const },
   { href: "/dashboard#insights", label: "Insights", key: "insights" as const },
 ];
 
-type IconName = "overview" | "accounts" | "transactions" | "reports" | "insights" | "settings";
+type IconName =
+  | "dashboard"
+  | "accounts"
+  | "transactions"
+  | "reports"
+  | "insights"
+  | "settings"
+  | "search"
+  | "notifications"
+  | "profile";
 
 function MenuIcon({ name }: { name: IconName }) {
   const common = {
@@ -35,12 +47,34 @@ function MenuIcon({ name }: { name: IconName }) {
   };
 
   switch (name) {
-    case "overview":
+    case "dashboard":
       return (
         <svg {...common}>
           <path d="M3 11.5 12 4l9 7.5" />
           <path d="M5 10.5V20h14v-9.5" />
           <path d="M9.5 20v-6.2h5V20" />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg {...common}>
+          <circle cx="11" cy="11" r="6" />
+          <path d="m20 20-4.2-4.2" />
+        </svg>
+      );
+    case "notifications":
+      return (
+        <svg {...common}>
+          <path d="M6 17h12" />
+          <path d="M8 17v-6a4 4 0 1 1 8 0v6" />
+          <path d="M10 17a2 2 0 0 0 4 0" />
+        </svg>
+      );
+    case "profile":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="8.5" r="3.2" />
+          <path d="M5.5 19c1.5-3.2 4.1-5 6.5-5s5 1.8 6.5 5" />
         </svg>
       );
     case "accounts":
@@ -98,52 +132,75 @@ export function CloverShell({
   showTopbar = true,
   children,
 }: CloverShellProps) {
+  const { user } = useUser();
+  const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
+  const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
+  const profileImage = user?.imageUrl ?? null;
+
   return (
-    <>
-      <div className="app-shell">
-        <aside className="sidebar" aria-label="Primary">
-          <div className="sidebar-brand">
-            <Link className="sidebar-brand-link" href="/" aria-label="Clover home">
-              <img className="brand-mark brand-mark--sidebar" src="/favicon.svg" alt="" aria-hidden="true" />
+    <div className="app-shell">
+      <aside className="sidebar" aria-label="Primary">
+        <div className="sidebar-brand">
+          <Link className="sidebar-brand-link" href="/dashboard" aria-label="Go to dashboard">
+            <img className="brand-mark brand-mark--sidebar" src="/favicon.svg" alt="" aria-hidden="true" />
+          </Link>
+
+          <div className="sidebar-brand-actions" aria-label="Quick actions">
+            <Link className="sidebar-icon-button" href="#sidebar-search" aria-label="Search">
+              <MenuIcon name="search" />
+            </Link>
+            <Link className="sidebar-icon-button" href="/settings#notifications-and-alerts" aria-label="Notifications">
+              <MenuIcon name="notifications" />
             </Link>
           </div>
+        </div>
 
-          <nav className="sidebar-nav" aria-label="Primary">
-            {navItems.map((item) => (
-              <Link key={item.key} className={`nav-link ${active === item.key ? "is-active" : ""}`} href={item.href}>
-                <span className="nav-link__icon" aria-hidden="true">
-                  <MenuIcon name={item.key} />
-                </span>
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+        <label className="sidebar-search" htmlFor="sidebar-search">
+          <span className="sr-only">Search</span>
+          <input id="sidebar-search" type="search" placeholder="Search" />
+        </label>
 
-          <div className="sidebar-footer">
-            <Link className={`nav-link nav-link--settings ${active === "settings" ? "is-active" : ""}`} href="/settings">
+        <nav className="sidebar-nav" aria-label="Primary">
+          {navItems.map((item) => (
+            <Link key={item.key} className={`nav-link ${active === item.key ? "is-active" : ""}`} href={item.href}>
               <span className="nav-link__icon" aria-hidden="true">
-                <MenuIcon name="settings" />
+                <MenuIcon name={item.key} />
               </span>
-              Settings
+              {item.label}
             </Link>
-          </div>
-        </aside>
+          ))}
+        </nav>
 
-        <main className="content">
-          {showTopbar ? (
-            <header className="topbar glass">
-              <div>
-                {kicker ? <p className="eyebrow">{kicker}</p> : null}
-                <h2>{title}</h2>
-                {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
-              </div>
-              <div className="topbar-actions">{actions}</div>
-            </header>
-          ) : null}
+        <div className="sidebar-footer">
+          <Link className="sidebar-profile" href="/settings#profile-and-workspace" aria-label="Profile">
+            <span className="sidebar-profile__avatar" aria-hidden="true">
+              {profileImage ? <img src={profileImage} alt="" /> : <span>{profileInitial}</span>}
+            </span>
+            <span className="sr-only">{displayName}</span>
+          </Link>
+          <Link className={`sidebar-icon-button ${active === "settings" ? "is-active" : ""}`} href="/settings" aria-label="Settings">
+            <MenuIcon name="settings" />
+          </Link>
+          <Link className="sidebar-icon-button" href="/settings#notifications-and-alerts" aria-label="Notifications">
+            <MenuIcon name="notifications" />
+          </Link>
+        </div>
+      </aside>
 
-          <div className="content-body">{children}</div>
-        </main>
-      </div>
-    </>
+      <main className="content">
+        {showTopbar ? (
+          <header className="topbar glass">
+            <div>
+              {kicker ? <p className="eyebrow">{kicker}</p> : null}
+              <h2>{title}</h2>
+              {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
+            </div>
+            <div className="topbar-actions">{actions}</div>
+          </header>
+        ) : null}
+
+        <div className="content-body">{children}</div>
+      </main>
+    </div>
   );
 }
