@@ -1350,6 +1350,632 @@ label {
   gap: 18px;
 }
 
+.accounts-page {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.accounts-toolbar-filters {
+  position: relative;
+}
+
+.accounts-toolbar-button {
+  border-radius: 999px;
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.accounts-toolbar-button .button-icon {
+  margin-right: 0;
+}
+
+.accounts-toolbar-button span:last-child {
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.accounts-toolbar-add {
+  border-radius: 999px;
+  min-height: 38px;
+  padding: 0 16px;
+}
+
+.accounts-toolbar-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 25;
+  display: grid;
+  gap: 12px;
+  width: min(280px, 90vw);
+  padding: 14px;
+  border-radius: 20px;
+}
+
+.accounts-toolbar-popover label {
+  gap: 6px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.accounts-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 240px;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 30px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow);
+}
+
+.accounts-hero__copy {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.accounts-hero__value-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.accounts-hero__value-row strong {
+  font-size: clamp(2.2rem, 4vw, 3.35rem);
+  letter-spacing: -0.06em;
+  line-height: 0.92;
+}
+
+.accounts-hero__delta {
+  font-size: 0.96rem;
+  font-weight: 700;
+}
+
+.accounts-hero__delta.positive {
+  color: var(--good);
+}
+
+.accounts-hero__delta.negative {
+  color: var(--bad);
+}
+
+.accounts-hero__meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.accounts-hero__copyline {
+  margin: 0;
+  color: var(--muted);
+  max-width: 54ch;
+  line-height: 1.65;
+}
+
+.accounts-hero__controls {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.accounts-hero__controls label {
+  gap: 6px;
+}
+
+.accounts-chart-card {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 26px;
+  background: rgba(248, 251, 252, 0.92);
+  border: 1px solid rgba(199, 213, 219, 0.95);
+}
+
+.accounts-chart-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.accounts-chart-card__head h3 {
+  margin: 0;
+  font-size: 1.16rem;
+  letter-spacing: -0.03em;
+}
+
+.accounts-chart-card__head p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.accounts-chart-card__pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.accounts-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.accounts-breakdown {
+  display: grid;
+  gap: 16px;
+  min-height: 280px;
+}
+
+.accounts-breakdown__bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 18px;
+  min-height: 280px;
+  padding: 14px 0 4px;
+}
+
+.accounts-breakdown__bar {
+  width: 34%;
+  border-radius: 22px 22px 10px 10px;
+  min-height: 48px;
+}
+
+.accounts-breakdown__bar--assets {
+  background: linear-gradient(180deg, rgba(3, 168, 192, 0.42), rgba(3, 168, 192, 0.18));
+}
+
+.accounts-breakdown__bar--liabilities {
+  background: linear-gradient(180deg, rgba(207, 79, 102, 0.42), rgba(207, 79, 102, 0.18));
+}
+
+.accounts-breakdown__legend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  margin-right: 8px;
+}
+
+.dot--teal {
+  background: var(--accent);
+}
+
+.dot--rose {
+  background: var(--bad);
+}
+
+.accounts-chart-card__footer {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.accounts-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) 340px;
+  gap: 16px;
+  align-items: start;
+}
+
+.accounts-list-column {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.accounts-list-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.accounts-list-head h4,
+.accounts-summary-column__head h4 {
+  margin: 4px 0 0;
+  font-size: 1.3rem;
+  letter-spacing: -0.03em;
+}
+
+.accounts-list-head p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.accounts-sections {
+  display: grid;
+  gap: 14px;
+}
+
+.accounts-group {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 26px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-soft);
+}
+
+.accounts-group__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.accounts-group__head h5 {
+  margin: 0;
+  font-size: 1.06rem;
+  letter-spacing: -0.03em;
+}
+
+.accounts-group__head p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.accounts-group__tone {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.accounts-group__tone--assets {
+  background: rgba(3, 168, 192, 0.08);
+  color: var(--accent);
+  border-color: rgba(3, 168, 192, 0.18);
+}
+
+.accounts-group__tone--liability {
+  background: rgba(198, 79, 110, 0.08);
+  color: var(--bad);
+  border-color: rgba(198, 79, 110, 0.18);
+}
+
+.accounts-group__tone--cash,
+.accounts-group__tone--neutral {
+  background: rgba(15, 23, 42, 0.05);
+}
+
+.accounts-table {
+  display: grid;
+  gap: 4px;
+}
+
+.accounts-table__header,
+.accounts-table__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) 140px 140px 160px;
+  gap: 12px;
+  align-items: center;
+}
+
+.accounts-table__header {
+  padding: 0 4px 4px;
+  color: var(--muted-2);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.accounts-table__row {
+  padding: 14px 4px;
+  border-top: 1px solid rgba(215, 228, 233, 0.72);
+}
+
+.accounts-table__cell {
+  color: var(--text);
+  font-size: 0.94rem;
+}
+
+.accounts-table__cell--name {
+  display: grid;
+  gap: 4px;
+}
+
+.accounts-table__cell--name strong {
+  font-size: 0.98rem;
+  letter-spacing: -0.02em;
+}
+
+.accounts-table__cell--name span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.accounts-source {
+  color: var(--accent);
+}
+
+.accounts-type-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  background: rgba(3, 168, 192, 0.08);
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.accounts-type-tag.is-liability {
+  border-color: rgba(198, 79, 110, 0.18);
+  background: rgba(198, 79, 110, 0.08);
+  color: var(--bad);
+}
+
+.accounts-table__cell--amount {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.accounts-table__cell--amount.is-asset {
+  color: var(--good);
+}
+
+.accounts-table__cell--amount.is-liability {
+  color: var(--bad);
+}
+
+.accounts-summary-column {
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 26px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow);
+  position: sticky;
+  top: 22px;
+}
+
+.accounts-summary-column__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.accounts-summary-tabs {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.04);
+  gap: 4px;
+}
+
+.accounts-summary-tabs button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  min-height: 30px;
+  padding: 0 12px;
+}
+
+.accounts-summary-tabs button.is-active {
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+}
+
+.accounts-summary-list {
+  display: grid;
+  gap: 12px;
+}
+
+.accounts-summary-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.accounts-summary-item span {
+  color: var(--muted);
+}
+
+.accounts-summary-item strong {
+  font-size: 1.03rem;
+  letter-spacing: -0.02em;
+}
+
+.accounts-summary-bar {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.1);
+  overflow: hidden;
+}
+
+.accounts-summary-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(3, 168, 192, 0.45), rgba(3, 168, 192, 0.9));
+}
+
+.accounts-summary-bar--liability {
+  background: rgba(198, 79, 110, 0.1);
+}
+
+.accounts-summary-bar--liability span {
+  background: linear-gradient(90deg, rgba(198, 79, 110, 0.45), rgba(198, 79, 110, 0.9));
+}
+
+.accounts-summary-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.accounts-summary-download {
+  justify-content: flex-start;
+  color: var(--accent);
+}
+
+.accounts-summary-download .button-icon {
+  margin-right: 0;
+}
+
+.accounts-status-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.accounts-add-modal {
+  width: min(1040px, calc(100vw - 28px));
+}
+
+.accounts-add-tabs {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.04);
+  gap: 4px;
+}
+
+.accounts-add-tabs button {
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  min-height: 32px;
+  padding: 0 14px;
+}
+
+.accounts-add-tabs button.is-active {
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--text);
+  box-shadow: var(--shadow-soft);
+}
+
+.accounts-add-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.accounts-add-column,
+.accounts-import-column {
+  display: grid;
+  gap: 14px;
+}
+
+.accounts-kind-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.accounts-kind-card {
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 20px;
+  padding: 14px;
+  text-align: left;
+  display: grid;
+  gap: 6px;
+  min-height: 92px;
+}
+
+.accounts-kind-card strong {
+  font-size: 0.98rem;
+}
+
+.accounts-kind-card span {
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.accounts-kind-card.is-active {
+  border-color: rgba(3, 168, 192, 0.34);
+  background: rgba(3, 168, 192, 0.08);
+}
+
+.accounts-kind-card.is-cash {
+  opacity: 0.86;
+}
+
+.accounts-manual-form {
+  display: grid;
+  gap: 12px;
+  max-width: 420px;
+}
+
+.accounts-import-column {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.accounts-import-card {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid var(--stroke);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.accounts-import-card h5 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.accounts-import-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.58;
+}
+
+.accounts-import-card--stacked {
+  align-content: start;
+}
+
+.accounts-hero,
+.accounts-summary-column,
+.accounts-group,
+.accounts-import-card,
+.accounts-kind-card {
+  animation: fade-up 280ms ease;
+}
+
 .table-panel,
 .insight-card,
 .workspace {
@@ -1427,6 +2053,23 @@ label {
     grid-template-columns: 1fr;
   }
 
+  .accounts-hero,
+  .accounts-main-grid,
+  .accounts-import-column,
+  .accounts-kind-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .accounts-summary-column {
+    position: relative;
+    top: 0;
+  }
+
+  .accounts-table__header,
+  .accounts-table__row {
+    grid-template-columns: 1.3fr 120px 120px 120px;
+  }
+
   .overview-panel__list--wide {
     grid-template-columns: 1fr;
   }
@@ -1475,5 +2118,38 @@ label {
 
   .brand-wordmark {
     width: 138px;
+  }
+
+  .accounts-hero,
+  .accounts-group,
+  .accounts-summary-column,
+  .accounts-add-modal,
+  .accounts-toolbar-popover {
+    border-radius: 22px;
+  }
+
+  .accounts-hero__value-row strong {
+    font-size: clamp(2rem, 11vw, 3rem);
+  }
+
+  .accounts-chart-card__head,
+  .accounts-list-head,
+  .accounts-group__head,
+  .accounts-summary-column__head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .accounts-table__header {
+    display: none;
+  }
+
+  .accounts-table__row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .accounts-table__cell--amount {
+    justify-self: flex-start;
   }
 }

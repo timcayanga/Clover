@@ -34,6 +34,14 @@ export const ensureStarterWorkspace = async (userId: string, email: string, veri
             currency: "PHP",
             source: "upload",
           },
+          {
+            name: "Cash on hand",
+            institution: "Wallet",
+            type: "cash",
+            currency: "PHP",
+            source: "manual",
+            balance: 0,
+          },
         ],
       },
       categories: {
@@ -66,15 +74,26 @@ export const seedWorkspaceDefaults = async (workspaceId: string) => {
 
   const existingAccounts = await prisma.account.findMany({ where: { workspaceId } });
   if (existingAccounts.length === 0) {
-    await prisma.account.create({
-      data: {
-        workspaceId,
-        name: "Imported transactions",
-        institution: "Source upload",
-        type: "bank",
-        currency: "PHP",
-        source: "upload",
-      },
+    await prisma.account.createMany({
+      data: [
+        {
+          workspaceId,
+          name: "Imported transactions",
+          institution: "Source upload",
+          type: "bank",
+          currency: "PHP",
+          source: "upload",
+        },
+        {
+          workspaceId,
+          name: "Cash on hand",
+          institution: "Wallet",
+          type: "cash",
+          currency: "PHP",
+          source: "manual",
+          balance: 0,
+        },
+      ],
     });
   }
 };

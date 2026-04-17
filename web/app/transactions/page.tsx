@@ -14,6 +14,7 @@ type Account = {
   id: string;
   name: string;
   institution: string | null;
+  type: "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
   currency: string;
 };
 
@@ -507,6 +508,11 @@ export default function TransactionsPage() {
   };
 
   const ensureDefaultAccount = async (workspaceId: string) => {
+    const preferredAccount = accounts.find((account) => account.type !== "cash" && account.type !== "other" && account.type !== "investment");
+    if (preferredAccount) {
+      return preferredAccount.id;
+    }
+
     if (accounts.length > 0) {
       return accounts[0].id;
     }

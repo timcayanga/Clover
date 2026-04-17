@@ -142,6 +142,11 @@ export default function ImportsPage() {
   }, [selectedWorkspaceId]);
 
   const ensureDefaultAccount = async (workspaceId: string) => {
+    const preferredAccount = accounts.find((account) => account.type !== "cash" && account.type !== "other" && account.type !== "investment");
+    if (preferredAccount) {
+      return preferredAccount.id;
+    }
+
     if (accounts.length > 0) {
       return accounts[0].id;
     }
