@@ -9,7 +9,9 @@ export const metadata: Metadata = {
   description: "Upload statements, understand cash flow, and act with clarity.",
 };
 
-const productionHosts = new Set(["clover.ph", "www.clover.ph"]);
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const stagingHosts = new Set(["staging.clover.ph"]);
 const stagingCookieName = "clover_staging_access";
 
@@ -24,16 +26,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const cookieStore = await cookies();
   const stagingCookie = cookieStore.get(stagingCookieName)?.value;
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-
-  if (productionHosts.has(hostname)) {
-    return (
-      <html lang="en">
-        <body>
-          <main aria-hidden="true" style={{ minHeight: "100vh", background: "white" }} />
-        </body>
-      </html>
-    );
-  }
 
   if (stagingHosts.has(hostname) && stagingCookie !== "1") {
     return (
