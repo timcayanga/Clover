@@ -12,6 +12,7 @@ const prepareSchema = z.object({
   fileName: z.string().min(1),
   fileType: z.string().min(1),
   contentType: z.string().min(1),
+  skipUpload: z.boolean().optional().default(false),
 });
 
 export async function GET(request: Request) {
@@ -41,7 +42,7 @@ export async function POST(request: Request) {
     await requireAuth();
     const payload = prepareSchema.parse(await request.json());
     const storageKey = buildImportKey(payload.workspaceId, payload.fileName);
-    const upload = await createUploadUrl(storageKey, payload.contentType);
+    const upload = payload.skipUpload ? null : await createUploadUrl(storageKey, payload.contentType);
 
     const importFile = await prisma.importFile.create({
       data: {
@@ -56,9 +57,12 @@ export async function POST(request: Request) {
     return NextResponse.json({
       importFile,
       upload,
+      mode: payload.skipUpload ? "local" : "remote",
       retention: {
-        deleteAfterHours: 72,
-        note: "Configure a bucket lifecycle rule to auto-delete temporary uploads.",
+        deleteAfterHours: payload.skipUpload ? 0 : 72,
+        note: payload.skipUpload
+          ? "The raw file is parsed locally in your browser and not uploaded."
+          : "Configure a bucket lifecycle rule to auto-delete temporary uploads.",
       },
     });
   } catch (error) {

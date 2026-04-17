@@ -2059,6 +2059,12 @@ label {
   width: min(1040px, calc(100vw - 28px));
 }
 
+.accounts-import-modal {
+  width: min(980px, calc(100vw - 28px));
+  display: grid;
+  gap: 16px;
+}
+
 .accounts-add-tabs {
   display: inline-flex;
   padding: 4px;
@@ -2136,7 +2142,7 @@ label {
 }
 
 .accounts-import-column {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
 }
 
 .accounts-import-card {
@@ -2161,6 +2167,239 @@ label {
 
 .accounts-import-card--stacked {
   align-content: start;
+}
+
+.accounts-import-security {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(3, 168, 192, 0.14);
+  background: rgba(3, 168, 192, 0.07);
+}
+
+.accounts-import-security strong {
+  font-size: 0.92rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.accounts-import-security p {
+  color: var(--muted);
+  line-height: 1.55;
+  font-size: 0.94rem;
+}
+
+.accounts-import-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.accounts-import-summary div {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.accounts-import-summary span {
+  color: var(--muted-2);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.accounts-import-summary strong {
+  font-size: 0.98rem;
+  letter-spacing: -0.02em;
+}
+
+.accounts-import-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(240px, 0.7fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.accounts-import-dropzone {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px dashed rgba(3, 168, 192, 0.24);
+  background: linear-gradient(180deg, rgba(3, 168, 192, 0.08), rgba(255, 255, 255, 0.9));
+  color: var(--text);
+  transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.accounts-import-dropzone.is-active {
+  border-color: rgba(3, 168, 192, 0.52);
+  background: linear-gradient(180deg, rgba(3, 168, 192, 0.14), rgba(255, 255, 255, 0.94));
+  transform: translateY(-1px);
+}
+
+.accounts-import-dropzone strong {
+  font-size: 1rem;
+}
+
+.accounts-import-dropzone span {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.accounts-import-target {
+  gap: 6px;
+  align-content: start;
+}
+
+.accounts-import-target__hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.accounts-import-target select {
+  width: 100%;
+}
+
+.accounts-import-note {
+  padding: 12px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(247, 249, 250, 0.9);
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.accounts-import-files {
+  display: grid;
+  gap: 12px;
+  max-height: min(44vh, 420px);
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.accounts-import-file {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-soft);
+}
+
+.accounts-import-file--needs_password {
+  border-color: rgba(245, 158, 11, 0.32);
+  background: rgba(255, 247, 224, 0.92);
+}
+
+.accounts-import-file--error {
+  border-color: rgba(239, 68, 68, 0.24);
+}
+
+.accounts-import-file--done {
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.accounts-import-file__head,
+.accounts-import-file__foot {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.accounts-import-file__meta {
+  display: grid;
+  gap: 4px;
+}
+
+.accounts-import-file__meta strong {
+  font-size: 0.98rem;
+  letter-spacing: -0.02em;
+  word-break: break-word;
+}
+
+.accounts-import-file__meta span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.accounts-import-file__badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.accounts-import-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  color: var(--muted);
+  background: rgba(247, 249, 250, 0.94);
+  font-size: 0.74rem;
+  text-transform: capitalize;
+}
+
+.accounts-import-badge.is-done {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.22);
+  color: #15803d;
+}
+
+.accounts-import-badge.is-needs_password {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.22);
+  color: #a16207;
+}
+
+.accounts-import-badge.is-error {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: #b91c1c;
+}
+
+.accounts-import-remove {
+  flex: none;
+}
+
+.accounts-import-file__error {
+  color: #b91c1c;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.accounts-import-password-row {
+  display: grid;
+  gap: 10px;
+}
+
+.accounts-import-password-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.accounts-import-password-input input {
+  width: 100%;
+}
+
+.accounts-import-file__foot {
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 
 .accounts-summary-column,
@@ -2253,6 +2492,11 @@ label {
     grid-template-columns: 1fr;
   }
 
+  .accounts-import-toolbar,
+  .accounts-import-summary {
+    grid-template-columns: 1fr;
+  }
+
   .accounts-overview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2320,6 +2564,7 @@ label {
   .accounts-group,
   .accounts-summary-column,
   .accounts-add-modal,
+  .accounts-import-modal,
   .accounts-toolbar-popover {
     border-radius: 22px;
   }
@@ -2376,5 +2621,9 @@ label {
     width: 100%;
     height: 100vh;
     border-radius: 0;
+  }
+
+  .accounts-import-files {
+    max-height: none;
   }
 }

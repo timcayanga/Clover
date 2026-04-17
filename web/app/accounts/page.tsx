@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { CloverShell } from "@/components/clover-shell";
+import { ImportFilesModal } from "@/components/import-files-modal";
 
 type Workspace = {
   id: string;
@@ -234,6 +234,7 @@ export default function AccountsPage() {
   const [message, setMessage] = useState("Select a workspace to review accounts.");
   const [addOpen, setAddOpen] = useState(false);
   const [addMode, setAddMode] = useState<AddMode>("manual");
+  const [importOpen, setImportOpen] = useState(false);
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<AccountSort>("updated_desc");
@@ -304,6 +305,7 @@ export default function AccountsPage() {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setAddOpen(false);
+        setImportOpen(false);
         setDrawerAccountId(null);
       }
     };
@@ -435,6 +437,11 @@ export default function AccountsPage() {
     if (!selectedWorkspaceId) return;
     await loadWorkspaceData(selectedWorkspaceId);
     setMessage(`Workspace "${selectedWorkspace?.name ?? "selected"}" refreshed.`);
+  };
+
+  const openImportFiles = () => {
+    setAddOpen(false);
+    setImportOpen(true);
   };
 
   const openAccountDrawer = (account: Account) => {
@@ -631,14 +638,10 @@ export default function AccountsPage() {
               <ActionIcon name="plus" />
               <span>Add account</span>
             </button>
-            <Link className="button button-secondary button-small accounts-toolbar-button" href="/imports">
+            <button className="button button-secondary button-small accounts-toolbar-button" type="button" onClick={openImportFiles}>
               <ActionIcon name="upload" />
-              <span>Import transactions</span>
-            </Link>
-            <Link className="button button-secondary button-small accounts-toolbar-button" href="/imports">
-              <ActionIcon name="upload" />
-              <span>Import balances</span>
-            </Link>
+              <span>Import files</span>
+            </button>
           </div>
         </div>
 
@@ -820,14 +823,10 @@ export default function AccountsPage() {
             <div className="accounts-summary-group">
               <p className="eyebrow">Import shortcuts</p>
               <div className="accounts-summary-actions">
-                <Link className="button button-secondary button-small accounts-summary-download" href="/imports">
+                <button className="button button-secondary button-small accounts-summary-download" type="button" onClick={openImportFiles}>
                   <ActionIcon name="upload" />
-                  <span>Import transactions</span>
-                </Link>
-                <Link className="button button-secondary button-small accounts-summary-download" href="/imports">
-                  <ActionIcon name="upload" />
-                  <span>Import balances</span>
-                </Link>
+                  <span>Import files</span>
+                </button>
               </div>
             </div>
 
@@ -943,17 +942,14 @@ export default function AccountsPage() {
 
             <section className="accounts-drawer__section">
               <div className="accounts-drawer__section-head">
-                <h5>Import history</h5>
+                <h5>Import files</h5>
                 <ActionIcon name="upload" />
               </div>
-              <p className="accounts-drawer__note">Bring in PDF or CSV statements to map balances and transactions back to this account.</p>
+              <p className="accounts-drawer__note">Bring in CSV or PDF support files to map balances and transactions back to this account.</p>
               <div className="accounts-drawer__actions">
-                <Link className="button button-secondary button-small" href="/imports">
-                  Import transactions
-                </Link>
-                <Link className="button button-secondary button-small" href="/imports">
-                  Import balances
-                </Link>
+                <button className="button button-secondary button-small" type="button" onClick={openImportFiles}>
+                  Import files
+                </button>
               </div>
             </section>
 
@@ -1057,31 +1053,16 @@ export default function AccountsPage() {
                 </div>
               ) : (
                 <div className="accounts-import-column">
-                  <article className="accounts-import-card">
-                    <p className="eyebrow">Import</p>
-                    <h5>Import transaction history</h5>
-                    <p>
-                      PDF and CSV imports can auto-populate the bank name, account label, and line items. If the account is
-                      not recognized, we can label it as <strong>-</strong> until it’s assigned.
-                    </p>
-                    <Link className="button button-secondary button-small" href="/imports">
-                      Import transactions
-                    </Link>
-                  </article>
-
-                  <article className="accounts-import-card">
-                    <p className="eyebrow">Import</p>
-                    <h5>Import balance history</h5>
-                    <p>Map historical balances to the correct account after upload so the net worth chart stays aligned.</p>
-                    <Link className="button button-secondary button-small" href="/imports">
-                      Import balances
-                    </Link>
-                  </article>
-
                   <article className="accounts-import-card accounts-import-card--stacked">
-                    <p className="eyebrow">Imported accounts</p>
-                    <h5>Multiple accounts in one file</h5>
-                    <p>If a statement contains several accounts, we can disambiguate them with the last four digits and file source.</p>
+                    <p className="eyebrow">Import files</p>
+                    <h5>Bring in statements, balances, and account history</h5>
+                    <p>
+                      Upload CSV or PDF support files, including password-protected statements. We parse the file locally,
+                      extract the account and transaction details, and keep the workflow focused on the account you’re reviewing.
+                    </p>
+                    <button className="button button-secondary button-small" type="button" onClick={openImportFiles}>
+                      Open import files
+                    </button>
                   </article>
                 </div>
               )}
@@ -1089,6 +1070,16 @@ export default function AccountsPage() {
           </section>
         </div>
       ) : null}
+
+      <ImportFilesModal
+        open={importOpen}
+        workspaceId={selectedWorkspaceId}
+        workspaceName={selectedWorkspace?.name ?? null}
+        accounts={accounts}
+        defaultAccountId={selectedAccount?.id ?? accounts[0]?.id ?? null}
+        onClose={() => setImportOpen(false)}
+        onImported={refreshAll}
+      />
     </CloverShell>
   );
 }

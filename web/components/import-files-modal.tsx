@@ -1,0 +1,572 @@
+"use client";
+
+import type { ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+
+type AccountOption = {
+  id: string;
+  name: string;
+  institution: string | null;
+  type: string;
+};
+
+type ImportFilesModalProps = {
+  open: boolean;
+  workspaceId: string;
+  workspaceName: string | null;
+  accounts: AccountOption[];
+  defaultAccountId?: string | null;
+  onClose: () => void;
+  onImported: () => Promise<void> | void;
+};
+
+type ImportStatus = "pending" | "needs_password" | "parsing" | "importing" | "done" | "error";
+
+type QueuedFile = {
+  id: string;
+  file: File;
+  status: ImportStatus;
+  error: string | null;
+  password: string;
+  passwordVisible: boolean;
+  importFileId: string | null;
+  importedRows: number | null;
+};
+
+const extractTextFromFile = async (file: File, password?: string) => {
+  const lowerName = file.name.toLowerCase();
+
+  if (lowerName.endsWith(".csv") || lowerName.endsWith(".tsv") || lowerName.endsWith(".txt")) {
+    return file.text();
+  }
+
+  if (lowerName.endsWith(".pdf")) {
+    const data = new Uint8Array(await file.arrayBuffer());
+    const options = password ? { data, password } : { data };
+    const loadingTask = pdfjs.getDocument(options as any);
+    const pdf = await loadingTask.promise;
+    const pages: string[] = [];
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const lines = new Map<number, { x: number; text: string }[]>();
+
+      for (const item of content.items as Array<{ str?: string; transform?: number[] }>) {
+        if (typeof item.str !== "string" || !item.str.trim()) {
+          continue;
+        }
+
+        const y = Math.round(Number(item.transform?.[5] ?? 0));
+        const x = Number(item.transform?.[4] ?? 0);
+        const row = lines.get(y) ?? [];
+        row.push({ x, text: item.str.trim() });
+        lines.set(y, row);
+      }
+
+      const text = Array.from(lines.entries())
+        .sort((a, b) => b[0] - a[0])
+        .map(([, row]) => row.sort((a, b) => a.x - b.x).map((entry) => entry.text).join(" "))
+        .join("\n");
+      pages.push(text);
+    }
+
+    return pages.join("\n");
+  }
+
+  throw new Error("Only CSV, TSV, TXT, and PDF files are supported.");
+};
+
+const isPasswordError = (error: unknown) => {
+  if (!error || typeof error !== "object") return false;
+  const name = "name" in error ? String((error as { name?: unknown }).name ?? "") : "";
+  const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
+  return /password/i.test(name) || /password/i.test(message);
+};
+
+const fileKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
+
+const fileTypeLabel = (file: File) => {
+  const lowerName = file.name.toLowerCase();
+  if (lowerName.endsWith(".pdf") || file.type === "application/pdf") return "PDF";
+  if (lowerName.endsWith(".csv")) return "CSV";
+  if (lowerName.endsWith(".tsv")) return "TSV";
+  return "File";
+};
+
+const normalizeAccountLabel = (account: AccountOption) => account.institution ? `${account.name} (${account.institution})` : account.name;
+
+export function ImportFilesModal({
+  open,
+  workspaceId,
+  workspaceName,
+  accounts,
+  defaultAccountId,
+  onClose,
+  onImported,
+}: ImportFilesModalProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [items, setItems] = useState<QueuedFile[]>([]);
+  const [dragActive, setDragActive] = useState(false);
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("Upload CSV or PDF files to import transactions and balances.");
+
+  useEffect(() => {
+    if (!open) {
+      setItems([]);
+      setDragActive(false);
+      setBusy(false);
+      setSelectedAccountId("");
+      setMessage("Upload CSV or PDF files to import transactions and balances.");
+      return;
+    }
+
+    setSelectedAccountId((current) => {
+      if (current) return current;
+      return defaultAccountId ?? accounts[0]?.id ?? "";
+    });
+    setMessage("Upload CSV or PDF files to import transactions and balances.");
+  }, [accounts, defaultAccountId, open]);
+
+  const counts = useMemo(() => {
+    return items.reduce(
+      (accumulator, item) => {
+        accumulator.total += 1;
+        if (item.status === "done") accumulator.done += 1;
+        if (item.status === "needs_password") accumulator.needsPassword += 1;
+        if (item.status === "error") accumulator.error += 1;
+        if (item.status === "pending") accumulator.pending += 1;
+        return accumulator;
+      },
+      { total: 0, done: 0, needsPassword: 0, error: 0, pending: 0 }
+    );
+  }, [items]);
+
+  const addFiles = (incoming: FileList | File[]) => {
+    const nextFiles = Array.from(incoming);
+    if (nextFiles.length === 0) return;
+
+    setItems((current) => {
+      const existing = new Set(current.map((item) => fileKey(item.file)));
+      const additions = nextFiles
+        .filter((file) => !existing.has(fileKey(file)))
+        .map((file) => ({
+          id: crypto.randomUUID(),
+          file,
+          status: "pending" as ImportStatus,
+          error: null,
+          password: "",
+          passwordVisible: false,
+          importFileId: null,
+          importedRows: null,
+        }));
+
+      return [...current, ...additions];
+    });
+  };
+
+  const updateItem = (id: string, patch: Partial<QueuedFile>) => {
+    setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  };
+
+  const ensureTargetAccountId = async () => {
+    if (selectedAccountId) {
+      return selectedAccountId;
+    }
+
+    if (accounts[0]?.id) {
+      setSelectedAccountId(accounts[0].id);
+      return accounts[0].id;
+    }
+
+    const response = await fetch("/api/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId,
+        name: "Imported transactions",
+        institution: "Source upload",
+        type: "bank",
+        currency: "PHP",
+        source: "upload",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to create a default account for this workspace.");
+    }
+
+    const payload = await response.json();
+    const accountId = String(payload.account?.id ?? "");
+    if (!accountId) {
+      throw new Error("Default account was not created.");
+    }
+
+    setSelectedAccountId(accountId);
+    return accountId;
+  };
+
+  const removeItem = (id: string) => {
+    setItems((current) => current.filter((item) => item.id !== id));
+  };
+
+  const processFile = async (itemId: string): Promise<"done" | "needs_password" | "error"> => {
+    const item = items.find((entry) => entry.id === itemId);
+    if (!item) return "error";
+
+    if (!workspaceId) {
+      updateItem(itemId, { status: "error", error: "Select a workspace before importing files." });
+      return "error";
+    }
+
+    updateItem(itemId, { status: "parsing", error: null });
+
+    try {
+      const targetAccountId = await ensureTargetAccountId();
+      const text = await extractTextFromFile(item.file, item.password.trim() || undefined);
+      updateItem(itemId, { status: "importing" });
+
+      const prepareResponse = await fetch("/api/imports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId,
+          fileName: item.file.name,
+          fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
+          contentType: item.file.type || "application/octet-stream",
+          skipUpload: true,
+        }),
+      });
+
+      if (!prepareResponse.ok) {
+        throw new Error("Unable to prepare this import.");
+      }
+
+      const prepared = await prepareResponse.json();
+      const importFileId = String(prepared.importFile?.id ?? "");
+
+      if (!importFileId) {
+        throw new Error("The import could not be created.");
+      }
+
+      const processResponse = await fetch(`/api/imports/${importFileId}/process`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!processResponse.ok) {
+        const payload = await processResponse.json().catch(() => ({}));
+        throw new Error(payload.error || "Unable to parse this file.");
+      }
+
+      const confirmResponse = await fetch(`/api/imports/${importFileId}/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: targetAccountId }),
+      });
+
+      if (!confirmResponse.ok) {
+        const payload = await confirmResponse.json().catch(() => ({}));
+        throw new Error(payload.error || "Unable to confirm this import.");
+      }
+
+      const confirmed = await confirmResponse.json();
+      const importedRows = Number(confirmed.result?.imported ?? 0);
+      updateItem(itemId, {
+        status: "done",
+        error: null,
+        importFileId,
+        importedRows,
+      });
+      await onImported();
+      return "done";
+    } catch (error) {
+      if (isPasswordError(error)) {
+        const needsPasswordMessage = item.password.trim()
+          ? `Wrong password for ${item.file.name}.`
+          : `${item.file.name} is password-protected. Enter the password to continue.`;
+        updateItem(itemId, {
+          status: "needs_password",
+          error: needsPasswordMessage,
+          password: "",
+          passwordVisible: true,
+        });
+        return "needs_password";
+      }
+
+      updateItem(itemId, {
+        status: "error",
+        error: error instanceof Error ? error.message : `Unable to import ${item.file.name}.`,
+      });
+      return "error";
+    }
+  };
+
+  const handleStartImport = async () => {
+    if (busy) return;
+
+    setBusy(true);
+    setMessage("Parsing selected files...");
+
+    let importedCount = 0;
+    let blockedCount = 0;
+
+    for (const item of items) {
+      if (item.status === "done") {
+        continue;
+      }
+
+      const result = await processFile(item.id);
+      if (result === "done") {
+        importedCount += 1;
+      }
+
+      if (result === "needs_password") {
+        blockedCount += 1;
+      }
+    }
+
+    if (blockedCount > 0) {
+      setMessage("Enter passwords for the locked files to finish the remaining imports.");
+    } else if (importedCount > 0) {
+      setMessage(`Imported ${importedCount} file${importedCount === 1 ? "" : "s"}.`);
+    } else {
+      setMessage("Add files to begin.");
+    }
+
+    setBusy(false);
+  };
+
+  const handleRetry = async (itemId: string) => {
+    setBusy(true);
+    setMessage("Retrying password-protected file...");
+    const result = await processFile(itemId);
+    if (result === "done") {
+      setMessage("File imported successfully.");
+    } else {
+      setMessage("Check the password and try again.");
+    }
+    setBusy(false);
+  };
+
+  const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      addFiles(event.target.files);
+    }
+    event.target.value = "";
+  };
+
+  const readyToImport = items.some((item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim()));
+
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+      <section
+        className="modal-card modal-card--wide accounts-import-modal glass"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="import-files-title"
+        aria-describedby="import-files-copy"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal-head">
+          <div>
+            <p className="eyebrow">Import files</p>
+            <h4 id="import-files-title">Import files</h4>
+            <p id="import-files-copy" className="modal-copy">
+              Drop CSV or PDF statements here, unlock only the protected files, and we’ll parse the account and transaction data for you.
+            </p>
+          </div>
+          <button className="icon-button" type="button" onClick={onClose} aria-label="Close import files">
+            ×
+          </button>
+        </div>
+
+        <div className="accounts-import-security">
+          <strong>Privacy note</strong>
+          <p>
+            We read the selected files locally in your browser, extract only the account and transaction details needed for import,
+            and send the parsed data to the app. The raw file stays on your device and is not stored by the import flow.
+          </p>
+        </div>
+
+        <div className="accounts-import-summary">
+          <div>
+            <span>Workspace</span>
+            <strong>{workspaceName ?? "Selected workspace"}</strong>
+          </div>
+          <div>
+            <span>Files queued</span>
+            <strong>{counts.total}</strong>
+          </div>
+          <div>
+            <span>Ready</span>
+            <strong>{counts.pending + counts.needsPassword}</strong>
+          </div>
+        </div>
+
+        <div className="accounts-import-toolbar">
+          <label
+            className={`accounts-import-dropzone ${dragActive ? "is-active" : ""}`}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setDragActive(true);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={(event) => {
+              event.preventDefault();
+              setDragActive(false);
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragActive(false);
+              if (event.dataTransfer.files.length > 0) {
+                addFiles(event.dataTransfer.files);
+              }
+            }}
+          >
+            <input
+              ref={fileInputRef}
+              className="hidden-file-input"
+              type="file"
+              accept=".csv,.pdf,.tsv,.txt"
+              multiple
+              onChange={handleInputChange}
+            />
+            <strong>Drop files here</strong>
+            <span>or browse for CSV and PDF statements from your disk.</span>
+            <button
+              className="button button-secondary button-small"
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              Choose files
+            </button>
+          </label>
+
+          <label className="accounts-import-target">
+            Target account
+            <span className="accounts-import-target__hint">If none exists yet, we’ll create a default account for this workspace.</span>
+            <select value={selectedAccountId} onChange={(event) => setSelectedAccountId(event.target.value)}>
+              <option value="">Select account</option>
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {normalizeAccountLabel(account)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="accounts-import-note">
+          {message}
+          {selectedAccountId ? null : " If no account exists yet, we’ll create a default one for this workspace."}
+        </div>
+
+        <div className="accounts-import-files">
+          {items.length > 0 ? (
+            items.map((item) => {
+              const isPasswordLocked = item.status === "needs_password";
+
+              return (
+                <article key={item.id} className={`accounts-import-file accounts-import-file--${item.status}`}>
+                  <div className="accounts-import-file__head">
+                    <div className="accounts-import-file__meta">
+                      <strong>{item.file.name}</strong>
+                      <span>
+                        {fileTypeLabel(item.file)} · {Math.max(1, Math.round(item.file.size / 1024))} KB
+                      </span>
+                    </div>
+                    <div className="accounts-import-file__badges">
+                      <span className={`accounts-import-badge is-${item.status}`}>{item.status.replaceAll("_", " ")}</span>
+                      <button className="icon-button accounts-import-remove" type="button" onClick={() => removeItem(item.id)} aria-label={`Remove ${item.file.name}`}>
+                        ×
+                      </button>
+                    </div>
+                  </div>
+
+                  {item.error ? <p className="accounts-import-file__error">{item.error}</p> : null}
+
+                  {isPasswordLocked ? (
+                    <div className="accounts-import-password-row">
+                      <label>
+                        Password for {item.file.name}
+                        <div className="accounts-import-password-input">
+                          <input
+                            type={item.passwordVisible ? "text" : "password"}
+                            value={item.password}
+                            onChange={(event) => updateItem(item.id, { password: event.target.value, error: null })}
+                            placeholder="Enter password"
+                          />
+                          <button
+                            className="button button-secondary button-small"
+                            type="button"
+                            onClick={() => updateItem(item.id, { passwordVisible: !item.passwordVisible })}
+                          >
+                            {item.passwordVisible ? "Hide" : "Show"}
+                          </button>
+                        </div>
+                      </label>
+                      <button
+                        className="button button-primary button-small"
+                        type="button"
+                        onClick={() => void handleRetry(item.id)}
+                        disabled={busy || !item.password.trim()}
+                      >
+                        Unlock file
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <div className="accounts-import-file__foot">
+                    <span>
+                      {item.status === "done"
+                        ? `Imported ${item.importedRows ?? 0} row${item.importedRows === 1 ? "" : "s"}`
+                        : item.status === "importing"
+                          ? "Importing into the selected account..."
+                          : item.status === "parsing"
+                            ? "Parsing locally..."
+                            : item.status === "needs_password"
+                              ? "Waiting for password"
+                              : "Queued"}
+                    </span>
+                    {item.status !== "done" ? (
+                      <button
+                        className="button button-secondary button-small"
+                        type="button"
+                        onClick={() => void processFile(item.id)}
+                        disabled={busy || !selectedAccountId || item.status === "parsing" || item.status === "importing"}
+                      >
+                        {item.status === "needs_password" ? "Try again" : "Import file"}
+                      </button>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })
+          ) : (
+            <div className="empty-state">No files added yet.</div>
+          )}
+        </div>
+
+        <div className="form-actions">
+          <button className="button button-secondary" type="button" onClick={onClose}>
+            Close
+          </button>
+          <button className="button button-primary" type="button" onClick={() => void handleStartImport()} disabled={busy || !readyToImport || !workspaceId}>
+            {busy ? "Importing..." : "Import files"}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
