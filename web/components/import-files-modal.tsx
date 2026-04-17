@@ -426,6 +426,18 @@ export function ImportFilesModal({
     setBusy(false);
   };
 
+  const handleRetry = async (itemId: string) => {
+    setBusy(true);
+    setMessage("Retrying password-protected file...");
+    const result = await processFile(itemId);
+    if (result === "done") {
+      setMessage("File imported successfully.");
+    } else {
+      setMessage("Check the password and try again.");
+    }
+    setBusy(false);
+  };
+
   useEffect(() => {
     if (!open || busy || !workspaceId || !autoStartRef.current) {
       return;
@@ -443,18 +455,6 @@ export function ImportFilesModal({
     autoStartRef.current = false;
     void handleStartImport();
   }, [busy, handleStartImport, items, open, workspaceId]);
-
-  const handleRetry = async (itemId: string) => {
-    setBusy(true);
-    setMessage("Retrying password-protected file...");
-    const result = await processFile(itemId);
-    if (result === "done") {
-      setMessage("File imported successfully.");
-    } else {
-      setMessage("Check the password and try again.");
-    }
-    setBusy(false);
-  };
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {

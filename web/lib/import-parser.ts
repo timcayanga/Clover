@@ -107,13 +107,15 @@ const monthIndexByAbbr: Record<string, number> = {
 
 const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
-  if (!/BANK OF THE PHILIPPINE ISLANDS|^\s*FORBES PARK\s+SAVINGS\s+BET-PHP/i.test(normalized)) {
+  if (!/BANK OF THE PHILIPPINE ISLANDS|\bBPI\b/i.test(normalized)) {
     return null;
   }
 
-  const accountSection =
-    normalized.match(/\b(?:ACCOUNT\s*(?:NO|NUMBER|#)?|ACCT\s*(?:NO|NUMBER|#)?|NO)\s*[:\-]?\s*([0-9\s-]{8,})/i)?.[1] ??
+  const labeledAccountSection =
+    normalized.match(/\b(?:ACCOUNT\s*(?:NO|NUMBER|#)?|ACCT\s*(?:NO|NUMBER|#)?|A\/C\s*(?:NO|NUMBER|#)?|NO)\s*[:\-]?\s*([0-9\s-]{8,})/i)?.[1] ??
     "";
+  const fallbackAccountSection = normalized.match(/\b\d{4}[-\s]?\d{4}[-\s]?\d{2}\b/)?.[0] ?? "";
+  const accountSection = labeledAccountSection || fallbackAccountSection;
   const accountNumber = accountSection.replace(/\D/g, "").slice(0, 10) || null;
   const accountName = accountNumber ? `BPI ${accountNumber.slice(-4)}` : "BPI";
 
