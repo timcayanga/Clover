@@ -823,9 +823,21 @@ label {
   flex-wrap: wrap;
 }
 
+.transactions-status-line__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.transactions-clear-selection {
+  border: 0;
+}
+
 .line-item-header {
   display: grid;
-  grid-template-columns: minmax(0, 2.45fr) minmax(110px, 0.8fr) minmax(130px, 0.9fr) minmax(150px, 1fr) minmax(110px, 0.75fr) 84px 40px;
+  grid-template-columns: 28px minmax(0, 2.45fr) minmax(110px, 0.8fr) minmax(130px, 0.9fr) minmax(150px, 1fr) minmax(110px, 0.75fr) 84px 40px;
   gap: 12px;
   align-items: center;
   padding: 10px 4px 8px;
@@ -853,6 +865,10 @@ label {
   padding-left: 2px;
 }
 
+.line-item-header-cell--select {
+  width: 28px;
+}
+
 .line-item-header-cell--amount {
   justify-content: flex-end;
   text-align: right;
@@ -868,7 +884,7 @@ label {
 
 .line-item {
   display: grid;
-  grid-template-columns: minmax(0, 2.45fr) minmax(110px, 0.8fr) minmax(130px, 0.9fr) minmax(150px, 1fr) minmax(110px, 0.75fr) 84px 40px;
+  grid-template-columns: 28px minmax(0, 2.45fr) minmax(110px, 0.8fr) minmax(130px, 0.9fr) minmax(150px, 1fr) minmax(110px, 0.75fr) 84px 40px;
   gap: 12px;
   align-items: center;
   padding: 16px 4px;
@@ -879,16 +895,40 @@ label {
   opacity: 0.65;
 }
 
+.line-item.is-selected {
+  background: rgba(3, 168, 192, 0.05);
+  border-radius: 18px;
+}
+
+.transaction-select-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.transaction-select-cell input {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+  margin: 0;
+}
+
 .transaction-name-cell {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
-.item-merchant {
+.transaction-name-button {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0;
+  text-align: left;
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: -0.03em;
+  line-height: 1.25;
 }
 
 .transaction-subtext {
@@ -925,6 +965,10 @@ label {
 .transaction-warning-cell {
   display: flex;
   justify-content: center;
+}
+
+.transaction-warning-cell {
+  justify-content: flex-end;
 }
 
 .transaction-note-button {
@@ -1069,6 +1113,28 @@ label {
   justify-self: start;
   align-self: end;
   min-height: 28px;
+}
+
+.transactions-popover-card {
+  width: min(860px, 100%);
+}
+
+.transaction-drawer {
+  width: min(980px, 100%);
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+}
+
+.transaction-drawer-grid {
+  margin-bottom: 14px;
+}
+
+.date-filter-card {
+  width: min(780px, 100%);
+}
+
+.detail-warning-box {
+  margin-top: 6px;
 }
 
 .modal-backdrop {

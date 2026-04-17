@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 
@@ -48,6 +47,8 @@ type ImportFile = {
   uploadedAt: string;
 };
 
+type DateFilterMode = "ltd" | "day" | "week" | "month" | "quarter" | "year" | "custom";
+
 type ManualTransactionForm = {
   date: string;
   accountId: string;
@@ -57,6 +58,28 @@ type ManualTransactionForm = {
   merchantRaw: string;
   merchantClean: string;
   description: string;
+};
+
+type BulkEditForm = {
+  accountId: string;
+  categoryId: string;
+  type: "" | "income" | "expense" | "transfer";
+  description: string;
+  isExcluded: "" | "include" | "exclude";
+  isTransfer: "" | "true" | "false";
+};
+
+type TransactionDetailDraft = {
+  merchantRaw: string;
+  merchantClean: string;
+  date: string;
+  accountId: string;
+  categoryId: string;
+  amount: string;
+  type: "income" | "expense" | "transfer";
+  description: string;
+  isExcluded: boolean;
+  isTransfer: boolean;
 };
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
@@ -95,6 +118,138 @@ const downloadTextFile = (filename: string, contents: string, mimeType: string) 
   URL.revokeObjectURL(url);
 };
 
+const toIsoDate = (value: Date) => value.toISOString().slice(0, 10);
+
+const dateAtNoon = (value: string) => new Date(`${value.slice(0, 10)}T12:00:00`);
+
+const startOfWeekIso = (value: string) => {
+  const date = dateAtNoon(value);
+  const day = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() - day);
+  return toIsoDate(date);
+};
+
+const endOfWeekIso = (value: string) => {
+  const date = dateAtNoon(value);
+  const day = (date.getDay() + 6) % 7;
+  date.setDate(date.getDate() + (6 - day));
+  return toIsoDate(date);
+};
+
+const startOfMonthIso = (value: string) => {
+  const date = dateAtNoon(value);
+  date.setDate(1);
+  return toIsoDate(date);
+};
+
+const endOfMonthIso = (value: string) => {
+  const date = dateAtNoon(value);
+  date.setMonth(date.getMonth() + 1, 0);
+  return toIsoDate(date);
+};
+
+const startOfQuarterIso = (value: string) => {
+  const date = dateAtNoon(value);
+  const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
+  date.setMonth(quarterStartMonth, 1);
+  return toIsoDate(date);
+};
+
+const endOfQuarterIso = (value: string) => {
+  const date = dateAtNoon(value);
+  const quarterStartMonth = Math.floor(date.getMonth() / 3) * 3;
+  date.setMonth(quarterStartMonth + 3, 0);
+  return toIsoDate(date);
+};
+
+const startOfYearIso = (value: string) => {
+  const date = dateAtNoon(value);
+  date.setMonth(0, 1);
+  return toIsoDate(date);
+};
+
+const endOfYearIso = (value: string) => {
+  const date = dateAtNoon(value);
+  date.setMonth(11, 31);
+  return toIsoDate(date);
+};
+
+const getDateFilterLabel = (mode: DateFilterMode, anchor: string, customStart: string, customEnd: string) => {
+  switch (mode) {
+    case "day":
+      return "Today";
+    case "week":
+      return "This week";
+    case "month":
+      return "This month";
+    case "quarter":
+      return "This quarter";
+    case "year":
+      return "This year";
+    case "custom":
+      return customStart && customEnd ? `${formatDate(customStart)} - ${formatDate(customEnd)}` : "Custom range";
+    default:
+      return "Lifetime to date";
+  }
+};
+
+const dateMatchesFilter = (dateValue: string, mode: DateFilterMode, anchor: string, customStart: string, customEnd: string) => {
+  const date = dateValue.slice(0, 10);
+  if (mode === "ltd") {
+    return true;
+  }
+  if (mode === "day") {
+    return date === anchor.slice(0, 10);
+  }
+  if (mode === "week") {
+    return date >= startOfWeekIso(anchor) && date <= endOfWeekIso(anchor);
+  }
+  if (mode === "month") {
+    return date >= startOfMonthIso(anchor) && date <= endOfMonthIso(anchor);
+  }
+  if (mode === "quarter") {
+    return date >= startOfQuarterIso(anchor) && date <= endOfQuarterIso(anchor);
+  }
+  if (mode === "year") {
+    return date >= startOfYearIso(anchor) && date <= endOfYearIso(anchor);
+  }
+  if (mode === "custom") {
+    if (!customStart && !customEnd) {
+      return true;
+    }
+    if (customStart && date < customStart) {
+      return false;
+    }
+    if (customEnd && date > customEnd) {
+      return false;
+    }
+    return true;
+  }
+  return true;
+};
+
+const createEmptyBulkEditForm = (): BulkEditForm => ({
+  accountId: "",
+  categoryId: "",
+  type: "",
+  description: "",
+  isExcluded: "",
+  isTransfer: "",
+});
+
+const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => ({
+  merchantRaw: transaction.merchantRaw,
+  merchantClean: transaction.merchantClean ?? "",
+  date: transaction.date.slice(0, 10),
+  accountId: transaction.accountId,
+  categoryId: transaction.categoryId ?? "",
+  amount: transaction.amount,
+  type: transaction.type,
+  description: transaction.description ?? "",
+  isExcluded: transaction.isExcluded,
+  isTransfer: transaction.isTransfer,
+});
+
 export default function TransactionsPage() {
   const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -109,12 +264,22 @@ export default function TransactionsPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [accountFilter, setAccountFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [dateFilterOpen, setDateFilterOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [message, setMessage] = useState("Select a workspace to review transactions.");
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
+  const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>("ltd");
+  const [dateFilterAnchor, setDateFilterAnchor] = useState(todayIso);
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
+  const [bulkEditForm, setBulkEditForm] = useState<BulkEditForm>(createEmptyBulkEditForm());
   const [manualForm, setManualForm] = useState<ManualTransactionForm>(createEmptyManualForm());
   const [isSaving, setIsSaving] = useState(false);
 
@@ -172,6 +337,9 @@ export default function TransactionsPage() {
 
   useEffect(() => {
     void loadWorkspaceData(selectedWorkspaceId);
+    setSelectedTransactionIds([]);
+    setSelectedTransaction(null);
+    setDetailDraft(null);
   }, [selectedWorkspaceId]);
 
   const ensureDefaultAccount = async (workspaceId: string) => {
@@ -218,9 +386,10 @@ export default function TransactionsPage() {
       const matchesCategory = categoryFilter === "all" || transaction.categoryId === categoryFilter;
       const matchesAccount = accountFilter === "all" || transaction.accountId === accountFilter;
       const matchesType = typeFilter === "all" || transaction.type === typeFilter;
-      return matchesQuery && matchesCategory && matchesAccount && matchesType;
+      const matchesDate = dateMatchesFilter(transaction.date, dateFilterMode, dateFilterAnchor, customStart, customEnd);
+      return matchesQuery && matchesCategory && matchesAccount && matchesType && matchesDate;
     });
-  }, [transactions, query, categoryFilter, accountFilter, typeFilter]);
+  }, [transactions, query, categoryFilter, accountFilter, typeFilter, dateFilterMode, dateFilterAnchor, customStart, customEnd]);
 
   const duplicateLookup = useMemo(() => {
     const counts = new Map<string, number>();
@@ -342,6 +511,37 @@ export default function TransactionsPage() {
     return null;
   };
 
+  const openTransactionDetail = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    setDetailDraft(createDetailDraft(transaction));
+  };
+
+  const closeTransactionDetail = () => {
+    setSelectedTransaction(null);
+    setDetailDraft(null);
+  };
+
+  const toggleSelectedTransaction = (transactionId: string, selected: boolean) => {
+    setSelectedTransactionIds((current) => {
+      const next = new Set(current);
+      if (selected) {
+        next.add(transactionId);
+      } else {
+        next.delete(transactionId);
+      }
+      return Array.from(next);
+    });
+  };
+
+  const clearSelection = () => {
+    setSelectedTransactionIds([]);
+  };
+
+  const openBulkEdit = () => {
+    setBulkEditForm(createEmptyBulkEditForm());
+    setBulkEditOpen(true);
+  };
+
   const openManualAdd = async () => {
     setAddMenuOpen(false);
 
@@ -422,6 +622,74 @@ export default function TransactionsPage() {
     setTransactions((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
   };
 
+  const applyBulkEdit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!selectedTransactionIds.length) {
+      setMessage("Select transactions first.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const updates = selectedTransactionIds.map((transactionId) =>
+        updateTransaction(transactionId, {
+          accountId: bulkEditForm.accountId || undefined,
+          categoryId: bulkEditForm.categoryId || undefined,
+          type: bulkEditForm.type || undefined,
+          description: bulkEditForm.description ? bulkEditForm.description : undefined,
+          isExcluded:
+            bulkEditForm.isExcluded === ""
+              ? undefined
+              : bulkEditForm.isExcluded === "exclude",
+          isTransfer:
+            bulkEditForm.isTransfer === ""
+              ? undefined
+              : bulkEditForm.isTransfer === "true",
+        })
+      );
+
+      await Promise.all(updates);
+      setBulkEditOpen(false);
+      clearSelection();
+      setMessage(`${selectedTransactionIds.length} transaction${selectedTransactionIds.length === 1 ? "" : "s"} updated.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update transactions.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const saveDetailDraft = async () => {
+    if (!selectedTransaction || !detailDraft) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const payload = {
+        merchantRaw: detailDraft.merchantRaw,
+        merchantClean: detailDraft.merchantClean || null,
+        date: detailDraft.date,
+        accountId: detailDraft.accountId,
+        categoryId: detailDraft.categoryId || null,
+        amount: detailDraft.amount,
+        type: detailDraft.type,
+        description: detailDraft.description || null,
+        isExcluded: detailDraft.isExcluded,
+        isTransfer: detailDraft.isTransfer,
+      };
+
+      await updateTransaction(selectedTransaction.id, payload);
+      setMessage("Transaction details updated.");
+      closeTransactionDetail();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const saveView = () => {
     if (typeof window === "undefined") {
       return;
@@ -472,6 +740,7 @@ export default function TransactionsPage() {
 
   const netGain = totals.income - totals.expense;
   const hasReviewItems = totals.review > 0;
+  const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
 
   return (
     <CloverShell active="transactions" title="Transactions" showTopbar={false}>
@@ -504,6 +773,20 @@ export default function TransactionsPage() {
                 </div>
               </div>
 
+              {selectedTransactionIds.length > 0 ? (
+                <button
+                  className="button button-secondary button-small transactions-action-button"
+                  type="button"
+                  title={`Bulk edit ${selectedTransactionIds.length} selected transaction${selectedTransactionIds.length === 1 ? "" : "s"}`}
+                  onClick={openBulkEdit}
+                >
+                  <span className="button-icon" aria-hidden="true">
+                    ☰
+                  </span>
+                  <span>Bulk edit ({selectedTransactionIds.length})</span>
+                </button>
+              ) : null}
+
               <button className="button button-secondary button-small transactions-action-button" type="button" title="Undo">
                 <span className="button-icon" aria-hidden="true">
                   ↶
@@ -530,13 +813,23 @@ export default function TransactionsPage() {
                 </span>
                 <span>Search</span>
               </button>
-              <button className="button button-secondary button-small transactions-action-button" type="button" title="Date">
+              <button
+                className="button button-secondary button-small transactions-action-button"
+                type="button"
+                title={dateFilterLabel}
+                onClick={() => setDateFilterOpen(true)}
+              >
                 <span className="button-icon" aria-hidden="true">
                   ⏲
                 </span>
                 <span>Date</span>
               </button>
-              <button className="button button-secondary button-small transactions-action-button" type="button" title="Filters">
+              <button
+                className="button button-secondary button-small transactions-action-button"
+                type="button"
+                title="Filters"
+                onClick={() => setFilterOpen(true)}
+              >
                 <span className="button-icon" aria-hidden="true">
                   ≡
                 </span>
@@ -649,10 +942,19 @@ export default function TransactionsPage() {
             <span className="pill pill-neutral">
               {workspace ? `${workspace.name}` : "No workspace selected"} · {filteredTransactions.length} items shown
             </span>
-            <span className="pill pill-neutral">{imports.length} import file{imports.length === 1 ? "" : "s"}</span>
+            <div className="transactions-status-line__meta">
+              {selectedTransactionIds.length > 0 ? (
+                <button className="pill pill-neutral transactions-clear-selection" type="button" onClick={clearSelection}>
+                  {selectedTransactionIds.length} selected · clear
+                </button>
+              ) : null}
+              <span className="pill pill-neutral">{imports.length} import file{imports.length === 1 ? "" : "s"}</span>
+              <span className="pill pill-neutral">{dateFilterLabel}</span>
+            </div>
           </div>
 
           <div className="line-item-header" role="row" aria-label="Transaction columns">
+            <span className="line-item-header-cell line-item-header-cell--select" aria-hidden="true" />
             <button className="line-item-header-cell line-item-header-cell--name" type="button">
               Name
             </button>
@@ -679,9 +981,24 @@ export default function TransactionsPage() {
                 const amount = Number(transaction.amount);
                 const isPositive = transaction.type === "income";
                 return (
-                  <div key={transaction.id} className={`line-item ${transaction.isExcluded ? "is-muted" : ""}`}>
+                  <div
+                    key={transaction.id}
+                    className={`line-item ${transaction.isExcluded ? "is-muted" : ""} ${
+                      selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
+                    }`}
+                  >
+                    <label className="transaction-select-cell">
+                      <input
+                        type="checkbox"
+                        checked={selectedTransactionIds.includes(transaction.id)}
+                        onChange={(event) => toggleSelectedTransaction(transaction.id, event.target.checked)}
+                        aria-label={`Select ${transaction.merchantRaw}`}
+                      />
+                    </label>
                     <div className="transaction-name-cell">
-                      <strong className="item-merchant">{transaction.merchantClean || transaction.merchantRaw}</strong>
+                      <button type="button" className="transaction-name-button" onClick={() => openTransactionDetail(transaction)}>
+                        {transaction.merchantClean || transaction.merchantRaw}
+                      </button>
                       <small className="transaction-subtext">
                         {transaction.description || transaction.merchantClean ? transaction.merchantRaw : transaction.accountName}
                       </small>
@@ -713,7 +1030,7 @@ export default function TransactionsPage() {
                       <button
                         type="button"
                         className="button button-secondary button-small transaction-note-button"
-                        onClick={() => setSelectedTransaction(transaction)}
+                        onClick={() => openTransactionDetail(transaction)}
                       >
                         Notes
                       </button>
@@ -724,7 +1041,7 @@ export default function TransactionsPage() {
                           type="button"
                           className="warning-chip"
                           title={warningReason}
-                          onClick={() => setSelectedTransaction(transaction)}
+                          onClick={() => openTransactionDetail(transaction)}
                         >
                           <span className="warning-mark warning-mark--small" aria-hidden="true" />
                         </button>
@@ -807,6 +1124,335 @@ export default function TransactionsPage() {
           </button>
         </aside>
       </section>
+
+      {dateFilterOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setDateFilterOpen(false)}>
+          <section
+            className="modal-card modal-card--wide date-filter-card glass"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="date-filter-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Transactions</p>
+                <h4 id="date-filter-title">Date filter</h4>
+                <p className="modal-copy">{dateFilterLabel}</p>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setDateFilterOpen(false)} aria-label="Close date filter">
+                ×
+              </button>
+            </div>
+
+            <div className="date-filter-tabs" role="tablist" aria-label="Date filter mode">
+              {[
+                ["ltd", "Lifetime"],
+                ["day", "Today"],
+                ["week", "Week"],
+                ["month", "Month"],
+                ["quarter", "Quarter"],
+                ["year", "Year"],
+                ["custom", "Custom"],
+              ].map(([mode, label]) => (
+                <button
+                  key={mode}
+                  className={`date-filter-tab ${dateFilterMode === mode ? "is-active" : ""}`}
+                  type="button"
+                  onClick={() => setDateFilterMode(mode as DateFilterMode)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="date-filter-panel">
+              {dateFilterMode === "ltd" ? (
+                <div className="date-filter-empty">Lifetime to date includes every transaction up to today.</div>
+              ) : null}
+              {dateFilterMode === "day" ? (
+                <label className="date-filter-field">
+                  <span>On</span>
+                  <input type="date" value={dateFilterAnchor} onChange={(event) => setDateFilterAnchor(event.target.value)} />
+                </label>
+              ) : null}
+              {dateFilterMode === "week" ? (
+                <div className="date-filter-fields date-filter-fields--two">
+                  <label className="date-filter-field">
+                    <span>Anchor</span>
+                    <input type="date" value={dateFilterAnchor} onChange={(event) => setDateFilterAnchor(event.target.value)} />
+                  </label>
+                  <div className="date-filter-empty">
+                    {formatDate(startOfWeekIso(dateFilterAnchor))} - {formatDate(endOfWeekIso(dateFilterAnchor))}
+                  </div>
+                </div>
+              ) : null}
+              {dateFilterMode === "month" ? (
+                <div className="date-filter-fields date-filter-fields--two">
+                  <label className="date-filter-field">
+                    <span>Anchor</span>
+                    <input type="date" value={dateFilterAnchor} onChange={(event) => setDateFilterAnchor(event.target.value)} />
+                  </label>
+                  <div className="date-filter-empty">
+                    {formatDate(startOfMonthIso(dateFilterAnchor))} - {formatDate(endOfMonthIso(dateFilterAnchor))}
+                  </div>
+                </div>
+              ) : null}
+              {dateFilterMode === "quarter" ? (
+                <div className="date-filter-fields date-filter-fields--two">
+                  <label className="date-filter-field">
+                    <span>Anchor</span>
+                    <input type="date" value={dateFilterAnchor} onChange={(event) => setDateFilterAnchor(event.target.value)} />
+                  </label>
+                  <div className="date-filter-empty">
+                    {formatDate(startOfQuarterIso(dateFilterAnchor))} - {formatDate(endOfQuarterIso(dateFilterAnchor))}
+                  </div>
+                </div>
+              ) : null}
+              {dateFilterMode === "year" ? (
+                <div className="date-filter-fields date-filter-fields--two">
+                  <label className="date-filter-field">
+                    <span>Anchor</span>
+                    <input type="date" value={dateFilterAnchor} onChange={(event) => setDateFilterAnchor(event.target.value)} />
+                  </label>
+                  <div className="date-filter-empty">
+                    {formatDate(startOfYearIso(dateFilterAnchor))} - {formatDate(endOfYearIso(dateFilterAnchor))}
+                  </div>
+                </div>
+              ) : null}
+              {dateFilterMode === "custom" ? (
+                <div className="date-filter-fields date-filter-fields--two">
+                  <label className="date-filter-field">
+                    <span>Start</span>
+                    <input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} />
+                  </label>
+                  <label className="date-filter-field">
+                    <span>End</span>
+                    <input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} />
+                  </label>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="form-actions date-filter-actions">
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => {
+                  setDateFilterMode("ltd");
+                  setDateFilterAnchor(todayIso);
+                  setCustomStart("");
+                  setCustomEnd("");
+                }}
+              >
+                Reset
+              </button>
+              <button className="button button-primary" type="button" onClick={() => setDateFilterOpen(false)}>
+                Done
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {filterOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setFilterOpen(false)}>
+          <section
+            className="modal-card modal-card--wide glass"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="transaction-filters-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Transactions</p>
+                <h4 id="transaction-filters-title">Filters</h4>
+                <p className="modal-copy">Refine what appears in the transaction review table.</p>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setFilterOpen(false)} aria-label="Close filters">
+                ×
+              </button>
+            </div>
+
+            <div className="form-grid">
+              <label className="span-2">
+                Search
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Merchant, note, or alias"
+                />
+              </label>
+              <label>
+                Workspace
+                <select value={selectedWorkspaceId} onChange={(event) => setSelectedWorkspaceId(event.target.value)}>
+                  <option value="">Choose workspace</option>
+                  {workspaces.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Category
+                <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+                  <option value="all">All categories</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Account
+                <select value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}>
+                  <option value="all">All accounts</option>
+                  {accounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Type
+                <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
+                  <option value="all">All types</option>
+                  <option value="income">Income</option>
+                  <option value="expense">Expense</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="form-actions">
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setCategoryFilter("all");
+                  setAccountFilter("all");
+                  setTypeFilter("all");
+                }}
+              >
+                Reset
+              </button>
+              <button className="button button-primary" type="button" onClick={() => setFilterOpen(false)}>
+                Done
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {bulkEditOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setBulkEditOpen(false)}>
+          <section
+            className="modal-card modal-card--wide glass"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="bulk-edit-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Transactions</p>
+                <h4 id="bulk-edit-title">Bulk edit</h4>
+                <p className="modal-copy">{selectedTransactionIds.length} selected · apply the same changes to all rows.</p>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setBulkEditOpen(false)} aria-label="Close bulk edit">
+                ×
+              </button>
+            </div>
+
+            <form className="manual-form" onSubmit={applyBulkEdit}>
+              <div className="form-grid">
+                <label>
+                  Account
+                  <select value={bulkEditForm.accountId} onChange={(event) => setBulkEditForm((current) => ({ ...current, accountId: event.target.value }))}>
+                    <option value="">Leave unchanged</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Category
+                  <select value={bulkEditForm.categoryId} onChange={(event) => setBulkEditForm((current) => ({ ...current, categoryId: event.target.value }))}>
+                    <option value="">Leave unchanged</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Type
+                  <select
+                    value={bulkEditForm.type}
+                    onChange={(event) => setBulkEditForm((current) => ({ ...current, type: event.target.value as BulkEditForm["type"] }))}
+                  >
+                    <option value="">Leave unchanged</option>
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                    <option value="transfer">Transfer</option>
+                  </select>
+                </label>
+                <label>
+                  Review state
+                  <select
+                    value={bulkEditForm.isExcluded}
+                    onChange={(event) =>
+                      setBulkEditForm((current) => ({ ...current, isExcluded: event.target.value as BulkEditForm["isExcluded"] }))
+                    }
+                  >
+                    <option value="">Leave unchanged</option>
+                    <option value="include">Include in totals</option>
+                    <option value="exclude">Exclude from totals</option>
+                  </select>
+                </label>
+                <label>
+                  Transfer state
+                  <select
+                    value={bulkEditForm.isTransfer}
+                    onChange={(event) =>
+                      setBulkEditForm((current) => ({ ...current, isTransfer: event.target.value as BulkEditForm["isTransfer"] }))
+                    }
+                  >
+                    <option value="">Leave unchanged</option>
+                    <option value="true">Mark as transfer</option>
+                    <option value="false">Clear transfer</option>
+                  </select>
+                </label>
+                <label className="span-2">
+                  Notes
+                  <textarea
+                    value={bulkEditForm.description}
+                    onChange={(event) => setBulkEditForm((current) => ({ ...current, description: event.target.value }))}
+                    placeholder="Leave blank to keep existing notes"
+                  />
+                </label>
+              </div>
+
+              <div className="form-actions">
+                <button className="button button-secondary" type="button" onClick={() => setBulkEditOpen(false)}>
+                  Cancel
+                </button>
+                <button className="button button-primary" type="submit" disabled={isSaving}>
+                  {isSaving ? "Saving..." : "Apply changes"}
+                </button>
+              </div>
+            </form>
+          </section>
+        </div>
+      ) : null}
 
       {manualOpen ? (
         <div className="modal-backdrop" role="presentation" onClick={() => setManualOpen(false)}>
@@ -935,9 +1581,9 @@ export default function TransactionsPage() {
       ) : null}
 
       {selectedTransaction ? (
-        <div className="modal-backdrop" role="presentation" onClick={() => setSelectedTransaction(null)}>
+        <div className="modal-backdrop" role="presentation" onClick={closeTransactionDetail}>
           <section
-            className="modal-card modal-card--wide glass"
+            className="modal-card modal-card--wide transaction-drawer glass"
             role="dialog"
             aria-modal="true"
             aria-labelledby="transaction-notes-title"
@@ -945,11 +1591,11 @@ export default function TransactionsPage() {
           >
             <div className="modal-head">
               <div>
-                <p className="eyebrow">Notes</p>
-                <h4 id="transaction-notes-title">{selectedTransaction.merchantClean || selectedTransaction.merchantRaw}</h4>
-                <p className="modal-copy">Review the transaction details and keep a note for later.</p>
+                <p className="eyebrow">Transaction details</p>
+                <h4 id="transaction-notes-title">{detailDraft?.merchantClean || detailDraft?.merchantRaw || selectedTransaction.merchantRaw}</h4>
+                <p className="modal-copy">Edit the transaction, add notes, and resolve warnings in one place.</p>
               </div>
-              <button className="icon-button" type="button" onClick={() => setSelectedTransaction(null)} aria-label="Close notes dialog">
+              <button className="icon-button" type="button" onClick={closeTransactionDetail} aria-label="Close notes dialog">
                 ×
               </button>
             </div>
@@ -957,7 +1603,7 @@ export default function TransactionsPage() {
             <div className="transaction-notes-grid">
               <div className="transaction-note-meta">
                 <span>Date</span>
-                <strong>{formatDate(selectedTransaction.date)}</strong>
+                <strong>{formatDate(detailDraft?.date ?? selectedTransaction.date)}</strong>
               </div>
               <div className="transaction-note-meta">
                 <span>Account</span>
@@ -965,48 +1611,155 @@ export default function TransactionsPage() {
               </div>
               <div className="transaction-note-meta">
                 <span>Category</span>
-                <strong>{selectedTransaction.categoryName ?? "Unassigned"}</strong>
+                <strong>{detailDraft?.categoryId ? categories.find((category) => category.id === detailDraft.categoryId)?.name ?? "Unassigned" : "Unassigned"}</strong>
               </div>
               <div className="transaction-note-meta">
                 <span>Amount</span>
-                <strong>{currencyFormatter.format(Number(selectedTransaction.amount))}</strong>
+                <strong>{currencyFormatter.format(Number(detailDraft?.amount ?? selectedTransaction.amount))}</strong>
               </div>
             </div>
 
-            <label className="span-2">
-              Notes
-              <textarea
-                value={selectedTransaction.description ?? ""}
-                onChange={(event) =>
-                  setSelectedTransaction((current) =>
-                    current
-                      ? {
-                          ...current,
-                          description: event.target.value,
-                        }
-                      : current
-                  )
-                }
-                placeholder="Optional context, receipt notes, or review comments"
-              />
-            </label>
+            <div className="form-grid transaction-drawer-grid">
+              <label className="span-2">
+                Name
+                <input
+                  value={detailDraft?.merchantRaw ?? ""}
+                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, merchantRaw: event.target.value } : current))}
+                />
+              </label>
+              <label>
+                Date
+                <input
+                  type="date"
+                  value={detailDraft?.date ?? todayIso}
+                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, date: event.target.value } : current))}
+                />
+              </label>
+              <label>
+                Account
+                <select
+                  value={detailDraft?.accountId ?? ""}
+                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, accountId: event.target.value } : current))}
+                >
+                  {accounts.map((account) => (
+                    <option key={account.id} value={account.id}>
+                      {account.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Category
+                <select
+                  value={detailDraft?.categoryId ?? ""}
+                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, categoryId: event.target.value } : current))}
+                >
+                  <option value="">Unassigned</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Amount
+                <input
+                  type="number"
+                  step="0.01"
+                  value={detailDraft?.amount ?? selectedTransaction.amount}
+                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, amount: event.target.value } : current))}
+                />
+              </label>
+              <label>
+                Type
+                <select
+                  value={detailDraft?.type ?? selectedTransaction.type}
+                  onChange={(event) =>
+                    setDetailDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            type: event.target.value as TransactionDetailDraft["type"],
+                          }
+                        : current
+                    )
+                  }
+                >
+                  <option value="expense">Expense</option>
+                  <option value="income">Income</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </label>
+              <label className="span-2">
+                Merchant alias
+                <input
+                  value={detailDraft?.merchantClean ?? ""}
+                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, merchantClean: event.target.value } : current))}
+                />
+              </label>
+              <label className="span-2">
+                Notes
+                <textarea
+                  value={detailDraft?.description ?? ""}
+                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, description: event.target.value } : current))}
+                  placeholder="Optional context, receipt notes, or review comments"
+                />
+              </label>
+            </div>
 
-            <div className="form-actions">
-              <button className="button button-secondary" type="button" onClick={() => setSelectedTransaction(null)}>
-                Close
-              </button>
+            {warningReasonFor(selectedTransaction) ? (
+              <div className="detail-warning-box">
+                <span>Review warning</span>
+                <p>{warningReasonFor(selectedTransaction)}</p>
+                <div className="detail-warning-actions">
+                  <button
+                    className="button button-primary button-small"
+                    type="button"
+                    onClick={async () => {
+                      await updateTransaction(selectedTransaction.id, {
+                        isExcluded: false,
+                        isTransfer: false,
+                      });
+                      setMessage("Warning accepted.");
+                      closeTransactionDetail();
+                    }}
+                  >
+                    Accept
+                  </button>
+                  <button
+                    className="button button-secondary button-small detail-warning-delete"
+                    type="button"
+                    onClick={async () => {
+                      await updateTransaction(selectedTransaction.id, {
+                        isExcluded: true,
+                      });
+                      setMessage("Transaction excluded.");
+                      closeTransactionDetail();
+                    }}
+                  >
+                    Exclude
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="form-actions detail-actions">
               <button
-                className="button button-primary"
+                className="button button-secondary"
                 type="button"
                 onClick={async () => {
                   await updateTransaction(selectedTransaction.id, {
-                    description: selectedTransaction.description ?? null,
+                    isExcluded: true,
                   });
-                  setMessage("Notes updated.");
-                  setSelectedTransaction(null);
+                  setMessage("Transaction excluded.");
+                  closeTransactionDetail();
                 }}
               >
-                Save notes
+                Exclude
+              </button>
+              <button className="button button-primary" type="button" disabled={isSaving} onClick={saveDetailDraft}>
+                {isSaving ? "Saving..." : "Save changes"}
               </button>
             </div>
           </section>

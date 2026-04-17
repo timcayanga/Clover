@@ -8,10 +8,15 @@ export const dynamic = "force-dynamic";
 
 const patchSchema = z.object({
   categoryId: z.string().nullable().optional(),
+  accountId: z.string().min(1).optional(),
   isExcluded: z.boolean().optional(),
   isTransfer: z.boolean().optional(),
+  type: z.enum(["income", "expense", "transfer"]).optional(),
+  merchantRaw: z.string().min(1).optional(),
   merchantClean: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
+  date: z.string().optional(),
+  amount: z.union([z.string(), z.number()]).optional(),
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ transactionId: string }> }) {
@@ -34,10 +39,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       where: { id: transactionId },
       data: {
         categoryId: payload.categoryId === undefined ? undefined : payload.categoryId,
+        accountId: payload.accountId,
         isExcluded: payload.isExcluded,
         isTransfer: payload.isTransfer,
+        type: payload.type,
+        merchantRaw: payload.merchantRaw,
         merchantClean: payload.merchantClean,
         description: payload.description,
+        date: payload.date ? new Date(payload.date) : undefined,
+        amount: payload.amount === undefined ? undefined : payload.amount.toString(),
       },
     });
 
