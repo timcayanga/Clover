@@ -1,11 +1,5 @@
-export default function BlankPage() {
-  return (
-    <main
-      aria-hidden="true"
-      style={{
-        minHeight: "100vh",
-        background: "white",
-      }}
-    />
-  );
+import { BlankPage } from "./blank-page";
+
+export default function Page() {
+  return <BlankPage />;
 }

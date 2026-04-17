@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { cookies, headers } from "next/headers";
 import "./globals.css";
+import { BlankPage } from "./blank/blank-page";
 import { StagingGate } from "./staging-gate";
 
 export const metadata: Metadata = {
@@ -26,12 +27,24 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const cookieStore = await cookies();
   const stagingCookie = cookieStore.get(stagingCookieName)?.value;
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const isStagingHost = stagingHosts.has(hostname);
+  const isProductionDeployment = process.env.NODE_ENV === "production";
 
-  if (stagingHosts.has(hostname) && stagingCookie !== "1") {
+  if (isStagingHost && stagingCookie !== "1") {
     return (
       <html lang="en">
         <body>
           <StagingGate />
+        </body>
+      </html>
+    );
+  }
+
+  if (isProductionDeployment && !isStagingHost) {
+    return (
+      <html lang="en">
+        <body>
+          <BlankPage />
         </body>
       </html>
     );
