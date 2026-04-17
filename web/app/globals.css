@@ -773,6 +773,11 @@ label {
   gap: 4px;
 }
 
+.transactions-add-menu__panel[hidden],
+.transactions-download-menu__panel[hidden] {
+  display: none !important;
+}
+
 .transactions-download-menu__panel {
   left: auto;
   right: 0;
@@ -1269,6 +1274,12 @@ label {
 }
 
 .transactions-action-button .button-icon svg {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.transactions-action-button .button-icon img {
   display: block;
   width: 13px;
   height: 13px;

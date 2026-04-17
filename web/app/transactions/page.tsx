@@ -458,6 +458,10 @@ export default function TransactionsPage() {
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
+    if (!addMenuOpen && !downloadMenuOpen) {
+      return;
+    }
+
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target;
       if (!(target instanceof Node)) {
@@ -485,7 +489,22 @@ export default function TransactionsPage() {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [addMenuOpen, downloadMenuOpen]);
+
+  const closeToolbarMenus = () => {
+    setAddMenuOpen(false);
+    setDownloadMenuOpen(false);
+  };
+
+  const openAddMenu = () => {
+    setDownloadMenuOpen(false);
+    setAddMenuOpen((current) => !current);
+  };
+
+  const openDownloadMenu = () => {
+    setAddMenuOpen(false);
+    setDownloadMenuOpen((current) => !current);
+  };
 
   const ensureDefaultAccount = async (workspaceId: string) => {
     if (accounts.length > 0) {
@@ -954,7 +973,9 @@ export default function TransactionsPage() {
                     className="button button-primary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
                     style={toolbarAddStyle}
                     type="button"
-                    onClick={() => setAddMenuOpen((current) => !current)}
+                    onClick={() => {
+                      openAddMenu();
+                    }}
                     aria-expanded={addMenuOpen}
                   >
                     <span className="button-icon" aria-hidden="true">
@@ -966,10 +987,24 @@ export default function TransactionsPage() {
                     </span>
                   </button>
                   <div className="transactions-add-menu__panel" hidden={!addMenuOpen}>
-                    <button className="transactions-add-menu__item" type="button" onClick={openManualAdd}>
+                    <button
+                      className="transactions-add-menu__item"
+                      type="button"
+                      onClick={() => {
+                        setAddMenuOpen(false);
+                        void openManualAdd();
+                      }}
+                    >
                       Add transaction
                     </button>
-                    <button className="transactions-add-menu__item" type="button" onClick={() => router.push("/imports")}>
+                    <button
+                      className="transactions-add-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        router.push("/imports");
+                      }}
+                    >
                       Import files
                     </button>
                   </div>
@@ -981,7 +1016,7 @@ export default function TransactionsPage() {
                   title="Undo"
                 >
                   <span className="button-icon" aria-hidden="true">
-                    <ActionIcon name="undo" />
+                    <img src="/undo.svg" alt="" aria-hidden="true" />
                   </span>
                   <span>Undo</span>
                 </button>
@@ -992,7 +1027,7 @@ export default function TransactionsPage() {
                   title="Redo"
                 >
                   <span className="button-icon" aria-hidden="true">
-                    <ActionIcon name="redo" />
+                    <img src="/redo.svg" alt="" aria-hidden="true" />
                   </span>
                   <span>Redo</span>
                 </button>
@@ -1018,7 +1053,9 @@ export default function TransactionsPage() {
                     type="button"
                     aria-haspopup="menu"
                     aria-expanded={downloadMenuOpen}
-                    onClick={() => setDownloadMenuOpen((current) => !current)}
+                    onClick={() => {
+                      openDownloadMenu();
+                    }}
                     title="Download"
                   >
                     <span className="button-icon" aria-hidden="true">
@@ -1030,10 +1067,24 @@ export default function TransactionsPage() {
                     </span>
                   </button>
                   <div className="transactions-download-menu__panel" hidden={!downloadMenuOpen}>
-                    <button className="transactions-download-menu__item" type="button" onClick={downloadCsv}>
+                    <button
+                      className="transactions-download-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        downloadCsv();
+                      }}
+                    >
                       CSV
                     </button>
-                    <button className="transactions-download-menu__item" type="button" onClick={downloadPdf}>
+                    <button
+                      className="transactions-download-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        downloadPdf();
+                      }}
+                    >
                       PDF
                     </button>
                   </div>
