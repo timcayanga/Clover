@@ -1,0 +1,837 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Clover</title>
+    <meta
+      name="description"
+      content="Clover desktop app for transactions, analytics, and source-aware financial tracking."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-screen="overview">
+    <div class="background" aria-hidden="true">
+      <div class="orb orb-a"></div>
+      <div class="orb orb-b"></div>
+      <div class="grid-overlay"></div>
+    </div>
+
+    <div class="app-shell">
+      <aside class="sidebar glass">
+        <div class="brand">
+          <div class="brand-mark">CL</div>
+          <div>
+            <p class="eyebrow">Clover</p>
+            <h1>Pulse</h1>
+          </div>
+        </div>
+
+        <nav class="nav" aria-label="Primary">
+          <button class="nav-link is-active" type="button" data-screen="overview">Overview</button>
+          <button class="nav-link" type="button" data-screen="line-items">Transactions</button>
+          <button class="nav-link" type="button" data-screen="analytics">Analytics</button>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <header class="topbar glass">
+          <div>
+            <p class="eyebrow" data-screen-kicker>Today</p>
+            <h2 data-screen-title>Finance overview</h2>
+            <p class="topbar-subtitle" data-screen-description>
+              A calm desktop workspace for reviewing transactions, insights, and source-aware spending.
+            </p>
+          </div>
+          <input
+            class="topbar-search"
+            id="line-item-search"
+            type="search"
+            placeholder="Search"
+            aria-label="Search transactions"
+          />
+        </header>
+
+        <section class="screen is-active" data-screen-panel="overview">
+          <section class="hero">
+            <div class="hero-copy">
+              <p class="eyebrow">Product direction</p>
+              <h3>A calm, glass-like workspace for transactions, source tracking, and insight.</h3>
+              <p>
+                Transactions, analytics, and source-aware imports stay in one place so you can review,
+                learn, and decide faster.
+              </p>
+              <div class="hero-actions">
+                <button class="button button-primary" type="button" data-action="primary">
+                  Add transaction
+                </button>
+                <button class="button button-secondary" type="button" data-action="secondary">
+                  Open analytics
+                </button>
+              </div>
+            </div>
+            <div class="hero-metrics" id="overview-metrics">
+              <article class="metric">
+                <span>Income</span>
+                <strong>₱45,000.00</strong>
+                <small>0 items need review</small>
+              </article>
+              <article class="metric">
+                <span>Expenses</span>
+                <strong>₱122,331.54</strong>
+                <small>Tracked by category and source</small>
+              </article>
+              <article class="metric">
+                <span>Financial</span>
+                <strong>-₱77,331.54</strong>
+                <small>0% savings rate</small>
+              </article>
+            </div>
+          </section>
+
+          <section class="feature-grid">
+            <article class="feature-card glass">
+              <p class="eyebrow">Transactions</p>
+              <h3>Review, edit, and clean up every transaction.</h3>
+              <p>Each row carries a source, category, and warning state so reviews stay quick.</p>
+            </article>
+            <article class="feature-card glass">
+              <p class="eyebrow">Analytics</p>
+              <h3>See spending, saving, and source patterns at a glance.</h3>
+              <p>Trends, category mix, source mix, and recurring behavior are all reflected on the dashboard.</p>
+            </article>
+            <article class="feature-card glass">
+              <p class="eyebrow">Insights</p>
+              <h3>Get practical tips from your own behavior.</h3>
+              <p>Overview cards can highlight cashflow, review load, and places to save more.</p>
+            </article>
+            <article class="feature-card glass">
+              <p class="eyebrow">Imports</p>
+              <h3>Bring in bank statements and receipts in batches.</h3>
+              <p>Protected PDFs, spreadsheets, and email exports can all be added from the same workflow.</p>
+            </article>
+          </section>
+
+          <section class="overview-insight-grid">
+            <article class="glass insight-card overview-panel overview-panel--large">
+              <p class="eyebrow">Insights</p>
+              <h4>What stands out right now</h4>
+              <div class="overview-panel__list overview-panel__list--wide" id="overview-insights"></div>
+            </article>
+            <article class="glass insight-card overview-panel">
+              <p class="eyebrow">Tips</p>
+              <h4>Small moves that could help</h4>
+              <div class="overview-panel__list" id="overview-tips"></div>
+            </article>
+          </section>
+
+          <section class="overview-activity-grid">
+            <article class="glass insight-card overview-panel overview-panel--full">
+              <div class="overview-panel__head">
+                <div>
+                  <p class="eyebrow">Activity</p>
+                  <h4>Recent changes across the app</h4>
+                </div>
+                <div class="overview-activity-actions">
+                  <span class="pill pill-neutral" id="overview-activity-count">0 items</span>
+                </div>
+              </div>
+              <div class="overview-activity-list" id="overview-activity"></div>
+            </article>
+          </section>
+        </section>
+
+        <section class="screen" data-screen-panel="line-items" hidden>
+          <section class="workspace glass" id="line-items">
+            <input
+              id="statement-upload"
+              class="hidden-file-input"
+              type="file"
+              multiple
+              accept=".csv,.tsv,.txt,.json,.pdf,.xls,.xlsx,.ofx,.qfx,.xml,.html,.htm,application/pdf,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            />
+
+            <div class="transactions-layout">
+              <div class="glass table-panel table-panel--full transactions-table-panel transactions-main-panel">
+                <div class="transactions-topbar">
+                  <div class="transactions-top-actions">
+                    <button class="button button-secondary button-small transactions-action-button transactions-search-trigger" type="button" id="transactions-search-trigger" aria-haspopup="dialog" aria-expanded="false">
+                      <span class="button-icon" aria-hidden="true">⌕</span>
+                      <span>Search</span>
+                    </button>
+                    <button class="button button-secondary button-small transactions-action-button" type="button" id="transactions-date-trigger">
+                      <span class="button-icon" aria-hidden="true">
+                        <img src="assets/icons/calendar.svg" alt="" />
+                      </span>
+                      <span>Date</span>
+                    </button>
+                    <button class="button button-secondary button-small transactions-action-button" type="button" id="transactions-filters-trigger">
+                      <span class="button-icon" aria-hidden="true">≡</span>
+                      <span>Filters</span>
+                    </button>
+                    <button class="button button-secondary button-small transactions-action-button transactions-summary-toggle-button" type="button" id="transactions-summary-toggle" aria-label="Show transaction summary" aria-expanded="false" title="Show summary">
+                      <span class="summary-toggle-icon" aria-hidden="true">
+                        <svg viewBox="0 0 16 16" class="summary-toggle-svg" aria-hidden="true">
+                          <rect x="2" y="2" width="12" height="12" rx="2.2" />
+                          <path d="M4.5 5.25h7M4.5 8h7M4.5 10.75h4" />
+                        </svg>
+                      </span>
+                    </button>
+                  </div>
+                </div>
+                <div class="transactions-search-popover" id="transactions-search-popover" hidden>
+                  <section class="transactions-search-popover__card" role="dialog" aria-modal="false" aria-labelledby="transactions-search-title">
+                    <div class="transactions-search-popover__head">
+                      <h4 id="transactions-search-title">Search</h4>
+                    </div>
+                    <label class="transactions-search-popover__field" for="transactions-search-input">
+                      <input
+                        id="transactions-search-input"
+                        type="search"
+                        placeholder="Enter a search term..."
+                        aria-label="Search transactions"
+                      />
+                    </label>
+                    <p class="transactions-search-popover__copy">
+                      We'll match your search term to merchant names, categories, original statements, amounts, and notes.
+                    </p>
+                    <div class="transactions-search-popover__footer">
+                      <button class="button button-secondary button-small" type="button" id="transactions-search-clear" aria-label="Clear search">
+                        Clear
+                      </button>
+                      <div class="transactions-search-popover__actions">
+                        <button class="button button-secondary button-small" type="button" id="transactions-search-cancel">
+                          Cancel
+                        </button>
+                        <button class="button button-primary button-small" type="button" id="transactions-search-apply">
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                </div>
+                <div class="toolbar-filters toolbar-filters--compact">
+                  <div class="toolbar-filters__primary">
+                    <div class="transactions-add-menu" id="transactions-add-menu">
+                      <button class="button button-primary button-small transactions-action-button transactions-add-menu__toggle" type="button" id="transactions-add">
+                        <span class="button-icon" aria-hidden="true">＋</span>
+                        <span>Add</span>
+                        <span class="button-icon" aria-hidden="true">▾</span>
+                      </button>
+                      <div class="transactions-add-menu__panel">
+                        <button class="transactions-add-menu__item" type="button" id="transactions-add-transaction">
+                          Add transaction
+                        </button>
+                        <button class="transactions-add-menu__item" type="button" id="transactions-import-files">
+                          Import files
+                        </button>
+                      </div>
+                    </div>
+                    <button class="button button-secondary button-small toolbar-icon-button" type="button" id="transactions-undo" disabled aria-label="Undo" title="Undo">
+                      <span class="button-icon" aria-hidden="true">
+                        <img src="assets/icons/undo.svg" alt="" />
+                      </span>
+                      Undo
+                    </button>
+                    <button class="button button-secondary button-small toolbar-icon-button" type="button" id="transactions-redo" disabled aria-label="Redo" title="Redo">
+                      <span class="button-icon" aria-hidden="true">
+                        <img src="assets/icons/redo.svg" alt="" />
+                      </span>
+                      Redo
+                    </button>
+                  </div>
+                  <div class="table-actions">
+                    <button class="button button-secondary button-small" type="button" id="clear-selection">Clear</button>
+                    <button class="button button-primary button-small" type="button" id="bulk-delete" hidden>Delete selected</button>
+                  </div>
+                  <div class="table-toolbar-actions">
+                    <button class="button button-secondary button-small toolbar-icon-button" type="button" id="save-view" title="Save current view" aria-label="Save current view">
+                      <span class="button-icon" aria-hidden="true">
+                        <img src="assets/icons/save.svg" alt="" />
+                      </span>
+                      <span>Save view</span>
+                    </button>
+                    <div class="transactions-download-menu" id="transactions-download-menu">
+                      <button class="button button-secondary button-small toolbar-icon-button transactions-download-menu__toggle" type="button" id="transactions-download" aria-haspopup="menu" aria-expanded="false">
+                        <span class="button-icon" aria-hidden="true">
+                          <img src="assets/icons/download.svg" alt="" />
+                        </span>
+                        <span>Download</span>
+                        <span class="button-icon" aria-hidden="true">▾</span>
+                      </button>
+                      <div class="transactions-download-menu__panel" hidden>
+                        <button class="transactions-download-menu__item" type="button" id="transactions-download-csv">
+                          CSV
+                        </button>
+                        <button class="transactions-download-menu__item" type="button" id="transactions-download-pdf">
+                          PDF
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="line-item-header" role="row" aria-label="Transaction columns">
+                  <span class="line-item-header-cell line-item-header-cell--select-all" aria-label="Select all transactions" title="Select all transactions">
+                    <input class="item-select item-select--all" type="checkbox" id="select-all" aria-label="Select all transactions" />
+                  </span>
+                  <span class="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true"></span>
+                  <button class="line-item-header-cell" type="button" data-sort-field="merchant">Name</button>
+                  <button class="line-item-header-cell" type="button" data-sort-field="date">Date</button>
+                  <span class="line-item-header-cell line-item-header-cell--account-header" aria-label="Account controls">
+                    <button class="line-item-header-cell line-item-header-cell--account-sort" type="button" data-sort-field="source" title="Sort by account">Account</button>
+                    <button class="line-item-header-cell__filter-indicator" type="button" data-column-filter-field="source" aria-label="Filter by account" title="Filter by account">▾</button>
+                  </span>
+                  <span class="line-item-header-cell line-item-header-cell--category-header" aria-label="Category controls">
+                    <button class="line-item-header-cell line-item-header-cell--category-sort" type="button" data-sort-field="category" title="Sort by category">Category</button>
+                    <button class="line-item-header-cell__filter-indicator" type="button" data-column-filter-field="category" aria-label="Filter by category" title="Filter by category">▾</button>
+                  </span>
+                  <button class="line-item-header-cell line-item-header-cell--amount" type="button" data-sort-field="amount" data-filter-field="amount">Amount</button>
+                  <span class="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true"></span>
+                  <span class="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true"></span>
+                </div>
+
+                <div class="column-filter-tray" id="column-filter-tray" hidden></div>
+
+                <div class="table-wrap" id="line-item-list"></div>
+                <div class="table-footer">
+                  <div class="table-footer__summary">
+                    <span class="pill" data-list-summary>0 items</span>
+                    <button class="warning-summary-button" type="button" data-warning-summary hidden aria-label="Review warning transactions" title="No warnings">
+                      <span class="warning-mark warning-mark--small" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                  <span class="pill pill-neutral" data-period-net>Net gain PHP 0.00</span>
+                </div>
+              </div>
+              <aside class="glass transactions-summary-panel" aria-label="Transaction summary" hidden>
+                <div class="transactions-summary-panel__head">
+                  <p class="eyebrow">Summary</p>
+                  <h4>Overview</h4>
+                </div>
+                <dl class="transactions-summary-list" id="transactions-summary">
+                  <div>
+                    <dt>Total transactions</dt>
+                    <dd data-summary-total>0</dd>
+                  </div>
+                  <div>
+                    <dt>Income</dt>
+                    <dd class="positive" data-summary-income>PHP 0.00</dd>
+                  </div>
+                  <div>
+                    <dt>Spending</dt>
+                    <dd class="negative" data-summary-spending>PHP 0.00</dd>
+                  </div>
+                  <div>
+                    <dt>Net</dt>
+                    <dd data-summary-net>PHP 0.00</dd>
+                  </div>
+                  <div>
+                    <dt>Review items</dt>
+                    <dd data-summary-review>0</dd>
+                  </div>
+                  <div>
+                    <dt>Top category</dt>
+                    <dd data-summary-category>—</dd>
+                  </div>
+                  <div>
+                    <dt>Top source</dt>
+                    <dd data-summary-source>—</dd>
+                  </div>
+                  <div>
+                    <dt>First transaction</dt>
+                    <dd data-summary-first>—</dd>
+                  </div>
+                  <div>
+                    <dt>Last transaction</dt>
+                    <dd data-summary-last>—</dd>
+                  </div>
+                </dl>
+                <button class="transactions-summary-panel__download" type="button" id="summary-download-transactions">
+                  Download CSV
+                </button>
+              </aside>
+            </div>
+          </section>
+        </section>
+
+        <div class="modal-backdrop" id="transactions-import-modal" hidden>
+          <section class="modal-card modal-card--wide glass" role="dialog" aria-modal="true" aria-labelledby="transactions-import-title">
+            <div class="modal-head">
+              <div>
+                <p class="eyebrow">File Import</p>
+                <h4 id="transactions-import-title">Import statements, exports, and receipts</h4>
+                <p class="modal-copy">
+                  Drop in bank statements, exports, and receipts as CSV, TSV, TXT, JSON, PDF, XLS, XLSX, OFX, QFX,
+                  XML, HTML, or HTM files. Password-protected PDFs will prompt for a password one file at a time.
+                </p>
+              </div>
+              <button class="icon-button" type="button" id="transactions-import-close" aria-label="Close import dialog">×</button>
+            </div>
+
+            <div class="import-format-pills import-format-pills--modal" aria-label="Supported file formats">
+              <span class="pill pill-neutral">CSV</span>
+              <span class="pill pill-neutral">TSV</span>
+              <span class="pill pill-neutral">TXT</span>
+              <span class="pill pill-neutral">JSON</span>
+              <span class="pill pill-neutral">PDF</span>
+              <span class="pill pill-neutral">XLS</span>
+              <span class="pill pill-neutral">XLSX</span>
+              <span class="pill pill-neutral">OFX</span>
+              <span class="pill pill-neutral">QFX</span>
+              <span class="pill pill-neutral">XML</span>
+              <span class="pill pill-neutral">HTML</span>
+            </div>
+
+            <p class="import-status import-status--modal" aria-live="polite" aria-atomic="true">
+              Password-protected PDFs are supported and will prompt one file at a time.
+            </p>
+
+            <div class="form-actions">
+              <button class="button button-secondary" type="button" id="transactions-import-cancel">Cancel</button>
+              <button class="button button-primary" type="button" id="transactions-import-choose">Choose files</button>
+            </div>
+          </section>
+        </div>
+
+        <section class="screen" data-screen-panel="analytics" hidden>
+          <section class="workspace glass">
+            <div class="analytics-toolbar">
+              <div class="analytics-toolbar__controls">
+                <button class="button button-secondary button-small date-filter-trigger" type="button" id="analytics-date-trigger">
+                  <span class="button-icon" aria-hidden="true">
+                    <img src="assets/icons/calendar.svg" alt="" />
+                  </span>
+                  <span class="date-filter-trigger__label">Lifetime to date</span>
+                </button>
+                <label class="analytics-view-select">
+                  <span class="sr-only">Trend view</span>
+                  <select id="analytics-trend-view">
+                    <option value="day">Day</option>
+                    <option value="week">Week</option>
+                    <option value="month" selected>Month</option>
+                    <option value="year">Year</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="stats-grid" id="analytics-stats"></div>
+            <div class="analytics-browser" id="analytics-browser" hidden></div>
+            <div class="analytics-grid">
+              <article class="glass chart-card analytics-card analytics-card--chart">
+                <div class="card-head">
+                  <div>
+                    <p class="eyebrow">Cashflow trend</p>
+                    <h4>Income, expenses, and net movement</h4>
+                  </div>
+                  <span class="pill" data-analytics-range>Last 30 days</span>
+                </div>
+                <div class="cashflow-chart" id="analytics-cashflow"></div>
+              </article>
+
+              <article class="glass insight-card analytics-card analytics-card--chart">
+                <div class="card-head">
+                  <p class="eyebrow">Category mix</p>
+                  <h4>Where the money went</h4>
+                </div>
+                <div class="donut-wrap">
+                  <div class="donut-chart" id="analytics-category-donut"></div>
+                  <div class="donut-legend" id="analytics-categories"></div>
+                </div>
+              </article>
+
+              <article class="glass insight-card analytics-card analytics-card--chart">
+                <div class="card-head">
+                  <p class="eyebrow">Source mix</p>
+                  <h4>Where transactions came from</h4>
+                </div>
+                <div class="donut-wrap">
+                  <div class="donut-chart" id="analytics-source-donut"></div>
+                  <div class="donut-legend" id="analytics-sources"></div>
+                </div>
+              </article>
+
+              <article class="glass chart-card analytics-card analytics-card--chart analytics-card--wide analytics-card--flow" id="analytics-money-flows-card">
+                <div class="card-head">
+                  <p class="eyebrow">Money flows</p>
+                  <h4>Where money comes from and where it goes</h4>
+                </div>
+                <div class="sankey-chart" id="analytics-money-flows"></div>
+              </article>
+
+              <article class="glass insight-card analytics-card analytics-card--chart">
+                <div class="card-head">
+                  <p class="eyebrow">Category changes</p>
+                  <h4>Biggest shifts versus the previous period</h4>
+                </div>
+                <div class="analytics-list analytics-change-list" id="analytics-changes"></div>
+              </article>
+            </div>
+
+            <div class="analytics-footer">
+              <article class="glass insight-card analytics-card analytics-card--full">
+                <p class="eyebrow">Insights</p>
+                <h4>What this period tells you</h4>
+                <div class="analytics-insights" id="analytics-insights"></div>
+              </article>
+              <article class="glass insight-card analytics-card analytics-card--full">
+                <p class="eyebrow">Review</p>
+                <h4>Warnings and clean-up items</h4>
+                <div class="analytics-list" id="analytics-warnings"></div>
+              </article>
+              <article class="glass insight-card analytics-card analytics-card--full">
+                <p class="eyebrow">Recurring</p>
+                <h4>Patterns that repeat every period</h4>
+                <div class="analytics-list" id="analytics-recurring"></div>
+              </article>
+              <article class="glass insight-card analytics-card analytics-card--full">
+                <p class="eyebrow">Bills payments</p>
+                <h4>Settlements matched across banks</h4>
+                <div class="analytics-bills" id="analytics-bills-payments"></div>
+              </article>
+            </div>
+          </section>
+        </section>
+
+      </main>
+    </div>
+
+    <button class="scroll-top-fab" id="scroll-top-fab" type="button" aria-label="Scroll to top" hidden>↑</button>
+
+    <div class="modal-backdrop" id="date-filter-modal" hidden>
+      <section class="modal-card modal-card--wide date-filter-card glass" role="dialog" aria-modal="true" aria-labelledby="date-filter-title">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Transactions</p>
+            <h4 id="date-filter-title">Date filter</h4>
+            <p class="modal-copy" id="date-filter-summary">Lifetime to date</p>
+          </div>
+          <button class="icon-button" type="button" id="date-filter-close" aria-label="Close date filter">×</button>
+        </div>
+
+        <div class="date-filter-tabs" role="tablist" aria-label="Date filter mode">
+          <button class="date-filter-tab is-active" type="button" data-date-tab="relative">Relative</button>
+          <button class="date-filter-tab" type="button" data-date-tab="custom">Custom</button>
+        </div>
+
+        <div class="date-filter-panel" id="date-filter-panel"></div>
+
+        <div class="form-actions date-filter-actions">
+          <button class="button button-secondary" type="button" id="date-filter-reset">Reset</button>
+          <button class="button button-primary" type="button" id="date-filter-done">Done</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="pdf-password-modal" hidden>
+      <section class="modal-card glass" role="dialog" aria-modal="true" aria-labelledby="pdf-password-title">
+        <p class="eyebrow">Password required</p>
+        <h4 id="pdf-password-title">Open protected statement</h4>
+        <p id="pdf-password-copy">Enter the PDF password so Clover can read the bank statement.</p>
+        <p class="modal-copy pdf-password-queue" id="pdf-password-queue" hidden></p>
+        <form class="password-form" id="pdf-password-form">
+          <label>
+            <span>Password</span>
+            <input id="pdf-password-input" type="password" autocomplete="current-password" />
+          </label>
+          <p class="password-error" id="pdf-password-error" hidden></p>
+          <div class="form-actions">
+            <button class="button button-secondary" type="button" id="pdf-password-cancel">Cancel</button>
+            <button class="button button-primary" type="submit">Open statement</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="source-popover glass" id="source-modal" hidden role="dialog" aria-modal="false" aria-label="Add source">
+      <div class="source-popover__caret" aria-hidden="true"></div>
+      <div class="source-popover__body">
+        <div class="modal-head source-popover__head">
+          <button class="icon-button" type="button" id="source-modal-cancel" aria-label="Close source picker">×</button>
+        </div>
+        <form class="source-form" id="source-form">
+          <input id="source-modal-input" type="text" placeholder="Add source..." autocomplete="off" aria-label="Source name" />
+          <p class="password-error" id="source-modal-error" hidden></p>
+        </form>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="manual-entry-modal" hidden>
+      <section class="modal-card modal-card--wide glass" role="dialog" aria-modal="true" aria-labelledby="manual-entry-title">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Manual Entry</p>
+            <h4 id="manual-entry-title">Add a line item</h4>
+          </div>
+          <button class="icon-button" type="button" id="manual-entry-close" aria-label="Close manual entry">×</button>
+        </div>
+
+        <form class="manual-form" id="line-item-form">
+          <div class="form-grid">
+            <label>
+              <span>Date</span>
+              <input name="date" type="date" required />
+            </label>
+            <label>
+              <span>Type</span>
+              <select name="type" required>
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+                <option value="transfer">Transfer</option>
+              </select>
+            </label>
+          <label class="span-2">
+            <span>Merchant / Source</span>
+            <input name="merchant" type="text" placeholder="Starbucks, Income, etc." required />
+          </label>
+          <label>
+            <span>Source</span>
+            <input name="source" type="text" placeholder="Cash, BPI, BDO, RCBC, Wise..." />
+          </label>
+          <label>
+            <span>Amount</span>
+            <input name="amount" type="number" step="0.01" min="0" placeholder="0.00" required />
+          </label>
+            <label>
+              <span>Category</span>
+              <select name="category" required>
+                <option>Income</option>
+                <option>Gifts &amp; Donations</option>
+                <option>Transport</option>
+                <option>Housing</option>
+                <option>Bills &amp; Utilities</option>
+                <option>Food &amp; Dining</option>
+                <option>Travel &amp; Lifestyle</option>
+                <option>Shopping</option>
+                <option>Children</option>
+                <option>Education</option>
+                <option>Health &amp; Wellness</option>
+                <option>Financial</option>
+                <option>Other</option>
+                <option>Business</option>
+                <option>Transfers</option>
+              </select>
+            </label>
+            <label class="span-2">
+              <span>Notes</span>
+              <textarea
+                name="notes"
+                rows="4"
+                placeholder="Optional context, receipt notes, or review comments"
+              ></textarea>
+            </label>
+            <label class="span-2">
+              <span>Receipt or screenshot</span>
+              <input name="attachment" type="file" accept="image/*,.pdf" />
+            </label>
+          </div>
+
+          <div class="form-actions">
+            <button class="button button-secondary" type="reset">Clear</button>
+            <button class="button button-primary" type="submit">Save line item</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="bulk-edit-modal" hidden>
+      <section class="modal-card modal-card--wide glass" role="dialog" aria-modal="true" aria-labelledby="bulk-edit-title">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Transactions</p>
+            <h4 id="bulk-edit-title">Edit multiple transactions</h4>
+            <p class="modal-copy" id="bulk-edit-copy">Apply the same changes to all selected rows.</p>
+          </div>
+          <button class="icon-button" type="button" id="bulk-edit-close" aria-label="Close bulk edit">×</button>
+        </div>
+
+        <form class="manual-form" id="bulk-edit-form">
+          <div class="form-grid">
+            <label>
+              <span>Type</span>
+              <select name="type">
+                <option value="">Leave unchanged</option>
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+                <option value="transfer">Transfer</option>
+              </select>
+            </label>
+            <label>
+              <span>Source</span>
+              <input name="source" type="text" placeholder="Leave blank to keep existing" />
+            </label>
+            <label class="span-2">
+              <span>Category</span>
+              <select name="category">
+                <option value="">Leave unchanged</option>
+              </select>
+            </label>
+            <label class="span-2">
+              <span>Notes</span>
+              <textarea name="notes" rows="3" placeholder="Leave blank to keep existing"></textarea>
+            </label>
+            <label>
+              <span>Tags</span>
+              <select name="tagsMode">
+                <option value="append">Append tags</option>
+                <option value="remove">Remove tags</option>
+              </select>
+            </label>
+            <label class="span-2">
+              <span>Tag values</span>
+              <input name="tags" type="text" placeholder="Comma-separated tags" />
+            </label>
+          </div>
+          <p class="modal-copy" id="bulk-edit-count">0 selected</p>
+          <div class="form-actions">
+            <button class="button button-secondary" type="button" id="bulk-edit-cancel">Cancel</button>
+            <button class="button button-primary" type="submit">Apply changes</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="item-detail-modal" hidden>
+      <section class="modal-card modal-card--wide glass" role="dialog" aria-modal="true" aria-labelledby="item-detail-title">
+        <div class="modal-head">
+          <div>
+            <p class="eyebrow">Line item</p>
+            <h4 id="item-detail-title">Item details</h4>
+          </div>
+          <button class="icon-button" type="button" id="item-detail-close" aria-label="Close item details">×</button>
+        </div>
+
+        <div class="detail-amount" id="item-detail-amount"></div>
+        <div class="detail-grid">
+          <label>
+            <span>Name</span>
+            <input id="item-detail-merchant" type="text" />
+          </label>
+          <label>
+            <span>Date</span>
+            <input id="item-detail-date" type="date" />
+          </label>
+          <label>
+            <span>Type</span>
+            <select id="item-detail-type">
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+              <option value="transfer">Transfer</option>
+            </select>
+          </label>
+          <label>
+            <span>Account</span>
+            <input id="item-detail-source" type="text" list="source-options" />
+          </label>
+          <label>
+            <span>Category</span>
+            <select id="item-detail-category">
+              <option>Income</option>
+              <option>Gifts &amp; Donations</option>
+              <option>Transport</option>
+              <option>Housing</option>
+              <option>Bills &amp; Utilities</option>
+              <option>Food &amp; Dining</option>
+              <option>Travel &amp; Lifestyle</option>
+              <option>Shopping</option>
+              <option>Children</option>
+              <option>Education</option>
+              <option>Health &amp; Wellness</option>
+              <option>Financial</option>
+              <option>Other</option>
+              <option>Business</option>
+              <option>Transfers</option>
+            </select>
+          </label>
+          <label>
+            <span>Amount</span>
+            <input id="item-detail-amount-input" type="number" min="0" step="0.01" />
+          </label>
+          <div class="detail-full detail-readonly">
+            <span>Imported from</span>
+            <strong id="item-detail-imported-from"></strong>
+          </div>
+          <div class="detail-full detail-readonly">
+            <span>Imported at</span>
+            <strong id="item-detail-imported-at"></strong>
+          </div>
+          <label class="detail-full">
+            <span>Notes</span>
+            <textarea id="item-detail-notes" rows="4"></textarea>
+          </label>
+          <label class="detail-full">
+            <span>Import evidence</span>
+            <textarea id="item-detail-import-evidence" rows="4"></textarea>
+          </label>
+          <div class="detail-full detail-warning-box" id="item-detail-warning-wrap" hidden>
+            <span>Review warning</span>
+            <p id="item-detail-warning"></p>
+            <div class="detail-warning-actions">
+              <button class="button button-primary button-small" type="button" data-warning-action="accept">Accept</button>
+              <button class="button button-secondary button-small detail-warning-delete" type="button" data-warning-action="delete">Delete</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-actions detail-actions">
+          <button class="button button-secondary" type="button" id="item-detail-delete">Delete</button>
+        </div>
+      </section>
+    </div>
+
+    <template id="line-item-template">
+      <article class="line-item">
+        <input class="item-select" type="checkbox" aria-label="Select line item" />
+        <span class="item-avatar"></span>
+        <input class="item-merchant" type="text" aria-label="Transaction name" />
+        <button class="item-date" type="button" aria-label="Transaction date"></button>
+        <input class="item-date-input hidden-file-input" type="date" aria-label="Transaction date input" />
+        <div class="item-source" aria-label="Transaction account">
+          <span class="item-source-badge" aria-hidden="true"></span>
+          <select class="item-source-select"></select>
+        </div>
+        <select class="item-type" aria-label="Transaction type">
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
+          <option value="transfer">Transfer</option>
+        </select>
+        <div class="item-category" aria-label="Transaction category">
+          <span class="item-category-badge" aria-hidden="true"></span>
+          <select class="item-category-select">
+            <option>Income</option>
+            <option>Gifts &amp; Donations</option>
+            <option>Transport</option>
+            <option>Housing</option>
+            <option>Bills &amp; Utilities</option>
+            <option>Food &amp; Dining</option>
+            <option>Travel &amp; Lifestyle</option>
+            <option>Shopping</option>
+            <option>Children</option>
+            <option>Education</option>
+            <option>Health &amp; Wellness</option>
+            <option>Financial</option>
+            <option>Other</option>
+            <option>Business</option>
+            <option>Transfers</option>
+          </select>
+        </div>
+        <input class="amount" type="text" inputmode="decimal" aria-label="Transaction amount" />
+        <button class="item-details-button" type="button" aria-label="Open transaction details">
+          <img src="assets/icons/details.svg" alt="" aria-hidden="true" />
+        </button>
+        <span class="warning-slot" aria-hidden="true"></span>
+      </article>
+    </template>
+
+    <datalist id="source-options"></datalist>
+
+    <script src="node_modules/xlsx/dist/xlsx.full.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

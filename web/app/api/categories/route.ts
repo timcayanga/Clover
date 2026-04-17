@@ -1,0 +1,59 @@
+import { prisma } from "@/lib/prisma";
+import { requireAuth } from "@/lib/auth";
+import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+
+export const dynamic = "force-dynamic";
+
+const createCategorySchema = z.object({
+  workspaceId: z.string().min(1),
+  name: z.string().min(1),
+  type: z.enum(["income", "expense", "transfer"]),
+  parentCategoryId: z.string().optional().nullable(),
+});
+
+export async function GET(request: Request) {
+  try {
+    const { userId } = await requireAuth();
+    const { searchParams } = new URL(request.url);
+    const workspaceId = searchParams.get("workspaceId");
+
+    if (!workspaceId) {
+      return NextResponse.json({ error: "workspaceId is required" }, { status: 400 });
+    }
+
+    await assertWorkspaceAccess(userId, workspaceId);
+
+    const categories = await prisma.category.findMany({
+      where: { workspaceId },
+      orderBy: [{ type: "asc" }, { name: "asc" }],
+    });
+
+    return NextResponse.json({ categories });
+  } catch {
+    return NextResponse.json({ error: "Unable to load categories" }, { status: 400 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const { userId } = await requireAuth();
+    const payload = createCategorySchema.parse(await request.json());
+
+    await assertWorkspaceAccess(userId, payload.workspaceId);
+
+    const category = await prisma.category.create({
+      data: {
+        workspaceId: payload.workspaceId,
+        name: payload.name,
+        type: payload.type,
+        parentCategoryId: payload.parentCategoryId ?? null,
+      },
+    });
+
+    return NextResponse.json({ category }, { status: 201 });
+  } catch {
+    return NextResponse.json({ error: "Unable to create category" }, { status: 400 });
+  }
+}

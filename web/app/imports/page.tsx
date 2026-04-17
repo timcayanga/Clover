@@ -1,0 +1,548 @@
+"use client";
+
+import type { ChangeEvent, FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
+import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+
+type Workspace = {
+  id: string;
+  name: string;
+  type: string;
+};
+
+type Account = {
+  id: string;
+  name: string;
+  institution: string | null;
+  type: string;
+  currency: string;
+};
+
+type ImportFile = {
+  id: string;
+  fileName: string;
+  fileType: string;
+  status: string;
+};
+
+type ParsedRow = {
+  id: string;
+  accountName: string | null;
+  date: string | null;
+  amount: string | null;
+  merchantRaw: string | null;
+  categoryName: string | null;
+  type: "income" | "expense" | "transfer" | null;
+};
+
+const extractTextFromFile = async (file: File) => {
+  const lowerName = file.name.toLowerCase();
+
+  if (lowerName.endsWith(".csv") || lowerName.endsWith(".tsv") || lowerName.endsWith(".txt")) {
+    return file.text();
+  }
+
+  if (lowerName.endsWith(".pdf")) {
+    const data = new Uint8Array(await file.arrayBuffer());
+    const task = pdfjs.getDocument({ data } as any);
+    const pdf = await task.promise;
+    const pages: string[] = [];
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      const lines = new Map<number, { x: number; text: string }[]>();
+
+      for (const item of content.items as Array<{ str?: string; transform?: number[] }>) {
+        if (typeof item.str !== "string" || !item.str.trim()) {
+          continue;
+        }
+
+        const y = Math.round(Number(item.transform?.[5] ?? 0));
+        const x = Number(item.transform?.[4] ?? 0);
+        const row = lines.get(y) ?? [];
+        row.push({ x, text: item.str.trim() });
+        lines.set(y, row);
+      }
+
+      const text = Array.from(lines.entries())
+        .sort((a, b) => b[0] - a[0])
+        .map(([, row]) => row.sort((a, b) => a.x - b.x).map((entry) => entry.text).join(" "))
+        .join("\n");
+      pages.push(text);
+    }
+
+    return pages.join("\n");
+  }
+
+  throw new Error("Only PDF, CSV, TSV, and TXT files are supported right now.");
+};
+
+export default function ImportsPage() {
+  const [message, setMessage] = useState("Upload a PDF or CSV to begin.");
+  const [isUploading, setIsUploading] = useState(false);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [previewRows, setPreviewRows] = useState<ParsedRow[]>([]);
+  const [currentImport, setCurrentImport] = useState<ImportFile | null>(null);
+  const [currentJobId, setCurrentJobId] = useState<string>("");
+
+  const selectedWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
+    [selectedWorkspaceId, workspaces]
+  );
+
+  const loadWorkspaces = async () => {
+    const response = await fetch("/api/workspaces");
+    if (!response.ok) {
+      setMessage("Unable to load workspaces.");
+      return;
+    }
+
+    const data = await response.json();
+    const items = Array.isArray(data.workspaces) ? data.workspaces : [];
+    setWorkspaces(items);
+
+    if (items.length > 0) {
+      setSelectedWorkspaceId((current) => current || items[0].id);
+    }
+  };
+
+  const loadAccounts = async (workspaceId: string) => {
+    if (!workspaceId) {
+      setAccounts([]);
+      setSelectedAccountId("");
+      return;
+    }
+
+    const response = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
+    if (!response.ok) {
+      setAccounts([]);
+      setSelectedAccountId("");
+      return;
+    }
+
+    const data = await response.json();
+    const items = Array.isArray(data.accounts) ? data.accounts : [];
+    setAccounts(items);
+    setSelectedAccountId((current) => current || items[0]?.id || "");
+  };
+
+  useEffect(() => {
+    void loadWorkspaces();
+  }, []);
+
+  useEffect(() => {
+    void loadAccounts(selectedWorkspaceId);
+  }, [selectedWorkspaceId]);
+
+  const ensureDefaultAccount = async (workspaceId: string) => {
+    if (accounts.length > 0) {
+      return accounts[0].id;
+    }
+
+    const response = await fetch("/api/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId,
+        name: "Imported transactions",
+        institution: "Source upload",
+        type: "bank",
+        currency: "PHP",
+        source: "upload",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to create a default account for this workspace.");
+    }
+
+    const data = await response.json();
+    const accountId = data.account?.id as string | undefined;
+
+    if (!accountId) {
+      throw new Error("Default account was not created.");
+    }
+
+    setAccounts([data.account]);
+    setSelectedAccountId(accountId);
+    return accountId;
+  };
+
+  const createWorkspace = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const name = workspaceName.trim();
+    if (!name) {
+      setMessage("Workspace name is required.");
+      return;
+    }
+
+    setCreatingWorkspace(true);
+    try {
+      const response = await fetch("/api/workspaces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, type: "personal" }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to create workspace.");
+      }
+
+      const data = await response.json();
+      const created = data.workspace as Workspace;
+      setWorkspaces((current) => [...current, created]);
+      setSelectedWorkspaceId(created.id);
+      setWorkspaceName("");
+      setMessage(`Workspace "${created.name}" created.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to create workspace.");
+    } finally {
+      setCreatingWorkspace(false);
+    }
+  };
+
+  const handleWorkspaceChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setSelectedWorkspaceId(event.target.value);
+    setCurrentImport(null);
+    setPreviewRows([]);
+    setCurrentJobId("");
+  };
+
+  const processImportedText = async (importFileId: string, text: string) => {
+    const response = await fetch(`/api/imports/${importFileId}/process`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(payload.error || "Unable to process the import.");
+    }
+  };
+
+  const loadPreview = async (importFileId: string) => {
+    const response = await fetch(`/api/imports/${importFileId}/preview`);
+    if (!response.ok) {
+      throw new Error("Unable to load import preview.");
+    }
+
+    const payload = await response.json();
+    const importFile = payload.importFile as ImportFile | undefined;
+    if (importFile) {
+      setCurrentImport(importFile);
+    }
+    const rows = Array.isArray(payload.parsedRows) ? payload.parsedRows : [];
+    setPreviewRows(rows);
+    return { rows, importFile };
+  };
+
+  const loadImportStatus = async (importFileId: string) => {
+    const response = await fetch(`/api/imports/${importFileId}/status`);
+    if (!response.ok) {
+      throw new Error("Unable to load import status.");
+    }
+
+    const payload = await response.json();
+    const importFile = payload.importFile as ImportFile | undefined;
+    if (importFile) {
+      setCurrentImport(importFile);
+    }
+
+    return {
+      importFile,
+      parsedRowsCount: Number(payload.parsedRowsCount ?? 0),
+    };
+  };
+
+  useEffect(() => {
+    const importId = currentImport?.id;
+    const shouldPoll = Boolean(importId) && (currentImport?.status === "processing" || currentImport?.status === "queued" || Boolean(currentJobId));
+
+    if (!shouldPoll || !importId) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const refresh = async () => {
+      try {
+        const { importFile, parsedRowsCount } = await loadImportStatus(importId);
+        if (cancelled || !importFile) {
+          return;
+        }
+
+        if (importFile.status === "failed") {
+          setMessage("Import parsing failed.");
+          setCurrentJobId("");
+          return;
+        }
+
+        if (importFile.status === "done" || parsedRowsCount > 0) {
+          const result = await loadPreview(importId);
+          if (!cancelled) {
+            setCurrentJobId("");
+            setMessage(
+              result.rows.length > 0
+                ? `Preview ready for ${importFile.fileName}. Confirm when you're ready.`
+                : `Parsed ${importFile.fileName}, but no rows were recognized yet.`
+            );
+          }
+        } else if (!cancelled) {
+          setMessage(`Parsing ${importFile.fileName}...`);
+        }
+      } catch {
+        if (!cancelled) {
+          setMessage("Unable to refresh import status.");
+        }
+      }
+    };
+
+    void refresh();
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 1500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [currentImport?.id, currentImport?.status, currentJobId]);
+
+  const handleUpload = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsUploading(true);
+    setMessage("Preparing upload...");
+
+    const form = event.currentTarget;
+    const input = form.elements.namedItem("file") as HTMLInputElement | null;
+    const file = input?.files?.[0];
+
+    if (!file) {
+      setIsUploading(false);
+      setMessage("Choose a file first.");
+      return;
+    }
+
+    if (!selectedWorkspaceId) {
+      setIsUploading(false);
+      setMessage("Choose or create a workspace first.");
+      return;
+    }
+
+    try {
+      const accountId = await ensureDefaultAccount(selectedWorkspaceId);
+      const prepResponse = await fetch("/api/imports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+          fileName: file.name,
+          fileType: file.type || file.name.split(".").pop() || "unknown",
+          contentType: file.type || "application/octet-stream",
+        }),
+      });
+
+      if (!prepResponse.ok) {
+        throw new Error("Could not prepare upload");
+      }
+
+      const prep = await prepResponse.json();
+      const stagedImport = prep.importFile as ImportFile;
+      const uploadResponse = await fetch(prep.upload.url, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file,
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error("Upload failed");
+      }
+
+      const extractedText = await extractTextFromFile(file);
+      setMessage("Queued for parsing...");
+      await processImportedText(prep.importFile.id, extractedText);
+      setMessage("Parsing in the background...");
+      setCurrentImport({ ...stagedImport, status: "processing" });
+      setCurrentJobId(String(prep.jobId || ""));
+      setSelectedAccountId(accountId);
+      setMessage(
+        `Uploaded ${file.name}. Your import is now in the queue and will update automatically.`
+      );
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const confirmImport = async () => {
+    if (!currentImport?.id || !selectedAccountId) {
+      setMessage("Choose an account before confirming the import.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/imports/${currentImport.id}/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId: selectedAccountId }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to confirm import.");
+      }
+
+      const payload = await response.json();
+      setMessage(`Imported ${payload.result?.imported ?? previewRows.length} transactions.`);
+      setPreviewRows([]);
+      setCurrentImport(null);
+      setCurrentJobId("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to confirm import.");
+    }
+  };
+
+  const statusTone =
+    currentImport?.status === "done"
+      ? "status status--done"
+      : currentImport?.status === "failed"
+        ? "status status--failed"
+        : currentImport?.status === "processing" || currentJobId
+          ? "status status--processing"
+          : "status";
+
+  return (
+    <main className="page dashboard">
+      <section className="panel">
+        <h2>Import statements</h2>
+        <p className="panel-muted">{message}</p>
+
+        <div className="import-stack" style={{ marginTop: 20 }}>
+          <form onSubmit={createWorkspace} className="actions">
+            <input
+              name="workspaceName"
+              placeholder="New workspace name"
+              value={workspaceName}
+              onChange={(event) => setWorkspaceName(event.target.value)}
+            />
+            <button className="button button-secondary" type="submit" disabled={creatingWorkspace}>
+              {creatingWorkspace ? "Creating..." : "Create workspace"}
+            </button>
+          </form>
+
+          <label className="panel-muted">
+            Workspace
+            <select
+              value={selectedWorkspaceId}
+              onChange={handleWorkspaceChange}
+              style={{ display: "block", marginTop: 8, minWidth: 260 }}
+            >
+              <option value="">Select a workspace</option>
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name} {workspace.type ? `(${workspace.type})` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {selectedWorkspace ? (
+            <p className="panel-muted">
+              Selected workspace: {selectedWorkspace.name}. {accounts.length === 0 ? "A default account will be created on first upload." : ""}
+            </p>
+          ) : null}
+
+          <form onSubmit={handleUpload} className="actions">
+            <input name="file" type="file" accept=".pdf,.csv,.tsv,.txt" />
+            <button className="button button-primary" type="submit" disabled={isUploading}>
+              {isUploading ? "Uploading..." : "Upload and parse"}
+            </button>
+          </form>
+        </div>
+
+        <div className="panel" style={{ marginTop: 24 }}>
+          <h3>Preview</h3>
+          <p className="panel-muted">
+            After upload, the file is parsed into staging rows. Confirming commits them into real transactions.
+          </p>
+
+          {currentImport ? (
+            <div className="status-card">
+              <div>
+                <strong>{currentImport.fileName}</strong>
+                <div className="panel-muted">Live import status and preview</div>
+              </div>
+              <div className="status-stack">
+                <span className={statusTone}>Status: {currentImport.status}</span>
+                {currentJobId ? <span className="status status--processing">Job: {currentJobId}</span> : null}
+              </div>
+            </div>
+          ) : null}
+
+          {previewRows.length > 0 ? (
+            <div style={{ overflowX: "auto" }}>
+              <table className="preview-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Merchant</th>
+                    <th>Amount</th>
+                    <th>Category</th>
+                    <th>Type</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewRows.map((row, index) => (
+                    <tr key={`${row.id}-${index}`}>
+                      <td>{row.date || "—"}</td>
+                      <td>{row.merchantRaw || "—"}</td>
+                      <td>{row.amount || "—"}</td>
+                      <td>{row.categoryName || "—"}</td>
+                      <td>{row.type || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="panel-muted">No parsed rows yet.</p>
+          )}
+
+          <div className="actions" style={{ marginTop: 16 }}>
+            <label className="panel-muted">
+              Import account
+              <select
+                value={selectedAccountId}
+                onChange={(event) => setSelectedAccountId(event.target.value)}
+                style={{ display: "block", marginTop: 8, minWidth: 260 }}
+              >
+                <option value="">Select an account</option>
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.name} {account.institution ? `(${account.institution})` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              className="button button-primary"
+              type="button"
+              onClick={() => void confirmImport()}
+              disabled={!currentImport || previewRows.length === 0 || !selectedAccountId}
+            >
+              Confirm import
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}

@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum WorkspaceType {
+  personal
+  shared
+  business
+}
+
+enum AccountType {
+  bank
+  wallet
+  credit_card
+  cash
+  investment
+  other
+}
+
+enum TransactionType {
+  income
+  expense
+  transfer
+}
+
+enum ImportFileStatus {
+  processing
+  done
+  failed
+  deleted
+}
+
+model User {
+  id            String      @id @default(cuid())
+  clerkUserId   String      @unique
+  email         String      @unique
+  verified      Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  workspaces    Workspace[]
+}
+
+model Workspace {
+  id            String        @id @default(cuid())
+  userId        String
+  name          String
+  type          WorkspaceType @default(personal)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accounts      Account[]
+  categories    Category[]
+  transactions  Transaction[]
+  importFiles   ImportFile[]
+  auditLogs     AuditLog[]
+
+  @@index([userId])
+}
+
+model Account {
+  id            String        @id @default(cuid())
+  workspaceId   String
+  name          String
+  institution   String?
+  type          AccountType   @default(bank)
+  currency      String        @default("PHP")
+  source        String        @default("upload")
+  balance       Decimal?      @db.Decimal(18, 2)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transactions  Transaction[]
+
+  @@index([workspaceId])
+}
+
+model Category {
+  id               String      @id @default(cuid())
+  workspaceId      String
+  name             String
+  type             TransactionType
+  parentCategoryId String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  workspace        Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transactions     Transaction[]
+
+  @@index([workspaceId])
+}
+
+model Transaction {
+  id             String           @id @default(cuid())
+  workspaceId    String
+  accountId      String
+  categoryId     String?
+  date           DateTime
+  amount         Decimal          @db.Decimal(18, 2)
+  currency       String           @default("PHP")
+  type           TransactionType
+  merchantRaw    String
+  merchantClean  String?
+  description    String?
+  isTransfer     Boolean          @default(false)
+  isExcluded     Boolean          @default(false)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account        Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  category       Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([accountId])
+  @@index([categoryId])
+  @@index([date])
+}
+
+model ImportFile {
+  id            String           @id @default(cuid())
+  workspaceId   String
+  fileName      String
+  fileType      String
+  storageKey    String
+  status        ImportFileStatus @default(processing)
+  uploadedAt    DateTime         @default(now())
+  deletedAt     DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parsedRows    ParsedTransaction[]
+
+  @@index([workspaceId])
+  @@index([status])
+}
+
+model ParsedTransaction {
+  id             String      @id @default(cuid())
+  importFileId   String
+  workspaceId    String
+  accountName    String?
+  date           DateTime?
+  amount         Decimal?    @db.Decimal(18, 2)
+  merchantRaw    String?
+  type           TransactionType?
+  categoryName   String?
+  rawPayload     Json?
+  createdAt      DateTime    @default(now())
+  importFile     ImportFile   @relation(fields: [importFileId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([importFileId])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  workspaceId String
+  actorUserId String
+  action      String
+  entity      String
+  entityId    String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([actorUserId])
+}

@@ -1,0 +1,13 @@
+.DS_Store
+.toolchain/
+node_modules/
+web/node_modules/
+web/.next/
+.next/
+.env.local
+web/.env.local
+*.log
+*.app/
+*.app
+*.app.broken/
+*.app.bundle/

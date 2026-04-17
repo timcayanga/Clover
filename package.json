@@ -1,0 +1,21 @@
+{
+  "name": "clover",
+  "version": "0.1.0",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "check": "node scripts/check.mjs",
+    "qa:renderer": "node scripts/renderer-check.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "electron": "^39.0.0",
+    "jsdom": "^26.1.0"
+  },
+  "dependencies": {
+    "pdfjs-dist": "^5.6.205",
+    "xlsx": "^0.18.5"
+  }
+}
