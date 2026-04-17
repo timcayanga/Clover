@@ -121,10 +121,10 @@ label {
 .app-shell {
   position: relative;
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 24px;
-  padding: 24px;
-  height: calc(100dvh - 48px);
+  grid-template-columns: 296px minmax(0, 1fr);
+  gap: 22px;
+  padding: 22px;
+  height: calc(100dvh - 44px);
   min-height: 0;
   overflow: hidden;
 }
@@ -139,19 +139,19 @@ label {
 
 .sidebar {
   position: sticky;
-  top: 24px;
-  height: calc(100dvh - 48px);
+  top: 22px;
+  height: calc(100dvh - 44px);
   border-radius: 32px;
-  padding: 24px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 14px;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .brand--stack {
@@ -160,9 +160,9 @@ label {
 }
 
 .brand-mark {
-  width: 52px;
-  height: 52px;
-  border-radius: 16px;
+  width: 48px;
+  height: 48px;
+  border-radius: 15px;
   display: block;
   box-shadow: var(--shadow-soft);
   flex: none;
@@ -170,14 +170,14 @@ label {
 }
 
 .brand-wordmark {
-  width: min(100%, 155px);
+  width: min(100%, 142px);
   height: auto;
   display: block;
 }
 
 .brand-copy {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -205,6 +205,8 @@ label {
 .brand-eyebrow {
   margin-bottom: 0;
   color: var(--muted-2);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
 }
 
 .eyebrow {
@@ -217,8 +219,8 @@ label {
 
 .nav {
   display: grid;
-  gap: 8px;
-  margin-top: 4px;
+  gap: 7px;
+  margin-top: 2px;
 }
 
 .nav-link {
@@ -228,8 +230,9 @@ label {
   background: transparent;
   color: var(--muted);
   text-align: left;
-  padding: 13px 16px;
-  border-radius: 18px;
+  padding: 11px 14px;
+  border-radius: 16px;
+  font-size: 0.94rem;
   transition: background 160ms ease, color 160ms ease, transform 160ms ease, border-color 160ms ease;
 }
 
@@ -299,7 +302,7 @@ label {
 .content {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 20px;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -307,7 +310,7 @@ label {
 
 .topbar {
   border-radius: 28px;
-  padding: 20px 24px;
+  padding: 18px 22px;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -331,7 +334,7 @@ label {
 
 .content-body {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   min-width: 0;
   min-height: 0;
   overflow: auto;
@@ -340,8 +343,8 @@ label {
 
 .hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.18fr) minmax(320px, 0.82fr);
-  gap: 22px;
+  grid-template-columns: minmax(0, 1.22fr) minmax(300px, 0.78fr);
+  gap: 18px;
   align-items: center;
 }
 
@@ -353,119 +356,122 @@ label {
 }
 
 .hero-copy {
-  padding: 28px 18px 26px 6px;
+  padding: 22px 16px 22px 6px;
 }
 
 .hero-copy h3 {
-  margin: 12px 0 18px;
-  font-size: clamp(3.05rem, 5.1vw, 4.9rem);
-  line-height: 0.92;
-  letter-spacing: -0.075em;
-  max-width: 11.5ch;
+  margin: 10px 0 14px;
+  font-size: clamp(2.5rem, 4.35vw, 4rem);
+  line-height: 0.94;
+  letter-spacing: -0.08em;
+  max-width: 11.2ch;
 }
 
 .hero-copy p {
   margin: 0;
   max-width: 58ch;
   color: var(--muted);
-  line-height: 1.7;
-  font-size: 1.08rem;
+  line-height: 1.62;
+  font-size: 0.98rem;
 }
 
 .hero-actions {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
-  margin-top: 22px;
+  margin-top: 18px;
 }
 
 .hero-metrics {
-  padding: 18px;
+  padding: 14px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.8);
   box-shadow: var(--shadow);
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .metric {
   background: rgba(245, 249, 251, 0.9);
   border: 1px solid var(--stroke);
-  border-radius: 24px;
-  padding: 18px 18px 16px;
+  border-radius: 22px;
+  padding: 14px 15px 13px;
   box-shadow: var(--shadow-soft);
 }
 
 .metric span {
   display: block;
   color: var(--muted);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  font-size: 0.8rem;
 }
 
 .metric strong {
   display: block;
-  font-size: 1.82rem;
-  letter-spacing: -0.04em;
+  font-size: 1.42rem;
+  letter-spacing: -0.045em;
 }
 
 .metric small {
   display: block;
-  margin-top: 6px;
+  margin-top: 4px;
   color: var(--muted);
-  line-height: 1.5;
+  line-height: 1.45;
+  font-size: 0.86rem;
 }
 
 .metric.compact {
-  padding: 14px 16px;
+  padding: 12px 14px;
   border-radius: 18px;
 }
 
 .metric.compact strong {
-  font-size: 1.45rem;
+  font-size: 1.2rem;
 }
 
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .feature-card {
   background: rgba(255, 255, 255, 0.88);
   border: 1px solid var(--stroke);
   box-shadow: var(--shadow);
-  padding: 22px;
+  padding: 18px 18px 20px;
 }
 
 .feature-card p {
   margin: 10px 0 0;
   color: var(--muted);
-  line-height: 1.65;
+  line-height: 1.55;
+  font-size: 0.94rem;
 }
 
 .overview-insight-grid,
 .overview-activity-grid {
   display: grid;
-  gap: 16px;
+  gap: 14px;
 }
 
 .overview-insight-grid {
-  grid-template-columns: minmax(0, 1.22fr) minmax(320px, 0.78fr);
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
 }
 
 .overview-panel {
-  padding: 22px;
+  padding: 18px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.88);
   box-shadow: var(--shadow);
 }
 
 .overview-panel--large {
-  min-height: 280px;
+  min-height: 240px;
 }
 
 .overview-panel--full {
-  min-height: 210px;
+  min-height: 190px;
 }
 
 .overview-panel__head {
@@ -473,13 +479,13 @@ label {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .overview-panel__list,
 .overview-activity-list {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .overview-panel__list--wide {
@@ -487,8 +493,8 @@ label {
 }
 
 .overview-panel__item {
-  padding: 14px 16px;
-  border-radius: 20px;
+  padding: 12px 14px;
+  border-radius: 18px;
   background: rgba(255, 255, 255, 0.58);
   border: 1px solid rgba(15, 23, 42, 0.06);
   display: grid;
@@ -496,13 +502,14 @@ label {
 }
 
 .overview-panel__item strong {
-  font-size: 0.96rem;
+  font-size: 0.88rem;
   letter-spacing: -0.02em;
 }
 
 .overview-panel__item span {
   color: var(--muted);
   line-height: 1.55;
+  font-size: 0.9rem;
 }
 
 .actions {
@@ -517,9 +524,9 @@ label {
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-height: 46px;
+  min-height: 42px;
   padding: 0 18px;
-  border-radius: 14px;
+  border-radius: 999px;
   border: 1px solid transparent;
   cursor: pointer;
   background: transparent;
@@ -533,13 +540,18 @@ label {
 
 .button-secondary {
   background: rgba(255, 255, 255, 0.92);
-  border-color: var(--stroke);
+  border-color: rgba(3, 168, 192, 0.24);
+  color: var(--accent);
 }
 
 .button-small {
-  min-height: 38px;
+  min-height: 36px;
   padding: 0 14px;
-  border-radius: 12px;
+  border-radius: 999px;
+}
+
+.button-pill {
+  border-radius: 999px;
 }
 
 .page {
@@ -747,7 +759,7 @@ label {
   }
 
   .brand-wordmark {
-    width: 172px;
+    width: 150px;
   }
 }
 
@@ -805,6 +817,6 @@ label {
   }
 
   .brand-wordmark {
-    width: 150px;
+    width: 138px;
   }
 }

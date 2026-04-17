@@ -17,17 +17,16 @@ export default function HomePage() {
     >
       <section className="hero">
         <div className="hero-copy">
-          <span className="pill pill-accent">Upload → Understand → Act</span>
           <h3>A calm, glass-like workspace for transactions, source tracking, and insight.</h3>
           <p>
             Clover keeps transactions, analytics, and source-aware imports in one place so your
             review flow stays quiet, deliberate, and useful.
           </p>
           <div className="hero-actions">
-            <Link className="button button-primary" href="/transactions">
-              Add transaction
+            <Link className="button button-primary button-pill" href="/transactions">
+              View Transactions
             </Link>
-            <Link className="button button-secondary" href="/dashboard#analytics">
+            <Link className="button button-secondary button-pill" href="/dashboard#analytics">
               See analytics
             </Link>
           </div>
