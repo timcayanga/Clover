@@ -2,7 +2,9 @@
 
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { ImportProgressModal } from "@/components/import-progress-modal";
 import { pdfjs } from "@/lib/pdfjs";
 
 type Workspace = {
@@ -79,7 +81,44 @@ const extractTextFromFile = async (file: File) => {
   throw new Error("Only PDF, CSV, TSV, and TXT files are supported right now.");
 };
 
+const uploadFileWithProgress = (
+  url: string,
+  file: File,
+  onProgress: (loaded: number, total: number) => void
+) =>
+  new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress(event.loaded, event.total);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(new Error("Upload failed"));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Upload failed"));
+    xhr.send(file);
+  });
+
+type ProgressState = {
+  open: boolean;
+  fileName: string;
+  progress: number;
+  detail: string;
+  statusLabel: string;
+};
+
 export default function ImportsPage() {
+  const router = useRouter();
   const [message, setMessage] = useState("Upload a PDF or CSV to begin.");
   const [isUploading, setIsUploading] = useState(false);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -91,6 +130,8 @@ export default function ImportsPage() {
   const [previewRows, setPreviewRows] = useState<ParsedRow[]>([]);
   const [currentImport, setCurrentImport] = useState<ImportFile | null>(null);
   const [currentJobId, setCurrentJobId] = useState<string>("");
+  const [progressState, setProgressState] = useState<ProgressState | null>(null);
+  const [autoReturnToTransactions, setAutoReturnToTransactions] = useState(false);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
@@ -288,6 +329,8 @@ export default function ImportsPage() {
         if (importFile.status === "failed") {
           setMessage("Import parsing failed.");
           setCurrentJobId("");
+          setProgressState(null);
+          setAutoReturnToTransactions(false);
           return;
         }
 
@@ -295,18 +338,39 @@ export default function ImportsPage() {
           const result = await loadPreview(importId);
           if (!cancelled) {
             setCurrentJobId("");
+            setProgressState((current) =>
+              current
+                ? { ...current, open: false, progress: 100, detail: "Import complete", statusLabel: "Done" }
+                : current
+            );
             setMessage(
               result.rows.length > 0
                 ? `Preview ready for ${importFile.fileName}. Confirm when you're ready.`
                 : `Parsed ${importFile.fileName}, but no rows were recognized yet.`
             );
+            if (autoReturnToTransactions) {
+              setAutoReturnToTransactions(false);
+              router.replace("/transactions");
+            }
           }
         } else if (!cancelled) {
+          setProgressState((current) =>
+            current
+              ? {
+                  ...current,
+                  progress: Math.max(current.progress, 85),
+                  detail: `Parsing ${importFile.fileName}...`,
+                  statusLabel: "Parsing",
+                }
+              : current
+          );
           setMessage(`Parsing ${importFile.fileName}...`);
         }
       } catch {
         if (!cancelled) {
           setMessage("Unable to refresh import status.");
+          setProgressState(null);
+          setAutoReturnToTransactions(false);
         }
       }
     };
@@ -320,7 +384,7 @@ export default function ImportsPage() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [currentImport?.id, currentImport?.status, currentJobId]);
+  }, [autoReturnToTransactions, currentImport?.id, currentImport?.status, currentJobId, router]);
 
   const handleUpload = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -344,7 +408,19 @@ export default function ImportsPage() {
     }
 
     try {
+      setProgressState({
+        open: true,
+        fileName: file.name,
+        progress: 5,
+        detail: "Preparing upload...",
+        statusLabel: "Uploading",
+      });
       const accountId = await ensureDefaultAccount(selectedWorkspaceId);
+      setProgressState((current) =>
+        current
+          ? { ...current, progress: 10, detail: "Creating the import record...", statusLabel: "Uploading" }
+          : current
+      );
       const prepResponse = await fetch("/api/imports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -362,27 +438,43 @@ export default function ImportsPage() {
 
       const prep = await prepResponse.json();
       const stagedImport = prep.importFile as ImportFile;
-      const uploadResponse = await fetch(prep.upload.url, {
-        method: "PUT",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-        body: file,
+      await uploadFileWithProgress(prep.upload.url, file, (loaded, total) => {
+        const uploadPercent = total > 0 ? loaded / total : 0;
+        const progress = 10 + Math.round(uploadPercent * 55);
+        setProgressState((current) =>
+          current
+            ? { ...current, progress: Math.max(current.progress, progress), detail: "Uploading the file...", statusLabel: "Uploading" }
+            : current
+        );
       });
 
-      if (!uploadResponse.ok) {
-        throw new Error("Upload failed");
-      }
-
+      setProgressState((current) =>
+        current
+          ? { ...current, progress: 70, detail: "Reading the uploaded file...", statusLabel: "Parsing" }
+          : current
+      );
       const extractedText = await extractTextFromFile(file);
+      setProgressState((current) =>
+        current
+          ? { ...current, progress: 82, detail: "Sending the parsed text to the import queue...", statusLabel: "Parsing" }
+          : current
+      );
       setMessage("Queued for parsing...");
       await processImportedText(prep.importFile.id, extractedText);
+      setProgressState((current) =>
+        current
+          ? { ...current, progress: 90, detail: "Waiting for the import to finish...", statusLabel: "Finishing" }
+          : current
+      );
       setMessage("Parsing in the background...");
       setCurrentImport({ ...stagedImport, status: "processing" });
       setCurrentJobId(String(prep.jobId || ""));
       setSelectedAccountId(accountId);
-      setMessage(
-        `Uploaded ${file.name}. Your import is now in the queue and will update automatically.`
-      );
+      setAutoReturnToTransactions(true);
+      setMessage(`Uploaded ${file.name}. Your import is now in the queue and will update automatically.`);
     } catch (error) {
+      setProgressState(null);
+      setAutoReturnToTransactions(false);
       setMessage(error instanceof Error ? error.message : "Upload failed");
     } finally {
       setIsUploading(false);
@@ -554,6 +646,15 @@ export default function ImportsPage() {
             </button>
           </div>
         </div>
+
+        <ImportProgressModal
+          open={Boolean(progressState?.open)}
+          title="Uploading import"
+          fileName={progressState?.fileName ?? ""}
+          progress={progressState?.progress ?? 0}
+          detail={progressState?.detail ?? ""}
+          statusLabel={progressState?.statusLabel ?? "Working"}
+        />
       </section>
     </CloverShell>
   );

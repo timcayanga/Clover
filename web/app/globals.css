@@ -2065,6 +2065,110 @@ label {
   gap: 16px;
 }
 
+.import-progress-backdrop {
+  backdrop-filter: blur(16px);
+}
+
+.import-progress-modal {
+  width: min(560px, calc(100vw - 28px));
+  display: grid;
+  gap: 20px;
+  padding: 26px;
+}
+
+.import-progress-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.import-progress-header h4 {
+  margin: 2px 0 0;
+}
+
+.import-progress-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.12);
+  border: 1px solid rgba(3, 168, 192, 0.18);
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.import-progress-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 20px;
+  align-items: center;
+}
+
+.import-progress-donut {
+  --progress: 0%;
+  width: 176px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.98) 0 54%, transparent 55%),
+    conic-gradient(var(--accent) var(--progress), rgba(3, 168, 192, 0.12) 0);
+  display: grid;
+  place-items: center;
+  box-shadow: var(--shadow);
+}
+
+.import-progress-donut__inner {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
+.import-progress-donut__inner strong {
+  font-size: clamp(1.6rem, 4vw, 2.1rem);
+  letter-spacing: -0.06em;
+}
+
+.import-progress-donut__inner span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.import-progress-copy {
+  display: grid;
+  gap: 12px;
+}
+
+.import-progress-copy p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.import-progress-bar {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.12);
+  overflow: hidden;
+}
+
+.import-progress-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), rgba(3, 168, 192, 0.6));
+  transition: width 180ms ease;
+}
+
 .accounts-add-tabs {
   display: inline-flex;
   padding: 4px;

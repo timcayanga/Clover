@@ -2,6 +2,7 @@
 
 import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
+import { ImportProgressModal } from "@/components/import-progress-modal";
 import { pdfjs } from "@/lib/pdfjs";
 
 type AccountOption = {
@@ -31,6 +32,8 @@ type QueuedFile = {
   passwordVisible: boolean;
   importFileId: string | null;
   importedRows: number | null;
+  progress: number;
+  progressLabel: string;
 };
 
 const extractTextFromFile = async (file: File, password?: string) => {
@@ -143,6 +146,8 @@ export function ImportFilesModal({
           passwordVisible: false,
           importFileId: null,
           importedRows: null,
+          progress: 0,
+          progressLabel: "Queued",
         }));
 
       return [...current, ...additions];
@@ -203,12 +208,13 @@ export function ImportFilesModal({
       return "error";
     }
 
-    updateItem(itemId, { status: "parsing", error: null });
+    updateItem(itemId, { status: "parsing", error: null, progress: 8, progressLabel: "Preparing file" });
 
     try {
       const targetAccountId = await ensureTargetAccountId();
+      updateItem(itemId, { progress: 20, progressLabel: "Reading file" });
       const text = await extractTextFromFile(item.file, item.password.trim() || undefined);
-      updateItem(itemId, { status: "importing" });
+      updateItem(itemId, { status: "importing", progress: 55, progressLabel: "Parsing file" });
 
       const prepareResponse = await fetch("/api/imports", {
         method: "POST",
@@ -233,6 +239,7 @@ export function ImportFilesModal({
         throw new Error("The import could not be created.");
       }
 
+      updateItem(itemId, { progress: 72, progressLabel: "Saving import" });
       const processResponse = await fetch(`/api/imports/${importFileId}/process`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -244,6 +251,7 @@ export function ImportFilesModal({
         throw new Error(payload.error || "Unable to parse this file.");
       }
 
+      updateItem(itemId, { progress: 92, progressLabel: "Linking to account" });
       const confirmResponse = await fetch(`/api/imports/${importFileId}/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -262,6 +270,8 @@ export function ImportFilesModal({
         error: null,
         importFileId,
         importedRows,
+        progress: 100,
+        progressLabel: "Done",
       });
       await onImported();
       return "done";
@@ -275,6 +285,8 @@ export function ImportFilesModal({
           error: needsPasswordMessage,
           password: "",
           passwordVisible: true,
+          progress: 0,
+          progressLabel: "Password needed",
         });
         return "needs_password";
       }
@@ -282,10 +294,15 @@ export function ImportFilesModal({
       updateItem(itemId, {
         status: "error",
         error: error instanceof Error ? error.message : `Unable to import ${item.file.name}.`,
+        progress: 0,
+        progressLabel: "Error",
       });
       return "error";
     }
   };
+
+  const activeItem = items.find((item) => item.status === "parsing" || item.status === "importing") ?? null;
+  const hasCompletedAllFiles = items.length > 0 && items.every((item) => item.status === "done");
 
   useEffect(() => {
     if (!open || busy || !workspaceId) {
@@ -311,11 +328,19 @@ export function ImportFilesModal({
     })();
   }, [busy, items, open, processFile, workspaceId]);
 
+  useEffect(() => {
+    if (!open || !hasCompletedAllFiles) {
+      return;
+    }
+
+    onClose();
+  }, [hasCompletedAllFiles, onClose, open]);
+
   const handleStartImport = async () => {
     if (busy) return;
 
     setBusy(true);
-    setMessage("Parsing selected files...");
+    setMessage("Working through selected files...");
 
     let importedCount = 0;
     let blockedCount = 0;
@@ -432,6 +457,15 @@ export function ImportFilesModal({
           <p>Accepted files: CSV and PDF. Password-protected files are supported.</p>
           <p>We parse the file for account and transaction data, do not store the raw upload, and remove it after processing to protect your privacy.</p>
         </div>
+
+        <ImportProgressModal
+          open={Boolean(activeItem)}
+          title="Importing file"
+          fileName={activeItem?.file.name ?? ""}
+          progress={activeItem?.progress ?? 0}
+          detail={activeItem?.progressLabel ?? "Working"}
+          statusLabel={activeItem?.status === "importing" ? "Importing" : "Parsing"}
+        />
 
         <div className="accounts-import-files">
           {items.length > 0 ? (
