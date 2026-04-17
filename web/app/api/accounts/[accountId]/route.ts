@@ -87,6 +87,18 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
 
     await assertWorkspaceAccess(userId, workspaceId);
 
+    const existingAccount = await prisma.account.findUnique({
+      where: { id: accountId },
+    });
+
+    if (!existingAccount) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    }
+
+    if (existingAccount.workspaceId !== workspaceId) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     const account = await prisma.account.delete({
       where: { id: accountId },
     });

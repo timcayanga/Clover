@@ -250,6 +250,8 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [message, setMessage] = useState("Select a workspace to review accounts.");
+  const [workspacesLoading, setWorkspacesLoading] = useState(true);
+  const [accountsLoading, setAccountsLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
   const [addMode, setAddMode] = useState<AddMode>("manual");
   const [importOpen, setImportOpen] = useState(false);
@@ -277,9 +279,12 @@ export default function AccountsPage() {
   );
 
   const loadWorkspaces = async () => {
+    setWorkspacesLoading(true);
     const response = await fetch("/api/workspaces");
     if (!response.ok) {
       setMessage("Unable to load workspaces.");
+      setWorkspacesLoading(false);
+      setAccountsLoading(false);
       return;
     }
 
@@ -287,29 +292,40 @@ export default function AccountsPage() {
     const items = Array.isArray(data.workspaces) ? data.workspaces : [];
     setWorkspaces(items);
     setSelectedWorkspaceId((current) => current || items[0]?.id || "");
+    setWorkspacesLoading(false);
   };
 
   const loadWorkspaceData = async (workspaceId: string) => {
     if (!workspaceId) {
       setAccounts([]);
       setTransactions([]);
+      setAccountsLoading(false);
       return;
     }
 
-    const [accountsResponse, transactionsResponse] = await Promise.all([
-      fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
-      fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`),
-    ]);
+    setAccountsLoading(true);
+    setAccounts([]);
+    setTransactions([]);
 
+    const accountsRequest = fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
+    const transactionsRequest = fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`);
+
+    const accountsResponse = await accountsRequest;
     if (accountsResponse.ok) {
       const payload = await accountsResponse.json();
       setAccounts(Array.isArray(payload.accounts) ? payload.accounts : []);
     }
 
-    if (transactionsResponse.ok) {
+    setAccountsLoading(false);
+
+    void transactionsRequest.then(async (transactionsResponse) => {
+      if (!transactionsResponse.ok) {
+        return;
+      }
+
       const payload = await transactionsResponse.json();
       setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
-    }
+    });
   };
 
   useEffect(() => {
@@ -712,22 +728,26 @@ export default function AccountsPage() {
         <section className="accounts-overview-grid">
           <article className="accounts-overview-card glass">
             <p className="eyebrow">Net worth</p>
-            <strong>{currencyFormatter.format(totals.netWorth)}</strong>
-            <span>{accounts.length} accounts across {workspaces.length} workspace{workspaces.length === 1 ? "" : "s"}</span>
+            <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.netWorth)}</strong>
+            <span>
+              {accountsLoading
+                ? "Loading accounts"
+                : `${accounts.length} accounts across ${workspaces.length} workspace${workspaces.length === 1 ? "" : "s"}`}
+            </span>
           </article>
           <article className="accounts-overview-card glass">
             <p className="eyebrow">Assets</p>
-            <strong>{currencyFormatter.format(totals.assets)}</strong>
+            <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.assets)}</strong>
             <span>Cash, savings, and invested balances</span>
           </article>
           <article className="accounts-overview-card glass">
             <p className="eyebrow">Liabilities</p>
-            <strong>{currencyFormatter.format(totals.liabilities)}</strong>
+            <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.liabilities)}</strong>
             <span>Credit cards and other negative balances</span>
           </article>
           <article className="accounts-overview-card glass">
             <p className="eyebrow">Needs review</p>
-            <strong>{needsReviewCount}</strong>
+            <strong>{accountsLoading ? "Loading..." : needsReviewCount}</strong>
             <span>Potential duplicates or incomplete imports</span>
           </article>
         </section>
@@ -737,7 +757,7 @@ export default function AccountsPage() {
             <div className="accounts-list-head">
               <div>
                 <p className="eyebrow">Account list</p>
-                <h4>{visibleCount} visible account{visibleCount === 1 ? "" : "s"}</h4>
+                <h4>{accountsLoading ? "Loading accounts..." : `${visibleCount} visible account${visibleCount === 1 ? "" : "s"}`}</h4>
               </div>
               <div className="accounts-list-controls">
                 <label className="accounts-search">
@@ -756,7 +776,9 @@ export default function AccountsPage() {
             </div>
 
             <div className="accounts-sections">
-              {accountGroups.length > 0 ? (
+              {accountsLoading ? (
+                <div className="empty-state">Loading accounts...</div>
+              ) : accountGroups.length > 0 ? (
                 accountGroups.map((group) => (
                   <article key={group.title} className="accounts-group glass">
                     <div className="accounts-group__head">
@@ -919,7 +941,7 @@ export default function AccountsPage() {
         </section>
 
         <div className="accounts-status-bar">
-          <span className="pill pill-neutral">{selectedWorkspace?.name ?? "No workspace selected"}</span>
+          <span className="pill pill-neutral">{workspacesLoading ? "Loading workspace..." : selectedWorkspace?.name ?? "No workspace selected"}</span>
           <span className="pill pill-neutral">{message}</span>
         </div>
       </div>

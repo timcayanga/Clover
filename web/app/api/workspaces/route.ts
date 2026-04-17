@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { syncClerkUser } from "@/lib/clerk";
-import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
+import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -15,8 +15,6 @@ export async function GET() {
       where: { clerkUserId: clerkUser.clerkUserId },
       include: { workspaces: true },
     });
-
-    await Promise.all((user?.workspaces ?? [starterWorkspace]).map((workspace) => seedWorkspaceDefaults(workspace.id)));
 
     return NextResponse.json({
       workspaces: user?.workspaces ?? [starterWorkspace],
@@ -54,8 +52,6 @@ export async function POST(request: Request) {
         type: type === "shared" || type === "business" ? type : "personal",
       },
     });
-
-    await seedWorkspaceDefaults(workspace.id);
 
     const seededWorkspace = await prisma.workspace.findUnique({
       where: { id: workspace.id },
