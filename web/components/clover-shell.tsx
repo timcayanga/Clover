@@ -36,11 +36,11 @@ export function CloverShell({
 
       <div className="app-shell">
         <aside className="sidebar glass">
-          <div className="brand">
+          <div className="brand brand--stack">
             <img className="brand-mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
             <div className="brand-copy">
-              <p className="eyebrow brand-eyebrow">Clover</p>
-              <h1>Clover</h1>
+              <p className="brand-eyebrow">CLOVER</p>
+              <img className="brand-wordmark" src="/clover-name-teal.svg" alt="Clover" />
             </div>
           </div>
 
