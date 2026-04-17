@@ -2,6 +2,7 @@
 CREATE TYPE "TrainingSignalSource" AS ENUM ('import_confirmation', 'manual_recategorization', 'training_upload', 'manual_transaction_creation');
 
 -- AlterTable
+ALTER TABLE "Transaction" ADD COLUMN "importFileId" TEXT;
 ALTER TABLE "ParsedTransaction" ADD COLUMN "institution" TEXT;
 ALTER TABLE "ParsedTransaction" ADD COLUMN "accountNumber" TEXT;
 ALTER TABLE "ParsedTransaction" ADD COLUMN "merchantClean" TEXT;
@@ -9,6 +10,8 @@ ALTER TABLE "ParsedTransaction" ADD COLUMN "confidence" INTEGER NOT NULL DEFAULT
 ALTER TABLE "ParsedTransaction" ADD COLUMN "categoryReason" TEXT;
 ALTER TABLE "ParsedTransaction" ADD COLUMN "parserVersion" TEXT NOT NULL DEFAULT 'v1';
 ALTER TABLE "ParsedTransaction" ADD COLUMN "statementFingerprint" TEXT;
+ALTER TABLE "ImportFile" ADD COLUMN "accountId" TEXT;
+ALTER TABLE "ImportFile" ADD COLUMN "confirmedAt" TIMESTAMP(3);
 
 -- CreateTable
 CREATE TABLE "StatementTemplate" (
@@ -52,6 +55,8 @@ CREATE TABLE "TrainingSignal" (
 CREATE UNIQUE INDEX "StatementTemplate_workspaceId_fingerprint_key" ON "StatementTemplate"("workspaceId", "fingerprint");
 CREATE INDEX "StatementTemplate_workspaceId_idx" ON "StatementTemplate"("workspaceId");
 CREATE INDEX "ParsedTransaction_statementFingerprint_idx" ON "ParsedTransaction"("statementFingerprint");
+CREATE INDEX "Transaction_importFileId_idx" ON "Transaction"("importFileId");
+CREATE INDEX "ImportFile_accountId_idx" ON "ImportFile"("accountId");
 CREATE INDEX "TrainingSignal_workspaceId_idx" ON "TrainingSignal"("workspaceId");
 CREATE INDEX "TrainingSignal_transactionId_idx" ON "TrainingSignal"("transactionId");
 CREATE INDEX "TrainingSignal_importFileId_idx" ON "TrainingSignal"("importFileId");
@@ -59,6 +64,8 @@ CREATE INDEX "TrainingSignal_merchantKey_idx" ON "TrainingSignal"("merchantKey")
 
 -- AddForeignKey
 ALTER TABLE "StatementTemplate" ADD CONSTRAINT "StatementTemplate_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Transaction" ADD CONSTRAINT "Transaction_importFileId_fkey" FOREIGN KEY ("importFileId") REFERENCES "ImportFile"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "ImportFile" ADD CONSTRAINT "ImportFile_accountId_fkey" FOREIGN KEY ("accountId") REFERENCES "Account"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "TrainingSignal" ADD CONSTRAINT "TrainingSignal_workspaceId_fkey" FOREIGN KEY ("workspaceId") REFERENCES "Workspace"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "TrainingSignal" ADD CONSTRAINT "TrainingSignal_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ALTER TABLE "TrainingSignal" ADD CONSTRAINT "TrainingSignal_importFileId_fkey" FOREIGN KEY ("importFileId") REFERENCES "ImportFile"("id") ON DELETE SET NULL ON UPDATE CASCADE;

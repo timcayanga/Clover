@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { ImportFilesModal } from "@/components/import-files-modal";
 
 type Workspace = {
   id: string;
@@ -365,7 +365,6 @@ function ActionIcon({
 }
 
 export default function TransactionsPage() {
-  const router = useRouter();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
@@ -386,6 +385,7 @@ export default function TransactionsPage() {
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
@@ -481,6 +481,7 @@ export default function TransactionsPage() {
       if (event.key === "Escape") {
         setAddMenuOpen(false);
         setDownloadMenuOpen(false);
+        setImportOpen(false);
       }
     };
 
@@ -505,6 +506,11 @@ export default function TransactionsPage() {
   const openDownloadMenu = () => {
     setAddMenuOpen(false);
     setDownloadMenuOpen((current) => !current);
+  };
+
+  const openImportFiles = () => {
+    closeToolbarMenus();
+    setImportOpen(true);
   };
 
   const ensureDefaultAccount = async (workspaceId: string) => {
@@ -1011,8 +1017,7 @@ export default function TransactionsPage() {
                       className="transactions-add-menu__item"
                       type="button"
                       onClick={() => {
-                        closeToolbarMenus();
-                        router.push("/imports");
+                        openImportFiles();
                       }}
                     >
                       Import files
@@ -1915,6 +1920,22 @@ export default function TransactionsPage() {
           </section>
         </div>
       ) : null}
+
+      <ImportFilesModal
+        open={importOpen}
+        workspaceId={selectedWorkspaceId}
+        accounts={accounts}
+        defaultAccountId={accounts[0]?.id ?? null}
+        onClose={() => setImportOpen(false)}
+        onImported={async () => {
+          if (!selectedWorkspaceId) {
+            return;
+          }
+
+          await loadWorkspaceData(selectedWorkspaceId);
+          setMessage("Import complete. Transactions refreshed.");
+        }}
+      />
     </CloverShell>
   );
 }

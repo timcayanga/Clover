@@ -27,6 +27,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ imp
     const result = await confirmImportFile(importId, payload.accountId);
     return NextResponse.json({ ok: true, result });
   } catch (error) {
-    return NextResponse.json({ error: "Unable to confirm import" }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Unable to confirm import",
+      },
+      { status: 400 }
+    );
   }
 }

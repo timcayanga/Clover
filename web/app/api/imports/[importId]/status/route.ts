@@ -21,6 +21,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
 
     await assertWorkspaceAccess(userId, importFile.workspaceId);
     const parsedRowsCount = await countParsedTransactionRows(importId);
+    const confirmedTransactionsCount = await prisma.transaction.count({
+      where: { importFileId: importId },
+    });
+    const confirmationStatus =
+      importFile.status === "failed"
+        ? "failed"
+        : confirmedTransactionsCount > 0
+          ? "confirmed"
+          : parsedRowsCount > 0
+            ? "staged"
+            : "processing";
 
     return NextResponse.json({
       importFile: {
@@ -28,11 +39,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         fileName: importFile.fileName,
         fileType: importFile.fileType,
         status: importFile.status,
+        accountId: importFile.accountId,
+        confirmedAt: importFile.confirmedAt?.toISOString() ?? null,
         uploadedAt: importFile.uploadedAt.toISOString(),
         deletedAt: importFile.deletedAt?.toISOString() ?? null,
         updatedAt: importFile.updatedAt.toISOString(),
       },
       parsedRowsCount,
+      confirmedTransactionsCount,
+      confirmationStatus,
     });
   } catch {
     return NextResponse.json({ error: "Unable to load import status" }, { status: 400 });

@@ -78,6 +78,25 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     throw new Error("Import file not found");
   }
 
+  await prisma.transaction.deleteMany({
+    where: { importFileId },
+  });
+
+  await prisma.trainingSignal.deleteMany({
+    where: {
+      importFileId,
+      source: "import_confirmation",
+    },
+  });
+
+  await prisma.importFile.update({
+    where: { id: importFileId },
+    data: {
+      accountId,
+      confirmedAt: new Date(),
+    },
+  });
+
   const existingCategories = await prisma.category.findMany({
     where: { workspaceId: importFile.workspaceId },
   });
@@ -108,6 +127,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       data: {
         workspaceId: importFile.workspaceId,
         accountId,
+        importFileId,
         categoryId,
         date: row.date instanceof Date ? row.date : row.date ? new Date(String(row.date)) : new Date(),
         amount: typeof row.amount === "number" ? row.amount : Number(String(row.amount ?? "0").replace(/[^0-9.-]/g, "")) || 0,
@@ -144,6 +164,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     where: { id: importFileId },
     data: {
       status: "done",
+      accountId,
     },
   });
 

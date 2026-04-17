@@ -27,6 +27,10 @@ type ImportFile = {
   fileName: string;
   fileType: string;
   status: string;
+  accountId: string | null;
+  confirmedAt: string | null;
+  confirmedTransactionsCount?: number;
+  confirmationStatus?: "failed" | "confirmed" | "staged" | "processing";
 };
 
 type ParsedRow = {
@@ -355,6 +359,8 @@ export default function ImportsPage() {
     return {
       importFile,
       parsedRowsCount: Number(payload.parsedRowsCount ?? 0),
+      confirmedTransactionsCount: Number(payload.confirmedTransactionsCount ?? 0),
+      confirmationStatus: payload.confirmationStatus as ImportFile["confirmationStatus"] | undefined,
     };
   };
 
@@ -370,7 +376,7 @@ export default function ImportsPage() {
 
     const refresh = async () => {
       try {
-        const { importFile, parsedRowsCount } = await loadImportStatus(importId);
+        const { importFile, parsedRowsCount, confirmedTransactionsCount, confirmationStatus } = await loadImportStatus(importId);
         if (cancelled || !importFile) {
           return;
         }
@@ -383,7 +389,7 @@ export default function ImportsPage() {
           return;
         }
 
-        if (importFile.status === "done" || parsedRowsCount > 0) {
+        if (importFile.status === "done" || parsedRowsCount > 0 || confirmedTransactionsCount > 0) {
           const result = await loadPreview(importId);
           if (!cancelled) {
             setCurrentJobId("");
@@ -394,7 +400,9 @@ export default function ImportsPage() {
             );
             setMessage(
               result.rows.length > 0
-                ? `Preview ready for ${importFile.fileName}. Confirm when you're ready.`
+                ? confirmationStatus === "confirmed" || confirmedTransactionsCount > 0
+                  ? `Confirmed ${confirmedTransactionsCount > 0 ? confirmedTransactionsCount : result.rows.length} transaction${(confirmedTransactionsCount > 0 ? confirmedTransactionsCount : result.rows.length) === 1 ? "" : "s"} for ${importFile.fileName}.`
+                  : `Preview ready for ${importFile.fileName}. Confirm when you're ready.`
                 : `Parsed ${importFile.fileName}, but no rows were recognized yet.`
             );
             if (autoReturnToTransactions) {
@@ -541,8 +549,10 @@ export default function ImportsPage() {
     }
   };
 
-  const confirmImport = async () => {
-    if (!currentImport?.id || !selectedAccountId) {
+  const confirmImport = async (overrideAccountId?: string) => {
+    const accountId = overrideAccountId || currentImport?.accountId || selectedAccountId;
+
+    if (!currentImport?.id || !accountId) {
       setMessage("Choose an account before confirming the import.");
       return;
     }
@@ -551,7 +561,7 @@ export default function ImportsPage() {
       const response = await fetch(`/api/imports/${currentImport.id}/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId: selectedAccountId }),
+        body: JSON.stringify({ accountId }),
       });
 
       if (!response.ok) {
@@ -560,9 +570,21 @@ export default function ImportsPage() {
       }
 
       const payload = await response.json();
-      setMessage(`Imported ${payload.result?.imported ?? previewRows.length} transactions.`);
+      const importedCount = Number(payload.result?.imported ?? previewRows.length);
+      setCurrentImport((current) =>
+        current
+          ? {
+              ...current,
+              status: "done",
+              confirmedAt: new Date().toISOString(),
+              confirmationStatus: "confirmed",
+              confirmedTransactionsCount: importedCount,
+              accountId,
+            }
+          : current
+      );
+      setMessage(`Imported ${importedCount} transaction${importedCount === 1 ? "" : "s"}.`);
       setPreviewRows([]);
-      setCurrentImport(null);
       setCurrentJobId("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to confirm import.");
@@ -570,13 +592,39 @@ export default function ImportsPage() {
   };
 
   const statusTone =
-    currentImport?.status === "done"
+    currentImport?.confirmationStatus === "confirmed" || currentImport?.status === "done"
       ? "status status--done"
-      : currentImport?.status === "failed"
+      : currentImport?.confirmationStatus === "failed" || currentImport?.status === "failed"
         ? "status status--failed"
         : currentImport?.status === "processing" || currentJobId
           ? "status status--processing"
           : "status";
+
+  const statusLabel =
+    currentImport?.confirmationStatus === "confirmed"
+      ? "Confirmed"
+      : currentImport?.confirmationStatus === "staged"
+        ? "Staged"
+        : currentImport?.confirmationStatus === "failed"
+          ? "Confirmation failed"
+          : currentImport?.status === "done"
+            ? "Done"
+            : currentImport?.status === "failed"
+              ? "Failed"
+              : currentImport?.status === "processing" || currentJobId
+                ? "Processing"
+                : "Ready";
+
+  const confirmationDetail =
+    currentImport?.confirmationStatus === "confirmed"
+      ? `Confirmed ${currentImport.confirmedTransactionsCount ?? previewRows.length} transaction${(currentImport.confirmedTransactionsCount ?? previewRows.length) === 1 ? "" : "s"} into ${currentImport.accountId ? "the linked account" : "an account"}.`
+      : currentImport?.confirmationStatus === "staged"
+        ? "The import is parsed but has not been confirmed into transactions yet."
+        : currentImport?.confirmationStatus === "failed"
+          ? "The import was parsed, but confirmation did not finish writing transactions."
+          : currentImport?.status === "processing" || currentJobId
+            ? "The file is still being processed."
+            : "Upload a file to start the import workflow.";
 
   return (
     <CloverShell
@@ -640,16 +688,21 @@ export default function ImportsPage() {
           </p>
 
           {currentImport ? (
-            <div className="status-card">
-              <div>
-                <strong>{currentImport.fileName}</strong>
-                <div className="panel-muted">Live import status and preview</div>
+            <>
+              <div className="status-card">
+                <div>
+                  <strong>{currentImport.fileName}</strong>
+                  <div className="panel-muted">Live import status and preview</div>
+                </div>
+                <div className="status-stack">
+                  <span className={statusTone}>Status: {statusLabel}</span>
+                  {currentJobId ? <span className="status status--processing">Job: {currentJobId}</span> : null}
+                </div>
               </div>
-              <div className="status-stack">
-                <span className={statusTone}>Status: {currentImport.status}</span>
-                {currentJobId ? <span className="status status--processing">Job: {currentJobId}</span> : null}
-              </div>
-            </div>
+              <p className="panel-muted" style={{ marginTop: 12 }}>
+                {confirmationDetail}
+              </p>
+            </>
           ) : null}
 
           {previewRows.length > 0 ? (
@@ -705,10 +758,20 @@ export default function ImportsPage() {
               className="button button-primary"
               type="button"
               onClick={() => void confirmImport()}
-              disabled={!currentImport || previewRows.length === 0 || !selectedAccountId}
+              disabled={!currentImport || previewRows.length === 0 || !(currentImport.accountId || selectedAccountId)}
             >
-              Confirm import
+              {currentImport?.confirmationStatus === "staged" ? "Confirm staged import" : "Confirm import"}
             </button>
+            {currentImport?.confirmationStatus === "staged" ? (
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => void confirmImport(currentImport.accountId ?? selectedAccountId)}
+                disabled={!currentImport.accountId && !selectedAccountId}
+              >
+                Retry confirmation
+              </button>
+            ) : null}
           </div>
         </div>
 

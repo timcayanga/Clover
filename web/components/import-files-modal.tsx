@@ -24,14 +24,18 @@ type ImportFilesModalProps = {
 
 type ImportStatus = "pending" | "needs_password" | "parsing" | "importing" | "done" | "error";
 
+type ConfirmationState = "none" | "staged" | "confirmed";
+
 type QueuedFile = {
   id: string;
   file: File;
   status: ImportStatus;
+  confirmationState: ConfirmationState;
   error: string | null;
   password: string;
   passwordVisible: boolean;
   importFileId: string | null;
+  targetAccountId: string | null;
   importedRows: number | null;
   progress: number;
   progressLabel: string;
@@ -205,10 +209,12 @@ export function ImportFilesModal({
             id: crypto.randomUUID(),
             file,
             status: "pending" as ImportStatus,
+            confirmationState: "none" as ConfirmationState,
             error: null,
             password: "",
             passwordVisible: false,
             importFileId: null,
+            targetAccountId: null,
             importedRows: null,
             progress: 0,
             progressLabel: "Queued",
@@ -244,6 +250,43 @@ export function ImportFilesModal({
     setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   };
 
+  const confirmItemImport = async (itemId: string, importFileId: string, accountId: string) => {
+    updateItem(itemId, { status: "importing", progress: 92, progressLabel: "Confirming import", targetAccountId: accountId });
+
+    const confirmResponse = await fetch(`/api/imports/${importFileId}/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId }),
+    });
+
+    if (!confirmResponse.ok) {
+      const payload = await confirmResponse.json().catch(() => ({}));
+      updateItem(itemId, {
+        status: "error",
+        confirmationState: "staged",
+        error: payload.error || "Unable to confirm this import.",
+        progress: 0,
+        progressLabel: "Confirmation failed",
+      });
+      return null;
+    }
+
+    const confirmed = await confirmResponse.json();
+    const importedRows = Number(confirmed.result?.imported ?? 0);
+    updateItem(itemId, {
+      status: "done",
+      confirmationState: "confirmed",
+      error: null,
+      importFileId,
+      targetAccountId: accountId,
+      importedRows,
+      progress: 100,
+      progressLabel: "Done",
+    });
+    await onImported();
+    return importedRows;
+  };
+
   const ensureTargetAccountId = async (statementAccountName?: string | null, institution?: string | null) => {
     if (statementAccountName) {
       const key = accountKey(statementAccountName, institution ?? null);
@@ -273,7 +316,7 @@ export function ImportFilesModal({
     setItems((current) => current.filter((item) => item.id !== id));
   };
 
-  const processFile = async (itemId: string): Promise<"done" | "needs_password" | "error"> => {
+  const processFile = async (itemId: string): Promise<"done" | "needs_password" | "error" | "staged"> => {
     const item = items.find((entry) => entry.id === itemId);
     if (!item) return "error";
 
@@ -335,30 +378,15 @@ export function ImportFilesModal({
         processedMetadata?.institution ?? null
       );
 
-      updateItem(itemId, { progress: 92, progressLabel: "Linking to account" });
-      const confirmResponse = await fetch(`/api/imports/${importFileId}/confirm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId: targetAccountId }),
-      });
-
-      if (!confirmResponse.ok) {
-        const payload = await confirmResponse.json().catch(() => ({}));
-        throw new Error(payload.error || "Unable to confirm this import.");
-      }
-
-      const confirmed = await confirmResponse.json();
-      const importedRows = Number(confirmed.result?.imported ?? 0);
       updateItem(itemId, {
-        status: "done",
-        error: null,
         importFileId,
-        importedRows,
-        progress: 100,
-        progressLabel: "Done",
+        targetAccountId,
+        confirmationState: "staged",
+        progress: 88,
+        progressLabel: "Ready to confirm",
       });
-      await onImported();
-      return "done";
+      const importedRows = await confirmItemImport(itemId, importFileId, targetAccountId);
+      return importedRows === null ? "staged" : "done";
     } catch (error) {
       if (isPasswordError(error)) {
         const needsPasswordMessage = item.password.trim()
@@ -377,6 +405,7 @@ export function ImportFilesModal({
 
       updateItem(itemId, {
         status: "error",
+        confirmationState: item.importFileId ? "staged" : "none",
         error: error instanceof Error ? error.message : `Unable to import ${item.file.name}.`,
         progress: 0,
         progressLabel: "Error",
@@ -387,7 +416,7 @@ export function ImportFilesModal({
 
   const activeItem = items.find((item) => item.status === "parsing" || item.status === "importing") ?? null;
   const activeItemIndex = activeItem ? items.findIndex((item) => item.id === activeItem.id) + 1 : null;
-  const hasCompletedAllFiles = items.length > 0 && items.every((item) => item.status === "done");
+  const hasCompletedAllFiles = items.length > 0 && items.every((item) => item.confirmationState === "confirmed");
   const pendingProgressItem =
     busy && !activeItem
       ? items.find((item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim())) ?? null
@@ -411,15 +440,20 @@ export function ImportFilesModal({
 
     let importedCount = 0;
     let blockedCount = 0;
+    let stagedCount = 0;
 
     for (const item of items) {
-      if (item.status === "done") {
+      if (item.confirmationState === "confirmed") {
         continue;
       }
 
       const result = await processFile(item.id);
       if (result === "done") {
         importedCount += 1;
+      }
+
+      if (result === "staged") {
+        stagedCount += 1;
       }
 
       if (result === "needs_password") {
@@ -429,6 +463,8 @@ export function ImportFilesModal({
 
     if (blockedCount > 0) {
       setMessage("Enter passwords for the locked files to finish the remaining imports.");
+    } else if (stagedCount > 0) {
+      setMessage("Some files are staged and can be confirmed again.");
     } else if (importedCount > 0) {
       setMessage(`Imported ${importedCount} file${importedCount === 1 ? "" : "s"}.`);
     } else {
@@ -448,6 +484,28 @@ export function ImportFilesModal({
       setMessage("Check the password and try again.");
     }
     setBusy(false);
+  };
+
+  const handleReplayConfirm = async (itemId: string) => {
+    const item = items.find((entry) => entry.id === itemId);
+    if (!item?.importFileId) {
+      setMessage("No staged import found to confirm.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("Retrying confirmation...");
+    try {
+      const accountId = item.targetAccountId || selectedAccountId || (await ensureTargetAccountId());
+      const importedRows = await confirmItemImport(itemId, item.importFileId, accountId);
+      if (typeof importedRows === "number") {
+        setMessage(`Confirmed ${importedRows} imported row${importedRows === 1 ? "" : "s"}.`);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to confirm this import.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   useEffect(() => {
@@ -475,7 +533,7 @@ export function ImportFilesModal({
     event.target.value = "";
   };
 
-  const readyToImport = items.some((item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim()));
+  const readyToImport = items.some((item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim()) || item.confirmationState === "staged");
 
   if (!open) {
     return null;
@@ -615,8 +673,10 @@ export function ImportFilesModal({
 
                   <div className="accounts-import-file__foot">
                     <span>
-                      {item.status === "done"
+                      {item.confirmationState === "confirmed"
                         ? `Imported ${item.importedRows ?? 0} row${item.importedRows === 1 ? "" : "s"}`
+                        : item.confirmationState === "staged"
+                          ? "Parsed and ready for confirmation"
                         : item.status === "importing"
                           ? "Importing into the selected account..."
                           : item.status === "parsing"
@@ -625,7 +685,16 @@ export function ImportFilesModal({
                               ? "Waiting for password"
                               : "Queued"}
                     </span>
-                    {item.status === "error" ? (
+                    {item.status === "error" && item.importFileId ? (
+                      <button
+                        className="button button-primary button-small"
+                        type="button"
+                        onClick={() => void handleReplayConfirm(item.id)}
+                        disabled={busy}
+                      >
+                        Retry confirmation
+                      </button>
+                    ) : item.status === "error" ? (
                       <button
                         className="button button-secondary button-small"
                         type="button"
@@ -633,6 +702,15 @@ export function ImportFilesModal({
                         disabled={busy || !selectedAccountId}
                       >
                         Retry import
+                      </button>
+                    ) : item.confirmationState === "staged" && item.importFileId ? (
+                      <button
+                        className="button button-primary button-small"
+                        type="button"
+                        onClick={() => void handleReplayConfirm(item.id)}
+                        disabled={busy}
+                      >
+                        Confirm now
                       </button>
                     ) : null}
                   </div>

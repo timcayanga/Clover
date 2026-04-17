@@ -83,6 +83,7 @@ model Account {
   updatedAt     DateTime      @updatedAt
   workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   transactions  Transaction[]
+  importFiles   ImportFile[]
 
   @@index([workspaceId])
 }
@@ -106,6 +107,7 @@ model Transaction {
   id             String           @id @default(cuid())
   workspaceId    String
   accountId      String
+  importFileId   String?
   categoryId     String?
   date           DateTime
   amount         Decimal          @db.Decimal(18, 2)
@@ -120,11 +122,13 @@ model Transaction {
   updatedAt      DateTime         @updatedAt
   workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   account        Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  importFile     ImportFile?      @relation(fields: [importFileId], references: [id], onDelete: SetNull)
   category       Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   trainingSignals TrainingSignal[]
 
   @@index([workspaceId])
   @@index([accountId])
+  @@index([importFileId])
   @@index([categoryId])
   @@index([date])
 }
@@ -132,19 +136,24 @@ model Transaction {
 model ImportFile {
   id            String           @id @default(cuid())
   workspaceId   String
+  accountId     String?
   fileName      String
   fileType      String
   storageKey    String
   status        ImportFileStatus @default(processing)
+  confirmedAt   DateTime?
   uploadedAt    DateTime         @default(now())
   deletedAt     DateTime?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account       Account?         @relation(fields: [accountId], references: [id], onDelete: SetNull)
   parsedRows    ParsedTransaction[]
+  transactions  Transaction[]
   trainingSignals TrainingSignal[]
 
   @@index([workspaceId])
+  @@index([accountId])
   @@index([status])
 }
 
