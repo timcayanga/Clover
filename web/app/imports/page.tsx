@@ -45,7 +45,7 @@ const extractTextFromFile = async (file: File) => {
 
   if (lowerName.endsWith(".pdf")) {
     const data = new Uint8Array(await file.arrayBuffer());
-    const task = pdfjs.getDocument({ data } as any);
+    const task = pdfjs.getDocument({ data, disableWorker: true } as any);
     const pdf = await task.promise;
     const pages: string[] = [];
 

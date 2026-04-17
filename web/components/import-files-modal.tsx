@@ -42,7 +42,7 @@ const extractTextFromFile = async (file: File, password?: string) => {
 
   if (lowerName.endsWith(".pdf")) {
     const data = new Uint8Array(await file.arrayBuffer());
-    const options = password ? { data, password } : { data };
+    const options = password ? { data, password, disableWorker: true } : { data, disableWorker: true };
     const loadingTask = pdfjs.getDocument(options as any);
     const pdf = await loadingTask.promise;
     const pages: string[] = [];
@@ -287,6 +287,30 @@ export function ImportFilesModal({
     }
   };
 
+  useEffect(() => {
+    if (!open || busy || !workspaceId) {
+      return;
+    }
+
+    const nextItem = items.find(
+      (item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim())
+    );
+
+    if (!nextItem) {
+      return;
+    }
+
+    setBusy(true);
+
+    void (async () => {
+      try {
+        await processFile(nextItem.id);
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [busy, items, open, processFile, workspaceId]);
+
   const handleStartImport = async () => {
     if (busy) return;
 
@@ -476,14 +500,14 @@ export function ImportFilesModal({
                               ? "Waiting for password"
                               : "Queued"}
                     </span>
-                    {item.status !== "done" ? (
+                    {item.status === "error" ? (
                       <button
                         className="button button-secondary button-small"
                         type="button"
                         onClick={() => void processFile(item.id)}
-                        disabled={busy || !selectedAccountId || item.status === "parsing" || item.status === "importing"}
+                        disabled={busy || !selectedAccountId}
                       >
-                        {item.status === "needs_password" ? "Try again" : "Import file"}
+                        Retry import
                       </button>
                     ) : null}
                   </div>
