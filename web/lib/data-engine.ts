@@ -247,6 +247,7 @@ export const buildParsedTransactionInsertData = async (params: {
 
   return params.rows.map((row) => {
     const record: Record<string, unknown> = {};
+    if (columns.has("id")) record.id = crypto.randomUUID();
     if (columns.has("importFileId")) record.importFileId = params.importFileId;
     if (columns.has("workspaceId")) record.workspaceId = params.workspaceId;
     if (columns.has("institution")) record.institution = params.metadata.institution;
@@ -263,6 +264,7 @@ export const buildParsedTransactionInsertData = async (params: {
     if (columns.has("parserVersion")) record.parserVersion = row.parserVersion ?? DATA_ENGINE_VERSION;
     if (columns.has("statementFingerprint")) record.statementFingerprint = params.statementFingerprint;
     if (columns.has("rawPayload")) record.rawPayload = (row.rawPayload ?? {}) as Prisma.InputJsonValue;
+    if (columns.has("createdAt")) record.createdAt = new Date();
     return record;
   });
 };
@@ -276,14 +278,13 @@ export const insertParsedTransactionsCompat = async (params: {
   }
 
   const columns = await getCompatibleParsedTransactionColumns();
-  const requiredColumns = columns.filter((column) => column !== "createdAt");
-  if (requiredColumns.length === 0) {
+  if (columns.length === 0) {
     return;
   }
 
   const values: unknown[] = [];
   const tuples = params.rows.map((row) => {
-    const placeholders = requiredColumns.map((column) => {
+    const placeholders = columns.map((column) => {
       values.push(row[column] ?? null);
       return `$${values.length}`;
     });
@@ -291,7 +292,7 @@ export const insertParsedTransactionsCompat = async (params: {
   });
 
   await prisma.$executeRawUnsafe(
-    `INSERT INTO "ParsedTransaction" (${requiredColumns.map((column) => `"${column}"`).join(", ")}) VALUES ${tuples.join(", ")}`,
+    `INSERT INTO "ParsedTransaction" (${columns.map((column) => `"${column}"`).join(", ")}) VALUES ${tuples.join(", ")}`,
     ...values
   );
 };
