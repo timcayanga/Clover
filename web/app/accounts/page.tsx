@@ -28,42 +28,23 @@ type Transaction = {
   amount: string;
   type: "income" | "expense" | "transfer";
   date: string;
+  merchantRaw: string;
+  merchantClean: string | null;
+  categoryName: string | null;
+  description: string | null;
   isExcluded: boolean;
 };
 
 type AddMode = "manual" | "import";
-type ChartMetric = "performance" | "breakdown" | "liabilities";
-type ChartRange = "1m" | "3m" | "6m" | "ytd" | "1y" | "lifetime";
-type FilterScope = "all" | "assets" | "liabilities";
-type FilterSource = "all" | "manual" | "imported";
 type SummaryMode = "totals" | "percent";
 type ManualAccountKind = "savings" | "checking" | "credit_card" | "cash";
-
-type Point = {
-  label: string;
-  value: number;
-};
+type AccountSort = "name" | "balance_desc" | "updated_desc";
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
   style: "currency",
   currency: "PHP",
   minimumFractionDigits: 2,
 });
-
-const chartRangeOptions: Array<{ value: ChartRange; label: string }> = [
-  { value: "1m", label: "1 month" },
-  { value: "3m", label: "3 months" },
-  { value: "6m", label: "6 months" },
-  { value: "ytd", label: "Year to date" },
-  { value: "1y", label: "1 year" },
-  { value: "lifetime", label: "Lifetime" },
-];
-
-const chartMetricOptions: Array<{ value: ChartMetric; label: string }> = [
-  { value: "performance", label: "Net worth performance" },
-  { value: "breakdown", label: "Net worth breakdown" },
-  { value: "liabilities", label: "Liabilities" },
-];
 
 const manualKinds: Array<{ value: ManualAccountKind; label: string; helper: string }> = [
   { value: "savings", label: "Savings", helper: "Manual name and balance" },
@@ -88,10 +69,18 @@ const getAccountDisplayType = (account: Account) => {
   if (account.type === "wallet") return "Wallet";
   if (account.type === "bank" && account.institution === "Checking") return "Checking";
   if (account.type === "bank" && account.institution === "Savings") return "Savings";
+  if (account.type === "other") return "-";
   return "Bank";
 };
 
 const getAccountTone = (account: Account) => (account.type === "credit_card" ? "liability" : "asset");
+
+const getAccountWarning = (account: Account, duplicateCount: number) => {
+  if (duplicateCount > 1) return "Possible duplicate";
+  if (account.source === "imported" && !account.institution) return "Needs category";
+  if (account.balance === null) return "Add balance";
+  return null;
+};
 
 const getAccountKindInstitution = (kind: ManualAccountKind) => {
   if (kind === "savings") return "Savings";
@@ -107,83 +96,22 @@ const getAccountKindType = (kind: ManualAccountKind): Account["type"] => {
   return "bank";
 };
 
-const rangeStartDate = (range: ChartRange) => {
-  const date = new Date();
-  if (range === "lifetime") {
-    date.setFullYear(date.getFullYear() - 2);
-    date.setMonth(0, 1);
-    return date;
-  }
-  if (range === "ytd") {
-    date.setMonth(0, 1);
-    return date;
-  }
-  if (range === "1y") {
-    date.setFullYear(date.getFullYear() - 1);
-    return date;
-  }
-  const months = range === "1m" ? 1 : range === "3m" ? 3 : 6;
-  date.setMonth(date.getMonth() - months);
-  return date;
-};
-
-const buildDayBuckets = (transactions: Transaction[], start: Date) => {
-  const buckets = new Map<string, number>();
-  for (const transaction of transactions) {
-    if (transaction.isExcluded) continue;
-    const key = transaction.date.slice(0, 10);
-    const amount = parseAmount(transaction.amount);
-    const signed = transaction.type === "income" ? amount : transaction.type === "expense" ? -amount : 0;
-    buckets.set(key, (buckets.get(key) ?? 0) + signed);
-  }
-
-  const dates: string[] = [];
-  const cursor = new Date(start);
-  cursor.setHours(12, 0, 0, 0);
-  const end = new Date();
-  end.setHours(12, 0, 0, 0);
-  while (cursor <= end) {
-    dates.push(cursor.toISOString().slice(0, 10));
-    cursor.setDate(cursor.getDate() + 1);
-  }
-
-  return dates.map((date) => ({ date, flow: buckets.get(date) ?? 0 }));
-};
-
-const buildSamplePoints = (flow: Array<{ date: string; flow: number }>, endValue: number) => {
-  const totalFlow = flow.reduce((sum, entry) => sum + entry.flow, 0);
-  let running = endValue - totalFlow;
-  return flow.map((entry) => {
-    running += entry.flow;
-    return {
-      label: formatDate(entry.date),
-      value: running,
-    };
-  });
-};
-
-const makeSvgPath = (points: Point[], width: number, height: number, padding = 16) => {
-  if (points.length === 0) return "";
-  const values = points.map((point) => point.value);
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  const innerWidth = width - padding * 2;
-  const innerHeight = height - padding * 2;
-  return points
-    .map((point, index) => {
-      const x = padding + (points.length === 1 ? innerWidth / 2 : (innerWidth * index) / (points.length - 1));
-      const normalized = (point.value - min) / span;
-      const y = padding + innerHeight - normalized * innerHeight;
-      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(" ");
-};
-
 function ActionIcon({
   name,
 }: {
-  name: "plus" | "filters" | "refresh" | "calendar" | "chart" | "save" | "download" | "chevron-down";
+  name:
+    | "plus"
+    | "filters"
+    | "refresh"
+    | "calendar"
+    | "chart"
+    | "save"
+    | "download"
+    | "chevron-down"
+    | "search"
+    | "edit"
+    | "upload"
+    | "history";
 }) {
   const common = {
     width: 14,
@@ -203,6 +131,13 @@ function ActionIcon({
         <svg {...common}>
           <path d="M12 5v14" />
           <path d="M5 12h14" />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg {...common}>
+          <circle cx="11" cy="11" r="6" />
+          <path d="m20 20-4.2-4.2" />
         </svg>
       );
     case "filters":
@@ -254,6 +189,30 @@ function ActionIcon({
           <path d="M5 19h14" />
         </svg>
       );
+    case "upload":
+      return (
+        <svg {...common}>
+          <path d="M12 21V11" />
+          <path d="m8 15 4-4 4 4" />
+          <path d="M5 5h14" />
+        </svg>
+      );
+    case "edit":
+      return (
+        <svg {...common}>
+          <path d="M4 20h16" />
+          <path d="M14.5 5.5 18.5 9.5" />
+          <path d="M6 18l1.5-4.5L15 6l3 3-7.5 7.5L6 18z" />
+        </svg>
+      );
+    case "history":
+      return (
+        <svg {...common}>
+          <path d="M3 12a9 9 0 1 0 3-6.7" />
+          <path d="M3 4v5h5" />
+          <path d="M12 7v6l4 2" />
+        </svg>
+      );
     case "chevron-down":
       return (
         <svg {...common}>
@@ -266,7 +225,6 @@ function ActionIcon({
 }
 
 export default function AccountsPage() {
-  const filtersRef = useRef<HTMLDivElement>(null);
   const addRef = useRef<HTMLDivElement>(null);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -274,19 +232,24 @@ export default function AccountsPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [message, setMessage] = useState("Select a workspace to review accounts.");
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [addMode, setAddMode] = useState<AddMode>("manual");
-  const [chartMetric, setChartMetric] = useState<ChartMetric>("performance");
-  const [chartRange, setChartRange] = useState<ChartRange>("1m");
+  const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<AccountSort>("updated_desc");
   const [summaryMode, setSummaryMode] = useState<SummaryMode>("totals");
-  const [filterScope, setFilterScope] = useState<FilterScope>("all");
-  const [filterSource, setFilterSource] = useState<FilterSource>("all");
-  const [hideZero, setHideZero] = useState(false);
   const [manualKind, setManualKind] = useState<ManualAccountKind>("savings");
   const [manualName, setManualName] = useState("");
   const [manualBalance, setManualBalance] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [accountEditName, setAccountEditName] = useState("");
+  const [accountEditInstitution, setAccountEditInstitution] = useState("");
+  const [accountEditType, setAccountEditType] = useState<Account["type"]>("bank");
+  const [accountEditCurrency, setAccountEditCurrency] = useState("PHP");
+  const [accountEditBalance, setAccountEditBalance] = useState("");
+  const [accountEditSource, setAccountEditSource] = useState("manual");
+  const [accountEditBusy, setAccountEditBusy] = useState(false);
+  const [balanceDraft, setBalanceDraft] = useState("");
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
@@ -338,45 +301,52 @@ export default function AccountsPage() {
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (filtersRef.current?.contains(target) || addRef.current?.contains(target)) return;
-      setFiltersOpen(false);
-    };
-
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setFiltersOpen(false);
         setAddOpen(false);
+        setDrawerAccountId(null);
       }
     };
 
-    document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleEscape);
     return () => {
-      document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleEscape);
     };
   }, []);
 
-  const filteredAccounts = useMemo(() => {
-    return accounts.filter((account) => {
-      const value = parseAmount(account.balance);
-      const isLiability = account.type === "credit_card";
-      const isManual = account.source === "manual";
+  const duplicateCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const account of accounts) {
+      const key = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [accounts]);
 
-      if (filterScope === "assets" && isLiability) return false;
-      if (filterScope === "liabilities" && !isLiability) return false;
-      if (filterSource === "manual" && !isManual) return false;
-      if (filterSource === "imported" && isManual) return false;
-      if (hideZero && Math.abs(value) < 0.01) return false;
-      return true;
+  const searchedAccounts = useMemo(() => {
+    const term = searchQuery.trim().toLowerCase();
+    const base = term
+      ? accounts.filter((account) => {
+          const haystack = [account.name, account.institution ?? "", account.source, account.type].join(" ").toLowerCase();
+          return haystack.includes(term);
+        })
+      : accounts;
+
+    return [...base].sort((left, right) => {
+      if (sortBy === "name") {
+        return left.name.localeCompare(right.name);
+      }
+
+      if (sortBy === "balance_desc") {
+        return parseAmount(right.balance) - parseAmount(left.balance);
+      }
+
+      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
     });
-  }, [accounts, filterScope, filterSource, hideZero]);
+  }, [accounts, searchQuery, sortBy]);
 
   const totals = useMemo(() => {
-    return filteredAccounts.reduce(
+    return accounts.reduce(
       (accumulator, account) => {
         const rawValue = parseAmount(account.balance);
         const isLiability = account.type === "credit_card";
@@ -391,69 +361,29 @@ export default function AccountsPage() {
       },
       { assets: 0, liabilities: 0, netWorth: 0 }
     );
-  }, [filteredAccounts]);
-
-  const oneMonthAgo = useMemo(() => {
-    const date = new Date();
-    date.setDate(date.getDate() - 30);
-    return date;
-  }, []);
-
-  const recentTransactions = useMemo(
-    () =>
-      transactions
-        .filter((transaction) => !transaction.isExcluded)
-        .filter((transaction) => new Date(transaction.date) >= oneMonthAgo),
-    [transactions, oneMonthAgo]
-  );
-
-  const netFlow = useMemo(() => {
-    return recentTransactions.reduce((sum, transaction) => {
-      const amount = parseAmount(transaction.amount);
-      if (transaction.type === "income") return sum + amount;
-      if (transaction.type === "expense") return sum - amount;
-      return sum;
-    }, 0);
-  }, [recentTransactions]);
-
-  const rangeStart = useMemo(() => rangeStartDate(chartRange), [chartRange]);
-
-  const chartFlow = useMemo(() => buildDayBuckets(transactions, rangeStart), [transactions, rangeStart]);
-  const performancePoints = useMemo(
-    () => buildSamplePoints(chartFlow, totals.netWorth),
-    [chartFlow, totals.netWorth]
-  );
-  const performancePath = useMemo(() => makeSvgPath(performancePoints, 820, 220), [performancePoints]);
-  const liabilityPoints = useMemo<Point[]>(() => {
-    const values = chartFlow.map((entry, index) => ({
-      label: entry.date,
-      value: Math.max(totals.liabilities - index * 500, 0),
-    }));
-    return values.length > 0 ? values : [{ label: "Liabilities", value: totals.liabilities }];
-  }, [chartFlow, totals.liabilities]);
-  const liabilityPath = useMemo(() => makeSvgPath(liabilityPoints, 820, 220), [liabilityPoints]);
+  }, [accounts]);
 
   const accountGroups = useMemo(() => {
     const groups = [
       {
         title: "Cash",
         tone: "cash",
-        rows: filteredAccounts.filter((account) => account.type === "cash"),
+        rows: searchedAccounts.filter((account) => account.type === "cash"),
       },
       {
         title: "Banks & savings",
         tone: "assets",
-        rows: filteredAccounts.filter((account) => account.type === "bank" || account.type === "wallet" || account.type === "investment"),
+        rows: searchedAccounts.filter((account) => account.type === "bank" || account.type === "wallet" || account.type === "investment"),
       },
       {
         title: "Credit cards",
         tone: "liability",
-        rows: filteredAccounts.filter((account) => account.type === "credit_card"),
+        rows: searchedAccounts.filter((account) => account.type === "credit_card"),
       },
       {
         title: "Imported & other",
         tone: "neutral",
-        rows: filteredAccounts.filter((account) => account.type === "other"),
+        rows: searchedAccounts.filter((account) => account.type === "other"),
       },
     ];
 
@@ -463,16 +393,101 @@ export default function AccountsPage() {
         total: group.rows.reduce((sum, account) => sum + (account.type === "credit_card" ? -Math.abs(parseAmount(account.balance)) : parseAmount(account.balance)), 0),
       }))
       .filter((group) => group.rows.length > 0);
-  }, [filteredAccounts]);
+  }, [searchedAccounts]);
 
-  const visibleCount = filteredAccounts.length;
-  const currentRangeLabel = chartRangeOptions.find((option) => option.value === chartRange)?.label ?? "1 month";
-  const currentMetricLabel = chartMetricOptions.find((option) => option.value === chartMetric)?.label ?? "Net worth performance";
+  const selectedAccount = useMemo(
+    () => accounts.find((account) => account.id === drawerAccountId) ?? null,
+    [accounts, drawerAccountId]
+  );
+
+  const selectedAccountTransactions = useMemo(
+    () =>
+      selectedAccount
+        ? transactions.filter((transaction) => transaction.accountId === selectedAccount.id && !transaction.isExcluded)
+        : [],
+    [selectedAccount, transactions]
+  );
+
+  const visibleCount = searchedAccounts.length;
+  const needsReviewCount = useMemo(() => {
+    return accounts.filter((account) => {
+      const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
+      const duplicate = (duplicateCounts.get(duplicateKey) ?? 0) > 1;
+      const missingInstitution = account.source === "imported" && !account.institution;
+      const missingBalance = account.balance === null;
+      return duplicate || missingInstitution || missingBalance;
+    }).length;
+  }, [accounts, duplicateCounts]);
+
+  const accountHistoryEntries = useMemo(() => {
+    if (!selectedAccount) return [];
+    return selectedAccountTransactions.slice(0, 5).map((transaction) => ({
+      id: transaction.id,
+      title: transaction.merchantRaw,
+      subtitle: transaction.categoryName ?? "Uncategorized",
+      value: transaction.amount,
+      date: transaction.date,
+      kind: transaction.type,
+    }));
+  }, [selectedAccount, selectedAccountTransactions]);
 
   const refreshAll = async () => {
     if (!selectedWorkspaceId) return;
     await loadWorkspaceData(selectedWorkspaceId);
     setMessage(`Workspace "${selectedWorkspace?.name ?? "selected"}" refreshed.`);
+  };
+
+  const openAccountDrawer = (account: Account) => {
+    setDrawerAccountId(account.id);
+    setAccountEditName(account.name);
+    setAccountEditInstitution(account.institution ?? "");
+    setAccountEditType(account.type);
+    setAccountEditCurrency(account.currency);
+    setAccountEditBalance(account.balance?.toString() ?? "");
+    setAccountEditSource(account.source);
+    setBalanceDraft(account.balance?.toString() ?? "");
+  };
+
+  const saveAccountChanges = async (event?: FormEvent<HTMLFormElement>) => {
+    event?.preventDefault();
+    if (!selectedWorkspaceId || !selectedAccount) return;
+
+    const name = accountEditName.trim();
+    if (!name) {
+      setMessage("Account name is required.");
+      return;
+    }
+
+    setAccountEditBusy(true);
+    try {
+      const response = await fetch(`/api/accounts/${selectedAccount.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+          name,
+          institution: accountEditInstitution.trim() || null,
+          type: accountEditType,
+          currency: accountEditCurrency || "PHP",
+          source: accountEditSource || selectedAccount.source,
+          balance: accountEditBalance.trim() ? Number(accountEditBalance) : null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to update account.");
+      }
+
+      const payload = await response.json();
+      if (payload.account) {
+        setAccounts((current) => current.map((account) => (account.id === selectedAccount.id ? payload.account : account)));
+        setMessage(`Account "${name}" updated.`);
+      }
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update account.");
+    } finally {
+      setAccountEditBusy(false);
+    }
   };
 
   const createManualAccount = async (event: FormEvent<HTMLFormElement>) => {
@@ -532,7 +547,7 @@ export default function AccountsPage() {
   const exportCsv = () => {
     const rows = [
       ["Name", "Type", "Amount", "Last updated", "Source"],
-      ...filteredAccounts.map((account) => [
+      ...searchedAccounts.map((account) => [
         account.name,
         getAccountDisplayType(account),
         currencyFormatter.format(parseAmount(account.balance)),
@@ -573,7 +588,7 @@ export default function AccountsPage() {
               <tr><th>Name</th><th>Type</th><th>Amount</th><th>Last updated</th></tr>
             </thead>
             <tbody>
-              ${filteredAccounts
+              ${searchedAccounts
                 .map(
                   (account) => `
                     <tr>
@@ -593,166 +608,84 @@ export default function AccountsPage() {
     report.document.close();
   };
 
-  const chartTitle = chartMetric === "performance" ? "Net worth performance" : chartMetric === "breakdown" ? "Net worth breakdown" : "Liabilities";
-  const chartSubtitle =
-    chartMetric === "performance"
-      ? `${currentRangeLabel} trend from imported and manual accounts.`
-      : chartMetric === "breakdown"
-        ? "Assets versus liabilities drawn from the current workspace balances."
-        : "Liability pressure from credit-card balances and related activity.";
-
   return (
-    <CloverShell
-      active="accounts"
-      title="Accounts"
-      showTopbar={false}
-    >
+    <CloverShell active="accounts" title="Accounts" showTopbar={false}>
       <div className="accounts-page">
-        <div className="accounts-page__actions">
-          <div className="accounts-toolbar-filters" ref={filtersRef}>
-            <button className="button button-secondary button-small pill-link accounts-toolbar-button" type="button" onClick={() => setFiltersOpen((current) => !current)}>
-              <ActionIcon name="filters" />
-              <span>Filters</span>
-            </button>
-            {filtersOpen ? (
-              <div className="accounts-toolbar-popover glass">
-                <label>
-                  View
-                  <select value={filterScope} onChange={(event) => setFilterScope(event.target.value as FilterScope)}>
-                    <option value="all">All accounts</option>
-                    <option value="assets">Assets only</option>
-                    <option value="liabilities">Liabilities only</option>
-                  </select>
-                </label>
-                <label>
-                  Source
-                  <select value={filterSource} onChange={(event) => setFilterSource(event.target.value as FilterSource)}>
-                    <option value="all">All sources</option>
-                    <option value="manual">Manual</option>
-                    <option value="imported">Imported</option>
-                  </select>
-                </label>
-                <label className="toggle-row">
-                  <span>Hide zero balance</span>
-                  <input type="checkbox" checked={hideZero} onChange={(event) => setHideZero(event.target.checked)} />
-                </label>
-              </div>
-            ) : null}
+        <div className="accounts-page__headline">
+          <div className="accounts-page__headline-copy">
+            <p className="eyebrow">Accounts</p>
+            <h1>Accounts</h1>
+            <p className="accounts-page__subtitle">
+              Keep a calm overview of balances, individual account history, and the imports that created each account.
+            </p>
           </div>
-          <button className="button button-secondary button-small pill-link accounts-toolbar-button" type="button" onClick={() => void refreshAll()}>
-            <ActionIcon name="refresh" />
-            <span>Refresh all</span>
-          </button>
-          <button
-            className="button button-primary button-small accounts-toolbar-add"
-            type="button"
-            onClick={() => {
-              setAddMode("manual");
-              setAddOpen(true);
-            }}
-          >
-            <ActionIcon name="plus" />
-            <span>Add account</span>
-          </button>
+          <div className="accounts-page__headline-actions">
+            <button
+              className="button button-primary button-small accounts-toolbar-add"
+              type="button"
+              onClick={() => {
+                setAddMode("manual");
+                setAddOpen(true);
+              }}
+            >
+              <ActionIcon name="plus" />
+              <span>Add account</span>
+            </button>
+            <Link className="button button-secondary button-small accounts-toolbar-button" href="/imports">
+              <ActionIcon name="upload" />
+              <span>Import transactions</span>
+            </Link>
+            <Link className="button button-secondary button-small accounts-toolbar-button" href="/imports">
+              <ActionIcon name="upload" />
+              <span>Import balances</span>
+            </Link>
+          </div>
         </div>
 
-        <section className="accounts-hero glass">
-          <div className="accounts-hero__copy">
+        <section className="accounts-overview-grid">
+          <article className="accounts-overview-card glass">
             <p className="eyebrow">Net worth</p>
-            <div className="accounts-hero__value-row">
-              <strong>{currencyFormatter.format(totals.netWorth)}</strong>
-              <span className={`accounts-hero__delta ${netFlow >= 0 ? "positive" : "negative"}`}>
-                {netFlow >= 0 ? "↑" : "↓"} {currencyFormatter.format(Math.abs(netFlow))}
-              </span>
-              <span className="accounts-hero__meta">1 month change</span>
-            </div>
-          </div>
-          <div className="accounts-hero__controls">
-            <label>
-              View
-              <select value={chartMetric} onChange={(event) => setChartMetric(event.target.value as ChartMetric)}>
-                {chartMetricOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Date range
-              <select value={chartRange} onChange={(event) => setChartRange(event.target.value as ChartRange)}>
-                {chartRangeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="accounts-chart-card">
-            <div className="accounts-chart-card__head">
-              <div>
-                <p className="eyebrow">Chart</p>
-                <h3>{chartTitle}</h3>
-                <p>{chartSubtitle}</p>
-              </div>
-              <div className="accounts-chart-card__pill">{selectedWorkspace?.name ?? "Workspace"}</div>
-            </div>
-            {chartMetric === "performance" ? (
-              <svg className="accounts-chart" viewBox="0 0 820 220" role="img" aria-label={chartTitle}>
-                <defs>
-                  <linearGradient id="accountsFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgba(3,168,192,0.26)" />
-                    <stop offset="100%" stopColor="rgba(3,168,192,0.03)" />
-                  </linearGradient>
-                </defs>
-                {[0, 1, 2, 3].map((line) => (
-                  <line key={line} x1="16" y1={28 + line * 48} x2="804" y2={28 + line * 48} stroke="rgba(13, 22, 29, 0.06)" />
-                ))}
-                <path d={`${performancePath} L 804 204 L 16 204 Z`} fill="url(#accountsFill)" />
-                <path d={performancePath} fill="none" stroke="#03a8c0" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            ) : chartMetric === "breakdown" ? (
-              <div className="accounts-breakdown">
-                <div className="accounts-breakdown__bars">
-                  <div className="accounts-breakdown__bar accounts-breakdown__bar--assets" style={{ height: `${Math.max((totals.assets / Math.max(totals.netWorth || 1, 1)) * 100, 30)}%` }} />
-                  <div className="accounts-breakdown__bar accounts-breakdown__bar--liabilities" style={{ height: `${Math.max((totals.liabilities / Math.max(totals.assets + totals.liabilities || 1, 1)) * 100, 16)}%` }} />
-                </div>
-                <div className="accounts-breakdown__legend">
-                  <div>
-                    <span className="dot dot--teal" />
-                    Assets {currencyFormatter.format(totals.assets)}
-                  </div>
-                  <div>
-                    <span className="dot dot--rose" />
-                    Liabilities {currencyFormatter.format(totals.liabilities)}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <svg className="accounts-chart" viewBox="0 0 820 220" role="img" aria-label={chartTitle}>
-                {[0, 1, 2, 3].map((line) => (
-                  <line key={line} x1="16" y1={28 + line * 48} x2="804" y2={28 + line * 48} stroke="rgba(13, 22, 29, 0.06)" />
-                ))}
-                <path d={liabilityPath} fill="none" stroke="#cf4f66" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
-            <div className="accounts-chart-card__footer">
-              <span className="pill pill-neutral">Assets {currencyFormatter.format(totals.assets)}</span>
-              <span className="pill pill-neutral">Liabilities {currencyFormatter.format(totals.liabilities)}</span>
-              <span className="pill pill-neutral">Net worth {currencyFormatter.format(totals.netWorth)}</span>
-            </div>
-          </div>
+            <strong>{currencyFormatter.format(totals.netWorth)}</strong>
+            <span>{accounts.length} accounts across {workspaces.length} workspace{workspaces.length === 1 ? "" : "s"}</span>
+          </article>
+          <article className="accounts-overview-card glass">
+            <p className="eyebrow">Assets</p>
+            <strong>{currencyFormatter.format(totals.assets)}</strong>
+            <span>Cash, savings, and invested balances</span>
+          </article>
+          <article className="accounts-overview-card glass">
+            <p className="eyebrow">Liabilities</p>
+            <strong>{currencyFormatter.format(totals.liabilities)}</strong>
+            <span>Credit cards and other negative balances</span>
+          </article>
+          <article className="accounts-overview-card glass">
+            <p className="eyebrow">Needs review</p>
+            <strong>{needsReviewCount}</strong>
+            <span>Potential duplicates or incomplete imports</span>
+          </article>
         </section>
 
         <section className="accounts-main-grid">
           <div className="accounts-list-column">
             <div className="accounts-list-head">
               <div>
-                <p className="eyebrow">Accounts</p>
+                <p className="eyebrow">Account list</p>
                 <h4>{visibleCount} visible account{visibleCount === 1 ? "" : "s"}</h4>
               </div>
-              <p>{selectedWorkspace?.name ?? "Workspace"} · source-aware balances and imported snapshots</p>
+              <div className="accounts-list-controls">
+                <label className="accounts-search">
+                  <ActionIcon name="search" />
+                  <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search accounts" />
+                </label>
+                <label>
+                  Sort
+                  <select value={sortBy} onChange={(event) => setSortBy(event.target.value as AccountSort)}>
+                    <option value="updated_desc">Latest updated</option>
+                    <option value="name">Name</option>
+                    <option value="balance_desc">Balance</option>
+                  </select>
+                </label>
+              </div>
             </div>
 
             <div className="accounts-sections">
@@ -770,16 +703,19 @@ export default function AccountsPage() {
                       <span className={`accounts-group__tone accounts-group__tone--${group.tone}`}>{group.title}</span>
                     </div>
 
-                    <div className="accounts-table" role="table" aria-label={`${group.title} accounts`}>
+                      <div className="accounts-table" role="table" aria-label={`${group.title} accounts`}>
                       <div className="accounts-table__header" role="row">
                         <span role="columnheader">Name</span>
                         <span role="columnheader">Type</span>
                         <span role="columnheader">Amount</span>
                         <span role="columnheader">Last updated</span>
+                        <span role="columnheader">Status</span>
                       </div>
                       {group.rows.map((account) => {
                         const value = parseAmount(account.balance);
                         const isLiability = account.type === "credit_card";
+                        const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
+                        const warning = getAccountWarning(account, duplicateCounts.get(duplicateKey) ?? 0);
                         return (
                           <div key={account.id} className="accounts-table__row" role="row">
                             <div className="accounts-table__cell accounts-table__cell--name" role="cell">
@@ -799,6 +735,13 @@ export default function AccountsPage() {
                             </div>
                             <div className="accounts-table__cell" role="cell">
                               {formatDate(account.updatedAt)}
+                            </div>
+                            <div className="accounts-table__cell accounts-table__cell--status" role="cell">
+                              {warning ? <span className="accounts-warning-pill">{warning}</span> : <span className="accounts-view-pill">Ready</span>}
+                              <button className="button button-secondary button-small accounts-row-button" type="button" onClick={() => openAccountDrawer(account)}>
+                                <ActionIcon name="history" />
+                                <span>History</span>
+                              </button>
                             </div>
                           </div>
                         );
@@ -852,6 +795,10 @@ export default function AccountsPage() {
                 <div className="accounts-summary-bar accounts-summary-bar--liability">
                   <span style={{ width: `${Math.max((totals.liabilities / Math.max(totals.assets + totals.liabilities, 1)) * 100, 12)}%` }} />
                 </div>
+                <div className="accounts-summary-item">
+                  <span>Needs review</span>
+                  <strong>{needsReviewCount}</strong>
+                </div>
               </div>
             ) : (
               <div className="accounts-summary-list">
@@ -870,6 +817,20 @@ export default function AccountsPage() {
               </div>
             )}
 
+            <div className="accounts-summary-group">
+              <p className="eyebrow">Import shortcuts</p>
+              <div className="accounts-summary-actions">
+                <Link className="button button-secondary button-small accounts-summary-download" href="/imports">
+                  <ActionIcon name="upload" />
+                  <span>Import transactions</span>
+                </Link>
+                <Link className="button button-secondary button-small accounts-summary-download" href="/imports">
+                  <ActionIcon name="upload" />
+                  <span>Import balances</span>
+                </Link>
+              </div>
+            </div>
+
             <div className="accounts-summary-actions">
               <button className="button button-secondary button-small accounts-summary-download" type="button" onClick={exportCsv}>
                 <ActionIcon name="download" />
@@ -885,11 +846,141 @@ export default function AccountsPage() {
 
         <div className="accounts-status-bar">
           <span className="pill pill-neutral">{selectedWorkspace?.name ?? "No workspace selected"}</span>
-          <span className="pill pill-neutral">{currentMetricLabel}</span>
-          <span className="pill pill-neutral">{currentRangeLabel}</span>
           <span className="pill pill-neutral">{message}</span>
         </div>
       </div>
+
+      {selectedAccount ? (
+        <div className="accounts-drawer-backdrop" role="presentation" onClick={() => setDrawerAccountId(null)}>
+          <aside className="accounts-drawer glass" role="dialog" aria-modal="true" aria-labelledby="account-drawer-title" onClick={(event) => event.stopPropagation()}>
+            <div className="accounts-drawer__head">
+              <div>
+                <p className="eyebrow">Account drawer</p>
+                <h4 id="account-drawer-title">{accountEditName || selectedAccount.name}</h4>
+                <p>{getAccountDisplayType(selectedAccount)} · {selectedAccount.source === "manual" ? "Manual" : "Imported"}</p>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setDrawerAccountId(null)} aria-label="Close account drawer">
+                ×
+              </button>
+            </div>
+
+            <div className="accounts-drawer__overview">
+              <div>
+                <span>Current balance</span>
+                <strong>{currencyFormatter.format(parseAmount(selectedAccount.balance))}</strong>
+              </div>
+              <div>
+                <span>Last updated</span>
+                <strong>{formatDate(selectedAccount.updatedAt)}</strong>
+              </div>
+              <div>
+                <span>Institution</span>
+                <strong>{selectedAccount.institution ?? "No institution"}</strong>
+              </div>
+              <div>
+                <span>Status</span>
+                <strong>{getAccountWarning(selectedAccount, duplicateCounts.get(`${selectedAccount.name.trim().toLowerCase()}::${(selectedAccount.institution ?? "").trim().toLowerCase()}`) ?? 0) ?? "Ready"}</strong>
+              </div>
+            </div>
+
+            <section className="accounts-drawer__section">
+              <div className="accounts-drawer__section-head">
+                <h5>Edit account</h5>
+                <ActionIcon name="edit" />
+              </div>
+              <form className="accounts-drawer__form" onSubmit={saveAccountChanges}>
+                <label>
+                  Name
+                  <input value={accountEditName} onChange={(event) => setAccountEditName(event.target.value)} />
+                </label>
+                <label>
+                  Institution
+                  <input value={accountEditInstitution} onChange={(event) => setAccountEditInstitution(event.target.value)} placeholder="Bank or wallet name" />
+                </label>
+                <label>
+                  Type
+                  <select value={accountEditType} onChange={(event) => setAccountEditType(event.target.value as Account["type"])}>
+                    <option value="bank">Bank</option>
+                    <option value="wallet">Wallet</option>
+                    <option value="credit_card">Credit Card</option>
+                    <option value="cash">Cash</option>
+                    <option value="investment">Investment</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <label>
+                  Balance
+                  <input value={accountEditBalance} onChange={(event) => setAccountEditBalance(event.target.value)} inputMode="decimal" placeholder="0.00" />
+                </label>
+                <button className="button button-primary" type="submit" disabled={accountEditBusy}>
+                  {accountEditBusy ? "Saving..." : "Save changes"}
+                </button>
+              </form>
+            </section>
+
+            <section className="accounts-drawer__section">
+              <div className="accounts-drawer__section-head">
+                <h5>Add balance</h5>
+                <ActionIcon name="plus" />
+              </div>
+              <div className="accounts-drawer__mini-form">
+                <label>
+                  Balance
+                  <input value={balanceDraft} onChange={(event) => setBalanceDraft(event.target.value)} inputMode="decimal" placeholder="0.00" />
+                </label>
+                <button
+                  className="button button-secondary button-small"
+                  type="button"
+                  onClick={() => {
+                    setAccountEditBalance(balanceDraft);
+                    void saveAccountChanges();
+                  }}
+                >
+                  Update balance
+                </button>
+              </div>
+            </section>
+
+            <section className="accounts-drawer__section">
+              <div className="accounts-drawer__section-head">
+                <h5>Import history</h5>
+                <ActionIcon name="upload" />
+              </div>
+              <p className="accounts-drawer__note">Bring in PDF or CSV statements to map balances and transactions back to this account.</p>
+              <div className="accounts-drawer__actions">
+                <Link className="button button-secondary button-small" href="/imports">
+                  Import transactions
+                </Link>
+                <Link className="button button-secondary button-small" href="/imports">
+                  Import balances
+                </Link>
+              </div>
+            </section>
+
+            <section className="accounts-drawer__section">
+              <div className="accounts-drawer__section-head">
+                <h5>Recent transactions</h5>
+                <ActionIcon name="history" />
+              </div>
+              <div className="accounts-drawer__transactions">
+                {selectedAccountTransactions.length > 0 ? (
+                  selectedAccountTransactions.slice(0, 5).map((transaction) => (
+                    <div key={transaction.id} className="accounts-drawer__transaction">
+                      <div>
+                        <strong>{transaction.merchantRaw}</strong>
+                        <span>{formatDate(transaction.date)} · {transaction.type}</span>
+                      </div>
+                      <strong>{currencyFormatter.format(parseAmount(transaction.amount))}</strong>
+                    </div>
+                  ))
+                ) : (
+                  <p className="accounts-drawer__note">No recent transactions are linked to this account yet.</p>
+                )}
+              </div>
+            </section>
+          </aside>
+        </div>
+      ) : null}
 
       {addOpen ? (
         <div className="modal-backdrop" role="presentation" onClick={() => setAddOpen(false)}>
