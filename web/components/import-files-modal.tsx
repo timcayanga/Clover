@@ -287,7 +287,6 @@ export function ImportFilesModal({
     try {
       const text = await extractTextFromFile(item.file, item.password.trim() || undefined);
       const statement = detectStatementMetadata(text);
-      const targetAccountId = await ensureTargetAccountId(statement?.accountName ?? null, statement?.institution ?? null);
       updateItem(itemId, {
         progress: 20,
         progressLabel: statement?.accountName ? `Detected ${statement.accountName}` : "Reading file",
@@ -328,6 +327,13 @@ export function ImportFilesModal({
         const payload = await processResponse.json().catch(() => ({}));
         throw new Error(payload.error || "Unable to parse this file.");
       }
+
+      const processPayload = await processResponse.json().catch(() => ({}));
+      const processedMetadata = processPayload?.metadata ?? statement ?? null;
+      const targetAccountId = await ensureTargetAccountId(
+        processedMetadata?.accountName ?? null,
+        processedMetadata?.institution ?? null
+      );
 
       updateItem(itemId, { progress: 92, progressLabel: "Linking to account" });
       const confirmResponse = await fetch(`/api/imports/${importFileId}/confirm`, {

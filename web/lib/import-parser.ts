@@ -94,6 +94,8 @@ const normalizeBpiText = (text: string) =>
     })
     .join("\n");
 
+const compactWhitespace = (value: string) => normalizeWhitespace(value).replace(/\s+/g, "");
+
 const parseMoney = (value?: string | null) => {
   if (!value) return null;
   const parsed = Number(String(value).replace(/[^0-9.-]/g, ""));
@@ -170,8 +172,20 @@ const detectBalanceFromText = (text: string) => {
 
 const parseBpiDate = (value?: string | null) => {
   if (!value) return null;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  const normalized = normalizeWhitespace(value);
+  const compact = compactWhitespace(normalized);
+  const match = compact.match(/^([A-Z]{3})(\d{1,2}),(\d{4})$/i);
+  if (!match) {
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const monthIndex = monthIndexByAbbr[match[1].slice(0, 3).toUpperCase()];
+  if (monthIndex === undefined) {
+    return null;
+  }
+
+  return new Date(Date.UTC(Number(match[3]), monthIndex, Number(match[2]), 12));
 };
 
 const monthIndexByAbbr: Record<string, number> = {
@@ -195,22 +209,43 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     return null;
   }
 
-  const labeledAccountSection =
-    normalized.match(/\b(?:ACCOUNT\s*(?:NO|NUMBER|#)?|ACCT\s*(?:NO|NUMBER|#)?|A\/C\s*(?:NO|NUMBER|#)?|NO)\s*[:\-]?\s*([0-9\s-]{8,})/i)?.[1] ??
+  const lines = normalized
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+  const headerLine =
+    lines.find((line) => /PERIOD\s*COVERED/i.test(line)) ??
+    lines.find((line) => /FORBES\s*PARK\s*SAVINGS/i.test(line)) ??
+    normalized;
+  const headerCompact = compactWhitespace(headerLine);
+  const accountSection =
+    headerCompact.match(/(?:PERIODCOVERED.*?NO|ACCOUNT(?:NO|NUMBER|#)|ACCT(?:NO|NUMBER|#)|A\/C(?:NO|NUMBER|#)|NO):?([0-9-]{8,})/i)?.[1] ??
+    headerCompact.match(/NO:([0-9-]{8,})/i)?.[1] ??
     "";
-  const fallbackAccountSection = normalized.match(/\b\d{4}[-\s]?\d{4}[-\s]?\d{2}\b/)?.[0] ?? "";
-  const accountSection = labeledAccountSection || fallbackAccountSection;
   const accountNumber = accountSection.replace(/\D/g, "").slice(0, 10) || null;
   const accountName = accountNumber ? `BPI ${accountNumber.slice(-4)}` : "BPI";
 
-  const periodMatch = normalized.match(/PERIOD COVERED\s+([A-Z]{3}\s+\d{1,2},\s+\d{4})\s*-\s*([A-Z]{3}\s+\d{1,2},\s+\d{4})/i);
+  const periodMatch =
+    headerCompact.match(/PERIODCOVERED(?:.*?)([A-Z]{3}\d{1,2},\d{4})-([A-Z]{3}\d{1,2},\d{4})/i) ??
+    normalized.match(/PERIOD\s*COVERED\s+([A-Z]{3}\s+\d{1,2},\s+\d{4})\s*-\s*([A-Z]{3}\s+\d{1,2},\s+\d{4})/i);
   const startDate = parseBpiDate(periodMatch?.[1] ?? null);
   const endDate = parseBpiDate(periodMatch?.[2] ?? null);
 
-  const openingBalance = parseMoney(normalized.match(/BEGINNING BALANCE\s+([0-9,]+\.\d{2})/i)?.[1]);
+  const openingLine = lines.find((line) => /BEGINNING\s*BALANCE/i.test(line)) ?? normalized;
+  const openingCompact = compactWhitespace(openingLine);
+  const openingBalance =
+    parseMoney(openingCompact.match(/BEGINNINGBALANCE([0-9,]+\.\d{2})/i)?.[1]) ??
+    parseMoney(openingLine.match(/BEGINNING\s+BALANCE\s+([0-9,]+\.\d{2})/i)?.[1]) ??
+    parseMoney(normalized.match(/BEGINNING\s+BALANCE\s+([0-9,]+\.\d{2})/i)?.[1]);
+  const endingLine = lines.find((line) => /BALANCE\s+THIS\s+STATEMENT|ENDING\s+BALANCE/i.test(line)) ?? normalized;
+  const endingCompact = compactWhitespace(endingLine);
   const endingBalance =
-    parseMoney(normalized.match(/BALANCE THIS STATEMENT\s+([0-9,]+\.\d{2})/i)?.[1]) ??
-    parseMoney(normalized.match(/ENDING BALANCE\s+([0-9,]+\.\d{2})/i)?.[1]);
+    parseMoney(endingCompact.match(/BALANCETHISSTATEMENT([0-9,]+\.\d{2})/i)?.[1]) ??
+    parseMoney(endingCompact.match(/ENDINGBALANCE([0-9,]+\.\d{2})/i)?.[1]) ??
+    parseMoney(endingLine.match(/BALANCE\s+THIS\s+STATEMENT\s+([0-9,]+\.\d{2})/i)?.[1]) ??
+    parseMoney(endingLine.match(/ENDING\s+BALANCE\s+([0-9,]+\.\d{2})/i)?.[1]) ??
+    parseMoney(normalized.match(/BALANCE\s+THIS\s+STATEMENT\s+([0-9,]+\.\d{2})/i)?.[1]) ??
+    parseMoney(normalized.match(/ENDING\s+BALANCE\s+([0-9,]+\.\d{2})/i)?.[1]);
 
   return {
     institution: "BPI",

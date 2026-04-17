@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { processImportFileText } from "@/workers/import-processor";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { detectStatementMetadataFromText } from "@/lib/data-engine";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -23,15 +24,17 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     }
 
     const result = await processImportFileText(importId, text);
+    const metadata = detectStatementMetadataFromText(text);
 
     return NextResponse.json({
       ok: true,
       queued: false,
       processed: true,
       importedRows: result.count,
+      metadata,
       status: "done",
     });
   } catch (error) {
-    return NextResponse.json({ error: "Unable to process import" }, { status: 400 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to process import" }, { status: 400 });
   }
 }
