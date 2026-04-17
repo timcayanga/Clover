@@ -2,7 +2,7 @@
 
 import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import { pdfjs } from "@/lib/pdfjs";
 
 type AccountOption = {
   id: string;
@@ -42,7 +42,7 @@ const extractTextFromFile = async (file: File, password?: string) => {
 
   if (lowerName.endsWith(".pdf")) {
     const data = new Uint8Array(await file.arrayBuffer());
-    const options = password ? { data, password, disableWorker: true } : { data, disableWorker: true };
+    const options = password ? { data, password } : { data };
     const loadingTask = pdfjs.getDocument(options as any);
     const pdf = await loadingTask.promise;
     const pages: string[] = [];

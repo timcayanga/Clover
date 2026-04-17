@@ -3,7 +3,7 @@
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { CloverShell } from "@/components/clover-shell";
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
+import { pdfjs } from "@/lib/pdfjs";
 
 type Workspace = {
   id: string;
@@ -45,7 +45,7 @@ const extractTextFromFile = async (file: File) => {
 
   if (lowerName.endsWith(".pdf")) {
     const data = new Uint8Array(await file.arrayBuffer());
-    const task = pdfjs.getDocument({ data, disableWorker: true } as any);
+    const task = pdfjs.getDocument({ data } as any);
     const pdf = await task.promise;
     const pages: string[] = [];
 
