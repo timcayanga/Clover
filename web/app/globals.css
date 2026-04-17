@@ -1774,7 +1774,6 @@ label {
   color: var(--bad);
 }
 
-.accounts-warning-pill,
 .accounts-view-pill {
   display: inline-flex;
   align-items: center;
@@ -1786,20 +1785,35 @@ label {
   white-space: nowrap;
 }
 
-.accounts-warning-pill {
-  background: rgba(245, 158, 11, 0.12);
-  border-color: rgba(245, 158, 11, 0.28);
-  color: #a16207;
-}
-
 .accounts-view-pill {
   background: rgba(247, 249, 250, 0.95);
   color: var(--muted);
 }
 
+.accounts-warning-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 158, 11, 0.26);
+  background: rgba(245, 158, 11, 0.12);
+  color: #a16207;
+}
+
 .accounts-row-button {
-  min-height: 30px;
-  padding: 0 12px;
+  min-height: 32px;
+  min-width: 32px;
+  padding: 0;
+  width: 32px;
+  border-radius: 999px;
+}
+
+.accounts-row-button .button-icon,
+.accounts-row-button svg {
+  margin: 0;
 }
 
 .accounts-summary-column {
@@ -1976,6 +1990,28 @@ label {
   line-height: 1.45;
 }
 
+.accounts-drawer__notice {
+  display: grid;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(245, 158, 11, 0.26);
+  background: rgba(255, 247, 224, 0.92);
+}
+
+.accounts-drawer__notice strong {
+  font-size: 0.86rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a16207;
+}
+
+.accounts-drawer__notice p {
+  color: var(--text);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
 .accounts-drawer__overview strong {
   font-size: 1rem;
   letter-spacing: -0.02em;
@@ -2046,6 +2082,12 @@ label {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.accounts-drawer__delete {
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.2);
+  background: rgba(254, 242, 242, 0.94);
 }
 
 .accounts-status-bar {

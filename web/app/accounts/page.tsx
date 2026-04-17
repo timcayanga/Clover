@@ -112,7 +112,9 @@ function ActionIcon({
     | "search"
     | "edit"
     | "upload"
-    | "history";
+    | "history"
+    | "chevron-right"
+    | "warning";
 }) {
   const common = {
     width: 14,
@@ -214,6 +216,20 @@ function ActionIcon({
           <path d="M12 7v6l4 2" />
         </svg>
       );
+    case "chevron-right":
+      return (
+        <svg {...common}>
+          <path d="m9 6 6 6-6 6" />
+        </svg>
+      );
+    case "warning":
+      return (
+        <svg {...common}>
+          <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
+          <path d="M12 9v4" />
+          <path d="M12 17h.01" />
+        </svg>
+      );
     case "chevron-down":
       return (
         <svg {...common}>
@@ -253,6 +269,7 @@ export default function AccountsPage() {
   const [accountEditSource, setAccountEditSource] = useState("manual");
   const [accountEditBusy, setAccountEditBusy] = useState(false);
   const [balanceDraft, setBalanceDraft] = useState("");
+  const [drawerNotice, setDrawerNotice] = useState<string | null>(null);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
@@ -457,6 +474,7 @@ export default function AccountsPage() {
 
   const openAccountDrawer = (account: Account) => {
     setDrawerAccountId(account.id);
+    setDrawerNotice(null);
     setAccountEditName(account.name);
     setAccountEditInstitution(account.institution ?? "");
     setAccountEditType(account.type);
@@ -469,6 +487,11 @@ export default function AccountsPage() {
   const openFullAccountPage = () => {
     if (!selectedAccount) return;
     router.push(`/accounts/${selectedAccount.id}`);
+  };
+
+  const openDrawerForWarning = (account: Account, warning: string) => {
+    openAccountDrawer(account);
+    setDrawerNotice(warning);
   };
 
   const saveAccountChanges = async (event?: FormEvent<HTMLFormElement>) => {
@@ -508,6 +531,35 @@ export default function AccountsPage() {
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to update account.");
+    } finally {
+      setAccountEditBusy(false);
+    }
+  };
+
+  const deleteSelectedAccount = async () => {
+    if (!selectedWorkspaceId || !selectedAccount) return;
+
+    const confirmed = window.confirm(`Delete "${selectedAccount.name}"? This will remove the account and its linked transactions.`);
+    if (!confirmed) return;
+
+    setAccountEditBusy(true);
+    try {
+      const response = await fetch(`/api/accounts/${selectedAccount.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId: selectedWorkspaceId }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to delete account.");
+      }
+
+      setAccounts((current) => current.filter((account) => account.id !== selectedAccount.id));
+      setTransactions((current) => current.filter((transaction) => transaction.accountId !== selectedAccount.id));
+      setDrawerAccountId(null);
+      setMessage(`Account "${selectedAccount.name}" deleted.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete account.");
     } finally {
       setAccountEditBusy(false);
     }
@@ -752,10 +804,21 @@ export default function AccountsPage() {
                               {formatDate(account.updatedAt)}
                             </div>
                             <div className="accounts-table__cell accounts-table__cell--status" role="cell">
-                              {warning ? <span className="accounts-warning-pill">{warning}</span> : <span className="accounts-view-pill">Ready</span>}
-                              <button className="button button-secondary button-small accounts-row-button" type="button" onClick={() => openAccountDrawer(account)}>
-                                <ActionIcon name="history" />
-                                <span>History</span>
+                              {warning ? (
+                                <button
+                                  className="accounts-warning-icon"
+                                  type="button"
+                                  onClick={() => openDrawerForWarning(account, warning)}
+                                  title={warning}
+                                  aria-label={warning}
+                                >
+                                  <ActionIcon name="warning" />
+                                </button>
+                              ) : (
+                                <span className="accounts-view-pill">Ready</span>
+                              )}
+                              <button className="button button-secondary button-small accounts-row-button" type="button" onClick={() => openAccountDrawer(account)} aria-label={`Open ${account.name} drawer`}>
+                                <ActionIcon name="chevron-right" />
                               </button>
                             </div>
                           </div>
@@ -894,6 +957,13 @@ export default function AccountsPage() {
               </div>
             </div>
 
+            {drawerNotice ? (
+              <div className="accounts-drawer__notice">
+                <strong>Needs review</strong>
+                <p>{drawerNotice}</p>
+              </div>
+            ) : null}
+
             <section className="accounts-drawer__section">
               <div className="accounts-drawer__section-head">
                 <h5>Edit account</h5>
@@ -979,6 +1049,17 @@ export default function AccountsPage() {
                   Open account page
                 </button>
               </div>
+            </section>
+
+            <section className="accounts-drawer__section">
+              <div className="accounts-drawer__section-head">
+                <h5>Delete account</h5>
+                <ActionIcon name="warning" />
+              </div>
+              <p className="accounts-drawer__note">This removes the account and its linked transactions from the workspace.</p>
+              <button className="button button-secondary button-small accounts-drawer__delete" type="button" onClick={() => void deleteSelectedAccount()} disabled={accountEditBusy}>
+                Delete account
+              </button>
             </section>
 
             <section className="accounts-drawer__section">

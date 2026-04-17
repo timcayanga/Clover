@@ -73,3 +73,33 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 }
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ accountId: string }> }) {
+  try {
+    const { userId } = await requireAuth();
+    const { accountId } = await params;
+    const body = await request.json().catch(() => ({}));
+    const workspaceId = String(body?.workspaceId || "");
+
+    if (!workspaceId) {
+      return NextResponse.json({ error: "workspaceId is required" }, { status: 400 });
+    }
+
+    await assertWorkspaceAccess(userId, workspaceId);
+
+    const account = await prisma.account.delete({
+      where: { id: accountId },
+    });
+
+    return NextResponse.json({
+      account: {
+        ...account,
+        balance: account.balance?.toString() ?? null,
+        createdAt: account.createdAt.toISOString(),
+        updatedAt: account.updatedAt.toISOString(),
+      },
+    });
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+}
