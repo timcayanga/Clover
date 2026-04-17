@@ -53,6 +53,8 @@ const formatCurrency = (value: number) => currencyFormatter.format(value);
 
 const formatSignedCurrency = (value: number) => `${value < 0 ? "-" : ""}${currencyFormatter.format(Math.abs(value))}`;
 
+const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
+
 const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
@@ -60,6 +62,14 @@ const toMonthLabel = (date: Date) => monthFormatter.format(date);
 const formatShortDate = (value: Date) => shortDateFormatter.format(value);
 
 const normalizeMerchant = (value: string) => value.trim().toLowerCase();
+
+const goalLabels: Record<string, string> = {
+  save_more: "Save more",
+  pay_down_debt: "Pay down debt",
+  track_spending: "Track spending",
+  build_emergency_fund: "Build an emergency fund",
+  invest_better: "Invest better",
+};
 
 const bucketMonth = (date: Date, buckets: MonthBucket[]) => buckets.find((bucket) => bucket.key === toIsoMonth(date));
 
@@ -389,17 +399,70 @@ export default async function ReportsPage() {
     const previousNet = previousSummary.income - previousSummary.expense;
     const currentSpend = currentSummary.expense;
     const previousSpend = previousSummary.expense;
+    const savingsRate = currentSummary.income > 0 ? currentNet / currentSummary.income : null;
+    const spendDelta = previousSpend > 0 ? ((currentSpend - previousSpend) / previousSpend) * 100 : null;
+    const incomeDelta = previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
+    const topCategoryShare = currentSpend > 0 ? maxCategorySpend / currentSpend : null;
     const importedTransactions = importedTransactionStats._count.id;
     const manualTransactions = manualTransactionStats._count.id;
     const importedAmount = Number(importedTransactionStats._sum.amount ?? 0);
     const manualAmount = Number(manualTransactionStats._sum.amount ?? 0);
+    const goalKey = user.primaryGoal?.trim() ?? null;
+    const goalLabel = goalKey ? goalLabels[goalKey] ?? goalKey : null;
+
+    const merchantSpend = new Map<
+      string,
+      {
+        label: string;
+        amount: number;
+        count: number;
+      }
+    >();
+
+    currentWindowTransactions.forEach((transaction) => {
+      if (transaction.type !== "expense") {
+        return;
+      }
+
+      const label = transaction.merchantClean ?? transaction.merchantRaw;
+      const key = normalizeMerchant(label);
+      const existing = merchantSpend.get(key) ?? { label, amount: 0, count: 0 };
+      existing.amount += Math.abs(Number(transaction.amount));
+      existing.count += 1;
+      merchantSpend.set(key, existing);
+    });
+
+    const recurringMerchants = Array.from(merchantSpend.values())
+      .filter((merchant) => merchant.count > 1)
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 3);
+
+    const goalSummary = goalLabel
+      ? currentNet >= 0
+        ? `Your ${goalLabel.toLowerCase()} goal has room to move forward because the last 30 days ended positive.`
+        : `Your ${goalLabel.toLowerCase()} goal needs a tighter spending pattern or higher income to move faster.`
+      : "Set a primary goal so Clover can compare your cash flow and spending against something specific.";
+
+    const goalNextStep = goalLabel
+      ? {
+          title: `Keep ${goalLabel.toLowerCase()} in view`,
+          body: "Use goal-aware insights to see whether spending and cash flow are helping or slowing you down.",
+          href: "/settings",
+          label: "Open settings",
+        }
+      : {
+          title: "Choose a goal to sharpen the insights",
+          body: "A goal gives the page a destination, so every trend can be evaluated against progress instead of noise.",
+          href: "/onboarding",
+          label: "Set a goal",
+        };
 
     return (
       <CloverShell
         active="reports"
-        kicker="Reports"
-        title="See the state of your finances at a glance."
-        subtitle="These reports are generated from imported files, parsed transactions, and manual entries so you can review what matters without extra interpretation."
+        kicker="Insights"
+        title="Turn your statements into clear next steps."
+        subtitle="These insights are generated from imported statements, parsed transactions, and manual entries so you can see what changed, why it changed, and what to do next."
         actions={
           <>
             <Link className="pill-link" href="/transactions">
@@ -413,11 +476,11 @@ export default async function ReportsPage() {
       >
         <section className="reports-hero">
           <div className="reports-hero__copy glass">
-            <span className="pill pill-accent">Auto-generated reports</span>
-            <h3>A compact view that shows what changed, what needs attention, and what to do next.</h3>
+            <span className="pill pill-accent">Goal-aware insights</span>
+            <h3>A calm view of your money that explains what changed and what it means.</h3>
             <p>
-              The reports focus on the minimum useful set: cash flow, category spend, review work, and import
-              health. That keeps the page readable while still giving you the full picture.
+              The page focuses on the minimum useful set: cash flow, spending patterns, review work, and goal
+              alignment. That keeps the experience readable while still giving you the full picture.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href={nextStep.href}>
@@ -426,22 +489,26 @@ export default async function ReportsPage() {
               <Link className="button button-secondary" href="/transactions">
                 Open transactions
               </Link>
-              <Link className="button button-secondary" href="/imports">
-                Review imports
+              <Link className="button button-secondary" href="/settings">
+                Review settings
               </Link>
             </div>
           </div>
 
           <article className="reports-next glass">
-            <p className="eyebrow">Next step</p>
-            <h4>{nextStep.title}</h4>
-            <p>{nextStep.body}</p>
-            <Link className="button button-primary button-pill" href={nextStep.href}>
-              {nextStep.label}
+            <p className="eyebrow">Goal lens</p>
+            <h4>{goalNextStep.title}</h4>
+            <p>{goalSummary}</p>
+            <div className="reports-next__meta">
+              <span>{goalLabel ?? "No primary goal set"}</span>
+              <span>{savingsRate === null ? "Savings rate unavailable" : `${formatPercent(savingsRate * 100)} savings rate`}</span>
+            </div>
+            <Link className="button button-primary button-pill" href={goalNextStep.href}>
+              {goalNextStep.label}
             </Link>
             <div className="reports-next__meta">
               <span>
-                {actionableCount} actionable item{actionableCount === 1 ? "" : "s"}
+                {actionableCount} item{actionableCount === 1 ? "" : "s"} need attention
               </span>
               <span>{selectedWorkspace.accounts.length} account{selectedWorkspace.accounts.length === 1 ? "" : "s"}</span>
             </div>
@@ -454,18 +521,21 @@ export default async function ReportsPage() {
             <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
             <small>
               {currentNet >= 0 ? "Positive" : "Negative"} over the last 30 days ·{" "}
-              {previousNet === 0 ? "No prior baseline" : `${currentNet >= previousNet ? "up" : "down"} from the previous 30 days`}
+              {previousNet === 0 ? "No prior baseline" : `${currentNet >= previousNet ? "above" : "below"} the prior period`}
             </small>
           </article>
           <article className="metric compact glass">
-            <span>Spending</span>
-            <strong>{formatCurrency(currentSpend)}</strong>
+            <span>Savings rate</span>
+            <strong>{savingsRate === null ? "N/A" : formatPercent(savingsRate * 100)}</strong>
             <small>
-              {previousSpend > 0
-                ? `${currentSpend >= previousSpend ? "Above" : "Below"} the previous 30 days by ${formatCurrency(
-                    Math.abs(currentSpend - previousSpend)
-                  )}`
-                : "Current 30-day spend"}
+              {goalLabel ? `${goalLabel} is the lens here` : "Add a goal to track progress against"}
+            </small>
+          </article>
+          <article className="metric compact glass">
+            <span>Top category</span>
+            <strong>{topCategories[0]?.[0] ?? "N/A"}</strong>
+            <small>
+              {topCategoryShare === null ? "No spending data yet" : `${formatPercent(topCategoryShare * 100)} of total spend`}
             </small>
           </article>
           <article className="metric compact glass">
@@ -474,19 +544,6 @@ export default async function ReportsPage() {
             <small>
               {uncategorizedTransactions.length} uncategorized · {possibleDuplicateGroups.length} duplicate set
               {possibleDuplicateGroups.length === 1 ? "" : "s"}
-            </small>
-          </article>
-          <article className="metric compact glass">
-            <span>Import health</span>
-            <strong>
-              {importStatusCounts.failed > 0
-                ? `${importStatusCounts.failed} failed`
-                : importStatusCounts.processing > 0
-                  ? `${importStatusCounts.processing} processing`
-                  : `${importStatusCounts.done} done`}
-            </strong>
-            <small>
-              {importStatusCounts.done} done · {importStatusCounts.processing} processing · {importStatusCounts.failed} failed
             </small>
           </article>
         </section>
@@ -513,7 +570,7 @@ export default async function ReportsPage() {
                 <span>Current 30 days</span>
                 <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
                 <small>
-                  {currentSummary.income >= previousSummary.income ? "Income is holding up" : "Income softened a bit"}.
+                  {incomeDelta === null ? "No previous baseline" : `${formatPercent(incomeDelta)} vs the prior 30 days`}
                 </small>
               </div>
               <div className="report-insight">
@@ -522,6 +579,24 @@ export default async function ReportsPage() {
                 <small>
                   {previousNet === 0 ? "No prior benchmark" : `${previousNet >= 0 ? "Positive" : "Negative"} cash flow`}
                 </small>
+              </div>
+            </div>
+
+            <div className="report-subsection">
+              <p className="eyebrow">Why it changed</p>
+              <div className="report-list">
+                <div className="report-list__item">
+                  <div className="report-list__meta">
+                    <strong>Spending</strong>
+                    <span>{spendDelta === null ? "No prior comparison period" : `${formatPercent(spendDelta)} vs the previous 30 days`}</span>
+                  </div>
+                </div>
+                <div className="report-list__item">
+                  <div className="report-list__meta">
+                    <strong>Income</strong>
+                    <span>{incomeDelta === null ? "No prior comparison period" : `${formatPercent(incomeDelta)} vs the previous 30 days`}</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -549,15 +624,13 @@ export default async function ReportsPage() {
           <article className="report-card glass">
             <div className="report-card__head">
               <div>
-                <p className="eyebrow">Spending by category</p>
-                <h4>Where the money actually went</h4>
+                <p className="eyebrow">Spending behavior</p>
+                <h4>Where the money concentrated this month</h4>
               </div>
               <div className="report-card__stat">
                 <strong>{formatCurrency(currentSpend)}</strong>
                 <span>
-                  {topCategories.length > 0
-                    ? `${topCategories.length} leading ${topCategories.length === 1 ? "category" : "categories"}`
-                    : "No spending yet"}
+                  {topCategories.length > 0 ? `${topCategories.length} leading categories` : "No spending yet"}
                 </span>
               </div>
             </div>
@@ -581,6 +654,26 @@ export default async function ReportsPage() {
               ) : (
                 <div className="empty-state">No categorized expenses yet.</div>
               )}
+            </div>
+
+            <div className="report-subsection">
+              <p className="eyebrow">Recurring merchants</p>
+              <div className="report-list">
+                {recurringMerchants.length > 0 ? (
+                  recurringMerchants.map((merchant) => (
+                    <div key={merchant.label} className="report-list__item">
+                      <div className="report-list__meta">
+                        <strong>{merchant.label}</strong>
+                        <span>
+                          {merchant.count} transaction{merchant.count === 1 ? "" : "s"} · {formatCurrency(merchant.amount)}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-state">No repeat merchants surfaced in the current period.</div>
+                )}
+              </div>
             </div>
           </article>
         </section>
@@ -675,6 +768,18 @@ export default async function ReportsPage() {
               </div>
             </div>
 
+            <div className="report-subsection">
+              <p className="eyebrow">Goal lens</p>
+              <div className="report-list">
+                <div className="report-list__item">
+                  <div className="report-list__meta">
+                    <strong>{goalLabel ?? "No goal set yet"}</strong>
+                    <span>{goalSummary}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="report-status-list">
               <div className="report-status-list__item">
                 <span>Done</span>
@@ -726,9 +831,9 @@ export default async function ReportsPage() {
     return (
       <CloverShell
         active="reports"
-        kicker="Reports"
-        title="See the state of your finances at a glance."
-        subtitle="The reports page could not load right now, but your workspace and transactions are still available."
+        kicker="Insights"
+        title="Turn your statements into clear next steps."
+        subtitle="The insights page could not load right now, but your workspace and transactions are still available."
         actions={
           <>
             <Link className="pill-link" href="/transactions">

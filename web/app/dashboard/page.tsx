@@ -148,7 +148,7 @@ export default async function DashboardPage() {
               Add transaction
             </Link>
             <Link className="button button-secondary" href="/reports">
-              See reports
+              See insights
             </Link>
           </div>
         </div>
