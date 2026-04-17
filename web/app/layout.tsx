@@ -8,6 +8,11 @@ import { StagingGate } from "./staging-gate";
 export const metadata: Metadata = {
   title: "Clover",
   description: "Upload statements, understand cash flow, and act with clarity.",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
 };
 
 export const dynamic = "force-dynamic";
