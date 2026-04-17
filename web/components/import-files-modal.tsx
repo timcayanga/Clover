@@ -198,6 +198,31 @@ export function ImportFilesModal({
     setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   };
 
+  const waitForImportCompletion = async (importFileId: string) => {
+    for (let attempt = 0; attempt < 45; attempt += 1) {
+      const response = await fetch(`/api/imports/${importFileId}/status`);
+      if (!response.ok) {
+        throw new Error("Unable to load import status.");
+      }
+
+      const payload = await response.json();
+      const status = String(payload.importFile?.status ?? "");
+      const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
+
+      if (status === "failed") {
+        throw new Error("Import parsing failed.");
+      }
+
+      if (status === "done" && parsedRowsCount > 0) {
+        return;
+      }
+
+      await new Promise((resolve) => window.setTimeout(resolve, 1000));
+    }
+
+    throw new Error("Import parsing is taking longer than expected.");
+  };
+
   const ensureTargetAccountId = async (statementAccountName?: string | null, institution?: string | null) => {
     if (statementAccountName) {
       const key = accountKey(statementAccountName, institution ?? null);
@@ -284,6 +309,7 @@ export function ImportFilesModal({
       }
 
       updateItem(itemId, { progress: 92, progressLabel: "Linking to account" });
+      await waitForImportCompletion(importFileId);
       const confirmResponse = await fetch(`/api/imports/${importFileId}/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

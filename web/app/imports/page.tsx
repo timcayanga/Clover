@@ -541,7 +541,8 @@ export default function ImportsPage() {
       });
 
       if (!response.ok) {
-        throw new Error("Unable to confirm import.");
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "Unable to confirm import.");
       }
 
       const payload = await response.json();

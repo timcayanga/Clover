@@ -111,7 +111,9 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     return null;
   }
 
-  const accountSection = normalized.match(/\bNO\s*:\s*([0-9\s-]+)/i)?.[1] ?? "";
+  const accountSection =
+    normalized.match(/\b(?:ACCOUNT\s*(?:NO|NUMBER|#)?|ACCT\s*(?:NO|NUMBER|#)?|NO)\s*[:\-]?\s*([0-9\s-]{8,})/i)?.[1] ??
+    "";
   const accountNumber = accountSection.replace(/\D/g, "").slice(0, 10) || null;
   const accountName = accountNumber ? `BPI ${accountNumber.slice(-4)}` : "BPI";
 

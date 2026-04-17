@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportFilesModal } from "@/components/import-files-modal";
 
@@ -225,6 +226,7 @@ function ActionIcon({
 }
 
 export default function AccountsPage() {
+  const router = useRouter();
   const addRef = useRef<HTMLDivElement>(null);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -462,6 +464,11 @@ export default function AccountsPage() {
     setAccountEditBalance(account.balance?.toString() ?? "");
     setAccountEditSource(account.source);
     setBalanceDraft(account.balance?.toString() ?? "");
+  };
+
+  const openFullAccountPage = () => {
+    if (!selectedAccount) return;
+    router.push(`/accounts/${selectedAccount.id}`);
   };
 
   const saveAccountChanges = async (event?: FormEvent<HTMLFormElement>) => {
@@ -967,6 +974,9 @@ export default function AccountsPage() {
               <div className="accounts-drawer__actions">
                 <button className="button button-secondary button-small" type="button" onClick={openImportFiles}>
                   Import files
+                </button>
+                <button className="button button-secondary button-small" type="button" onClick={openFullAccountPage} disabled={!selectedAccount}>
+                  Open account page
                 </button>
               </div>
             </section>

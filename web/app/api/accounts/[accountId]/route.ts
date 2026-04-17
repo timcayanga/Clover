@@ -16,6 +16,31 @@ const accountPatchSchema = z.object({
   balance: z.union([z.string(), z.number(), z.null()]).optional(),
 });
 
+export async function GET(_request: Request, { params }: { params: Promise<{ accountId: string }> }) {
+  try {
+    const { userId } = await requireAuth();
+    const { accountId } = await params;
+
+    const account = await prisma.account.findUnique({ where: { id: accountId } });
+    if (!account) {
+      return NextResponse.json({ error: "Account not found" }, { status: 404 });
+    }
+
+    await assertWorkspaceAccess(userId, account.workspaceId);
+
+    return NextResponse.json({
+      account: {
+        ...account,
+        balance: account.balance?.toString() ?? null,
+        createdAt: account.createdAt.toISOString(),
+        updatedAt: account.updatedAt.toISOString(),
+      },
+    });
+  } catch {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+}
+
 export async function PATCH(request: Request, { params }: { params: Promise<{ accountId: string }> }) {
   try {
     const { userId } = await requireAuth();
