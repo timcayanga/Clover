@@ -36,9 +36,7 @@ type Transaction = {
   isExcluded: boolean;
 };
 
-type AddMode = "manual" | "import";
 type SummaryMode = "totals" | "percent";
-type ManualAccountKind = "savings" | "checking" | "credit_card" | "cash";
 type AccountSort = "name" | "balance_desc" | "updated_desc";
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
@@ -46,13 +44,6 @@ const currencyFormatter = new Intl.NumberFormat("en-PH", {
   currency: "PHP",
   minimumFractionDigits: 2,
 });
-
-const manualKinds: Array<{ value: ManualAccountKind; label: string; helper: string }> = [
-  { value: "savings", label: "Savings", helper: "Manual name and balance" },
-  { value: "checking", label: "Checking", helper: "Manual name and balance" },
-  { value: "credit_card", label: "Credit Card", helper: "Manual name and balance" },
-  { value: "cash", label: "Cash", helper: "Automatically shows up" },
-];
 
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", {
@@ -81,20 +72,6 @@ const getAccountWarning = (account: Account, duplicateCount: number) => {
   if (account.source === "imported" && !account.institution) return "Needs category";
   if (account.balance === null) return "Add balance";
   return null;
-};
-
-const getAccountKindInstitution = (kind: ManualAccountKind) => {
-  if (kind === "savings") return "Savings";
-  if (kind === "checking") return "Checking";
-  if (kind === "credit_card") return "Credit Card";
-  if (kind === "cash") return "Cash";
-  return "Savings";
-};
-
-const getAccountKindType = (kind: ManualAccountKind): Account["type"] => {
-  if (kind === "credit_card") return "credit_card";
-  if (kind === "cash") return "cash";
-  return "bank";
 };
 
 function ActionIcon({
@@ -253,13 +230,12 @@ export default function AccountsPage() {
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [addOpen, setAddOpen] = useState(false);
-  const [addMode, setAddMode] = useState<AddMode>("manual");
   const [importOpen, setImportOpen] = useState(false);
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<AccountSort>("updated_desc");
   const [summaryMode, setSummaryMode] = useState<SummaryMode>("totals");
-  const [manualKind, setManualKind] = useState<ManualAccountKind>("savings");
+  const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
   const [manualBalance, setManualBalance] = useState("");
   const [isSaving, setIsSaving] = useState(false);
@@ -270,6 +246,7 @@ export default function AccountsPage() {
   const [accountEditBalance, setAccountEditBalance] = useState("");
   const [accountEditSource, setAccountEditSource] = useState("manual");
   const [accountEditBusy, setAccountEditBusy] = useState(false);
+  const [accountDeleteBusy, setAccountDeleteBusy] = useState(false);
   const [balanceDraft, setBalanceDraft] = useState("");
   const [drawerNotice, setDrawerNotice] = useState<string | null>(null);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
@@ -469,7 +446,6 @@ export default function AccountsPage() {
     [selectedAccount, transactions]
   );
 
-  const visibleCount = searchedAccounts.length;
   const needsReviewCount = useMemo(() => {
     return accounts.filter((account) => {
       const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
@@ -572,18 +548,18 @@ export default function AccountsPage() {
     }
   };
 
-  const deleteSelectedAccount = async () => {
+  const deleteAccount = async () => {
     if (!selectedWorkspaceId || !selectedAccount) return;
+    if (!window.confirm(`Delete ${selectedAccount.name}? This cannot be undone.`)) return;
 
-    const confirmed = window.confirm(`Delete "${selectedAccount.name}"? This will remove the account and its linked transactions.`);
-    if (!confirmed) return;
-
-    setAccountEditBusy(true);
+    setAccountDeleteBusy(true);
     try {
       const response = await fetch(`/api/accounts/${selectedAccount.id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId: selectedWorkspaceId }),
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+        }),
       });
 
       if (!response.ok) {
@@ -597,7 +573,7 @@ export default function AccountsPage() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to delete account.");
     } finally {
-      setAccountEditBusy(false);
+      setAccountDeleteBusy(false);
     }
   };
 
@@ -615,7 +591,7 @@ export default function AccountsPage() {
     }
 
     const hasCashAccount = accounts.some((account) => account.type === "cash");
-    if (manualKind === "cash" && hasCashAccount) {
+    if (manualType === "cash" && hasCashAccount) {
       setMessage("Cash already appears automatically in this workspace. Rename the existing Cash account instead.");
       return;
     }
@@ -628,8 +604,8 @@ export default function AccountsPage() {
         body: JSON.stringify({
           workspaceId: selectedWorkspaceId,
           name,
-          institution: getAccountKindInstitution(manualKind),
-          type: getAccountKindType(manualKind),
+          institution: null,
+          type: manualType,
           currency: "PHP",
           source: "manual",
           balance: manualBalance ? Number(manualBalance) : 0,
@@ -646,6 +622,7 @@ export default function AccountsPage() {
       }
       setManualName("");
       setManualBalance("");
+      setManualType("bank");
       setAddOpen(false);
       setMessage(`Account "${name}" created.`);
     } catch (error) {
@@ -732,57 +709,51 @@ export default function AccountsPage() {
   return (
     <CloverShell active="accounts" title="Accounts" showTopbar={false}>
       <div className="accounts-page">
-        <div className="accounts-page__headline">
-          <div className="accounts-page__headline-copy">
-            <h1>Accounts</h1>
+        <div className="accounts-page__sticky">
+          <div className="accounts-page__headline">
+            <div className="accounts-page__headline-copy">
+              <h1>Accounts</h1>
+            </div>
+            <div className="accounts-page__headline-actions">
+              <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={() => setAddOpen(true)}>
+                <ActionIcon name="plus" />
+                <span>Add account</span>
+              </button>
+              <button className="button button-secondary button-small accounts-toolbar-button" type="button" onClick={openImportFiles}>
+                <ActionIcon name="upload" />
+                <span>Import files</span>
+              </button>
+            </div>
           </div>
-          <div className="accounts-page__headline-actions">
-            <button
-              className="button button-primary button-small accounts-toolbar-add"
-              type="button"
-              onClick={() => {
-                setAddMode("manual");
-                setAddOpen(true);
-              }}
-            >
-              <ActionIcon name="plus" />
-              <span>Add account</span>
-            </button>
-            <button className="button button-secondary button-small accounts-toolbar-button" type="button" onClick={openImportFiles}>
-              <ActionIcon name="upload" />
-              <span>Import files</span>
-            </button>
-          </div>
-        </div>
 
-        <section className="accounts-overview-grid">
-          <article className="accounts-overview-card glass">
-            <p className="eyebrow">Net worth</p>
-            <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.netWorth)}</strong>
-            <span>
-              {accountsLoading
-                ? "Loading accounts"
-                : `${accounts.length} accounts across ${workspaces.length} workspace${workspaces.length === 1 ? "" : "s"}`}
-            </span>
-          </article>
-          <article className="accounts-overview-card glass">
-            <p className="eyebrow">Assets</p>
-            <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.assets)}</strong>
-            <span>Cash, savings, and invested balances</span>
-          </article>
-          <article className="accounts-overview-card glass">
-            <p className="eyebrow">Liabilities</p>
-            <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.liabilities)}</strong>
-            <span>Credit cards and other negative balances</span>
-          </article>
-        </section>
+          <section className="accounts-overview-grid">
+            <article className="accounts-overview-card glass">
+              <p className="eyebrow">Net worth</p>
+              <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.netWorth)}</strong>
+              <span>
+                {accountsLoading
+                  ? "Loading accounts"
+                  : `${accounts.length} accounts across ${workspaces.length} workspace${workspaces.length === 1 ? "" : "s"}`}
+              </span>
+            </article>
+            <article className="accounts-overview-card glass">
+              <p className="eyebrow">Assets</p>
+              <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.assets)}</strong>
+              <span>Cash, savings, and invested balances</span>
+            </article>
+            <article className="accounts-overview-card glass">
+              <p className="eyebrow">Liabilities</p>
+              <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.liabilities)}</strong>
+              <span>Credit cards and other negative balances</span>
+            </article>
+          </section>
+        </div>
 
         <section className="accounts-main-grid">
           <div className="accounts-list-column">
             <div className="accounts-list-head">
               <div>
                 <p className="eyebrow">Account list</p>
-                <h4>{accountsLoading ? "Loading accounts..." : `${visibleCount} visible account${visibleCount === 1 ? "" : "s"}`}</h4>
               </div>
               <div className="accounts-list-controls">
                 <label className="accounts-search">
@@ -859,13 +830,13 @@ export default function AccountsPage() {
                                   title={warning}
                                   aria-label={warning}
                                 >
-                                  <ActionIcon name="warning" />
+                                  <span aria-hidden="true">⚠</span>
                                 </button>
                               ) : (
                                 <span className="accounts-view-pill">Ready</span>
                               )}
                               <button className="button button-secondary button-small accounts-row-button" type="button" onClick={() => openAccountDrawer(account)} aria-label={`Open ${account.name} drawer`}>
-                                <ActionIcon name="chevron-right" />
+                                <span aria-hidden="true">&gt;</span>
                               </button>
                             </div>
                           </div>
@@ -977,11 +948,6 @@ export default function AccountsPage() {
             </div>
           </aside>
         </section>
-
-        <div className="accounts-status-bar">
-          <span className="pill pill-neutral">{workspacesLoading ? "Loading workspace..." : selectedWorkspace?.name ?? "No workspace selected"}</span>
-          <span className="pill pill-neutral">{message}</span>
-        </div>
       </div>
 
       {selectedAccount ? (
@@ -1117,7 +1083,7 @@ export default function AccountsPage() {
                 <ActionIcon name="warning" />
               </div>
               <p className="accounts-drawer__note">This removes the account and its linked transactions from the workspace.</p>
-              <button className="button button-secondary button-small accounts-drawer__delete" type="button" onClick={() => void deleteSelectedAccount()} disabled={accountEditBusy}>
+              <button className="button button-secondary button-small accounts-drawer__delete" type="button" onClick={() => void deleteAccount()} disabled={accountDeleteBusy}>
                 Delete account
               </button>
             </section>
@@ -1161,80 +1127,46 @@ export default function AccountsPage() {
               <div>
                 <p className="eyebrow">Accounts</p>
                 <h4 id="add-account-title">Add an account</h4>
-                <p className="modal-copy">Manual balances or imported statement history. Cash is included automatically.</p>
+                <p className="modal-copy">Create a manual account with a name, type, and starting balance.</p>
               </div>
               <button className="icon-button" type="button" onClick={() => setAddOpen(false)} aria-label="Close add account">
                 ×
               </button>
             </div>
 
-            <div className="accounts-add-tabs">
-              <button type="button" className={addMode === "manual" ? "is-active" : ""} onClick={() => setAddMode("manual")}>
-                Manual account
-              </button>
-              <button type="button" className={addMode === "import" ? "is-active" : ""} onClick={() => setAddMode("import")}>
-                Import from statements
-              </button>
-            </div>
-
             <div className="accounts-add-grid">
-              {addMode === "manual" ? (
-                <div className="accounts-add-column">
-                  <div className="accounts-kind-grid">
-                    {manualKinds.map((kind) => (
-                    <button
-                      key={kind.value}
-                      type="button"
-                      className={`accounts-kind-card ${manualKind === kind.value ? "is-active" : ""} ${kind.value === "cash" ? "is-cash" : ""}`}
-                      onClick={() => setManualKind(kind.value)}
-                      >
-                        <strong>{kind.label}</strong>
-                        <span>{kind.helper}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <form className="accounts-manual-form" onSubmit={createManualAccount}>
-                    <label>
-                      Name
-                      <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: BDO Savings" />
-                    </label>
-                    <label>
-                      Balance
-                      <input
-                        value={manualBalance}
-                        onChange={(event) => setManualBalance(event.target.value)}
-                        inputMode="decimal"
-                        placeholder="0.00"
-                      />
-                    </label>
-                    <button
-                      className="button button-primary"
-                      type="submit"
-                      disabled={isSaving || (manualKind === "cash" && accounts.some((account) => account.type === "cash"))}
-                    >
-                      {isSaving ? "Saving..." : "Create account"}
-                    </button>
-                    {manualKind === "cash" && accounts.some((account) => account.type === "cash") ? (
-                      <p className="modal-copy">Cash already appears automatically in this workspace.</p>
-                    ) : null}
-                  </form>
-                </div>
-              ) : (
-                <div className="accounts-import-column">
-                  <article className="accounts-import-card accounts-import-card--stacked">
-                    <p className="eyebrow">Import files</p>
-                    <h5>Bring in statements, balances, and account history</h5>
-                    <p>
-                      Upload CSV or PDF support files, including password-protected statements. We parse the file locally,
-                      extract the account and transaction details, and keep the workflow focused on the account you’re reviewing.
-                    </p>
-                    <button className="button button-secondary button-small" type="button" onClick={openImportFiles}>
-                      Open import files
-                    </button>
-                  </article>
-                </div>
-              )}
+              <form className="accounts-manual-form" onSubmit={createManualAccount}>
+                <label>
+                  Name
+                  <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: BDO Savings" />
+                </label>
+                <label>
+                  Type
+                  <select value={manualType} onChange={(event) => setManualType(event.target.value as Account["type"])}>
+                    <option value="bank">Bank</option>
+                    <option value="wallet">Wallet</option>
+                    <option value="credit_card">Credit Card</option>
+                    <option value="cash">Cash</option>
+                    <option value="investment">Investment</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <label>
+                  Balance
+                  <input
+                    value={manualBalance}
+                    onChange={(event) => setManualBalance(event.target.value)}
+                    inputMode="decimal"
+                    placeholder="0.00"
+                  />
+                </label>
+                <button className="button button-primary" type="submit" disabled={isSaving || (manualType === "cash" && accounts.some((account) => account.type === "cash"))}>
+                  {isSaving ? "Saving..." : "Create account"}
+                </button>
+                {manualType === "cash" && accounts.some((account) => account.type === "cash") ? (
+                  <p className="modal-copy">Cash already appears automatically in this workspace.</p>
+                ) : null}
+              </form>
             </div>
           </section>
         </div>

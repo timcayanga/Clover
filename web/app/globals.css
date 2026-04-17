@@ -211,7 +211,10 @@ label {
 .brand-mark--sidebar {
   width: 52px;
   height: 52px;
-  border-radius: 18px;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+  object-fit: contain;
 }
 
 .topbar h2,
@@ -2123,152 +2126,8 @@ label {
   background: rgba(254, 242, 242, 0.94);
 }
 
-.accounts-status-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
 .accounts-add-modal {
-  width: min(1040px, calc(100vw - 28px));
-}
-
-.accounts-import-modal {
-  width: min(1080px, calc(100vw - 28px));
-  display: grid;
-  gap: 16px;
-}
-
-.import-progress-modal {
-  width: min(560px, calc(100vw - 28px));
-  display: grid;
-  gap: 20px;
-  padding: 26px;
-}
-
-.import-progress-layer {
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  display: grid;
-  place-items: center;
-  padding: 18px;
-  pointer-events: none;
-}
-
-.import-progress-layer .import-progress-modal {
-  pointer-events: auto;
-  box-shadow: 0 22px 80px rgba(15, 23, 42, 0.26);
-}
-
-.import-progress-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 14px;
-}
-
-.import-progress-header h4 {
-  margin: 2px 0 0;
-}
-
-.import-progress-status {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: rgba(3, 168, 192, 0.12);
-  border: 1px solid rgba(3, 168, 192, 0.18);
-  color: var(--accent-strong);
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.import-progress-body {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 20px;
-  align-items: center;
-}
-
-.import-progress-donut {
-  --progress: 0%;
-  width: 176px;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at center, rgba(255, 255, 255, 0.98) 0 54%, transparent 55%),
-    conic-gradient(var(--accent) var(--progress), rgba(3, 168, 192, 0.12) 0);
-  display: grid;
-  place-items: center;
-  box-shadow: var(--shadow);
-}
-
-.import-progress-donut__inner {
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  text-align: center;
-}
-
-.import-progress-donut__inner strong {
-  font-size: clamp(1.9rem, 4.8vw, 2.6rem);
-  letter-spacing: -0.06em;
-  line-height: 1;
-}
-
-.import-progress-copy {
-  display: grid;
-  gap: 12px;
-}
-
-.import-progress-copy p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.55;
-}
-
-.import-progress-bar {
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(3, 168, 192, 0.12);
-  overflow: hidden;
-}
-
-.import-progress-bar span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent), rgba(3, 168, 192, 0.6));
-  transition: width 180ms ease;
-}
-
-.accounts-add-tabs {
-  display: inline-flex;
-  padding: 4px;
-  border-radius: 999px;
-  background: rgba(15, 23, 42, 0.04);
-  gap: 4px;
-}
-
-.accounts-add-tabs button {
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  min-height: 32px;
-  padding: 0 14px;
-}
-
-.accounts-add-tabs button.is-active {
-  background: rgba(255, 255, 255, 0.95);
-  color: var(--text);
-  box-shadow: var(--shadow-soft);
+  width: min(640px, calc(100vw - 28px));
 }
 
 .accounts-add-grid {
@@ -2276,80 +2135,14 @@ label {
   gap: 14px;
 }
 
-.accounts-add-column,
-.accounts-import-column {
-  display: grid;
-  gap: 14px;
-}
-
-.accounts-kind-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.accounts-kind-card {
-  border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 20px;
-  padding: 14px;
-  text-align: left;
-  display: grid;
-  gap: 6px;
-  min-height: 92px;
-}
-
-.accounts-kind-card strong {
-  font-size: 0.98rem;
-}
-
-.accounts-kind-card span {
-  color: var(--muted);
-  font-size: 0.86rem;
-  line-height: 1.45;
-}
-
-.accounts-kind-card.is-active {
-  border-color: rgba(3, 168, 192, 0.34);
-  background: rgba(3, 168, 192, 0.08);
-}
-
-.accounts-kind-card.is-cash {
-  opacity: 0.86;
-}
-
 .accounts-manual-form {
   display: grid;
   gap: 12px;
-  max-width: 420px;
+  max-width: 360px;
 }
 
-.accounts-import-column {
-  grid-template-columns: 1fr;
-}
-
-.accounts-import-card {
-  display: grid;
-  gap: 10px;
-  padding: 16px;
-  border: 1px solid var(--stroke);
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.88);
-}
-
-.accounts-import-card h5 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-.accounts-import-card p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.58;
-}
-
-.accounts-import-card--stacked {
-  align-content: start;
+.accounts-manual-form button {
+  justify-self: start;
 }
 
 .accounts-import-security {
@@ -2620,8 +2413,7 @@ label {
 
 .accounts-summary-column,
 .accounts-group,
-.accounts-import-card,
-.accounts-kind-card {
+.accounts-warning-icon {
   animation: fade-up 280ms ease;
 }
 
@@ -2702,9 +2494,7 @@ label {
     grid-template-columns: 1fr;
   }
 
-  .accounts-main-grid,
-  .accounts-import-column,
-  .accounts-kind-grid {
+  .accounts-main-grid {
     grid-template-columns: 1fr;
   }
 
