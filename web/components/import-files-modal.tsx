@@ -3,6 +3,7 @@
 import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { ImportProgressModal } from "@/components/import-progress-modal";
+import { detectStatementMetadata } from "@/lib/import-parser";
 import { pdfjs } from "@/lib/pdfjs";
 
 type AccountOption = {
@@ -97,6 +98,9 @@ const fileTypeLabel = (file: File) => {
   return "File";
 };
 
+const accountKey = (name: string, institution: string | null) =>
+  `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
+
 export function ImportFilesModal({
   open,
   workspaceId,
@@ -106,6 +110,7 @@ export function ImportFilesModal({
   onImported,
 }: ImportFilesModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const accountIdByKeyRef = useRef(new Map<string, string>());
   const [items, setItems] = useState<QueuedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState("");
@@ -118,9 +123,16 @@ export function ImportFilesModal({
       setDragActive(false);
       setBusy(false);
       setSelectedAccountId("");
+      accountIdByKeyRef.current.clear();
       setMessage("Upload CSV or PDF files to import transactions and balances.");
       return;
     }
+
+    const map = new Map<string, string>();
+    for (const account of accounts) {
+      map.set(accountKey(account.name, account.institution), account.id);
+    }
+    accountIdByKeyRef.current = map;
 
     setSelectedAccountId((current) => {
       if (current) return current;
@@ -128,6 +140,34 @@ export function ImportFilesModal({
     });
     setMessage("Upload CSV or PDF files to import transactions and balances.");
   }, [accounts, defaultAccountId, open]);
+
+  const createStatementAccount = async (name: string, institution: string | null) => {
+    const response = await fetch("/api/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId,
+        name,
+        institution,
+        type: "bank",
+        currency: "PHP",
+        source: "upload",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to create an account for this statement.");
+    }
+
+    const payload = await response.json();
+    const accountId = String(payload.account?.id ?? "");
+    if (!accountId) {
+      throw new Error("The account could not be created.");
+    }
+
+    accountIdByKeyRef.current.set(accountKey(name, institution), accountId);
+    return accountId;
+  };
 
   const addFiles = (incoming: FileList | File[]) => {
     const nextFiles = Array.from(incoming);
@@ -158,41 +198,29 @@ export function ImportFilesModal({
     setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   };
 
-  const ensureTargetAccountId = async () => {
+  const ensureTargetAccountId = async (statementAccountName?: string | null, institution?: string | null) => {
+    if (statementAccountName) {
+      const key = accountKey(statementAccountName, institution ?? null);
+      const existing = accountIdByKeyRef.current.get(key) ?? accounts.find((account) => accountKey(account.name, account.institution) === key)?.id;
+      if (existing) {
+        accountIdByKeyRef.current.set(key, existing);
+        return existing;
+      }
+
+      return createStatementAccount(statementAccountName, institution ?? null);
+    }
+
     if (selectedAccountId) {
       return selectedAccountId;
     }
 
-    if (accounts[0]?.id) {
-      setSelectedAccountId(accounts[0].id);
-      return accounts[0].id;
+    const fallback = accounts[0]?.id;
+    if (fallback) {
+      setSelectedAccountId(fallback);
+      return fallback;
     }
 
-    const response = await fetch("/api/accounts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        workspaceId,
-        name: "Imported transactions",
-        institution: "Source upload",
-        type: "bank",
-        currency: "PHP",
-        source: "upload",
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error("Unable to create a default account for this workspace.");
-    }
-
-    const payload = await response.json();
-    const accountId = String(payload.account?.id ?? "");
-    if (!accountId) {
-      throw new Error("Default account was not created.");
-    }
-
-    setSelectedAccountId(accountId);
-    return accountId;
+    return createStatementAccount("Imported transactions", "Source upload");
   };
 
   const removeItem = (id: string) => {
@@ -211,9 +239,13 @@ export function ImportFilesModal({
     updateItem(itemId, { status: "parsing", error: null, progress: 8, progressLabel: "Preparing file" });
 
     try {
-      const targetAccountId = await ensureTargetAccountId();
-      updateItem(itemId, { progress: 20, progressLabel: "Reading file" });
       const text = await extractTextFromFile(item.file, item.password.trim() || undefined);
+      const statement = detectStatementMetadata(text);
+      const targetAccountId = await ensureTargetAccountId(statement?.accountName ?? null, statement?.institution ?? null);
+      updateItem(itemId, {
+        progress: 20,
+        progressLabel: statement?.accountName ? `Detected ${statement.accountName}` : "Reading file",
+      });
       updateItem(itemId, { status: "importing", progress: 55, progressLabel: "Parsing file" });
 
       const prepareResponse = await fetch("/api/imports", {

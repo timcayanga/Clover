@@ -12,6 +12,16 @@ export type ParsedImportRow = {
   rawPayload?: Record<string, unknown>;
 };
 
+export type DetectedStatementMetadata = {
+  institution: string | null;
+  accountNumber: string | null;
+  accountName: string | null;
+  openingBalance: number | null;
+  endingBalance: number | null;
+  startDate: string | null;
+  endDate: string | null;
+};
+
 const delimiterForFile = (fileType: string, fileName: string) => {
   const lower = `${fileType} ${fileName}`.toLowerCase();
   if (lower.includes("tsv")) return "\t";
@@ -64,6 +74,224 @@ const splitLine = (line: string, delimiter: string) => {
 
   cells.push(current.trim());
   return cells;
+};
+
+const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+
+const parseMoney = (value?: string | null) => {
+  if (!value) return null;
+  const parsed = Number(String(value).replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseBpiDate = (value?: string | null) => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const monthIndexByAbbr: Record<string, number> = {
+  JAN: 0,
+  FEB: 1,
+  MAR: 2,
+  APR: 3,
+  MAY: 4,
+  JUN: 5,
+  JUL: 6,
+  AUG: 7,
+  SEP: 8,
+  OCT: 9,
+  NOV: 10,
+  DEC: 11,
+};
+
+const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+  const normalized = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  if (!/BANK OF THE PHILIPPINE ISLANDS|^\s*FORBES PARK\s+SAVINGS\s+BET-PHP/i.test(normalized)) {
+    return null;
+  }
+
+  const accountSection = normalized.match(/\bNO\s*:\s*([0-9\s-]+)/i)?.[1] ?? "";
+  const accountNumber = accountSection.replace(/\D/g, "").slice(0, 10) || null;
+  const accountName = accountNumber ? `BPI ${accountNumber.slice(-4)}` : "BPI";
+
+  const periodMatch = normalized.match(/PERIOD COVERED\s+([A-Z]{3}\s+\d{1,2},\s+\d{4})\s*-\s*([A-Z]{3}\s+\d{1,2},\s+\d{4})/i);
+  const startDate = parseBpiDate(periodMatch?.[1] ?? null);
+  const endDate = parseBpiDate(periodMatch?.[2] ?? null);
+
+  const openingBalance = parseMoney(normalized.match(/BEGINNING BALANCE\s+([0-9,]+\.\d{2})/i)?.[1]);
+  const endingBalance =
+    parseMoney(normalized.match(/BALANCE THIS STATEMENT\s+([0-9,]+\.\d{2})/i)?.[1]) ??
+    parseMoney(normalized.match(/ENDING BALANCE\s+([0-9,]+\.\d{2})/i)?.[1]);
+
+  return {
+    institution: "BPI",
+    accountNumber,
+    accountName,
+    openingBalance,
+    endingBalance,
+    startDate: startDate ? startDate.toISOString() : null,
+    endDate: endDate ? endDate.toISOString() : null,
+  };
+};
+
+const guessBpiCategoryName = (description: string, type: TransactionType) => {
+  const lower = description.toLowerCase();
+  if (/^beginning balance$/i.test(description)) return "Opening Balance";
+  if (type === "transfer") return "Transfers";
+  if (/transfer fee|service charge|withheld tax|tax withheld|bank charge|fee/.test(lower)) return "Financial";
+  if (/bills payment|utility|bill|payment/.test(lower)) return "Bills & Utilities";
+  if (/interest earned|interest/.test(lower)) return "Income";
+  return guessCategoryName(description, type);
+};
+
+const parseBpiTransactionLine = (
+  line: string,
+  state: {
+    year: number;
+    previousMonthIndex: number | null;
+    previousBalance: number | null;
+    accountName: string;
+    statementStartDate: string | null;
+  }
+) => {
+  const normalized = normalizeWhitespace(line);
+  const match = normalized.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(.+)$/i);
+
+  if (!match) {
+    return null;
+  }
+
+  const monthIndex = monthIndexByAbbr[match[1].slice(0, 3).toUpperCase()];
+  if (state.previousMonthIndex !== null && monthIndex < state.previousMonthIndex) {
+    state.year += 1;
+  }
+  state.previousMonthIndex = monthIndex;
+
+  const day = Number(match[2]);
+  const date = new Date(Date.UTC(state.year, monthIndex, day, 12));
+  const moneyMatches = normalized.match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
+  const currentBalance = parseMoney(moneyMatches.at(-1) ?? null);
+  const previousBalance = state.previousBalance;
+  const amountDelta =
+    currentBalance !== null && previousBalance !== null ? currentBalance - previousBalance : parseMoney(moneyMatches.at(-2) ?? null) ?? 0;
+  if (currentBalance !== null) {
+    state.previousBalance = currentBalance;
+  }
+
+  const description = normalized
+    .replace(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}\s+/i, "")
+    .replace(/[0-9][0-9,]*\.\d{2}/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  const isOpeningBalance = /^BEGINNING BALANCE$/i.test(description);
+  if (isOpeningBalance) {
+    return null;
+  }
+
+  const descriptionLower = description.toLowerCase();
+  let type: TransactionType = amountDelta >= 0 ? "income" : "expense";
+  if (/transfer/.test(descriptionLower) && !/fee/.test(descriptionLower)) {
+    type = "transfer";
+  } else if (/fee|tax withheld|withheld tax|bills payment|payment|withdrawal|service charge/.test(descriptionLower)) {
+    type = "expense";
+  } else if (/interest earned/.test(descriptionLower)) {
+    type = "income";
+  }
+
+  const amount = Math.abs(amountDelta).toFixed(2);
+
+  return {
+    date: date.toISOString().slice(0, 10),
+    amount,
+    merchantRaw: description || normalized,
+    merchantClean: description || normalized,
+    description: normalized,
+    categoryName: guessBpiCategoryName(description || normalized, type),
+    accountName: state.accountName,
+    type,
+    rawPayload: {
+      bank: "BPI",
+      accountName: state.accountName,
+      statementStartDate: state.statementStartDate,
+      line: normalized,
+      balance: currentBalance,
+      amountDelta,
+    },
+  } satisfies ParsedImportRow;
+};
+
+const parseBpiImportText = (text: string) => {
+  const metadata = bpiStatementMetadata(text);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+
+  const startDate = metadata.startDate ? new Date(metadata.startDate) : null;
+  const endDate = metadata.endDate ? new Date(metadata.endDate) : null;
+  const openingBalance = metadata.openingBalance;
+  const endingBalance = metadata.endingBalance;
+
+  let year = startDate?.getUTCFullYear() ?? endDate?.getUTCFullYear() ?? new Date().getUTCFullYear();
+  let previousMonthIndex: number | null = startDate ? startDate.getUTCMonth() : null;
+  let previousBalance = openingBalance;
+  const state = {
+    year,
+    previousMonthIndex,
+    previousBalance,
+    accountName: metadata.accountName ?? "BPI",
+    statementStartDate: metadata.startDate,
+  };
+
+  const rows: ParsedImportRow[] = [];
+
+  if (openingBalance !== null && startDate) {
+    rows.push({
+      date: startDate.toISOString().slice(0, 10),
+      amount: openingBalance.toFixed(2),
+      merchantRaw: "Beginning balance",
+      merchantClean: "Beginning balance",
+      description: `Beginning balance for ${metadata.accountName}`,
+      categoryName: "Opening Balance",
+      accountName: metadata.accountName ?? "BPI",
+      type: "transfer",
+      rawPayload: {
+        bank: "BPI",
+        kind: "opening_balance",
+        accountName: metadata.accountName,
+        accountNumber: metadata.accountNumber,
+        openingBalance,
+        endingBalance,
+        statementStartDate: metadata.startDate,
+        statementEndDate: metadata.endDate,
+      },
+    });
+  }
+
+  for (const line of lines) {
+    const parsed = parseBpiTransactionLine(line, state);
+    year = state.year;
+    previousMonthIndex = state.previousMonthIndex;
+    previousBalance = state.previousBalance;
+    if (parsed) {
+      rows.push(parsed);
+    }
+  }
+
+  return {
+    metadata,
+    rows,
+  };
+};
+
+export const detectStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+  return bpiStatementMetadata(text);
 };
 
 const parseDelimitedText = (text: string, delimiter: string) => {
@@ -143,6 +371,11 @@ const parseHeuristicLines = (text: string) => {
 };
 
 export const parseImportText = (text: string, fileName: string, fileType: string): ParsedImportRow[] => {
+  const bpiParsed = parseBpiImportText(text);
+  if (bpiParsed) {
+    return bpiParsed.rows;
+  }
+
   const delimiter = delimiterForFile(fileType, fileName);
   const firstLine = text.split(/\r?\n/)[0] ?? "";
   const looksDelimited = /,|\t|;/.test(firstLine);

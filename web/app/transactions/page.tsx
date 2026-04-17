@@ -547,6 +547,10 @@ export default function TransactionsPage() {
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((transaction) => {
+      if (transaction.merchantRaw === "Beginning balance" || transaction.description === "Beginning balance") {
+        return false;
+      }
+
       const term = query.trim().toLowerCase();
       const matchesQuery =
         !term ||

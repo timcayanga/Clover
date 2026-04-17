@@ -405,7 +405,11 @@ export default function AccountsPage() {
   const selectedAccountTransactions = useMemo(
     () =>
       selectedAccount
-        ? transactions.filter((transaction) => transaction.accountId === selectedAccount.id && !transaction.isExcluded)
+        ? transactions.filter(
+            (transaction) =>
+              transaction.accountId === selectedAccount.id &&
+              (!transaction.isExcluded || transaction.merchantRaw === "Beginning balance")
+          )
         : [],
     [selectedAccount, transactions]
   );
@@ -432,6 +436,11 @@ export default function AccountsPage() {
       kind: transaction.type,
     }));
   }, [selectedAccount, selectedAccountTransactions]);
+
+  const openingBalanceEntry = useMemo(
+    () => selectedAccountTransactions.find((transaction) => transaction.merchantRaw === "Beginning balance") ?? null,
+    [selectedAccountTransactions]
+  );
 
   const refreshAll = async () => {
     if (!selectedWorkspaceId) return;
@@ -935,6 +944,19 @@ export default function AccountsPage() {
                 </button>
               </div>
             </section>
+
+            {openingBalanceEntry ? (
+              <section className="accounts-drawer__section">
+                <div className="accounts-drawer__section-head">
+                  <h5>Opening balance</h5>
+                  <ActionIcon name="history" />
+                </div>
+                <div className="accounts-drawer__note">
+                  <strong>{formatDate(openingBalanceEntry.date)}</strong>
+                  <span>{currencyFormatter.format(parseAmount(openingBalanceEntry.amount))}</span>
+                </div>
+              </section>
+            ) : null}
 
             <section className="accounts-drawer__section">
               <div className="accounts-drawer__section-head">

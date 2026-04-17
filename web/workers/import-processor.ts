@@ -101,7 +101,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
         merchantClean: row.merchantRaw ?? null,
         description: typeof row.rawPayload === "object" ? JSON.stringify(row.rawPayload) : null,
         isTransfer: row.type === "transfer",
-        isExcluded: false,
+        isExcluded: typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance",
       },
     });
 

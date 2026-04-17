@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportProgressModal } from "@/components/import-progress-modal";
+import { detectStatementMetadata } from "@/lib/import-parser";
 import { pdfjs } from "@/lib/pdfjs";
 
 type Workspace = {
@@ -117,6 +118,9 @@ type ProgressState = {
   statusLabel: string;
 };
 
+const accountKey = (name: string, institution: string | null) =>
+  `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
+
 export default function ImportsPage() {
   const router = useRouter();
   const [message, setMessage] = useState("Upload a PDF or CSV to begin.");
@@ -182,7 +186,44 @@ export default function ImportsPage() {
     void loadAccounts(selectedWorkspaceId);
   }, [selectedWorkspaceId]);
 
-  const ensureDefaultAccount = async (workspaceId: string) => {
+  const ensureStatementAccount = async (workspaceId: string, statementAccountName?: string | null, institution?: string | null) => {
+    if (statementAccountName) {
+      const key = accountKey(statementAccountName, institution ?? null);
+      const existing = accounts.find((account) => accountKey(account.name, account.institution) === key);
+      if (existing) {
+        setSelectedAccountId(existing.id);
+        return existing.id;
+      }
+
+      const response = await fetch("/api/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId,
+          name: statementAccountName,
+          institution: institution ?? null,
+          type: "bank",
+          currency: "PHP",
+          source: "upload",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to create an account for this statement.");
+      }
+
+      const data = await response.json();
+      const accountId = data.account?.id as string | undefined;
+
+      if (!accountId) {
+        throw new Error("The account for this statement was not created.");
+      }
+
+      setAccounts((current) => [...current, data.account]);
+      setSelectedAccountId(accountId);
+      return accountId;
+    }
+
     const preferredAccount = accounts.find((account) => account.type !== "cash" && account.type !== "other" && account.type !== "investment");
     if (preferredAccount) {
       return preferredAccount.id;
@@ -216,7 +257,7 @@ export default function ImportsPage() {
       throw new Error("Default account was not created.");
     }
 
-    setAccounts([data.account]);
+    setAccounts((current) => [...current, data.account]);
     setSelectedAccountId(accountId);
     return accountId;
   };
@@ -415,7 +456,6 @@ export default function ImportsPage() {
         detail: "Preparing upload...",
         statusLabel: "Uploading",
       });
-      const accountId = await ensureDefaultAccount(selectedWorkspaceId);
       setProgressState((current) =>
         current
           ? { ...current, progress: 10, detail: "Creating the import record...", statusLabel: "Uploading" }
@@ -454,6 +494,12 @@ export default function ImportsPage() {
           : current
       );
       const extractedText = await extractTextFromFile(file);
+      const detectedStatement = detectStatementMetadata(extractedText);
+      const accountId = await ensureStatementAccount(
+        selectedWorkspaceId,
+        detectedStatement?.accountName ?? null,
+        detectedStatement?.institution ?? null
+      );
       setProgressState((current) =>
         current
           ? { ...current, progress: 82, detail: "Sending the parsed text to the import queue...", statusLabel: "Parsing" }
