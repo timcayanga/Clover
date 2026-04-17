@@ -11,6 +11,7 @@ const patchSchema = z.object({
   isExcluded: z.boolean().optional(),
   isTransfer: z.boolean().optional(),
   merchantClean: z.string().nullable().optional(),
+  description: z.string().nullable().optional(),
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ transactionId: string }> }) {
@@ -36,6 +37,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         isExcluded: payload.isExcluded,
         isTransfer: payload.isTransfer,
         merchantClean: payload.merchantClean,
+        description: payload.description,
       },
     });
 
