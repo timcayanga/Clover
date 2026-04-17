@@ -55,9 +55,8 @@ type ManualTransactionForm = {
   accountId: string;
   categoryId: string;
   amount: string;
-  type: "income" | "expense" | "transfer";
+  type: "debit" | "credit";
   merchantRaw: string;
-  merchantClean: string;
   description: string;
 };
 
@@ -91,16 +90,18 @@ const currencyFormatter = new Intl.NumberFormat("en-PH", {
 
 const todayIso = new Date().toISOString().slice(0, 10);
 
-const createEmptyManualForm = (accountId = ""): ManualTransactionForm => ({
+const createEmptyManualForm = (accountId = "", categoryId = ""): ManualTransactionForm => ({
   date: todayIso,
   accountId,
-  categoryId: "",
+  categoryId,
   amount: "",
-  type: "expense",
+  type: "debit",
   merchantRaw: "",
-  merchantClean: "",
   description: "",
 });
+
+const getOtherCategoryId = (categoryList: Category[]) =>
+  categoryList.find((category) => category.name.trim().toLowerCase() === "other")?.id ?? "";
 
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", {
@@ -732,7 +733,7 @@ export default function TransactionsPage() {
 
     try {
       const accountId = await ensureDefaultAccount(selectedWorkspaceId);
-      setManualForm(createEmptyManualForm(accountId));
+      setManualForm(createEmptyManualForm(accountId, getOtherCategoryId(categories)));
       setManualOpen(true);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to prepare transaction form.");
@@ -750,6 +751,7 @@ export default function TransactionsPage() {
     setIsSaving(true);
     try {
       const accountId = manualForm.accountId || (await ensureDefaultAccount(selectedWorkspaceId));
+      const categoryId = manualForm.categoryId || getOtherCategoryId(categories) || undefined;
 
       const response = await fetch("/api/transactions", {
         method: "POST",
@@ -757,15 +759,15 @@ export default function TransactionsPage() {
         body: JSON.stringify({
           workspaceId: selectedWorkspaceId,
           accountId,
-          categoryId: manualForm.categoryId || null,
+          categoryId: categoryId ?? null,
           date: manualForm.date,
           amount: manualForm.amount,
           currency: "PHP",
-          type: manualForm.type,
+          type: manualForm.type === "credit" ? "income" : "expense",
           merchantRaw: manualForm.merchantRaw,
-          merchantClean: manualForm.merchantClean.trim() || null,
+          merchantClean: null,
           description: manualForm.description.trim() || null,
-          isTransfer: manualForm.type === "transfer",
+          isTransfer: false,
           isExcluded: false,
         }),
       });
@@ -1669,7 +1671,6 @@ export default function TransactionsPage() {
                     value={manualForm.categoryId}
                     onChange={(event) => setManualForm((current) => ({ ...current, categoryId: event.target.value }))}
                   >
-                    <option value="">Unassigned</option>
                     {categories.map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.name}
@@ -1699,18 +1700,9 @@ export default function TransactionsPage() {
                       }))
                     }
                   >
-                    <option value="expense">Expense</option>
-                    <option value="income">Income</option>
-                    <option value="transfer">Transfer</option>
+                    <option value="debit">Debit</option>
+                    <option value="credit">Credit</option>
                   </select>
-                </label>
-                <label className="span-2">
-                  Merchant alias
-                  <input
-                    value={manualForm.merchantClean}
-                    onChange={(event) => setManualForm((current) => ({ ...current, merchantClean: event.target.value }))}
-                    placeholder="Optional cleaned-up merchant name"
-                  />
                 </label>
                 <label className="span-2">
                   Notes

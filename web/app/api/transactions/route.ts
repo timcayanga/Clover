@@ -76,11 +76,23 @@ export async function POST(request: Request) {
 
     await assertWorkspaceAccess(userId, payload.workspaceId);
 
+    const resolvedCategoryId =
+      payload.categoryId ??
+      (
+        await prisma.category.findFirst({
+          where: {
+            workspaceId: payload.workspaceId,
+            name: "Other",
+          },
+        })
+      )?.id ??
+      null;
+
     const transaction = await prisma.transaction.create({
       data: {
         workspaceId: payload.workspaceId,
         accountId: payload.accountId,
-        categoryId: payload.categoryId ?? null,
+        categoryId: resolvedCategoryId,
         date: new Date(payload.date),
         amount: payload.amount.toString(),
         currency: payload.currency.toUpperCase(),
@@ -93,9 +105,9 @@ export async function POST(request: Request) {
       },
     });
 
-    if (payload.categoryId) {
+    if (resolvedCategoryId) {
       const category = await prisma.category.findUnique({
-        where: { id: payload.categoryId },
+        where: { id: resolvedCategoryId },
       });
 
       if (category) {
