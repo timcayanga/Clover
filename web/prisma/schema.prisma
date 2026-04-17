@@ -34,6 +34,12 @@ enum ImportFileStatus {
   deleted
 }
 
+enum TrainingSignalSource {
+  import_confirmation
+  manual_recategorization
+  training_upload
+}
+
 model User {
   id            String      @id @default(cuid())
   clerkUserId   String      @unique
@@ -57,6 +63,8 @@ model Workspace {
   transactions  Transaction[]
   importFiles   ImportFile[]
   auditLogs     AuditLog[]
+  statementTemplates StatementTemplate[]
+  trainingSignals TrainingSignal[]
 
   @@index([userId])
 }
@@ -88,6 +96,7 @@ model Category {
   updatedAt        DateTime    @updatedAt
   workspace        Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   transactions     Transaction[]
+  trainingSignals  TrainingSignal[]
 
   @@index([workspaceId])
 }
@@ -111,6 +120,7 @@ model Transaction {
   workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   account        Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
   category       Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  trainingSignals TrainingSignal[]
 
   @@index([workspaceId])
   @@index([accountId])
@@ -131,6 +141,7 @@ model ImportFile {
   updatedAt     DateTime         @updatedAt
   workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   parsedRows    ParsedTransaction[]
+  trainingSignals TrainingSignal[]
 
   @@index([workspaceId])
   @@index([status])
@@ -140,18 +151,71 @@ model ParsedTransaction {
   id             String      @id @default(cuid())
   importFileId   String
   workspaceId    String
+  institution    String?
+  accountNumber  String?
   accountName    String?
   date           DateTime?
   amount         Decimal?    @db.Decimal(18, 2)
   merchantRaw    String?
+  merchantClean  String?
   type           TransactionType?
   categoryName   String?
+  confidence     Int         @default(0)
+  categoryReason String?
+  parserVersion  String      @default("v1")
+  statementFingerprint String?
   rawPayload     Json?
   createdAt      DateTime    @default(now())
   importFile     ImportFile   @relation(fields: [importFileId], references: [id], onDelete: Cascade)
 
   @@index([workspaceId])
   @@index([importFileId])
+  @@index([statementFingerprint])
+}
+
+model StatementTemplate {
+  id            String   @id @default(cuid())
+  workspaceId   String
+  fingerprint   String
+  institution   String?
+  accountNumber String?
+  accountName   String?
+  parserVersion String   @default("v1")
+  exampleCount  Int      @default(1)
+  lastSeenAt    DateTime @default(now())
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, fingerprint])
+  @@index([workspaceId])
+}
+
+model TrainingSignal {
+  id            String               @id @default(cuid())
+  workspaceId   String
+  transactionId String?
+  importFileId  String?
+  source        TrainingSignalSource
+  merchantKey   String
+  merchantTokens Json?
+  categoryId    String
+  categoryName  String?
+  type          TransactionType
+  confidence    Int                  @default(100)
+  notes         String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  workspace     Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transaction   Transaction?         @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  importFile    ImportFile?          @relation(fields: [importFileId], references: [id], onDelete: SetNull)
+  category      Category             @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@index([transactionId])
+  @@index([importFileId])
+  @@index([merchantKey])
 }
 
 model AuditLog {

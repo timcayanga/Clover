@@ -31,11 +31,17 @@ type ImportFile = {
 
 type ParsedRow = {
   id: string;
+  institution: string | null;
+  accountNumber: string | null;
   accountName: string | null;
   date: string | null;
   amount: string | null;
   merchantRaw: string | null;
+  merchantClean: string | null;
   categoryName: string | null;
+  confidence: number | null;
+  categoryReason: string | null;
+  statementFingerprint: string | null;
   type: "income" | "expense" | "transfer" | null;
 };
 
@@ -655,6 +661,8 @@ export default function ImportsPage() {
                     <th>Merchant</th>
                     <th>Amount</th>
                     <th>Category</th>
+                    <th>Confidence</th>
+                    <th>Note</th>
                     <th>Type</th>
                   </tr>
                 </thead>
@@ -662,9 +670,11 @@ export default function ImportsPage() {
                   {previewRows.map((row, index) => (
                     <tr key={`${row.id}-${index}`}>
                       <td>{row.date || "—"}</td>
-                      <td>{row.merchantRaw || "—"}</td>
+                      <td>{row.merchantClean || row.merchantRaw || "—"}</td>
                       <td>{row.amount || "—"}</td>
                       <td>{row.categoryName || "—"}</td>
+                      <td>{typeof row.confidence === "number" ? `${row.confidence}%` : "—"}</td>
+                      <td>{row.categoryReason || "—"}</td>
                       <td>{row.type || "—"}</td>
                     </tr>
                   ))}

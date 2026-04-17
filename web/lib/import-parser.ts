@@ -84,6 +84,74 @@ const parseMoney = (value?: string | null) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const institutionPatterns: Array<{ name: string; pattern: RegExp }> = [
+  { name: "BPI", pattern: /\b(BANK OF THE PHILIPPINE ISLANDS|BPI)\b/i },
+  { name: "BDO", pattern: /\b(BDO|BANCO DE ORO)\b/i },
+  { name: "Metrobank", pattern: /\b(METROBANK|METROPOLITAN BANK)\b/i },
+  { name: "Security Bank", pattern: /\bSECURITY BANK\b/i },
+  { name: "EastWest", pattern: /\b(EASTWEST|EAST WEST)\b/i },
+  { name: "RCBC", pattern: /\bRCBC\b/i },
+  { name: "UnionBank", pattern: /\bUNIONBANK\b/i },
+  { name: "Landbank", pattern: /\bLANDBANK\b/i },
+  { name: "Chinabank", pattern: /\bCHINABANK\b/i },
+  { name: "Maya", pattern: /\bMAYA\b/i },
+  { name: "GCash", pattern: /\bGCASH\b/i },
+  { name: "Wise", pattern: /\bWISE\b/i },
+  { name: "PayPal", pattern: /\bPAYPAL\b/i },
+];
+
+const detectInstitutionFromText = (text: string) => {
+  for (const institution of institutionPatterns) {
+    if (institution.pattern.test(text)) {
+      return institution.name;
+    }
+  }
+
+  return null;
+};
+
+const detectAccountNumberFromText = (text: string) => {
+  const labeledAccountSection =
+    text.match(/\b(?:ACCOUNT\s*(?:NO|NUMBER|#)?|ACCT\s*(?:NO|NUMBER|#)?|A\/C\s*(?:NO|NUMBER|#)?|CARD\s*(?:NO|NUMBER|#)?|NO)\s*[:\-]?\s*([0-9\s-]{6,})/i)?.[1] ??
+    "";
+  const fallbackAccountSection = text.match(/\b\d{4}[-\s]?\d{4}[-\s]?\d{2,4}\b/)?.[0] ?? "";
+  const accountSection = labeledAccountSection || fallbackAccountSection;
+  const accountNumber = accountSection.replace(/\D/g, "").slice(0, 16) || null;
+  return accountNumber;
+};
+
+const detectStatementDatesFromText = (text: string) => {
+  const rangeMatch =
+    text.match(/(?:STATEMENT\s*PERIOD|PERIOD\s*COVERED|FROM)\s*[:\-]?\s*(.+?)\s*(?:TO|THRU|THROUGH|[-–—])\s*(.+?)(?:\s{2,}|$)/i) ??
+    text.match(/(?:START\s*DATE|BEGINNING\s*DATE)\s*[:\-]?\s*(.+?)\s*(?:END\s*DATE|ENDING\s*DATE)\s*[:\-]?\s*(.+?)(?:\s{2,}|$)/i);
+
+  const parseLooseDate = (value?: string | null) => {
+    if (!value) return null;
+    const normalized = value.replace(/\s+/g, " ").trim();
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  return {
+    startDate: parseLooseDate(rangeMatch?.[1]),
+    endDate: parseLooseDate(rangeMatch?.[2]),
+  };
+};
+
+const detectBalanceFromText = (text: string) => {
+  const openingBalance =
+    parseMoney(text.match(/(?:BEGINNING|OPENING|STARTING)\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
+    null;
+  const endingBalance =
+    parseMoney(text.match(/(?:ENDING|CLOSING|BALANCE\s+THIS\s+STATEMENT)\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
+    null;
+
+  return {
+    openingBalance,
+    endingBalance,
+  };
+};
+
 const parseBpiDate = (value?: string | null) => {
   if (!value) return null;
   const parsed = new Date(value);
@@ -295,7 +363,37 @@ const parseBpiImportText = (text: string) => {
 };
 
 export const detectStatementMetadata = (text: string): DetectedStatementMetadata | null => {
-  return bpiStatementMetadata(text);
+  const bpiMetadata = bpiStatementMetadata(text);
+  if (bpiMetadata) {
+    return bpiMetadata;
+  }
+
+  const normalized = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+  const institution = detectInstitutionFromText(normalized);
+  const accountNumber = detectAccountNumberFromText(normalized);
+  const { startDate, endDate } = detectStatementDatesFromText(normalized);
+  const { openingBalance, endingBalance } = detectBalanceFromText(normalized);
+  const accountName = institution && accountNumber
+    ? `${institution} ${accountNumber.slice(-4)}`
+    : institution
+      ? institution
+      : accountNumber
+        ? `Account ${accountNumber.slice(-4)}`
+        : null;
+
+  if (!institution && !accountNumber && !startDate && !endDate && openingBalance === null && endingBalance === null) {
+    return null;
+  }
+
+  return {
+    institution,
+    accountNumber,
+    accountName,
+    openingBalance,
+    endingBalance,
+    startDate: startDate ? startDate.toISOString() : null,
+    endDate: endDate ? endDate.toISOString() : null,
+  };
 };
 
 const parseDelimitedText = (text: string, delimiter: string) => {

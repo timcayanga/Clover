@@ -1,12 +1,15 @@
-import { Prisma, TransactionType } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseAmountValue, parseDateValue, parseImportText } from "@/lib/import-parser";
-
-const defaultCategoryForType = (type: TransactionType) => {
-  if (type === "income") return "Income";
-  if (type === "transfer") return "Transfers";
-  return "Other";
-};
+import {
+  DATA_ENGINE_VERSION,
+  buildStatementFingerprint,
+  detectStatementMetadataFromText,
+  enrichParsedRowsWithTraining,
+  defaultCategoryForType,
+  recordTrainingSignal,
+  upsertStatementTemplate,
+} from "@/lib/data-engine";
 
 export const processImportFileText = async (importFileId: string, text: string) => {
   const importFile = await prisma.importFile.findUnique({
@@ -17,7 +20,19 @@ export const processImportFileText = async (importFileId: string, text: string) 
     throw new Error("Import file not found");
   }
 
-  const rows = parseImportText(text, importFile.fileName, importFile.fileType);
+  const parsedRows = parseImportText(text, importFile.fileName, importFile.fileType);
+  const metadata = detectStatementMetadataFromText(text);
+  const statementFingerprint = buildStatementFingerprint(text, metadata, importFile.fileName, importFile.fileType);
+  const template = await upsertStatementTemplate({
+    workspaceId: importFile.workspaceId,
+    fingerprint: statementFingerprint,
+    metadata,
+  });
+
+  const rows = await enrichParsedRowsWithTraining({
+    workspaceId: importFile.workspaceId,
+    rows: parsedRows,
+  });
 
   await prisma.parsedTransaction.deleteMany({
     where: { importFileId },
@@ -27,12 +42,19 @@ export const processImportFileText = async (importFileId: string, text: string) 
     data: rows.map((row) => ({
       importFileId,
       workspaceId: importFile.workspaceId,
+      institution: metadata.institution,
+      accountNumber: metadata.accountNumber,
       accountName: row.accountName ?? null,
       date: parseDateValue(row.date ?? null),
       amount: parseAmountValue(row.amount ?? null),
       merchantRaw: row.merchantRaw ?? null,
+      merchantClean: row.merchantClean ?? row.merchantRaw ?? null,
       type: row.type ?? "expense",
       categoryName: row.categoryName ?? defaultCategoryForType(row.type ?? "expense"),
+      confidence: row.confidence ?? 0,
+      categoryReason: row.categoryReason ?? null,
+      parserVersion: row.parserVersion ?? DATA_ENGINE_VERSION,
+      statementFingerprint: template.fingerprint,
       rawPayload: (row.rawPayload ?? {}) as Prisma.InputJsonValue,
     })),
   });
@@ -98,7 +120,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
         currency: "PHP",
         type: row.type ?? "expense",
         merchantRaw: row.merchantRaw ?? "Imported transaction",
-        merchantClean: row.merchantRaw ?? null,
+        merchantClean: row.merchantClean ?? row.merchantRaw ?? null,
         description: typeof row.rawPayload === "object" ? JSON.stringify(row.rawPayload) : null,
         isTransfer: row.type === "transfer",
         isExcluded: typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance",
@@ -106,6 +128,19 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     });
 
     transactions.push(transaction);
+
+    await recordTrainingSignal({
+      workspaceId: importFile.workspaceId,
+      importFileId,
+      transactionId: transaction.id,
+      merchantText: row.merchantClean || row.merchantRaw || "Imported transaction",
+      categoryId,
+      categoryName,
+      type: row.type ?? "expense",
+      source: "import_confirmation",
+      confidence: row.confidence ?? 100,
+      notes: row.categoryReason ?? null,
+    });
   }
 
   await prisma.importFile.update({

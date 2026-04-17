@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { recordTrainingSignal } from "@/lib/data-engine";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
 
     await assertWorkspaceAccess(userId, transaction.workspaceId);
 
+    const categoryChanged =
+      payload.categoryId !== undefined &&
+      payload.categoryId !== transaction.categoryId &&
+      Boolean(payload.categoryId);
+
     const updated = await prisma.transaction.update({
       where: { id: transactionId },
       data: {
@@ -50,6 +56,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         amount: payload.amount === undefined ? undefined : payload.amount.toString(),
       },
     });
+
+    if (categoryChanged && payload.categoryId) {
+      const category = await prisma.category.findUnique({
+        where: { id: payload.categoryId },
+      });
+
+      if (category) {
+        await recordTrainingSignal({
+          workspaceId: transaction.workspaceId,
+          transactionId: transaction.id,
+          merchantText: payload.merchantClean || payload.merchantRaw || transaction.merchantClean || transaction.merchantRaw,
+          categoryId: category.id,
+          categoryName: category.name,
+          type: payload.type ?? transaction.type,
+          source: "manual_recategorization",
+          confidence: 100,
+          notes: "Manual category change from the transaction editor.",
+        });
+      }
+    }
 
     return NextResponse.json({ transaction: updated });
   } catch {
