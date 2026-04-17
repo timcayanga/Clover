@@ -2,6 +2,7 @@
 
 import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { PulseShell } from "@/components/pulse-shell";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 
 type Workspace = {
@@ -420,7 +421,13 @@ export default function ImportsPage() {
           : "status";
 
   return (
-    <main className="page dashboard">
+    <PulseShell
+      active="transactions"
+      title="Import statements"
+      kicker="Import workflow"
+      subtitle="Upload PDF or CSV files, parse them into staging rows, and confirm when they’re ready."
+      showTopbar={false}
+    >
       <section className="panel">
         <h2>Import statements</h2>
         <p className="panel-muted">{message}</p>
@@ -543,6 +550,6 @@ export default function ImportsPage() {
           </div>
         </div>
       </section>
-    </main>
+    </PulseShell>
   );
 }

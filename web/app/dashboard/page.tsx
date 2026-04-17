@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { syncClerkUser } from "@/lib/clerk";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
+import { PulseShell } from "@/components/pulse-shell";
 
 export const dynamic = "force-dynamic";
 
@@ -122,142 +123,153 @@ export default async function DashboardPage() {
   );
 
   return (
-    <main className="page dashboard">
-      <header className="nav">
-        <div className="brand">
-          <div className="brand-mark">CL</div>
-          <div>
-            <div>Dashboard</div>
-            <small className="panel-muted">Workspace overview for {selectedWorkspace.name}</small>
-          </div>
-        </div>
-        <div className="actions">
+    <PulseShell
+      active="overview"
+      kicker="Workspace direction"
+      title={`A calm, glass-like workspace for ${selectedWorkspace.name}.`}
+      subtitle="Showing live data from the seeded workspace, imported transactions, and queued uploads."
+      showTopbar={false}
+      actions={
+        <>
           <Link className="pill-link" href="/imports">
             Imports
           </Link>
           <Link className="pill-link" href="/transactions">
             Transactions
           </Link>
+        </>
+      }
+    >
+      <section className="hero">
+        <div className="hero-copy">
+          <span className="pill pill-accent">Live workspace overview</span>
+          <h3>A calm, glass-like workspace for transactions, source tracking, and insight.</h3>
+          <p>
+            Transactions, analytics, and source-aware imports stay in one place so you can review,
+            learn, and decide faster.
+          </p>
+          <div className="hero-actions">
+            <Link className="button button-primary" href="/transactions">
+              Add transaction
+            </Link>
+            <Link className="button button-secondary" href="/dashboard#analytics">
+              See analytics
+            </Link>
+          </div>
         </div>
-      </header>
 
-      <section className="dashboard-shell">
-        <div className="dashboard-grid">
-          <article className="panel wide">
-            <div className="panel-header">
-              <div>
-                <h2>Calm, current money view</h2>
-                <p className="panel-muted">
-                  Showing live data from your seeded workspace and imported transactions.
-                </p>
-              </div>
-              <span className="status status--done">Live</span>
-            </div>
+        <div className="hero-metrics">
+          <article className="metric">
+            <span>Income</span>
+            <strong>{currencyFormatter.format(summary.income)}</strong>
+            <small>{pendingImports} item{pendingImports === 1 ? "" : "s"} need review</small>
           </article>
-
-          <article className="panel third">
-            <h3>Workspaces</h3>
-            <strong className="panel-value">{workspaces.length}</strong>
-            <p className="panel-muted">Personal and future shared workspaces are supported.</p>
+          <article className="metric">
+            <span>Expenses</span>
+            <strong>{currencyFormatter.format(Math.abs(summary.expense))}</strong>
+            <small>Tracked by category and source</small>
           </article>
-
-          <article className="panel third">
-            <h3>Transactions</h3>
-            <strong className="panel-value">{totalTransactions}</strong>
-            <p className="panel-muted">{recentTransactions.length} recent rows in the current view.</p>
-          </article>
-
-          <article className="panel third">
-            <h3>Pending imports</h3>
-            <strong className="panel-value">{pendingImports}</strong>
-            <p className="panel-muted">Queued uploads show their live worker status here.</p>
-          </article>
-
-          <article className="panel half">
-            <h3>Last 30 days</h3>
-            <div className="metric-grid" style={{ marginTop: 16 }}>
-              <div className="metric compact">
-                <span>Income</span>
-                <strong>{currencyFormatter.format(summary.income)}</strong>
-              </div>
-              <div className="metric compact">
-                <span>Expenses</span>
-                <strong>{currencyFormatter.format(Math.abs(summary.expense))}</strong>
-              </div>
-              <div className="metric compact">
-                <span>Transfers</span>
-                <strong>{currencyFormatter.format(Math.abs(summary.transfer))}</strong>
-              </div>
-            </div>
-          </article>
-
-          <article className="panel half">
-            <h3>Top categories</h3>
-            <div className="list-stack" style={{ marginTop: 16 }}>
-              {topCategories.length > 0 ? (
-                topCategories.map(([name, value]) => (
-                  <div key={name} className="list-row">
-                    <div>
-                      <strong>{name}</strong>
-                      <div className="panel-muted">Most active category</div>
-                    </div>
-                    <span>{currencyFormatter.format(value)}</span>
-                  </div>
-                ))
-              ) : (
-                <p className="panel-muted">No imported spend yet.</p>
-              )}
-            </div>
-          </article>
-
-          <article className="panel wide">
-            <div className="panel-header">
-              <h3>Recent imports</h3>
-              <Link className="pill-link" href="/imports">
-                Open import flow
-              </Link>
-            </div>
-            <div className="list-stack" style={{ marginTop: 16 }}>
-              {latestImport ? (
-                <div className="list-row">
-                  <div>
-                    <strong>{latestImport.fileName}</strong>
-                    <div className="panel-muted">{latestImport.workspaceName}</div>
-                  </div>
-                  <span className={`status status--${latestImport.status}`}> {latestImport.status}</span>
-                </div>
-              ) : (
-                <p className="panel-muted">No imports yet.</p>
-              )}
-              <div className="panel-muted">Import files processed: {totalImports}</div>
-            </div>
-          </article>
-
-          <article className="panel wide">
-            <div className="panel-header">
-              <h3>Recent transactions</h3>
-              <Link className="pill-link" href="/transactions">
-                Review all
-              </Link>
-            </div>
-            <div className="list-stack" style={{ marginTop: 16 }}>
-              {recentTransactions.map((transaction) => (
-                <div key={transaction.id} className="list-row">
-                  <div>
-                    <strong>{transaction.merchantClean || transaction.merchantRaw}</strong>
-                    <div className="panel-muted">
-                      {transaction.account.name}
-                      {transaction.category?.name ? ` · ${transaction.category.name}` : ""}
-                    </div>
-                  </div>
-                  <span>{currencyFormatter.format(Number(transaction.amount))}</span>
-                </div>
-              ))}
-              {recentTransactions.length === 0 ? <p className="panel-muted">No transactions yet.</p> : null}
-            </div>
+          <article className="metric">
+            <span>Financial</span>
+            <strong>{currencyFormatter.format(summary.income - Math.abs(summary.expense))}</strong>
+            <small>{totalAccounts} account{totalAccounts === 1 ? "" : "s"} connected</small>
           </article>
         </div>
       </section>
-    </main>
+
+      <section className="feature-grid" id="analytics">
+        <article className="feature-card glass">
+          <p className="eyebrow">Transactions</p>
+          <h3>Review, edit, and clean up every transaction.</h3>
+          <p>{recentTransactions.length} recent rows are available in the current workspace view.</p>
+        </article>
+        <article className="feature-card glass">
+          <p className="eyebrow">Analytics</p>
+          <h3>See spending, saving, and source patterns at a glance.</h3>
+          <p>Trends, category mix, source mix, and recurring behavior are all reflected on the dashboard.</p>
+        </article>
+        <article className="feature-card glass">
+          <p className="eyebrow">Insights</p>
+          <h3>Get practical tips from your own behavior.</h3>
+          <p>
+            Your top category is {topCategories[0]?.[0] ?? "still forming"}, and the current workspace is
+            ready for richer review workflows.
+          </p>
+        </article>
+        <article className="feature-card glass">
+          <p className="eyebrow">Imports</p>
+          <h3>Bring in bank statements and receipts in batches.</h3>
+          <p>{totalImports} import file{totalImports === 1 ? "" : "s"} have been processed so far.</p>
+        </article>
+      </section>
+
+      <section className="overview-insight-grid">
+        <article className="glass insight-card overview-panel overview-panel--large">
+          <p className="eyebrow">Insights</p>
+          <h4>What stands out right now</h4>
+          <div className="overview-panel__list overview-panel__list--wide">
+            <div className="overview-panel__item">
+              <strong>Workspace</strong>
+              <span>{selectedWorkspace.name}</span>
+            </div>
+            <div className="overview-panel__item">
+              <strong>Import health</strong>
+              <span>
+                {pendingImports > 0 ? `${pendingImports} queued or processing import(s)` : "No imports in progress"}
+              </span>
+            </div>
+            <div className="overview-panel__item">
+              <strong>Top category</strong>
+              <span>{topCategories[0] ? `${topCategories[0][0]} at ${currencyFormatter.format(topCategories[0][1])}` : "No imported spend yet"}</span>
+            </div>
+          </div>
+        </article>
+        <article className="glass insight-card overview-panel">
+          <p className="eyebrow">Tips</p>
+          <h4>Small moves that could help</h4>
+          <div className="overview-panel__list">
+            <div className="overview-panel__item">
+              <strong>Keep imports tidy</strong>
+              <span>Source tags and category edits keep the dashboard readable.</span>
+            </div>
+            <div className="overview-panel__item">
+              <strong>Watch category drift</strong>
+              <span>A small change in dining or transport can shift the overall picture quickly.</span>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section className="overview-activity-grid">
+        <article className="glass insight-card overview-panel overview-panel--full">
+          <div className="overview-panel__head">
+            <div>
+              <p className="eyebrow">Activity</p>
+              <h4>Recent imports and transactions</h4>
+            </div>
+          </div>
+          <div className="overview-activity-list">
+            {latestImport ? (
+              <div className="overview-panel__item">
+                <strong>{latestImport.fileName}</strong>
+                <span>
+                  {latestImport.workspaceName} · <span className={`status status--${latestImport.status}`}>{latestImport.status}</span>
+                </span>
+              </div>
+            ) : null}
+            {recentTransactions.slice(0, 4).map((transaction) => (
+              <div key={transaction.id} className="overview-panel__item">
+                <strong>{transaction.merchantClean || transaction.merchantRaw}</strong>
+                <span>
+                  {transaction.account.name}
+                  {transaction.category?.name ? ` · ${transaction.category.name}` : ""} ·{" "}
+                  {currencyFormatter.format(Number(transaction.amount))}
+                </span>
+              </div>
+            ))}
+          </div>
+        </article>
+      </section>
+    </PulseShell>
   );
 }

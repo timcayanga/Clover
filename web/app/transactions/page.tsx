@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { PulseShell } from "@/components/pulse-shell";
 
 type Workspace = {
   id: string;
@@ -185,25 +186,22 @@ export default function TransactionsPage() {
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
 
   return (
-    <main className="page dashboard">
-      <header className="nav">
-        <div className="brand">
-          <div className="brand-mark">CL</div>
-          <div>
-            <div>Transactions</div>
-            <small className="panel-muted">PostgreSQL-backed review and edits</small>
-          </div>
-        </div>
-        <div className="actions">
-          <Link className="button button-secondary" href="/imports">
+    <PulseShell
+      active="transactions"
+      title="Transactions"
+      kicker="Review and edit"
+      subtitle="PostgreSQL-backed review, edits, and workspace-level filtering."
+      actions={
+        <>
+          <Link className="pill-link" href="/imports">
             Imports
           </Link>
-          <Link className="button button-secondary" href="/">
+          <Link className="pill-link" href="/">
             Home
           </Link>
-        </div>
-      </header>
-
+        </>
+      }
+    >
       <section className="panel">
         <h2>Transaction review</h2>
         <p className="panel-muted">{message}</p>
@@ -403,6 +401,6 @@ export default function TransactionsPage() {
           </table>
         </div>
       </section>
-    </main>
+    </PulseShell>
   );
 }
