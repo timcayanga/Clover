@@ -41,14 +41,22 @@ enum TrainingSignalSource {
   manual_transaction_creation
 }
 
+enum PlanTier {
+  free
+  pro
+}
+
 model User {
-  id            String      @id @default(cuid())
-  clerkUserId   String      @unique
-  email         String      @unique
-  verified      Boolean     @default(false)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  workspaces    Workspace[]
+  id                    String      @id @default(cuid())
+  clerkUserId           String      @unique
+  email                 String      @unique
+  verified              Boolean     @default(false)
+  planTier              PlanTier    @default(free)
+  primaryGoal           String?
+  onboardingCompletedAt DateTime?
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  workspaces            Workspace[]
 }
 
 model Workspace {

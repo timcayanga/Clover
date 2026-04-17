@@ -24,11 +24,16 @@ async function main() {
     update: {
       email: "demo@finance.local",
       verified: true,
+      primaryGoal: "track_spending",
+      onboardingCompletedAt: new Date(),
     },
     create: {
       clerkUserId: "seed-demo-user",
       email: "demo@finance.local",
       verified: true,
+      planTier: "free",
+      primaryGoal: "track_spending",
+      onboardingCompletedAt: new Date(),
     },
   });
 

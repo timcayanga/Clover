@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportFilesModal } from "@/components/import-files-modal";
+import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 
 type Workspace = {
   id: string;
@@ -366,6 +367,7 @@ function ActionIcon({
 }
 
 export default function TransactionsPage() {
+  const onboardingStatus = useOnboardingAccess();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
@@ -399,6 +401,20 @@ export default function TransactionsPage() {
   const [bulkEditForm, setBulkEditForm] = useState<BulkEditForm>(createEmptyBulkEditForm());
   const [manualForm, setManualForm] = useState<ManualTransactionForm>(createEmptyManualForm());
   const [isSaving, setIsSaving] = useState(false);
+
+  if (onboardingStatus !== "ready") {
+    return (
+      <CloverShell
+        active="transactions"
+        title="Checking your setup..."
+        kicker="One moment"
+        subtitle="We’re confirming your onboarding status before opening Transactions."
+        showTopbar={false}
+      >
+        <section className="empty-state">Checking your setup...</section>
+      </CloverShell>
+    );
+  }
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
 

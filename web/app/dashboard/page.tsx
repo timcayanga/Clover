@@ -2,9 +2,9 @@ import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { syncClerkUser } from "@/lib/clerk";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
+import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const dynamic = "force-dynamic";
 
@@ -21,15 +21,10 @@ export default async function DashboardPage() {
     redirect("/sign-in");
   }
 
-  const clerkUser = await syncClerkUser(userId);
-  const user = await prisma.user.upsert({
-    where: { clerkUserId: clerkUser.clerkUserId },
-    update: {
-      email: clerkUser.email,
-      verified: clerkUser.verified,
-    },
-    create: clerkUser,
-  });
+  const user = await getOrCreateCurrentUser(userId);
+  if (!hasCompletedOnboarding(user)) {
+    redirect("/onboarding");
+  }
 
   const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
   await seedWorkspaceDefaults(starterWorkspace.id);

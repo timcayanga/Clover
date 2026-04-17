@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 
 type Account = {
   id: string;
@@ -47,12 +48,27 @@ const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
 export default function AccountDetailPage() {
   const router = useRouter();
+  const onboardingStatus = useOnboardingAccess();
   const params = useParams<{ accountId: string }>();
   const accountId = params.accountId;
 
   const [account, setAccount] = useState<Account | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [message, setMessage] = useState("Loading account history...");
+
+  if (onboardingStatus !== "ready") {
+    return (
+      <CloverShell
+        active="accounts"
+        title="Checking your setup..."
+        kicker="One moment"
+        subtitle="We’re confirming your onboarding status before opening this account."
+        showTopbar={false}
+      >
+        <section className="empty-state">Checking your setup...</section>
+      </CloverShell>
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;

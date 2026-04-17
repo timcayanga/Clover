@@ -7,6 +7,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { ImportProgressModal } from "@/components/import-progress-modal";
 import { detectStatementMetadata } from "@/lib/import-parser";
 import { pdfjs } from "@/lib/pdfjs";
+import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 
 type Workspace = {
   id: string;
@@ -135,6 +136,7 @@ const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
 
 export default function ImportsPage() {
   const router = useRouter();
+  const onboardingStatus = useOnboardingAccess();
   const [message, setMessage] = useState("Upload a PDF or CSV to begin.");
   const [isUploading, setIsUploading] = useState(false);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -148,6 +150,20 @@ export default function ImportsPage() {
   const [currentJobId, setCurrentJobId] = useState<string>("");
   const [progressState, setProgressState] = useState<ProgressState | null>(null);
   const [autoReturnToTransactions, setAutoReturnToTransactions] = useState(false);
+
+  if (onboardingStatus !== "ready") {
+    return (
+      <CloverShell
+        active="overview"
+        title="Checking your setup..."
+        kicker="One moment"
+        subtitle="We’re confirming your onboarding status before opening Imports."
+        showTopbar={false}
+      >
+        <section className="empty-state">Checking your setup...</section>
+      </CloverShell>
+    );
+  }
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,

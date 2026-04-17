@@ -1,4 +1,7 @@
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 type FieldKind = "text" | "select" | "textarea" | "toggle";
 
@@ -177,7 +180,17 @@ function renderField(field: SettingField) {
   );
 }
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const { userId } = await auth();
+  if (!userId) {
+    redirect("/sign-in");
+  }
+
+  const user = await getOrCreateCurrentUser(userId);
+  if (!hasCompletedOnboarding(user)) {
+    redirect("/onboarding");
+  }
+
   return (
     <CloverShell
       active="settings"

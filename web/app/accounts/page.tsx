@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportFilesModal } from "@/components/import-files-modal";
+import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 
 type Workspace = {
   id: string;
@@ -220,6 +221,7 @@ function ActionIcon({
 
 export default function AccountsPage() {
   const router = useRouter();
+  const onboardingStatus = useOnboardingAccess();
   const addRef = useRef<HTMLDivElement>(null);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -251,6 +253,20 @@ export default function AccountsPage() {
   const [drawerNotice, setDrawerNotice] = useState<string | null>(null);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
+
+  if (onboardingStatus !== "ready") {
+    return (
+      <CloverShell
+        active="accounts"
+        title="Checking your setup..."
+        kicker="One moment"
+        subtitle="We’re confirming your onboarding status before opening Accounts."
+        showTopbar={false}
+      >
+        <section className="empty-state">Checking your setup...</section>
+      </CloverShell>
+    );
+  }
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
