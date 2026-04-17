@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
-import { enqueueImportProcessing } from "@/lib/import-queue";
+import { processImportFileText } from "@/workers/import-processor";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 
@@ -22,13 +22,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       return NextResponse.json({ error: "Missing extracted statement text." }, { status: 400 });
     }
 
-    const job = await enqueueImportProcessing({ importFileId: importId, text });
+    const result = await processImportFileText(importId, text);
 
     return NextResponse.json({
       ok: true,
-      queued: true,
-      jobId: job.id,
-      status: "processing",
+      queued: false,
+      processed: true,
+      importedRows: result.count,
+      status: "done",
     });
   } catch (error) {
     return NextResponse.json({ error: "Unable to process import" }, { status: 400 });
