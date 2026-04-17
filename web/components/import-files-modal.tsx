@@ -113,6 +113,7 @@ export function ImportFilesModal({
 }: ImportFilesModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const accountIdByKeyRef = useRef(new Map<string, string>());
+  const autoStartRef = useRef(false);
   const [items, setItems] = useState<QueuedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState("");
@@ -230,6 +231,10 @@ export function ImportFilesModal({
       return [...current, ...additions];
     });
 
+    if (nextFiles.length > 0) {
+      autoStartRef.current = true;
+    }
+
     if (feedbackMessage) {
       setMessage(feedbackMessage);
     }
@@ -237,31 +242,6 @@ export function ImportFilesModal({
 
   const updateItem = (id: string, patch: Partial<QueuedFile>) => {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
-  };
-
-  const waitForImportCompletion = async (importFileId: string) => {
-    for (let attempt = 0; attempt < 45; attempt += 1) {
-      const response = await fetch(`/api/imports/${importFileId}/status`);
-      if (!response.ok) {
-        throw new Error("Unable to load import status.");
-      }
-
-      const payload = await response.json();
-      const status = String(payload.importFile?.status ?? "");
-      const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
-
-      if (status === "failed") {
-        throw new Error("Import parsing failed.");
-      }
-
-      if (status === "done" && parsedRowsCount > 0) {
-        return;
-      }
-
-      await new Promise((resolve) => window.setTimeout(resolve, 1000));
-    }
-
-    throw new Error("Import parsing is taking longer than expected.");
   };
 
   const ensureTargetAccountId = async (statementAccountName?: string | null, institution?: string | null) => {
@@ -350,7 +330,6 @@ export function ImportFilesModal({
       }
 
       updateItem(itemId, { progress: 92, progressLabel: "Linking to account" });
-      await waitForImportCompletion(importFileId);
       const confirmResponse = await fetch(`/api/imports/${importFileId}/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -405,30 +384,6 @@ export function ImportFilesModal({
   const hasCompletedAllFiles = items.length > 0 && items.every((item) => item.status === "done");
 
   useEffect(() => {
-    if (!open || busy || !workspaceId) {
-      return;
-    }
-
-    const nextItem = items.find(
-      (item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim())
-    );
-
-    if (!nextItem) {
-      return;
-    }
-
-    setBusy(true);
-
-    void (async () => {
-      try {
-        await processFile(nextItem.id);
-      } finally {
-        setBusy(false);
-      }
-    })();
-  }, [busy, items, open, processFile, workspaceId]);
-
-  useEffect(() => {
     if (!open || !hasCompletedAllFiles) {
       return;
     }
@@ -470,6 +425,24 @@ export function ImportFilesModal({
 
     setBusy(false);
   };
+
+  useEffect(() => {
+    if (!open || busy || !workspaceId || !autoStartRef.current) {
+      return;
+    }
+
+    const nextItem = items.find(
+      (item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim())
+    );
+
+    if (!nextItem) {
+      autoStartRef.current = false;
+      return;
+    }
+
+    autoStartRef.current = false;
+    void handleStartImport();
+  }, [busy, handleStartImport, items, open, workspaceId]);
 
   const handleRetry = async (itemId: string) => {
     setBusy(true);
