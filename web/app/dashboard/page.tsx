@@ -152,8 +152,8 @@ export default async function DashboardPage() {
             <Link className="button button-primary" href="/transactions">
               Add transaction
             </Link>
-            <Link className="button button-secondary" href="/dashboard#analytics">
-              See analytics
+            <Link className="button button-secondary" href="/reports">
+              See reports
             </Link>
           </div>
         </div>

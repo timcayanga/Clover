@@ -26,8 +26,8 @@ export default function HomePage() {
             <Link className="button button-primary button-pill" href="/transactions">
               View Transactions
             </Link>
-            <Link className="button button-secondary button-pill" href="/dashboard#analytics">
-              See analytics
+            <Link className="button button-secondary button-pill" href="/reports">
+              See reports
             </Link>
           </div>
         </div>
