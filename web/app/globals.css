@@ -1712,28 +1712,22 @@ label {
   gap: 22px;
 }
 
-.onboarding-page__brand {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: fit-content;
-  padding: 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid var(--stroke);
-  box-shadow: var(--shadow-soft);
-}
-
-.onboarding-page__mark {
-  width: 28px;
-  height: 28px;
-}
-
 .onboarding-card {
   display: grid;
   gap: 14px;
   padding: 24px 26px;
   border-radius: 30px;
+}
+
+.onboarding-card__brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.onboarding-card__mark {
+  width: 30px;
+  height: 30px;
 }
 
 .onboarding-card h3 {
@@ -1754,6 +1748,10 @@ label {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.onboarding-grid--start {
+  grid-template-columns: 1fr;
 }
 
 .onboarding-option {
@@ -1783,6 +1781,10 @@ label {
 .onboarding-option.is-selected {
   background: linear-gradient(135deg, rgba(3, 168, 192, 0.16), rgba(3, 168, 192, 0.08));
   border-color: rgba(3, 168, 192, 0.34);
+}
+
+.onboarding-option--start {
+  min-height: 70px;
 }
 
 .onboarding-option__icon {
@@ -4763,6 +4765,10 @@ label {
   }
 
   .onboarding-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .onboarding-grid--start {
     grid-template-columns: 1fr;
   }
 

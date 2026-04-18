@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 const onboardingSchema = z.object({
   goal: z.string().trim().min(1).max(80).optional().nullable(),
   goals: z.array(z.string().trim().min(1).max(80)).optional().default([]),
+  startAction: z.string().trim().min(1).max(80).optional().nullable(),
   skipped: z.boolean().optional().default(false),
 });
 
