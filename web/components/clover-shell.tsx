@@ -2,10 +2,11 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 
 type CloverShellProps = {
-  active: "dashboard" | "accounts" | "transactions" | "reports" | "insights" | "settings";
+  active: "dashboard" | "accounts" | "transactions" | "reports" | "insights" | "settings" | "profile" | "notifications";
   title: string;
   kicker?: string;
   subtitle?: string;
@@ -133,9 +134,12 @@ export function CloverShell({
   children,
 }: CloverShellProps) {
   const { user } = useUser();
+  const pathname = usePathname();
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
   const profileImage = user?.imageUrl ?? null;
+  const isProfileActive = active === "profile" || pathname.startsWith("/profile");
+  const isNotificationsActive = active === "notifications" || pathname.startsWith("/notifications");
 
   return (
     <div className="app-shell">
@@ -149,7 +153,7 @@ export function CloverShell({
             <Link className="sidebar-icon-button" href="#sidebar-search" aria-label="Search">
               <MenuIcon name="search" />
             </Link>
-            <Link className="sidebar-icon-button" href="/settings#notifications-and-alerts" aria-label="Notifications">
+            <Link className="sidebar-icon-button" href="/notifications" aria-label="Notifications">
               <MenuIcon name="notifications" />
             </Link>
           </div>
@@ -169,19 +173,16 @@ export function CloverShell({
               {item.label}
             </Link>
           ))}
-        </nav>
+          </nav>
 
         <div className="sidebar-footer">
-          <Link className="sidebar-profile" href="/settings#profile-and-workspace" aria-label="Profile">
+          <Link className={`sidebar-profile ${isProfileActive ? "is-active" : ""}`} href="/profile" aria-label={`Open ${displayName} profile`}>
             <span className="sidebar-profile__avatar" aria-hidden="true">
               {profileImage ? <img src={profileImage} alt="" /> : <span>{profileInitial}</span>}
             </span>
             <span className="sr-only">{displayName}</span>
           </Link>
-          <Link className={`sidebar-icon-button ${active === "settings" ? "is-active" : ""}`} href="/settings" aria-label="Settings">
-            <MenuIcon name="settings" />
-          </Link>
-          <Link className="sidebar-icon-button" href="/settings#notifications-and-alerts" aria-label="Notifications">
+          <Link className={`sidebar-icon-button ${isNotificationsActive ? "is-active" : ""}`} href="/notifications" aria-label="Notifications">
             <MenuIcon name="notifications" />
           </Link>
         </div>

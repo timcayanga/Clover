@@ -125,8 +125,8 @@ export default async function InsightsPage() {
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
   const [
-    currentWindowTransactions,
-    previousWindowTransactions,
+    currentWindowTransactionsRaw,
+    previousWindowTransactionsRaw,
     ninetyDayTransactions,
     sixMonthTransactions,
     importedTransactionStats,
@@ -171,6 +171,11 @@ export default async function InsightsPage() {
       select: {
         amount: true,
         type: true,
+        category: {
+          select: {
+            name: true,
+          },
+        },
       },
     }),
     prisma.transaction.findMany({
@@ -232,6 +237,9 @@ export default async function InsightsPage() {
     }),
   ]);
 
+  const currentWindowTransactions = currentWindowTransactionsRaw as InsightTransaction[];
+  const previousWindowTransactions = previousWindowTransactionsRaw as InsightTransaction[];
+
   const currentSummary = currentWindowTransactions.reduce(
     (accumulator, transaction) => {
       const amount = Number(transaction.amount);
@@ -268,6 +276,11 @@ export default async function InsightsPage() {
         accumulator.income += amount;
       } else if (transaction.type === "expense") {
         accumulator.expense += amount;
+        const categoryName = transaction.category?.name ?? "Uncategorized";
+        accumulator.expenseCategories.set(
+          categoryName,
+          (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)
+        );
       } else {
         accumulator.transfer += amount;
       }
@@ -277,6 +290,7 @@ export default async function InsightsPage() {
       income: 0,
       expense: 0,
       transfer: 0,
+      expenseCategories: new Map<string, number>(),
     }
   );
 
@@ -353,6 +367,10 @@ export default async function InsightsPage() {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4);
 
+  const previousTopCategories = Array.from(previousSummary.expenseCategories.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4);
+
   const topCategoryShare = currentSpend > 0 ? (topCategories[0]?.[1] ?? 0) / currentSpend : null;
 
   const merchantSpend = new Map<
@@ -392,6 +410,26 @@ export default async function InsightsPage() {
     .sort((a, b) => b.amount - a.amount)
     .slice(0, 3);
 
+  const categoryDriverChanges = Array.from(
+    new Set([...currentSummary.expenseCategories.keys(), ...previousSummary.expenseCategories.keys()])
+  )
+    .map((categoryName) => {
+      const currentAmount = currentSummary.expenseCategories.get(categoryName) ?? 0;
+      const previousAmount = previousSummary.expenseCategories.get(categoryName) ?? 0;
+      const delta = currentAmount - previousAmount;
+      const deltaPercent = previousAmount > 0 ? (delta / previousAmount) * 100 : null;
+      return {
+        categoryName,
+        currentAmount,
+        previousAmount,
+        delta,
+        deltaPercent,
+      };
+    })
+    .filter((entry) => Math.abs(entry.delta) > 0)
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, 4);
+
   const selectedGoal = user.primaryGoal?.trim() ?? null;
   const goalLabel = selectedGoal ? goalLabels[selectedGoal] ?? selectedGoal : null;
 
@@ -409,7 +447,7 @@ export default async function InsightsPage() {
   );
   const confidenceLabel = confidenceScore >= 85 ? "High confidence" : confidenceScore >= 70 ? "Good confidence" : "Watch closely";
 
-  const trendDirection = currentNet >= previousNet ? "Improving" : "Softening";
+  const trendDirection = currentNet >= previousNet ? "improving" : "softening";
   const spendDirection =
     spendDelta === null ? "stable" : spendDelta > 4 ? "up" : spendDelta < -4 ? "down" : "stable";
 
@@ -426,8 +464,8 @@ export default async function InsightsPage() {
     spendDelta === null || incomeDelta === null
       ? "There is enough recent activity to give guidance, but one of the comparison periods is still thin."
       : currentNet >= 0
-        ? `Cash flow is ${trendDirection.toLowerCase()}, spending is ${spendDirection}, and savings are still positive.`
-        : `Cash flow is ${trendDirection.toLowerCase()}, spending is ${spendDirection}, and the month is currently negative.`;
+        ? `Cash flow is ${trendDirection}, spending is ${spendDirection}, and savings are still positive.`
+        : `Cash flow is ${trendDirection}, spending is ${spendDirection}, and the month is currently negative.`;
 
   const priorityFlag =
     importStatusCounts.failed > 0 || uncategorizedTransactions.length + possibleDuplicateGroups.length > 0
@@ -488,6 +526,29 @@ export default async function InsightsPage() {
     },
   ];
 
+  const headlineNetLabel =
+    currentNet >= previousNet
+      ? `${formatSignedCurrency(currentNet)} this month, up from ${formatSignedCurrency(previousNet)} last month`
+      : `${formatSignedCurrency(currentNet)} this month, down from ${formatSignedCurrency(previousNet)} last month`;
+
+  const weekendExpenses = currentWindowTransactions.filter((transaction) => {
+    const day = transaction.date.getDay();
+    return transaction.type === "expense" && (day === 0 || day === 6);
+  });
+  const weekendExpenseShare = currentSpend > 0 ? weekendExpenses.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0) / currentSpend : 0;
+  const weekendInsight =
+    weekendExpenseShare > 0.3
+      ? `Weekend spending makes up ${formatPercent(weekendExpenseShare * 100)} of this month's expenses.`
+      : `Weekend spending is relatively contained at ${formatPercent(weekendExpenseShare * 100)} of this month's expenses.`;
+
+  const recurringCostsTotal = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0);
+  const recurringSavingsPotential = recurringCostsTotal * 0.2;
+  const topCategoryOpportunity = topCategories[0] ? topCategories[0][1] * 0.2 : 0;
+  const annualRecurringOpportunity = recurringSavingsPotential * 12;
+  const trackedCategorySpend = topCategories.reduce((sum, [, amount]) => sum + amount, 0);
+  const otherSpend = Math.max(currentSpend - trackedCategorySpend, 0);
+  const trackedCategoryShare = currentSpend > 0 ? trackedCategorySpend / currentSpend : 0;
+
   return (
     <CloverShell
       active="insights"
@@ -495,7 +556,7 @@ export default async function InsightsPage() {
       title="Your money, translated into next steps."
       subtitle="Built from your statements and spending patterns, this page explains what changed, why it changed, and what to do next."
     >
-      <section className="insights-hero">
+      <section className="insights-story">
         <article className="insights-hero__summary glass">
           <div className="insights-hero__header">
             <span className="pill pill-accent">AI brief</span>
@@ -507,39 +568,36 @@ export default async function InsightsPage() {
           <p>{aiSummary}</p>
           <div className="insights-hero__stats">
             <div className="insight-tile">
-              <span>Cash flow</span>
-              <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
-              <small>{previousNet === 0 ? "No prior baseline" : `${formatSignedCurrency(previousNet)} previously`}</small>
+              <span>Headline</span>
+              <strong>{headlineNetLabel}</strong>
+              <small>{goalLabel ?? "No primary goal set yet"}</small>
             </div>
             <div className="insight-tile">
               <span>Savings rate</span>
               <strong>{currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}</strong>
-              <small>{goalLabel ?? "Add a goal to focus the guidance"}</small>
+              <small>{confidenceLabel}</small>
             </div>
             <div className="insight-tile">
               <span>Confidence</span>
-              <strong>{confidenceLabel}</strong>
-              <small>{Math.round(confidenceScore)}% model confidence</small>
+              <strong>{Math.round(confidenceScore)}%</strong>
+              <small>{currentWindowTransactions.length} transactions reviewed</small>
             </div>
           </div>
           <div className="hero-actions">
             <Link className="button button-primary" href={quickActions[0].href}>
               {quickActions[0].label}
             </Link>
-            <Link className="button button-secondary" href="/transactions">
-              Open transactions
+            <Link className="button button-secondary" href={quickActions[1].href}>
+              {quickActions[1].label}
             </Link>
           </div>
         </article>
 
-      </section>
-
-      <section className="insights-grid">
         <article className="insight-panel insight-panel--feature glass">
           <div className="insight-panel__head">
             <div>
-              <p className="eyebrow">What changed</p>
-              <h4>30-day comparison</h4>
+              <p className="eyebrow">What happened</p>
+              <h4>Income vs expenses snapshot</h4>
             </div>
             <div className="insight-panel__stat">
               <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
@@ -550,7 +608,7 @@ export default async function InsightsPage() {
           <div className="insight-signal-grid">
             <div className="insight-signal">
               <span>Income</span>
-              <strong>{formatSignedCurrency(currentSummary.income)}</strong>
+              <strong>{formatCurrency(currentSummary.income)}</strong>
               <small>{incomeDelta === null ? "No comparison period" : `${formatPercent(incomeDelta)} vs last 30 days`}</small>
             </div>
             <div className="insight-signal">
@@ -559,17 +617,14 @@ export default async function InsightsPage() {
               <small>{spendDelta === null ? "No comparison period" : `${formatPercent(spendDelta)} vs last 30 days`}</small>
             </div>
             <div className="insight-signal">
-              <span>Top category</span>
-              <strong>{topCategories[0]?.[0] ?? "None"}</strong>
-              <small>{topCategoryShare === null ? "No spend data" : `${formatPercent(topCategoryShare * 100)} of spend`}</small>
+              <span>Net</span>
+              <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
+              <small>{previousNet === 0 ? "No prior baseline" : `${formatSignedCurrency(previousNet)} previously`}</small>
             </div>
             <div className="insight-signal">
-              <span>Review load</span>
-              <strong>{uncategorizedTransactions.length + possibleDuplicateGroups.length}</strong>
-              <small>
-                {uncategorizedTransactions.length} uncategorized, {possibleDuplicateGroups.length} duplicate set
-                {possibleDuplicateGroups.length === 1 ? "" : "s"}
-              </small>
+              <span>Saving</span>
+              <strong>{currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}</strong>
+              <small>{goalLabel ?? "Add a goal to focus the guidance"}</small>
             </div>
           </div>
 
@@ -604,22 +659,134 @@ export default async function InsightsPage() {
         <article className="insight-panel glass">
           <div className="insight-panel__head">
             <div>
-              <p className="eyebrow">Why it changed</p>
-              <h4>Signals the model is watching</h4>
+              <p className="eyebrow">Where your money went</p>
+              <h4>Top categories and the rest</h4>
+            </div>
+            <div className="insight-panel__stat">
+              <strong>{formatCurrency(currentSpend)}</strong>
+              <span>{formatPercent(trackedCategoryShare * 100)} in tracked categories</span>
             </div>
           </div>
+
+          <div className="report-list">
+            {topCategories.length > 0 ? (
+              topCategories.map(([categoryName, amount]) => {
+                const share = currentSpend > 0 ? (amount / currentSpend) * 100 : 0;
+                return (
+                  <div key={categoryName} className="report-list__item">
+                    <div className="report-list__meta">
+                      <strong>{categoryName}</strong>
+                      <span>{formatCurrency(amount)}</span>
+                    </div>
+                    <div className="report-list__track" aria-hidden="true">
+                      <span className="report-list__fill" style={{ width: `${Math.max(share, 8)}%` }} />
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="empty-state">No categorized expenses yet.</div>
+            )}
+            <div className="report-list__item">
+              <div className="report-list__meta">
+                <strong>Others</strong>
+                <span>{formatCurrency(otherSpend)}</span>
+              </div>
+              <div className="report-list__track" aria-hidden="true">
+                <span className="report-list__fill" style={{ width: `${Math.max(currentSpend > 0 ? (otherSpend / currentSpend) * 100 : 0, 8)}%` }} />
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article className="insight-panel glass">
+          <div className="insight-panel__head">
+            <div>
+              <p className="eyebrow">Why it happened</p>
+              <h4>Key drivers of change</h4>
+            </div>
+            <div className="insight-panel__stat">
+              <strong>{previousTopCategories[0]?.[0] ?? "No baseline"}</strong>
+              <span>Last period's top category</span>
+            </div>
+          </div>
+
+          <div className="insight-list">
+            {categoryDriverChanges.length > 0 ? (
+              categoryDriverChanges.map((driver) => (
+                <div key={driver.categoryName} className="insight-list__item">
+                  <strong>
+                    {driver.categoryName} {driver.delta > 0 ? "increased" : "decreased"} by {formatCurrency(Math.abs(driver.delta))}
+                  </strong>
+                  <span>
+                    {driver.previousAmount > 0
+                      ? `${formatPercent(driver.deltaPercent ?? 0)} vs last month · from ${formatCurrency(driver.previousAmount)} to ${formatCurrency(driver.currentAmount)}`
+                      : `New category this month · ${formatCurrency(driver.currentAmount)} spent`}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="empty-state">No category changes surfaced yet.</div>
+            )}
+          </div>
+        </article>
+
+        <article className="insight-panel glass">
+          <div className="insight-panel__head">
+            <div>
+              <p className="eyebrow">Recurring costs</p>
+              <h4>Subscriptions and repeated payments</h4>
+            </div>
+            <div className="insight-panel__stat">
+              <strong>{formatCurrency(recurringCostsTotal)}</strong>
+              <span>{formatCurrency(recurringSavingsPotential)} monthly savings if trimmed by 20%</span>
+            </div>
+          </div>
+
+          <div className="insight-list">
+            {recurringMerchants.length > 0 ? (
+              recurringMerchants.map((merchant) => (
+                <div key={merchant.label} className="insight-list__item">
+                  <strong>{merchant.label}</strong>
+                  <span>
+                    {merchant.count} transaction{merchant.count === 1 ? "" : "s"} over 90 days · {formatCurrency(merchant.amount)} total
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="empty-state">No recurring merchants surfaced yet.</div>
+            )}
+            <div className="insight-list__item">
+              <strong>Potential savings</strong>
+              <span>
+                Cutting recurring costs by 20% could save {formatCurrency(recurringSavingsPotential)} a month, or {formatCurrency(annualRecurringOpportunity)} a year.
+              </span>
+            </div>
+          </div>
+        </article>
+
+        <article className="insight-panel glass">
+          <div className="insight-panel__head">
+            <div>
+              <p className="eyebrow">Behavioral insights</p>
+              <h4>Lightweight patterns worth watching</h4>
+            </div>
+            <div className="insight-panel__stat">
+              <strong>{confidenceLabel}</strong>
+              <span>{Math.round(confidenceScore)}% model confidence</span>
+            </div>
+          </div>
+
           <div className="insight-list">
             <div className="insight-list__item">
-              <strong>Spending direction</strong>
-              <span>{spendDelta === null ? "No prior comparison period" : `${spendDirection.toUpperCase()} compared with the previous 30 days`}</span>
+              <strong>Weekend spending</strong>
+              <span>{weekendInsight}</span>
             </div>
             <div className="insight-list__item">
-              <strong>Income direction</strong>
-              <span>{incomeDelta === null ? "No prior comparison period" : `${incomeDelta >= 0 ? "Held up" : "Softened"} versus the previous 30 days`}</span>
-            </div>
-            <div className="insight-list__item">
-              <strong>Goal alignment</strong>
-              <span>{goalLabel ?? "No primary goal set yet"}</span>
+              <strong>Concentration</strong>
+              <span>
+                Your top category is {topCategoryShare ? formatPercent(topCategoryShare * 100) : "N/A"} of this month's spending.
+              </span>
             </div>
             <div className="insight-list__item">
               <strong>Data quality</strong>
@@ -629,105 +796,59 @@ export default async function InsightsPage() {
                   : "Imports look clean enough for guidance"}
               </span>
             </div>
-          </div>
-        </article>
-
-        <article className="insight-panel glass">
-          <div className="insight-panel__head">
-            <div>
-              <p className="eyebrow">What to do next</p>
-              <h4>Suggested next moves</h4>
-            </div>
-          </div>
-          <div className="insight-action-list">
-            {quickActions.map((action) => (
-              <div key={action.title} className="insight-action">
-                <div>
-                  <strong>{action.title}</strong>
-                  <span>{action.body}</span>
-                </div>
-                <Link className="pill-link pill-link--inline" href={action.href}>
-                  {action.label}
-                </Link>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="insight-panel glass">
-          <div className="insight-panel__head">
-            <div>
-              <p className="eyebrow">Behavior</p>
-              <h4>Recurring patterns</h4>
-            </div>
-          </div>
-          <div className="insight-list">
-            {recurringMerchants.length > 0 ? (
-              recurringMerchants.map((merchant) => (
-                <div key={merchant.label} className="insight-list__item">
-                  <strong>{merchant.label}</strong>
-                  <span>
-                    {merchant.count} transaction{merchant.count === 1 ? "" : "s"} over 90 days · {formatCurrency(merchant.amount)}
-                  </span>
-                </div>
-              ))
-            ) : (
-              <div className="empty-state">No recurring merchants surfaced yet.</div>
-            )}
-          </div>
-        </article>
-
-        <article className="insight-panel glass">
-          <div className="insight-panel__head">
-            <div>
-              <p className="eyebrow">Evidence</p>
-              <h4>What this guidance is based on</h4>
-            </div>
-          </div>
-          <div className="insight-list">
-            <div className="insight-list__item">
-              <strong>Current month</strong>
-              <span>
-                {currentWindowTransactions.length} transactions · {currentSummary.income > 0 ? formatCurrency(currentSummary.income) : "No income"} in · {currentSpend > 0 ? formatCurrency(currentSpend) : "No spend"} out
-              </span>
-            </div>
             <div className="insight-list__item">
               <strong>Goal context</strong>
               <span>{goalLabel ?? "No primary goal set yet"}</span>
             </div>
-            <div className="insight-list__item">
-              <strong>Source coverage</strong>
-              <span>
-                {importStatusCounts.done} done, {importStatusCounts.processing} processing, {importStatusCounts.failed} failed
-              </span>
+          </div>
+        </article>
+
+        <article className="insight-panel glass">
+          <div className="insight-panel__head">
+            <div>
+              <p className="eyebrow">Suggested actions</p>
+              <h4>What to do next</h4>
             </div>
-            <div className="insight-list__item">
-              <strong>Balances visible</strong>
-              <span>
-                {activeAccountCount} account{activeAccountCount === 1 ? "" : "s"} with balances totaling {formatCurrency(totalAccountBalance)}
-              </span>
+          </div>
+
+          <div className="insight-action-list">
+            <div className="insight-action">
+              <div>
+                <strong>
+                  Reduce {topCategories[0]?.[0] ?? "your top category"} by 20%
+                </strong>
+                <span>
+                  You could save {formatCurrency(topCategoryOpportunity)} a month by trimming the biggest category a little.
+                </span>
+              </div>
+              <Link className="pill-link pill-link--inline" href="/transactions">
+                Review spending
+              </Link>
+            </div>
+            <div className="insight-action">
+              <div>
+                <strong>Cut recurring costs</strong>
+                <span>
+                  A 20% trim on recurring merchants could free up {formatCurrency(recurringSavingsPotential)} a month.
+                </span>
+              </div>
+              <Link className="pill-link pill-link--inline" href="/transactions">
+                Check subscriptions
+              </Link>
+            </div>
+            <div className="insight-action">
+              <div>
+                <strong>Set the goal as the benchmark</strong>
+                <span>
+                  {goalLabel ?? "Add a primary goal"} so the page can judge progress instead of only showing trends.
+                </span>
+              </div>
+              <Link className="pill-link pill-link--inline" href={goalLabel ? "/settings" : "/onboarding"}>
+                {goalLabel ? "Review goal" : "Set goal"}
+              </Link>
             </div>
           </div>
         </article>
-      </section>
-
-      <section className="insights-footer glass">
-        <div>
-          <p className="eyebrow">Recent activity</p>
-          <h4>Latest transactions grounding the advice</h4>
-        </div>
-        <div className="insights-footer__list">
-          {currentWindowTransactions.slice(0, 4).map((transaction) => (
-            <div key={transaction.id} className="insights-footer__item">
-              <strong>{transaction.merchantClean ?? transaction.merchantRaw}</strong>
-              <span>
-                {transaction.account.name}
-                {transaction.category?.name ? ` · ${transaction.category.name}` : ""} ·{" "}
-                {formatCurrency(Number(transaction.amount))} · {formatShortDate(transaction.date)}
-              </span>
-            </div>
-          ))}
-        </div>
       </section>
     </CloverShell>
   );
