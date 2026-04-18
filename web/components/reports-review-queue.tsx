@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export type ReportsQueueAction = {
   label: string;
@@ -14,6 +14,7 @@ export type ReportsQueueItem = {
   description: string;
   tags: string[];
   actions: [ReportsQueueAction, ReportsQueueAction?];
+  categoryOptions?: string[];
 };
 
 type ReportsReviewQueueProps = {
@@ -22,28 +23,35 @@ type ReportsReviewQueueProps = {
 
 export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
   const [index, setIndex] = useState(0);
+  const [selectedCategories, setSelectedCategories] = useState<Record<number, string>>({});
+  const [isCategoryPickerOpen, setIsCategoryPickerOpen] = useState(false);
+  const hasItems = items.length > 0;
+  const currentIndex = hasItems ? index % items.length : 0;
+  const current = hasItems ? items[currentIndex] : null;
+  const currentCategory = current ? selectedCategories[currentIndex] ?? null : null;
+  const categoryOptions = current?.categoryOptions ?? ["Food & Dining", "Transport", "Groceries", "Utilities", "Subscriptions"];
+  const canPickCategory = current?.tags.includes("No category") ?? false;
 
-  if (items.length === 0) {
-    return <div className="empty-state">No actionable items right now.</div>;
-  }
-
-  const currentIndex = index % items.length;
-  const current = items[currentIndex];
+  useEffect(() => {
+    setIsCategoryPickerOpen(false);
+  }, [currentIndex, items.length]);
 
   const goPrevious = () => setIndex((value) => (value - 1 + items.length) % items.length);
   const goNext = () => setIndex((value) => (value + 1) % items.length);
+  const setCategory = (category: string) => {
+    setSelectedCategories((value) => ({ ...value, [currentIndex]: category }));
+    setIsCategoryPickerOpen(false);
+  };
+
+  if (!hasItems || !current) {
+    return <div className="empty-state">No actionable items right now.</div>;
+  }
 
   return (
     <div className="reports-review-queue">
       <div className="report-card__head">
         <div>
           <h4>Review queue</h4>
-        </div>
-        <div className="report-card__stat">
-          <strong>
-            {currentIndex + 1}/{items.length}
-          </strong>
-          <span>Use the arrows to move through the queue</span>
         </div>
       </div>
 
@@ -52,9 +60,6 @@ export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
           <button type="button" className="report-review-nav" onClick={goPrevious} aria-label="Previous review item">
             ‹
           </button>
-          <div className="reports-review-queue__counter">
-            {currentIndex + 1} of {items.length}
-          </div>
           <button type="button" className="report-review-nav" onClick={goNext} aria-label="Next review item">
             ›
           </button>
@@ -67,11 +72,44 @@ export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
           </div>
 
           <div className="report-tags">
-            {current.tags.map((tag) => (
-              <span key={tag} className="pill pill-subtle">
-                {tag}
-              </span>
-            ))}
+            {current.tags.map((tag) => {
+              if (tag === "No category" && canPickCategory) {
+                return (
+                  <div key={tag} className="reports-review-queue__picker-group">
+                    <button
+                      type="button"
+                      className={`pill pill-subtle pill-interactive ${currentCategory ? "pill-is-selected" : ""}`}
+                      onClick={() => setIsCategoryPickerOpen((value) => !value)}
+                      aria-expanded={isCategoryPickerOpen}
+                      aria-haspopup="menu"
+                    >
+                      {currentCategory ?? tag}
+                    </button>
+
+                    {isCategoryPickerOpen ? (
+                      <div className="reports-review-queue__picker" role="menu" aria-label="Category options">
+                        {categoryOptions.map((category) => (
+                          <button
+                            key={category}
+                            type="button"
+                            className="reports-review-queue__picker-option"
+                            onClick={() => setCategory(category)}
+                          >
+                            {category}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              }
+
+              return (
+                <span key={tag} className="pill pill-subtle">
+                  {tag}
+                </span>
+              );
+            })}
           </div>
         </div>
 
@@ -87,6 +125,12 @@ export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
               </Link>
             ) : null
           ))}
+        </div>
+
+        <div className="reports-review-queue__footer">
+          <div className="reports-review-queue__counter">
+            {currentIndex + 1} of {items.length}
+          </div>
         </div>
       </div>
     </div>

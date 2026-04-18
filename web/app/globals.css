@@ -1649,6 +1649,12 @@ label {
   font-size: 14px;
 }
 
+.reports-review-queue__footer {
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+
 .report-review-nav {
   width: 42px;
   height: 42px;
@@ -1662,6 +1668,65 @@ label {
   justify-content: center;
   font-size: 22px;
   line-height: 1;
+}
+
+.pill-interactive {
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
+}
+
+.pill-interactive:hover,
+.pill-interactive:focus-visible {
+  transform: translateY(-1px);
+  border-color: rgba(14, 165, 233, 0.22);
+  color: var(--text);
+}
+
+.pill-is-selected {
+  background: rgba(14, 165, 233, 0.12);
+  border-color: rgba(14, 165, 233, 0.22);
+  color: var(--accent);
+}
+
+.reports-review-queue__picker-group {
+  position: relative;
+}
+
+.reports-review-queue__picker {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 2;
+  display: grid;
+  gap: 6px;
+  min-width: 180px;
+  padding: 10px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.12);
+  backdrop-filter: blur(18px);
+}
+
+.reports-review-queue__picker-option {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font-size: 14px;
+}
+
+.reports-review-queue__picker-option:hover,
+.reports-review-queue__picker-option:focus-visible {
+  background: rgba(14, 165, 233, 0.08);
+  color: var(--accent);
 }
 
 .reports-review-queue__item {
@@ -2887,7 +2952,7 @@ label {
 
 .line-item-header {
   display: grid;
-  grid-template-columns: 28px minmax(0, 2.45fr) minmax(110px, 0.8fr) minmax(130px, 0.9fr) minmax(150px, 1fr) minmax(110px, 0.75fr) 84px 40px;
+  grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
   gap: 12px;
   align-items: center;
   padding: 10px 4px 8px;
@@ -2919,6 +2984,14 @@ label {
   width: 28px;
 }
 
+.line-item-header-cell--select-all {
+  justify-content: center;
+}
+
+.line-item-header-cell--icon {
+  width: 40px;
+}
+
 .line-item-header-cell--amount {
   justify-content: flex-end;
   text-align: right;
@@ -2934,7 +3007,7 @@ label {
 
 .line-item {
   display: grid;
-  grid-template-columns: 28px minmax(0, 2.45fr) minmax(110px, 0.8fr) minmax(130px, 0.9fr) minmax(150px, 1fr) minmax(110px, 0.75fr) 84px 40px;
+  grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
   gap: 12px;
   align-items: center;
   padding: 16px 4px;
@@ -2963,22 +3036,91 @@ label {
   margin: 0;
 }
 
+.transaction-category-icon-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.transaction-category-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.08);
+  border: 1px solid rgba(3, 168, 192, 0.12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.transaction-category-icon img {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
 .transaction-name-cell {
   display: grid;
   gap: 4px;
   min-width: 0;
 }
 
-.transaction-name-button {
+.transaction-inline-edit {
+  width: 100%;
   border: 0;
   background: transparent;
   color: var(--text);
   padding: 0;
   text-align: left;
+  font: inherit;
+  min-height: 0;
+}
+
+button.transaction-inline-edit {
+  cursor: pointer;
+}
+
+button.transaction-inline-edit--name {
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.25;
+}
+
+input.transaction-inline-edit,
+select.transaction-inline-edit {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--stroke);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+input.transaction-inline-edit:focus,
+select.transaction-inline-edit:focus {
+  outline: none;
+  border-color: rgba(3, 168, 192, 0.55);
+  box-shadow: 0 0 0 3px rgba(3, 168, 192, 0.12);
+}
+
+.transaction-inline-edit--date,
+.transaction-inline-edit--select,
+.transaction-inline-edit--amount {
+  display: inline-flex;
+  align-items: center;
+}
+
+.transaction-inline-edit--amount {
+  justify-content: flex-end;
+  text-align: right;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.transaction-inline-edit--select {
+  width: 100%;
 }
 
 .transaction-subtext {
@@ -2991,10 +3133,6 @@ label {
 .transaction-category-cell,
 .transaction-amount-cell {
   font-size: 0.92rem;
-}
-
-.transaction-category-cell select {
-  width: 100%;
 }
 
 .transaction-amount-cell {
@@ -3022,7 +3160,10 @@ label {
 }
 
 .transaction-note-button {
-  min-width: 72px;
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+  justify-content: center;
 }
 
 .warning-chip,

@@ -119,6 +119,7 @@ export default async function ReportsPage() {
         title: "Ride share charge needs a category",
         description: "Assign this imported transport transaction so the spending report stays tidy.",
         tags: ["No category", "Imported transactions", "₱180.00"],
+        categoryOptions: ["Transport", "Food & Dining", "Groceries", "Utilities", "Subscriptions"],
         actions: [
           { label: "Review transaction", href: "/transactions" },
           { label: "Open imports", href: "/imports", variant: "secondary" },
