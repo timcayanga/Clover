@@ -4346,6 +4346,67 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 14px;
 }
 
+.transactions-filter-group {
+  grid-column: span 2;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.transactions-filter-group__label {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.transactions-filter-group__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.transactions-filter-group__clear {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 0;
+}
+
+.transactions-filter-group__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.transactions-filter-group__options--wrap {
+  gap: 10px;
+}
+
+.transactions-filter-pill {
+  min-height: 36px;
+  padding-inline: 12px;
+}
+
+.transactions-filter-pill--merchant {
+  gap: 8px;
+}
+
+.transactions-merchant-filter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.transactions-merchant-filter input {
+  min-width: 0;
+}
+
 .span-2 {
   grid-column: span 2;
 }

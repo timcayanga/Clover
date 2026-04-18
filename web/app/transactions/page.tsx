@@ -469,6 +469,20 @@ const createEmptyBulkEditForm = (): BulkEditForm => ({
   isTransfer: "",
 });
 
+const normalizeFilterValue = (value: string) => value.trim().toLowerCase();
+
+const toggleFilterValue = (values: string[], value: string) =>
+  values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value];
+
+const toggleTypedFilterValue = <T extends string>(values: T[], value: T) =>
+  values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value];
+
+const splitMerchantFilters = (value: string) =>
+  value
+    .split(/[,;\n]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
 const looksLikeJsonBlob = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed || !/^[\[{]/.test(trimmed)) {
@@ -634,6 +648,110 @@ function ActionIcon({
   }
 }
 
+function MultiSelectFilterGroup({
+  label,
+  options,
+  selected,
+  onToggle,
+  onClear,
+}: {
+  label: string;
+  options: Array<{ value: string; label: string }>;
+  selected: string[];
+  onToggle: (value: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="transactions-filter-group" role="group" aria-label={label}>
+      <div className="transactions-filter-group__head">
+        <span className="transactions-filter-group__label">{label}</span>
+        {selected.length ? (
+          <button className="transactions-filter-group__clear" type="button" onClick={onClear}>
+            Clear
+          </button>
+        ) : null}
+      </div>
+      <div className="transactions-filter-group__options">
+        {options.map((option) => {
+          const isSelected = selected.includes(option.value);
+          return (
+            <button
+              key={option.value}
+              className={`pill pill-interactive transactions-filter-pill ${isSelected ? "pill-is-selected" : ""}`}
+              type="button"
+              aria-pressed={isSelected}
+              onClick={() => onToggle(option.value)}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function MerchantFilterGroup({
+  merchants,
+  input,
+  onInputChange,
+  onAddMerchants,
+  onRemoveMerchant,
+  onClear,
+}: {
+  merchants: string[];
+  input: string;
+  onInputChange: (value: string) => void;
+  onAddMerchants: (value: string) => void;
+  onRemoveMerchant: (value: string) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div className="transactions-filter-group transactions-filter-group--merchants" role="group" aria-label="Merchants">
+      <div className="transactions-filter-group__head">
+        <span className="transactions-filter-group__label">Merchants</span>
+        {merchants.length ? (
+          <button className="transactions-filter-group__clear" type="button" onClick={onClear}>
+            Clear
+          </button>
+        ) : null}
+      </div>
+      <div className="transactions-merchant-filter">
+        <input
+          value={input}
+          onChange={(event) => onInputChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === ",") {
+              event.preventDefault();
+              onAddMerchants(input);
+            }
+          }}
+          placeholder="Type one or more merchants, then press Enter"
+        />
+        <button className="button button-secondary button-small" type="button" onClick={() => onAddMerchants(input)}>
+          Add
+        </button>
+      </div>
+      {merchants.length ? (
+        <div className="transactions-filter-group__options transactions-filter-group__options--wrap">
+          {merchants.map((merchant) => (
+            <button
+              key={merchant}
+              className="pill pill-interactive pill-is-selected transactions-filter-pill transactions-filter-pill--merchant"
+              type="button"
+              aria-label={`Remove merchant filter ${merchant}`}
+              onClick={() => onRemoveMerchant(merchant)}
+            >
+              <span>{merchant}</span>
+              <span aria-hidden="true">×</span>
+            </button>
+          ))}
+          </div>
+        ) : null}
+    </div>
+  );
+}
+
 export default function TransactionsPage() {
   const onboardingStatus = useOnboardingAccess();
 
@@ -668,9 +786,11 @@ function TransactionsPageContent() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [imports, setImports] = useState<ImportFile[]>([]);
   const [query, setQuery] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [accountFilter, setAccountFilter] = useState("all");
-  const [typeFilter, setTypeFilter] = useState("all");
+  const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
+  const [accountFilters, setAccountFilters] = useState<string[]>([]);
+  const [typeFilters, setTypeFilters] = useState<Array<"debit" | "credit">>([]);
+  const [merchantFilters, setMerchantFilters] = useState<string[]>([]);
+  const [merchantFilterInput, setMerchantFilterInput] = useState("");
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [message, setMessage] = useState("Select a workspace to review transactions.");
@@ -906,13 +1026,31 @@ function TransactionsPageContent() {
         transaction.merchantRaw.toLowerCase().includes(term) ||
         (transaction.merchantClean ?? "").toLowerCase().includes(term) ||
         (transaction.description ?? "").toLowerCase().includes(term);
-      const matchesCategory = categoryFilter === "all" || transaction.categoryId === categoryFilter;
-      const matchesAccount = accountFilter === "all" || transaction.accountId === accountFilter;
-      const matchesType = typeFilter === "all" || transaction.type === typeFilter;
+      const matchesCategory =
+        categoryFilters.length === 0 ||
+        (transaction.categoryId ? categoryFilters.includes(transaction.categoryId) : false);
+      const matchesAccount = accountFilters.length === 0 || accountFilters.includes(transaction.accountId);
+      const transactionFilterType = transaction.type === "income" ? "credit" : "debit";
+      const matchesType = typeFilters.length === 0 || typeFilters.includes(transactionFilterType);
+      const merchantValue = normalizeFilterValue(`${transaction.merchantClean ?? transaction.merchantRaw} ${transaction.description ?? ""}`);
+      const matchesMerchant =
+        merchantFilters.length === 0 ||
+        merchantFilters.some((merchantFilter) => merchantValue.includes(normalizeFilterValue(merchantFilter)));
       const matchesDate = dateMatchesFilter(transaction.date, dateFilterMode, dateFilterAnchor, customStart, customEnd);
-      return matchesQuery && matchesCategory && matchesAccount && matchesType && matchesDate;
+      return matchesQuery && matchesCategory && matchesAccount && matchesType && matchesMerchant && matchesDate;
     });
-  }, [transactions, query, categoryFilter, accountFilter, typeFilter, dateFilterMode, dateFilterAnchor, customStart, customEnd]);
+  }, [
+    transactions,
+    query,
+    categoryFilters,
+    accountFilters,
+    typeFilters,
+    merchantFilters,
+    dateFilterMode,
+    dateFilterAnchor,
+    customStart,
+    customEnd,
+  ]);
   const hasVisibleTransactions = useMemo(
     () =>
       transactions.some(
@@ -1423,14 +1561,28 @@ function TransactionsPageContent() {
     window.localStorage.setItem(
       "clover.transactions.view",
       JSON.stringify({
-        workspaceId: selectedWorkspaceId,
         query,
-        categoryFilter,
-        accountFilter,
-        typeFilter,
+        categoryFilters,
+        accountFilters,
+        typeFilters,
+        merchantFilters,
       })
     );
     setMessage("Current view saved.");
+  };
+
+  const addMerchantFilters = (value: string) => {
+    const next = splitMerchantFilters(value);
+    if (!next.length) {
+      return;
+    }
+
+    setMerchantFilters((current) => {
+      const merged = new Set(current);
+      next.forEach((merchant) => merged.add(merchant));
+      return Array.from(merged);
+    });
+    setMerchantFilterInput("");
   };
 
   const downloadCsv = () => {
@@ -2153,51 +2305,50 @@ function TransactionsPageContent() {
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Merchant, note, or alias"
+                  placeholder="Search by merchant, note, or alias"
                 />
               </label>
-              <label>
-                Workspace
-                <select value={selectedWorkspaceId} onChange={(event) => setSelectedWorkspaceId(event.target.value)}>
-                  <option value="">Choose workspace</option>
-                  {workspaces.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
-                      {entry.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Category
-                <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
-                  <option value="all">All categories</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Account
-                <select value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}>
-                  <option value="all">All accounts</option>
-                  {accounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Type
-                <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)}>
-                  <option value="all">All types</option>
-                  <option value="income">Income</option>
-                  <option value="expense">Expense</option>
-                  <option value="transfer">Transfer</option>
-                </select>
-              </label>
+              <MerchantFilterGroup
+                merchants={merchantFilters}
+                input={merchantFilterInput}
+                onInputChange={setMerchantFilterInput}
+                onAddMerchants={addMerchantFilters}
+                onRemoveMerchant={(merchant) => setMerchantFilters((current) => current.filter((entry) => entry !== merchant))}
+                onClear={() => {
+                  setMerchantFilters([]);
+                  setMerchantFilterInput("");
+                }}
+              />
+              <MultiSelectFilterGroup
+                label="Categories"
+                options={categories.map((category) => ({
+                  value: category.id,
+                  label: category.name,
+                }))}
+                selected={categoryFilters}
+                onToggle={(value) => setCategoryFilters((current) => toggleFilterValue(current, value))}
+                onClear={() => setCategoryFilters([])}
+              />
+              <MultiSelectFilterGroup
+                label="Accounts"
+                options={accounts.map((account) => ({
+                  value: account.id,
+                  label: account.name,
+                }))}
+                selected={accountFilters}
+                onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))}
+                onClear={() => setAccountFilters([])}
+              />
+              <MultiSelectFilterGroup
+                label="Types"
+                options={[
+                  { value: "debit", label: "Debit" },
+                  { value: "credit", label: "Credit" },
+                ]}
+                selected={typeFilters}
+                onToggle={(value) => setTypeFilters((current) => toggleTypedFilterValue(current, value as "debit" | "credit"))}
+                onClear={() => setTypeFilters([])}
+              />
             </div>
 
             <div className="form-actions">
@@ -2206,9 +2357,11 @@ function TransactionsPageContent() {
                 type="button"
                 onClick={() => {
                   setQuery("");
-                  setCategoryFilter("all");
-                  setAccountFilter("all");
-                  setTypeFilter("all");
+                  setCategoryFilters([]);
+                  setAccountFilters([]);
+                  setTypeFilters([]);
+                  setMerchantFilters([]);
+                  setMerchantFilterInput("");
                 }}
               >
                 Reset
