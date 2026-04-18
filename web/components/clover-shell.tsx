@@ -19,7 +19,7 @@ const navItems = [
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/reports", label: "Reports", key: "reports" as const },
-  { href: "/dashboard#insights", label: "Insights", key: "insights" as const },
+  { href: "/reports", label: "Insights", key: "insights" as const },
 ];
 
 type IconName =

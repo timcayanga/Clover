@@ -179,7 +179,7 @@ export default async function ReportsPage() {
 
     return (
       <CloverShell
-        active="reports"
+        active="insights"
         kicker="Insights"
         title="Turn your statements into clear next steps."
         subtitle="These sample reports are shown in staging so the page feels complete even before live workspace data is available."
@@ -808,7 +808,7 @@ export default async function ReportsPage() {
 
     return (
       <CloverShell
-        active="reports"
+        active="insights"
         kicker="Insights"
         title="Turn your statements into clear next steps."
         subtitle="These insights are generated from imported statements, parsed transactions, and manual entries so you can see what changed, why it changed, and what to do next."
