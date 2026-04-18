@@ -238,6 +238,27 @@ label {
   display: grid;
   gap: 0;
   align-items: stretch;
+  background: #ffffff;
+}
+
+.clerk-auth-screen--signup [data-clerk-component="footer"],
+.clerk-auth-screen--signup [data-clerk-component="footerItem"],
+.clerk-auth-screen--signup [data-clerk-component="footerAction"],
+.clerk-auth-screen--signup [data-clerk-component="footerActionText"],
+.clerk-auth-screen--signup [data-clerk-component="footerActionLink"],
+.clerk-auth-screen--signup [data-clerk-component="footerPages"],
+.clerk-auth-screen--signup [data-clerk-component="footerPagesLink"] {
+  background: #ffffff !important;
+}
+
+.clerk-auth-screen--signup [data-clerk-component="footer"] {
+  box-shadow: none !important;
+  border-top-color: transparent !important;
+}
+
+.clerk-auth-screen--signup [data-clerk-component="footerActionLink"] {
+  color: var(--accent) !important;
+  font-weight: 600 !important;
 }
 
 .sidebar {
