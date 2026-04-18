@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
+import { ReportsReviewQueue, type ReportsQueueItem } from "@/components/reports-review-queue";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
@@ -106,23 +107,75 @@ export default async function ReportsPage() {
     ];
 
     const sampleTopCategories = [
-      ["Food & Dining", 3266],
-      ["Transport", 1880],
-      ["Subscriptions", 970],
-      ["Groceries", 740],
-      ["Utilities", 510],
+      { label: "Food & Dining", amount: 3266, color: "#0ea5c8" },
+      { label: "Transport", amount: 1880, color: "#36b6e0" },
+      { label: "Subscriptions", amount: 970, color: "#7dd3fc" },
+      { label: "Groceries", amount: 740, color: "#8b5cf6" },
+      { label: "Utilities", amount: 510, color: "#14b8a6" },
     ] as const;
 
-    const sampleUncategorized = [
-      { id: "sample-1", merchant: "Ride share", account: "Imported transactions", date: new Date("2026-04-15T12:00:00"), amount: 180 },
-      { id: "sample-2", merchant: "Coffee stop", account: "Cash on hand", date: new Date("2026-04-13T12:00:00"), amount: 120 },
-      { id: "sample-3", merchant: "Cloud storage", account: "Imported transactions", date: new Date("2026-04-11T12:00:00"), amount: 320 },
+    const sampleReviewItems: ReportsQueueItem[] = [
+      {
+        title: "Ride share charge needs a category",
+        description: "Assign this imported transport transaction so the spending report stays tidy.",
+        tags: ["No category", "Imported transactions", "₱180.00"],
+        actions: [
+          { label: "Review transaction", href: "/transactions" },
+          { label: "Open imports", href: "/imports", variant: "secondary" },
+        ],
+      },
+      {
+        title: "Coffee stop is still uncategorized",
+        description: "A small manual expense is still waiting for classification.",
+        tags: ["Manual entry", "No category", "₱120.00"],
+        actions: [
+          { label: "Review transaction", href: "/transactions" },
+          { label: "Open settings", href: "/settings", variant: "secondary" },
+        ],
+      },
+      {
+        title: "Supermarket duplicates need confirmation",
+        description: "This matched pair should be checked before it affects totals.",
+        tags: ["Duplicate set", "Imported transactions", "₱1,460.00"],
+        actions: [
+          { label: "Review duplicates", href: "/transactions" },
+          { label: "Open transactions", href: "/transactions", variant: "secondary" },
+        ],
+      },
     ];
 
-    const sampleDuplicates = [
-      { id: "dup-1", merchant: "Supermarket", account: "Imported transactions", date: new Date("2026-04-09T12:00:00"), amount: 1460, count: 2 },
-      { id: "dup-2", merchant: "Ride share", account: "Imported transactions", date: new Date("2026-04-03T12:00:00"), amount: 180, count: 2 },
+    const sampleTotalSpend = sampleTopCategories.reduce((sum, category) => sum + category.amount, 0);
+    const activeAccounts = [
+      { name: "BPI Checking" },
+      { name: "Union Savings" },
+      { name: "GCash Wallet" },
     ];
+    const totalAccountBalance = 41734;
+    const importedTransactions = 42;
+    const manualTransactions = 7;
+    const importedAmount = 38700;
+    const manualAmount = 2034;
+    const chartWidth = 520;
+    const chartHeight = 220;
+    const chartPadding = 24;
+    const chartXSpan = chartWidth - chartPadding * 2;
+    const chartYSpan = chartHeight - chartPadding * 2;
+    const cashFlowValues = sampleMonthBuckets.map((bucket) => bucket.net);
+    const cashFlowMax = Math.max(...cashFlowValues);
+    const cashFlowMin = Math.min(...cashFlowValues);
+    const cashFlowRange = Math.max(cashFlowMax - cashFlowMin, 1);
+    const cashFlowPoints = sampleMonthBuckets.map((bucket, index) => {
+      const x = chartPadding + (index / Math.max(sampleMonthBuckets.length - 1, 1)) * chartXSpan;
+      const normalized = (bucket.net - cashFlowMin) / cashFlowRange;
+      const y = chartPadding + (1 - normalized) * chartYSpan;
+      return { ...bucket, x, y };
+    });
+    const cashFlowPath = cashFlowPoints
+      .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
+      .join(" ");
+    const donutRadius = 72;
+    const donutCircumference = 2 * Math.PI * donutRadius;
+    let donutOffset = 0;
 
     return (
       <CloverShell
@@ -142,26 +195,21 @@ export default async function ReportsPage() {
           </>
         }
       >
-        <section className="reports-summary-grid">
+        <section className="reports-summary-grid reports-summary-grid--three">
           <article className="metric compact glass">
             <span>Net cash flow</span>
             <strong className="positive">₱41,734.00</strong>
             <small>Positive over the last 30 days · sample staging data</small>
           </article>
           <article className="metric compact glass">
-            <span>Spending</span>
+            <span>Inflow</span>
+            <strong>₱45,000.00</strong>
+            <small>Income over the last 30 days · sample staging data</small>
+          </article>
+          <article className="metric compact glass">
+            <span>Outflow</span>
             <strong>₱3,266.00</strong>
-            <small>Current 30-day spend · sample staging data</small>
-          </article>
-          <article className="metric compact glass">
-            <span>Needs review</span>
-            <strong>5</strong>
-            <small>3 uncategorized · 2 duplicate sets</small>
-          </article>
-          <article className="metric compact glass">
-            <span>Import health</span>
-            <strong>6 done</strong>
-            <small>6 done · 1 processing · 0 failed</small>
+            <small>Expenses over the last 30 days · sample staging data</small>
           </article>
         </section>
 
@@ -170,7 +218,7 @@ export default async function ReportsPage() {
             <div className="report-card__head">
               <div>
                 <p className="eyebrow">Cash flow</p>
-                <h4>Money in and money out over time</h4>
+                <h4>Cash flow trend</h4>
               </div>
               <div className="report-card__stat">
                 <strong className="positive">₱41,734.00</strong>
@@ -178,32 +226,32 @@ export default async function ReportsPage() {
               </div>
             </div>
 
-            <div className="report-insight-grid">
-              <div className="report-insight">
-                <span>Current 30 days</span>
-                <strong className="positive">₱41,734.00</strong>
-                <small>Income is holding up.</small>
-              </div>
-              <div className="report-insight">
-                <span>Previous 30 days</span>
-                <strong className="positive">₱29,650.00</strong>
-                <small>Positive cash flow.</small>
-              </div>
-            </div>
+            <div className="report-chart">
+              <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} className="report-chart__svg" role="img" aria-label="Cash flow line chart">
+                <defs>
+                  <linearGradient id="cash-flow-gradient" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="rgba(14,165,233,0.28)" />
+                    <stop offset="100%" stopColor="rgba(14,165,233,0.02)" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d={`${cashFlowPath} L ${cashFlowPoints[cashFlowPoints.length - 1].x.toFixed(1)} ${chartHeight - chartPadding} L ${cashFlowPoints[0].x.toFixed(1)} ${chartHeight - chartPadding} Z`}
+                  fill="url(#cash-flow-gradient)"
+                />
+                <path d={cashFlowPath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                {cashFlowPoints.map((point) => (
+                  <circle key={point.key} cx={point.x} cy={point.y} r="6" fill="white" stroke="var(--accent)" strokeWidth="3" />
+                ))}
+              </svg>
 
-            <div className="report-timeline">
-              {sampleMonthBuckets.map((bucket) => {
-                const width = Math.max((Math.abs(bucket.net) / 41734) * 100, bucket.net === 0 ? 6 : 18);
-                return (
-                  <div key={bucket.key} className="report-timeline__row">
-                    <div className="report-timeline__label">{bucket.label}</div>
-                    <div className="report-timeline__track" aria-hidden="true">
-                      <span className="report-timeline__fill report-timeline__fill--positive" style={{ width: `${Math.min(width, 100)}%` }} />
-                    </div>
-                    <div className="report-timeline__value positive">{formatCurrency(bucket.net)}</div>
+              <div className="report-chart__labels">
+                {cashFlowPoints.map((point) => (
+                  <div key={point.key} className="report-chart__label">
+                    <span>{point.label}</span>
+                    <strong>{formatCurrency(point.net)}</strong>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
           </article>
 
@@ -211,127 +259,93 @@ export default async function ReportsPage() {
             <div className="report-card__head">
               <div>
                 <p className="eyebrow">Spending by category</p>
-                <h4>Where the money actually went</h4>
+                <h4>Donut chart of category mix</h4>
               </div>
               <div className="report-card__stat">
                 <strong>₱3,266.00</strong>
-                <span>5 leading categories</span>
+                <span>{sampleTopCategories.length} categories · 100% of spend</span>
               </div>
             </div>
 
-            <div className="report-list">
-              {sampleTopCategories.map(([categoryName, amount]) => {
-                const max = sampleTopCategories[0][1];
-                const share = (amount / max) * 100;
-                return (
-                  <div key={categoryName} className="report-list__item">
-                    <div className="report-list__meta">
-                      <strong>{categoryName}</strong>
-                      <span>{formatCurrency(amount)}</span>
+            <div className="report-donut">
+              <div className="report-donut__chart" aria-label="Spending donut chart" role="img">
+                <svg viewBox="0 0 240 240">
+                  <circle cx="120" cy="120" r={donutRadius} className="report-donut__track" />
+                  {sampleTopCategories.map((category) => {
+                    const share = (category.amount / sampleTotalSpend) * 100;
+                    const segmentLength = (share / 100) * donutCircumference;
+                    const dashArray = `${segmentLength} ${donutCircumference}`;
+                    const dashOffset = -donutOffset;
+                    donutOffset += segmentLength;
+                    return (
+                      <circle
+                        key={category.label}
+                        cx="120"
+                        cy="120"
+                        r={donutRadius}
+                        className="report-donut__segment"
+                        style={{
+                          stroke: category.color,
+                          strokeDasharray: dashArray,
+                          strokeDashoffset: dashOffset,
+                        }}
+                      />
+                    );
+                  })}
+                </svg>
+                <div className="report-donut__center">
+                  <strong>100%</strong>
+                  <span>spent</span>
+                </div>
+              </div>
+
+              <div className="report-donut__legend">
+                {sampleTopCategories.map((category) => {
+                  const share = (category.amount / sampleTotalSpend) * 100;
+                  return (
+                    <div key={category.label} className="report-donut__legend-item">
+                      <span className="report-donut__swatch" style={{ background: category.color }} />
+                      <div className="report-donut__meta">
+                        <strong>{category.label}</strong>
+                        <span>
+                          {formatCurrency(category.amount)} · {share.toFixed(0)}%
+                        </span>
+                      </div>
                     </div>
-                    <div className="report-list__track" aria-hidden="true">
-                      <span className="report-list__fill" style={{ width: `${Math.max(share, 8)}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </article>
         </section>
 
-        <section className="reports-grid reports-grid--secondary">
-          <article className="report-card glass">
-            <div className="report-card__head">
-              <div>
-                <p className="eyebrow">Review queue</p>
-                <h4>What needs a quick clean-up pass</h4>
-              </div>
-              <div className="report-card__stat">
-                <strong>5</strong>
-                <span>actionable items</span>
-              </div>
-            </div>
-
-            <div className="report-subsection">
-              <p className="eyebrow">Uncategorized</p>
-              <div className="report-list">
-                {sampleUncategorized.map((transaction) => (
-                  <div key={transaction.id} className="report-list__item">
-                    <div className="report-list__meta">
-                      <strong>{transaction.merchant}</strong>
-                      <span>
-                        {transaction.account} · {formatShortDate(transaction.date)} · {formatCurrency(transaction.amount)}
-                      </span>
-                    </div>
-                    <div className="report-tags">
-                      <span className="pill pill-subtle">No category</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="report-subsection">
-              <p className="eyebrow">Possible duplicates</p>
-              <div className="report-list">
-                {sampleDuplicates.map((group) => (
-                  <div key={group.id} className="report-list__item">
-                    <div className="report-list__meta">
-                      <strong>{group.merchant}</strong>
-                      <span>
-                        {group.count} matches · {group.account} · {formatShortDate(group.date)}
-                      </span>
-                    </div>
-                    <div className="report-tags">
-                      <span className="pill pill-subtle">{formatCurrency(group.amount)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+        <section className="reports-grid reports-grid--secondary reports-grid--equal">
+          <article className="report-card report-card--balanced glass">
+            <ReportsReviewQueue items={sampleReviewItems} />
           </article>
 
-          <article className="report-card glass">
+          <article className="report-card report-card--balanced glass">
             <div className="report-card__head">
               <div>
                 <p className="eyebrow">Data health</p>
                 <h4>Imports, manual entries, and balance coverage</h4>
               </div>
               <div className="report-card__stat">
-                <strong>₱41,734.00</strong>
-                <span>2 accounts with balances</span>
+                <strong>{formatCurrency(totalAccountBalance)}</strong>
+                <span>{activeAccounts.length} account{activeAccounts.length === 1 ? "" : "s"} with balances</span>
               </div>
             </div>
 
             <div className="report-insight-grid">
               <div className="report-insight">
                 <span>Imported transactions</span>
-                <strong>42</strong>
-                <small>₱38,700.00 total</small>
+                <strong>{importedTransactions}</strong>
+                <small>{formatCurrency(importedAmount)} total</small>
               </div>
               <div className="report-insight">
                 <span>Manual transactions</span>
-                <strong>7</strong>
-                <small>₱2,034.00 total</small>
-              </div>
-            </div>
-
-            <div className="report-status-list">
-              <div className="report-status-list__item">
-                <span>Done</span>
-                <strong>6</strong>
-              </div>
-              <div className="report-status-list__item">
-                <span>Processing</span>
-                <strong>1</strong>
-              </div>
-              <div className="report-status-list__item">
-                <span>Failed</span>
-                <strong>0</strong>
-              </div>
-              <div className="report-status-list__item">
-                <span>Deleted</span>
-                <strong>0</strong>
+                <strong>{manualTransactions}</strong>
+                <small>{formatCurrency(manualAmount)} total</small>
               </div>
             </div>
 
