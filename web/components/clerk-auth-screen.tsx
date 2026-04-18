@@ -1,10 +1,22 @@
 "use client";
 
 import { SignIn, SignUp } from "@clerk/nextjs";
+import type { Appearance } from "@clerk/types";
 
 type ClerkAuthScreenProps = {
   enabled: boolean;
   mode: "sign-in" | "sign-up";
+};
+
+const cloverAuthAppearance: Appearance = {
+  layout: {
+    logoImageUrl: "/clover-name-teal.svg",
+    logoLinkUrl: "/",
+    logoPlacement: "outside",
+    socialButtonsPlacement: "bottom",
+    socialButtonsVariant: "blockButton",
+    showOptionalFields: false,
+  },
 };
 
 export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
@@ -22,8 +34,16 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
   }
 
   if (mode === "sign-in") {
-    return <SignIn afterSignInUrl="/dashboard" afterSignUpUrl="/onboarding" />;
+    return (
+      <div className="clerk-auth-screen">
+        <SignIn appearance={cloverAuthAppearance} afterSignInUrl="/dashboard" afterSignUpUrl="/onboarding" />
+      </div>
+    );
   }
 
-  return <SignUp afterSignUpUrl="/onboarding" afterSignInUrl="/dashboard" />;
+  return (
+    <div className="clerk-auth-screen">
+      <SignUp appearance={cloverAuthAppearance} afterSignUpUrl="/onboarding" afterSignInUrl="/dashboard" />
+    </div>
+  );
 }

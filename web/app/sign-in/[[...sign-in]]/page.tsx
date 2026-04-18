@@ -4,7 +4,7 @@ const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? process.
 
 export default function SignInPage() {
   return (
-    <main className="page dashboard">
+    <main className="auth-page auth-page--signin">
       <ClerkAuthScreen enabled={Boolean(publishableKey)} mode="sign-in" />
     </main>
   );

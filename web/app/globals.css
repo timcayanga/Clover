@@ -192,6 +192,48 @@ label {
   -webkit-backdrop-filter: blur(16px);
 }
 
+.auth-page {
+  position: relative;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 32px 20px;
+  overflow: hidden;
+}
+
+.auth-page::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(3, 168, 192, 0.14), transparent 26%),
+    radial-gradient(circle at 80% 20%, rgba(94, 211, 224, 0.12), transparent 24%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(244, 249, 251, 0.98));
+  pointer-events: none;
+}
+
+.auth-page::after {
+  content: "";
+  position: absolute;
+  inset: auto auto 12% 8%;
+  width: 220px;
+  height: 220px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(3, 168, 192, 0.18), transparent 72%);
+  filter: blur(4px);
+  pointer-events: none;
+}
+
+.auth-page > * {
+  position: relative;
+  z-index: 1;
+}
+
+.auth-page .clerk-auth-screen {
+  width: 100%;
+  max-width: 520px;
+}
+
 .sidebar {
   height: 100dvh;
   padding: 20px 18px;
