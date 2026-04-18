@@ -37,8 +37,7 @@ export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
     <div className="reports-review-queue">
       <div className="report-card__head">
         <div>
-          <p className="eyebrow">Review queue</p>
-          <h4>{items.length} actionable item{items.length === 1 ? "" : "s"}</h4>
+          <h4>Review queue</h4>
         </div>
         <div className="report-card__stat">
           <strong>

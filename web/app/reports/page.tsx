@@ -217,8 +217,7 @@ export default async function ReportsPage() {
           <article className="report-card glass report-card--wide">
             <div className="report-card__head">
               <div>
-                <p className="eyebrow">Cash flow</p>
-                <h4>Cash flow trend</h4>
+                <h4>Cash flow</h4>
               </div>
               <div className="report-card__stat">
                 <strong className="positive">₱41,734.00</strong>
@@ -258,8 +257,7 @@ export default async function ReportsPage() {
           <article className="report-card glass">
             <div className="report-card__head">
               <div>
-                <p className="eyebrow">Spending by category</p>
-                <h4>Donut chart of category mix</h4>
+                <h4>Spending by category</h4>
               </div>
               <div className="report-card__stat">
                 <strong>₱3,266.00</strong>
@@ -327,8 +325,7 @@ export default async function ReportsPage() {
           <article className="report-card report-card--balanced glass">
             <div className="report-card__head">
               <div>
-                <p className="eyebrow">Data health</p>
-                <h4>Imports, manual entries, and balance coverage</h4>
+                <h4>Data health</h4>
               </div>
               <div className="report-card__stat">
                 <strong>{formatCurrency(totalAccountBalance)}</strong>
@@ -882,8 +879,7 @@ export default async function ReportsPage() {
           <article className="report-ai-card glass">
             <div className="report-card__head">
               <div>
-                <p className="eyebrow">Signals</p>
-                <h4>What the model is paying attention to</h4>
+                <h4>Signals</h4>
               </div>
             </div>
             <div className="report-ai-signal-grid">
@@ -900,8 +896,7 @@ export default async function ReportsPage() {
           <article className="report-ai-card glass">
             <div className="report-card__head">
               <div>
-                <p className="eyebrow">Next moves</p>
-                <h4>Suggested actions</h4>
+                <h4>Next moves</h4>
               </div>
             </div>
             <div className="report-list">
@@ -957,8 +952,7 @@ export default async function ReportsPage() {
           <article className="report-card glass report-card--wide">
             <div className="report-card__head">
               <div>
-                <p className="eyebrow">Cash flow</p>
-                <h4>Money in and money out over time</h4>
+                <h4>Cash flow</h4>
               </div>
               <div className="report-card__stat">
                 <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
@@ -1029,8 +1023,7 @@ export default async function ReportsPage() {
           <article className="report-card glass">
             <div className="report-card__head">
               <div>
-                <p className="eyebrow">Spending behavior</p>
-                <h4>Where the money concentrated this month</h4>
+                <h4>Spending by category</h4>
               </div>
               <div className="report-card__stat">
                 <strong>{formatCurrency(currentSpend)}</strong>
@@ -1087,8 +1080,7 @@ export default async function ReportsPage() {
           <article className="report-card glass">
             <div className="report-card__head">
               <div>
-                <p className="eyebrow">Review queue</p>
-                <h4>What needs a quick clean-up pass</h4>
+                <h4>Review queue</h4>
               </div>
               <div className="report-card__stat">
                 <strong>{uncategorizedTransactions.length + possibleDuplicateGroups.length}</strong>
@@ -1151,8 +1143,7 @@ export default async function ReportsPage() {
           <article className="report-card glass">
             <div className="report-card__head">
               <div>
-                <p className="eyebrow">Data health</p>
-                <h4>Imports, manual entries, and balance coverage</h4>
+                <h4>Data health</h4>
               </div>
               <div className="report-card__stat">
                 <strong>{formatCurrency(totalAccountBalance)}</strong>
