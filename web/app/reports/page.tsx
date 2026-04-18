@@ -90,7 +90,7 @@ const getMonthBuckets = (anchor: Date) => {
   return buckets;
 };
 
-export async function ReportsPageView({ active = "reports" }: { active?: "reports" | "insights" }) {
+async function ReportsPageView({ active = "reports" }: { active?: "reports" | "insights" }) {
   const headerList = await headers();
   const hostname = (headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "")
     .split(",")[0]
