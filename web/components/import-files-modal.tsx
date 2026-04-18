@@ -3,6 +3,7 @@
 import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { ImportProgressModal } from "@/components/import-progress-modal";
+import { ImportPasswordModal } from "@/components/import-password-modal";
 import { detectStatementMetadata } from "@/lib/import-parser";
 import { pdfjs } from "@/lib/pdfjs";
 
@@ -123,6 +124,7 @@ export function ImportFilesModal({
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("Upload CSV or PDF files to import transactions and balances.");
+  const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -130,6 +132,7 @@ export function ImportFilesModal({
       setDragActive(false);
       setBusy(false);
       setSelectedAccountId("");
+      setSelectedPasswordItemId(null);
       accountIdByKeyRef.current.clear();
       setMessage("Upload CSV or PDF files to import transactions and balances.");
       return;
@@ -416,6 +419,9 @@ export function ImportFilesModal({
 
   const activeItem = items.find((item) => item.status === "parsing" || item.status === "importing") ?? null;
   const activeItemIndex = activeItem ? items.findIndex((item) => item.id === activeItem.id) + 1 : null;
+  const passwordItems = items.filter((item) => item.status === "needs_password");
+  const activePasswordItem =
+    passwordItems.find((item) => item.id === selectedPasswordItemId) ?? passwordItems[0] ?? null;
   const hasCompletedAllFiles = items.length > 0 && items.every((item) => item.confirmationState === "confirmed");
   const pendingProgressItem =
     busy && !activeItem
@@ -431,6 +437,17 @@ export function ImportFilesModal({
 
     onClose();
   }, [hasCompletedAllFiles, onClose, open]);
+
+  useEffect(() => {
+    if (!open || passwordItems.length === 0) {
+      setSelectedPasswordItemId(null);
+      return;
+    }
+
+    if (!selectedPasswordItemId || !passwordItems.some((item) => item.id === selectedPasswordItemId)) {
+      setSelectedPasswordItemId(passwordItems[0].id);
+    }
+  }, [open, passwordItems, selectedPasswordItemId]);
 
   const handleStartImport = async () => {
     if (busy) return;
@@ -550,6 +567,31 @@ export function ImportFilesModal({
         statusLabel={progressItem.status === "importing" ? "Importing" : busy ? "Importing" : "Parsing"}
         fileIndex={progressItemIndex}
         fileTotal={items.length}
+      />
+    );
+  }
+
+  if (activePasswordItem) {
+    return (
+      <ImportPasswordModal
+        open
+        files={passwordItems.map((item) => ({
+          id: item.id,
+          name: item.file.name,
+          sizeLabel: `${fileTypeLabel(item.file)} · ${Math.max(1, Math.round(item.file.size / 1024))} KB`,
+          error: item.error,
+          password: item.password,
+          passwordVisible: item.passwordVisible,
+        }))}
+        activeFileId={activePasswordItem.id}
+        busy={busy}
+        onClose={onClose}
+        onSelectFile={(id) => setSelectedPasswordItemId(id)}
+        onPasswordChange={(id, password) => updateItem(id, { password, error: null })}
+        onToggleVisibility={(id) =>
+          updateItem(id, { passwordVisible: !items.find((item) => item.id === id)?.passwordVisible })
+        }
+        onUnlock={(id) => void handleRetry(id)}
       />
     );
   }
