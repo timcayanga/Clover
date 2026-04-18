@@ -237,6 +237,7 @@ label {
 .clerk-auth-screen--signup {
   display: grid;
   gap: 0;
+  align-items: stretch;
 }
 
 .clerk-auth-screen--signup [data-clerk-component="footer"],
@@ -250,11 +251,11 @@ label {
 }
 
 .clerk-auth-screen__footer {
-  margin: 0;
-  padding: 14px 24px 22px;
+  margin: -1px 0 0;
+  padding: 12px 24px 20px;
   text-align: center;
   border: 1px solid var(--stroke);
-  border-top: 0;
+  border-top-color: var(--stroke);
   border-radius: 0 0 28px 28px;
   background: #ffffff;
   box-shadow: none;
