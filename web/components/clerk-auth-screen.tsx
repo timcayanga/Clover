@@ -23,6 +23,11 @@ const cloverAuthAppearance: Appearance = {
     colorPrimary: "#03a8c0",
     colorPrimaryForeground: "#ffffff",
   },
+  elements: {
+    footer: {
+      display: "none",
+    },
+  },
 };
 
 export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {

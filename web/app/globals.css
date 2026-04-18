@@ -250,14 +250,14 @@ label {
 }
 
 .clerk-auth-screen__footer {
-  margin: -1px 0 0;
-  padding: 16px 24px 22px;
+  margin: 0;
+  padding: 14px 24px 22px;
   text-align: center;
   border: 1px solid var(--stroke);
-  border-top: 1px solid var(--stroke);
+  border-top: 0;
   border-radius: 0 0 28px 28px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--shadow-soft);
+  background: #ffffff;
+  box-shadow: none;
   color: var(--muted);
   font-size: 15px;
 }
