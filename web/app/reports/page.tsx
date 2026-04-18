@@ -141,26 +141,6 @@ export default async function ReportsPage() {
           </>
         }
       >
-        <section className="report-card glass">
-          <p className="eyebrow">Goal-aware insights</p>
-          <h4>A calm view of your money that explains what changed and what it means.</h4>
-          <p className="panel-muted">
-            Sample data keeps staging readable and avoids the empty-page feeling while we keep the live report logic
-            focused on useful, minimal reporting.
-          </p>
-          <div className="hero-actions">
-            <Link className="button button-primary" href="/transactions">
-              Open transactions
-            </Link>
-            <Link className="button button-secondary" href="/imports">
-              Open imports
-            </Link>
-            <Link className="button button-secondary" href="/settings">
-              Review settings
-            </Link>
-          </div>
-        </section>
-
         <section className="reports-summary-grid">
           <article className="metric compact glass">
             <span>Net cash flow</span>
