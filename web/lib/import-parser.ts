@@ -96,10 +96,21 @@ const normalizeBpiText = (text: string) =>
 
 const compactWhitespace = (value: string) => normalizeWhitespace(value).replace(/\s+/g, "");
 
+const MAX_DECIMAL_AMOUNT = 9_999_999_999_999_999.99;
+
 const parseMoney = (value?: string | null) => {
   if (!value) return null;
-  const parsed = Number(String(value).replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(parsed) ? parsed : null;
+  const cleaned = String(value).replace(/[^0-9.-]/g, "");
+  if (!cleaned || cleaned === "-" || cleaned === "." || cleaned === "-.") {
+    return null;
+  }
+
+  const parsed = Number(cleaned);
+  if (!Number.isFinite(parsed) || Math.abs(parsed) > MAX_DECIMAL_AMOUNT) {
+    return null;
+  }
+
+  return parsed;
 };
 
 const institutionPatterns: Array<{ name: string; pattern: RegExp }> = [
@@ -568,6 +579,11 @@ export const parseDateValue = (value?: string | null) => {
 
 export const parseAmountValue = (value?: string | null) => {
   if (!value) return null;
-  const parsed = Number(String(value).replace(/[^0-9.-]/g, ""));
-  return Number.isFinite(parsed) ? parsed : null;
+  const cleaned = String(value).replace(/[^0-9.-]/g, "");
+  if (!cleaned || cleaned === "-" || cleaned === "." || cleaned === "-.") {
+    return null;
+  }
+
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) && Math.abs(parsed) <= MAX_DECIMAL_AMOUNT ? parsed : null;
 };

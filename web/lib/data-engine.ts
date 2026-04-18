@@ -567,6 +567,11 @@ export const insertTransactionCompat = async (params: {
 }) => {
   const columns = new Set(await getCompatibleTransactionColumns());
   const record: Record<string, unknown> = {};
+  const amount = parseAmountValue(typeof params.amount === "number" ? String(params.amount) : params.amount ?? null);
+
+  if (amount === null) {
+    throw new Error("Invalid transaction amount.");
+  }
 
   if (columns.has("id")) record.id = crypto.randomUUID();
   if (columns.has("workspaceId")) record.workspaceId = params.workspaceId;
@@ -583,7 +588,7 @@ export const insertTransactionCompat = async (params: {
   if (columns.has("normalizedPayload")) record.normalizedPayload = params.normalizedPayload ?? null;
   if (columns.has("learnedRuleIdsApplied")) record.learnedRuleIdsApplied = params.learnedRuleIdsApplied ?? null;
   if (columns.has("date")) record.date = params.date;
-  if (columns.has("amount")) record.amount = typeof params.amount === "number" ? params.amount : String(params.amount);
+  if (columns.has("amount")) record.amount = amount;
   if (columns.has("currency")) record.currency = params.currency;
   if (columns.has("type")) record.type = params.type;
   if (columns.has("merchantRaw")) record.merchantRaw = params.merchantRaw;
@@ -618,7 +623,12 @@ export const buildParsedTransactionInsertData = async (params: {
 }) => {
   const columns = new Set(await getCompatibleParsedTransactionColumns());
 
-  return params.rows.map((row) => {
+  return params.rows.flatMap((row) => {
+    const amount = parseAmountValue(row.amount ?? null);
+    if (amount === null) {
+      return [];
+    }
+
     const record: Record<string, unknown> = {};
     if (columns.has("id")) record.id = crypto.randomUUID();
     if (columns.has("importFileId")) record.importFileId = params.importFileId;
@@ -627,7 +637,7 @@ export const buildParsedTransactionInsertData = async (params: {
     if (columns.has("accountNumber")) record.accountNumber = params.metadata.accountNumber;
     if (columns.has("accountName")) record.accountName = row.accountName ?? null;
     if (columns.has("date")) record.date = parseDateValue(row.date ?? null);
-    if (columns.has("amount")) record.amount = parseAmountValue(row.amount ?? null);
+    if (columns.has("amount")) record.amount = amount;
     if (columns.has("merchantRaw")) record.merchantRaw = row.merchantRaw ?? null;
     if (columns.has("merchantClean")) record.merchantClean = row.merchantClean ?? row.merchantRaw ?? null;
     if (columns.has("type")) record.type = row.type ?? "expense";
@@ -646,7 +656,7 @@ export const buildParsedTransactionInsertData = async (params: {
     if (columns.has("normalizedPayload")) record.normalizedPayload = (row.normalizedPayload ?? null) as Prisma.InputJsonValue | null;
     if (columns.has("learnedRuleIdsApplied")) record.learnedRuleIdsApplied = (row.learnedRuleIdsApplied ?? null) as Prisma.InputJsonValue | null;
     if (columns.has("createdAt")) record.createdAt = new Date();
-    return record;
+    return [record];
   });
 };
 

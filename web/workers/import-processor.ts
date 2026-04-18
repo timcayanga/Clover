@@ -1,6 +1,6 @@
 import type { Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { parseImportText } from "@/lib/import-parser";
+import { parseAmountValue, parseImportText } from "@/lib/import-parser";
 import {
   DATA_ENGINE_VERSION,
   buildParsedTransactionInsertData,
@@ -137,7 +137,10 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
       learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
       date: row.date instanceof Date ? row.date : row.date ? new Date(String(row.date)) : new Date(),
-      amount: typeof row.amount === "number" ? row.amount : Number(String(row.amount ?? "0").replace(/[^0-9.-]/g, "")) || 0,
+      amount:
+        parseAmountValue(
+          typeof row.amount === "number" ? String(row.amount) : typeof row.amount === "string" ? row.amount : null
+        ) ?? 0,
       currency: "PHP",
       type: (rowType ?? "expense") as TransactionType,
       merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
