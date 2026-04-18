@@ -606,17 +606,23 @@ function TransactionsPageContent() {
   const [bulkEditForm, setBulkEditForm] = useState<BulkEditForm>(createEmptyBulkEditForm());
   const [manualForm, setManualForm] = useState<ManualTransactionForm>(createEmptyManualForm());
   const [isSaving, setIsSaving] = useState(false);
+  const [isWorkspacesLoaded, setIsWorkspacesLoaded] = useState(false);
+  const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
 
   const loadWorkspaces = async () => {
-    const response = await fetch("/api/workspaces");
-    if (!response.ok) return;
-    const data = await response.json();
-    const items = Array.isArray(data.workspaces) ? data.workspaces : [];
-    setWorkspaces(items);
-    setSelectedWorkspaceId((current) => current || items[0]?.id || "");
+    try {
+      const response = await fetch("/api/workspaces");
+      if (!response.ok) return;
+      const data = await response.json();
+      const items = Array.isArray(data.workspaces) ? data.workspaces : [];
+      setWorkspaces(items);
+      setSelectedWorkspaceId((current) => current || items[0]?.id || "");
+    } finally {
+      setIsWorkspacesLoaded(true);
+    }
   };
 
   const loadWorkspaceData = async (workspaceId: string) => {
@@ -661,11 +667,43 @@ function TransactionsPageContent() {
   }, []);
 
   useEffect(() => {
-    void loadWorkspaceData(selectedWorkspaceId);
+    if (!isWorkspacesLoaded) {
+      return;
+    }
+
+    let active = true;
+
     setSelectedTransactionIds([]);
     setSelectedTransaction(null);
     setDetailDraft(null);
-  }, [selectedWorkspaceId]);
+
+    if (!selectedWorkspaceId) {
+      setAccounts([]);
+      setCategories([]);
+      setTransactions([]);
+      setImports([]);
+      setIsWorkspaceDataReady(true);
+      return () => {
+        active = false;
+      };
+    }
+
+    setAccounts([]);
+    setCategories([]);
+    setTransactions([]);
+    setImports([]);
+    setIsWorkspaceDataReady(false);
+    void (async () => {
+      await loadWorkspaceData(selectedWorkspaceId);
+      if (active) {
+        setIsWorkspaceDataReady(true);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [selectedWorkspaceId, isWorkspacesLoaded]);
 
   useEffect(() => {
     if (!addMenuOpen && !downloadMenuOpen) {
@@ -1185,6 +1223,7 @@ function TransactionsPageContent() {
   const netGain = totals.income - totals.expense;
   const hasReviewItems = totals.review > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
+  const isTableLoading = !isWorkspacesLoaded || (Boolean(selectedWorkspaceId) && !isWorkspaceDataReady);
 
   return (
     <CloverShell active="transactions" title="Transactions" showTopbar={false}>
@@ -1413,8 +1452,38 @@ function TransactionsPageContent() {
             <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
           </div>
 
-          <div className="table-wrap transactions-table-wrap">
-            {filteredTransactions.length > 0 ? (
+          <div className="table-wrap transactions-table-wrap" aria-busy={isTableLoading}>
+            {isTableLoading ? (
+              <div className="transactions-loading-state" role="status" aria-live="polite" aria-label="Loading transactions">
+                <div className="transactions-loading-header">
+                  <span className="skeleton-block skeleton-block--checkbox" />
+                  <span className="skeleton-block skeleton-block--icon" />
+                  <span className="skeleton-block skeleton-block--name" />
+                  <span className="skeleton-block skeleton-block--date" />
+                  <span className="skeleton-block skeleton-block--account" />
+                  <span className="skeleton-block skeleton-block--category" />
+                  <span className="skeleton-block skeleton-block--amount" />
+                  <span className="skeleton-block skeleton-block--chevron" />
+                  <span className="skeleton-block skeleton-block--warning" />
+                </div>
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={index} className="transactions-loading-row">
+                    <span className="skeleton-block skeleton-block--checkbox" />
+                    <span className="skeleton-block skeleton-block--icon" />
+                    <span className="transactions-loading-name">
+                      <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+                      <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+                    </span>
+                    <span className="skeleton-block skeleton-block--date" />
+                    <span className="skeleton-block skeleton-block--account" />
+                    <span className="skeleton-block skeleton-block--category" />
+                    <span className="skeleton-block skeleton-block--amount" />
+                    <span className="skeleton-block skeleton-block--chevron" />
+                    <span className="skeleton-block skeleton-block--warning" />
+                  </div>
+                ))}
+              </div>
+            ) : filteredTransactions.length > 0 ? (
               filteredTransactions.map((transaction) => {
                 const warningReason = warningReasonFor(transaction);
                 const amount = Number(transaction.amount);
@@ -1528,7 +1597,9 @@ function TransactionsPageContent() {
                 );
               })
             ) : (
-              <div className="empty-state">No transactions match the current filters.</div>
+              <div className="empty-state">
+                {selectedWorkspaceId ? "No transactions match the current filters." : "Select a workspace to review transactions."}
+              </div>
             )}
           </div>
 
