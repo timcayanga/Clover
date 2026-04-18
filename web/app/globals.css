@@ -240,38 +240,6 @@ label {
   align-items: stretch;
 }
 
-.clerk-auth-screen--signup [data-clerk-component="footer"],
-.clerk-auth-screen--signup [data-clerk-component="footerItem"],
-.clerk-auth-screen--signup [data-clerk-component="footerAction"],
-.clerk-auth-screen--signup [data-clerk-component="footerActionText"],
-.clerk-auth-screen--signup [data-clerk-component="footerActionLink"],
-.clerk-auth-screen--signup [data-clerk-component="footerPages"],
-.clerk-auth-screen--signup [data-clerk-component="footerPagesLink"] {
-  display: none !important;
-}
-
-.clerk-auth-screen__footer {
-  margin: -1px 0 0;
-  padding: 12px 24px 20px;
-  text-align: center;
-  border: 1px solid var(--stroke);
-  border-top-color: var(--stroke);
-  border-radius: 0 0 28px 28px;
-  background: #ffffff;
-  box-shadow: none;
-  color: var(--muted);
-  font-size: 15px;
-}
-
-.clerk-auth-screen__footer-link {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.clerk-auth-screen__footer-link:hover {
-  color: var(--accent-hover);
-}
-
 .sidebar {
   height: 100dvh;
   padding: 20px 18px;
