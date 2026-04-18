@@ -42,7 +42,7 @@ const guessCategoryName = (text: string, type: TransactionType) => {
   if (/education|tuition|school|college|course|learning/.test(lower)) return "Education";
   if (/gift|donation|charity|present/.test(lower)) return "Gifts & Donations";
   if (/business|invoice|client|contract/.test(lower)) return "Business";
-  if (/fee|interest|loan|financial|bank charge/.test(lower)) return "Financial";
+  if (/\bfee\b|interest|loan|financial|bank charge/.test(lower)) return "Financial";
   return "Other";
 };
 
@@ -199,6 +199,81 @@ const parseBpiDate = (value?: string | null) => {
   return new Date(Date.UTC(Number(match[3]), monthIndex, Number(match[2]), 12));
 };
 
+const parseRcbcDate = (value?: string | null) => {
+  if (!value) return null;
+
+  const normalized = normalizeWhitespace(value);
+  const monthDayYearMatch = normalized.match(/^([A-Z]{3})\s+(\d{1,2})\s+(\d{4})$/i);
+  if (monthDayYearMatch) {
+    const monthIndex = monthIndexByAbbr[monthDayYearMatch[1].slice(0, 3).toUpperCase()];
+    if (monthIndex === undefined) {
+      return null;
+    }
+
+    return new Date(Date.UTC(Number(monthDayYearMatch[3]), monthIndex, Number(monthDayYearMatch[2]), 12));
+  }
+
+  const slashDateMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slashDateMatch) {
+    const month = Number(slashDateMatch[1]) - 1;
+    const day = Number(slashDateMatch[2]);
+    const year = Number(slashDateMatch[3].length === 2 ? `20${slashDateMatch[3]}` : slashDateMatch[3]);
+    return new Date(Date.UTC(year, month, day, 12));
+  }
+
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+  const normalized = text.replace(/\u00a0/g, " ");
+  const compact = normalizeWhitespace(normalized);
+  if (!/\bRCBC\b|\bRCBC BANKARD\b|\bBANKARD\b|\bVISA PLATINUM\b/i.test(compact)) {
+    return null;
+  }
+
+  const lines = normalized
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+
+  const cardMatch =
+    lines
+      .map((line) => line.match(/\b(\d{4}[-\s]\d{4}[-\s]\d{4}[-\s]\d{4})\b/))
+      .find((match) => Boolean(match?.[1])) ??
+    compact.match(/\b(\d{4}[-\s]\d{4}[-\s]\d{4}[-\s]\d{4})\b/);
+  const accountNumber = cardMatch?.[1] ? cardMatch[1].replace(/\D/g, "") : null;
+  const accountName = accountNumber ? `RCBC ${accountNumber.slice(-4)}` : "RCBC";
+
+  const dateLine =
+    lines.find((line) => /STATEMENT\s+DATE\s+PAYMENT\s+DUE\s+DATE/i.test(line)) ??
+    compact;
+  const dateMatch =
+    dateLine.match(/([A-Z]{3}\s+\d{1,2}\s+\d{4})\s+([A-Z]{3}\s+\d{1,2}\s+\d{4})/i) ??
+    compact.match(/([A-Z]{3}\s+\d{1,2}\s+\d{4})\s+([A-Z]{3}\s+\d{1,2}\s+\d{4})/i);
+  const startDate = parseRcbcDate(dateMatch?.[1] ?? null);
+  const endDate = parseRcbcDate(dateMatch?.[2] ?? null);
+
+  let openingBalance: number | null = null;
+  let endingBalance: number | null = null;
+  const summaryIndex = lines.findIndex((line) => /PREVIOUS\s+BALANCE.*TOTAL\s+BALANCE\s+DUE/i.test(line));
+  if (summaryIndex >= 0 && lines[summaryIndex + 1]) {
+    const values = lines[summaryIndex + 1].match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
+    openingBalance = parseMoney(values[0] ?? null);
+    endingBalance = parseMoney(values.at(-1) ?? null);
+  }
+
+  return {
+    institution: "RCBC",
+    accountNumber,
+    accountName,
+    openingBalance,
+    endingBalance,
+    startDate: startDate ? startDate.toISOString() : null,
+    endDate: endDate ? endDate.toISOString() : null,
+  };
+};
+
 const monthIndexByAbbr: Record<string, number> = {
   JAN: 0,
   FEB: 1,
@@ -266,6 +341,123 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     endingBalance,
     startDate: startDate ? startDate.toISOString() : null,
     endDate: endDate ? endDate.toISOString() : null,
+  };
+};
+
+const guessRcbcCategoryName = (description: string, type: TransactionType) => {
+  const lower = description.toLowerCase();
+  if (/^cash payment$/i.test(description) || /cash payment|payment to card|card payment/.test(lower)) return "Transfers";
+  if (/transfer|instapay|pesonet/.test(lower)) return "Transfers";
+  if (/interest|\bfee\b|charge|finance charge|late charge|cash advance/.test(lower)) return "Financial";
+  if (/bills payment|utility|bill|payment/.test(lower)) return "Bills & Utilities";
+  if (/salary|payroll|credit memo|refund|reversal/.test(lower) && type !== "expense") return "Income";
+  return guessCategoryName(description, type);
+};
+
+const parseRcbcTransactionLine = (
+  line: string,
+  state: {
+    accountName: string;
+    cardNumber: string | null;
+  }
+) => {
+  const normalized = normalizeWhitespace(line);
+  const match = normalized.match(/^(\d{2}\/\d{2}\/\d{2})\s+(\d{2}\/\d{2}\/\d{2})\s+(.+?)\s+([0-9][0-9,]*\.\d{2}-?)$/);
+  if (!match) {
+    return null;
+  }
+
+  const saleDate = parseDateValue(match[1]);
+  const postDate = parseDateValue(match[2]);
+  const description = normalizeWhitespace(match[3]);
+  const amountText = match[4];
+  const amount = parseMoney(amountText);
+  if (!saleDate || amount === null) {
+    return null;
+  }
+
+  const type: TransactionType = /cash payment|payment to card|card payment/i.test(description)
+    ? "transfer"
+    : /refund|reversal|credit memo/i.test(description)
+      ? "income"
+      : "expense";
+
+  const categoryName = guessRcbcCategoryName(description, type);
+  return {
+    date: saleDate.toISOString().slice(0, 10),
+    amount: amount.toFixed(2),
+    merchantRaw: description,
+    merchantClean: description,
+    description,
+    categoryName,
+    accountName: state.accountName,
+    type,
+    rawPayload: {
+      bank: "RCBC",
+      cardNumber: state.cardNumber,
+      saleDate: saleDate.toISOString().slice(0, 10),
+      postDate: postDate ? postDate.toISOString().slice(0, 10) : null,
+      amountText,
+      line: normalized,
+    },
+  } satisfies ParsedImportRow;
+};
+
+const parseRcbcImportText = (text: string) => {
+  const normalizedText = text.replace(/\u00a0/g, " ");
+  const metadata = rcbcStatementMetadata(normalizedText);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = normalizedText
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+
+  const headerIndex = lines.findIndex((line) => /SALE\s+DATE\s+POST\s+DATE\s+DESCRIPTION\s+AMOUNT/i.test(line));
+  if (headerIndex < 0) {
+    return {
+      metadata,
+      rows: [],
+    };
+  }
+
+  const endIndexCandidates = [
+    lines.findIndex((line, index) => index > headerIndex && /BALANCE\s+END/i.test(line)),
+    lines.findIndex((line, index) => index > headerIndex && /\*\*\*\s*END OF STATEMENT/i.test(line)),
+    lines.findIndex((line, index) => index > headerIndex && /PAGE\s+3\s+of/i.test(line)),
+  ].filter((index) => index >= 0);
+
+  const endIndex = endIndexCandidates.length > 0 ? Math.min(...endIndexCandidates) : lines.length;
+  const rows: ParsedImportRow[] = [];
+
+  for (const line of lines.slice(headerIndex + 1, endIndex)) {
+    if (
+      !line ||
+      /IMPORTANT REMINDERS/i.test(line) ||
+      /PREVIOUS\s+STATEMENT\s+BALANCE/i.test(line) ||
+      /BALANCE\s+END/i.test(line) ||
+      /PAGE\s+\d+\s+of\s+\d+/i.test(line) ||
+      /TOTAL\s+BALANCE\s+DUE/i.test(line) ||
+      /^([A-Z]{3,4})\s+[0-9,]+\.\d{2}$/.test(line)
+    ) {
+      continue;
+    }
+
+    const parsed = parseRcbcTransactionLine(line, {
+      accountName: metadata.accountName ?? "RCBC",
+      cardNumber: metadata.accountNumber,
+    });
+
+    if (parsed) {
+      rows.push(parsed);
+    }
+  }
+
+  return {
+    metadata,
+    rows,
   };
 };
 
@@ -426,6 +618,11 @@ const parseBpiImportText = (text: string) => {
 };
 
 export const detectStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+  const rcbcMetadata = rcbcStatementMetadata(text);
+  if (rcbcMetadata) {
+    return rcbcMetadata;
+  }
+
   const bpiMetadata = bpiStatementMetadata(text);
   if (bpiMetadata) {
     return bpiMetadata;
@@ -536,6 +733,11 @@ const parseHeuristicLines = (text: string) => {
 };
 
 export const parseImportText = (text: string, fileName: string, fileType: string): ParsedImportRow[] => {
+  const rcbcParsed = parseRcbcImportText(text);
+  if (rcbcParsed) {
+    return rcbcParsed.rows;
+  }
+
   const bpiParsed = parseBpiImportText(text);
   if (bpiParsed) {
     return bpiParsed.rows;
