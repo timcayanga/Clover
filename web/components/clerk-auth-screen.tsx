@@ -24,18 +24,21 @@ const cloverAuthAppearance: Appearance = {
     colorPrimaryForeground: "#ffffff",
   },
   elements: {
+    rootBox: {
+      backgroundColor: "transparent",
+      boxShadow: "none",
+    },
+    card: {
+      backgroundColor: "transparent",
+      boxShadow: "none",
+      border: "0",
+      padding: "0",
+    },
+    main: {
+      backgroundColor: "transparent",
+    },
     footer: {
       display: "none",
-    },
-    footerAction: {
-      backgroundColor: "#ffffff",
-    },
-    footerActionText: {
-      color: "#6b7280",
-    },
-    footerActionLink: {
-      color: "#03a8c0",
-      fontWeight: "600",
     },
   },
 };
