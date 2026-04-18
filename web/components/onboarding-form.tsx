@@ -269,11 +269,6 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
         </>
       )}
 
-      {step === "goals" ? (
-        <p className="onboarding-status" aria-live="polite">
-          {message}
-        </p>
-      ) : null}
     </section>
   );
 }
