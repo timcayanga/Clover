@@ -464,9 +464,15 @@ const parseRcbcImportText = (text: string) => {
 
 const guessBpiCategoryName = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
+  const compact = compactWhitespace(description).toLowerCase();
   if (/^beginning balance$/i.test(description)) return "Opening Balance";
   if (type === "transfer") return "Transfers";
-  if (/transfer fee|service charge|withheld tax|tax withheld|bank charge|fee/.test(lower)) return "Financial";
+  if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) return "Financial";
+  if (/instapay transfer fee|instapaytransferfee|transfer fee|transferfee/.test(lower) || /instapaytransferfee|transferfee/.test(compact)) {
+    return "Transfers";
+  }
+  if (/service charge|bank charge/.test(lower)) return "Financial";
+  if (/fee/.test(lower)) return "Financial";
   if (/bills payment|utility|bill|payment/.test(lower)) return "Bills & Utilities";
   if (/interest earned|interest/.test(lower)) return "Income";
   return guessCategoryName(description, type);
@@ -520,6 +526,8 @@ const parseBpiTransactionLine = (
   const descriptionLower = description.toLowerCase();
   let type: TransactionType = amountDelta >= 0 ? "income" : "expense";
   if (/transfer/.test(descriptionLower) && !/fee/.test(descriptionLower)) {
+    type = "transfer";
+  } else if (/instapay\s*transfer\s*fee|instapaytransferfee|transfer\s*fee|transferfee/.test(descriptionLower)) {
     type = "transfer";
   } else if (/fee|tax withheld|withheld tax|bills payment|payment|withdrawal|service charge/.test(descriptionLower)) {
     type = "expense";

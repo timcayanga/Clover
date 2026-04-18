@@ -63,6 +63,48 @@ export const processImportFileText = async (importFileId: string, text: string) 
   return { count: rows.length };
 };
 
+const extractHumanReadableDescription = (rawPayload: Prisma.InputJsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const candidates = [
+    payload.description,
+    payload.notes,
+    payload.memo,
+    payload.detail,
+    payload.line,
+    payload.merchant,
+    payload.merchantRaw,
+    payload.transactionDescription,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string") {
+      const trimmed = candidate.trim();
+      if (!trimmed) {
+        continue;
+      }
+
+      if (/^[\[{]/.test(trimmed)) {
+        try {
+          const parsed = JSON.parse(trimmed);
+          if (parsed && typeof parsed === "object") {
+            continue;
+          }
+        } catch {
+          // Keep the original string when it is only JSON-like noise.
+        }
+      }
+
+      return trimmed;
+    }
+  }
+
+  return null;
+};
+
 export const confirmImportFile = async (importFileId: string, accountId: string) => {
   const parsedRows = await fetchParsedTransactionRows(importFileId);
 
@@ -158,7 +200,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       type: (rowType ?? "expense") as TransactionType,
       merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
       merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
-      description: typeof row.rawPayload === "object" && row.rawPayload !== null ? JSON.stringify(row.rawPayload) : null,
+      description: extractHumanReadableDescription(row.rawPayload ?? null),
       isTransfer: rowType === "transfer",
       isExcluded: typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance",
     });

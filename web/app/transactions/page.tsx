@@ -469,6 +469,30 @@ const createEmptyBulkEditForm = (): BulkEditForm => ({
   isTransfer: "",
 });
 
+const normalizeTransactionNotes = (value: string | null | undefined) => {
+  if (!value) {
+    return "";
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+
+  if (/^[\[{]/.test(trimmed)) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object") {
+        return "";
+      }
+    } catch {
+      // Keep non-JSON strings that merely start with braces.
+    }
+  }
+
+  return trimmed;
+};
+
 const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => ({
   merchantRaw: transaction.merchantRaw,
   merchantClean: transaction.merchantClean ?? "",
@@ -477,8 +501,7 @@ const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => 
   categoryId: transaction.categoryId ?? "",
   amount: transaction.amount,
   type: transaction.type === "income" ? "credit" : "debit",
-  description:
-    transaction.description && !/^\s*\{[\s\S]*\}\s*$/.test(transaction.description) ? transaction.description : "",
+  description: normalizeTransactionNotes(transaction.description),
   isExcluded: transaction.isExcluded,
   isTransfer: transaction.isTransfer,
 });
@@ -999,11 +1022,7 @@ function TransactionsPageContent() {
     ].join("|");
 
     if (transaction.isExcluded) {
-      return "Excluded from totals";
-    }
-
-    if (transaction.isTransfer) {
-      return "Marked as transfer";
+      return "Ignored from totals";
     }
 
     if (!transaction.categoryId) {
@@ -1653,7 +1672,7 @@ function TransactionsPageContent() {
                   }}
                   disabled={isSaving}
                 >
-                  Exclude
+                  Ignore
                 </button>
                 <button
                   className="button button-secondary button-small transactions-action-button"
@@ -2254,7 +2273,7 @@ function TransactionsPageContent() {
                   >
                     <option value="">Leave unchanged</option>
                     <option value="include">Include in totals</option>
-                    <option value="exclude">Exclude from totals</option>
+                    <option value="exclude">Ignore in totals</option>
                   </select>
                 </label>
                 <label>
@@ -2528,11 +2547,11 @@ function TransactionsPageContent() {
                       await updateTransaction(selectedTransaction.id, {
                         isExcluded: true,
                       });
-                      setMessage("Transaction excluded.");
+                      setMessage("Transaction ignored.");
                       closeTransactionDetail();
                     }}
                   >
-                    Exclude
+                    Ignore
                   </button>
                 </div>
               </div>
@@ -2546,11 +2565,11 @@ function TransactionsPageContent() {
                   await updateTransaction(selectedTransaction.id, {
                     isExcluded: true,
                   });
-                  setMessage("Transaction excluded.");
+                  setMessage("Transaction ignored.");
                   closeTransactionDetail();
                 }}
               >
-                Exclude
+                Ignore
               </button>
               <button className="button button-primary" type="button" disabled={isSaving} onClick={saveDetailDraft}>
                 {isSaving ? "Saving..." : "Save changes"}

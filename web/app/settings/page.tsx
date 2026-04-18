@@ -63,7 +63,7 @@ const sections: SettingSection[] = [
       { label: "Auto-categorize", kind: "toggle", checked: true },
       { label: "Normalize merchant names", kind: "toggle", checked: true },
       { label: "Recurring detection", kind: "toggle", checked: true },
-      { label: "Excluded items", kind: "select", value: "Keep manual control", options: ["Keep manual control", "Hide by default", "Always show"] },
+      { label: "Ignored items", kind: "select", value: "Keep manual control", options: ["Keep manual control", "Hide by default", "Always show"] },
       { label: "Merchant rules notes", kind: "textarea", value: "Treat Grab, GCash, and Maya merchant labels as the same source where possible.", rows: 3 },
     ],
   },
