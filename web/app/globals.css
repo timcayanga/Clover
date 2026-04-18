@@ -339,13 +339,25 @@ label {
   color: var(--bad);
 }
 
-.clover-auth-password-rules {
+.clover-auth-password-popover {
+  margin-top: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 10px 22px rgba(31, 41, 51, 0.08);
   display: grid;
-  gap: 6px;
-  margin-top: -4px;
+  gap: 8px;
 }
 
-.clover-auth-password-rule {
+.clover-auth-password-popover__title {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.clover-auth-password-check {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -354,19 +366,22 @@ label {
   color: var(--muted);
 }
 
-.clover-auth-password-rule__mark {
+.clover-auth-password-check__mark {
   width: 16px;
+  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--bad);
   font-size: 14px;
   font-weight: 600;
-  flex: none;
 }
 
-.clover-auth-password-rule__mark.is-met {
+.clover-auth-password-check.is-met .clover-auth-password-check__mark {
   color: var(--good);
+}
+
+.clover-auth-password-check.is-missing .clover-auth-password-check__mark {
+  color: var(--bad);
 }
 
 .clover-auth-field input:focus {

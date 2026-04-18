@@ -106,6 +106,23 @@ function getPasswordMessage(password: string) {
   return `Please include ${missing.join(", ").replace(/, ([^,]*)$/, " and $1")}.`;
 }
 
+function PasswordRequirementRow({
+  met,
+  label,
+}: {
+  met: boolean;
+  label: string;
+}) {
+  return (
+    <div className={`clover-auth-password-check ${met ? "is-met" : "is-missing"}`}>
+      <span className="clover-auth-password-check__mark" aria-hidden="true">
+        {met ? "✓" : "✕"}
+      </span>
+      <span>{label}</span>
+    </div>
+  );
+}
+
 function GoogleIcon() {
   return (
     <svg viewBox="0 0 48 48" aria-hidden="true" className="clover-auth-button__icon">
@@ -491,38 +508,16 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
             </label>
             {mode === "sign-up" ? (
               <>
-                <div className="clover-auth-password-rules" aria-label="Password requirements">
-                  <div className="clover-auth-password-rule">
-                    <span className={`clover-auth-password-rule__mark ${passwordRequirements.minLength ? "is-met" : ""}`}>
-                      {passwordRequirements.minLength ? "✓" : "✕"}
-                    </span>
-                    <span>8+ Characters</span>
+                {mode === "sign-up" && (showPassword || touchedPassword || attemptedSubmit) ? (
+                  <div className="clover-auth-password-popover" role="status" aria-live="polite">
+                    <p className="clover-auth-password-popover__title">Password must have:</p>
+                    <PasswordRequirementRow met={passwordRequirements.lowerCase} label="At least one lowercase letter" />
+                    <PasswordRequirementRow met={passwordRequirements.upperCase} label="At least one uppercase letter" />
+                    <PasswordRequirementRow met={passwordRequirements.number} label="At least one number" />
+                    <PasswordRequirementRow met={passwordRequirements.special} label="At least one special character" />
+                    <PasswordRequirementRow met={passwordRequirements.minLength} label="At least 8 characters" />
                   </div>
-                  <div className="clover-auth-password-rule">
-                    <span className={`clover-auth-password-rule__mark ${passwordRequirements.lowerCase ? "is-met" : ""}`}>
-                      {passwordRequirements.lowerCase ? "✓" : "✕"}
-                    </span>
-                    <span>1 Lower Case</span>
-                  </div>
-                  <div className="clover-auth-password-rule">
-                    <span className={`clover-auth-password-rule__mark ${passwordRequirements.upperCase ? "is-met" : ""}`}>
-                      {passwordRequirements.upperCase ? "✓" : "✕"}
-                    </span>
-                    <span>1 Upper Case</span>
-                  </div>
-                  <div className="clover-auth-password-rule">
-                    <span className={`clover-auth-password-rule__mark ${passwordRequirements.number ? "is-met" : ""}`}>
-                      {passwordRequirements.number ? "✓" : "✕"}
-                    </span>
-                    <span>1 Number</span>
-                  </div>
-                  <div className="clover-auth-password-rule">
-                    <span className={`clover-auth-password-rule__mark ${passwordRequirements.special ? "is-met" : ""}`}>
-                      {passwordRequirements.special ? "✓" : "✕"}
-                    </span>
-                    <span>1 Special Char</span>
-                  </div>
-                </div>
+                ) : null}
                 {showPasswordWarning ? (
                   <p id="clover-password-warning" className="clover-auth-field__hint clover-auth-field__hint--error">
                     {passwordMessage}
