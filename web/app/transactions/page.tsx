@@ -84,6 +84,18 @@ type TransactionDetailDraft = {
   isTransfer: boolean;
 };
 
+type EditableTransactionField = "name" | "date" | "accountId" | "categoryId" | "amount";
+
+type InlineEditableCellProps = {
+  value: string;
+  displayValue: string;
+  ariaLabel: string;
+  kind: "text" | "date" | "number" | "select";
+  onCommit: (value: string) => Promise<void> | void;
+  options?: Array<{ value: string; label: string }>;
+  className?: string;
+};
+
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
   style: "currency",
   currency: "PHP",
@@ -104,6 +116,171 @@ const createEmptyManualForm = (accountId = "", categoryId = ""): ManualTransacti
 
 const getOtherCategoryId = (categoryList: Category[]) =>
   categoryList.find((category) => category.name.trim().toLowerCase() === "other")?.id ?? "";
+
+const normalizeCategoryName = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
+
+const getCategoryIconSrc = (categoryName: string | null | undefined) => {
+  switch (normalizeCategoryName(categoryName)) {
+    case "income":
+      return "/category-icons/income.svg";
+    case "food & dining":
+      return "/category-icons/food.svg";
+    case "transport":
+      return "/category-icons/transport.svg";
+    case "housing":
+      return "/category-icons/housing.svg";
+    case "bills & utilities":
+    case "utilities":
+      return "/category-icons/utilities.svg";
+    case "travel & lifestyle":
+      return "/category-icons/travel.svg";
+    case "shopping":
+      return "/category-icons/shopping.svg";
+    case "health & wellness":
+      return "/category-icons/health.svg";
+    case "education":
+      return "/category-icons/education.svg";
+    case "financial":
+      return "/category-icons/financial.svg";
+    case "gifts & donations":
+      return "/category-icons/gift.svg";
+    case "business":
+      return "/category-icons/business.svg";
+    case "transfers":
+      return "/category-icons/transfer.svg";
+    case "other":
+      return "/category-icons/other.svg";
+    case "groceries":
+      return "/category-icons/groceries.svg";
+    case "medical":
+      return "/category-icons/medical.svg";
+    case "salary":
+      return "/category-icons/salary.svg";
+    case "investments":
+    case "investment":
+      return "/category-icons/investments.svg";
+    default:
+      return "/category-icons/default.svg";
+  }
+};
+
+function InlineEditableCell({
+  value,
+  displayValue,
+  ariaLabel,
+  kind,
+  onCommit,
+  options = [],
+  className,
+}: InlineEditableCellProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const fieldRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
+
+  useEffect(() => {
+    if (!editing) {
+      setDraft(value);
+    }
+  }, [editing, value]);
+
+  useEffect(() => {
+    if (!editing) {
+      return;
+    }
+
+    const field = fieldRef.current;
+    field?.focus();
+    if (field instanceof HTMLInputElement) {
+      field.select();
+    }
+  }, [editing]);
+
+  const openEditor = () => {
+    setDraft(value);
+    setEditing(true);
+  };
+
+  const cancelEditor = () => {
+    setDraft(value);
+    setEditing(false);
+  };
+
+  const commit = async (nextValue = draft) => {
+    const normalized = kind === "text" ? nextValue.trim() : nextValue;
+    if (normalized === value) {
+      setEditing(false);
+      return;
+    }
+
+    try {
+      await onCommit(normalized);
+      setEditing(false);
+    } catch {
+      setDraft(value);
+      setEditing(false);
+    }
+  };
+
+  if (editing) {
+    if (kind === "select") {
+      return (
+        <select
+          ref={(node) => {
+            fieldRef.current = node;
+          }}
+          className={className}
+          value={draft}
+          aria-label={ariaLabel}
+          onChange={(event) => {
+            const next = event.target.value;
+            setDraft(next);
+            void commit(next);
+          }}
+          onBlur={cancelEditor}
+        >
+          {options.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      );
+    }
+
+    return (
+      <input
+        ref={(node) => {
+          fieldRef.current = node;
+        }}
+        className={className}
+        value={draft}
+        aria-label={ariaLabel}
+        type={kind}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          void commit();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void commit();
+          }
+
+          if (event.key === "Escape") {
+            event.preventDefault();
+            cancelEditor();
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <button type="button" className={className} onClick={openEditor} aria-label={ariaLabel}>
+      {displayValue}
+    </button>
+  );
+}
 
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", {
@@ -271,7 +448,7 @@ const toolbarAddStyle = {
 function ActionIcon({
   name,
 }: {
-  name: "plus" | "chevron-down" | "undo" | "redo" | "search" | "calendar" | "filters" | "summary" | "save" | "download";
+  name: "plus" | "chevron-down" | "chevron-right" | "undo" | "redo" | "search" | "calendar" | "filters" | "summary" | "save" | "download";
 }) {
   const common = {
     width: 14,
@@ -297,6 +474,12 @@ function ActionIcon({
       return (
         <svg {...common}>
           <path d="m6 9 6 6 6-6" />
+        </svg>
+      );
+    case "chevron-right":
+      return (
+        <svg {...common}>
+          <path d="m9 6 6 6-6 6" />
         </svg>
       );
     case "undo":
@@ -392,6 +575,7 @@ function TransactionsPageContent() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
@@ -424,6 +608,7 @@ function TransactionsPageContent() {
   const [isSaving, setIsSaving] = useState(false);
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
+  const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
 
   const loadWorkspaces = async () => {
     const response = await fetch("/api/workspaces");
@@ -602,6 +787,18 @@ function TransactionsPageContent() {
     });
   }, [transactions, query, categoryFilter, accountFilter, typeFilter, dateFilterMode, dateFilterAnchor, customStart, customEnd]);
 
+  const filteredTransactionIds = useMemo(() => filteredTransactions.map((transaction) => transaction.id), [filteredTransactions]);
+  const allVisibleSelected = filteredTransactionIds.length > 0 && filteredTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
+  const someVisibleSelected = filteredTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
+
+  useEffect(() => {
+    if (!selectAllRef.current) {
+      return;
+    }
+
+    selectAllRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
+  }, [allVisibleSelected, someVisibleSelected]);
+
   const duplicateLookup = useMemo(() => {
     const counts = new Map<string, number>();
 
@@ -678,7 +875,8 @@ function TransactionsPageContent() {
 
     for (const transaction of filteredTransactions) {
       const amount = Math.abs(Number(transaction.amount));
-      topCategories.set(transaction.categoryName ?? "Unassigned", (topCategories.get(transaction.categoryName ?? "Unassigned") ?? 0) + amount);
+      const categoryName = transaction.categoryName ?? "Other";
+      topCategories.set(categoryName, (topCategories.get(categoryName) ?? 0) + amount);
       topAccounts.set(transaction.accountName, (topAccounts.get(transaction.accountName) ?? 0) + amount);
     }
 
@@ -724,7 +922,10 @@ function TransactionsPageContent() {
 
   const openTransactionDetail = (transaction: Transaction) => {
     setSelectedTransaction(transaction);
-    setDetailDraft(createDetailDraft(transaction));
+    setDetailDraft({
+      ...createDetailDraft(transaction),
+      categoryId: transaction.categoryId ?? otherCategoryId,
+    });
   };
 
   const closeTransactionDetail = () => {
@@ -832,6 +1033,37 @@ function TransactionsPageContent() {
     const payload = await response.json();
     const updated = payload.transaction as Transaction;
     setTransactions((current) => current.map((entry) => (entry.id === updated.id ? updated : entry)));
+    setSelectedTransaction((current) => (current?.id === updated.id ? updated : current));
+    setDetailDraft((current) => {
+      if (!current || selectedTransaction?.id !== updated.id) {
+        return current;
+      }
+
+      return createDetailDraft(updated);
+    });
+  };
+
+  const commitInlineEdit = async (transaction: Transaction, field: EditableTransactionField, value: string) => {
+    const payload: Record<string, unknown> = {};
+
+    if (field === "name") {
+      payload.merchantClean = value.trim() || null;
+    } else if (field === "date") {
+      payload.date = value;
+    } else if (field === "accountId") {
+      payload.accountId = value;
+    } else if (field === "categoryId") {
+      payload.categoryId = value || otherCategoryId || null;
+    } else if (field === "amount") {
+      payload.amount = value;
+    }
+
+    if (Object.keys(payload).length === 0) {
+      return;
+    }
+
+    await updateTransaction(transaction.id, payload);
+    setMessage("Transaction updated.");
   };
 
   const applyBulkEdit = async (event: FormEvent<HTMLFormElement>) => {
@@ -926,7 +1158,7 @@ function TransactionsPageContent() {
       transaction.merchantClean ?? transaction.merchantRaw,
       formatDate(transaction.date),
       transaction.accountName,
-      transaction.categoryName ?? "Unassigned",
+      transaction.categoryName ?? "Other",
       transaction.amount,
       transaction.type,
       transaction.description ?? "",
@@ -1141,7 +1373,27 @@ function TransactionsPageContent() {
           </div>
 
           <div className="line-item-header" role="row" aria-label="Transaction columns">
-            <span className="line-item-header-cell line-item-header-cell--select" aria-hidden="true" />
+            <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
+              <input
+                ref={selectAllRef}
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={(event) => {
+                  const shouldSelect = event.target.checked;
+                  setSelectedTransactionIds((current) => {
+                    const next = new Set(current);
+                    if (shouldSelect) {
+                      filteredTransactionIds.forEach((transactionId) => next.add(transactionId));
+                    } else {
+                      filteredTransactionIds.forEach((transactionId) => next.delete(transactionId));
+                    }
+                    return Array.from(next);
+                  });
+                }}
+                aria-label="Select all visible transactions"
+              />
+            </label>
+            <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
             <button className="line-item-header-cell line-item-header-cell--name" type="button">
               Name
             </button>
@@ -1167,6 +1419,8 @@ function TransactionsPageContent() {
                 const warningReason = warningReasonFor(transaction);
                 const amount = Number(transaction.amount);
                 const isPositive = transaction.type === "income";
+                const categoryValue = transaction.categoryId ?? otherCategoryId;
+                const categoryLabel = categories.find((category) => category.id === categoryValue)?.name ?? "Other";
                 return (
                   <div
                     key={transaction.id}
@@ -1182,44 +1436,80 @@ function TransactionsPageContent() {
                         aria-label={`Select ${transaction.merchantRaw}`}
                       />
                     </label>
+                    <div className="transaction-category-icon-cell" aria-hidden="true">
+                      <span className="transaction-category-icon">
+                        <img src={getCategoryIconSrc(transaction.categoryName ?? categoryLabel)} alt="" aria-hidden="true" />
+                      </span>
+                    </div>
                     <div className="transaction-name-cell">
-                      <button type="button" className="transaction-name-button" onClick={() => openTransactionDetail(transaction)}>
-                        {transaction.merchantClean || transaction.merchantRaw}
-                      </button>
+                      <InlineEditableCell
+                        value={transaction.merchantClean ?? transaction.merchantRaw}
+                        displayValue={transaction.merchantClean || transaction.merchantRaw}
+                        ariaLabel={`Edit name for ${transaction.merchantRaw}`}
+                        kind="text"
+                        className="transaction-inline-edit transaction-inline-edit--name"
+                        onCommit={(value) => commitInlineEdit(transaction, "name", value)}
+                      />
                       <small className="transaction-subtext">
                         {transaction.description || transaction.merchantClean ? transaction.merchantRaw : transaction.accountName}
                       </small>
                     </div>
-                    <div className="transaction-date-cell">{formatDate(transaction.date)}</div>
-                    <div className="transaction-account-cell">{transaction.accountName}</div>
+                    <div className="transaction-date-cell">
+                      <InlineEditableCell
+                        value={transaction.date.slice(0, 10)}
+                        displayValue={formatDate(transaction.date)}
+                        ariaLabel={`Edit date for ${transaction.merchantRaw}`}
+                        kind="date"
+                        className="transaction-inline-edit transaction-inline-edit--date"
+                        onCommit={(value) => commitInlineEdit(transaction, "date", value)}
+                      />
+                    </div>
+                    <div className="transaction-account-cell">
+                      <InlineEditableCell
+                        value={transaction.accountId}
+                        displayValue={transaction.accountName}
+                        ariaLabel={`Edit account for ${transaction.merchantRaw}`}
+                        kind="select"
+                        className="transaction-inline-edit transaction-inline-edit--select"
+                        options={accounts.map((account) => ({
+                          value: account.id,
+                          label: account.name,
+                        }))}
+                        onCommit={(value) => commitInlineEdit(transaction, "accountId", value)}
+                      />
+                    </div>
                     <div className="transaction-category-cell">
-                      <select
-                        className="transaction-category-select"
-                        value={transaction.categoryId ?? ""}
-                        onChange={(event) =>
-                          void updateTransaction(transaction.id, {
-                            categoryId: event.target.value || null,
-                          })
-                        }
-                      >
-                        <option value="">Unassigned</option>
-                        {categories.map((category) => (
-                          <option key={category.id} value={category.id}>
-                            {category.name}
-                          </option>
-                        ))}
-                      </select>
+                      <InlineEditableCell
+                        value={categoryValue}
+                        displayValue={categoryLabel}
+                        ariaLabel={`Edit category for ${transaction.merchantRaw}`}
+                        kind="select"
+                        className="transaction-inline-edit transaction-inline-edit--select"
+                        options={categories.map((category) => ({
+                          value: category.id,
+                          label: category.name,
+                        }))}
+                        onCommit={(value) => commitInlineEdit(transaction, "categoryId", value)}
+                      />
                     </div>
                     <div className={`transaction-amount-cell ${isPositive ? "positive" : "negative"}`}>
-                      {currencyFormatter.format(amount)}
+                      <InlineEditableCell
+                        value={transaction.amount}
+                        displayValue={currencyFormatter.format(amount)}
+                        ariaLabel={`Edit amount for ${transaction.merchantRaw}`}
+                        kind="number"
+                        className="transaction-inline-edit transaction-inline-edit--amount"
+                        onCommit={(value) => commitInlineEdit(transaction, "amount", value)}
+                      />
                     </div>
                     <div className="transaction-notes-cell">
                       <button
                         type="button"
                         className="button button-secondary button-small transaction-note-button"
                         onClick={() => openTransactionDetail(transaction)}
+                        aria-label={`Open details for ${transaction.merchantRaw}`}
                       >
-                        Notes
+                        <ActionIcon name="chevron-right" />
                       </button>
                     </div>
                     <div className="transaction-warning-cell">
@@ -1788,7 +2078,7 @@ function TransactionsPageContent() {
               </div>
               <div className="transaction-note-meta">
                 <span>Category</span>
-                <strong>{detailDraft?.categoryId ? categories.find((category) => category.id === detailDraft.categoryId)?.name ?? "Unassigned" : "Unassigned"}</strong>
+                <strong>{detailDraft?.categoryId ? categories.find((category) => category.id === detailDraft.categoryId)?.name ?? "Other" : "Other"}</strong>
               </div>
               <div className="transaction-note-meta">
                 <span>Amount</span>
@@ -1797,13 +2087,6 @@ function TransactionsPageContent() {
             </div>
 
             <div className="form-grid transaction-drawer-grid">
-              <label className="span-2">
-                Name
-                <input
-                  value={detailDraft?.merchantRaw ?? ""}
-                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, merchantRaw: event.target.value } : current))}
-                />
-              </label>
               <label>
                 Date
                 <input
@@ -1828,10 +2111,9 @@ function TransactionsPageContent() {
               <label>
                 Category
                 <select
-                  value={detailDraft?.categoryId ?? ""}
+                  value={detailDraft?.categoryId ?? otherCategoryId}
                   onChange={(event) => setDetailDraft((current) => (current ? { ...current, categoryId: event.target.value } : current))}
                 >
-                  <option value="">Unassigned</option>
                   {categories.map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}
@@ -1862,19 +2144,12 @@ function TransactionsPageContent() {
                         : current
                     )
                   }
-                >
-                  <option value="expense">Expense</option>
-                  <option value="income">Income</option>
-                  <option value="transfer">Transfer</option>
-                </select>
-              </label>
-              <label className="span-2">
-                Merchant alias
-                <input
-                  value={detailDraft?.merchantClean ?? ""}
-                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, merchantClean: event.target.value } : current))}
-                />
-              </label>
+                  >
+                    <option value="expense">Expense</option>
+                    <option value="income">Income</option>
+                    <option value="transfer">Transfer</option>
+                  </select>
+                </label>
               <label className="span-2">
                 Notes
                 <textarea
