@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
@@ -29,7 +29,6 @@ type IconName =
   | "transactions"
   | "reports"
   | "insights"
-  | "settings"
   | "search"
   | "notifications"
   | "profile";
@@ -114,15 +113,26 @@ function MenuIcon({ name }: { name: IconName }) {
           <path d="M19.5 14l.95 2.35L22.5 17l-2.05.65L19.5 20l-.95-2.35L16.5 17l2.05-.65L19.5 14Z" />
         </svg>
       );
-    case "settings":
-      return (
-        <svg {...common}>
-          <circle cx="12" cy="12" r="3.2" />
-          <path d="M19.4 15a8.3 8.3 0 0 0 .1-6l-2 .2a6.8 6.8 0 0 0-1.6-1.6l.2-2a8.3 8.3 0 0 0-6-.1l-.2 2a6.8 6.8 0 0 0-1.6 1.6l-2-.2a8.3 8.3 0 0 0-.1 6l2-.2a6.8 6.8 0 0 0 1.6 1.6l-.2 2a8.3 8.3 0 0 0 6 .1l.2-2a6.8 6.8 0 0 0 1.6-1.6Z" />
-        </svg>
-      );
   }
 }
+
+const notifications = [
+  {
+    title: "Import finished",
+    detail: "Your latest statement import is ready for review.",
+    time: "Just now",
+  },
+  {
+    title: "Transactions need attention",
+    detail: "Three recent transactions still need categorization.",
+    time: "14m ago",
+  },
+  {
+    title: "Weekly summary",
+    detail: "A spending summary is ready in Reports.",
+    time: "Yesterday",
+  },
+];
 
 export function CloverShell({
   active,
@@ -135,28 +145,57 @@ export function CloverShell({
 }: CloverShellProps) {
   const { user } = useUser();
   const pathname = usePathname();
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | null>(null);
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
   const profileImage = user?.imageUrl ?? null;
   const isProfileActive = active === "profile" || pathname.startsWith("/profile");
-  const isNotificationsActive = active === "notifications" || pathname.startsWith("/notifications");
+  const isNotificationsActive = openMenu === "notifications";
+  const isProfileMenuOpen = openMenu === "profile";
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!shellRef.current || event.target instanceof Node === false) {
+        return;
+      }
+
+      if (!shellRef.current.contains(event.target)) {
+        setOpenMenu(null);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpenMenu(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  const notificationCount = notifications.length;
+  const profileMenuLinks = useMemo(
+    () => [
+      { href: "/profile", label: "Profile", description: "Open your account hub" },
+      { href: "/settings", label: "Settings", description: "Adjust Clover defaults" },
+    ],
+    []
+  );
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" ref={shellRef}>
       <aside className="sidebar" aria-label="Primary">
         <div className="sidebar-brand">
           <Link className="sidebar-brand-link" href="/dashboard" aria-label="Go to dashboard">
             <img className="brand-mark brand-mark--sidebar" src="/favicon.svg" alt="" aria-hidden="true" />
           </Link>
-
-          <div className="sidebar-brand-actions" aria-label="Quick actions">
-            <Link className="sidebar-icon-button" href="#sidebar-search" aria-label="Search">
-              <MenuIcon name="search" />
-            </Link>
-            <Link className="sidebar-icon-button" href="/notifications" aria-label="Notifications">
-              <MenuIcon name="notifications" />
-            </Link>
-          </div>
         </div>
 
         <label className="sidebar-search" htmlFor="sidebar-search">
@@ -173,18 +212,73 @@ export function CloverShell({
               {item.label}
             </Link>
           ))}
-          </nav>
+        </nav>
 
         <div className="sidebar-footer">
-          <Link className={`sidebar-profile ${isProfileActive ? "is-active" : ""}`} href="/profile" aria-label={`Open ${displayName} profile`}>
+          <button
+            className={`sidebar-profile ${isProfileActive || isProfileMenuOpen ? "is-active" : ""}`}
+            type="button"
+            aria-label={`Open ${displayName} profile menu`}
+            aria-expanded={isProfileMenuOpen}
+            aria-haspopup="menu"
+            onClick={() => setOpenMenu((current) => (current === "profile" ? null : "profile"))}
+          >
             <span className="sidebar-profile__avatar" aria-hidden="true">
               {profileImage ? <img src={profileImage} alt="" /> : <span>{profileInitial}</span>}
             </span>
             <span className="sr-only">{displayName}</span>
-          </Link>
-          <Link className={`sidebar-icon-button ${isNotificationsActive ? "is-active" : ""}`} href="/notifications" aria-label="Notifications">
+          </button>
+          <button
+            className={`sidebar-icon-button ${isNotificationsActive ? "is-active" : ""}`}
+            type="button"
+            aria-label={`Open notifications${notificationCount ? ` (${notificationCount})` : ""}`}
+            aria-expanded={isNotificationsActive}
+            aria-haspopup="menu"
+            onClick={() => setOpenMenu((current) => (current === "notifications" ? null : "notifications"))}
+          >
             <MenuIcon name="notifications" />
-          </Link>
+          </button>
+
+          {isProfileMenuOpen ? (
+            <div className="sidebar-popover sidebar-popover--profile" role="menu" aria-label="Profile menu">
+              <div className="sidebar-popover__head">
+                <span className="sidebar-popover__title">{displayName}</span>
+                <span className="sidebar-popover__subtitle">{user?.primaryEmailAddress?.emailAddress ?? "Account"}</span>
+              </div>
+              <div className="sidebar-popover__links">
+                {profileMenuLinks.map((item) => (
+                  <Link key={item.href} className="sidebar-popover__link" role="menuitem" href={item.href}>
+                    <strong>{item.label}</strong>
+                    <span>{item.description}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {isNotificationsActive ? (
+            <div className="sidebar-popover sidebar-popover--notifications" role="menu" aria-label="Notifications">
+              <div className="sidebar-popover__head">
+                <span className="sidebar-popover__title">Notifications</span>
+                <span className="sidebar-popover__subtitle">
+                  {notificationCount ? `${notificationCount} recent update${notificationCount === 1 ? "" : "s"}` : "No new alerts"}
+                </span>
+              </div>
+              <div className="sidebar-popover__items">
+                {notifications.length ? (
+                  notifications.map((notification) => (
+                    <div key={notification.title} className="sidebar-popover__item">
+                      <strong>{notification.title}</strong>
+                      <span>{notification.detail}</span>
+                      <small>{notification.time}</small>
+                    </div>
+                  ))
+                ) : (
+                  <div className="sidebar-popover__empty">You’re all caught up.</div>
+                )}
+              </div>
+            </div>
+          ) : null}
         </div>
       </aside>
 
