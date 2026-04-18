@@ -3363,6 +3363,7 @@ label {
   gap: 16px;
   align-items: start;
   min-height: 0;
+  height: 100%;
 }
 
 .transactions-layout--summary-open {
@@ -3371,9 +3372,11 @@ label {
 
 .transactions-main-panel {
   min-height: 0;
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  overflow: hidden;
 }
 
 .transactions-topbar {
@@ -3381,6 +3384,12 @@ label {
   gap: 14px;
   padding-bottom: 10px;
   border-bottom: 1px solid var(--stroke);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .transactions-toolbar-row {
@@ -3560,6 +3569,12 @@ label {
   font-size: 0.72rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .line-item-header-cell {
@@ -3602,6 +3617,10 @@ label {
 
 .transactions-table-wrap {
   display: grid;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
 }
 
 .line-item {
@@ -3837,6 +3856,12 @@ input.transaction-inline-edit--amount::placeholder {
   padding-top: 14px;
   margin-top: 2px;
   border-top: 1px solid var(--stroke);
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
 .transactions-net-pill.is-positive {

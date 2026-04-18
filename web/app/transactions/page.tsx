@@ -1166,6 +1166,24 @@ function TransactionsPageContent() {
     };
   }, [filteredTransactions]);
 
+  const reviewTransactionCount = useMemo(
+    () =>
+      filteredTransactions.reduce((count, transaction) => {
+        if (transaction.isExcluded || !transaction.categoryId) {
+          return count;
+        }
+
+        const signature = [
+          transaction.date.slice(0, 10),
+          Number(transaction.amount).toFixed(2),
+          (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase(),
+        ].join("|");
+
+        return (duplicateLookup.get(signature) ?? 0) > 1 ? count + 1 : count;
+      }, 0),
+    [filteredTransactions, duplicateLookup]
+  );
+
   const warningReasonFor = (transaction: Transaction) => {
     const signature = [
       transaction.date.slice(0, 10),
@@ -1616,7 +1634,7 @@ function TransactionsPageContent() {
   };
 
   const netGain = totals.income - totals.expense;
-  const hasReviewItems = totals.review > 0;
+  const hasReviewItems = reviewTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
   const isTableLoading = !isWorkspacesLoaded || (Boolean(selectedWorkspaceId) && !isWorkspaceDataReady);
   const hasSelectedTransactions = selectedTransactionIds.length > 0;
