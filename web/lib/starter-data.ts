@@ -1,12 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
+import { getOrCreateCurrentUser } from "@/lib/user-context";
 
 export const ensureStarterWorkspace = async (userId: string, email: string, verified: boolean) => {
-  const user = await prisma.user.upsert({
-    where: { clerkUserId: userId },
-    update: { email, verified },
-    create: { clerkUserId: userId, email, verified },
-  });
+  const user = await getOrCreateCurrentUser(userId);
 
   const existing = await prisma.workspace.findFirst({
     where: { userId: user.id },
