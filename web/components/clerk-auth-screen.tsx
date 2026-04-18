@@ -106,6 +106,19 @@ function getPasswordMessage(password: string) {
   return `Please include ${missing.join(", ").replace(/, ([^,]*)$/, " and $1")}.`;
 }
 
+function getMissingPasswordRequirements(password: string) {
+  const requirements = getPasswordRequirements(password);
+  const missing: string[] = [];
+
+  if (!requirements.minLength) missing.push("8+ characters");
+  if (!requirements.lowerCase) missing.push("1 lowercase letter");
+  if (!requirements.upperCase) missing.push("1 uppercase letter");
+  if (!requirements.number) missing.push("1 number");
+  if (!requirements.special) missing.push("1 special character");
+
+  return missing;
+}
+
 function GoogleIcon() {
   return (
     <svg viewBox="0 0 48 48" aria-hidden="true" className="clover-auth-button__icon">
@@ -174,10 +187,11 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
   const emailIsValid = useMemo(() => isValidEmail(email), [email]);
   const passwordRequirements = useMemo(() => getPasswordRequirements(password), [password]);
   const passwordMessage = useMemo(() => getPasswordMessage(password), [password]);
+  const missingPasswordRequirements = useMemo(() => getMissingPasswordRequirements(password), [password]);
   const passwordMatchesRequirements = passwordMessage === null;
   const passwordStatusMessage = passwordMatchesRequirements
     ? "Password looks good."
-    : "Must be 8+ characters and include 1 lowercase letter, 1 uppercase letter, 1 number, and 1 special character.";
+    : `Missing: ${missingPasswordRequirements.join(", ").replace(/, ([^,]*)$/, " and $1")}.`;
   const showEmailWarning = (touchedEmail || attemptedSubmit) && !emailIsValid;
   const showPasswordWarning = mode === "sign-up" ? (touchedPassword || attemptedSubmit) && Boolean(passwordMessage) : false;
   const canSubmitSignUp = emailIsValid && passwordMessage === null && !busy;

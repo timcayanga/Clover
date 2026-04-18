@@ -369,7 +369,7 @@ label {
 }
 
 .clover-auth-field__hint--status.is-missing .clover-auth-field__status-mark {
-  color: var(--bad);
+  color: var(--muted-2);
 }
 
 .clover-auth-field input:focus {
