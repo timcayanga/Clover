@@ -906,6 +906,13 @@ function TransactionsPageContent() {
       return matchesQuery && matchesCategory && matchesAccount && matchesType && matchesDate;
     });
   }, [transactions, query, categoryFilter, accountFilter, typeFilter, dateFilterMode, dateFilterAnchor, customStart, customEnd]);
+  const hasVisibleTransactions = useMemo(
+    () =>
+      transactions.some(
+        (transaction) => transaction.merchantRaw !== "Beginning balance" && transaction.description !== "Beginning balance"
+      ),
+    [transactions]
+  );
 
   const filteredTransactionIds = useMemo(() => filteredTransactions.map((transaction) => transaction.id), [filteredTransactions]);
   const allVisibleSelected = filteredTransactionIds.length > 0 && filteredTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
@@ -1892,7 +1899,7 @@ function TransactionsPageContent() {
                   </div>
                 );
               })
-            ) : transactions.length === 0 ? (
+            ) : !hasVisibleTransactions ? (
               <div className="transactions-empty-state">
                 <p className="transactions-empty-state__eyebrow">It is quiet in here</p>
                 <h3>No transactions yet</h3>
