@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
@@ -89,6 +90,290 @@ const getMonthBuckets = (anchor: Date) => {
 };
 
 export default async function ReportsPage() {
+  const headerList = await headers();
+  const hostname = (headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "")
+    .split(",")[0]
+    .split(":")[0]
+    .toLowerCase();
+  const isStagingHost = hostname === "staging.clover.ph";
+
+  if (isStagingHost) {
+    const sampleMonthBuckets = [
+      { key: "2026-01", label: "Jan 2026", income: 38000, expense: 11200, net: 26800 },
+      { key: "2026-02", label: "Feb 2026", income: 40250, expense: 9800, net: 30450 },
+      { key: "2026-03", label: "Mar 2026", income: 41750, expense: 12100, net: 29650 },
+      { key: "2026-04", label: "Apr 2026", income: 45000, expense: 3266, net: 41734 },
+    ];
+
+    const sampleTopCategories = [
+      ["Food & Dining", 3266],
+      ["Transport", 1880],
+      ["Subscriptions", 970],
+      ["Groceries", 740],
+      ["Utilities", 510],
+    ] as const;
+
+    const sampleUncategorized = [
+      { id: "sample-1", merchant: "Ride share", account: "Imported transactions", date: new Date("2026-04-15T12:00:00"), amount: 180 },
+      { id: "sample-2", merchant: "Coffee stop", account: "Cash on hand", date: new Date("2026-04-13T12:00:00"), amount: 120 },
+      { id: "sample-3", merchant: "Cloud storage", account: "Imported transactions", date: new Date("2026-04-11T12:00:00"), amount: 320 },
+    ];
+
+    const sampleDuplicates = [
+      { id: "dup-1", merchant: "Supermarket", account: "Imported transactions", date: new Date("2026-04-09T12:00:00"), amount: 1460, count: 2 },
+      { id: "dup-2", merchant: "Ride share", account: "Imported transactions", date: new Date("2026-04-03T12:00:00"), amount: 180, count: 2 },
+    ];
+
+    return (
+      <CloverShell
+        active="reports"
+        kicker="Insights"
+        title="Turn your statements into clear next steps."
+        subtitle="These sample reports are shown in staging so the page feels complete even before live workspace data is available."
+        actions={
+          <>
+            <Link className="pill-link" href="/transactions">
+              Transactions
+            </Link>
+            <Link className="pill-link" href="/imports">
+              Imports
+            </Link>
+          </>
+        }
+      >
+        <section className="report-card glass">
+          <p className="eyebrow">Goal-aware insights</p>
+          <h4>A calm view of your money that explains what changed and what it means.</h4>
+          <p className="panel-muted">
+            Sample data keeps staging readable and avoids the empty-page feeling while we keep the live report logic
+            focused on useful, minimal reporting.
+          </p>
+          <div className="hero-actions">
+            <Link className="button button-primary" href="/transactions">
+              Open transactions
+            </Link>
+            <Link className="button button-secondary" href="/imports">
+              Open imports
+            </Link>
+            <Link className="button button-secondary" href="/settings">
+              Review settings
+            </Link>
+          </div>
+        </section>
+
+        <section className="reports-summary-grid">
+          <article className="metric compact glass">
+            <span>Net cash flow</span>
+            <strong className="positive">₱41,734.00</strong>
+            <small>Positive over the last 30 days · sample staging data</small>
+          </article>
+          <article className="metric compact glass">
+            <span>Spending</span>
+            <strong>₱3,266.00</strong>
+            <small>Current 30-day spend · sample staging data</small>
+          </article>
+          <article className="metric compact glass">
+            <span>Needs review</span>
+            <strong>5</strong>
+            <small>3 uncategorized · 2 duplicate sets</small>
+          </article>
+          <article className="metric compact glass">
+            <span>Import health</span>
+            <strong>6 done</strong>
+            <small>6 done · 1 processing · 0 failed</small>
+          </article>
+        </section>
+
+        <section className="reports-grid reports-grid--primary">
+          <article className="report-card glass report-card--wide">
+            <div className="report-card__head">
+              <div>
+                <p className="eyebrow">Cash flow</p>
+                <h4>Money in and money out over time</h4>
+              </div>
+              <div className="report-card__stat">
+                <strong className="positive">₱41,734.00</strong>
+                <span>₱45,000.00 in · ₱3,266.00 out</span>
+              </div>
+            </div>
+
+            <div className="report-insight-grid">
+              <div className="report-insight">
+                <span>Current 30 days</span>
+                <strong className="positive">₱41,734.00</strong>
+                <small>Income is holding up.</small>
+              </div>
+              <div className="report-insight">
+                <span>Previous 30 days</span>
+                <strong className="positive">₱29,650.00</strong>
+                <small>Positive cash flow.</small>
+              </div>
+            </div>
+
+            <div className="report-timeline">
+              {sampleMonthBuckets.map((bucket) => {
+                const width = Math.max((Math.abs(bucket.net) / 41734) * 100, bucket.net === 0 ? 6 : 18);
+                return (
+                  <div key={bucket.key} className="report-timeline__row">
+                    <div className="report-timeline__label">{bucket.label}</div>
+                    <div className="report-timeline__track" aria-hidden="true">
+                      <span className="report-timeline__fill report-timeline__fill--positive" style={{ width: `${Math.min(width, 100)}%` }} />
+                    </div>
+                    <div className="report-timeline__value positive">{formatCurrency(bucket.net)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </article>
+
+          <article className="report-card glass">
+            <div className="report-card__head">
+              <div>
+                <p className="eyebrow">Spending by category</p>
+                <h4>Where the money actually went</h4>
+              </div>
+              <div className="report-card__stat">
+                <strong>₱3,266.00</strong>
+                <span>5 leading categories</span>
+              </div>
+            </div>
+
+            <div className="report-list">
+              {sampleTopCategories.map(([categoryName, amount]) => {
+                const max = sampleTopCategories[0][1];
+                const share = (amount / max) * 100;
+                return (
+                  <div key={categoryName} className="report-list__item">
+                    <div className="report-list__meta">
+                      <strong>{categoryName}</strong>
+                      <span>{formatCurrency(amount)}</span>
+                    </div>
+                    <div className="report-list__track" aria-hidden="true">
+                      <span className="report-list__fill" style={{ width: `${Math.max(share, 8)}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </article>
+        </section>
+
+        <section className="reports-grid reports-grid--secondary">
+          <article className="report-card glass">
+            <div className="report-card__head">
+              <div>
+                <p className="eyebrow">Review queue</p>
+                <h4>What needs a quick clean-up pass</h4>
+              </div>
+              <div className="report-card__stat">
+                <strong>5</strong>
+                <span>actionable items</span>
+              </div>
+            </div>
+
+            <div className="report-subsection">
+              <p className="eyebrow">Uncategorized</p>
+              <div className="report-list">
+                {sampleUncategorized.map((transaction) => (
+                  <div key={transaction.id} className="report-list__item">
+                    <div className="report-list__meta">
+                      <strong>{transaction.merchant}</strong>
+                      <span>
+                        {transaction.account} · {formatShortDate(transaction.date)} · {formatCurrency(transaction.amount)}
+                      </span>
+                    </div>
+                    <div className="report-tags">
+                      <span className="pill pill-subtle">No category</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="report-subsection">
+              <p className="eyebrow">Possible duplicates</p>
+              <div className="report-list">
+                {sampleDuplicates.map((group) => (
+                  <div key={group.id} className="report-list__item">
+                    <div className="report-list__meta">
+                      <strong>{group.merchant}</strong>
+                      <span>
+                        {group.count} matches · {group.account} · {formatShortDate(group.date)}
+                      </span>
+                    </div>
+                    <div className="report-tags">
+                      <span className="pill pill-subtle">{formatCurrency(group.amount)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </article>
+
+          <article className="report-card glass">
+            <div className="report-card__head">
+              <div>
+                <p className="eyebrow">Data health</p>
+                <h4>Imports, manual entries, and balance coverage</h4>
+              </div>
+              <div className="report-card__stat">
+                <strong>₱41,734.00</strong>
+                <span>2 accounts with balances</span>
+              </div>
+            </div>
+
+            <div className="report-insight-grid">
+              <div className="report-insight">
+                <span>Imported transactions</span>
+                <strong>42</strong>
+                <small>₱38,700.00 total</small>
+              </div>
+              <div className="report-insight">
+                <span>Manual transactions</span>
+                <strong>7</strong>
+                <small>₱2,034.00 total</small>
+              </div>
+            </div>
+
+            <div className="report-status-list">
+              <div className="report-status-list__item">
+                <span>Done</span>
+                <strong>6</strong>
+              </div>
+              <div className="report-status-list__item">
+                <span>Processing</span>
+                <strong>1</strong>
+              </div>
+              <div className="report-status-list__item">
+                <span>Failed</span>
+                <strong>0</strong>
+              </div>
+              <div className="report-status-list__item">
+                <span>Deleted</span>
+                <strong>0</strong>
+              </div>
+            </div>
+
+            <div className="report-subsection">
+              <p className="eyebrow">Latest import</p>
+              <div className="report-list">
+                <div className="report-list__item">
+                  <div className="report-list__meta">
+                    <strong>April_statement.csv</strong>
+                    <span>{formatShortDate(new Date("2026-04-17T12:00:00"))} · done</span>
+                  </div>
+                  <div className="report-tags">
+                    <span className="pill pill-good">done</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
+      </CloverShell>
+    );
+  }
+
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
