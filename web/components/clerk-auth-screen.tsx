@@ -106,23 +106,6 @@ function getPasswordMessage(password: string) {
   return `Please include ${missing.join(", ").replace(/, ([^,]*)$/, " and $1")}.`;
 }
 
-function PasswordRequirementRow({
-  met,
-  label,
-}: {
-  met: boolean;
-  label: string;
-}) {
-  return (
-    <div className={`clover-auth-password-check ${met ? "is-met" : "is-missing"}`}>
-      <span className="clover-auth-password-check__mark" aria-hidden="true">
-        {met ? "✓" : "✕"}
-      </span>
-      <span>{label}</span>
-    </div>
-  );
-}
-
 function GoogleIcon() {
   return (
     <svg viewBox="0 0 48 48" aria-hidden="true" className="clover-auth-button__icon">
@@ -191,6 +174,10 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
   const emailIsValid = useMemo(() => isValidEmail(email), [email]);
   const passwordRequirements = useMemo(() => getPasswordRequirements(password), [password]);
   const passwordMessage = useMemo(() => getPasswordMessage(password), [password]);
+  const passwordMatchesRequirements = passwordMessage === null;
+  const passwordStatusMessage = passwordMatchesRequirements
+    ? "Password looks good."
+    : "Must be 8+ characters and include 1 lowercase letter, 1 uppercase letter, 1 number, and 1 special character.";
   const showEmailWarning = (touchedEmail || attemptedSubmit) && !emailIsValid;
   const showPasswordWarning = mode === "sign-up" ? (touchedPassword || attemptedSubmit) && Boolean(passwordMessage) : false;
   const canSubmitSignUp = emailIsValid && passwordMessage === null && !busy;
@@ -507,23 +494,21 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
               </div>
             </label>
             {mode === "sign-up" ? (
-              <>
-                {mode === "sign-up" && (showPassword || touchedPassword || attemptedSubmit) ? (
-                  <div className="clover-auth-password-popover" role="status" aria-live="polite">
-                    <p className="clover-auth-password-popover__title">Password must have:</p>
-                    <PasswordRequirementRow met={passwordRequirements.lowerCase} label="At least one lowercase letter" />
-                    <PasswordRequirementRow met={passwordRequirements.upperCase} label="At least one uppercase letter" />
-                    <PasswordRequirementRow met={passwordRequirements.number} label="At least one number" />
-                    <PasswordRequirementRow met={passwordRequirements.special} label="At least one special character" />
-                    <PasswordRequirementRow met={passwordRequirements.minLength} label="At least 8 characters" />
-                  </div>
-                ) : null}
-                {showPasswordWarning ? (
-                  <p id="clover-password-warning" className="clover-auth-field__hint clover-auth-field__hint--error">
-                    {passwordMessage}
-                  </p>
-                ) : null}
-              </>
+              <p
+                className={`clover-auth-field__hint clover-auth-field__hint--status ${passwordMatchesRequirements ? "is-ok" : "is-missing"}`}
+                role="status"
+                aria-live="polite"
+              >
+                <span className="clover-auth-field__status-mark" aria-hidden="true">
+                  {passwordMatchesRequirements ? "✓" : "✕"}
+                </span>
+                <span>{passwordStatusMessage}</span>
+              </p>
+            ) : null}
+            {showPasswordWarning ? (
+              <p id="clover-password-warning" className="clover-auth-field__hint clover-auth-field__hint--error">
+                {passwordMessage}
+              </p>
             ) : null}
 
             <button
