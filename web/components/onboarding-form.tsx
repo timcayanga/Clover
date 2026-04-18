@@ -80,32 +80,25 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
   const [isPending, startTransition] = useTransition();
 
   const submit = (skipped: boolean) => {
-    const saveOnboarding = async () => {
-      setMessage(skipped ? "Skipping for now..." : "Saving your preference...");
-      const isStagingHost = window.location.hostname === "staging.clover.ph";
-      const headers: Record<string, string> = { "Content-Type": "application/json" };
-      if (isStagingHost) {
-        headers["x-staging-guest"] = "1";
-      }
-
-      const response = await fetch("/api/onboarding", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ goal: goals[0] ?? null, goals, skipped }),
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}));
-        setMessage(payload.error || "Unable to save onboarding right now.");
-        return;
-      }
-
-      router.replace("/dashboard");
-      router.refresh();
-    };
+    const payload = JSON.stringify({ goal: goals[0] ?? null, goals, skipped });
+    const isStagingHost = window.location.hostname === "staging.clover.ph";
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (isStagingHost) {
+      headers["x-staging-guest"] = "1";
+    }
 
     startTransition(() => {
-      void saveOnboarding();
+      setMessage(skipped ? "Skipping for now..." : "Saving your preference...");
+      void fetch("/api/onboarding", {
+        method: "POST",
+        headers,
+        body: payload,
+        keepalive: true,
+      }).catch(() => {
+        // The redirect happens immediately; this is best-effort persistence.
+      });
+      router.replace("/dashboard");
+      router.refresh();
     });
   };
 

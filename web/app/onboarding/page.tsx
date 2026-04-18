@@ -15,9 +15,8 @@ export default async function OnboardingPage() {
   return (
     <main className="onboarding-page">
       <section className="onboarding-page__shell">
-        <div className="onboarding-page__brand">
-          <img className="onboarding-page__mark" src="/favicon.svg" alt="" aria-hidden="true" />
-          <span>Clover</span>
+        <div className="onboarding-page__brand" aria-label="Clover">
+          <img className="onboarding-page__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
         </div>
 
         <OnboardingForm currentGoal={user.primaryGoal} />

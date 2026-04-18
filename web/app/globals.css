@@ -1715,22 +1715,18 @@ label {
 .onboarding-page__brand {
   display: inline-flex;
   align-items: center;
-  gap: 14px;
+  justify-content: center;
   width: fit-content;
-  padding: 8px 14px 8px 10px;
+  padding: 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.82);
   border: 1px solid var(--stroke);
   box-shadow: var(--shadow-soft);
-  color: var(--text);
-  font-family: var(--font-heading);
-  font-weight: 700;
-  letter-spacing: -0.03em;
 }
 
 .onboarding-page__mark {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
 }
 
 .onboarding-card {
