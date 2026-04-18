@@ -341,6 +341,10 @@ function AccountsPageContent() {
   }, [router, searchParams]);
 
   useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
     void loadWorkspaceData(selectedWorkspaceId);
   }, [selectedWorkspaceId]);
 
