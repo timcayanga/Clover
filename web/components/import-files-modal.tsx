@@ -303,7 +303,7 @@ export function ImportFilesModal({
         progress: 100,
         progressLabel: "Done",
       });
-      await onImported();
+      void onImported();
       return importedRows;
     } finally {
       window.clearInterval(finalizingTimer);

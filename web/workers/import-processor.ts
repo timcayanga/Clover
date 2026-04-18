@@ -96,6 +96,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
   const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
 
   const transactions = [];
+  const trainingSignalJobs: Promise<unknown>[] = [];
 
   for (const row of parsedRows) {
     const rowType =
@@ -152,27 +153,31 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
 
     transactions.push(transaction);
 
-    await recordTrainingSignal({
-      workspaceId: importFile.workspaceId,
-      importFileId,
-      transactionId: typeof transaction?.id === "string" ? transaction.id : null,
-      merchantText:
-        (typeof row.merchantClean === "string" && row.merchantClean) ||
-        (typeof row.merchantRaw === "string" && row.merchantRaw) ||
-        "Imported transaction",
-      categoryId,
-      categoryName,
-      type: rowType ?? "expense",
-      source: "import_confirmation",
-      confidence: typeof row.confidence === "number" ? row.confidence : 100,
-      notes: typeof row.categoryReason === "string" ? row.categoryReason : null,
-    });
+    trainingSignalJobs.push(
+      recordTrainingSignal({
+        workspaceId: importFile.workspaceId,
+        importFileId,
+        transactionId: typeof transaction?.id === "string" ? transaction.id : null,
+        merchantText:
+          (typeof row.merchantClean === "string" && row.merchantClean) ||
+          (typeof row.merchantRaw === "string" && row.merchantRaw) ||
+          "Imported transaction",
+        categoryId,
+        categoryName,
+        type: rowType ?? "expense",
+        source: "import_confirmation",
+        confidence: typeof row.confidence === "number" ? row.confidence : 100,
+        notes: typeof row.categoryReason === "string" ? row.categoryReason : null,
+      }).catch(() => null)
+    );
   }
 
   await updateImportFileCompat(importFileId, {
     status: "done",
     accountId,
   });
+
+  void Promise.allSettled(trainingSignalJobs);
 
   return { imported: transactions.length };
 };
