@@ -13,8 +13,10 @@ type GoalOption = {
 type StartOption = {
   value: "accounts" | "statement" | "manual" | "skip";
   title: string;
+  description: string;
   icon: ReactNode;
   href: string;
+  featured?: boolean;
 };
 
 const GOALS: GoalOption[] = [
@@ -78,8 +80,23 @@ const GOALS: GoalOption[] = [
 
 const START_OPTIONS: StartOption[] = [
   {
+    value: "statement",
+    title: "Import a statement",
+    description: "Upload a bank statement to auto-populate your dashboard, transactions, and review queue.",
+    href: "/imports",
+    featured: true,
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M12 3v10" />
+        <path d="m8 7 4-4 4 4" />
+        <path d="M5 13v6h14v-6" />
+      </svg>
+    ),
+  },
+  {
     value: "accounts",
     title: "Add an account",
+    description: "Connect an account for ongoing tracking and a fuller picture of your money.",
     href: "/accounts",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -92,20 +109,9 @@ const START_OPTIONS: StartOption[] = [
     ),
   },
   {
-    value: "statement",
-    title: "Upload a statement",
-    href: "/imports",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3v10" />
-        <path d="m8 7 4-4 4 4" />
-        <path d="M5 13v6h14v-6" />
-      </svg>
-    ),
-  },
-  {
     value: "manual",
     title: "Enter manually",
+    description: "Start with a few transactions if you want to add details yourself.",
     href: "/transactions",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -118,6 +124,7 @@ const START_OPTIONS: StartOption[] = [
   {
     value: "skip",
     title: "Skip for now",
+    description: "Jump into the dashboard and explore first.",
     href: "/dashboard",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -136,12 +143,12 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
   const router = useRouter();
   const [goals, setGoals] = useState<string[]>(currentGoal ? [currentGoal] : []);
   const [step, setStep] = useState<"goals" | "start">("goals");
-  const [selectedStart, setSelectedStart] = useState<StartOption["value"] | null>(null);
   const [message, setMessage] = useState("Choose one or more goals to shape your first experience.");
   const [isPending, startTransition] = useTransition();
+  const skipOption = START_OPTIONS.find((option) => option.value === "skip");
 
-  const submit = (skipped: boolean) => {
-    const payload = JSON.stringify({ goal: goals[0] ?? null, goals, skipped, startAction: selectedStart });
+  const completeStep = (option: StartOption) => {
+    const payload = JSON.stringify({ goal: goals[0] ?? null, goals, skipped: option.value === "skip", startAction: option.value });
     const isStagingHost = window.location.hostname === "staging.clover.ph";
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (isStagingHost) {
@@ -149,7 +156,7 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
     }
 
     startTransition(() => {
-      setMessage(skipped ? "Skipping for now..." : "Saving your preference...");
+      setMessage(`Opening ${option.title.toLowerCase()}...`);
       void fetch("/api/onboarding", {
         method: "POST",
         headers,
@@ -158,8 +165,7 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
       }).catch(() => {
         // The redirect happens immediately; this is best-effort persistence.
       });
-      const nextRoute = START_OPTIONS.find((option) => option.value === selectedStart)?.href ?? "/dashboard";
-      router.replace(nextRoute);
+      router.replace(option.href);
     });
   };
 
@@ -204,14 +210,13 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
               type="button"
               disabled={isPending || goals.length === 0}
               onClick={() => {
-                setSelectedStart(null);
                 setStep("start");
                 setMessage("How would you like to get started?");
               }}
             >
               Continue
             </button>
-            <button className="button button-secondary" type="button" disabled={isPending} onClick={() => submit(true)}>
+            <button className="button button-secondary" type="button" disabled={isPending} onClick={() => skipOption && completeStep(skipOption)}>
               Skip for now
             </button>
           </div>
@@ -220,7 +225,8 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
         <>
           <h3>How would you like to get started?</h3>
           <p className="onboarding-card__copy">
-            Choose the first thing you want to do. You can always come back and do the rest later.
+            Importing a statement is the fastest way to auto-populate your dashboard. You can still add an account or
+            enter manually if that fits your setup better.
           </p>
 
           <div className="onboarding-grid onboarding-grid--start" role="list" aria-label="Getting started options">
@@ -228,15 +234,21 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
               <button
                 key={option.value}
                 type="button"
-                className={`onboarding-option onboarding-option--start ${selectedStart === option.value ? "is-selected" : ""}`}
-                onClick={() => setSelectedStart(option.value)}
+                className={`onboarding-option onboarding-option--start ${option.featured ? "onboarding-option--featured" : ""}`}
+                onClick={() => completeStep(option)}
                 role="listitem"
-                aria-pressed={selectedStart === option.value}
+                aria-label={option.title}
               >
                 <span className="onboarding-option__icon" aria-hidden="true">
                   {option.icon}
                 </span>
-                <span className="onboarding-option__title">{option.title}</span>
+                <span className="onboarding-option__content">
+                  <span className="onboarding-option__title-row">
+                    <span className="onboarding-option__title">{option.title}</span>
+                    {option.featured ? <span className="onboarding-option__badge">Recommended</span> : null}
+                  </span>
+                  <span className="onboarding-option__copy">{option.description}</span>
+                </span>
               </button>
             ))}
           </div>
@@ -252,14 +264,6 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
               }}
             >
               Back
-            </button>
-            <button
-              className="button button-primary"
-              type="button"
-              disabled={isPending || selectedStart === null}
-              onClick={() => submit(false)}
-            >
-              Continue
             </button>
           </div>
         </>
