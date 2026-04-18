@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useSignIn, useSignUp } from "@clerk/nextjs";
 
@@ -44,6 +44,68 @@ function formatError(error: unknown) {
   return "Something went wrong. Please try again.";
 }
 
+function getFirstClerkError(error: unknown) {
+  const clerkError = error as {
+    errors?: Array<{
+      code?: string;
+      message?: string;
+      longMessage?: string;
+    }>;
+    errorsList?: Array<{
+      code?: string;
+      message?: string;
+      longMessage?: string;
+    }>;
+    code?: string;
+    message?: string;
+  };
+
+  const source = clerkError.errors ?? clerkError.errorsList ?? [];
+  const first = source[0];
+
+  return {
+    code: first?.code ?? clerkError.code ?? "",
+    message: first?.longMessage ?? first?.message ?? clerkError.message ?? "",
+  };
+}
+
+function isValidEmail(email: string) {
+  if (!email.trim()) {
+    return false;
+  }
+
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+function getPasswordRequirements(password: string) {
+  const requirements = {
+    minLength: password.length >= 8,
+    lowerCase: /[a-z]/.test(password),
+    upperCase: /[A-Z]/.test(password),
+    number: /\d/.test(password),
+    special: /[^A-Za-z0-9]/.test(password),
+  };
+
+  return requirements;
+}
+
+function getPasswordMessage(password: string) {
+  const requirements = getPasswordRequirements(password);
+  const missing: string[] = [];
+
+  if (!requirements.minLength) missing.push("at least 8 characters");
+  if (!requirements.lowerCase) missing.push("one lowercase letter");
+  if (!requirements.upperCase) missing.push("one uppercase letter");
+  if (!requirements.number) missing.push("one number");
+  if (!requirements.special) missing.push("one special character");
+
+  if (missing.length === 0) {
+    return null;
+  }
+
+  return `Please include ${missing.join(", ").replace(/, ([^,]*)$/, " and $1")}.`;
+}
+
 function GoogleIcon() {
   return (
     <svg viewBox="0 0 48 48" aria-hidden="true" className="clover-auth-button__icon">
@@ -61,6 +123,24 @@ function FacebookIcon() {
       <path
         fill="#1877F2"
         d="M24 12a12 12 0 1 0-13.875 11.844v-8.39H7.078V12h3.047V9.356c0-3.008 1.793-4.668 4.533-4.668 1.312 0 2.684.234 2.684.234v2.953h-1.514c-1.49 0-1.953.925-1.953 1.874V12h3.324l-.531 3.454h-2.793v8.39A12.001 12.001 0 0 0 24 12Z"
+      />
+    </svg>
+  );
+}
+
+function PasswordIcon({ visible }: { visible: boolean }) {
+  return visible ? (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="clover-auth-password-toggle__icon">
+      <path
+        fill="currentColor"
+        d="M12 5c5.5 0 9.7 4 11 7-1.3 3-5.5 7-11 7S2.3 15 1 12c1.3-3 5.5-7 11-7Zm0 2C7.9 7 4.5 9.7 3.2 12 4.5 14.3 7.9 17 12 17s7.5-2.7 8.8-5C19.5 9.7 16.1 7 12 7Zm0 2.5A2.5 2.5 0 1 1 12 14a2.5 2.5 0 0 1 0-5Z"
+      />
+    </svg>
+  ) : (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="clover-auth-password-toggle__icon">
+      <path
+        fill="currentColor"
+        d="M2.1 4.3 3.5 2.9l17.6 17.6-1.4 1.4-2.7-2.7C15.5 20.4 13.9 21 12 21 6.5 21 2.3 17 1 14c.7-1.6 2.2-3.8 5-5.7L2.1 4.3ZM6.9 9.1c-1.9 1.3-3.3 2.9-3.9 4 1.3 2.3 4.7 5 8.9 5 1.2 0 2.3-.2 3.3-.6l-1.9-1.9a2.5 2.5 0 0 1-3.3-3.3L6.9 9.1Zm4.2-3.1c4.1 0 8.3 3.4 9.7 6.1-.5 1-1.3 2.2-2.5 3.4l-1.5-1.5c.9-.9 1.6-1.8 2-2.4C17.5 9.3 14.1 6.8 11 6.8c-.5 0-1 0-1.5.1l-2-2c1.1-.5 2.4-.8 3.6-.9ZM12 9.5a2.5 2.5 0 0 1 2.4 3.1l-2.9-2.9c.2-.1.3-.2.5-.2Z"
       />
     </svg>
   );
@@ -84,8 +164,19 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [socialBusy, setSocialBusy] = useState<SocialStrategy | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [touchedEmail, setTouchedEmail] = useState(false);
+  const [touchedPassword, setTouchedPassword] = useState(false);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
 
   const isReady = auth.isLoaded && signInState.isLoaded && signUpState.isLoaded;
+  const trimmedEmail = email.trim();
+  const emailIsValid = useMemo(() => isValidEmail(email), [email]);
+  const passwordMessage = useMemo(() => getPasswordMessage(password), [password]);
+  const showEmailWarning = (touchedEmail || attemptedSubmit) && !emailIsValid;
+  const showPasswordWarning = mode === "sign-up" ? (touchedPassword || attemptedSubmit) && Boolean(passwordMessage) : false;
+  const canSubmitSignUp = emailIsValid && passwordMessage === null && !busy;
+  const canSubmitSignIn = emailIsValid && password.length > 0 && !busy;
 
   useEffect(() => {
     if (auth.isLoaded && auth.isSignedIn) {
@@ -100,6 +191,10 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
     setNotice(null);
     setBusy(false);
     setSocialBusy(null);
+    setShowPassword(false);
+    setTouchedEmail(false);
+    setTouchedPassword(false);
+    setAttemptedSubmit(false);
     setEmail("");
     setPassword("");
   }, [mode]);
@@ -132,11 +227,12 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
     setBusy(true);
     setError(null);
     setNotice(null);
+    setAttemptedSubmit(true);
 
     try {
       const response = await signInState.signIn.create({
         strategy: "password",
-        identifier: email.trim(),
+        identifier: trimmedEmail,
         password,
       });
 
@@ -148,9 +244,20 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
         return;
       }
 
-      setError("Sign-in needs an additional step. Please try another method or contact support.");
+      setError("We couldn’t sign you in just yet. Please double-check your email and password.");
+
     } catch (err) {
-      setError(formatError(err));
+      const firstError = getFirstClerkError(err);
+
+      if (firstError.code.includes("form_identifier_not_found") || firstError.code.includes("identifier_not_found")) {
+        setError("We couldn’t find an account for that email. Please double-check it or sign up first.");
+      } else if (firstError.code.includes("form_identifier_invalid") || firstError.code.includes("identifier_invalid")) {
+        setError("That email address doesn’t look quite right. Please check it and try again.");
+      } else if (firstError.code.includes("incorrect_password") || firstError.code.includes("password")) {
+        setError("That password doesn’t look right. Please try again or use a different sign-in method.");
+      } else {
+        setError("We couldn’t sign you in just yet. Please double-check your email and password.");
+      }
     } finally {
       setBusy(false);
     }
@@ -160,10 +267,23 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
     setBusy(true);
     setError(null);
     setNotice(null);
+    setAttemptedSubmit(true);
+
+    if (!isValidEmail(email)) {
+      setBusy(false);
+      setError("Please enter a valid email address so we can keep your account in sync.");
+      return;
+    }
+
+    if (passwordMessage) {
+      setBusy(false);
+      setError(passwordMessage);
+      return;
+    }
 
     try {
       const response = await signUpState.signUp.create({
-        emailAddress: email.trim(),
+        emailAddress: trimmedEmail,
         password,
       });
 
@@ -178,7 +298,7 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
       if (response.unverifiedFields.includes("email_address")) {
         await signUpState.signUp.prepareEmailAddressVerification({ strategy: "email_code" });
         setPhase("verify-email");
-        setNotice(`We sent a verification code to ${email.trim()}.`);
+        setNotice(`We sent a verification code to ${trimmedEmail}.`);
         return;
       }
 
@@ -189,7 +309,17 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
 
       setError("We couldn't finish your sign-up. Please try again.");
     } catch (err) {
-      setError(formatError(err));
+      const firstError = getFirstClerkError(err);
+
+      if (firstError.code.includes("form_identifier_exists") || firstError.code.includes("identifier_exists")) {
+        setError("That email is already in use. Try signing in instead.");
+      } else if (firstError.code.includes("password") && firstError.message) {
+        setError("Your password needs one more tweak. Please make sure it meets the Clover rules.");
+      } else if (firstError.code.includes("email")) {
+        setError("Please double-check that email address. It should look something like name@example.com.");
+      } else {
+        setError("We couldn’t finish your sign-up just yet. Please review the form and try again.");
+      }
     } finally {
       setBusy(false);
     }
@@ -229,6 +359,18 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
     }
 
     if (mode === "sign-in") {
+      if (!emailIsValid) {
+        setAttemptedSubmit(true);
+        setError("Please enter a valid email address.");
+        return;
+      }
+
+      if (!password) {
+        setAttemptedSubmit(true);
+        setError("Please enter your password so we can check your account.");
+        return;
+      }
+
       await submitSignIn();
       return;
     }
@@ -310,23 +452,61 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
                 placeholder="Enter your email address"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
+                onBlur={() => setTouchedEmail(true)}
+                aria-invalid={showEmailWarning}
+                aria-describedby={showEmailWarning ? "clover-email-warning" : undefined}
                 required
               />
             </label>
+            {showEmailWarning ? (
+              <p id="clover-email-warning" className="clover-auth-field__hint clover-auth-field__hint--error">
+                That email address doesn’t look quite right. Please double-check it.
+              </p>
+            ) : null}
 
             <label className="clover-auth-field">
               <span>Password</span>
-              <input
-                type="password"
-                autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
-                placeholder="Enter your password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-              />
+              <div className="clover-auth-password">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  autoComplete={mode === "sign-in" ? "current-password" : "new-password"}
+                  placeholder="Enter your password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  onBlur={() => setTouchedPassword(true)}
+                  aria-invalid={showPasswordWarning}
+                  aria-describedby={showPasswordWarning ? "clover-password-warning" : undefined}
+                  required
+                />
+                <button
+                  type="button"
+                  className="clover-auth-password-toggle"
+                  onClick={() => setShowPassword((value) => !value)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  <PasswordIcon visible={showPassword} />
+                </button>
+              </div>
             </label>
+            {mode === "sign-up" ? (
+              <>
+                <p className="clover-auth-field__hint">
+                  Use at least 8 characters, with one lowercase letter, one uppercase letter, one number, and one
+                  special character.
+                </p>
+                {showPasswordWarning ? (
+                  <p id="clover-password-warning" className="clover-auth-field__hint clover-auth-field__hint--error">
+                    {passwordMessage}
+                  </p>
+                ) : null}
+              </>
+            ) : null}
 
-            <button className="clover-auth-primary" type="submit" disabled={busy}>
+            <button
+              className="clover-auth-primary"
+              type="submit"
+              disabled={mode === "sign-in" ? !canSubmitSignIn : !canSubmitSignUp}
+            >
               {busy ? "Please wait..." : mode === "sign-in" ? "Sign In" : "Continue"}
             </button>
           </>
