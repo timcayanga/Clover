@@ -90,7 +90,7 @@ const getMonthBuckets = (anchor: Date) => {
   return buckets;
 };
 
-export default async function ReportsPage() {
+export async function ReportsPageView({ active = "reports" }: { active?: "reports" | "insights" }) {
   const headerList = await headers();
   const hostname = (headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "")
     .split(",")[0]
@@ -180,7 +180,7 @@ export default async function ReportsPage() {
 
     return (
       <CloverShell
-        active="insights"
+        active={active}
         kicker="Insights"
         title="Turn your statements into clear next steps."
         subtitle="These sample reports are shown in staging so the page feels complete even before live workspace data is available."
@@ -806,7 +806,7 @@ export default async function ReportsPage() {
 
     return (
       <CloverShell
-        active="insights"
+        active={active}
         kicker="Insights"
         title="Turn your statements into clear next steps."
         subtitle="These insights are generated from imported statements, parsed transactions, and manual entries so you can see what changed, why it changed, and what to do next."
@@ -1227,7 +1227,7 @@ export default async function ReportsPage() {
 
     return (
       <CloverShell
-        active="reports"
+        active={active}
         kicker="Insights"
         title="Turn your statements into clear next steps."
         subtitle="The insights page could not load right now, but your workspace and transactions are still available."
@@ -1252,4 +1252,8 @@ export default async function ReportsPage() {
       </CloverShell>
     );
   }
+}
+
+export default async function ReportsPage() {
+  return <ReportsPageView active="reports" />;
 }
