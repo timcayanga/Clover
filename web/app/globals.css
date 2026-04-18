@@ -1735,11 +1735,13 @@ label {
   line-height: 1.15;
   font-weight: 600;
   letter-spacing: -0.04em;
-  max-width: 19ch;
+  max-width: none;
+  width: 100%;
 }
 
 .onboarding-card__copy {
-  max-width: 50ch;
+  max-width: none;
+  width: 100%;
   color: var(--muted);
   font-size: 15px;
 }
@@ -1886,6 +1888,7 @@ label {
 }
 
 .onboarding-status {
+  width: 100%;
   color: var(--muted);
   min-height: 24px;
 }
@@ -4810,6 +4813,7 @@ label {
 
   .onboarding-card h3 {
     max-width: none;
+    width: 100%;
     font-size: clamp(1.7rem, 6.4vw, 2.1rem);
   }
 
