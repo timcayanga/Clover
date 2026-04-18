@@ -132,6 +132,8 @@ type ProgressState = {
 const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
+const yieldToPaint = () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+
 const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
 
 export default function ImportsPage() {
@@ -536,6 +538,7 @@ function ImportsPageContent() {
           ? { ...current, progress: 70, detail: "Reading the uploaded file...", statusLabel: "Parsing" }
           : current
       );
+      await yieldToPaint();
       const extractedText = await extractTextFromFile(file);
       const detectedStatement = detectStatementMetadata(extractedText);
       const accountId = await ensureStatementAccount(

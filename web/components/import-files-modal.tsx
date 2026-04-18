@@ -108,6 +108,8 @@ const fileTypeLabel = (file: File) => {
 const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
+const yieldToPaint = () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+
 export function ImportFilesModal({
   open,
   workspaceId,
@@ -351,6 +353,7 @@ export function ImportFilesModal({
     updateItem(itemId, { status: "parsing", error: null, progress: 8, progressLabel: "Preparing file" });
 
     try {
+      await yieldToPaint();
       const text = await extractTextFromFile(item.file, item.password.trim() || undefined);
       const statement = detectStatementMetadata(text);
       updateItem(itemId, {
