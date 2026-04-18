@@ -78,7 +78,7 @@ type TransactionDetailDraft = {
   accountId: string;
   categoryId: string;
   amount: string;
-  type: "income" | "expense" | "transfer";
+  type: "debit" | "credit";
   description: string;
   isExcluded: boolean;
   isTransfer: boolean;
@@ -476,11 +476,14 @@ const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => 
   accountId: transaction.accountId,
   categoryId: transaction.categoryId ?? "",
   amount: transaction.amount,
-  type: transaction.type,
-  description: transaction.description ?? "",
+  type: transaction.type === "income" ? "credit" : "debit",
+  description:
+    transaction.description && !/^\s*\{[\s\S]*\}\s*$/.test(transaction.description) ? transaction.description : "",
   isExcluded: transaction.isExcluded,
   isTransfer: transaction.isTransfer,
 });
+
+const detailDraftTypeToTransactionType = (type: TransactionDetailDraft["type"]) => (type === "credit" ? "income" : "expense");
 
 const toolbarChipStyle = {
   backgroundColor: "#f2f5f7",
@@ -1363,7 +1366,7 @@ function TransactionsPageContent() {
         accountId: detailDraft.accountId,
         categoryId: detailDraft.categoryId || null,
         amount: detailDraft.amount,
-        type: detailDraft.type,
+        type: detailDraftTypeToTransactionType(detailDraft.type),
         description: detailDraft.description || null,
         isExcluded: detailDraft.isExcluded,
         isTransfer: detailDraft.isTransfer,
@@ -2426,27 +2429,6 @@ function TransactionsPageContent() {
               </button>
             </div>
 
-            <div className="transaction-notes-grid">
-              <div className="transaction-note-meta">
-                <span>Date</span>
-                <strong>{formatDate(detailDraft?.date ?? selectedTransaction.date)}</strong>
-              </div>
-              <div className="transaction-note-meta">
-                <span>Account</span>
-                <strong>{selectedTransaction.accountName}</strong>
-              </div>
-              <div className="transaction-note-meta">
-                <span>Category</span>
-                <strong>{detailDraft?.categoryId ? categories.find((category) => category.id === detailDraft.categoryId)?.name ?? "Other" : "Other"}</strong>
-              </div>
-              <div className="transaction-note-meta">
-                <span>Amount</span>
-                <strong className={(detailDraft?.type ?? selectedTransaction.type) === "income" ? "positive" : "negative"}>
-                  {currencyFormatter.format(Number(detailDraft?.amount ?? selectedTransaction.amount))}
-                </strong>
-              </div>
-            </div>
-
             <div className="form-grid transaction-drawer-grid">
               <label>
                 Date
@@ -2494,7 +2476,7 @@ function TransactionsPageContent() {
               <label>
                 Type
                 <select
-                  value={detailDraft?.type ?? selectedTransaction.type}
+                  value={detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : "debit")}
                   onChange={(event) =>
                     setDetailDraft((current) =>
                       current
@@ -2505,12 +2487,11 @@ function TransactionsPageContent() {
                         : current
                     )
                   }
-                  >
-                    <option value="expense">Expense</option>
-                    <option value="income">Income</option>
-                    <option value="transfer">Transfer</option>
-                  </select>
-                </label>
+                >
+                  <option value="debit">Debit</option>
+                  <option value="credit">Credit</option>
+                </select>
+              </label>
               <label className="span-2">
                 Notes
                 <textarea
