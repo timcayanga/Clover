@@ -248,6 +248,19 @@ label {
   box-shadow: var(--shadow);
 }
 
+.clerk-auth-screen--signup [data-clerk-component="rootBox"],
+.clerk-auth-screen--signup [data-clerk-component="cardBox"],
+.clerk-auth-screen--signup [data-clerk-component="card"],
+.clerk-auth-screen--signup [data-clerk-component="main"] {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 .clerk-auth-screen__footer {
   margin: 0;
   padding: 14px 24px 18px;

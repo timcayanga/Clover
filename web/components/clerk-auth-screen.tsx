@@ -28,14 +28,24 @@ const cloverAuthAppearance: Appearance = {
       backgroundColor: "transparent",
       boxShadow: "none",
     },
+    cardBox: {
+      backgroundColor: "transparent",
+      boxShadow: "none",
+      border: "0",
+      padding: "0",
+      margin: "0",
+      width: "100%",
+    },
     card: {
       backgroundColor: "transparent",
       boxShadow: "none",
       border: "0",
       padding: "0",
+      width: "100%",
     },
     main: {
       backgroundColor: "transparent",
+      width: "100%",
     },
     footer: {
       display: "none",
