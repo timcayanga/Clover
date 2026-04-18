@@ -394,12 +394,6 @@ export default async function InsightsPage() {
 
   const selectedGoal = user.primaryGoal?.trim() ?? null;
   const goalLabel = selectedGoal ? goalLabels[selectedGoal] ?? selectedGoal : null;
-  const goalStatus =
-    goalLabel === null
-      ? "No primary goal set yet"
-      : currentNet >= 0
-        ? `${goalLabel} looks supported by this month's cash flow`
-        : `${goalLabel} needs tighter spending or stronger income to stay on track`;
 
   const confidenceScore = Math.max(
     55,
@@ -454,13 +448,6 @@ export default async function InsightsPage() {
             tone: "good" as const,
           };
 
-  const dataSources = [
-    `${currentWindowTransactions.length} transactions in the last 30 days`,
-    `${ninetyDayTransactions.length} transactions in the last 90 days`,
-    `${importStatusCounts.done} completed imports`,
-    `${activeAccountCount} account${activeAccountCount === 1 ? "" : "s"} with balances`,
-  ];
-
   const chartWidth = 520;
   const chartHeight = 210;
   const chartPadding = 22;
@@ -507,16 +494,6 @@ export default async function InsightsPage() {
       kicker="AI insights"
       title="Your money, translated into next steps."
       subtitle="Built from your statements and spending patterns, this page explains what changed, why it changed, and what to do next."
-      actions={
-        <>
-          <Link className="pill-link" href="/transactions">
-            Transactions
-          </Link>
-          <Link className="pill-link" href="/reports">
-            Reports
-          </Link>
-        </>
-      }
     >
       <section className="insights-hero">
         <article className="insights-hero__summary glass">
@@ -555,18 +532,6 @@ export default async function InsightsPage() {
           </div>
         </article>
 
-        <aside className="insights-hero__sidebar glass">
-          <p className="eyebrow">Why this matters</p>
-          <h4>{goalStatus}</h4>
-          <p>{priorityFlag.body}</p>
-          <div className="insights-hero__list">
-            {dataSources.map((source) => (
-              <div key={source} className="insights-hero__item">
-                {source}
-              </div>
-            ))}
-          </div>
-        </aside>
       </section>
 
       <section className="insights-grid">
@@ -654,7 +619,7 @@ export default async function InsightsPage() {
             </div>
             <div className="insight-list__item">
               <strong>Goal alignment</strong>
-              <span>{goalStatus}</span>
+              <span>{goalLabel ?? "No primary goal set yet"}</span>
             </div>
             <div className="insight-list__item">
               <strong>Data quality</strong>
