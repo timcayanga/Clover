@@ -33,6 +33,7 @@ const guessCategoryName = (text: string, type: TransactionType) => {
   if (type === "income" || /salary|payroll|income|deposit|credit memo/.test(lower)) return "Income";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout/.test(lower)) return "Food & Dining";
+  if (/auntie\s*annes|llaollao/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
   if (/bill|utilities|electric|water|internet|phone|subscription|openai|netflix|spotify/.test(lower)) return "Bills & Utilities";

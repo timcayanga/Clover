@@ -97,6 +97,21 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
 
   const transactions = [];
   const trainingSignalJobs: Promise<unknown>[] = [];
+  const coerceAmountToString = (value: unknown) => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    if (typeof value === "number" || typeof value === "string") {
+      return String(value);
+    }
+
+    if (typeof value === "object" && "toString" in value && typeof (value as { toString?: unknown }).toString === "function") {
+      return String(value);
+    }
+
+    return null;
+  };
 
   for (const row of parsedRows) {
     const rowType =
@@ -138,10 +153,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
       learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
       date: row.date instanceof Date ? row.date : row.date ? new Date(String(row.date)) : new Date(),
-      amount:
-        parseAmountValue(
-          typeof row.amount === "number" ? String(row.amount) : typeof row.amount === "string" ? row.amount : null
-        ) ?? 0,
+      amount: parseAmountValue(coerceAmountToString(row.amount)) ?? 0,
       currency: "PHP",
       type: (rowType ?? "expense") as TransactionType,
       merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
