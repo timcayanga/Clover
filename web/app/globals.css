@@ -3945,6 +3945,46 @@ input.transaction-inline-edit--amount::placeholder {
 
 .detail-warning-box {
   margin-top: 6px;
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.14), rgba(245, 158, 11, 0.06));
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.detail-warning-box__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #92400e;
+}
+
+.detail-warning-box__header strong {
+  font-size: 0.98rem;
+  letter-spacing: -0.02em;
+}
+
+.detail-warning-box__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.16);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  flex: none;
+}
+
+.detail-warning-box p {
+  margin: 0;
+  color: var(--text);
+}
+
+.detail-warning-box p strong {
+  color: #92400e;
 }
 
 .modal-backdrop {

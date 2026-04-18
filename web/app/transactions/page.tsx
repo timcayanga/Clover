@@ -2523,8 +2523,15 @@ function TransactionsPageContent() {
 
             {warningReasonFor(selectedTransaction) ? (
               <div className="detail-warning-box">
-                <span>Review warning</span>
-                <p>{warningReasonFor(selectedTransaction)}</p>
+                <div className="detail-warning-box__header">
+                  <span className="detail-warning-box__icon" aria-hidden="true">
+                    <span className="warning-mark warning-mark--small" aria-hidden="true" />
+                  </span>
+                  <strong>Review warning</strong>
+                </div>
+                <p>
+                  <strong>Warning:</strong> {warningReasonFor(selectedTransaction)}
+                </p>
                 <div className="detail-warning-actions">
                   <button
                     className="button button-primary button-small"
