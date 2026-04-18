@@ -1,6 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { CloverShell } from "@/components/clover-shell";
 import { OnboardingForm } from "@/components/onboarding-form";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
@@ -19,16 +18,15 @@ export default async function OnboardingPage() {
   }
 
   return (
-    <CloverShell
-      active="dashboard"
-      kicker="Quick setup"
-      title="A few quick details, then you’re in."
-      subtitle="Clover uses your choice to shape the first experience without slowing signup down."
-      showTopbar={false}
-    >
-      <section className="onboarding-layout">
+    <main className="onboarding-page">
+      <section className="onboarding-page__shell">
+        <div className="onboarding-page__brand">
+          <img className="onboarding-page__mark" src="/favicon.svg" alt="" aria-hidden="true" />
+          <span>Clover</span>
+        </div>
+
         <OnboardingForm currentGoal={user.primaryGoal} />
       </section>
-    </CloverShell>
+    </main>
   );
 }
