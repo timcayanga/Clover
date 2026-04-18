@@ -81,9 +81,9 @@ const GOALS: GoalOption[] = [
 const START_OPTIONS: StartOption[] = [
   {
     value: "statement",
-    title: "Import a statement",
+    title: "Import files",
     description: "Upload a bank statement to auto-populate your dashboard, transactions, and review queue.",
-    href: "/imports",
+    href: "/transactions?import=1",
     featured: true,
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">

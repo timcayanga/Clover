@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportFilesModal } from "@/components/import-files-modal";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
@@ -387,6 +388,7 @@ export default function TransactionsPage() {
 }
 
 function TransactionsPageContent() {
+  const searchParams = useSearchParams();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
@@ -534,6 +536,13 @@ function TransactionsPageContent() {
     closeToolbarMenus();
     setImportOpen(true);
   };
+
+  useEffect(() => {
+    if (searchParams.get("import") === "1") {
+      setImportOpen(true);
+      window.history.replaceState({}, "", "/transactions");
+    }
+  }, [searchParams]);
 
   const ensureDefaultAccount = async (workspaceId: string) => {
     const preferredAccount = accounts.find((account) => account.type !== "cash" && account.type !== "other" && account.type !== "investment");

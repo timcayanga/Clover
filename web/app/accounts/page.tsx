@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportFilesModal } from "@/components/import-files-modal";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
@@ -241,6 +241,7 @@ export default function AccountsPage() {
 
 function AccountsPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const addRef = useRef<HTMLDivElement>(null);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -331,6 +332,13 @@ function AccountsPageContent() {
   useEffect(() => {
     void loadWorkspaces();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("import") === "1") {
+      setImportOpen(true);
+      router.replace("/accounts");
+    }
+  }, [router, searchParams]);
 
   useEffect(() => {
     void loadWorkspaceData(selectedWorkspaceId);
