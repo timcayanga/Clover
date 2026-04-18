@@ -96,6 +96,15 @@ type InlineEditableCellProps = {
   className?: string;
 };
 
+type TransactionHistoryEntry = {
+  before: Transaction;
+  after: Transaction;
+};
+
+type UpdateTransactionOptions = {
+  recordHistory?: boolean;
+};
+
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
   style: "currency",
   currency: "PHP",
@@ -161,6 +170,48 @@ const getCategoryIconSrc = (categoryName: string | null | undefined) => {
       return "/category-icons/investments.svg";
     default:
       return "/category-icons/default.svg";
+  }
+};
+
+const getCategoryIconTone = (categoryName: string | null | undefined) => {
+  switch (normalizeCategoryName(categoryName)) {
+    case "income":
+    case "salary":
+      return { backgroundColor: "rgba(34, 197, 94, 0.14)", borderColor: "rgba(34, 197, 94, 0.24)" };
+    case "food & dining":
+    case "groceries":
+      return { backgroundColor: "rgba(249, 115, 22, 0.14)", borderColor: "rgba(249, 115, 22, 0.24)" };
+    case "transport":
+      return { backgroundColor: "rgba(59, 130, 246, 0.14)", borderColor: "rgba(59, 130, 246, 0.24)" };
+    case "housing":
+      return { backgroundColor: "rgba(168, 85, 247, 0.14)", borderColor: "rgba(168, 85, 247, 0.24)" };
+    case "bills & utilities":
+    case "utilities":
+      return { backgroundColor: "rgba(14, 165, 233, 0.14)", borderColor: "rgba(14, 165, 233, 0.24)" };
+    case "travel & lifestyle":
+      return { backgroundColor: "rgba(236, 72, 153, 0.14)", borderColor: "rgba(236, 72, 153, 0.24)" };
+    case "shopping":
+      return { backgroundColor: "rgba(244, 63, 94, 0.14)", borderColor: "rgba(244, 63, 94, 0.24)" };
+    case "health & wellness":
+    case "medical":
+      return { backgroundColor: "rgba(20, 184, 166, 0.14)", borderColor: "rgba(20, 184, 166, 0.24)" };
+    case "education":
+      return { backgroundColor: "rgba(234, 179, 8, 0.14)", borderColor: "rgba(234, 179, 8, 0.24)" };
+    case "financial":
+      return { backgroundColor: "rgba(37, 99, 235, 0.14)", borderColor: "rgba(37, 99, 235, 0.24)" };
+    case "gifts & donations":
+      return { backgroundColor: "rgba(190, 24, 93, 0.14)", borderColor: "rgba(190, 24, 93, 0.24)" };
+    case "business":
+      return { backgroundColor: "rgba(100, 116, 139, 0.14)", borderColor: "rgba(100, 116, 139, 0.24)" };
+    case "transfers":
+      return { backgroundColor: "rgba(6, 182, 212, 0.14)", borderColor: "rgba(6, 182, 212, 0.24)" };
+    case "other":
+      return { backgroundColor: "rgba(148, 163, 184, 0.14)", borderColor: "rgba(148, 163, 184, 0.24)" };
+    case "investments":
+    case "investment":
+      return { backgroundColor: "rgba(124, 58, 237, 0.14)", borderColor: "rgba(124, 58, 237, 0.24)" };
+    default:
+      return { backgroundColor: "rgba(3, 168, 192, 0.10)", borderColor: "rgba(3, 168, 192, 0.18)" };
   }
 };
 
@@ -608,6 +659,9 @@ function TransactionsPageContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [isWorkspacesLoaded, setIsWorkspacesLoaded] = useState(false);
   const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
+  const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
+  const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
+  const [isApplyingHistory, setIsApplyingHistory] = useState(false);
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
@@ -676,6 +730,8 @@ function TransactionsPageContent() {
     setSelectedTransactionIds([]);
     setSelectedTransaction(null);
     setDetailDraft(null);
+    setUndoStack([]);
+    setRedoStack([]);
 
     if (!selectedWorkspaceId) {
       setAccounts([]);
@@ -1048,6 +1104,8 @@ function TransactionsPageContent() {
       const payload = await response.json();
       const created = payload.transaction as Transaction;
       setTransactions((current) => [created, ...current]);
+      setUndoStack([]);
+      setRedoStack([]);
       setManualOpen(false);
       setMessage(`Transaction "${created.merchantRaw}" added.`);
     } catch (error) {
@@ -1057,7 +1115,25 @@ function TransactionsPageContent() {
     }
   };
 
-  const updateTransaction = async (transactionId: string, body: Record<string, unknown>) => {
+  const transactionToPatch = (transaction: Transaction) => ({
+    categoryId: transaction.categoryId,
+    accountId: transaction.accountId,
+    isExcluded: transaction.isExcluded,
+    isTransfer: transaction.isTransfer,
+    type: transaction.type,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    description: transaction.description ?? null,
+    date: transaction.date.slice(0, 10),
+    amount: transaction.amount,
+  });
+
+  const updateTransaction = async (
+    transactionId: string,
+    body: Record<string, unknown>,
+    options: UpdateTransactionOptions = {}
+  ) => {
+    const before = options.recordHistory === false ? null : transactions.find((entry) => entry.id === transactionId) ?? null;
     const response = await fetch(`/api/transactions/${transactionId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -1079,6 +1155,13 @@ function TransactionsPageContent() {
 
       return createDetailDraft(updated);
     });
+
+    if (before) {
+      setUndoStack((current) => [{ before, after: updated }, ...current]);
+      setRedoStack([]);
+    }
+
+    return updated;
   };
 
   const commitInlineEdit = async (transaction: Transaction, field: EditableTransactionField, value: string) => {
@@ -1102,6 +1185,46 @@ function TransactionsPageContent() {
 
     await updateTransaction(transaction.id, payload);
     setMessage("Transaction updated.");
+  };
+
+  const applyHistoryEntry = async (entry: TransactionHistoryEntry, direction: "undo" | "redo") => {
+    setIsApplyingHistory(true);
+    try {
+      const destination = direction === "undo" ? entry.before : entry.after;
+      await updateTransaction(destination.id, transactionToPatch(destination), {
+        recordHistory: false,
+      });
+
+      if (direction === "undo") {
+        setUndoStack((current) => current.slice(1));
+        setRedoStack((current) => [entry, ...current]);
+        setMessage("Undid the last transaction change.");
+      } else {
+        setRedoStack((current) => current.slice(1));
+        setUndoStack((current) => [entry, ...current]);
+        setMessage("Redid the last transaction change.");
+      }
+    } finally {
+      setIsApplyingHistory(false);
+    }
+  };
+
+  const undoLastChange = async () => {
+    const entry = undoStack[0];
+    if (!entry || isSaving || isApplyingHistory) {
+      return;
+    }
+
+    await applyHistoryEntry(entry, "undo");
+  };
+
+  const redoLastChange = async () => {
+    const entry = redoStack[0];
+    if (!entry || isSaving || isApplyingHistory) {
+      return;
+    }
+
+    await applyHistoryEntry(entry, "redo");
   };
 
   const applyBulkEdit = async (event: FormEvent<HTMLFormElement>) => {
@@ -1332,6 +1455,10 @@ function TransactionsPageContent() {
                   style={toolbarChipStyle}
                   type="button"
                   title="Undo"
+                  disabled={!undoStack.length || isSaving || isApplyingHistory}
+                  onClick={() => {
+                    void undoLastChange();
+                  }}
                 >
                   <span className="button-icon" aria-hidden="true">
                     <img src="/undo.svg" alt="" aria-hidden="true" />
@@ -1343,6 +1470,10 @@ function TransactionsPageContent() {
                   style={toolbarChipStyle}
                   type="button"
                   title="Redo"
+                  disabled={!redoStack.length || isSaving || isApplyingHistory}
+                  onClick={() => {
+                    void redoLastChange();
+                  }}
                 >
                   <span className="button-icon" aria-hidden="true">
                     <img src="/redo.svg" alt="" aria-hidden="true" />
@@ -1507,7 +1638,7 @@ function TransactionsPageContent() {
                       />
                     </label>
                     <div className="transaction-category-icon-cell" aria-hidden="true">
-                      <span className="transaction-category-icon">
+                      <span className="transaction-category-icon" style={getCategoryIconTone(transaction.categoryName ?? categoryLabel)}>
                         <img src={getCategoryIconSrc(transaction.categoryName ?? categoryLabel)} alt="" aria-hidden="true" />
                       </span>
                     </div>
