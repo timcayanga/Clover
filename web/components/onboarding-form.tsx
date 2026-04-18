@@ -211,7 +211,7 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
               disabled={isPending || goals.length === 0}
               onClick={() => {
                 setStep("start");
-                setMessage("How would you like to get started?");
+                setMessage("");
               }}
             >
               Continue
@@ -269,9 +269,11 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
         </>
       )}
 
-      <p className="onboarding-status" aria-live="polite">
-        {message}
-      </p>
+      {step === "goals" ? (
+        <p className="onboarding-status" aria-live="polite">
+          {message}
+        </p>
+      ) : null}
     </section>
   );
 }
