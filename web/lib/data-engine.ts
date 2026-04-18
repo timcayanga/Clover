@@ -159,6 +159,22 @@ const IMPORT_FILE_COLUMNS = [
   "updatedAt",
 ] as const;
 
+const TRAINING_SIGNAL_COLUMNS = [
+  "id",
+  "workspaceId",
+  "importFileId",
+  "transactionId",
+  "source",
+  "merchantKey",
+  "merchantTokens",
+  "categoryId",
+  "categoryName",
+  "type",
+  "confidence",
+  "notes",
+  "createdAt",
+] as const;
+
 const TRANSACTION_COLUMNS = [
   "id",
   "workspaceId",
@@ -350,6 +366,25 @@ export const getCompatibleImportFileColumns = async () => {
 
   const existing = new Set(columns.map((column) => column.column_name));
   const compatible = IMPORT_FILE_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleTrainingSignalColumns = async () => {
+  const cacheKey = "TrainingSignal";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'TrainingSignal'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = TRAINING_SIGNAL_COLUMNS.filter((column) => existing.has(column));
   columnCache.set(cacheKey, compatible as string[]);
   return compatible as string[];
 };
@@ -943,6 +978,11 @@ export const classifyMerchant = (params: {
 };
 
 export const loadTrainingSignals = async (workspaceId: string) => {
+  const columns = await getCompatibleTrainingSignalColumns();
+  if (columns.length === 0) {
+    return [];
+  }
+
   let signals: Array<{
     categoryId: string;
     categoryName: string | null;
@@ -1040,47 +1080,44 @@ export const recordTrainingSignal = async (params: {
   const merchantKey = normalizeMerchantText(params.merchantText);
   const merchantTokens = tokenizeMerchant(params.merchantText);
 
-  try {
-    const signal = await prisma.trainingSignal.create({
-      data: {
-        workspaceId: params.workspaceId,
-        importFileId: params.importFileId ?? null,
-        transactionId: params.transactionId ?? null,
-        source: params.source,
-        merchantKey,
-        merchantTokens: merchantTokens as Prisma.InputJsonValue,
-        categoryId: params.categoryId,
-        categoryName: params.categoryName ?? null,
-        type: params.type,
-        confidence: params.confidence ?? 100,
-        notes: params.notes ?? null,
-      },
-    });
-
-    const category = await prisma.category.findUnique({
-      where: { id: params.categoryId },
-    });
-
-    if (category) {
-      await upsertMerchantRule({
-        workspaceId: params.workspaceId,
-        merchantText: params.merchantText,
-        normalizedName: params.merchantText,
-        categoryId: params.categoryId,
-        categoryName: params.categoryName ?? category.name,
-        source: params.source,
-        confidence: params.confidence ?? 100,
-      });
-    }
-
-    return signal;
-  } catch (error) {
-    if (isMissingDatabaseRelationError(error, "TrainingSignal")) {
-      return null;
-    }
-
-    throw error;
+  const columns = await getCompatibleTrainingSignalColumns();
+  if (columns.length === 0) {
+    return null;
   }
+
+  const signal = await prisma.trainingSignal.create({
+    data: {
+      workspaceId: params.workspaceId,
+      importFileId: params.importFileId ?? null,
+      transactionId: params.transactionId ?? null,
+      source: params.source,
+      merchantKey,
+      merchantTokens: merchantTokens as Prisma.InputJsonValue,
+      categoryId: params.categoryId,
+      categoryName: params.categoryName ?? null,
+      type: params.type,
+      confidence: params.confidence ?? 100,
+      notes: params.notes ?? null,
+    },
+  });
+
+  const category = await prisma.category.findUnique({
+    where: { id: params.categoryId },
+  });
+
+  if (category) {
+    await upsertMerchantRule({
+      workspaceId: params.workspaceId,
+      merchantText: params.merchantText,
+      normalizedName: params.merchantText,
+      categoryId: params.categoryId,
+      categoryName: params.categoryName ?? category.name,
+      source: params.source,
+      confidence: params.confidence ?? 100,
+    });
+  }
+
+  return signal;
 };
 
 export const enrichParsedRowsWithTraining = async (params: {
