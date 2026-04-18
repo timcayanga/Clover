@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { PasswordIcon } from "@/components/password-icon";
 
 type PasswordImportFile = {
@@ -34,11 +35,21 @@ export function ImportPasswordModal({
   onToggleVisibility,
   onUnlock,
 }: ImportPasswordModalProps) {
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+  const activeFile = files.find((file) => file.id === activeFileId) ?? files[0] ?? null;
+
+  useEffect(() => {
+    if (!open || !activeFile) {
+      return;
+    }
+
+    passwordInputRef.current?.focus();
+    passwordInputRef.current?.select();
+  }, [activeFile, open]);
+
   if (!open || files.length === 0) {
     return null;
   }
-
-  const activeFile = files.find((file) => file.id === activeFileId) ?? files[0];
 
   return (
     <div className="modal-backdrop import-password-layer" role="presentation" onClick={onClose}>
@@ -52,39 +63,12 @@ export function ImportPasswordModal({
         <div className="import-password-header">
           <div>
             <p className="eyebrow">Password required</p>
-            <h4 id="import-password-title">Unlock locked files</h4>
-            <p className="modal-copy">These files are password-protected. Select one and enter its password to continue importing.</p>
-          </div>
-          <div className="import-password-count">
-            <strong>{files.length}</strong>
-            <span>
-              file{files.length === 1 ? "" : "s"}
-            </span>
+            <h4 id="import-password-title">Unlock this file</h4>
+            <p className="modal-copy">This statement is password-protected. Enter its password to continue importing.</p>
           </div>
         </div>
 
         <div className="import-password-layout">
-          <aside className="import-password-list" aria-label="Files that need a password">
-            {files.map((file) => {
-              const isActive = file.id === activeFile.id;
-
-              return (
-                <button
-                  key={file.id}
-                  type="button"
-                  className={`import-password-list__item ${isActive ? "is-active" : ""}`}
-                  onClick={() => onSelectFile(file.id)}
-                >
-                  <div>
-                    <strong>{file.name}</strong>
-                    <span>{file.sizeLabel}</span>
-                  </div>
-                  <span className="import-password-list__item-status">Needs password</span>
-                </button>
-              );
-            })}
-          </aside>
-
           <div className="import-password-panel">
             <div className="import-password-panel__head">
               <strong>{activeFile.name}</strong>
@@ -104,6 +88,7 @@ export function ImportPasswordModal({
                 Password for {activeFile.name}
                 <div className="import-password-input">
                   <input
+                    ref={passwordInputRef}
                     type={activeFile.passwordVisible ? "text" : "password"}
                     value={activeFile.password}
                     onChange={(event) => onPasswordChange(activeFile.id, event.target.value)}
