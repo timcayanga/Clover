@@ -108,7 +108,7 @@ const fileTypeLabel = (file: File) => {
 const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
-const yieldToPaint = () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
 export function ImportFilesModal({
   open,
@@ -221,7 +221,7 @@ export function ImportFilesModal({
             importFileId: null,
             targetAccountId: null,
             importedRows: null,
-            progress: 0,
+            progress: 1,
             progressLabel: "Queued",
           },
         ];

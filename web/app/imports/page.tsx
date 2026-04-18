@@ -132,7 +132,7 @@ type ProgressState = {
 const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
-const yieldToPaint = () => new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
 const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
 
@@ -497,7 +497,7 @@ function ImportsPageContent() {
       setProgressState({
         open: true,
         fileName: file.name,
-        progress: 5,
+        progress: 1,
         detail: "Preparing upload...",
         statusLabel: "Uploading",
       });
