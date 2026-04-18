@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
+import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const dynamic = "force-dynamic";
@@ -79,13 +79,8 @@ const getMonthBuckets = (anchor: Date) => {
 };
 
 export default async function InsightsPage() {
-  const { userId } = await auth();
-
-  if (!userId) {
-    redirect("/sign-in");
-  }
-
-  const user = await getOrCreateCurrentUser(userId);
+  const session = await getSessionContext();
+  const user = await getOrCreateCurrentUser(session.userId);
   if (!hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
