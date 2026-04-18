@@ -494,6 +494,7 @@ export function ImportFilesModal({
 
       if (result === "needs_password") {
         blockedCount += 1;
+        break;
       }
     }
 
@@ -513,13 +514,19 @@ export function ImportFilesModal({
   const handleRetry = async (itemId: string) => {
     setBusy(true);
     setMessage("Retrying password-protected file...");
-    const result = await processFile(itemId);
-    if (result === "done") {
-      setMessage("File imported successfully.");
-    } else {
-      setMessage("Check the password and try again.");
+    try {
+      const result = await processFile(itemId);
+      if (result === "done") {
+        setMessage("File imported successfully.");
+        if (items.some((item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim()))) {
+          autoStartRef.current = true;
+        }
+      } else {
+        setMessage("Check the password and try again.");
+      }
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
 
   const handleReplayConfirm = async (itemId: string) => {
