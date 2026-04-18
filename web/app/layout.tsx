@@ -31,7 +31,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const hostname = await getHostname();
   const cookieStore = await cookies();
   const stagingCookie = cookieStore.get(stagingCookieName)?.value;
-  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? process.env.CLERK_PUBLISHABLE_KEY;
   const isStagingHost = stagingHosts.has(hostname);
   const isProductionDeployment = process.env.NODE_ENV === "production";
 
