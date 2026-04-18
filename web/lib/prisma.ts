@@ -7,8 +7,38 @@ const globalForPrisma = globalThis as unknown as {
   prismaPool?: Pool;
 };
 
+const resolveDatabaseUrl = () => {
+  const configuredUrl = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
+
+  if (!configuredUrl) {
+    return "postgresql://user:pass@localhost:5432/finance_manager";
+  }
+
+  try {
+    const url = new URL(configuredUrl);
+    const isSupabaseSessionPooler = url.hostname.endsWith(".pooler.supabase.com") && url.port === "5432";
+    if (!isSupabaseSessionPooler) {
+      return configuredUrl;
+    }
+
+    const [usernamePrefix, projectRef] = decodeURIComponent(url.username).split(".", 2);
+    if (usernamePrefix !== "postgres" || !projectRef) {
+      return configuredUrl;
+    }
+
+    const directUrl = new URL(configuredUrl);
+    directUrl.username = encodeURIComponent("postgres");
+    directUrl.hostname = `db.${projectRef}.supabase.co`;
+    directUrl.port = "5432";
+    directUrl.searchParams.delete("pgbouncer");
+    return directUrl.toString();
+  } catch {
+    return configuredUrl;
+  }
+};
+
 const connectionString =
-  process.env.DATABASE_URL ?? "postgresql://user:pass@localhost:5432/finance_manager";
+  resolveDatabaseUrl() ?? "postgresql://user:pass@localhost:5432/finance_manager";
 
 const pool =
   globalForPrisma.prismaPool ??
