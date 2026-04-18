@@ -254,40 +254,60 @@ export function ImportFilesModal({
   };
 
   const confirmItemImport = async (itemId: string, importFileId: string, accountId: string) => {
-    updateItem(itemId, { status: "importing", progress: 92, progressLabel: "Confirming import", targetAccountId: accountId });
-
-    const confirmResponse = await fetch(`/api/imports/${importFileId}/confirm`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ accountId }),
-    });
-
-    if (!confirmResponse.ok) {
-      const payload = await confirmResponse.json().catch(() => ({}));
+    let finalizingProgress = 92;
+    const finalizingTimer = window.setInterval(() => {
+      finalizingProgress = Math.min(98, finalizingProgress + 1);
       updateItem(itemId, {
-        status: "error",
-        confirmationState: "staged",
-        error: payload.error || "Unable to confirm this import.",
-        progress: 0,
-        progressLabel: "Confirmation failed",
+        status: "importing",
+        progress: finalizingProgress,
+        progressLabel: "Finalizing import",
+        targetAccountId: accountId,
       });
-      return null;
-    }
+    }, 700);
 
-    const confirmed = await confirmResponse.json();
-    const importedRows = Number(confirmed.result?.imported ?? 0);
     updateItem(itemId, {
-      status: "done",
-      confirmationState: "confirmed",
-      error: null,
-      importFileId,
+      status: "importing",
+      progress: finalizingProgress,
+      progressLabel: "Finalizing import",
       targetAccountId: accountId,
-      importedRows,
-      progress: 100,
-      progressLabel: "Done",
     });
-    await onImported();
-    return importedRows;
+
+    try {
+      const confirmResponse = await fetch(`/api/imports/${importFileId}/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accountId }),
+      });
+
+      if (!confirmResponse.ok) {
+        const payload = await confirmResponse.json().catch(() => ({}));
+        updateItem(itemId, {
+          status: "error",
+          confirmationState: "staged",
+          error: payload.error || "Unable to confirm this import.",
+          progress: 0,
+          progressLabel: "Confirmation failed",
+        });
+        return null;
+      }
+
+      const confirmed = await confirmResponse.json();
+      const importedRows = Number(confirmed.result?.imported ?? 0);
+      updateItem(itemId, {
+        status: "done",
+        confirmationState: "confirmed",
+        error: null,
+        importFileId,
+        targetAccountId: accountId,
+        importedRows,
+        progress: 100,
+        progressLabel: "Done",
+      });
+      await onImported();
+      return importedRows;
+    } finally {
+      window.clearInterval(finalizingTimer);
+    }
   };
 
   const ensureTargetAccountId = async (statementAccountName?: string | null, institution?: string | null) => {
