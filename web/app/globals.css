@@ -339,6 +339,36 @@ label {
   color: var(--bad);
 }
 
+.clover-auth-password-rules {
+  display: grid;
+  gap: 6px;
+  margin-top: -4px;
+}
+
+.clover-auth-password-rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+
+.clover-auth-password-rule__mark {
+  width: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bad);
+  font-size: 14px;
+  font-weight: 600;
+  flex: none;
+}
+
+.clover-auth-password-rule__mark.is-met {
+  color: var(--good);
+}
+
 .clover-auth-field input:focus {
   outline: none;
   border-color: rgba(3, 168, 192, 0.48);

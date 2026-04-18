@@ -172,6 +172,7 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
   const isReady = auth.isLoaded && signInState.isLoaded && signUpState.isLoaded;
   const trimmedEmail = email.trim();
   const emailIsValid = useMemo(() => isValidEmail(email), [email]);
+  const passwordRequirements = useMemo(() => getPasswordRequirements(password), [password]);
   const passwordMessage = useMemo(() => getPasswordMessage(password), [password]);
   const showEmailWarning = (touchedEmail || attemptedSubmit) && !emailIsValid;
   const showPasswordWarning = mode === "sign-up" ? (touchedPassword || attemptedSubmit) && Boolean(passwordMessage) : false;
@@ -490,10 +491,38 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
             </label>
             {mode === "sign-up" ? (
               <>
-                <p className="clover-auth-field__hint">
-                  Use at least 8 characters, with one lowercase letter, one uppercase letter, one number, and one
-                  special character.
-                </p>
+                <div className="clover-auth-password-rules" aria-label="Password requirements">
+                  <div className="clover-auth-password-rule">
+                    <span className={`clover-auth-password-rule__mark ${passwordRequirements.minLength ? "is-met" : ""}`}>
+                      {passwordRequirements.minLength ? "✓" : "✕"}
+                    </span>
+                    <span>8+ Characters</span>
+                  </div>
+                  <div className="clover-auth-password-rule">
+                    <span className={`clover-auth-password-rule__mark ${passwordRequirements.lowerCase ? "is-met" : ""}`}>
+                      {passwordRequirements.lowerCase ? "✓" : "✕"}
+                    </span>
+                    <span>1 Lower Case</span>
+                  </div>
+                  <div className="clover-auth-password-rule">
+                    <span className={`clover-auth-password-rule__mark ${passwordRequirements.upperCase ? "is-met" : ""}`}>
+                      {passwordRequirements.upperCase ? "✓" : "✕"}
+                    </span>
+                    <span>1 Upper Case</span>
+                  </div>
+                  <div className="clover-auth-password-rule">
+                    <span className={`clover-auth-password-rule__mark ${passwordRequirements.number ? "is-met" : ""}`}>
+                      {passwordRequirements.number ? "✓" : "✕"}
+                    </span>
+                    <span>1 Number</span>
+                  </div>
+                  <div className="clover-auth-password-rule">
+                    <span className={`clover-auth-password-rule__mark ${passwordRequirements.special ? "is-met" : ""}`}>
+                      {passwordRequirements.special ? "✓" : "✕"}
+                    </span>
+                    <span>1 Special Char</span>
+                  </div>
+                </div>
                 {showPasswordWarning ? (
                   <p id="clover-password-warning" className="clover-auth-field__hint clover-auth-field__hint--error">
                     {passwordMessage}
