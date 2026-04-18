@@ -1488,6 +1488,7 @@ function TransactionsPageContent() {
                 const warningReason = warningReasonFor(transaction);
                 const amount = Number(transaction.amount);
                 const isPositive = transaction.type === "income";
+                const amountToneClass = isPositive ? "positive" : "negative";
                 const categoryValue = transaction.categoryId ?? otherCategoryId;
                 const categoryLabel = categories.find((category) => category.id === categoryValue)?.name ?? "Other";
                 return (
@@ -1561,13 +1562,13 @@ function TransactionsPageContent() {
                         onCommit={(value) => commitInlineEdit(transaction, "categoryId", value)}
                       />
                     </div>
-                    <div className={`transaction-amount-cell ${isPositive ? "positive" : "negative"}`}>
+                    <div className={`transaction-amount-cell ${amountToneClass}`}>
                       <InlineEditableCell
                         value={transaction.amount}
                         displayValue={currencyFormatter.format(amount)}
                         ariaLabel={`Edit amount for ${transaction.merchantRaw}`}
                         kind="number"
-                        className="transaction-inline-edit transaction-inline-edit--amount"
+                        className={`transaction-inline-edit transaction-inline-edit--amount ${amountToneClass}`}
                         onCommit={(value) => commitInlineEdit(transaction, "amount", value)}
                       />
                     </div>
@@ -2167,7 +2168,9 @@ function TransactionsPageContent() {
               </div>
               <div className="transaction-note-meta">
                 <span>Amount</span>
-                <strong>{currencyFormatter.format(Number(detailDraft?.amount ?? selectedTransaction.amount))}</strong>
+                <strong className={(detailDraft?.type ?? selectedTransaction.type) === "income" ? "positive" : "negative"}>
+                  {currencyFormatter.format(Number(detailDraft?.amount ?? selectedTransaction.amount))}
+                </strong>
               </div>
             </div>
 

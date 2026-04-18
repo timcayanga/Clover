@@ -3432,6 +3432,18 @@ select.transaction-inline-edit:focus {
   letter-spacing: -0.02em;
 }
 
+.transaction-inline-edit--amount.positive {
+  color: var(--good);
+}
+
+.transaction-inline-edit--amount.negative {
+  color: var(--bad);
+}
+
+input.transaction-inline-edit--amount::placeholder {
+  color: currentColor;
+}
+
 .transaction-inline-edit--select {
   width: 100%;
 }
@@ -3459,6 +3471,14 @@ select.transaction-inline-edit:focus {
 }
 
 .transaction-amount-cell.negative {
+  color: var(--bad);
+}
+
+.transaction-note-meta strong.positive {
+  color: var(--good);
+}
+
+.transaction-note-meta strong.negative {
   color: var(--bad);
 }
 
