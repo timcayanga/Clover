@@ -807,6 +807,19 @@ function AccountsPageContent() {
             <div className="accounts-sections">
               {accountsLoading ? (
                 <div className="empty-state">Loading accounts...</div>
+              ) : accounts.length === 0 ? (
+                <div className="empty-state accounts-empty-state">
+                  <strong>It's quiet in here.</strong>
+                  <p>Add your first account to start seeing balances, history, and helpful review flags.</p>
+                  <div className="accounts-empty-state__actions">
+                    <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)}>
+                      Add account
+                    </button>
+                    <button className="button button-secondary button-small" type="button" onClick={openImportFiles}>
+                      Import files
+                    </button>
+                  </div>
+                </div>
               ) : accountGroups.length > 0 ? (
                 accountGroups.map((group) => (
                   <article key={group.title} className="accounts-group glass">
@@ -884,7 +897,10 @@ function AccountsPageContent() {
                   </article>
                 ))
               ) : (
-                <div className="empty-state">No accounts match the current filters.</div>
+                <div className="empty-state">
+                  <strong>No matches right now.</strong>
+                  <p>Try clearing your search or sorting, or open a different account group to keep browsing.</p>
+                </div>
               )}
             </div>
           </div>

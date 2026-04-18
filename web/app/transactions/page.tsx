@@ -1596,10 +1596,24 @@ function TransactionsPageContent() {
                   </div>
                 );
               })
-            ) : (
-              <div className="empty-state">
-                {selectedWorkspaceId ? "No transactions match the current filters." : "Select a workspace to review transactions."}
+            ) : transactions.length === 0 ? (
+              <div className="transactions-empty-state">
+                <p className="transactions-empty-state__eyebrow">It is quiet in here</p>
+                <h3>No transactions yet</h3>
+                <p className="transactions-empty-state__copy">
+                  Add your first transaction to get the dashboard moving and start building your categories.
+                </p>
+                <div className="transactions-empty-state__actions">
+                  <button className="button button-primary" type="button" onClick={() => void openManualAdd()}>
+                    Add transaction
+                  </button>
+                  <button className="button button-secondary" type="button" onClick={() => openImportFiles()}>
+                    Import files
+                  </button>
+                </div>
               </div>
+            ) : (
+              <div className="empty-state">No transactions match the current filters.</div>
             )}
           </div>
 
