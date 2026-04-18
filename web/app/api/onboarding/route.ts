@@ -8,6 +8,7 @@ export const dynamic = "force-dynamic";
 
 const onboardingSchema = z.object({
   goal: z.string().trim().min(1).max(80).optional().nullable(),
+  goals: z.array(z.string().trim().min(1).max(80)).optional().default([]),
   skipped: z.boolean().optional().default(false),
 });
 
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
     const { userId } = stagingGuestRequested ? { userId: "staging-guest" } : await requireAuth();
     const payload = onboardingSchema.parse(await request.json());
     const user = await getOrCreateCurrentUser(userId);
-    const primaryGoal = payload.skipped ? null : payload.goal ?? null;
+    const primaryGoal = payload.skipped ? null : payload.goal ?? payload.goals[0] ?? null;
 
     const updated = await prisma.user.update({
       where: { id: user.id },

@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 type GoalOption = {
   value: string;
   title: string;
-  description: string;
   icon: ReactNode;
 };
 
@@ -15,7 +14,6 @@ const GOALS: GoalOption[] = [
   {
     value: "save_more",
     title: "Save more",
-    description: "Focus the app on reducing spend and spotting room to save.",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12 4v16" />
@@ -26,7 +24,6 @@ const GOALS: GoalOption[] = [
   {
     value: "pay_down_debt",
     title: "Pay down debt",
-    description: "Prioritize balances, payments, and money going out.",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M7 7h10" />
@@ -39,7 +36,6 @@ const GOALS: GoalOption[] = [
   {
     value: "track_spending",
     title: "Track spending",
-    description: "Keep daily spending visible and easy to understand.",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M5 12h14" />
@@ -51,7 +47,6 @@ const GOALS: GoalOption[] = [
   {
     value: "build_emergency_fund",
     title: "Build an emergency fund",
-    description: "Highlight consistency, cash flow, and savings progress.",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M12 3.5v17" />
@@ -64,7 +59,6 @@ const GOALS: GoalOption[] = [
   {
     value: "invest_better",
     title: "Invest better",
-    description: "Keep the app centered on surplus cash and long-term growth.",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <path d="M6 18h12" />
@@ -81,8 +75,8 @@ type OnboardingFormProps = {
 
 export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
   const router = useRouter();
-  const [goal, setGoal] = useState<string | null>(currentGoal);
-  const [message, setMessage] = useState("Choose the goal that matters most right now.");
+  const [goals, setGoals] = useState<string[]>(currentGoal ? [currentGoal] : []);
+  const [message, setMessage] = useState("Choose one or more goals to shape your first experience.");
   const [isPending, startTransition] = useTransition();
 
   const submit = (skipped: boolean) => {
@@ -97,7 +91,7 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
       const response = await fetch("/api/onboarding", {
         method: "POST",
         headers,
-        body: JSON.stringify({ goal, skipped }),
+        body: JSON.stringify({ goal: goals[0] ?? null, goals, skipped }),
       });
 
       if (!response.ok) {
@@ -116,29 +110,30 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
   };
 
   return (
-    <section className="glass onboarding-card">
+      <section className="glass onboarding-card">
       <h3>What do you want Clover to help you with first?</h3>
-      <p className="onboarding-card__copy">
-        Pick one goal and we’ll tune the first experience around it. You can change this later.
-      </p>
+      <p className="onboarding-card__copy">Pick one or more goals and we’ll tune the first experience around them.</p>
 
       <div className="onboarding-grid" role="list" aria-label="Financial goals">
         {GOALS.map((option) => (
           <button
             key={option.value}
             type="button"
-            className={`onboarding-option ${goal === option.value ? "is-selected" : ""}`}
-            onClick={() => setGoal(option.value)}
+            className={`onboarding-option ${goals.includes(option.value) ? "is-selected" : ""}`}
+            onClick={() => {
+              setGoals((current) =>
+                current.includes(option.value)
+                  ? current.filter((item) => item !== option.value)
+                  : [...current, option.value],
+              );
+            }}
             role="listitem"
-            aria-pressed={goal === option.value}
+            aria-pressed={goals.includes(option.value)}
           >
             <span className="onboarding-option__icon" aria-hidden="true">
               {option.icon}
             </span>
-            <span className="onboarding-option__content">
-              <span className="onboarding-option__title">{option.title}</span>
-              <span className="onboarding-option__copy">{option.description}</span>
-            </span>
+            <span className="onboarding-option__title">{option.title}</span>
           </button>
         ))}
       </div>
@@ -147,7 +142,7 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
         <button
           className="button button-primary"
           type="button"
-          disabled={isPending || goal === null}
+          disabled={isPending || goals.length === 0}
           onClick={() => submit(false)}
         >
           Continue

@@ -1707,9 +1707,9 @@ label {
 }
 
 .onboarding-page__shell {
-  width: min(760px, 100%);
+  width: min(680px, 100%);
   display: grid;
-  gap: 28px;
+  gap: 22px;
 }
 
 .onboarding-page__brand {
@@ -1735,40 +1735,41 @@ label {
 
 .onboarding-card {
   display: grid;
-  gap: 18px;
-  padding: 34px;
-  border-radius: 34px;
+  gap: 14px;
+  padding: 24px 26px;
+  border-radius: 30px;
 }
 
 .onboarding-card h3 {
-  font-size: 30px;
+  font-size: 28px;
   line-height: 1.15;
   font-weight: 600;
   letter-spacing: -0.04em;
-  max-width: 18ch;
+  max-width: 19ch;
 }
 
 .onboarding-card__copy {
-  max-width: 56ch;
+  max-width: 50ch;
   color: var(--muted);
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .onboarding-grid {
   display: grid;
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .onboarding-option {
   width: 100%;
-  min-height: 104px;
-  padding: 18px 20px;
-  border-radius: 26px;
+  min-height: 76px;
+  padding: 16px 18px;
+  border-radius: 22px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(247, 249, 250, 0.9);
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 14px;
   text-align: left;
   transition:
     background 180ms ease,
@@ -1789,9 +1790,9 @@ label {
 }
 
 .onboarding-option__icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 18px;
+  width: 42px;
+  height: 42px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(3, 168, 192, 0.14);
   display: inline-flex;
@@ -1800,11 +1801,12 @@ label {
   color: var(--accent);
   flex: none;
   box-shadow: var(--shadow-soft);
+  transform-origin: center;
 }
 
 .onboarding-option__icon svg {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   stroke: currentColor;
   stroke-width: 1.9;
   fill: none;
@@ -1816,25 +1818,14 @@ label {
   background: var(--accent);
   border-color: rgba(3, 168, 192, 0.28);
   color: white;
-}
-
-.onboarding-option__content {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  padding-top: 2px;
+  animation: onboarding-icon-pop 260ms ease;
 }
 
 .onboarding-option__title {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--text);
-}
-
-.onboarding-option__copy {
-  color: var(--muted);
-  line-height: 1.5;
 }
 
 .onboarding-actions {
@@ -1850,6 +1841,18 @@ label {
 .onboarding-status {
   color: var(--muted);
   min-height: 24px;
+}
+
+@keyframes onboarding-icon-pop {
+  0% {
+    transform: scale(0.92);
+  }
+  55% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 .landing-page {
@@ -4754,24 +4757,28 @@ label {
   }
 
   .onboarding-card {
-    padding: 22px;
-    border-radius: 26px;
+    padding: 20px;
+    border-radius: 24px;
   }
 
   .onboarding-card h3 {
     max-width: none;
-    font-size: clamp(1.8rem, 7vw, 2.35rem);
+    font-size: clamp(1.7rem, 6.4vw, 2.1rem);
+  }
+
+  .onboarding-grid {
+    grid-template-columns: 1fr;
   }
 
   .onboarding-option {
-    min-height: 96px;
-    padding: 16px;
-    border-radius: 22px;
+    min-height: 70px;
+    padding: 14px 16px;
+    border-radius: 20px;
   }
 
   .onboarding-option__icon {
-    width: 44px;
-    height: 44px;
+    width: 40px;
+    height: 40px;
     border-radius: 16px;
   }
 
