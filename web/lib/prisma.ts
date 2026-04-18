@@ -8,7 +8,7 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 const resolveDatabaseUrl = () => {
-  const configuredUrl = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
+  const configuredUrl = process.env.DATABASE_URL;
 
   if (!configuredUrl) {
     return "postgresql://user:pass@localhost:5432/finance_manager";
@@ -16,29 +16,21 @@ const resolveDatabaseUrl = () => {
 
   try {
     const url = new URL(configuredUrl);
-    const isSupabaseSessionPooler = url.hostname.endsWith(".pooler.supabase.com") && url.port === "5432";
-    if (!isSupabaseSessionPooler) {
-      return configuredUrl;
+    const isSupabaseTransactionPooler =
+      url.hostname.endsWith(".pooler.supabase.com") && url.port === "6543";
+
+    if (isSupabaseTransactionPooler && !url.searchParams.has("pgbouncer")) {
+      url.searchParams.set("pgbouncer", "true");
+      return url.toString();
     }
 
-    const [usernamePrefix, projectRef] = decodeURIComponent(url.username).split(".", 2);
-    if (usernamePrefix !== "postgres" || !projectRef) {
-      return configuredUrl;
-    }
-
-    const directUrl = new URL(configuredUrl);
-    directUrl.username = encodeURIComponent("postgres");
-    directUrl.hostname = `db.${projectRef}.supabase.co`;
-    directUrl.port = "5432";
-    directUrl.searchParams.delete("pgbouncer");
-    return directUrl.toString();
+    return configuredUrl;
   } catch {
     return configuredUrl;
   }
 };
 
-const connectionString =
-  resolveDatabaseUrl() ?? "postgresql://user:pass@localhost:5432/finance_manager";
+const connectionString = resolveDatabaseUrl();
 
 const pool =
   globalForPrisma.prismaPool ??
