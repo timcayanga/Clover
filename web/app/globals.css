@@ -4079,7 +4079,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .import-password-modal {
-  width: min(680px, 100%);
+  width: min(560px, 100%);
 }
 
 .import-password-header {
