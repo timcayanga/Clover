@@ -46,14 +46,11 @@ function formatError(error: unknown) {
 
 function GoogleIcon() {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="clover-auth-button__icon">
-      <path
-        fill="#4285F4"
-        d="M21.35 11.1h-9.18v2.92h5.26c-.23 1.38-1.6 4.05-5.26 4.05-3.16 0-5.74-2.62-5.74-5.84s2.58-5.84 5.74-5.84c1.8 0 3 .77 3.69 1.43l2.51-2.42C16.52 3.87 14.62 3 12.17 3 6.98 3 2.8 7.18 2.8 12.37S6.98 21.74 12.17 21.74c5.41 0 9-3.8 9-9.14 0-.61-.07-1.09-.17-1.5Z"
-      />
-      <path fill="#EA4335" d="M3.92 7.73 7.1 10.05A5.78 5.78 0 0 1 12.17 3c1.8 0 3 .77 3.69 1.43l2.51-2.42C16.52 3.87 14.62 3 12.17 3 8.55 3 5.4 5.03 3.92 7.73Z" />
-      <path fill="#FBBC05" d="M12.17 21.74c2.3 0 4.23-.76 5.63-2.08l-2.6-2.13c-.72.5-1.7.87-3.03.87-2.33 0-4.31-1.56-5.02-3.66l-3.13 2.42c1.44 2.79 4.37 4.58 8.15 4.58Z" />
-      <path fill="#34A853" d="M12.17 8.47c1.04 0 1.98.36 2.72 1.07l2.03-1.97C15.16 5.88 13.9 5.2 12.17 5.2c-2.62 0-4.84 1.73-5.56 4.05l3.13 2.42c.48-1.46 1.82-3.2 2.43-3.2Z" />
+    <svg viewBox="0 0 48 48" aria-hidden="true" className="clover-auth-button__icon">
+      <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.2 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.153 7.962 3.038l5.657-5.657C34.442 6.053 29.525 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917Z" />
+      <path fill="#FF3D00" d="M6.306 14.691 12.876 19.5C14.654 15.004 19.045 12 24 12c3.059 0 5.842 1.153 7.962 3.038l5.657-5.657C34.442 6.053 29.525 4 24 4c-7.682 0-14.378 4.327-17.694 10.691Z" />
+      <path fill="#4CAF50" d="M24 44c5.42 0 10.255-1.958 14.04-5.179l-6.487-5.47C29.583 34.951 26.98 36 24 36c-5.178 0-9.621-3.319-11.287-7.946l-6.522 5.03C9.465 40.556 16.12 44 24 44Z" />
+      <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a11.99 11.99 0 0 1-3.75 5.351l.003-.002 6.487 5.47C37.58 36.891 44 31 44 24c0-1.341-.138-2.65-.389-3.917Z" />
     </svg>
   );
 }
@@ -274,11 +271,11 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
     }
   };
 
-  const title = mode === "sign-in" ? "Welcome back" : "Create your account";
+  const title = mode === "sign-in" ? "Welcome back" : "Sign Up";
   const subtitle =
     mode === "sign-in"
       ? "Sign in to pick up where you left off."
-      : "Set up your Clover account in a few quick steps.";
+      : "";
   const footerText =
     mode === "sign-in" ? (
       <>
@@ -298,7 +295,7 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
 
       <header className="clover-auth-card__header">
         <h1>{title}</h1>
-        <p>{subtitle}</p>
+        {subtitle ? <p>{subtitle}</p> : null}
       </header>
 
       <form className="clover-auth-card__form" onSubmit={handleSubmit}>
