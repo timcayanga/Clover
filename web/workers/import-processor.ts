@@ -63,6 +63,24 @@ export const processImportFileText = async (importFileId: string, text: string) 
   return { count: rows.length };
 };
 
+const looksLikeJsonBlob = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (!/^[\[{]/.test(trimmed)) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed !== null && typeof parsed === "object";
+  } catch {
+    return true;
+  }
+};
+
 const extractHumanReadableDescription = (rawPayload: Prisma.InputJsonValue | null | undefined) => {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
     return null;
@@ -87,15 +105,8 @@ const extractHumanReadableDescription = (rawPayload: Prisma.InputJsonValue | nul
         continue;
       }
 
-      if (/^[\[{]/.test(trimmed)) {
-        try {
-          const parsed = JSON.parse(trimmed);
-          if (parsed && typeof parsed === "object") {
-            continue;
-          }
-        } catch {
-          // Keep the original string when it is only JSON-like noise.
-        }
+      if (looksLikeJsonBlob(trimmed)) {
+        continue;
       }
 
       return trimmed;

@@ -469,6 +469,20 @@ const createEmptyBulkEditForm = (): BulkEditForm => ({
   isTransfer: "",
 });
 
+const looksLikeJsonBlob = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed || !/^[\[{]/.test(trimmed)) {
+    return false;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return parsed !== null && typeof parsed === "object";
+  } catch {
+    return true;
+  }
+};
+
 const normalizeTransactionNotes = (value: string | null | undefined) => {
   if (!value) {
     return "";
@@ -479,15 +493,8 @@ const normalizeTransactionNotes = (value: string | null | undefined) => {
     return "";
   }
 
-  if (/^[\[{]/.test(trimmed)) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (parsed && typeof parsed === "object") {
-        return "";
-      }
-    } catch {
-      // Keep non-JSON strings that merely start with braces.
-    }
+  if (looksLikeJsonBlob(trimmed)) {
+    return "";
   }
 
   return trimmed;

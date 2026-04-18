@@ -216,6 +216,21 @@ const fnv1a = (value: string) => {
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
+const getHardcodedCategoryOverride = (merchantText: string) => {
+  const lower = merchantText.toLowerCase();
+  const compact = normalizeWhitespace(merchantText).replace(/\s+/g, "").toLowerCase();
+
+  if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) {
+    return "Financial";
+  }
+
+  if (/instapay\s*transfer\s*fee|instapaytransferfee/.test(lower) || /instapaytransferfee/.test(compact)) {
+    return "Transfers";
+  }
+
+  return null;
+};
+
 export const normalizeMerchantText = (value?: string | null) =>
   normalizeWhitespace(String(value ?? ""))
     .toLowerCase()
@@ -231,6 +246,8 @@ export const tokenizeMerchant = (value?: string | null) =>
 
 export const guessCategoryFallback = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
+  const override = getHardcodedCategoryOverride(description);
+  if (override) return override;
   if (type === "income" || /salary|payroll|income|deposit|credit memo/.test(lower)) return "Income";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout/.test(lower)) return "Food & Dining";
@@ -920,6 +937,16 @@ export const classifyMerchant = (params: {
 }) => {
   const tokens = tokenizeMerchant(params.merchantText);
   const normalizedMerchant = normalizeMerchantText(params.merchantText);
+  const hardcodedOverride = getHardcodedCategoryOverride(params.merchantText);
+  if (hardcodedOverride) {
+    return {
+      categoryName: hardcodedOverride,
+      confidence: 99,
+      categoryReason: "hardcoded-override",
+      merchantKey: normalizedMerchant,
+      merchantTokens: tokens,
+    };
+  }
   const heuristicCategory = params.categoryName?.trim() || guessCategoryFallback(params.merchantText, params.type);
 
   let bestRule: MerchantRuleRow | null = null;

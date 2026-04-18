@@ -30,6 +30,9 @@ const delimiterForFile = (fileType: string, fileName: string) => {
 
 const guessCategoryName = (text: string, type: TransactionType) => {
   const lower = text.toLowerCase();
+  const compact = compactWhitespace(text).toLowerCase();
+  if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) return "Financial";
+  if (/instapay\s*transfer\s*fee|instapaytransferfee/.test(lower) || /instapaytransferfee/.test(compact)) return "Transfers";
   if (type === "income" || /salary|payroll|income|deposit|credit memo/.test(lower)) return "Income";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout/.test(lower)) return "Food & Dining";
