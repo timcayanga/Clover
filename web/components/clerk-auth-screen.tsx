@@ -10,12 +10,22 @@ type ClerkAuthScreenProps = {
 
 const cloverAuthAppearance: Appearance = {
   layout: {
-    logoImageUrl: "/clover-name-teal.svg",
+    logoImageUrl: "/clover-mark.svg",
     logoLinkUrl: "/",
-    logoPlacement: "outside",
+    logoPlacement: "inside",
     socialButtonsPlacement: "bottom",
     socialButtonsVariant: "blockButton",
     showOptionalFields: false,
+    unsafe_disableDevelopmentModeWarnings: true,
+  },
+  variables: {
+    colorPrimary: "#03a8c0",
+    colorPrimaryForeground: "#ffffff",
+  },
+  elements: {
+    footer: {
+      display: "none",
+    },
   },
 };
 
