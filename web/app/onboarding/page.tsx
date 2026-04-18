@@ -1,19 +1,14 @@
-import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { OnboardingForm } from "@/components/onboarding-form";
+import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const dynamic = "force-dynamic";
 
 export default async function OnboardingPage() {
-  const { userId } = await auth();
-
-  if (!userId) {
-    redirect("/sign-in");
-  }
-
-  const user = await getOrCreateCurrentUser(userId);
-  if (hasCompletedOnboarding(user)) {
+  const session = await getSessionContext({ preferGuestOnStaging: true });
+  const user = await getOrCreateCurrentUser(session.userId);
+  if (!session.isGuest && hasCompletedOnboarding(user)) {
     redirect("/dashboard");
   }
 

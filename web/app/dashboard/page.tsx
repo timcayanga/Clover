@@ -1,9 +1,9 @@
-import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
+import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const dynamic = "force-dynamic";
@@ -15,14 +15,9 @@ const currencyFormatter = new Intl.NumberFormat("en-PH", {
 });
 
 export default async function DashboardPage() {
-  const { userId } = await auth();
-
-  if (!userId) {
-    redirect("/sign-in");
-  }
-
-  const user = await getOrCreateCurrentUser(userId);
-  if (!hasCompletedOnboarding(user)) {
+  const session = await getSessionContext();
+  const user = await getOrCreateCurrentUser(session.userId);
+  if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
 

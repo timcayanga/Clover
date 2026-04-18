@@ -1,7 +1,7 @@
-import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { SettingsCenter, type SettingSection } from "@/components/settings-center";
+import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 const sections: SettingSection[] = [
@@ -131,13 +131,9 @@ const sections: SettingSection[] = [
 ];
 
 export default async function SettingsPage() {
-  const { userId } = await auth();
-  if (!userId) {
-    redirect("/sign-in");
-  }
-
-  const user = await getOrCreateCurrentUser(userId);
-  if (!hasCompletedOnboarding(user)) {
+  const session = await getSessionContext();
+  const user = await getOrCreateCurrentUser(session.userId);
+  if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
 

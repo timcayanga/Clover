@@ -88,10 +88,15 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
   const submit = (skipped: boolean) => {
     const saveOnboarding = async () => {
       setMessage(skipped ? "Skipping for now..." : "Saving your preference...");
+      const isStagingHost = window.location.hostname === "staging.clover.ph";
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (isStagingHost) {
+        headers["x-staging-guest"] = "1";
+      }
 
       const response = await fetch("/api/onboarding", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ goal, skipped }),
       });
 
