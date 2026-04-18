@@ -130,6 +130,7 @@ export default async function ReportsPage() {
         kicker="Insights"
         title="Turn your statements into clear next steps."
         subtitle="These sample reports are shown in staging so the page feels complete even before live workspace data is available."
+        showTopbar={false}
         actions={
           <>
             <Link className="pill-link" href="/transactions">
