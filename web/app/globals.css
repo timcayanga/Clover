@@ -3259,6 +3259,30 @@ label {
   justify-content: flex-end;
 }
 
+.transactions-selection-bar {
+  margin: 12px 0 14px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(3, 168, 192, 0.06);
+  border: 1px solid rgba(3, 168, 192, 0.12);
+}
+
+.transactions-selection-bar__text {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.transactions-selection-bar__danger {
+  border-color: rgba(239, 68, 68, 0.22);
+  color: #b91c1c;
+}
+
+.transactions-selection-bar__danger:hover,
+.transactions-selection-bar__danger:focus {
+  border-color: rgba(239, 68, 68, 0.34);
+  color: #991b1b;
+}
+
 .transactions-clear-selection {
   border: 0;
 }

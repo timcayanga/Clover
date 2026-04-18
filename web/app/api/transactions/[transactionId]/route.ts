@@ -100,3 +100,28 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
     return NextResponse.json({ error: "Unable to update transaction" }, { status: 400 });
   }
 }
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ transactionId: string }> }) {
+  try {
+    const { transactionId } = await params;
+    const { userId } = await requireAuth();
+
+    const transaction = await prisma.transaction.findUnique({
+      where: { id: transactionId },
+    });
+
+    if (!transaction) {
+      return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
+    }
+
+    await assertWorkspaceAccess(userId, transaction.workspaceId);
+
+    await prisma.transaction.delete({
+      where: { id: transactionId },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ error: "Unable to delete transaction" }, { status: 400 });
+  }
+}

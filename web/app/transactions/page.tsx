@@ -1043,6 +1043,19 @@ function TransactionsPageContent() {
     setSelectedTransactionIds([]);
   };
 
+  const syncAfterTransactionRemoval = (transactionId: string) => {
+    setTransactions((current) => current.filter((entry) => entry.id !== transactionId));
+    setSelectedTransactionIds((current) => current.filter((entryId) => entryId !== transactionId));
+    setSelectedTransaction((current) => (current?.id === transactionId ? null : current));
+    setDetailDraft((current) => {
+      if (!current || selectedTransaction?.id !== transactionId) {
+        return current;
+      }
+
+      return null;
+    });
+  };
+
   const openBulkEdit = () => {
     setBulkEditForm(createEmptyBulkEditForm());
     setBulkEditOpen(true);
@@ -1164,6 +1177,18 @@ function TransactionsPageContent() {
     return updated;
   };
 
+  const deleteTransaction = async (transactionId: string) => {
+    const response = await fetch(`/api/transactions/${transactionId}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to delete transaction.");
+    }
+
+    syncAfterTransactionRemoval(transactionId);
+  };
+
   const commitInlineEdit = async (transaction: Transaction, field: EditableTransactionField, value: string) => {
     const payload: Record<string, unknown> = {};
 
@@ -1265,6 +1290,65 @@ function TransactionsPageContent() {
     }
   };
 
+  const bulkUpdateSelectedTransactions = async (payloadFactory: (transaction: Transaction) => Record<string, unknown>) => {
+    if (!selectedTransactionIds.length) {
+      setMessage("Select transactions first.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const selected = selectedTransactionIds
+        .map((transactionId) => transactions.find((entry) => entry.id === transactionId))
+        .filter((entry): entry is Transaction => Boolean(entry));
+
+      await Promise.all(
+        selected.map((transaction) =>
+          updateTransaction(transaction.id, payloadFactory(transaction), {
+            recordHistory: false,
+          })
+        )
+      );
+
+      setUndoStack([]);
+      setRedoStack([]);
+      setMessage(`${selected.length} transaction${selected.length === 1 ? "" : "s"} updated.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update transactions.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const deleteSelectedTransactions = async () => {
+    if (!selectedTransactionIds.length) {
+      setMessage("Select transactions first.");
+      return;
+    }
+
+    const count = selectedTransactionIds.length;
+    const confirmed = typeof window !== "undefined"
+      ? window.confirm(`Delete ${count} selected transaction${count === 1 ? "" : "s"}? This cannot be undone.`)
+      : false;
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await Promise.all(selectedTransactionIds.map((transactionId) => deleteTransaction(transactionId)));
+      clearSelection();
+      setUndoStack([]);
+      setRedoStack([]);
+      setMessage(`${count} transaction${count === 1 ? "" : "s"} deleted.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete transactions.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const saveDetailDraft = async () => {
     if (!selectedTransaction || !detailDraft) {
       return;
@@ -1347,6 +1431,7 @@ function TransactionsPageContent() {
   const hasReviewItems = totals.review > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
   const isTableLoading = !isWorkspacesLoaded || (Boolean(selectedWorkspaceId) && !isWorkspaceDataReady);
+  const hasSelectedTransactions = selectedTransactionIds.length > 0;
 
   return (
     <CloverShell active="transactions" title="Transactions" showTopbar={false}>
@@ -1541,6 +1626,63 @@ function TransactionsPageContent() {
               </div>
             </div>
           </div>
+
+          {hasSelectedTransactions ? (
+            <div className="transactions-status-line transactions-selection-bar" role="status" aria-live="polite">
+              <div className="transactions-status-line__meta">
+                <span className="pill pill-neutral">{selectedTransactionIds.length} selected</span>
+                <span className="transactions-selection-bar__text">Choose what you want to do with the selected transactions.</span>
+              </div>
+              <div className="transactions-status-line__meta">
+                <button
+                  className="button button-secondary button-small transactions-action-button"
+                  type="button"
+                  onClick={openBulkEdit}
+                  disabled={isSaving || isApplyingHistory}
+                >
+                  Bulk edit
+                </button>
+                <button
+                  className="button button-secondary button-small transactions-action-button"
+                  type="button"
+                  onClick={() => {
+                    void bulkUpdateSelectedTransactions(() => ({ isExcluded: true }));
+                  }}
+                  disabled={isSaving}
+                >
+                  Exclude
+                </button>
+                <button
+                  className="button button-secondary button-small transactions-action-button"
+                  type="button"
+                  onClick={() => {
+                    void bulkUpdateSelectedTransactions(() => ({ isExcluded: false }));
+                  }}
+                  disabled={isSaving}
+                >
+                  Include
+                </button>
+                <button
+                  className="button button-secondary button-small transactions-action-button transactions-selection-bar__danger"
+                  type="button"
+                  onClick={() => {
+                    void deleteSelectedTransactions();
+                  }}
+                  disabled={isSaving}
+                >
+                  Delete
+                </button>
+                <button
+                  className="button button-secondary button-small transactions-action-button"
+                  type="button"
+                  onClick={clearSelection}
+                  disabled={isSaving || isApplyingHistory}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="line-item-header" role="row" aria-label="Transaction columns">
             <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
