@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { SignIn, SignUp } from "@clerk/nextjs";
 import type { Appearance } from "@clerk/types";
 
@@ -21,11 +22,6 @@ const cloverAuthAppearance: Appearance = {
   variables: {
     colorPrimary: "#03a8c0",
     colorPrimaryForeground: "#ffffff",
-  },
-  elements: {
-    footer: {
-      display: "none",
-    },
   },
 };
 
@@ -52,8 +48,11 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
   }
 
   return (
-    <div className="clerk-auth-screen">
+    <div className="clerk-auth-screen clerk-auth-screen--signup">
       <SignUp appearance={cloverAuthAppearance} afterSignUpUrl="/onboarding" afterSignInUrl="/dashboard" />
+      <p className="clerk-auth-screen__footer">
+        Already have an account? <Link className="clerk-auth-screen__footer-link" href="/sign-in">Sign In</Link>
+      </p>
     </div>
   );
 }
