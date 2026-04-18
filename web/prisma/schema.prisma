@@ -27,6 +27,15 @@ enum TransactionType {
   transfer
 }
 
+enum ReviewStatus {
+  pending_review
+  suggested
+  confirmed
+  edited
+  rejected
+  duplicate_skipped
+}
+
 enum ImportFileStatus {
   processing
   done
@@ -73,6 +82,7 @@ model Workspace {
   importFiles   ImportFile[]
   auditLogs     AuditLog[]
   statementTemplates StatementTemplate[]
+  merchantRules MerchantRule[]
   trainingSignals TrainingSignal[]
 
   @@index([userId])
@@ -107,6 +117,7 @@ model Category {
   workspace        Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   transactions     Transaction[]
   trainingSignals  TrainingSignal[]
+  merchantRules    MerchantRule[]
 
   @@index([workspaceId])
 }
@@ -117,6 +128,15 @@ model Transaction {
   accountId      String
   importFileId   String?
   categoryId     String?
+  reviewStatus   ReviewStatus     @default(suggested)
+  parserConfidence Int             @default(0)
+  categoryConfidence Int           @default(0)
+  accountMatchConfidence Int       @default(0)
+  duplicateConfidence Int          @default(0)
+  transferConfidence Int           @default(0)
+  rawPayload     Json?
+  normalizedPayload Json?
+  learnedRuleIdsApplied Json?
   date           DateTime
   amount         Decimal          @db.Decimal(18, 2)
   currency       String           @default("PHP")
@@ -138,6 +158,7 @@ model Transaction {
   @@index([accountId])
   @@index([importFileId])
   @@index([categoryId])
+  @@index([reviewStatus])
   @@index([date])
 }
 
@@ -195,11 +216,15 @@ model StatementTemplate {
   id            String   @id @default(cuid())
   workspaceId   String
   fingerprint   String
+  fileType      String?
   institution   String?
   accountNumber String?
   accountName   String?
   parserVersion String   @default("v1")
+  parserConfig  Json?
   exampleCount  Int      @default(1)
+  successCount  Int      @default(1)
+  failureCount  Int      @default(0)
   lastSeenAt    DateTime @default(now())
   metadata      Json?
   createdAt     DateTime @default(now())
@@ -208,6 +233,28 @@ model StatementTemplate {
 
   @@unique([workspaceId, fingerprint])
   @@index([workspaceId])
+}
+
+model MerchantRule {
+  id             String   @id @default(cuid())
+  workspaceId    String
+  merchantKey    String
+  merchantPattern String?
+  normalizedName String
+  categoryId     String?
+  categoryName   String?
+  source         String   @default("manual")
+  confidence     Int      @default(100)
+  timesConfirmed Int      @default(1)
+  lastUsedAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  category       Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, merchantKey])
+  @@index([workspaceId])
+  @@index([merchantKey])
 }
 
 model TrainingSignal {

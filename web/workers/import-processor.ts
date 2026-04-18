@@ -1,4 +1,4 @@
-import type { TransactionType } from "@prisma/client";
+import type { Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { parseImportText } from "@/lib/import-parser";
 import {
@@ -32,6 +32,7 @@ export const processImportFileText = async (importFileId: string, text: string) 
     workspaceId: importFile.workspaceId,
     fingerprint: statementFingerprint,
     metadata,
+    fileType: importFile.fileType,
   });
 
   const rows = await enrichParsedRowsWithTraining({
@@ -99,6 +100,12 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
   for (const row of parsedRows) {
     const rowType =
       row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : undefined;
+    const rowConfidence = typeof row.confidence === "number" ? row.confidence : 0;
+    const rowParserConfidence = typeof row.parserConfidence === "number" ? row.parserConfidence : rowConfidence;
+    const rowCategoryConfidence = typeof row.categoryConfidence === "number" ? row.categoryConfidence : rowConfidence;
+    const rowAccountMatchConfidence = typeof row.accountMatchConfidence === "number" ? row.accountMatchConfidence : 100;
+    const rowDuplicateConfidence = typeof row.duplicateConfidence === "number" ? row.duplicateConfidence : 0;
+    const rowTransferConfidence = typeof row.transferConfidence === "number" ? row.transferConfidence : rowType === "transfer" ? 100 : 0;
     const categoryName = (typeof row.categoryName === "string" && row.categoryName) || defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense");
     let categoryId = categoryByName.get(categoryName.toLowerCase());
 
@@ -120,6 +127,15 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       accountId,
       importFileId,
       categoryId,
+      reviewStatus: rowConfidence < 80 ? "pending_review" : "confirmed",
+      parserConfidence: rowParserConfidence,
+      categoryConfidence: rowCategoryConfidence,
+      accountMatchConfidence: rowAccountMatchConfidence,
+      duplicateConfidence: rowDuplicateConfidence,
+      transferConfidence: rowTransferConfidence,
+      rawPayload: (row.rawPayload ?? {}) as Prisma.InputJsonValue,
+      normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
+      learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
       date: row.date instanceof Date ? row.date : row.date ? new Date(String(row.date)) : new Date(),
       amount: typeof row.amount === "number" ? row.amount : Number(String(row.amount ?? "0").replace(/[^0-9.-]/g, "")) || 0,
       currency: "PHP",

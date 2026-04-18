@@ -132,6 +132,9 @@ export default async function DashboardPage() {
           <Link className="pill-link" href="/transactions">
             Transactions
           </Link>
+          <Link className="pill-link" href="/review">
+            Review queue
+          </Link>
         </>
       }
     >
@@ -149,6 +152,9 @@ export default async function DashboardPage() {
             </Link>
             <Link className="button button-secondary" href="/reports">
               See insights
+            </Link>
+            <Link className="button button-secondary" href="/review">
+              Open review queue
             </Link>
           </div>
         </div>

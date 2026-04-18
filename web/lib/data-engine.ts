@@ -1,4 +1,5 @@
-import type { Prisma, TransactionType } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import type { TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { detectStatementMetadata, parseAmountValue, parseDateValue, type ParsedImportRow } from "@/lib/import-parser";
 
@@ -13,6 +14,17 @@ type TrainingSignalRow = {
   confidence: number;
 };
 
+type MerchantRuleRow = {
+  merchantKey: string;
+  merchantPattern: string | null;
+  normalizedName: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  source: string;
+  confidence: number;
+  timesConfirmed: number;
+};
+
 export type EnrichedParsedImportRow = ParsedImportRow & {
   institution?: string | null;
   accountNumber?: string | null;
@@ -20,6 +32,15 @@ export type EnrichedParsedImportRow = ParsedImportRow & {
   parserVersion?: string;
   confidence?: number;
   categoryReason?: string | null;
+  reviewStatus?: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped";
+  parserConfidence?: number;
+  categoryConfidence?: number;
+  accountMatchConfidence?: number;
+  duplicateConfidence?: number;
+  transferConfidence?: number;
+  rawPayload?: Prisma.InputJsonValue | null;
+  normalizedPayload?: Prisma.InputJsonValue | null;
+  learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
 };
 
 const COMMON_STOP_WORDS = new Set([
@@ -88,6 +109,41 @@ const PARSED_TRANSACTION_COLUMNS = [
   "createdAt",
 ] as const;
 
+const STATEMENT_TEMPLATE_COLUMNS = [
+  "id",
+  "workspaceId",
+  "fingerprint",
+  "fileType",
+  "institution",
+  "accountNumber",
+  "accountName",
+  "parserVersion",
+  "parserConfig",
+  "exampleCount",
+  "successCount",
+  "failureCount",
+  "lastSeenAt",
+  "metadata",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const MERCHANT_RULE_COLUMNS = [
+  "id",
+  "workspaceId",
+  "merchantKey",
+  "merchantPattern",
+  "normalizedName",
+  "categoryId",
+  "categoryName",
+  "source",
+  "confidence",
+  "timesConfirmed",
+  "lastUsedAt",
+  "createdAt",
+  "updatedAt",
+] as const;
+
 const IMPORT_FILE_COLUMNS = [
   "id",
   "workspaceId",
@@ -109,6 +165,15 @@ const TRANSACTION_COLUMNS = [
   "accountId",
   "importFileId",
   "categoryId",
+  "reviewStatus",
+  "parserConfidence",
+  "categoryConfidence",
+  "accountMatchConfidence",
+  "duplicateConfidence",
+  "transferConfidence",
+  "rawPayload",
+  "normalizedPayload",
+  "learnedRuleIdsApplied",
   "date",
   "amount",
   "currency",
@@ -308,6 +373,44 @@ export const getCompatibleTransactionColumns = async () => {
   return compatible as string[];
 };
 
+export const getCompatibleStatementTemplateColumns = async () => {
+  const cacheKey = "StatementTemplate";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'StatementTemplate'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = STATEMENT_TEMPLATE_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleMerchantRuleColumns = async () => {
+  const cacheKey = "MerchantRule";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'MerchantRule'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = MERCHANT_RULE_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
 export const buildImportFileInsertData = async (params: {
   workspaceId: string;
   accountId?: string | null;
@@ -443,6 +546,15 @@ export const insertTransactionCompat = async (params: {
   accountId: string;
   importFileId?: string | null;
   categoryId?: string | null;
+  reviewStatus?: string;
+  parserConfidence?: number;
+  categoryConfidence?: number;
+  accountMatchConfidence?: number;
+  duplicateConfidence?: number;
+  transferConfidence?: number;
+  rawPayload?: Prisma.InputJsonValue | null;
+  normalizedPayload?: Prisma.InputJsonValue | null;
+  learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
   date: Date;
   amount: string | number;
   currency: string;
@@ -461,6 +573,15 @@ export const insertTransactionCompat = async (params: {
   if (columns.has("accountId")) record.accountId = params.accountId;
   if (columns.has("importFileId") && params.importFileId !== undefined) record.importFileId = params.importFileId ?? null;
   if (columns.has("categoryId")) record.categoryId = params.categoryId ?? null;
+  if (columns.has("reviewStatus")) record.reviewStatus = params.reviewStatus ?? "suggested";
+  if (columns.has("parserConfidence")) record.parserConfidence = params.parserConfidence ?? 0;
+  if (columns.has("categoryConfidence")) record.categoryConfidence = params.categoryConfidence ?? 0;
+  if (columns.has("accountMatchConfidence")) record.accountMatchConfidence = params.accountMatchConfidence ?? 0;
+  if (columns.has("duplicateConfidence")) record.duplicateConfidence = params.duplicateConfidence ?? 0;
+  if (columns.has("transferConfidence")) record.transferConfidence = params.transferConfidence ?? 0;
+  if (columns.has("rawPayload")) record.rawPayload = params.rawPayload ?? null;
+  if (columns.has("normalizedPayload")) record.normalizedPayload = params.normalizedPayload ?? null;
+  if (columns.has("learnedRuleIdsApplied")) record.learnedRuleIdsApplied = params.learnedRuleIdsApplied ?? null;
   if (columns.has("date")) record.date = params.date;
   if (columns.has("amount")) record.amount = typeof params.amount === "number" ? params.amount : String(params.amount);
   if (columns.has("currency")) record.currency = params.currency;
@@ -516,6 +637,14 @@ export const buildParsedTransactionInsertData = async (params: {
     if (columns.has("parserVersion")) record.parserVersion = row.parserVersion ?? DATA_ENGINE_VERSION;
     if (columns.has("statementFingerprint")) record.statementFingerprint = params.statementFingerprint;
     if (columns.has("rawPayload")) record.rawPayload = (row.rawPayload ?? {}) as Prisma.InputJsonValue;
+    if (columns.has("reviewStatus")) record.reviewStatus = row.reviewStatus ?? "suggested";
+    if (columns.has("parserConfidence")) record.parserConfidence = row.parserConfidence ?? row.confidence ?? 0;
+    if (columns.has("categoryConfidence")) record.categoryConfidence = row.categoryConfidence ?? row.confidence ?? 0;
+    if (columns.has("accountMatchConfidence")) record.accountMatchConfidence = row.accountMatchConfidence ?? 0;
+    if (columns.has("duplicateConfidence")) record.duplicateConfidence = row.duplicateConfidence ?? 0;
+    if (columns.has("transferConfidence")) record.transferConfidence = row.transferConfidence ?? 0;
+    if (columns.has("normalizedPayload")) record.normalizedPayload = (row.normalizedPayload ?? null) as Prisma.InputJsonValue | null;
+    if (columns.has("learnedRuleIdsApplied")) record.learnedRuleIdsApplied = (row.learnedRuleIdsApplied ?? null) as Prisma.InputJsonValue | null;
     if (columns.has("createdAt")) record.createdAt = new Date();
     return record;
   });
@@ -571,6 +700,97 @@ export const countParsedTransactionRows = async (importFileId: string) => {
   return Number(result[0]?.count ?? 0n);
 };
 
+export const loadMerchantRules = async (workspaceId: string) => {
+  let rules: Array<{
+    merchantKey: string;
+    merchantPattern: string | null;
+    normalizedName: string;
+    categoryId: string | null;
+    categoryName: string | null;
+    source: string;
+    confidence: number;
+    timesConfirmed: number;
+    category: { name: string } | null;
+  }> = [];
+
+  try {
+    rules = await prisma.merchantRule.findMany({
+      where: { workspaceId },
+      include: {
+        category: true,
+      },
+      orderBy: [{ timesConfirmed: "desc" }, { updatedAt: "desc" }],
+      take: 500,
+    });
+  } catch (error) {
+    if (!isMissingDatabaseRelationError(error, "MerchantRule")) {
+      throw error;
+    }
+  }
+
+  return rules.map((rule) => ({
+    merchantKey: rule.merchantKey,
+    merchantPattern: rule.merchantPattern,
+    normalizedName: rule.normalizedName,
+    categoryId: rule.categoryId,
+    categoryName: rule.category?.name ?? rule.categoryName ?? null,
+    source: rule.source,
+    confidence: rule.confidence,
+    timesConfirmed: rule.timesConfirmed,
+  }));
+};
+
+export const upsertMerchantRule = async (params: {
+  workspaceId: string;
+  merchantText: string;
+  normalizedName: string;
+  categoryId: string;
+  categoryName?: string | null;
+  source: string;
+  confidence?: number;
+}) => {
+  const merchantKey = normalizeMerchantText(params.merchantText);
+
+  try {
+    return await prisma.merchantRule.upsert({
+      where: {
+        workspaceId_merchantKey: {
+          workspaceId: params.workspaceId,
+          merchantKey,
+        },
+      },
+      update: {
+        merchantPattern: params.merchantText.trim(),
+        normalizedName: params.normalizedName.trim(),
+        categoryId: params.categoryId,
+        categoryName: params.categoryName ?? null,
+        source: params.source,
+        confidence: params.confidence ?? 100,
+        timesConfirmed: { increment: 1 },
+        lastUsedAt: new Date(),
+      },
+      create: {
+        workspaceId: params.workspaceId,
+        merchantKey,
+        merchantPattern: params.merchantText.trim(),
+        normalizedName: params.normalizedName.trim(),
+        categoryId: params.categoryId,
+        categoryName: params.categoryName ?? null,
+        source: params.source,
+        confidence: params.confidence ?? 100,
+        timesConfirmed: 1,
+        lastUsedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "MerchantRule")) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
 export const buildStatementFingerprint = (
   text: string,
   metadata: ReturnType<typeof detectStatementMetadataFromText>,
@@ -624,18 +844,63 @@ const scoreSignal = (tokens: string[], normalizedMerchant: string, signal: Train
   return overlap * 18 + signal.confidence * 0.5;
 };
 
+const scoreMerchantRule = (tokens: string[], normalizedMerchant: string, rule: MerchantRuleRow) => {
+  if (rule.merchantKey === normalizedMerchant) {
+    return 120 + rule.confidence;
+  }
+
+  const ruleTokens = tokenizeMerchant(rule.merchantPattern || rule.normalizedName || rule.merchantKey);
+  const ruleTokenSet = new Set(ruleTokens);
+  let overlap = 0;
+
+  for (const token of tokens) {
+    if (ruleTokenSet.has(token)) {
+      overlap += 1;
+    }
+  }
+
+  if (overlap === 0) {
+    return 0;
+  }
+
+  return overlap * 20 + rule.confidence * 0.75 + rule.timesConfirmed;
+};
+
 export const classifyMerchant = (params: {
   merchantText: string;
   type: TransactionType;
   categoryName?: string | null;
+  merchantRules: MerchantRuleRow[];
   trainingSignals: TrainingSignalRow[];
 }) => {
   const tokens = tokenizeMerchant(params.merchantText);
   const normalizedMerchant = normalizeMerchantText(params.merchantText);
   const heuristicCategory = params.categoryName?.trim() || guessCategoryFallback(params.merchantText, params.type);
 
+  let bestRule: MerchantRuleRow | null = null;
+  let bestRuleScore = 0;
   let bestSignal: TrainingSignalRow | null = null;
   let bestScore = 0;
+
+  for (const rule of params.merchantRules) {
+    const score = scoreMerchantRule(tokens, normalizedMerchant, rule);
+    if (score > bestRuleScore) {
+      bestRuleScore = score;
+      bestRule = rule;
+    }
+  }
+
+  if (bestRule && bestRuleScore >= 20) {
+    const learnedCategory = bestRule.categoryName ?? heuristicCategory;
+    const exact = bestRule.merchantKey === normalizedMerchant;
+    return {
+      categoryName: learnedCategory,
+      confidence: Math.min(99, Math.round(Math.max(78, bestRuleScore))),
+      categoryReason: exact ? "rule-exact" : "rule-pattern",
+      merchantKey: normalizedMerchant,
+      merchantTokens: tokens,
+    };
+  }
 
   for (const signal of params.trainingSignals) {
     const score = scoreSignal(tokens, normalizedMerchant, signal);
@@ -707,6 +972,8 @@ export const upsertStatementTemplate = async (params: {
   workspaceId: string;
   fingerprint: string;
   metadata: ReturnType<typeof detectStatementMetadataFromText>;
+  fileType?: string | null;
+  parserConfig?: Prisma.InputJsonValue | null;
 }) => {
   try {
     return await prisma.statementTemplate.upsert({
@@ -717,19 +984,24 @@ export const upsertStatementTemplate = async (params: {
         },
       },
       update: {
+        fileType: params.fileType ?? null,
         institution: params.metadata.institution,
         accountNumber: params.metadata.accountNumber,
         accountName: params.metadata.accountName,
+        parserConfig: params.parserConfig ?? Prisma.DbNull,
         metadata: params.metadata as Prisma.InputJsonValue,
         exampleCount: { increment: 1 },
+        successCount: { increment: 1 },
         lastSeenAt: new Date(),
       },
       create: {
         workspaceId: params.workspaceId,
         fingerprint: params.fingerprint,
+        fileType: params.fileType ?? null,
         institution: params.metadata.institution,
         accountNumber: params.metadata.accountNumber,
         accountName: params.metadata.accountName,
+        parserConfig: params.parserConfig ?? Prisma.DbNull,
         metadata: params.metadata as Prisma.InputJsonValue,
         parserVersion: DATA_ENGINE_VERSION,
       },
@@ -759,7 +1031,7 @@ export const recordTrainingSignal = async (params: {
   const merchantTokens = tokenizeMerchant(params.merchantText);
 
   try {
-    return await prisma.trainingSignal.create({
+    const signal = await prisma.trainingSignal.create({
       data: {
         workspaceId: params.workspaceId,
         importFileId: params.importFileId ?? null,
@@ -774,6 +1046,24 @@ export const recordTrainingSignal = async (params: {
         notes: params.notes ?? null,
       },
     });
+
+    const category = await prisma.category.findUnique({
+      where: { id: params.categoryId },
+    });
+
+    if (category) {
+      await upsertMerchantRule({
+        workspaceId: params.workspaceId,
+        merchantText: params.merchantText,
+        normalizedName: params.merchantText,
+        categoryId: params.categoryId,
+        categoryName: params.categoryName ?? category.name,
+        source: params.source,
+        confidence: params.confidence ?? 100,
+      });
+    }
+
+    return signal;
   } catch (error) {
     if (isMissingDatabaseRelationError(error, "TrainingSignal")) {
       return null;
@@ -787,6 +1077,7 @@ export const enrichParsedRowsWithTraining = async (params: {
   workspaceId: string;
   rows: ParsedImportRow[];
 }) => {
+  const merchantRules = await loadMerchantRules(params.workspaceId);
   const trainingSignals = await loadTrainingSignals(params.workspaceId);
 
   return params.rows.map((row) => {
@@ -795,6 +1086,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       merchantText,
       type: row.type ?? "expense",
       categoryName: row.categoryName ?? null,
+      merchantRules,
       trainingSignals,
     });
 
@@ -806,6 +1098,17 @@ export const enrichParsedRowsWithTraining = async (params: {
       confidence: learned.confidence,
       categoryReason: learned.categoryReason,
       parserVersion: DATA_ENGINE_VERSION,
+      reviewStatus: learned.confidence >= 80 ? "suggested" : "pending_review",
+      parserConfidence: 100,
+      categoryConfidence: learned.confidence,
+      accountMatchConfidence: 0,
+      duplicateConfidence: 0,
+      transferConfidence: row.type === "transfer" ? 100 : 0,
+      normalizedPayload: {
+        merchantClean: row.merchantClean || merchantText || null,
+        categoryName,
+        type: row.type ?? "expense",
+      } as Prisma.InputJsonValue,
       rawPayload: {
         ...(row.rawPayload ?? {}),
         classification: {

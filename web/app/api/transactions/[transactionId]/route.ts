@@ -18,6 +18,7 @@ const patchSchema = z.object({
   description: z.string().nullable().optional(),
   date: z.string().optional(),
   amount: z.union([z.string(), z.number()]).optional(),
+  reviewStatus: z.enum(["pending_review", "suggested", "confirmed", "edited", "rejected", "duplicate_skipped"]).optional(),
 });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ transactionId: string }> }) {
@@ -40,6 +41,17 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       payload.categoryId !== undefined &&
       payload.categoryId !== transaction.categoryId &&
       Boolean(payload.categoryId);
+    const editedFields =
+      payload.categoryId !== undefined ||
+      payload.accountId !== undefined ||
+      payload.isExcluded !== undefined ||
+      payload.isTransfer !== undefined ||
+      payload.type !== undefined ||
+      payload.merchantRaw !== undefined ||
+      payload.merchantClean !== undefined ||
+      payload.description !== undefined ||
+      payload.date !== undefined ||
+      payload.amount !== undefined;
 
     const updated = await prisma.transaction.update({
       where: { id: transactionId },
@@ -54,6 +66,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         description: payload.description,
         date: payload.date ? new Date(payload.date) : undefined,
         amount: payload.amount === undefined ? undefined : payload.amount.toString(),
+        reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : undefined),
+        parserConfidence: transaction.parserConfidence,
+        categoryConfidence: payload.categoryId ? 100 : transaction.categoryConfidence,
+        accountMatchConfidence: payload.accountId ? 100 : transaction.accountMatchConfidence,
+        duplicateConfidence: transaction.duplicateConfidence,
+        transferConfidence: payload.isTransfer !== undefined ? 100 : transaction.transferConfidence,
       },
     });
 
