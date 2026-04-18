@@ -135,21 +135,7 @@ const accountKey = (name: string, institution: string | null) =>
 const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
 
 export default function ImportsPage() {
-  const router = useRouter();
   const onboardingStatus = useOnboardingAccess();
-  const [message, setMessage] = useState("Upload a PDF or CSV to begin.");
-  const [isUploading, setIsUploading] = useState(false);
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
-  const [selectedAccountId, setSelectedAccountId] = useState("");
-  const [workspaceName, setWorkspaceName] = useState("");
-  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
-  const [previewRows, setPreviewRows] = useState<ParsedRow[]>([]);
-  const [currentImport, setCurrentImport] = useState<ImportFile | null>(null);
-  const [currentJobId, setCurrentJobId] = useState<string>("");
-  const [progressState, setProgressState] = useState<ProgressState | null>(null);
-  const [autoReturnToTransactions, setAutoReturnToTransactions] = useState(false);
 
   if (onboardingStatus !== "ready") {
     return (
@@ -164,6 +150,25 @@ export default function ImportsPage() {
       </CloverShell>
     );
   }
+
+  return <ImportsPageContent />;
+}
+
+function ImportsPageContent() {
+  const router = useRouter();
+  const [message, setMessage] = useState("Upload a PDF or CSV to begin.");
+  const [isUploading, setIsUploading] = useState(false);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [workspaceName, setWorkspaceName] = useState("");
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [previewRows, setPreviewRows] = useState<ParsedRow[]>([]);
+  const [currentImport, setCurrentImport] = useState<ImportFile | null>(null);
+  const [currentJobId, setCurrentJobId] = useState<string>("");
+  const [progressState, setProgressState] = useState<ProgressState | null>(null);
+  const [autoReturnToTransactions, setAutoReturnToTransactions] = useState(false);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,

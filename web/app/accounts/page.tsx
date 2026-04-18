@@ -220,8 +220,27 @@ function ActionIcon({
 }
 
 export default function AccountsPage() {
-  const router = useRouter();
   const onboardingStatus = useOnboardingAccess();
+
+  if (onboardingStatus !== "ready") {
+    return (
+      <CloverShell
+        active="accounts"
+        title="Checking your setup..."
+        kicker="One moment"
+        subtitle="We’re confirming your onboarding status before opening Accounts."
+        showTopbar={false}
+      >
+        <section className="empty-state">Checking your setup...</section>
+      </CloverShell>
+    );
+  }
+
+  return <AccountsPageContent />;
+}
+
+function AccountsPageContent() {
+  const router = useRouter();
   const addRef = useRef<HTMLDivElement>(null);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -253,20 +272,6 @@ export default function AccountsPage() {
   const [drawerNotice, setDrawerNotice] = useState<string | null>(null);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
-
-  if (onboardingStatus !== "ready") {
-    return (
-      <CloverShell
-        active="accounts"
-        title="Checking your setup..."
-        kicker="One moment"
-        subtitle="We’re confirming your onboarding status before opening Accounts."
-        showTopbar={false}
-      >
-        <section className="empty-state">Checking your setup...</section>
-      </CloverShell>
-    );
-  }
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,

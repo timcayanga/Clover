@@ -47,14 +47,7 @@ const formatDate = (value: string) =>
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
 export default function AccountDetailPage() {
-  const router = useRouter();
   const onboardingStatus = useOnboardingAccess();
-  const params = useParams<{ accountId: string }>();
-  const accountId = params.accountId;
-
-  const [account, setAccount] = useState<Account | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [message, setMessage] = useState("Loading account history...");
 
   if (onboardingStatus !== "ready") {
     return (
@@ -69,6 +62,18 @@ export default function AccountDetailPage() {
       </CloverShell>
     );
   }
+
+  return <AccountDetailPageContent />;
+}
+
+function AccountDetailPageContent() {
+  const router = useRouter();
+  const params = useParams<{ accountId: string }>();
+  const accountId = params.accountId;
+
+  const [account, setAccount] = useState<Account | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [message, setMessage] = useState("Loading account history...");
 
   useEffect(() => {
     let cancelled = false;
