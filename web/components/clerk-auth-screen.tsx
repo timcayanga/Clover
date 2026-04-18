@@ -27,8 +27,8 @@ const cloverAuthAppearance: Appearance = {
       backgroundColor: "#ffffff",
       boxShadow: "none",
       marginTop: "0",
-      paddingTop: "12px",
-      paddingBottom: "18px",
+      paddingTop: "0",
+      paddingBottom: "0",
     },
     footerAction: {
       backgroundColor: "#ffffff",
@@ -39,6 +39,9 @@ const cloverAuthAppearance: Appearance = {
     footerActionLink: {
       color: "#03a8c0",
       fontWeight: "600",
+    },
+    footerItem: {
+      display: "none",
     },
     footerPages: {
       display: "none",
