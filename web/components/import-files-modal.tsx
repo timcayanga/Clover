@@ -2,8 +2,8 @@
 
 import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
-import { ImportProgressModal } from "@/components/import-progress-modal";
 import { ImportPasswordModal } from "@/components/import-password-modal";
+import { ImportUploadDock } from "@/components/import-upload-dock";
 import { detectStatementMetadata } from "@/lib/import-parser";
 import { pdfjs } from "@/lib/pdfjs";
 
@@ -422,13 +422,12 @@ export function ImportFilesModal({
   const passwordItems = items.filter((item) => item.status === "needs_password");
   const activePasswordItem =
     passwordItems.find((item) => item.id === selectedPasswordItemId) ?? passwordItems[0] ?? null;
+  const completedFileCount = items.filter((item) => item.confirmationState === "confirmed").length;
+  const activeProgressItem = activeItem ?? (busy ? items.find((item) => item.status === "pending") ?? null : null);
+  const overallProgress = items.length > 0
+    ? ((completedFileCount + (activeProgressItem ? activeProgressItem.progress / 100 : 0)) / items.length) * 100
+    : 0;
   const hasCompletedAllFiles = items.length > 0 && items.every((item) => item.confirmationState === "confirmed");
-  const pendingProgressItem =
-    busy && !activeItem
-      ? items.find((item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim())) ?? null
-      : null;
-  const progressItem = activeItem ?? pendingProgressItem;
-  const progressItemIndex = progressItem ? items.findIndex((item) => item.id === progressItem.id) + 1 : null;
 
   useEffect(() => {
     if (!open || !hasCompletedAllFiles) {
@@ -556,21 +555,6 @@ export function ImportFilesModal({
     return null;
   }
 
-  if (progressItem) {
-    return (
-      <ImportProgressModal
-        open
-        title="Importing file"
-        fileName={progressItem.file.name}
-        progress={progressItem.progress}
-        detail={progressItem.progressLabel}
-        statusLabel={progressItem.status === "importing" ? "Importing" : busy ? "Importing" : "Parsing"}
-        fileIndex={progressItemIndex}
-        fileTotal={items.length}
-      />
-    );
-  }
-
   if (activePasswordItem) {
     return (
       <ImportPasswordModal
@@ -593,6 +577,37 @@ export function ImportFilesModal({
         }
         onUnlock={(id) => void handleRetry(id)}
       />
+    );
+  }
+
+  if (items.length > 0) {
+    return (
+      <ImportUploadDock
+        open
+        fileName={activeProgressItem?.file.name ?? null}
+        fileIndex={activeProgressItem ? items.findIndex((item) => item.id === activeProgressItem.id) + 1 : completedFileCount}
+        fileTotal={items.length}
+        completedFiles={completedFileCount}
+        progress={overallProgress}
+        detail={
+          activeProgressItem
+            ? activeProgressItem.progressLabel
+            : completedFileCount > 0
+              ? "Upload complete"
+              : "Preparing upload"
+        }
+        statusLabel={
+          activeProgressItem
+            ? activeProgressItem.status === "importing"
+              ? "Uploading"
+              : busy
+                ? "Uploading"
+                : "Parsing"
+            : busy
+              ? "Working"
+              : "Queued"
+        }
+        />
     );
   }
 
