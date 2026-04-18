@@ -419,7 +419,7 @@ export function ImportFilesModal({
           status: "needs_password",
           error: needsPasswordMessage,
           password: "",
-          passwordVisible: true,
+          passwordVisible: false,
           progress: 0,
           progressLabel: "Password needed",
         });
@@ -590,7 +590,6 @@ export function ImportFilesModal({
         activeFileId={activePasswordItem.id}
         busy={busy}
         onClose={onClose}
-        onSelectFile={(id) => setSelectedPasswordItemId(id)}
         onPasswordChange={(id, password) => updateItem(id, { password, error: null })}
         onToggleVisibility={(id) =>
           updateItem(id, { passwordVisible: !items.find((item) => item.id === id)?.passwordVisible })
