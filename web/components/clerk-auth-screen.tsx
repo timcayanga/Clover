@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import Link from "next/link";
 import { SignIn, SignUp } from "@clerk/nextjs";
 import type { Appearance } from "@clerk/types";
 
@@ -25,11 +25,7 @@ const cloverAuthAppearance: Appearance = {
   },
   elements: {
     footer: {
-      backgroundColor: "#ffffff",
-      boxShadow: "none",
-      marginTop: "0",
-      paddingTop: "0",
-      paddingBottom: "0",
+      display: "none",
     },
     footerAction: {
       backgroundColor: "#ffffff",
@@ -41,53 +37,10 @@ const cloverAuthAppearance: Appearance = {
       color: "#03a8c0",
       fontWeight: "600",
     },
-    footerItem: {
-      display: "none",
-    },
-    footerPages: {
-      display: "none",
-    },
   },
 };
 
 export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
-  const signupShellRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (mode !== "sign-up") {
-      return;
-    }
-
-    const hideClerkBadge = () => {
-      const root = signupShellRef.current;
-
-      if (!root) {
-        return;
-      }
-
-      const nodes = Array.from(root.querySelectorAll<HTMLElement>("*"));
-      const badgeNode = nodes.find((node) => /secured by\s+clerk/i.test(node.textContent?.replace(/\s+/g, " ").trim() ?? ""));
-
-      if (badgeNode) {
-        const row = badgeNode.parentElement ?? badgeNode;
-        row.style.setProperty("background-color", "#ffffff", "important");
-        row.style.setProperty("box-shadow", "none", "important");
-        row.style.setProperty("border-top", "0", "important");
-        row.style.setProperty("display", "none", "important");
-      }
-    };
-
-    hideClerkBadge();
-
-    const observer = new MutationObserver(hideClerkBadge);
-    const root = signupShellRef.current;
-    if (root) {
-      observer.observe(root, { childList: true, subtree: true });
-    }
-
-    return () => observer.disconnect();
-  }, [mode]);
-
   if (!enabled) {
     return (
       <section className="glass" style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>
@@ -110,8 +63,11 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
   }
 
   return (
-    <div ref={signupShellRef} className="clerk-auth-screen clerk-auth-screen--signup">
+    <div className="clerk-auth-screen clerk-auth-screen--signup">
       <SignUp appearance={cloverAuthAppearance} afterSignUpUrl="/onboarding" afterSignInUrl="/dashboard" />
+      <p className="clerk-auth-screen__footer">
+        Already have an account? <Link className="clerk-auth-screen__footer-link" href="/sign-in">Sign In</Link>
+      </p>
     </div>
   );
 }

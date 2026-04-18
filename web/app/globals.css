@@ -238,27 +238,31 @@ label {
   display: grid;
   gap: 0;
   align-items: stretch;
+  width: fit-content;
+  max-width: none;
+  margin: 0 auto;
+}
+
+.clerk-auth-screen__footer {
+  margin: -1px 0 0;
+  padding: 12px 24px 18px;
+  text-align: center;
+  border: 1px solid var(--stroke);
+  border-top: 0;
+  border-radius: 0 0 28px 28px;
   background: #ffffff;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 15px;
 }
 
-.clerk-auth-screen--signup [data-clerk-component="footer"],
-.clerk-auth-screen--signup [data-clerk-component="footerItem"],
-.clerk-auth-screen--signup [data-clerk-component="footerAction"],
-.clerk-auth-screen--signup [data-clerk-component="footerActionText"],
-.clerk-auth-screen--signup [data-clerk-component="footerActionLink"],
-.clerk-auth-screen--signup [data-clerk-component="footerPages"],
-.clerk-auth-screen--signup [data-clerk-component="footerPagesLink"] {
-  background: #ffffff !important;
+.clerk-auth-screen__footer-link {
+  color: var(--accent);
+  font-weight: 600;
 }
 
-.clerk-auth-screen--signup [data-clerk-component="footer"] {
-  box-shadow: none !important;
-  border-top-color: transparent !important;
-}
-
-.clerk-auth-screen--signup [data-clerk-component="footerActionLink"] {
-  color: var(--accent) !important;
-  font-weight: 600 !important;
+.clerk-auth-screen__footer-link:hover {
+  color: var(--accent-hover);
 }
 
 .sidebar {
