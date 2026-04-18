@@ -98,7 +98,6 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
         // The redirect happens immediately; this is best-effort persistence.
       });
       router.replace("/dashboard");
-      router.refresh();
     });
   };
 
