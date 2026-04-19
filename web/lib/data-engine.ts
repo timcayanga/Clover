@@ -348,6 +348,26 @@ export const extractMissingDatabaseColumn = (error: unknown) => {
 };
 
 const columnCache = new Map<string, string[]>();
+const tableExistsCache = new Map<string, boolean>();
+
+export const hasCompatibleTable = async (tableName: string) => {
+  const cached = tableExistsCache.get(tableName);
+  if (typeof cached === "boolean") {
+    return cached;
+  }
+
+  const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = ${tableName}
+    ) AS "exists"
+  `;
+
+  const exists = Boolean(rows[0]?.exists);
+  tableExistsCache.set(tableName, exists);
+  return exists;
+};
 
 export const getCompatibleParsedTransactionColumns = async () => {
   const cacheKey = "ParsedTransaction";
