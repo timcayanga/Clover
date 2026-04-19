@@ -956,28 +956,39 @@ const parseUnionBankTransactionSegment = (segment: string[], state: { accountNam
     return null;
   }
 
-  const date = parseDateValue(segment[0]);
+  const firstLine = normalizeWhitespace(segment[0] ?? "");
+  const dateMatch = firstLine.match(/^\d{2}\/\d{2}\/\d{2}/);
+  const date = parseDateValue(dateMatch?.[0] ?? null);
   if (!date) {
     return null;
   }
 
-  const body = segment.slice(1).filter((line) => line && !isUnionBankBoilerplateLine(line));
-  const moneyIndices = body.flatMap((line, index) => (unionbankMoneyPattern.test(line) ? [index] : []));
-  if (moneyIndices.length < 2) {
+  const body = [
+    firstLine.slice(dateMatch?.[0].length ?? 0).trim(),
+    ...segment.slice(1),
+  ].filter((line) => line && !isUnionBankBoilerplateLine(line));
+  const rowText = normalizeWhitespace(body.join(" "));
+  const moneyMatches = Array.from(rowText.matchAll(/PHP\s*[0-9][0-9,]*\.\d{2}/gi));
+  if (moneyMatches.length < 2) {
     return null;
   }
 
-  const transactionAmountLine = body[moneyIndices[0]];
-  const balanceLine = body[moneyIndices.at(-1)!];
+  const transactionAmountLine = moneyMatches[0][0];
+  const balanceLine = moneyMatches.at(-1)?.[0] ?? null;
   const transactionAmount = parseMoney(transactionAmountLine?.replace(/^PHP\s*/i, "") ?? null);
   if (transactionAmount === null) {
     return null;
   }
 
-  const refIndex = body.findIndex((line, index) => index < moneyIndices[0] && unionbankReferencePattern.test(line));
-  const descriptionLines = body.slice(Math.max(refIndex, 0) + 1, moneyIndices[0]).filter(Boolean);
-  const fallbackLines = body.slice(0, moneyIndices[0]).filter((line) => !unionbankReferencePattern.test(line));
-  const description = normalizeWhitespace((descriptionLines.length > 0 ? descriptionLines : fallbackLines).join(" "));
+  const refIndex = body.findIndex((line) => unionbankReferencePattern.test(line));
+  let descriptionSource = rowText
+    .replace(/PHP\s*[0-9][0-9,]*\.\d{2}/gi, " ")
+    .replace(refIndex >= 0 ? body[refIndex] : "", " ");
+  descriptionSource = descriptionSource.replace(/Date\s+Check No\.?\s+Ref\.?\s+No\.?\s+Description\s+Debit\s+Credit\s+Balance/gi, " ");
+  descriptionSource = descriptionSource.replace(/Page\s+\d+\s+of\s+\d+/gi, " ");
+  descriptionSource = descriptionSource.replace(/For billing concerns, you may contact our 24-Hour Customer Service at \+632 8841-8600 or send us your concern via our Mailbox-Support Feature\./gi, " ");
+  descriptionSource = descriptionSource.replace(/For best results, print your Transaction History on A4 paper using portrait orientation at actual size or fit-to-page settings/gi, " ");
+  const description = normalizeWhitespace(descriptionSource);
   if (!description || isUnionBankBoilerplateLine(description)) {
     return null;
   }
@@ -1031,7 +1042,7 @@ const parseUnionBankImportText = (text: string) => {
   let current: string[] = [];
 
   for (const line of lines) {
-    if (unionbankDatePattern.test(line)) {
+    if (/^\d{2}\/\d{2}\/\d{2}\b/.test(line)) {
       if (current.length > 0) {
         segments.push(current);
       }
@@ -1234,12 +1245,31 @@ export const parseDateValue = (value?: string | null) => {
   const normalized = value.trim();
   const iso = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (iso) {
-    return new Date(`${iso[1]}-${iso[2]}-${iso[3]}T12:00:00Z`);
+    return new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]), 12, 0, 0));
+  }
+
+  const slash = normalized.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (slash) {
+    let first = Number(slash[1]);
+    let second = Number(slash[2]);
+    let year = Number(slash[3]);
+    if (slash[3].length === 2) {
+      year += year >= 70 ? 1900 : 2000;
+    }
+
+    let month = first;
+    let day = second;
+    if (first > 12 && second <= 12) {
+      month = second;
+      day = first;
+    }
+
+    return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
   }
 
   const parsed = new Date(normalized);
   if (Number.isNaN(parsed.getTime())) return null;
-  return parsed;
+  return new Date(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate(), 12, 0, 0));
 };
 
 export const parseAmountValue = (value?: string | null) => {

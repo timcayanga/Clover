@@ -13,6 +13,7 @@ This document captures the UnionBank parsing rules learned from the synthetic tr
 - Use running balance as a required field.
 - Only accept rows that belong to the transaction table. Ignore customer-service text, page footers, statement boilerplate, and other prose even if they contain numbers.
 - Parse the table by row shape: date, reference, description, amount, balance.
+- UnionBank often keeps the transaction amount and running balance on the same extracted line, so parse the full row block rather than expecting separate amount and balance rows.
 - Keep `Bills Payment` rows as `Transfers`.
 - Keep `Interest Earned` as `Income`.
 - Keep `Withholding Tax` as `Financial`.
