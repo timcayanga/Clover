@@ -103,9 +103,10 @@ export default function HomePage() {
       <ScrollReveal as="section" className="landing-hero">
         <div className="landing-hero__copy">
           <span className="pill pill-accent">Money clarity, made simple</span>
-          <h1>Turn 8 hours of money admin into minutes.</h1>
+          <h1>See reports and insights in minutes.</h1>
           <p className="landing-hero__lede">
-            Clover helps you upload statements, see every account together, and get useful reports and AI insights faster.
+            Tracking finances takes time. Clover helps you upload statements, see every account together, and turn that data into faster reports and
+            AI insights.
           </p>
 
           <div className="landing-hero__actions">
@@ -117,7 +118,7 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <p className="landing-hero__note">See the full picture faster, spot what matters, and act with more confidence.</p>
+          <p className="landing-hero__note">Spend less time sorting through numbers and more time making smarter money moves.</p>
         </div>
 
         <HeroImage />
