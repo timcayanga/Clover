@@ -56,15 +56,6 @@ export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
       </div>
 
       <div className="reports-review-queue__body">
-        <div className="reports-review-queue__nav">
-          <button type="button" className="report-review-nav" onClick={goPrevious} aria-label="Previous review item">
-            ‹
-          </button>
-          <button type="button" className="report-review-nav" onClick={goNext} aria-label="Next review item">
-            ›
-          </button>
-        </div>
-
         <div className="reports-review-queue__item">
           <div className="report-list__meta">
             <strong>{current.title}</strong>
@@ -130,8 +121,16 @@ export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
         </div>
 
         <div className="reports-review-queue__footer">
-          <div className="reports-review-queue__counter">
-            {currentIndex + 1} of {items.length}
+          <div className="reports-review-queue__footer-row">
+            <button type="button" className="report-review-nav" onClick={goPrevious} aria-label="Previous review item">
+              ‹
+            </button>
+            <div className="reports-review-queue__counter">
+              {currentIndex + 1} of {items.length}
+            </div>
+            <button type="button" className="report-review-nav" onClick={goNext} aria-label="Next review item">
+              ›
+            </button>
           </div>
         </div>
       </div>
