@@ -8,3 +8,5 @@ web/.next
 web/.vercel
 web/.env.local
 .env.local
+
+# Keep this file in the deployment graph so prod rebuilds when landing assets change.
