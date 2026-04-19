@@ -100,6 +100,73 @@ const normalizeBpiText = (text: string) =>
 
 const compactWhitespace = (value: string) => normalizeWhitespace(value).replace(/\s+/g, "");
 
+const humanizeMerchantText = (value: string) => {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return "";
+  }
+
+  const replacements: Array<[RegExp, string]> = [
+    [/fundtransfer/gi, "Fund Transfer"],
+    [/interestearned/gi, "Interest Earned"],
+    [/taxwithheld/gi, "Tax Withheld"],
+    [/instapaytransferfee/gi, "InstaPay Transfer Fee"],
+    [/transfertootherbank/gi, "Transfer to Other Bank"],
+    [/transferto/gi, "Transfer to"],
+    [/transferfrom/gi, "Transfer from"],
+  ];
+
+  let next = normalized;
+  for (const [pattern, replacement] of replacements) {
+    next = next.replace(pattern, replacement);
+  }
+
+  next = next
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Za-z])(\d)/g, "$1 $2")
+    .replace(/(\d)([A-Za-z])/g, "$1 $2")
+    .replace(/\s*:\s*/g, ": ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return next;
+};
+
+const summarizeMerchantText = (value: string) => {
+  const humanized = humanizeMerchantText(value);
+  const compact = humanized.replace(/[^a-z0-9]+/gi, "").toLowerCase();
+
+  if (!humanized) {
+    return humanized;
+  }
+
+  if (compact.includes("fundtransfer")) {
+    return "Fund Transfer";
+  }
+
+  if (compact.includes("interestearned")) {
+    return "Interest Earned";
+  }
+
+  if (compact.includes("taxwithheld")) {
+    return "Tax Withheld";
+  }
+
+  if (compact.includes("instapaytransferfee")) {
+    return "InstaPay Transfer Fee";
+  }
+
+  if (compact.includes("transfertootherbank")) {
+    return "Transfer to Other Bank";
+  }
+
+  if (/^(cash in|cash out|payment to|received|sent|transfer to|transfer from)\b/i.test(humanized)) {
+    return humanized.split(/\s+/).slice(0, 3).join(" ");
+  }
+
+  return humanized;
+};
+
 const MAX_DECIMAL_AMOUNT = 9_999_999_999_999_999.99;
 
 const parseMoney = (value?: string | null) => {
@@ -390,8 +457,8 @@ const parseRcbcTransactionLine = (
   return {
     date: saleDate.toISOString().slice(0, 10),
     amount: amount.toFixed(2),
-    merchantRaw: description,
-    merchantClean: description,
+    merchantRaw: humanizeMerchantText(description),
+    merchantClean: summarizeMerchantText(description),
     description,
     categoryName,
     accountName: state.accountName,
@@ -586,8 +653,8 @@ const parseGcashTransactionRecord = (record: string) => {
   return {
     date: date.toISOString().slice(0, 10),
     amount: amount.toFixed(2),
-    merchantRaw: description,
-    merchantClean,
+    merchantRaw: humanizeMerchantText(description),
+    merchantClean: summarizeMerchantText(merchantClean),
     description,
     categoryName,
     type,
@@ -733,8 +800,8 @@ const parseBpiTransactionLine = (
   return {
     date: date.toISOString().slice(0, 10),
     amount,
-    merchantRaw: description || normalized,
-    merchantClean: description || normalized,
+    merchantRaw: humanizeMerchantText(description || normalized),
+    merchantClean: summarizeMerchantText(description || normalized),
     description: normalized,
     categoryName: guessBpiCategoryName(description || normalized, type),
     accountName: state.accountName,
@@ -928,8 +995,8 @@ const parseHeuristicLines = (text: string) => {
       return {
         date: dateMatch?.[0],
         amount: normalizedAmount,
-        merchantRaw: merchant || line,
-        merchantClean: merchant || line,
+        merchantRaw: humanizeMerchantText(merchant || line),
+        merchantClean: summarizeMerchantText(merchant || line),
         description: line,
         categoryName: guessCategoryName(line, type),
         type,
@@ -968,8 +1035,8 @@ export const parseImportText = (text: string, fileName: string, fileType: string
   return records.map((record) => ({
     date: record.date || record.transaction_date || record.posted_at || record.posted,
     amount: record.amount || record.value || record.debit || record.credit,
-    merchantRaw: record.merchant || record.description || record.name || record.payee || record.label,
-    merchantClean: record.merchant_clean || record.clean_merchant || record.name,
+    merchantRaw: humanizeMerchantText(record.merchant || record.description || record.name || record.payee || record.label || ""),
+    merchantClean: summarizeMerchantText(record.merchant_clean || record.clean_merchant || record.name || record.merchant || record.description || ""),
     description: record.description || record.memo || record.notes || record.detail,
     categoryName: record.category || record.category_name || guessCategoryName(record.description || record.merchant || "", inferType(record)),
     accountName: record.account || record.account_name || record.source,

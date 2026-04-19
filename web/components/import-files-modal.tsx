@@ -4,7 +4,7 @@ import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { ImportPasswordModal } from "@/components/import-password-modal";
 import { ImportUploadDock } from "@/components/import-upload-dock";
-import { uploadFileWithProgress } from "@/lib/import-file-upload";
+import { postFileWithProgress } from "@/lib/import-file-post";
 
 type AccountOption = {
   id: string;
@@ -64,19 +64,6 @@ const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string) => {
-  let timeoutId: number | null = null;
-  try {
-    const timeout = new Promise<never>((_, reject) => {
-      timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
-    });
-    return await Promise.race([promise, timeout]);
-  } finally {
-    if (timeoutId !== null) {
-      window.clearTimeout(timeoutId);
-    }
-  }
-};
 
 export function ImportFilesModal({
   open,
@@ -318,73 +305,41 @@ export function ImportFilesModal({
       return "error";
     }
 
-    updateItem(itemId, { status: "importing", error: null, progress: 8, progressLabel: "Creating import record" });
+    const importFileId = crypto.randomUUID();
+    updateItem(itemId, {
+      status: "importing",
+      error: null,
+      progress: 8,
+      progressLabel: "Starting upload",
+      importFileId,
+    });
 
     try {
-      const prepareResponse = await withTimeout(
-        fetch("/api/imports", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            workspaceId,
-            fileName: item.file.name,
-            fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
-            contentType: item.file.type || "application/octet-stream",
-            skipUpload: false,
-          }),
-        }),
-        15000,
-        "Preparing the import is taking longer than expected. Please try again."
-      );
-
-      if (!prepareResponse.ok) {
-        throw new Error("Unable to prepare this import.");
-      }
-
-      const prepared = await prepareResponse.json();
-      const importFileId = String(prepared.importFile?.id ?? "");
-
-      if (!importFileId) {
-        throw new Error("The import could not be created.");
-      }
-
-      if (!prepared.upload?.url) {
-        throw new Error("The upload service did not return a destination.");
-      }
-
       updateItem(itemId, { progress: 20, progressLabel: "Uploading the file" });
       await yieldToPaint();
-      await uploadFileWithProgress(prepared.upload.url, item.file, (progress) => {
-        updateItem(itemId, {
-          progress: 20 + progress * 0.45,
-          progressLabel: `Uploading ${item.file.name}`,
-          status: "importing",
-        });
-      });
+      const processResponse = await postFileWithProgress(
+        `/api/imports/${importFileId}/process`,
+        item.file,
+        {
+          workspaceId,
+          fileName: item.file.name,
+          fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
+          password: item.password.trim() || undefined,
+        },
+        (progress) => {
+          updateItem(itemId, {
+            progress: 20 + progress * 0.45,
+            progressLabel: `Uploading ${item.file.name}`,
+            status: "importing",
+          });
+        }
+      );
 
       updateItem(itemId, {
         progress: 65,
         progressLabel: "Parsing the statement on the server",
         status: "importing",
       });
-
-      let serverProgress = 65;
-      const processingTimer = window.setInterval(() => {
-        serverProgress = Math.min(82, serverProgress + 1);
-        updateItem(itemId, {
-          progress: serverProgress,
-          progressLabel: "Processing the statement on the server",
-          status: "importing",
-        });
-      }, 900);
-
-      const processResponse = await fetch(`/api/imports/${importFileId}/process`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: item.password.trim() || undefined }),
-      });
-
-      window.clearInterval(processingTimer);
 
       if (!processResponse.ok) {
         const payload = await processResponse.json().catch(() => ({}));

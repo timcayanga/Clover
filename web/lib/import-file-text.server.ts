@@ -89,6 +89,21 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string) => {
   return pages.join("\n");
 };
 
+export const readUploadedFileText = async (file: File, password?: string) => {
+  const lowerName = file.name.toLowerCase();
+
+  if (lowerName.endsWith(".csv") || lowerName.endsWith(".tsv") || lowerName.endsWith(".txt")) {
+    return file.text();
+  }
+
+  if (lowerName.endsWith(".pdf") || file.type === "application/pdf") {
+    const data = new Uint8Array(await file.arrayBuffer());
+    return extractTextFromPdfBytes(data, password);
+  }
+
+  throw new Error("Only CSV, TSV, TXT, and PDF files are supported.");
+};
+
 export const readImportedFileText = async (
   params: { storageKey: string; fileType: string; fileName: string },
   password?: string

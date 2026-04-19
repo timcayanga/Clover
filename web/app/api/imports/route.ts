@@ -1,6 +1,5 @@
 import { requireAuth } from "@/lib/auth";
 import { buildImportKey } from "@/lib/import-keys";
-import { createUploadUrl } from "@/lib/s3";
 import { listImportFilesCompat } from "@/lib/data-engine";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
@@ -39,7 +38,6 @@ export async function POST(request: Request) {
     await requireAuth();
     const payload = prepareSchema.parse(await request.json());
     const storageKey = buildImportKey(payload.workspaceId, payload.fileName);
-    const upload = payload.skipUpload ? null : await createUploadUrl(storageKey, payload.contentType);
 
     const importFile = await prisma.importFile.create({
       data: {
@@ -53,13 +51,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       importFile,
-      upload,
-      mode: payload.skipUpload ? "local" : "remote",
+      upload: null,
+      mode: "direct",
       retention: {
-        deleteAfterHours: payload.skipUpload ? 0 : 72,
-        note: payload.skipUpload
-          ? "The raw file is parsed locally in your browser and not uploaded."
-          : "Configure a bucket lifecycle rule to auto-delete temporary uploads.",
+        deleteAfterHours: 0,
+        note: "The raw file is uploaded directly to the import parser.",
       },
     });
   } catch (error) {
