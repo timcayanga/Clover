@@ -2158,6 +2158,7 @@ label {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .pill-subtle {
@@ -2167,12 +2168,17 @@ label {
 }
 
 .reports-review-queue__chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
   min-height: 44px;
-  padding: 10px 16px;
+  padding: 0 16px;
   border-radius: 999px;
   font-size: 14px;
   line-height: 1;
   white-space: nowrap;
+  box-sizing: border-box;
 }
 
 .reports-review-queue__chip--button {
