@@ -875,13 +875,22 @@ function TransactionsPageContent() {
       setCategories([]);
       setTransactions([]);
       setImports([]);
+      setIsWorkspaceDataReady(true);
       return;
     }
 
-    const [accountsResponse, categoriesResponse, transactionsResponse, importResponse] = await Promise.all([
+    const transactionsResponse = await fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`);
+
+    if (transactionsResponse.ok) {
+      const payload = await transactionsResponse.json();
+      setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
+    }
+
+    setIsWorkspaceDataReady(true);
+
+    const [accountsResponse, categoriesResponse, importResponse] = await Promise.all([
       fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
       fetch(`/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`),
-      fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`),
       fetch(`/api/imports?workspaceId=${encodeURIComponent(workspaceId)}`),
     ]);
 
@@ -893,11 +902,6 @@ function TransactionsPageContent() {
     if (categoriesResponse.ok) {
       const payload = await categoriesResponse.json();
       setCategories(Array.isArray(payload.categories) ? payload.categories : []);
-    }
-
-    if (transactionsResponse.ok) {
-      const payload = await transactionsResponse.json();
-      setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
     }
 
     if (importResponse.ok) {
