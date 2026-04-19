@@ -7030,6 +7030,9 @@ input.transaction-inline-edit--amount::placeholder {
 .landing-cta {
   margin-top: 24px;
   padding: 24px 0 8px;
+  max-width: 760px;
+  margin-left: auto;
+  margin-right: auto;
   display: grid;
   justify-items: center;
   gap: 18px;
@@ -7044,10 +7047,11 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   gap: 10px;
   justify-items: center;
+  width: 100%;
 }
 
 .landing-cta h2 {
-  max-width: 16ch;
+  max-width: 14ch;
   font-size: clamp(2rem, 3vw, 2.7rem);
   line-height: 1.05;
   letter-spacing: -0.05em;
@@ -7055,7 +7059,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .landing-cta__copy p {
-  max-width: 48ch;
+  max-width: 44ch;
   color: var(--muted);
   line-height: 1.7;
 }
