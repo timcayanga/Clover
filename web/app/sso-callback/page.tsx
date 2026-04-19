@@ -1,8 +1,13 @@
 "use client";
 
+import { useEffect } from "react";
 import { AuthenticateWithRedirectCallback } from "@clerk/nextjs";
 
 export default function SsoCallbackPage() {
+  useEffect(() => {
+    document.title = "Clover | SSO Callback";
+  }, []);
+
   return (
     <main className="auth-page">
       <section className="clover-auth-card glass">

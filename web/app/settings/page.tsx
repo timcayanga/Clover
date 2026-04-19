@@ -4,6 +4,10 @@ import { SettingsCenter, type SettingSection } from "@/components/settings-cente
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
+export const metadata = {
+  title: "Settings",
+};
+
 const sections: SettingSection[] = [
   {
     group: "General",

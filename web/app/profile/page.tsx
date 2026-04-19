@@ -5,6 +5,9 @@ import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "Profile",
+};
 
 export default async function ProfilePage() {
   const session = await getSessionContext();

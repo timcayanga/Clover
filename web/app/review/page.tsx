@@ -7,6 +7,9 @@ import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "Review",
+};
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
   style: "currency",

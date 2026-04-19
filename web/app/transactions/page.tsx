@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportFilesModal } from "@/components/import-files-modal";
@@ -48,6 +48,20 @@ type ImportFile = {
   fileName: string;
   status: string;
   uploadedAt: string;
+};
+
+type TransactionsWorkspaceCacheSnapshot = {
+  workspaceId: string;
+  accounts: Account[];
+  categories: Category[];
+  transactions: Transaction[];
+  imports: ImportFile[];
+  updatedAt: number;
+};
+
+type TransactionsWorkspaceCacheState = {
+  selectedWorkspaceId: string;
+  snapshots: Record<string, TransactionsWorkspaceCacheSnapshot>;
 };
 
 type DateFilterMode = "ltd" | "day" | "week" | "month" | "quarter" | "year" | "custom";
@@ -112,6 +126,7 @@ const currencyFormatter = new Intl.NumberFormat("en-PH", {
 });
 
 const todayIso = new Date().toISOString().slice(0, 10);
+const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v1";
 
 const createEmptyManualForm = (accountId = "", categoryId = ""): ManualTransactionForm => ({
   date: todayIso,
@@ -483,6 +498,80 @@ const splitMerchantFilters = (value: string) =>
     .map((entry) => entry.trim())
     .filter(Boolean);
 
+const readTransactionsWorkspaceCache = (): TransactionsWorkspaceCacheState | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const stored = window.localStorage.getItem(transactionsWorkspaceCacheKey);
+  if (!stored) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(stored) as Partial<TransactionsWorkspaceCacheState>;
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    const selectedWorkspaceId = typeof parsed.selectedWorkspaceId === "string" ? parsed.selectedWorkspaceId : "";
+    const snapshots = parsed.snapshots && typeof parsed.snapshots === "object" ? parsed.snapshots : {};
+    return {
+      selectedWorkspaceId,
+      snapshots: Object.fromEntries(
+        Object.entries(snapshots).filter(([, snapshot]) => {
+          return (
+            snapshot &&
+            typeof snapshot === "object" &&
+            typeof snapshot.workspaceId === "string" &&
+            Array.isArray(snapshot.accounts) &&
+            Array.isArray(snapshot.categories) &&
+            Array.isArray(snapshot.transactions) &&
+            Array.isArray(snapshot.imports)
+          );
+        })
+      ) as Record<string, TransactionsWorkspaceCacheSnapshot>,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const getCachedTransactionsWorkspace = (workspaceId: string): TransactionsWorkspaceCacheSnapshot | null => {
+  if (!workspaceId) {
+    return null;
+  }
+
+  const cache = readTransactionsWorkspaceCache();
+  return cache?.snapshots[workspaceId] ?? null;
+};
+
+const persistTransactionsWorkspaceCache = (
+  workspaceId: string,
+  snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
+) => {
+  if (typeof window === "undefined" || !workspaceId) {
+    return;
+  }
+
+  const cache = readTransactionsWorkspaceCache();
+  const nextSnapshot: TransactionsWorkspaceCacheSnapshot = {
+    workspaceId,
+    updatedAt: Date.now(),
+    ...snapshot,
+  };
+
+  const nextState: TransactionsWorkspaceCacheState = {
+    selectedWorkspaceId: workspaceId,
+    snapshots: {
+      ...(cache?.snapshots ?? {}),
+      [workspaceId]: nextSnapshot,
+    },
+  };
+
+  window.localStorage.setItem(transactionsWorkspaceCacheKey, JSON.stringify(nextState));
+};
+
 const looksLikeJsonBlob = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed || !/^[\[{]/.test(trimmed)) {
@@ -792,6 +881,10 @@ function MerchantFilterGroup({
 export default function TransactionsPage() {
   const onboardingStatus = useOnboardingAccess();
 
+  useEffect(() => {
+    document.title = "Clover | Transactions";
+  }, []);
+
   if (onboardingStatus !== "ready") {
     return (
       <CloverShell
@@ -856,6 +949,25 @@ function TransactionsPageContent() {
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
 
+  useLayoutEffect(() => {
+    const cache = readTransactionsWorkspaceCache();
+    if (!cache?.selectedWorkspaceId) {
+      return;
+    }
+
+    const snapshot = cache.snapshots[cache.selectedWorkspaceId];
+    if (!snapshot) {
+      return;
+    }
+
+    setSelectedWorkspaceId(cache.selectedWorkspaceId);
+    setAccounts(snapshot.accounts);
+    setCategories(snapshot.categories);
+    setTransactions(snapshot.transactions);
+    setImports(snapshot.imports);
+    setIsWorkspaceDataReady(true);
+  }, []);
+
   const loadWorkspaces = async () => {
     try {
       const response = await fetch("/api/workspaces");
@@ -863,7 +975,13 @@ function TransactionsPageContent() {
       const data = await response.json();
       const items = Array.isArray(data.workspaces) ? data.workspaces : [];
       setWorkspaces(items);
-      setSelectedWorkspaceId((current) => current || items[0]?.id || "");
+      setSelectedWorkspaceId((current) => {
+        if (current && items.some((workspace) => workspace.id === current)) {
+          return current;
+        }
+
+        return items[0]?.id || current;
+      });
     } finally {
       setIsWorkspacesLoaded(true);
     }
@@ -938,11 +1056,21 @@ function TransactionsPageContent() {
       };
     }
 
-    setAccounts([]);
-    setCategories([]);
-    setTransactions([]);
-    setImports([]);
-    setIsWorkspaceDataReady(false);
+    const cachedSnapshot = getCachedTransactionsWorkspace(selectedWorkspaceId);
+    if (cachedSnapshot) {
+      setAccounts(cachedSnapshot.accounts);
+      setCategories(cachedSnapshot.categories);
+      setTransactions(cachedSnapshot.transactions);
+      setImports(cachedSnapshot.imports);
+      setIsWorkspaceDataReady(true);
+    } else {
+      setAccounts([]);
+      setCategories([]);
+      setTransactions([]);
+      setImports([]);
+      setIsWorkspaceDataReady(false);
+    }
+
     void (async () => {
       await loadWorkspaceData(selectedWorkspaceId);
       if (active) {
@@ -1677,8 +1805,21 @@ function TransactionsPageContent() {
   const netGain = totals.income - totals.expense;
   const hasReviewItems = reviewTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
-  const isTableLoading = !isWorkspacesLoaded || (Boolean(selectedWorkspaceId) && !isWorkspaceDataReady);
+  const isTableLoading = !selectedWorkspaceId ? !isWorkspacesLoaded : !isWorkspaceDataReady;
   const hasSelectedTransactions = selectedTransactionIds.length > 0;
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || !isWorkspaceDataReady) {
+      return;
+    }
+
+    persistTransactionsWorkspaceCache(selectedWorkspaceId, {
+      accounts,
+      categories,
+      transactions,
+      imports,
+    });
+  }, [selectedWorkspaceId, isWorkspaceDataReady, accounts, categories, transactions, imports]);
 
   return (
     <CloverShell active="transactions" title="Transactions" showTopbar={false}>

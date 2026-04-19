@@ -5,7 +5,10 @@ import "./globals.css";
 import { BlankPage } from "./blank/blank-page";
 
 export const metadata: Metadata = {
-  title: "Clover | Visual money clarity",
+  title: {
+    default: "Clover",
+    template: "Clover | %s",
+  },
   description: "Clover helps you understand your money visually, review transactions faster, and get to action with less stress.",
   icons: {
     icon: "/favicon.svg",

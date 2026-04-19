@@ -235,6 +235,10 @@ function ActionIcon({
 export default function AccountsPage() {
   const onboardingStatus = useOnboardingAccess();
 
+  useEffect(() => {
+    document.title = "Clover | Accounts";
+  }, []);
+
   if (onboardingStatus !== "ready") {
     return (
       <CloverShell

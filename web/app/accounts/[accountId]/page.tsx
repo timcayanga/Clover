@@ -62,6 +62,10 @@ const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 export default function AccountDetailPage() {
   const onboardingStatus = useOnboardingAccess();
 
+  useEffect(() => {
+    document.title = "Clover | Account";
+  }, []);
+
   if (onboardingStatus !== "ready") {
     return (
       <CloverShell

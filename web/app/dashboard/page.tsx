@@ -7,6 +7,9 @@ import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "Dashboard",
+};
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
   style: "currency",
@@ -119,10 +122,10 @@ export default async function DashboardPage() {
       title={`A calm, glass-like workspace for ${selectedWorkspace.name}.`}
       subtitle="Showing live data from the seeded workspace, imported transactions, and queued uploads."
       showTopbar={false}
-      actions={
+        actions={
         <>
-          <Link className="pill-link" href="/imports">
-            Imports
+          <Link className="pill-link" href="/transactions?import=1">
+            Import files
           </Link>
           <Link className="pill-link" href="/transactions">
             Transactions

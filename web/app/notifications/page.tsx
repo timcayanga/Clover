@@ -4,28 +4,27 @@ import { CloverShell } from "@/components/clover-shell";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
-export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "Notifications",
+};
 
 const notifications = [
   {
     title: "Import finished",
     detail: "Your latest statement import is ready for review.",
     time: "Just now",
-    tone: "Live",
   },
   {
     title: "Transactions need attention",
     detail: "Three recent transactions still need categorization.",
     time: "14m ago",
-    tone: "Review",
   },
   {
     title: "Weekly summary",
-    detail: "A summary of this week’s spending is waiting in reports.",
+    detail: "A spending summary is ready in Reports.",
     time: "Yesterday",
-    tone: "Digest",
   },
-] as const;
+];
 
 export default async function NotificationsPage() {
   const session = await getSessionContext();
@@ -59,7 +58,6 @@ export default async function NotificationsPage() {
           {notifications.map((notification) => (
             <article key={notification.title} className="panel notification-item">
               <div className="notification-item__main">
-                <span className="notification-item__tone">{notification.tone}</span>
                 <h4>{notification.title}</h4>
                 <p>{notification.detail}</p>
               </div>

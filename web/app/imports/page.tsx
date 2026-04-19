@@ -84,6 +84,10 @@ const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
 export default function ImportsPage() {
   const onboardingStatus = useOnboardingAccess();
 
+  useEffect(() => {
+    document.title = "Clover | Imports";
+  }, []);
+
   if (onboardingStatus !== "ready") {
     return (
       <CloverShell

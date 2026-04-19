@@ -4,6 +4,9 @@ import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "Onboarding",
+};
 
 export default async function OnboardingPage() {
   const session = await getSessionContext({ preferGuestOnStaging: true });
