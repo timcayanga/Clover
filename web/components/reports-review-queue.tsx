@@ -78,7 +78,9 @@ export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
                   <div key={tag} className="reports-review-queue__picker-group">
                     <button
                       type="button"
-                      className={`pill pill-subtle pill-interactive ${currentCategory ? "pill-is-selected" : ""}`}
+                      className={`pill pill-subtle pill-interactive reports-review-queue__chip reports-review-queue__chip--button ${
+                        currentCategory ? "pill-is-selected" : ""
+                      }`}
                       onClick={() => setIsCategoryPickerOpen((value) => !value)}
                       aria-expanded={isCategoryPickerOpen}
                       aria-haspopup="menu"
@@ -105,11 +107,11 @@ export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
               }
 
               return (
-                <span key={tag} className="pill pill-subtle">
-                  {tag}
-                </span>
-              );
-            })}
+                  <span key={tag} className="pill pill-subtle reports-review-queue__chip">
+                    {tag}
+                  </span>
+                );
+              })}
           </div>
         </div>
 
