@@ -109,6 +109,29 @@ const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+const uploadFileWithProgress = (url: string, file: File, onProgress: (loaded: number, total: number) => void) =>
+  new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", url);
+    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) {
+        onProgress(event.loaded, event.total);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(new Error("Upload failed"));
+      }
+    };
+
+    xhr.onerror = () => reject(new Error("Upload failed"));
+    xhr.send(file);
+  });
 
 export function ImportFilesModal({
   open,
@@ -350,18 +373,9 @@ export function ImportFilesModal({
       return "error";
     }
 
-    updateItem(itemId, { status: "parsing", error: null, progress: 8, progressLabel: "Preparing file" });
+    updateItem(itemId, { status: "importing", error: null, progress: 8, progressLabel: "Creating import record" });
 
     try {
-      await yieldToPaint();
-      const text = await extractTextFromFile(item.file, item.password.trim() || undefined);
-      const statement = detectStatementMetadata(text);
-      updateItem(itemId, {
-        progress: 20,
-        progressLabel: statement?.accountName ? `Detected ${statement.accountName}` : "Reading file",
-      });
-      updateItem(itemId, { status: "importing", progress: 55, progressLabel: "Parsing file" });
-
       const prepareResponse = await fetch("/api/imports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -370,7 +384,7 @@ export function ImportFilesModal({
           fileName: item.file.name,
           fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
           contentType: item.file.type || "application/octet-stream",
-          skipUpload: true,
+          skipUpload: false,
         }),
       });
 
@@ -385,7 +399,25 @@ export function ImportFilesModal({
         throw new Error("The import could not be created.");
       }
 
-      updateItem(itemId, { progress: 72, progressLabel: "Saving import" });
+      updateItem(itemId, { progress: 28, progressLabel: "Uploading file" });
+      await uploadFileWithProgress(prepared.upload.url, item.file, (loaded, total) => {
+        const uploadPercent = total > 0 ? loaded / total : 0;
+        const progress = 28 + Math.round(uploadPercent * 42);
+        updateItem(itemId, {
+          progress,
+          progressLabel: "Uploading file",
+        });
+      });
+
+      updateItem(itemId, { progress: 72, progressLabel: "Reading uploaded file" });
+      await yieldToPaint();
+      const text = await extractTextFromFile(item.file, item.password.trim() || undefined);
+      const statement = detectStatementMetadata(text);
+      updateItem(itemId, {
+        progress: 76,
+        progressLabel: statement?.accountName ? `Detected ${statement.accountName}` : "Parsing file",
+      });
+
       const processResponse = await fetch(`/api/imports/${importFileId}/process`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -699,7 +731,7 @@ export function ImportFilesModal({
         <div className="accounts-import-footer-copy">
           <p>{message}</p>
           <p>Accepted files: CSV and PDF. Password-protected files are supported.</p>
-          <p>We parse the file for account and transaction data, do not store the raw upload, and remove it after processing to protect your privacy.</p>
+          <p>We upload the file first so the import can progress quickly, then parse it into account and transaction data.</p>
         </div>
 
         <div className="accounts-import-files">
