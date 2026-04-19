@@ -1956,9 +1956,9 @@ label {
 .reports-review-queue__footer-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
+  justify-content: center;
+  gap: 10px;
+  width: fit-content;
 }
 
 .report-review-nav {
