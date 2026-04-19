@@ -90,9 +90,12 @@ export default function HomePage() {
       </ScrollReveal>
 
       <ScrollReveal as="section" className="landing-cta">
-        <div>
+        <div className="landing-cta__copy">
           <p className="eyebrow">Ready when you are</p>
-          <h2>Start fresh or log back in.</h2>
+          <h2>Keep your finances in view, whenever you need them.</h2>
+          <p>
+            Clover stays with you as a calm place to upload statements, review insights, and return to your money with more confidence.
+          </p>
         </div>
         <div className="landing-cta__actions">
           <Link className="button button-primary button-pill" href="/sign-up">
