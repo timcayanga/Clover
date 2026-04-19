@@ -1676,6 +1676,43 @@ label {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.reports-range-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+}
+
+.reports-range-switch__copy {
+  display: grid;
+  gap: 4px;
+}
+
+.reports-range-switch__copy p {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.reports-range-switch__copy small {
+  color: var(--muted);
+}
+
+.reports-range-switch__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.reports-freshness {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
 .reports-grid--equal > .report-card {
   height: 100%;
 }
@@ -2065,9 +2102,18 @@ label {
   gap: 10px;
 }
 
+.report-list__item--link {
+  text-decoration: none;
+  color: inherit;
+}
+
 .report-list__item--compact {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
+}
+
+.report-subsection--compact {
+  margin-top: 0;
 }
 
 .report-list__meta {
@@ -2202,6 +2248,96 @@ label {
 .insights-story {
   display: grid;
   gap: 10px;
+}
+
+.insights-snapshot {
+  padding: 20px;
+  border: 1px solid var(--stroke);
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.16), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(245, 252, 253, 0.94));
+  box-shadow: var(--shadow);
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.insights-snapshot__copy {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.insights-snapshot__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.insights-snapshot__copy h3 {
+  margin: 0;
+  max-width: 16ch;
+  font-size: clamp(2.1rem, 4vw, 3.3rem);
+  line-height: 1.02;
+  letter-spacing: -0.05em;
+}
+
+.insights-snapshot__copy p {
+  color: var(--muted);
+  max-width: 58ch;
+  font-size: 18px;
+  line-height: 1.45;
+}
+
+.insights-snapshot__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.insights-snapshot__summary .pill {
+  margin-right: 2px;
+}
+
+.insights-snapshot__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.insights-snapshot__metric {
+  padding: 14px 15px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.72);
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+
+.insights-snapshot__metric span {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.insights-snapshot__metric strong {
+  font-size: 24px;
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+}
+
+.insights-snapshot__metric small {
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .insights-hero__summary h3 {
@@ -5835,6 +5971,7 @@ input.transaction-inline-edit--amount::placeholder {
   .feature-grid,
   .reports-hero,
   .reports-ai-grid,
+  .insights-snapshot,
   .insights-hero,
   .insights-grid,
   .reports-summary-grid,
@@ -5915,6 +6052,7 @@ input.transaction-inline-edit--amount::placeholder {
   .report-card,
   .report-ai-card,
   .insights-hero__summary,
+  .insights-snapshot,
   .insights-hero__sidebar,
   .insight-panel,
   .insights-footer,
@@ -5944,6 +6082,19 @@ input.transaction-inline-edit--amount::placeholder {
   .insights-hero__summary h3 {
     max-width: none;
     font-size: clamp(2.2rem, 10vw, 3rem);
+  }
+
+  .insights-snapshot {
+    grid-template-columns: 1fr;
+  }
+
+  .insights-snapshot__copy h3 {
+    max-width: none;
+    font-size: clamp(2.05rem, 9vw, 2.9rem);
+  }
+
+  .insights-snapshot__copy p {
+    font-size: 16px;
   }
 
   .report-donut__chart {

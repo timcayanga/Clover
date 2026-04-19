@@ -761,6 +761,37 @@ export default async function InsightsPage() {
         ? `Cash flow is ${trendDirection}, spending is ${spendDirection}, and savings are still positive.`
         : `Cash flow is ${trendDirection}, spending is ${spendDirection}, and the month is currently negative.`;
 
+  const headlineDriver = topCategories[0]?.[0] ?? "No clear driver yet";
+  const headlineDriverAmount = topCategories[0]?.[1] ?? 0;
+  const headlineDriverShare = currentSpend > 0 ? (headlineDriverAmount / currentSpend) * 100 : null;
+  const primarySnapshotItems = [
+    {
+      label: "Net",
+      value: formatSignedCurrency(currentNet),
+      note: currentNet >= previousNet ? "Up vs prior period" : "Down vs prior period",
+      tone: currentNet >= 0 ? "positive" : "negative",
+    },
+    {
+      label: "Savings rate",
+      value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
+      note: goalLabel ?? "No primary goal set yet",
+      tone: currentSavingsRate !== null && currentSavingsRate >= 0.2 ? "positive" : "neutral",
+    },
+    {
+      label: "Top driver",
+      value: headlineDriver,
+      note: `${formatCurrency(headlineDriverAmount)}${headlineDriverShare === null ? "" : ` · ${formatPercent(headlineDriverShare)}`}`,
+      tone: "neutral",
+    },
+    {
+      label: "Confidence",
+      value: Math.round(confidenceScore).toString(),
+      note: confidenceLabel,
+      tone: confidenceScore >= 85 ? "positive" : confidenceScore >= 70 ? "neutral" : "negative",
+      suffix: "%",
+    },
+  ];
+
   const chartWidth = 520;
   const chartHeight = 150;
   const chartPadding = 18;
@@ -832,6 +863,37 @@ export default async function InsightsPage() {
       subtitle="Built from your statements and spending patterns, this page explains what changed, why it changed, and what to do next."
     >
       <section className="insights-story">
+        <article className="insights-snapshot glass">
+          <div className="insights-snapshot__copy">
+            <div className="insights-snapshot__header">
+              <span className="pill pill-accent">AI insights</span>
+              {stagingDemoData ? <span className="pill pill-subtle">Sample staging data</span> : null}
+            </div>
+            <h3>{aiHeadline}</h3>
+            <p>{aiSummary}</p>
+            <div className="insights-snapshot__summary">
+              <span className={`pill ${currentNet >= 0 ? "pill-good" : "pill-danger"}`}>
+                {currentNet >= 0 ? "On track" : "Needs attention"}
+              </span>
+              <span>{currentWindowTransactions.length} transactions reviewed</span>
+              <span>{goalLabel ?? "No primary goal set yet"}</span>
+            </div>
+          </div>
+
+          <div className="insights-snapshot__metrics" aria-label="Insights snapshot metrics">
+            {primarySnapshotItems.map((item) => (
+              <div key={item.label} className="insights-snapshot__metric">
+                <span>{item.label}</span>
+                <strong className={item.tone === "positive" ? "positive" : item.tone === "negative" ? "negative" : undefined}>
+                  {item.value}
+                  {item.suffix ?? ""}
+                </strong>
+                <small>{item.note}</small>
+              </div>
+            ))}
+          </div>
+        </article>
+
         <article className="insight-panel insight-panel--feature glass">
           <div className="insight-panel__head">
             <div>
