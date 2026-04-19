@@ -4,8 +4,10 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { ImportPasswordModal } from "@/components/import-password-modal";
 import { ImportProgressModal } from "@/components/import-progress-modal";
 import { postFileWithProgress } from "@/lib/import-file-post";
+import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 
 type Workspace = {
@@ -57,6 +59,21 @@ type ProgressState = {
   statusLabel: string;
 };
 
+type PasswordPrompt = {
+  id: string;
+  file: File;
+  password: string;
+  passwordVisible: boolean;
+  error: string | null;
+};
+
+const isPasswordError = (error: unknown) => {
+  if (!error || typeof error !== "object") return false;
+  const name = "name" in error ? String((error as { name?: unknown }).name ?? "") : "";
+  const message = "message" in error ? String((error as { message?: unknown }).message ?? "") : "";
+  return /password/i.test(name) || /password/i.test(message);
+};
+
 const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
@@ -99,6 +116,7 @@ function ImportsPageContent() {
   const [currentJobId, setCurrentJobId] = useState<string>("");
   const [progressState, setProgressState] = useState<ProgressState | null>(null);
   const [autoReturnToTransactions, setAutoReturnToTransactions] = useState(false);
+  const [passwordPrompt, setPasswordPrompt] = useState<PasswordPrompt | null>(null);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
@@ -420,6 +438,19 @@ function ImportsPageContent() {
     }
 
     try {
+      if (await isLikelyPasswordProtectedPdf(file)) {
+        setPasswordPrompt({
+          id: crypto.randomUUID(),
+          file,
+          password: "",
+          passwordVisible: false,
+          error: null,
+        });
+        setMessage(`${file.name} looks password-protected. Enter the password to continue.`);
+        setIsUploading(false);
+        return;
+      }
+
       const importId = crypto.randomUUID();
       setProgressState({
         open: true,
@@ -480,6 +511,94 @@ function ImportsPageContent() {
       setAutoReturnToTransactions(true);
       setMessage(`Uploaded ${file.name}. The server is parsing it now and will update automatically.`);
     } catch (error) {
+      setProgressState(null);
+      setAutoReturnToTransactions(false);
+      setMessage(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const unlockPasswordPrompt = async () => {
+    const prompt = passwordPrompt;
+    if (!prompt?.file || !prompt.password.trim()) {
+      return;
+    }
+
+    const file = prompt.file;
+    setPasswordPrompt(null);
+    setIsUploading(true);
+    setMessage("Preparing upload...");
+
+    try {
+      const importId = crypto.randomUUID();
+      setProgressState({
+        open: true,
+        fileName: file.name,
+        progress: 1,
+        detail: "Starting the upload...",
+        statusLabel: "Uploading",
+      });
+      setProgressState((current) =>
+        current ? { ...current, progress: 12, detail: "Uploading the file...", statusLabel: "Uploading" } : current
+      );
+      setCurrentImport({ id: importId, fileName: file.name, fileType: file.type || "unknown", status: "processing", accountId: null, confirmedAt: null });
+      setCurrentJobId(importId);
+      await yieldToPaint();
+      const processResponse = await postFileWithProgress(
+        `/api/imports/${importId}/process`,
+          file,
+          {
+            workspaceId: selectedWorkspaceId,
+            fileName: file.name,
+            fileType: file.type || file.name.split(".").pop() || "unknown",
+            password: prompt.password.trim(),
+          },
+        (progress) => {
+          setProgressState((current) =>
+            current
+              ? {
+                  ...current,
+                  progress: 12 + progress * 0.48,
+                  detail: `Uploading ${file.name}...`,
+                  statusLabel: "Uploading",
+                }
+              : current
+          );
+        }
+      );
+
+      if (!processResponse.ok) {
+        const payload = await processResponse.json().catch(() => ({}));
+        throw new Error(payload.error || "Unable to parse this file.");
+      }
+
+      const processPayload = await processResponse.json().catch(() => ({}));
+      const processedMetadata = processPayload?.metadata ?? null;
+      const accountId = await ensureStatementAccount(
+        selectedWorkspaceId,
+        processedMetadata?.accountName ?? null,
+        processedMetadata?.institution ?? null
+      );
+      setProgressState((current) =>
+        current ? { ...current, progress: 88, detail: "Waiting for the import to finish...", statusLabel: "Finishing" } : current
+      );
+      setMessage("Import completed.");
+      setSelectedAccountId(accountId);
+      setAutoReturnToTransactions(true);
+      setMessage(`Uploaded ${file.name}. The server is parsing it now and will update automatically.`);
+    } catch (error) {
+      if (isPasswordError(error)) {
+        setPasswordPrompt({
+          id: crypto.randomUUID(),
+          file,
+          password: "",
+          passwordVisible: false,
+          error: error instanceof Error ? error.message : "The password was not accepted.",
+        });
+        setMessage(error instanceof Error ? error.message : "The password was not accepted.");
+        return;
+      }
       setProgressState(null);
       setAutoReturnToTransactions(false);
       setMessage(error instanceof Error ? error.message : "Upload failed");
@@ -724,6 +843,33 @@ function ImportsPageContent() {
           fileIndex={1}
           fileTotal={1}
         />
+
+        {passwordPrompt ? (
+          <ImportPasswordModal
+            open
+            files={[
+              {
+                id: passwordPrompt.id,
+                name: passwordPrompt.file.name,
+                sizeLabel: `${Math.max(1, Math.round(passwordPrompt.file.size / 1024))} KB`,
+                error: passwordPrompt.error,
+                password: passwordPrompt.password,
+                passwordVisible: passwordPrompt.passwordVisible,
+              },
+            ]}
+            activeFileId={passwordPrompt.id}
+            busy={isUploading}
+            onClose={() => {
+              setPasswordPrompt(null);
+              setIsUploading(false);
+            }}
+            onPasswordChange={(_, password) => setPasswordPrompt((current) => (current ? { ...current, password, error: null } : current))}
+            onToggleVisibility={() =>
+              setPasswordPrompt((current) => (current ? { ...current, passwordVisible: !current.passwordVisible } : current))
+            }
+            onUnlock={() => void unlockPasswordPrompt()}
+          />
+        ) : null}
       </section>
     </CloverShell>
   );

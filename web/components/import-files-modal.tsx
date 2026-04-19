@@ -4,6 +4,7 @@ import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { ImportPasswordModal } from "@/components/import-password-modal";
 import { ImportUploadDock } from "@/components/import-upload-dock";
+import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { postFileWithProgress } from "@/lib/import-file-post";
 
 type AccountOption = {
@@ -303,6 +304,16 @@ export function ImportFilesModal({
     if (!workspaceId) {
       updateItem(itemId, { status: "error", error: "Select a workspace before importing files." });
       return "error";
+    }
+
+    if (await isLikelyPasswordProtectedPdf(item.file) && !item.password.trim()) {
+      updateItem(itemId, {
+        status: "needs_password",
+        error: `${item.file.name} is password-protected. Enter the password to continue.`,
+        progress: 0,
+        progressLabel: "Password needed",
+      });
+      return "needs_password";
     }
 
     const importFileId = crypto.randomUUID();
