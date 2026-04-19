@@ -1,7 +1,132 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { getEnv } from "@/lib/env";
 import { getR2Client } from "@/lib/s3";
+
+class SimpleDOMMatrix {
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  e: number;
+  f: number;
+
+  constructor(init?: number[] | { a?: number; b?: number; c?: number; d?: number; e?: number; f?: number }) {
+    this.a = 1;
+    this.b = 0;
+    this.c = 0;
+    this.d = 1;
+    this.e = 0;
+    this.f = 0;
+
+    if (Array.isArray(init) && init.length >= 6) {
+      [this.a, this.b, this.c, this.d, this.e, this.f] = init.map((value) => Number(value) || 0);
+    } else if (init && !Array.isArray(init) && typeof init === "object") {
+      const matrixInit = init as { a?: number; b?: number; c?: number; d?: number; e?: number; f?: number };
+      this.a = Number(matrixInit.a ?? 1);
+      this.b = Number(matrixInit.b ?? 0);
+      this.c = Number(matrixInit.c ?? 0);
+      this.d = Number(matrixInit.d ?? 1);
+      this.e = Number(matrixInit.e ?? 0);
+      this.f = Number(matrixInit.f ?? 0);
+    }
+  }
+
+  multiplySelf(other: SimpleDOMMatrix | DOMMatrixInit): this {
+    const matrix = other instanceof SimpleDOMMatrix ? other : new SimpleDOMMatrix(other);
+    const { a, b, c, d, e, f } = this;
+
+    this.a = a * matrix.a + c * matrix.b;
+    this.b = b * matrix.a + d * matrix.b;
+    this.c = a * matrix.c + c * matrix.d;
+    this.d = b * matrix.c + d * matrix.d;
+    this.e = a * matrix.e + c * matrix.f + e;
+    this.f = b * matrix.e + d * matrix.f + f;
+    return this;
+  }
+
+  translateSelf(tx = 0, ty = 0): this {
+    return this.multiplySelf({ a: 1, b: 0, c: 0, d: 1, e: tx, f: ty });
+  }
+
+  scaleSelf(scaleX = 1, scaleY = scaleX): this {
+    return this.multiplySelf({ a: scaleX, b: 0, c: 0, d: scaleY, e: 0, f: 0 });
+  }
+
+  rotateSelf(angle = 0): this {
+    const radians = (angle * Math.PI) / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    return this.multiplySelf({ a: cos, b: sin, c: -sin, d: cos, e: 0, f: 0 });
+  }
+
+  invertSelf(): this {
+    const determinant = this.a * this.d - this.b * this.c;
+    if (determinant === 0) {
+      return this;
+    }
+
+    const a = this.a;
+    const b = this.b;
+    const c = this.c;
+    const d = this.d;
+    const e = this.e;
+    const f = this.f;
+
+    this.a = d / determinant;
+    this.b = -b / determinant;
+    this.c = -c / determinant;
+    this.d = a / determinant;
+    this.e = (c * f - d * e) / determinant;
+    this.f = (b * e - a * f) / determinant;
+    return this;
+  }
+
+  clone(): SimpleDOMMatrix {
+    return new SimpleDOMMatrix([this.a, this.b, this.c, this.d, this.e, this.f]);
+  }
+}
+
+class SimpleImageData {
+  data: Uint8ClampedArray;
+  width: number;
+  height: number;
+
+  constructor(dataOrWidth: Uint8ClampedArray | number, width?: number, height?: number) {
+    if (typeof dataOrWidth === "number") {
+      this.width = dataOrWidth;
+      this.height = Number(width ?? 0);
+      this.data = new Uint8ClampedArray(this.width * this.height * 4);
+      return;
+    }
+
+    this.data = dataOrWidth;
+    this.width = Number(width ?? 0);
+    this.height = Number(height ?? 0);
+  }
+}
+
+class SimplePath2D {
+  constructor(_path?: string | SimplePath2D) {}
+}
+
+const ensurePdfJsPolyfills = () => {
+  if (typeof globalThis.DOMMatrix === "undefined") {
+    (globalThis as any).DOMMatrix = SimpleDOMMatrix;
+  }
+
+  if (typeof globalThis.ImageData === "undefined") {
+    (globalThis as any).ImageData = SimpleImageData;
+  }
+
+  if (typeof globalThis.Path2D === "undefined") {
+    (globalThis as any).Path2D = SimplePath2D;
+  }
+};
+
+const loadPdfJs = async () => {
+  ensurePdfJsPolyfills();
+  return import("pdfjs-dist/legacy/build/pdf.mjs");
+};
 
 const decodeBody = async (body: unknown) => {
   if (!body) {
@@ -64,6 +189,7 @@ export const downloadImportObject = async (storageKey: string) => {
 };
 
 const extractTextFromPdfBytes = async (data: Uint8Array, password?: string) => {
+  const pdfjs = await loadPdfJs();
   const options = password ? { data, password } : { data };
   const loadingTask = pdfjs.getDocument(options as any);
   const pdf = await loadingTask.promise;
