@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { deriveReconciledBalance } from "@/lib/account-balance";
 import { ImportFilesModal } from "@/components/import-files-modal";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 
@@ -297,6 +298,25 @@ function AccountsPageContent() {
     [selectedWorkspaceId, workspaces]
   );
 
+  const reconciledAccounts = useMemo(
+    () =>
+      accounts.map((account) => {
+        const accountTransactions = transactions.filter((transaction) => transaction.accountId === account.id);
+        const accountCheckpoints = drawerAccountId === account.id ? statementCheckpoints : [];
+        const reconciledBalance = deriveReconciledBalance({
+          balance: account.balance,
+          transactions: accountTransactions,
+          checkpoints: accountCheckpoints,
+        });
+
+        return {
+          ...account,
+          balance: reconciledBalance ?? account.balance,
+        };
+      }),
+    [accounts, drawerAccountId, statementCheckpoints, transactions]
+  );
+
   const loadWorkspaces = async () => {
     setWorkspacesLoading(true);
     const response = await fetch("/api/workspaces");
@@ -437,21 +457,21 @@ function AccountsPageContent() {
 
   const duplicateCounts = useMemo(() => {
     const counts = new Map<string, number>();
-    for (const account of accounts) {
+    for (const account of reconciledAccounts) {
       const key = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return counts;
-  }, [accounts]);
+  }, [reconciledAccounts]);
 
   const searchedAccounts = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
     const base = term
-      ? accounts.filter((account) => {
+      ? reconciledAccounts.filter((account) => {
           const haystack = [account.name, account.institution ?? "", account.source, account.type].join(" ").toLowerCase();
           return haystack.includes(term);
         })
-      : accounts;
+      : reconciledAccounts;
 
     return [...base].sort((left, right) => {
       if (sortBy === "name") {
@@ -464,10 +484,10 @@ function AccountsPageContent() {
 
       return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
     });
-  }, [accounts, searchQuery, sortBy]);
+  }, [reconciledAccounts, searchQuery, sortBy]);
 
   const totals = useMemo(() => {
-    return accounts.reduce(
+    return reconciledAccounts.reduce(
       (accumulator, account) => {
         const rawValue = parseAmount(account.balance);
         const isLiability = account.type === "credit_card";
@@ -482,7 +502,7 @@ function AccountsPageContent() {
       },
       { assets: 0, liabilities: 0, netWorth: 0 }
     );
-  }, [accounts]);
+  }, [reconciledAccounts]);
 
   const accountGroups = useMemo(() => {
     const groups = [
@@ -517,8 +537,8 @@ function AccountsPageContent() {
   }, [searchedAccounts]);
 
   const selectedAccount = useMemo(
-    () => accounts.find((account) => account.id === drawerAccountId) ?? null,
-    [accounts, drawerAccountId]
+    () => reconciledAccounts.find((account) => account.id === drawerAccountId) ?? null,
+    [drawerAccountId, reconciledAccounts]
   );
 
   const selectedAccountTransactions = useMemo(
@@ -534,14 +554,14 @@ function AccountsPageContent() {
   );
 
   const needsReviewCount = useMemo(() => {
-    return accounts.filter((account) => {
+    return reconciledAccounts.filter((account) => {
       const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
       const duplicate = (duplicateCounts.get(duplicateKey) ?? 0) > 1;
       const missingInstitution = account.source === "imported" && !account.institution;
       const missingBalance = account.balance === null;
       return duplicate || missingInstitution || missingBalance;
     }).length;
-  }, [accounts, duplicateCounts]);
+  }, [duplicateCounts, reconciledAccounts]);
 
   const accountHistoryEntries = useMemo(() => {
     if (!selectedAccount) return [];

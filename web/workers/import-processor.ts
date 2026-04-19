@@ -1,5 +1,6 @@
 import type { Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { parseAmountValue, parseImportText } from "@/lib/import-parser";
 import {
   DATA_ENGINE_VERSION,
@@ -293,30 +294,36 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
         isExcluded: true,
       });
     }
+  }
 
-    if (await hasCompatibleTable("AccountStatementCheckpoint")) {
-      const latestCheckpoint = await prisma.accountStatementCheckpoint.findFirst({
-        where: {
-          accountId,
-          endingBalance: {
-            not: null,
+  const reconciledBalance = deriveReconciledBalance({
+    transactions: parsedRows.map((row) => ({
+      amount: row.amount,
+      type: row.type ?? null,
+      merchantRaw: row.merchantRaw ?? null,
+      merchantClean: row.merchantClean ?? null,
+      description: row.description ?? null,
+      date: row.date ?? null,
+      rawPayload: row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as { balance?: unknown; amountDelta?: unknown; openingBalance?: unknown; kind?: string }) : null,
+    } as BalanceLikeTransaction)),
+    checkpoints: statementCheckpoint && statementCheckpoint.endingBalance !== null
+      ? [
+          {
+            endingBalance: statementCheckpoint.endingBalance.toString(),
+            statementEndDate: statementCheckpoint.statementEndDate?.toISOString() ?? null,
+            createdAt: statementCheckpoint.createdAt.toISOString(),
           },
-        },
-        orderBy: [
-          { statementEndDate: "desc" },
-          { createdAt: "desc" },
-        ],
-      });
+        ]
+      : [],
+  });
 
-      if (latestCheckpoint && latestCheckpoint.endingBalance !== null) {
-        await prisma.account.update({
-          where: { id: accountId },
-          data: {
-            balance: latestCheckpoint.endingBalance.toString(),
-          },
-        });
-      }
-    }
+  if (reconciledBalance !== null) {
+    await prisma.account.update({
+      where: { id: accountId },
+      data: {
+        balance: reconciledBalance,
+      },
+    });
   }
 
   const existingCategories = await prisma.category.findMany({

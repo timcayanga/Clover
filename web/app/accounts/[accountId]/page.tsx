@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { deriveReconciledBalance } from "@/lib/account-balance";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 
 type Account = {
@@ -154,6 +155,16 @@ function AccountDetailPageContent() {
     [checkpoints]
   );
 
+  const reconciledBalance = useMemo(
+    () =>
+      deriveReconciledBalance({
+        balance: account?.balance ?? null,
+        transactions,
+        checkpoints,
+      }),
+    [account?.balance, checkpoints, transactions]
+  );
+
   const visibleTransactions = useMemo(
     () =>
       transactions
@@ -184,7 +195,7 @@ function AccountDetailPageContent() {
           <div className="accounts-detail__summary">
             <div className="status-card">
               <div className="panel-muted">Current balance</div>
-              <strong>{currencyFormatter.format(parseAmount(account.balance))}</strong>
+              <strong>{currencyFormatter.format(parseAmount(reconciledBalance ?? account.balance))}</strong>
             </div>
             <div className="status-card">
               <div className="panel-muted">Created</div>
