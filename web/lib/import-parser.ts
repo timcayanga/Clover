@@ -35,9 +35,9 @@ const guessCategoryName = (text: string, type: TransactionType) => {
   if (/instapay\s*transfer\s*fee|instapaytransferfee/.test(lower) || /instapaytransferfee/.test(compact)) return "Transfers";
   if (type === "income" || /salary|payroll|income|deposit|credit memo/.test(lower)) return "Income";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
-  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout/.test(lower)) return "Food & Dining";
+  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut/.test(lower)) return "Food & Dining";
   if (/auntie\s*annes|llaollao/.test(lower)) return "Food & Dining";
-  if (/grab|uber|taxi|bus|train|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
+  if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
   if (/bill|utilities|electric|water|internet|phone|subscription|openai|netflix|spotify/.test(lower)) return "Bills & Utilities";
   if (/travel|airbnb|hotel|airline|flight|tour|holiday/.test(lower)) return "Travel & Lifestyle";
@@ -465,6 +465,196 @@ const parseRcbcImportText = (text: string) => {
   };
 };
 
+const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+  const normalized = text.replace(/\u00a0/g, " ");
+  const compact = normalizeWhitespace(normalized);
+  if (!/\bGCASH\b/i.test(compact)) {
+    return null;
+  }
+
+  const phoneMatches = Array.from(compact.matchAll(/\b09\d{9}\b/g), (match) => match[0]);
+  const phoneCounts = new Map<string, number>();
+  for (const phone of phoneMatches) {
+    phoneCounts.set(phone, (phoneCounts.get(phone) ?? 0) + 1);
+  }
+
+  let accountNumber: string | null = null;
+  let bestCount = 0;
+  for (const [phone, count] of phoneCounts.entries()) {
+    if (count > bestCount) {
+      accountNumber = phone;
+      bestCount = count;
+    }
+  }
+
+  const dateRangeMatch =
+    compact.match(/(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})/i) ??
+    compact.match(/(\d{4}\/\d{2}\/\d{2})\s+to\s+(\d{4}\/\d{2}\/\d{2})/i);
+  const parseLooseDate = (value?: string | null) => {
+    if (!value) return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const openingBalance =
+    parseMoney(compact.match(/STARTING\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
+    parseMoney(compact.match(/BEGINNING\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
+    null;
+
+  return {
+    institution: "GCash",
+    accountNumber,
+    accountName: accountNumber ? `GCash ${accountNumber.slice(-4)}` : "GCash",
+    openingBalance,
+    endingBalance: null,
+    startDate: parseLooseDate(dateRangeMatch?.[1] ?? null)?.toISOString() ?? null,
+    endDate: parseLooseDate(dateRangeMatch?.[2] ?? null)?.toISOString() ?? null,
+  };
+};
+
+const normalizeGcashMerchant = (description: string) => {
+  const trimmed = normalizeWhitespace(description);
+
+  const receivedMatch = trimmed.match(/^Received GCash from\s+(.+?)(?:\s+with account ending in|\s+and invno:|$)/i);
+  if (receivedMatch?.[1]) {
+    return normalizeWhitespace(receivedMatch[1].replace(/\s*\/\s*GCash Family Savings Bank.*$/i, ""));
+  }
+
+  const sentMatch = trimmed.match(/^Sent GCash to\s+(.+?)(?:\s+with account ending in|\s+and invno:|$)/i);
+  if (sentMatch?.[1]) {
+    return normalizeWhitespace(sentMatch[1]);
+  }
+
+  const transferMatch = trimmed.match(/^Transfer from\s+\d+\s+to\s+\d+/i);
+  if (transferMatch) {
+    return "GCash Transfer";
+  }
+
+  const paymentMatch = trimmed.match(/^Payment to\s+(.+)$/i);
+  if (paymentMatch?.[1]) {
+    return normalizeWhitespace(paymentMatch[1]);
+  }
+
+  return trimmed;
+};
+
+const guessGcashCategoryName = (description: string, type: TransactionType) => {
+  const merchant = normalizeGcashMerchant(description);
+  if (type === "transfer") {
+    return "Transfers";
+  }
+
+  return guessCategoryName(merchant, type);
+};
+
+const parseGcashTransactionRecord = (record: string) => {
+  const normalized = normalizeWhitespace(record);
+  const match = normalized.match(
+    /^(?<date>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s+(?<body>.+?)\s+(?<reference>\d{10,})\s+(?<amount>\d[\d,]*\.\d{2})\s+(?<balance>\d[\d,]*\.\d{2})$/
+  );
+
+  if (!match?.groups) {
+    return null;
+  }
+
+  const description = normalizeWhitespace(match.groups.body);
+  const merchantClean = normalizeGcashMerchant(description);
+  const type: TransactionType =
+    /^Received GCash from/i.test(description) ||
+    /^Sent GCash to/i.test(description) ||
+    /^Transfer from/i.test(description) ||
+    /^Transfer to/i.test(description) ||
+    /^Cash In/i.test(description) ||
+    /^Cash Out/i.test(description) ||
+    /^Add Money/i.test(description) ||
+    /^Send Money/i.test(description) ||
+    /^Received Money/i.test(description) ||
+    /^(?:Payment to)\s+.*(?:bank|capital|securities|exchange|pdax|bancnet|loan|wallet)/i.test(description)
+      ? "transfer"
+      : /refund|reversal|cashback|reward|interest/i.test(description)
+        ? "income"
+        : "expense";
+
+  const categoryName = guessGcashCategoryName(description, type);
+  const date = parseDateValue(match.groups.date);
+  const amount = parseMoney(match.groups.amount);
+
+  if (!date || amount === null) {
+    return null;
+  }
+
+  return {
+    date: date.toISOString().slice(0, 10),
+    amount: amount.toFixed(2),
+    merchantRaw: description,
+    merchantClean,
+    description,
+    categoryName,
+    type,
+    rawPayload: {
+      bank: "GCash",
+      referenceNo: match.groups.reference,
+      amountText: match.groups.amount,
+      balanceText: match.groups.balance,
+      line: normalized,
+    },
+  } satisfies ParsedImportRow;
+};
+
+const parseGcashImportText = (text: string) => {
+  const metadata = gcashStatementMetadata(text);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+
+  const records: string[] = [];
+  let current: string[] = [];
+
+  for (const line of lines) {
+    if (/^GCash Transaction History$/i.test(line)) continue;
+    if (/^\d{4}-\d{2}-\d{2}\s+to\s+\d{4}-\d{2}-\d{2}$/i.test(line)) continue;
+    if (/^Date and Time$/i.test(line)) continue;
+    if (/^Description$/i.test(line)) continue;
+    if (/^Reference No\.?$/i.test(line)) continue;
+    if (/^Debit$/i.test(line)) continue;
+    if (/^Credit$/i.test(line)) continue;
+    if (/^Balance$/i.test(line)) continue;
+    if (/^STARTING BALANCE$/i.test(line)) continue;
+    if (/^Page\s+\d+\s+of\s+\d+$/i.test(line)) continue;
+
+    if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\b/.test(line)) {
+      if (current.length > 0) {
+        records.push(current.join(" "));
+      }
+      current = [line];
+      continue;
+    }
+
+    if (current.length > 0) {
+      current.push(line);
+    }
+  }
+
+  if (current.length > 0) {
+    records.push(current.join(" "));
+  }
+
+  const rows = records
+    .map((record) => parseGcashTransactionRecord(record))
+    .filter(Boolean) as ParsedImportRow[];
+
+  return {
+    metadata,
+    rows,
+  };
+};
+
 const guessBpiCategoryName = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
   const compact = compactWhitespace(description).toLowerCase();
@@ -640,6 +830,11 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     return bpiMetadata;
   }
 
+  const gcashMetadata = gcashStatementMetadata(text);
+  if (gcashMetadata) {
+    return gcashMetadata;
+  }
+
   const normalized = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
   const institution = detectInstitutionFromText(normalized);
   const accountNumber = detectAccountNumberFromText(normalized);
@@ -753,6 +948,11 @@ export const parseImportText = (text: string, fileName: string, fileType: string
   const bpiParsed = parseBpiImportText(text);
   if (bpiParsed) {
     return bpiParsed.rows;
+  }
+
+  const gcashParsed = parseGcashImportText(text);
+  if (gcashParsed && gcashParsed.rows.length > 0) {
+    return gcashParsed.rows;
   }
 
   const delimiter = delimiterForFile(fileType, fileName);
