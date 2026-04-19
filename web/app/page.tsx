@@ -1,113 +1,202 @@
 import Link from "next/link";
-import { CloverShell } from "@/components/clover-shell";
+import { ScrollReveal } from "@/components/scroll-reveal";
+
+function StepIcon({ name }: { name: "upload" | "insights" | "decision" }) {
+  const common = {
+    width: 24,
+    height: 24,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  switch (name) {
+    case "upload":
+      return (
+        <svg {...common}>
+          <path d="M12 16V5" />
+          <path d="m8 9 4-4 4 4" />
+          <path d="M5 19h14" />
+        </svg>
+      );
+    case "insights":
+      return (
+        <svg {...common}>
+          <path d="M5 19V9" />
+          <path d="M10 19V5" />
+          <path d="M15 19v-7" />
+          <path d="M20 19V7" />
+        </svg>
+      );
+    case "decision":
+      return (
+        <svg {...common}>
+          <path d="m6 13 4 4 8-8" />
+          <path d="M12 3a9 9 0 1 0 9 9" />
+        </svg>
+      );
+  }
+}
+
+function HeroImage() {
+  return (
+    <figure className="landing-photo landing-photo--hero" aria-hidden="true">
+      <img src="/landing-images/hero.jpg" alt="" />
+      <div className="landing-photo__overlay">
+        <div className="landing-photo__chips" aria-hidden="true">
+          <span>Upload PDFs</span>
+          <span>Review reports</span>
+          <span>AI insights</span>
+        </div>
+      </div>
+      <figcaption className="landing-photo__badge">Clear, confident, and in control</figcaption>
+    </figure>
+  );
+}
+
+function VisualGallery() {
+  return (
+    <div className="landing-gallery">
+      <div className="landing-gallery__layout">
+        <figure className="landing-photo landing-photo--gallery">
+          <img src="/landing-images/statement-upload.jpg" alt="" />
+          <figcaption className="landing-photo__badge">Upload statements</figcaption>
+        </figure>
+
+        <figure className="landing-photo landing-photo--gallery">
+          <img src="/landing-images/reports-ai.jpg" alt="" />
+          <figcaption className="landing-photo__badge">Reports and AI</figcaption>
+        </figure>
+
+        <figure className="landing-photo landing-photo--gallery">
+          <img src="/landing-images/smart-overview.jpg" alt="" />
+          <figcaption className="landing-photo__badge">A smarter overview</figcaption>
+        </figure>
+      </div>
+    </div>
+  );
+}
 
 export default function HomePage() {
   return (
-    <CloverShell
-      active="overview"
-      kicker="Product direction"
-      title="A calm, glass-like workspace for transactions, source tracking, and insight."
-      subtitle="Transactions, analytics, and source-aware imports stay in one place so you can review, learn, and decide faster."
-      showTopbar={false}
-      actions={
-        <Link className="pill-link" href="/dashboard">
-          Open app
+    <main className="landing-page">
+      <ScrollReveal as="header" className="landing-nav landing-nav--sticky">
+        <Link className="landing-brand" href="/" aria-label="Clover home">
+          <img className="landing-brand__mark" src="/favicon.svg" alt="" aria-hidden="true" />
+          <span>Clover</span>
         </Link>
-      }
-    >
-      <section className="hero">
-        <div className="hero-copy">
-          <h3>A calm, glass-like workspace for transactions, source tracking, and insight.</h3>
-          <p>
-            Clover keeps transactions, analytics, and source-aware imports in one place so your
-            review flow stays quiet, deliberate, and useful.
+
+        <nav className="landing-nav__links" aria-label="Primary">
+          <Link className="landing-nav__link" href="/sign-in">
+            Log in
+          </Link>
+          <Link className="button button-primary landing-nav__button" href="/sign-up">
+            Sign up
+          </Link>
+        </nav>
+      </ScrollReveal>
+
+      <ScrollReveal as="section" className="landing-hero">
+        <div className="landing-hero__copy">
+          <span className="pill pill-accent">Money clarity, made simple</span>
+          <h1>See reports and insights in minutes.</h1>
+          <p className="landing-hero__lede">
+            Tracking finances takes time. Clover helps you upload statements, see every account together, and turn that data into faster reports and
+            AI insights.
           </p>
-          <div className="hero-actions">
-            <Link className="button button-primary button-pill" href="/transactions">
-              View Transactions
+
+          <div className="landing-hero__actions">
+            <Link className="button button-primary button-pill" href="/sign-up">
+              Get started
             </Link>
-            <Link className="button button-secondary button-pill" href="/dashboard#analytics">
-              See analytics
+            <Link className="button button-secondary button-pill" href="/sign-in">
+              Log in
+            </Link>
+          </div>
+
+          <p className="landing-hero__note">Spend less time sorting through numbers and more time making smarter money moves.</p>
+        </div>
+
+        <HeroImage />
+      </ScrollReveal>
+
+      <ScrollReveal as="section" className="landing-proof" aria-label="Value proof">
+        <div className="landing-proof__item">
+          <strong>8 hrs/week</strong>
+          <span>Average time spent thinking about and dealing with personal finances</span>
+        </div>
+        <p className="landing-proof__source">Source: TIAA Institute-GFLEC Personal Finance Index (2024).</p>
+      </ScrollReveal>
+
+      <ScrollReveal as="section" className="landing-gallery-section">
+        <div className="landing-gallery__copy">
+          <p className="eyebrow">Visual overview</p>
+          <h2>See every account in one view.</h2>
+          <p>
+            Clover turns uploaded statements into a clearer overview so you can spot patterns without manual sorting.
+          </p>
+        </div>
+
+        <VisualGallery />
+      </ScrollReveal>
+
+      <ScrollReveal as="section" className="landing-flow">
+        <div className="landing-flow__copy">
+          <p className="eyebrow">How it works</p>
+          <h2>From statements to useful insights.</h2>
+        </div>
+
+        <div className="landing-flow__steps" aria-label="How Clover works">
+          <div className="landing-flow__step">
+            <span className="landing-flow__icon">
+              <StepIcon name="upload" />
+            </span>
+            <span className="landing-flow__number">01</span>
+            <h3>See everything together</h3>
+            <p>Bring in statement files so Clover can build a single financial overview.</p>
+          </div>
+          <div className="landing-flow__step">
+            <span className="landing-flow__icon">
+              <StepIcon name="insights" />
+            </span>
+            <span className="landing-flow__number">02</span>
+            <h3>Spot patterns faster</h3>
+            <p>Clover surfaces reports and trends so spending changes are easier to notice.</p>
+          </div>
+          <div className="landing-flow__step">
+            <span className="landing-flow__icon">
+              <StepIcon name="decision" />
+            </span>
+            <span className="landing-flow__number">03</span>
+            <h3>Plan your next move</h3>
+            <p>Use the clearer view and AI-guided insights to make better decisions.</p>
+          </div>
+        </div>
+      </ScrollReveal>
+
+      <ScrollReveal as="section" className="landing-cta">
+        <div className="landing-cta__inner">
+          <div className="landing-cta__copy">
+            <p className="eyebrow">Ready when you are</p>
+            <h2>Keep your finances in view, whenever you need them.</h2>
+            <p>
+              Clover stays with you as a clear place to upload statements, review insights, and take action with confidence.
+            </p>
+          </div>
+          <div className="landing-cta__actions">
+            <Link className="button button-primary button-pill" href="/sign-up">
+              Sign up
+            </Link>
+            <Link className="button button-secondary button-pill" href="/sign-in">
+              Log in
             </Link>
           </div>
         </div>
-
-        <div className="hero-metrics">
-          <article className="metric">
-            <span>Income</span>
-            <strong>₱45,000.00</strong>
-            <small>1 item needs review</small>
-          </article>
-          <article className="metric">
-            <span>Expenses</span>
-            <strong>₱3,266.00</strong>
-            <small>Tracked by category and source</small>
-          </article>
-          <article className="metric">
-            <span>Financial</span>
-            <strong>₱41,734.00</strong>
-            <small>92.7% savings rate</small>
-          </article>
-        </div>
-      </section>
-
-      <section className="feature-grid">
-        <article className="feature-card glass">
-          <p className="eyebrow">Transactions</p>
-          <h3>Review, edit, and clean up every transaction.</h3>
-          <p>Each row carries a source, category, and warning state so reviews stay quick.</p>
-        </article>
-        <article className="feature-card glass">
-          <p className="eyebrow">Analytics</p>
-          <h3>See spending, saving, and source patterns at a glance.</h3>
-          <p>Trends, category mix, source mix, and recurring behavior are all reflected on the dashboard.</p>
-        </article>
-        <article className="feature-card glass">
-          <p className="eyebrow">Insights</p>
-          <h3>Get practical tips from your own behavior.</h3>
-          <p>Overview cards can highlight cashflow, review load, and places to save more.</p>
-        </article>
-        <article className="feature-card glass">
-          <p className="eyebrow">Imports</p>
-          <h3>Bring in bank statements and receipts in batches.</h3>
-          <p>Protected PDFs, spreadsheets, and email exports can all be added from the same workflow.</p>
-        </article>
-      </section>
-
-      <section className="overview-insight-grid">
-        <article className="glass insight-card overview-panel overview-panel--large">
-          <p className="eyebrow">Insights</p>
-          <h4>What stands out right now</h4>
-          <div className="overview-panel__list overview-panel__list--wide">
-            <div className="overview-panel__item">
-              <strong>Net gain</strong>
-              <span>₱41,734.00 across your recorded items</span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>Savings rate</strong>
-              <span>92.7% of income remains after expenses</span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>Top category</strong>
-              <span>Food &amp; Dining at ₱3,266.00</span>
-            </div>
-          </div>
-        </article>
-        <article className="glass insight-card overview-panel">
-          <p className="eyebrow">Tips</p>
-          <h4>Small moves that could help</h4>
-          <div className="overview-panel__list">
-            <div className="overview-panel__item">
-              <strong>Watch category drift</strong>
-              <span>Small cuts in dining or transport can move savings quickly.</span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>Keep imports tidy</strong>
-              <span>Source tags and category edits keep the dashboard readable.</span>
-            </div>
-          </div>
-        </article>
-      </section>
-    </CloverShell>
+      </ScrollReveal>
+    </main>
   );
 }
