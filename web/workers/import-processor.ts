@@ -101,6 +101,15 @@ export const processImportFileText = async (importFileId: string, text: string) 
   return { count: rows.length };
 };
 
+const snapshotBalanceToString = (value: unknown) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const parsed = parseAmountValue(typeof value === "number" ? String(value) : String(value));
+  return parsed === null ? null : parsed.toFixed(2);
+};
+
 const looksLikeJsonBlob = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -296,7 +305,24 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     }
   }
 
-  const reconciledBalance = deriveReconciledBalance({
+  const latestExplicitBalance = [...parsedRows]
+    .reverse()
+    .find((row) => {
+      if (!row.rawPayload || typeof row.rawPayload !== "object" || Array.isArray(row.rawPayload)) {
+        return false;
+      }
+
+      return snapshotBalanceToString((row.rawPayload as Record<string, unknown>).balance) !== null;
+    });
+
+  const reconciledBalance =
+    snapshotBalanceToString(statementCheckpoint?.endingBalance) ??
+    snapshotBalanceToString(
+      latestExplicitBalance && typeof latestExplicitBalance.rawPayload === "object" && !Array.isArray(latestExplicitBalance.rawPayload)
+        ? (latestExplicitBalance.rawPayload as Record<string, unknown>).balance
+        : null
+    ) ??
+    deriveReconciledBalance({
     transactions: parsedRows.map((row) => ({
       amount: row.amount,
       type: row.type ?? null,
