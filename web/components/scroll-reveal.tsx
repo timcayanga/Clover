@@ -7,7 +7,7 @@ type ScrollRevealProps = {
   children: ReactNode;
   className?: string;
   delay?: number;
-  as?: "div" | "section" | "article";
+  as?: "div" | "section" | "article" | "header";
 };
 
 export function ScrollReveal({ children, className = "", delay = 0, as = "div" }: ScrollRevealProps) {

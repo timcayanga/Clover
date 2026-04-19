@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200" role="img" aria-labelledby="title desc">
+  <title id="title">Cashflow Trend Preview</title>
+  <desc id="desc">Minimal multi-line cashflow chart preview</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#f5fbfc"/>
+      <stop offset="100%" stop-color="#ffffff"/>
+    </linearGradient>
+    <linearGradient id="good" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0e9f6e"/>
+      <stop offset="100%" stop-color="#74d9b0"/>
+    </linearGradient>
+    <linearGradient id="bad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#c64f6e"/>
+      <stop offset="100%" stop-color="#ea8ea7"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#03a8c0"/>
+      <stop offset="100%" stop-color="#6edbe8"/>
+    </linearGradient>
+  </defs>
+  <rect width="320" height="200" rx="24" fill="url(#bg)"/>
+  <g opacity=".36" stroke="#d9e7eb" stroke-width="1">
+    <path d="M24 48H296M24 80H296M24 112H296M24 144H296"/>
+  </g>
+  <path d="M24 148L62 126L100 102L138 122L176 88L214 96L252 72L296 60" fill="none" stroke="url(#good)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M24 70L62 86L100 112L138 102L176 132L214 118L252 144L296 126" fill="none" stroke="url(#bad)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M24 116L62 108L100 116L138 94L176 108L214 84L252 90L296 68" fill="none" stroke="url(#accent)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#0b1116" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700">
+    <text x="24" y="28" fill="#5d6b75" font-size="12" letter-spacing=".16em">CASHFLOW</text>
+  </g>
+  <circle cx="296" cy="60" r="4.5" fill="#0e9f6e"/>
+  <circle cx="296" cy="126" r="4.5" fill="#c64f6e"/>
+  <circle cx="296" cy="68" r="4.5" fill="#03a8c0"/>
+</svg>
