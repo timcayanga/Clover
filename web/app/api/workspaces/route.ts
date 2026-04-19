@@ -10,11 +10,18 @@ export async function GET() {
   try {
     const { userId } = await requireAuth();
     const clerkUser = await syncClerkUser(userId);
-    const starterWorkspace = await ensureStarterWorkspace(clerkUser.clerkUserId, clerkUser.email, clerkUser.verified);
     const user = await prisma.user.findUnique({
       where: { clerkUserId: clerkUser.clerkUserId },
       include: { workspaces: true },
     });
+
+    if (user?.workspaces?.length) {
+      return NextResponse.json({
+        workspaces: user.workspaces,
+      });
+    }
+
+    const starterWorkspace = await ensureStarterWorkspace(clerkUser.clerkUserId, clerkUser.email, clerkUser.verified);
 
     return NextResponse.json({
       workspaces: user?.workspaces ?? [starterWorkspace],
