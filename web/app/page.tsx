@@ -103,9 +103,10 @@ export default function HomePage() {
       <ScrollReveal as="section" className="landing-hero">
         <div className="landing-hero__copy">
           <span className="pill pill-accent">Money clarity, made simple</span>
-          <h1>A smarter way to see your money.</h1>
+          <h1>Turn 8 hours of financial admin into minutes.</h1>
           <p className="landing-hero__lede">
-            Clover helps you upload statements, see every account together, and understand where your money goes through reports and AI.
+            The average U.S. adult spends about 8 hours a week thinking about and dealing with personal finances. Clover helps you upload statements,
+            see every account together, and get useful reports and AI insights faster.
           </p>
 
           <div className="landing-hero__actions">
@@ -117,10 +118,26 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <p className="landing-hero__note">See your money, understand it faster, and take action with more confidence.</p>
+          <p className="landing-hero__note">See the full picture faster, spot what matters, and act with more confidence.</p>
         </div>
 
         <HeroImage />
+      </ScrollReveal>
+
+      <ScrollReveal as="section" className="landing-proof" aria-label="Value proof">
+        <div className="landing-proof__item">
+          <strong>8 hrs/week</strong>
+          <span>Average time U.S. adults spend thinking about and dealing with personal finances</span>
+        </div>
+        <div className="landing-proof__item">
+          <strong>4 hrs/week</strong>
+          <span>Time spent by adults with very high financial literacy</span>
+        </div>
+        <div className="landing-proof__item">
+          <strong>12 hrs/week</strong>
+          <span>Time spent by adults with very low financial literacy</span>
+        </div>
+        <p className="landing-proof__source">Source: TIAA Institute-GFLEC Personal Finance Index (2024).</p>
       </ScrollReveal>
 
       <ScrollReveal as="section" className="landing-gallery-section">
