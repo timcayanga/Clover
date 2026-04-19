@@ -832,15 +832,6 @@ export default async function InsightsPage() {
       subtitle="Built from your statements and spending patterns, this page explains what changed, why it changed, and what to do next."
     >
       <section className="insights-story">
-        <article className="insights-hero__summary glass">
-          <div className="insights-hero__header">
-            <span className="pill pill-accent">AI insights</span>
-            {stagingDemoData ? <span className="pill pill-subtle">Sample staging data</span> : null}
-          </div>
-          <h3>{aiHeadline}</h3>
-          <p>{aiSummary}</p>
-        </article>
-
         <article className="insight-panel insight-panel--feature glass">
           <div className="insight-panel__head">
             <div>
