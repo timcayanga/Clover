@@ -122,29 +122,6 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: 
     }
   }
 };
-const uploadFileWithProgress = (url: string, file: File, onProgress: (loaded: number, total: number) => void) =>
-  new Promise<void>((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("PUT", url);
-    xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        onProgress(event.loaded, event.total);
-      }
-    };
-
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        resolve();
-      } else {
-        reject(new Error("Upload failed"));
-      }
-    };
-
-    xhr.onerror = () => reject(new Error("Upload failed"));
-    xhr.send(file);
-  });
 
 export function ImportFilesModal({
   open,
@@ -398,11 +375,11 @@ export function ImportFilesModal({
             fileName: item.file.name,
             fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
             contentType: item.file.type || "application/octet-stream",
-            skipUpload: false,
+            skipUpload: true,
           }),
         }),
         15000,
-        "Preparing the upload is taking longer than expected. Please try again."
+        "Preparing the import is taking longer than expected. Please try again."
       );
 
       if (!prepareResponse.ok) {
@@ -416,22 +393,12 @@ export function ImportFilesModal({
         throw new Error("The import could not be created.");
       }
 
-      updateItem(itemId, { progress: 28, progressLabel: "Uploading file" });
-      await uploadFileWithProgress(prepared.upload.url, item.file, (loaded, total) => {
-        const uploadPercent = total > 0 ? loaded / total : 0;
-        const progress = 28 + Math.round(uploadPercent * 42);
-        updateItem(itemId, {
-          progress,
-          progressLabel: "Uploading file",
-        });
-      });
-
-      updateItem(itemId, { progress: 72, progressLabel: "Reading uploaded file" });
+      updateItem(itemId, { progress: 20, progressLabel: "Reading the local file" });
       await yieldToPaint();
       const text = await extractTextFromFile(item.file, item.password.trim() || undefined);
       const statement = detectStatementMetadata(text);
       updateItem(itemId, {
-        progress: 76,
+        progress: 42,
         progressLabel: statement?.accountName ? `Detected ${statement.accountName}` : "Parsing file",
       });
 
@@ -748,7 +715,7 @@ export function ImportFilesModal({
         <div className="accounts-import-footer-copy">
           <p>{message}</p>
           <p>Accepted files: CSV and PDF. Password-protected files are supported.</p>
-          <p>We upload the file first so the import can progress quickly, then parse it into account and transaction data.</p>
+          <p>We parse the file locally, then send the extracted text into the import queue so the workflow stays responsive.</p>
         </div>
 
         <div className="accounts-import-files">
