@@ -2197,7 +2197,7 @@ label {
 
 .insights-story {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .insights-hero__summary h3 {
@@ -2287,16 +2287,16 @@ label {
 }
 
 .insight-panel {
-  padding: 18px;
+  padding: 14px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.88);
   box-shadow: var(--shadow);
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .insight-panel--feature {
-  min-height: 420px;
+  min-height: auto;
 }
 
 .insight-panel__head {
@@ -2327,16 +2327,16 @@ label {
 .insight-signal-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .insight-signal {
-  padding: 14px 15px;
-  border-radius: 20px;
+  padding: 10px 12px;
+  border-radius: 16px;
   border: 1px solid rgba(15, 23, 42, 0.06);
   background: rgba(255, 255, 255, 0.58);
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .insight-signal span {
@@ -2347,7 +2347,7 @@ label {
 }
 
 .insight-signal strong {
-  font-size: 24px;
+  font-size: 21px;
   line-height: 1.1;
   letter-spacing: -0.04em;
 }
@@ -2358,28 +2358,28 @@ label {
 
 .insight-chart {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .insight-chart svg {
   width: 100%;
-  height: auto;
+  height: 140px;
   display: block;
 }
 
 .insight-chart__labels {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
 }
 
 .insight-chart__label {
-  padding: 12px 14px;
-  border-radius: 18px;
+  padding: 10px 12px;
+  border-radius: 16px;
   background: rgba(255, 255, 255, 0.58);
   border: 1px solid rgba(15, 23, 42, 0.06);
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .insight-chart__label span {

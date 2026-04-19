@@ -447,48 +447,9 @@ export default async function InsightsPage() {
   );
   const confidenceLabel = confidenceScore >= 85 ? "High confidence" : confidenceScore >= 70 ? "Good confidence" : "Watch closely";
 
-  const trendDirection = currentNet >= previousNet ? "improving" : "softening";
-  const spendDirection =
-    spendDelta === null ? "stable" : spendDelta > 4 ? "up" : spendDelta < -4 ? "down" : "stable";
-
-  const aiHeadline =
-    goalLabel !== null
-      ? currentNet >= 0
-        ? `You are making progress toward ${goalLabel.toLowerCase()}, and the current month is holding up.`
-        : `You are still aiming at ${goalLabel.toLowerCase()}, but expenses are putting pressure on the plan.`
-      : currentNet >= 0
-        ? "Your money is in a healthy place right now, and the next win is turning that into a clear goal."
-        : "Your money needs a tighter path right now, and the fastest gain is to slow spending."
-
-  const aiSummary =
-    spendDelta === null || incomeDelta === null
-      ? "There is enough recent activity to give guidance, but one of the comparison periods is still thin."
-      : currentNet >= 0
-        ? `Cash flow is ${trendDirection}, spending is ${spendDirection}, and savings are still positive.`
-        : `Cash flow is ${trendDirection}, spending is ${spendDirection}, and the month is currently negative.`;
-
-  const priorityFlag =
-    importStatusCounts.failed > 0 || uncategorizedTransactions.length + possibleDuplicateGroups.length > 0
-      ? {
-          label: "Urgent",
-          body: "Review the data quality items first so the next insight pass has cleaner inputs.",
-          tone: "danger" as const,
-        }
-      : spendDelta !== null && spendDelta > 8
-        ? {
-            label: "Watchlist",
-            body: "Spending is rising faster than the previous period, so keep an eye on the biggest category.",
-            tone: "subtle" as const,
-          }
-        : {
-            label: "Opportunity",
-            body: "The current pattern leaves room to build savings or accelerate a goal.",
-            tone: "good" as const,
-          };
-
   const chartWidth = 520;
-  const chartHeight = 210;
-  const chartPadding = 22;
+  const chartHeight = 150;
+  const chartPadding = 18;
   const chartXSpan = chartWidth - chartPadding * 2;
   const chartYSpan = chartHeight - chartPadding * 2;
   const monthValues = monthBuckets.map((bucket) => bucket.net);
@@ -557,42 +518,6 @@ export default async function InsightsPage() {
       subtitle="Built from your statements and spending patterns, this page explains what changed, why it changed, and what to do next."
     >
       <section className="insights-story">
-        <article className="insights-hero__summary glass">
-          <div className="insights-hero__header">
-            <span className="pill pill-accent">AI brief</span>
-            <span className={`pill ${priorityFlag.tone === "danger" ? "pill-danger" : priorityFlag.tone === "good" ? "pill-good" : "pill-subtle"}`}>
-              {priorityFlag.label}
-            </span>
-          </div>
-          <h3>{aiHeadline}</h3>
-          <p>{aiSummary}</p>
-          <div className="insights-hero__stats">
-            <div className="insight-tile">
-              <span>Headline</span>
-              <strong>{headlineNetLabel}</strong>
-              <small>{goalLabel ?? "No primary goal set yet"}</small>
-            </div>
-            <div className="insight-tile">
-              <span>Savings rate</span>
-              <strong>{currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}</strong>
-              <small>{confidenceLabel}</small>
-            </div>
-            <div className="insight-tile">
-              <span>Confidence</span>
-              <strong>{Math.round(confidenceScore)}%</strong>
-              <small>{currentWindowTransactions.length} transactions reviewed</small>
-            </div>
-          </div>
-          <div className="hero-actions">
-            <Link className="button button-primary" href={quickActions[0].href}>
-              {quickActions[0].label}
-            </Link>
-            <Link className="button button-secondary" href={quickActions[1].href}>
-              {quickActions[1].label}
-            </Link>
-          </div>
-        </article>
-
         <article className="insight-panel insight-panel--feature glass">
           <div className="insight-panel__head">
             <div>
