@@ -147,6 +147,7 @@ export function CloverShell({
   const pathname = usePathname();
   const shellRef = useRef<HTMLDivElement | null>(null);
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
   const profileImage = user?.imageUrl ?? null;
@@ -155,6 +156,7 @@ export function CloverShell({
   const isProfileMenuOpen = openMenu === "profile";
 
   useEffect(() => {
+    setIsSidebarOpen(false);
     const handlePointerDown = (event: MouseEvent) => {
       if (!shellRef.current || event.target instanceof Node === false) {
         return;
@@ -178,7 +180,7 @@ export function CloverShell({
       document.removeEventListener("mousedown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  }, [pathname]);
 
   const notificationCount = notifications.length;
   const profileMenuLinks = useMemo(
@@ -190,12 +192,28 @@ export function CloverShell({
   );
 
   return (
-    <div className="app-shell" ref={shellRef}>
+    <div className={`app-shell ${isSidebarOpen ? "is-sidebar-open" : ""}`} ref={shellRef}>
+      <div
+        className="sidebar-backdrop"
+        role="presentation"
+        hidden={!isSidebarOpen}
+        onClick={() => setIsSidebarOpen(false)}
+      />
       <aside className="sidebar" aria-label="Primary">
         <div className="sidebar-brand">
           <Link className="sidebar-brand-link" href="/dashboard" aria-label="Go to dashboard">
             <img className="brand-mark brand-mark--sidebar" src="/favicon.svg" alt="" aria-hidden="true" />
           </Link>
+          <button
+            className="sidebar-brand-toggle"
+            type="button"
+            aria-label={isSidebarOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={isSidebarOpen}
+            aria-controls="primary-navigation"
+            onClick={() => setIsSidebarOpen((current) => !current)}
+          >
+            <img className="sidebar-brand-toggle__mark" src="/favicon.svg" alt="" aria-hidden="true" />
+          </button>
         </div>
 
         <label className="sidebar-search" htmlFor="sidebar-search">
@@ -203,7 +221,7 @@ export function CloverShell({
           <input id="sidebar-search" type="search" placeholder="Search" />
         </label>
 
-        <nav className="sidebar-nav" aria-label="Primary">
+        <nav className="sidebar-nav" aria-label="Primary" id="primary-navigation">
           {navItems.map((item) => (
             <Link key={item.key} className={`nav-link ${active === item.key ? "is-active" : ""}`} href={item.href}>
               <span className="nav-link__icon" aria-hidden="true">
@@ -283,6 +301,18 @@ export function CloverShell({
       </aside>
 
       <main className="content">
+        <div className="content-mobile-bar">
+          <button
+            className="content-mobile-bar__toggle"
+            type="button"
+            aria-label={isSidebarOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={isSidebarOpen}
+            aria-controls="primary-navigation"
+            onClick={() => setIsSidebarOpen((current) => !current)}
+          >
+            <img className="content-mobile-bar__mark" src="/favicon.svg" alt="" aria-hidden="true" />
+          </button>
+        </div>
         {showTopbar ? (
           <header className="topbar glass">
             <div>
