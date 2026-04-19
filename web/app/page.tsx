@@ -103,10 +103,10 @@ export default function HomePage() {
       <ScrollReveal as="section" className="landing-hero">
         <div className="landing-hero__copy">
           <span className="pill pill-accent">Money clarity, made simple</span>
-          <h1>Turn 8 hours of financial admin into minutes.</h1>
+          <h1>Turn money stress into a clearer view.</h1>
           <p className="landing-hero__lede">
-            The average U.S. adult spends about 8 hours a week thinking about and dealing with personal finances. Clover helps you upload statements,
-            see every account together, and get useful reports and AI insights faster.
+            In the Philippines, 59% of Filipinos say money worries are their top source of stress. Clover helps you upload statements, see every
+            account together, and get useful reports and AI insights faster.
           </p>
 
           <div className="landing-hero__actions">
@@ -126,18 +126,18 @@ export default function HomePage() {
 
       <ScrollReveal as="section" className="landing-proof" aria-label="Value proof">
         <div className="landing-proof__item">
-          <strong>8 hrs/week</strong>
-          <span>Average time U.S. adults spend thinking about and dealing with personal finances</span>
+          <strong>59%</strong>
+          <span>Filipinos who say money worries are their top source of stress</span>
         </div>
         <div className="landing-proof__item">
-          <strong>4 hrs/week</strong>
-          <span>Time spent by adults with very high financial literacy</span>
+          <strong>65%</strong>
+          <span>Filipinos who rely on personal savings for unexpected events</span>
         </div>
         <div className="landing-proof__item">
-          <strong>12 hrs/week</strong>
-          <span>Time spent by adults with very low financial literacy</span>
+          <strong>42%</strong>
+          <span>Filipinos who say their savings and insurance may not be enough</span>
         </div>
-        <p className="landing-proof__source">Source: TIAA Institute-GFLEC Personal Finance Index (2024).</p>
+        <p className="landing-proof__source">Source: AIA Philippines study on Filipino well-being (2025).</p>
       </ScrollReveal>
 
       <ScrollReveal as="section" className="landing-gallery-section">
