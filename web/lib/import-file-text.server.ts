@@ -1,4 +1,6 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { join } from "path";
+import { pathToFileURL } from "url";
 import { getEnv } from "@/lib/env";
 import { getR2Client } from "@/lib/s3";
 
@@ -125,8 +127,10 @@ const ensurePdfJsPolyfills = () => {
 
 const loadPdfJs = async () => {
   ensurePdfJsPolyfills();
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  pdfjs.GlobalWorkerOptions.workerSrc = "pdfjs-dist/build/pdf.worker.mjs";
+  const pdfjsModuleUrl = pathToFileURL(join(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.mjs"));
+  const workerUrl = pathToFileURL(join(process.cwd(), "node_modules/pdfjs-dist/build/pdf.worker.mjs")).toString();
+  const pdfjs = await import(pdfjsModuleUrl.toString());
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
   return pdfjs;
 };
 
