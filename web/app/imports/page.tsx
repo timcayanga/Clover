@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportPasswordModal } from "@/components/import-password-modal";
 import { ImportProgressModal } from "@/components/import-progress-modal";
-import { uploadFileWithProgress } from "@/lib/import-file-upload";
+import { postFileWithProgress } from "@/lib/import-file-post";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 
@@ -78,19 +78,6 @@ const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string) => {
-  let timeoutId: number | null = null;
-  try {
-    const timeout = new Promise<never>((_, reject) => {
-      timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
-    });
-    return await Promise.race([promise, timeout]);
-  } finally {
-    if (timeoutId !== null) {
-      window.clearTimeout(timeoutId);
-    }
-  }
-};
 
 const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
 
@@ -301,21 +288,6 @@ function ImportsPageContent() {
     setCurrentJobId("");
   };
 
-  const processImportedText = async (importFileId: string, password?: string) => {
-    const response = await fetch(`/api/imports/${importFileId}/process`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
-    });
-
-    if (!response.ok) {
-      const payload = await response.json().catch(() => ({}));
-      throw new Error(payload.error || "Unable to process the import.");
-    }
-
-    return response.json().catch(() => ({}));
-  };
-
   const loadPreview = async (importFileId: string) => {
     const response = await fetch(`/api/imports/${importFileId}/preview`);
     if (!response.ok) {
@@ -472,28 +444,7 @@ function ImportsPageContent() {
         return;
       }
 
-      const prepResponse = await withTimeout(
-        fetch("/api/imports", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            workspaceId: selectedWorkspaceId,
-            fileName: file.name,
-            fileType: file.type || file.name.split(".").pop() || "unknown",
-            contentType: file.type || "application/octet-stream",
-            skipUpload: false,
-          }),
-        }),
-        15000,
-        "Preparing the import is taking longer than expected. Please try again."
-      );
-
-      if (!prepResponse.ok) {
-        throw new Error("Could not prepare upload");
-      }
-
-      const prep = await prepResponse.json();
-      const importId = String(prep.importFile?.id ?? "");
+      const importId = crypto.randomUUID();
 
       if (!importId) {
         throw new Error("The import could not be created.");
@@ -511,50 +462,37 @@ function ImportsPageContent() {
           ? { ...current, progress: 20, detail: "Uploading the file...", statusLabel: "Uploading" }
           : current
       );
-      if (!prep.upload?.url) {
-        throw new Error("The upload service did not return a destination.");
-      }
-
-      await uploadFileWithProgress(prep.upload.url, file, (progress) => {
-        setProgressState((current) =>
-          current
-            ? {
-                ...current,
-                progress: 20 + progress * 0.45,
-                detail: `Uploading ${file.name}...`,
-                statusLabel: "Uploading",
-              }
-            : current
-        );
-      });
-
-      setProgressState((current) =>
-        current
-          ? { ...current, progress: 65, detail: "Parsing the statement on the server...", statusLabel: "Processing" }
-          : current
-      );
-      setMessage("Parsing on the server...");
       setCurrentImport({ id: importId, fileName: file.name, fileType: file.type || "unknown", status: "processing", accountId: null, confirmedAt: null });
       setCurrentJobId(importId);
       await yieldToPaint();
-      let serverProgress = 65;
-      const processingTimer = window.setInterval(() => {
-        serverProgress = Math.min(82, serverProgress + 1);
-        setProgressState((current) =>
-          current
-            ? {
-                ...current,
-                progress: serverProgress,
-                detail: "Processing the statement on the server...",
-                statusLabel: "Processing",
-              }
-            : current
-        );
-      }, 900);
+      const processResponse = await postFileWithProgress(
+        `/api/imports/${importId}/process`,
+        file,
+        {
+          workspaceId: selectedWorkspaceId,
+          fileName: file.name,
+          fileType: file.type || file.name.split(".").pop() || "unknown",
+        },
+        (progress) => {
+          setProgressState((current) =>
+            current
+              ? {
+                  ...current,
+                  progress: 20 + progress * 0.45,
+                  detail: `Uploading ${file.name}...`,
+                  statusLabel: "Uploading",
+                }
+              : current
+          );
+        }
+      );
 
-      const processPayload = await processImportedText(importId);
-      window.clearInterval(processingTimer);
+      if (!processResponse.ok) {
+        const payload = await processResponse.json().catch(() => ({}));
+        throw new Error(payload.error || "Unable to parse this file.");
+      }
 
+      const processPayload = await processResponse.json().catch(() => ({}));
       const processedMetadata = processPayload?.metadata ?? null;
       const accountId = await ensureStatementAccount(
         selectedWorkspaceId,
@@ -605,57 +543,35 @@ function ImportsPageContent() {
       setCurrentImport({ id: importId, fileName: file.name, fileType: file.type || "unknown", status: "processing", accountId: null, confirmedAt: null });
       setCurrentJobId(importId);
       await yieldToPaint();
-      const prepResponse = await withTimeout(
-        fetch("/api/imports", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            workspaceId: selectedWorkspaceId,
-            fileName: file.name,
-            fileType: file.type || file.name.split(".").pop() || "unknown",
-            contentType: file.type || "application/octet-stream",
-            skipUpload: false,
-          }),
-        }),
-        15000,
-        "Preparing the import is taking longer than expected. Please try again."
+      const processResponse = await postFileWithProgress(
+        `/api/imports/${importId}/process`,
+        file,
+        {
+          workspaceId: selectedWorkspaceId,
+          fileName: file.name,
+          fileType: file.type || file.name.split(".").pop() || "unknown",
+          password: prompt.password.trim(),
+        },
+        (progress) => {
+          setProgressState((current) =>
+            current
+              ? {
+                  ...current,
+                  progress: 20 + progress * 0.45,
+                  detail: `Uploading ${file.name}...`,
+                  statusLabel: "Uploading",
+                }
+              : current
+          );
+        }
       );
 
-      if (!prepResponse.ok) {
-        throw new Error("Could not prepare upload");
+      if (!processResponse.ok) {
+        const payload = await processResponse.json().catch(() => ({}));
+        throw new Error(payload.error || "Unable to parse this file.");
       }
 
-      const prep = await prepResponse.json();
-      const prepImportId = String(prep.importFile?.id ?? "");
-
-      if (!prepImportId) {
-        throw new Error("The import could not be created.");
-      }
-
-      if (!prep.upload?.url) {
-        throw new Error("The upload service did not return a destination.");
-      }
-
-      await uploadFileWithProgress(prep.upload.url, file, (progress) => {
-        setProgressState((current) =>
-          current
-            ? {
-                ...current,
-                progress: 20 + progress * 0.45,
-                detail: `Uploading ${file.name}...`,
-                statusLabel: "Uploading",
-              }
-            : current
-        );
-      });
-
-      setProgressState((current) =>
-        current
-          ? { ...current, progress: 65, detail: "Parsing the statement on the server...", statusLabel: "Processing" }
-          : current
-      );
-      setMessage("Parsing on the server...");
-      const processPayload = await processImportedText(prepImportId, prompt.password.trim());
+      const processPayload = await processResponse.json().catch(() => ({}));
       const processedMetadata = processPayload?.metadata ?? null;
       const accountId = await ensureStatementAccount(
         selectedWorkspaceId,
