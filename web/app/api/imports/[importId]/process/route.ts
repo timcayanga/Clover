@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
+  let stage = "initializing";
   try {
     const { importId } = await params;
     const { userId } = await requireAuth();
@@ -21,6 +22,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     let password: string | undefined;
 
     if (isMultipart) {
+      stage = "reading multipart form";
       const formData = await _request.formData();
       const uploadedFile = formData.get("file");
       const formPassword = formData.get("password");
@@ -34,6 +36,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           return NextResponse.json({ error: "workspaceId is required" }, { status: 400 });
         }
 
+        stage = "creating import record";
         await assertWorkspaceAccess(userId, formWorkspaceId);
         importFile = await prisma.importFile.create({
           data: {
@@ -54,8 +57,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         typeof uploadedFile === "object" &&
         typeof (uploadedFile as { arrayBuffer?: unknown }).arrayBuffer === "function"
       ) {
+        stage = "reading uploaded file";
         text = await readUploadedFileText(uploadedFile as File, password);
       } else if (importFile.storageKey) {
+        stage = "reading stored file";
         text = await readImportedFileText(
           {
             storageKey: String(importFile.storageKey ?? ""),
@@ -68,16 +73,19 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         return NextResponse.json({ error: "Missing uploaded file." }, { status: 400 });
       }
     } else {
+      stage = "loading import record";
       if (!importFile) {
         return NextResponse.json({ error: "Import not found" }, { status: 404 });
       }
 
       await assertWorkspaceAccess(userId, importFile.workspaceId as string);
+      stage = "reading json body";
       const body = await _request.json().catch(() => ({}));
       text = typeof body?.text === "string" ? body.text : "";
       password = typeof body?.password === "string" ? body.password : undefined;
 
       if (!text) {
+        stage = "reading stored file";
         const storageKey = String(importFile.storageKey ?? "");
 
         if (!storageKey) {
@@ -95,11 +103,14 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
     }
 
+    stage = "updating import status";
     await updateImportFileCompat(importId, {
       status: "processing",
     });
 
+    stage = "processing statement text";
     const result = await processImportFileText(importId, text);
+    stage = "detecting metadata";
     const metadata = detectStatementMetadataFromText(text);
 
     return NextResponse.json({
@@ -112,6 +123,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       importFileId: importId,
     });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to process import" }, { status: 400 });
+    console.error("Import processing failed", { stage, error });
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Unable to process import",
+        stage,
+      },
+      { status: 400 }
+    );
   }
 }
