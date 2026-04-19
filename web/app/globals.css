@@ -6875,13 +6875,14 @@ input.transaction-inline-edit--amount::placeholder {
   left: 18px;
   top: 18px;
   display: grid;
-  gap: 10px;
-  width: min(240px, calc(100% - 36px));
-  padding: 14px 16px;
-  border-radius: 24px;
+  gap: 8px;
+  width: fit-content;
+  max-width: calc(100% - 36px);
+  padding: 10px 12px;
+  border-radius: 20px;
   background: rgba(247, 249, 250, 0.78);
   border: 1px solid rgba(15, 23, 42, 0.06);
-  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   z-index: 1;
@@ -6892,7 +6893,7 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
 }
 
 .landing-photo__chips span {
