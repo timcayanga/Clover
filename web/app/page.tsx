@@ -44,14 +44,13 @@ function StepIcon({ name }: { name: "upload" | "insights" | "decision" }) {
 
 function HeroImage() {
   return (
-    <figure className="landing-photo landing-photo--hero" aria-hidden="true">
-      <img src="/landing-images/hero.jpg" alt="" />
-      <div className="landing-photo__overlay">
-        <span className="landing-photo__eyebrow">In one place</span>
-        <div className="landing-photo__chips" aria-hidden="true">
-          <span>Upload PDFs</span>
-          <span>Review reports</span>
-          <span>AI insights</span>
+      <figure className="landing-photo landing-photo--hero" aria-hidden="true">
+        <img src="/landing-images/hero.jpg" alt="" />
+        <div className="landing-photo__overlay">
+          <div className="landing-photo__chips" aria-hidden="true">
+            <span>Upload PDFs</span>
+            <span>Review reports</span>
+            <span>AI insights</span>
         </div>
       </div>
       <figcaption className="landing-photo__badge">Clear, confident, and in control</figcaption>
