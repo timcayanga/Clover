@@ -49,8 +49,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         await assertWorkspaceAccess(userId, importFile.workspaceId as string);
       }
 
-      if (uploadedFile instanceof File) {
-        text = await readUploadedFileText(uploadedFile, password);
+      if (
+        uploadedFile &&
+        typeof uploadedFile === "object" &&
+        typeof (uploadedFile as { arrayBuffer?: unknown }).arrayBuffer === "function"
+      ) {
+        text = await readUploadedFileText(uploadedFile as File, password);
       } else if (importFile.storageKey) {
         text = await readImportedFileText(
           {

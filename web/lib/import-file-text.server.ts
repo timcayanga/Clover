@@ -40,6 +40,13 @@ const decodeBody = async (body: unknown) => {
   throw new Error("Unable to read imported file.");
 };
 
+type ImportFileLike = {
+  name?: string;
+  type?: string;
+  arrayBuffer?: () => Promise<ArrayBuffer>;
+  text?: () => Promise<string>;
+};
+
 export const downloadImportObject = async (storageKey: string) => {
   const env = getEnv();
   if (!env.R2_BUCKET_NAME) {
@@ -89,14 +96,27 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string) => {
   return pages.join("\n");
 };
 
-export const readUploadedFileText = async (file: File, password?: string) => {
-  const lowerName = file.name.toLowerCase();
+export const readUploadedFileText = async (file: File | ImportFileLike, password?: string) => {
+  const lowerName = String(file.name ?? "").toLowerCase();
+  const lowerType = String(file.type ?? "").toLowerCase();
 
-  if (lowerName.endsWith(".csv") || lowerName.endsWith(".tsv") || lowerName.endsWith(".txt")) {
-    return file.text();
+  if (lowerName.endsWith(".csv") || lowerName.endsWith(".tsv") || lowerName.endsWith(".txt") || lowerType.includes("text/")) {
+    if (typeof file.text === "function") {
+      return file.text();
+    }
+
+    if (typeof file.arrayBuffer === "function") {
+      return new TextDecoder().decode(new Uint8Array(await file.arrayBuffer()));
+    }
+
+    throw new Error("Unable to read imported file.");
   }
 
-  if (lowerName.endsWith(".pdf") || file.type === "application/pdf") {
+  if (lowerName.endsWith(".pdf") || lowerType === "application/pdf") {
+    if (typeof file.arrayBuffer !== "function") {
+      throw new Error("Unable to read imported file.");
+    }
+
     const data = new Uint8Array(await file.arrayBuffer());
     return extractTextFromPdfBytes(data, password);
   }
