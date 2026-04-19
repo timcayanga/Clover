@@ -2266,7 +2266,7 @@ label {
 }
 
 .insights-snapshot {
-  padding: 20px;
+  padding: 24px;
   border: 1px solid var(--stroke);
   background:
     radial-gradient(circle at top left, rgba(3, 168, 192, 0.16), transparent 34%),
@@ -2276,6 +2276,10 @@ label {
   grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
   gap: 14px;
   align-items: stretch;
+}
+
+.insights-snapshot--hero {
+  min-height: min(72vh, 760px);
 }
 
 .insights-snapshot__copy {
@@ -2295,7 +2299,7 @@ label {
 .insights-snapshot__copy h3 {
   margin: 0;
   max-width: 16ch;
-  font-size: clamp(2.1rem, 4vw, 3.3rem);
+  font-size: clamp(2.35rem, 5vw, 4rem);
   line-height: 1.02;
   letter-spacing: -0.05em;
 }
@@ -2324,11 +2328,12 @@ label {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+  align-self: stretch;
 }
 
 .insights-snapshot__metric {
-  padding: 14px 15px;
-  border-radius: 18px;
+  padding: 16px 16px 15px;
+  border-radius: 20px;
   border: 1px solid rgba(15, 23, 42, 0.06);
   background: rgba(255, 255, 255, 0.72);
   display: grid;
@@ -2344,10 +2349,18 @@ label {
 }
 
 .insights-snapshot__metric strong {
-  font-size: 24px;
+  font-size: 26px;
   line-height: 1.05;
   letter-spacing: -0.04em;
   overflow-wrap: anywhere;
+}
+
+.insights-snapshot__metric strong.positive {
+  color: var(--good);
+}
+
+.insights-snapshot__metric strong.negative {
+  color: var(--bad);
 }
 
 .insights-snapshot__metric small {
@@ -6110,6 +6123,7 @@ input.transaction-inline-edit--amount::placeholder {
 
   .insights-snapshot {
     grid-template-columns: 1fr;
+    min-height: auto;
   }
 
   .insights-snapshot__copy h3 {
