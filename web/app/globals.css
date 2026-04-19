@@ -4426,6 +4426,12 @@ input.transaction-inline-edit--amount::placeholder {
   z-index: 80;
 }
 
+.modal-backdrop--soft {
+  background: rgba(9, 15, 20, 0.1);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 .modal-card {
   width: min(920px, 100%);
   border-radius: 28px;

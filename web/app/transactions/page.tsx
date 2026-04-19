@@ -2665,7 +2665,7 @@ function TransactionsPageContent() {
       ) : null}
 
       {filterOpen ? (
-        <div className="modal-backdrop" role="presentation" onClick={() => setFilterOpen(false)}>
+        <div className="modal-backdrop modal-backdrop--soft" role="presentation" onClick={() => setFilterOpen(false)}>
           <section
             className="modal-card modal-card--wide glass"
             role="dialog"
