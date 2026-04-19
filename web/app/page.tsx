@@ -54,7 +54,7 @@ function HeroImage() {
           <span>AI insights</span>
         </div>
       </div>
-      <figcaption className="landing-photo__badge">Calm, clear, and confident</figcaption>
+      <figcaption className="landing-photo__badge">Clear, confident, and in control</figcaption>
     </figure>
   );
 }
@@ -103,7 +103,7 @@ export default function HomePage() {
 
       <ScrollReveal as="section" className="landing-hero">
         <div className="landing-hero__copy">
-          <span className="pill pill-accent">Money clarity, made calm</span>
+          <span className="pill pill-accent">Money clarity, made simple</span>
           <h1>A smarter way to see your money.</h1>
           <p className="landing-hero__lede">
             Clover helps people upload statements, understand their finances, and discover meaningful insights through reports and AI.
@@ -127,7 +127,7 @@ export default function HomePage() {
       <ScrollReveal as="section" className="landing-gallery-section">
         <div className="landing-gallery__copy">
           <p className="eyebrow">Visual overview</p>
-          <h2>See statements, spending, and sources in one calm place.</h2>
+          <h2>See statements, spending, and sources in one place.</h2>
           <p>
             Clover makes the financial picture easier to read with a visual-first layout built for clarity, confidence, and faster decisions.
           </p>
@@ -172,7 +172,7 @@ export default function HomePage() {
 
       <ScrollReveal as="section" className="landing-trust">
         <p className="landing-trust__quote">
-          A calmer way to understand your finances, all in one place.
+          A clearer way to understand your finances, all in one place.
         </p>
         <p className="landing-trust__note">
           Clover keeps the experience friendly, professional, and trustworthy from the first upload to the last insight.
@@ -184,7 +184,7 @@ export default function HomePage() {
           <p className="eyebrow">Ready when you are</p>
           <h2>Keep your finances in view, whenever you need them.</h2>
           <p>
-            Clover stays with you as a calm place to upload statements, review insights, and return to your money with more confidence.
+            Clover stays with you as a clear place to upload statements, review insights, and return to your money with more confidence.
           </p>
         </div>
         <div className="landing-cta__actions">
