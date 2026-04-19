@@ -204,16 +204,6 @@ export function CloverShell({
           <Link className="sidebar-brand-link" href="/dashboard" aria-label="Go to dashboard">
             <img className="brand-mark brand-mark--sidebar" src="/favicon.svg" alt="" aria-hidden="true" />
           </Link>
-          <button
-            className="sidebar-brand-toggle"
-            type="button"
-            aria-label={isSidebarOpen ? "Close navigation" : "Open navigation"}
-            aria-expanded={isSidebarOpen}
-            aria-controls="primary-navigation"
-            onClick={() => setIsSidebarOpen((current) => !current)}
-          >
-            <img className="sidebar-brand-toggle__mark" src="/favicon.svg" alt="" aria-hidden="true" />
-          </button>
         </div>
 
         <label className="sidebar-search" htmlFor="sidebar-search">

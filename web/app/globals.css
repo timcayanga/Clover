@@ -522,22 +522,6 @@ label {
   justify-content: center;
 }
 
-.sidebar-brand-toggle {
-  display: none;
-  appearance: none;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: inherit;
-}
-
-.sidebar-brand-toggle__mark {
-  display: block;
-  width: 52px;
-  height: 52px;
-  object-fit: contain;
-}
-
 .sidebar-brand-actions {
   display: inline-flex;
   align-items: center;
@@ -6273,6 +6257,10 @@ input.transaction-inline-edit--amount::placeholder {
     visibility: hidden;
   }
 
+  .sidebar-brand {
+    display: none;
+  }
+
   .app-shell.is-sidebar-open .sidebar {
     transform: translateX(0);
     visibility: visible;
@@ -6291,15 +6279,8 @@ input.transaction-inline-edit--amount::placeholder {
     opacity: 0;
   }
 
-  .sidebar-brand {
-    grid-template-columns: 1fr auto;
-    align-items: center;
-  }
-
-  .sidebar-brand-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+  .sidebar-brand-link {
+    display: none;
   }
 
   .content {
@@ -6310,8 +6291,19 @@ input.transaction-inline-edit--amount::placeholder {
   .content-mobile-bar {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
-    padding: 2px 0 0;
+    justify-content: center;
+    position: fixed;
+    top: 18px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 95;
+    pointer-events: none;
+    width: 100%;
+    padding: 0;
+  }
+
+  .content-mobile-bar__toggle {
+    pointer-events: auto;
   }
 
   .transactions-topbar {
