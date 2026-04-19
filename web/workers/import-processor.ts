@@ -45,9 +45,11 @@ export const processImportFileText = async (importFileId: string, text: string) 
     rows: parsedRows,
   });
 
-  await prisma.parsedTransaction.deleteMany({
-    where: { importFileId },
-  });
+  if (await hasCompatibleTable("ParsedTransaction")) {
+    await prisma.parsedTransaction.deleteMany({
+      where: { importFileId },
+    });
+  }
 
   const parsedTransactionData = await buildParsedTransactionInsertData({
     importFileId,
