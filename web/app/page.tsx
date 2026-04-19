@@ -1,6 +1,47 @@
 import { ScrollReveal } from "../components/scroll-reveal";
 import Link from "next/link";
 
+function StepIcon({ name }: { name: "upload" | "insights" | "decision" }) {
+  const common = {
+    width: 24,
+    height: 24,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  switch (name) {
+    case "upload":
+      return (
+        <svg {...common}>
+          <path d="M12 16V5" />
+          <path d="m8 9 4-4 4 4" />
+          <path d="M5 19h14" />
+        </svg>
+      );
+    case "insights":
+      return (
+        <svg {...common}>
+          <path d="M5 19V9" />
+          <path d="M10 19V5" />
+          <path d="M15 19v-7" />
+          <path d="M20 19V7" />
+        </svg>
+      );
+    case "decision":
+      return (
+        <svg {...common}>
+          <path d="m6 13 4 4 8-8" />
+          <path d="M12 3a9 9 0 1 0 9 9" />
+        </svg>
+      );
+  }
+}
+
 function HeroImage() {
   return (
     <figure className="landing-photo landing-photo--hero" aria-hidden="true">
@@ -103,16 +144,25 @@ export default function HomePage() {
 
         <div className="landing-flow__steps" aria-label="How Clover works">
           <div className="landing-flow__step">
+            <span className="landing-flow__icon">
+              <StepIcon name="upload" />
+            </span>
             <span className="landing-flow__number">01</span>
             <h3>Upload statements</h3>
             <p>Bring in statement files so Clover can start building your financial overview.</p>
           </div>
           <div className="landing-flow__step">
+            <span className="landing-flow__icon">
+              <StepIcon name="insights" />
+            </span>
             <span className="landing-flow__number">02</span>
             <h3>Review insights</h3>
             <p>See reports, categories, and patterns that turn raw transactions into something useful.</p>
           </div>
           <div className="landing-flow__step">
+            <span className="landing-flow__icon">
+              <StepIcon name="decision" />
+            </span>
             <span className="landing-flow__number">03</span>
             <h3>Make better decisions</h3>
             <p>Use the clearer view and AI-guided insights to understand what matters most.</p>

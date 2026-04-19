@@ -6965,6 +6965,23 @@ input.transaction-inline-edit--amount::placeholder {
   text-transform: uppercase;
 }
 
+.landing-flow__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--teal-700);
+  background: rgba(3, 168, 192, 0.08);
+  border: 1px solid rgba(3, 168, 192, 0.14);
+}
+
+.landing-flow__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
 .landing-flow__step h3 {
   font-size: 22px;
   line-height: 1.08;
@@ -7061,6 +7078,12 @@ input.transaction-inline-edit--amount::placeholder {
     grid-template-columns: 1fr;
   }
 
+  .landing-flow__icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+  }
+
   .landing-cta__actions {
     justify-content: center;
   }
@@ -7105,6 +7128,11 @@ input.transaction-inline-edit--amount::placeholder {
 
   .landing-flow__step {
     padding-top: 14px;
+  }
+
+  .landing-flow__icon {
+    width: 42px;
+    height: 42px;
   }
 
   .landing-cta {
