@@ -7015,6 +7015,10 @@ input.transaction-inline-edit--amount::placeholder {
   justify-items: center;
   gap: 18px;
   text-align: center;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
 }
 
 .landing-cta__copy {
