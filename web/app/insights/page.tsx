@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
-import { getSessionContext } from "@/lib/auth";
+import { getSessionContext, isStagingHost } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const dynamic = "force-dynamic";
@@ -78,6 +78,295 @@ const getMonthBuckets = (anchor: Date) => {
   return buckets;
 };
 
+const createStagingInsightsSampleData = (anchor: Date) => {
+  const sampleAccount = { name: "Imported transactions" };
+  const cashAccount = { name: "Cash on hand" };
+
+  const makeDate = (daysAgo: number) => {
+    const date = new Date(anchor);
+    date.setDate(date.getDate() - daysAgo);
+    return date;
+  };
+
+  const currentWindowTransactions: InsightTransaction[] = [
+    {
+      id: "sample-current-income",
+      date: makeDate(2),
+      amount: 45000,
+      type: "income",
+      merchantRaw: "ACME Payroll",
+      merchantClean: "Salary",
+      account: sampleAccount,
+      category: { name: "Income" },
+    },
+    {
+      id: "sample-current-rent",
+      date: makeDate(6),
+      amount: -12000,
+      type: "expense",
+      merchantRaw: "Manila Home Rentals",
+      merchantClean: "Rent",
+      account: sampleAccount,
+      category: { name: "Housing" },
+    },
+    {
+      id: "sample-current-groceries",
+      date: makeDate(8),
+      amount: -2640,
+      type: "expense",
+      merchantRaw: "Green Basket Market",
+      merchantClean: "Groceries",
+      account: sampleAccount,
+      category: { name: "Groceries" },
+    },
+    {
+      id: "sample-current-transit",
+      date: makeDate(9),
+      amount: -1880,
+      type: "expense",
+      merchantRaw: "Ride Share",
+      merchantClean: "Transport",
+      account: sampleAccount,
+      category: { name: "Transport" },
+    },
+    {
+      id: "sample-current-internet",
+      date: makeDate(11),
+      amount: -1799,
+      type: "expense",
+      merchantRaw: "FiberNet Internet",
+      merchantClean: "Internet bill",
+      account: sampleAccount,
+      category: { name: "Bills & Utilities" },
+    },
+    {
+      id: "sample-current-coffee",
+      date: makeDate(1),
+      amount: -185,
+      type: "expense",
+      merchantRaw: "Luna Coffee Bar",
+      merchantClean: "Coffee",
+      account: sampleAccount,
+      category: { name: "Food & Dining" },
+    },
+    {
+      id: "sample-current-pharmacy",
+      date: makeDate(12),
+      amount: -640,
+      type: "expense",
+      merchantRaw: "Blue Ridge Pharmacy",
+      merchantClean: "Pharmacy",
+      account: sampleAccount,
+      category: { name: "Health & Wellness" },
+    },
+    {
+      id: "sample-current-transfer",
+      date: makeDate(13),
+      amount: -5000,
+      type: "transfer",
+      merchantRaw: "Atlas Savings Transfer",
+      merchantClean: "Transfer to savings",
+      account: cashAccount,
+      category: { name: "Transfers" },
+    },
+  ];
+
+  const previousWindowTransactions: InsightTransaction[] = [
+    {
+      id: "sample-previous-income",
+      date: makeDate(38),
+      amount: 40250,
+      type: "income",
+      merchantRaw: "ACME Payroll",
+      merchantClean: "Salary",
+      account: sampleAccount,
+      category: { name: "Income" },
+    },
+    {
+      id: "sample-previous-rent",
+      date: makeDate(45),
+      amount: -12000,
+      type: "expense",
+      merchantRaw: "Manila Home Rentals",
+      merchantClean: "Rent",
+      account: sampleAccount,
+      category: { name: "Housing" },
+    },
+    {
+      id: "sample-previous-groceries",
+      date: makeDate(42),
+      amount: -2100,
+      type: "expense",
+      merchantRaw: "Green Basket Market",
+      merchantClean: "Groceries",
+      account: sampleAccount,
+      category: { name: "Groceries" },
+    },
+    {
+      id: "sample-previous-transit",
+      date: makeDate(41),
+      amount: -980,
+      type: "expense",
+      merchantRaw: "Ride Share",
+      merchantClean: "Transport",
+      account: sampleAccount,
+      category: { name: "Transport" },
+    },
+    {
+      id: "sample-previous-coffee",
+      date: makeDate(44),
+      amount: -260,
+      type: "expense",
+      merchantRaw: "Luna Coffee Bar",
+      merchantClean: "Coffee",
+      account: sampleAccount,
+      category: { name: "Food & Dining" },
+    },
+    {
+      id: "sample-previous-phone",
+      date: makeDate(47),
+      amount: -740,
+      type: "expense",
+      merchantRaw: "Telco Mobile",
+      merchantClean: "Phone bill",
+      account: sampleAccount,
+      category: { name: "Bills & Utilities" },
+    },
+    {
+      id: "sample-previous-streaming",
+      date: makeDate(52),
+      amount: -490,
+      type: "expense",
+      merchantRaw: "StreamNow",
+      merchantClean: "Streaming",
+      account: sampleAccount,
+      category: { name: "Subscriptions" },
+    },
+  ];
+
+  const ninetyDayTransactions: InsightTransaction[] = [
+    ...currentWindowTransactions,
+    ...previousWindowTransactions,
+    {
+      id: "sample-90d-gym-1",
+      date: makeDate(18),
+      amount: -1590,
+      type: "expense",
+      merchantRaw: "Pulse Gym",
+      merchantClean: "Gym",
+      account: sampleAccount,
+      category: { name: "Health & Wellness" },
+    },
+    {
+      id: "sample-90d-gym-2",
+      date: makeDate(47),
+      amount: -1590,
+      type: "expense",
+      merchantRaw: "Pulse Gym",
+      merchantClean: "Gym",
+      account: sampleAccount,
+      category: { name: "Health & Wellness" },
+    },
+    {
+      id: "sample-90d-streaming-2",
+      date: makeDate(68),
+      amount: -490,
+      type: "expense",
+      merchantRaw: "StreamNow",
+      merchantClean: "Streaming",
+      account: sampleAccount,
+      category: { name: "Subscriptions" },
+    },
+  ];
+
+  const sixMonthTransactions: InsightTransaction[] = [
+    {
+      id: "sample-6m-1",
+      date: new Date(anchor.getFullYear(), anchor.getMonth() - 5, 12),
+      amount: 38000,
+      type: "income",
+      merchantRaw: "ACME Payroll",
+      merchantClean: "Salary",
+      account: sampleAccount,
+      category: { name: "Income" },
+    },
+    {
+      id: "sample-6m-2",
+      date: new Date(anchor.getFullYear(), anchor.getMonth() - 4, 12),
+      amount: 40250,
+      type: "income",
+      merchantRaw: "ACME Payroll",
+      merchantClean: "Salary",
+      account: sampleAccount,
+      category: { name: "Income" },
+    },
+    {
+      id: "sample-6m-3",
+      date: new Date(anchor.getFullYear(), anchor.getMonth() - 3, 12),
+      amount: 41750,
+      type: "income",
+      merchantRaw: "ACME Payroll",
+      merchantClean: "Salary",
+      account: sampleAccount,
+      category: { name: "Income" },
+    },
+    {
+      id: "sample-6m-4",
+      date: new Date(anchor.getFullYear(), anchor.getMonth() - 2, 12),
+      amount: 45000,
+      type: "income",
+      merchantRaw: "ACME Payroll",
+      merchantClean: "Salary",
+      account: sampleAccount,
+      category: { name: "Income" },
+    },
+    {
+      id: "sample-6m-5",
+      date: new Date(anchor.getFullYear(), anchor.getMonth() - 1, 12),
+      amount: 45000,
+      type: "income",
+      merchantRaw: "ACME Payroll",
+      merchantClean: "Salary",
+      account: sampleAccount,
+      category: { name: "Income" },
+    },
+    {
+      id: "sample-6m-6",
+      date: new Date(anchor.getFullYear(), anchor.getMonth(), 12),
+      amount: 45000,
+      type: "income",
+      merchantRaw: "ACME Payroll",
+      merchantClean: "Salary",
+      account: sampleAccount,
+      category: { name: "Income" },
+    },
+    {
+      id: "sample-6m-expense",
+      date: new Date(anchor.getFullYear(), anchor.getMonth(), 13),
+      amount: -3266,
+      type: "expense",
+      merchantRaw: "Living expenses",
+      merchantClean: "Core spending",
+      account: sampleAccount,
+      category: { name: "Food & Dining" },
+    },
+  ];
+
+  return {
+    accounts: [
+      { name: "BPI Checking", balance: 23000 },
+      { name: "Union Savings", balance: 18734 },
+      { name: "GCash Wallet", balance: null },
+    ],
+    importFiles: [{ status: "done" as const }, { status: "done" as const }, { status: "failed" as const }],
+    currentWindowTransactions,
+    previousWindowTransactions,
+    ninetyDayTransactions,
+    sixMonthTransactions,
+    selectedGoal: "save_more",
+  };
+};
+
 export default async function InsightsPage() {
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
@@ -115,6 +404,7 @@ export default async function InsightsPage() {
     redirect("/dashboard");
   }
 
+  const stagingHost = await isStagingHost();
   const now = new Date();
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -237,8 +527,13 @@ export default async function InsightsPage() {
     }),
   ]);
 
-  const currentWindowTransactions = currentWindowTransactionsRaw as InsightTransaction[];
-  const previousWindowTransactions = previousWindowTransactionsRaw as InsightTransaction[];
+  const stagingDemoData = stagingHost && currentWindowTransactionsRaw.length === 0 ? createStagingInsightsSampleData(now) : null;
+  const currentWindowTransactions = (stagingDemoData?.currentWindowTransactions ?? currentWindowTransactionsRaw) as InsightTransaction[];
+  const previousWindowTransactions = (stagingDemoData?.previousWindowTransactions ?? previousWindowTransactionsRaw) as InsightTransaction[];
+  const ninetyDayInsightTransactions = (stagingDemoData?.ninetyDayTransactions ?? ninetyDayTransactions) as InsightTransaction[];
+  const sixMonthInsightTransactions = (stagingDemoData?.sixMonthTransactions ?? sixMonthTransactions) as InsightTransaction[];
+  const workspaceAccounts = stagingDemoData?.accounts ?? selectedWorkspace.accounts;
+  const importFiles = stagingDemoData?.importFiles ?? selectedWorkspace.importFiles;
 
   const currentSummary = currentWindowTransactions.reduce(
     (accumulator, transaction) => {
@@ -295,7 +590,7 @@ export default async function InsightsPage() {
   );
 
   const monthBuckets = getMonthBuckets(now);
-  sixMonthTransactions.forEach((transaction) => {
+  sixMonthInsightTransactions.forEach((transaction) => {
     const bucket = monthBuckets.find((entry) => entry.key === toIsoMonth(transaction.date));
     if (!bucket) {
       return;
@@ -310,10 +605,10 @@ export default async function InsightsPage() {
     bucket.net = bucket.income - bucket.expense;
   });
 
-  const totalAccountBalance = selectedWorkspace.accounts
+  const totalAccountBalance = workspaceAccounts
     .filter((account) => account.balance !== null)
     .reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
-  const activeAccountCount = selectedWorkspace.accounts.filter((account) => account.balance !== null).length;
+  const activeAccountCount = workspaceAccounts.filter((account) => account.balance !== null).length;
 
   const uncategorizedTransactions = currentWindowTransactions.filter(
     (transaction) => !transaction.category?.name || !transaction.merchantClean
@@ -340,7 +635,6 @@ export default async function InsightsPage() {
     .sort((a, b) => b.length - a.length)
     .slice(0, 3);
 
-  const importFiles = selectedWorkspace.importFiles;
   const importStatusCounts = importFiles.reduce(
     (counts, file) => {
       counts[file.status] += 1;
@@ -384,7 +678,7 @@ export default async function InsightsPage() {
     }
   >();
 
-  ninetyDayTransactions.forEach((transaction) => {
+  ninetyDayInsightTransactions.forEach((transaction) => {
     if (transaction.type !== "expense") {
       return;
     }
@@ -430,7 +724,7 @@ export default async function InsightsPage() {
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
     .slice(0, 4);
 
-  const selectedGoal = user.primaryGoal?.trim() ?? null;
+  const selectedGoal = stagingDemoData?.selectedGoal ?? user.primaryGoal?.trim() ?? null;
   const goalLabel = selectedGoal ? goalLabels[selectedGoal] ?? selectedGoal : null;
 
   const confidenceScore = Math.max(
@@ -439,7 +733,7 @@ export default async function InsightsPage() {
       99,
       52 +
         currentWindowTransactions.length * 0.2 +
-        ninetyDayTransactions.length * 0.1 +
+        ninetyDayInsightTransactions.length * 0.1 +
         (importStatusCounts.done > 0 ? 8 : 0) -
         importStatusCounts.failed * 6 -
         (uncategorizedTransactions.length + possibleDuplicateGroups.length) * 1.5
@@ -541,6 +835,7 @@ export default async function InsightsPage() {
         <article className="insights-hero__summary glass">
           <div className="insights-hero__header">
             <span className="pill pill-accent">AI insights</span>
+            {stagingDemoData ? <span className="pill pill-subtle">Sample staging data</span> : null}
           </div>
           <h3>{aiHeadline}</h3>
           <p>{aiSummary}</p>
