@@ -1,7 +1,8 @@
 import { requireAuth } from "@/lib/auth";
 import { buildImportKey } from "@/lib/import-keys";
 import { createUploadUrl } from "@/lib/s3";
-import { insertImportFileCompat, listImportFilesCompat } from "@/lib/data-engine";
+import { listImportFilesCompat } from "@/lib/data-engine";
+import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -40,12 +41,14 @@ export async function POST(request: Request) {
     const storageKey = buildImportKey(payload.workspaceId, payload.fileName);
     const upload = payload.skipUpload ? null : await createUploadUrl(storageKey, payload.contentType);
 
-    const importFile = await insertImportFileCompat({
-      workspaceId: payload.workspaceId,
-      fileName: payload.fileName,
-      fileType: payload.fileType,
-      storageKey,
-      status: "processing",
+    const importFile = await prisma.importFile.create({
+      data: {
+        workspaceId: payload.workspaceId,
+        fileName: payload.fileName,
+        fileType: payload.fileType,
+        storageKey,
+        status: "processing",
+      },
     });
 
     return NextResponse.json({

@@ -109,6 +109,19 @@ const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string) => {
+  let timeoutId: number | null = null;
+  try {
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    });
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
+  }
+};
 const uploadFileWithProgress = (url: string, file: File, onProgress: (loaded: number, total: number) => void) =>
   new Promise<void>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -376,17 +389,21 @@ export function ImportFilesModal({
     updateItem(itemId, { status: "importing", error: null, progress: 8, progressLabel: "Creating import record" });
 
     try {
-      const prepareResponse = await fetch("/api/imports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspaceId,
-          fileName: item.file.name,
-          fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
-          contentType: item.file.type || "application/octet-stream",
-          skipUpload: false,
+      const prepareResponse = await withTimeout(
+        fetch("/api/imports", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId,
+            fileName: item.file.name,
+            fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
+            contentType: item.file.type || "application/octet-stream",
+            skipUpload: false,
+          }),
         }),
-      });
+        15000,
+        "Preparing the upload is taking longer than expected. Please try again."
+      );
 
       if (!prepareResponse.ok) {
         throw new Error("Unable to prepare this import.");

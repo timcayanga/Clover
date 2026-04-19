@@ -133,6 +133,19 @@ const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string) => {
+  let timeoutId: number | null = null;
+  try {
+    const timeout = new Promise<never>((_, reject) => {
+      timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    });
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
+  }
+};
 
 const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
 
@@ -503,19 +516,23 @@ function ImportsPageContent() {
       });
       setProgressState((current) =>
         current
-          ? { ...current, progress: 10, detail: "Creating the import record...", statusLabel: "Uploading" }
+          ? { ...current, progress: 10, detail: "Connecting to import service...", statusLabel: "Uploading" }
           : current
       );
-      const prepResponse = await fetch("/api/imports", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspaceId: selectedWorkspaceId,
-          fileName: file.name,
-          fileType: file.type || file.name.split(".").pop() || "unknown",
-          contentType: file.type || "application/octet-stream",
+      const prepResponse = await withTimeout(
+        fetch("/api/imports", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: selectedWorkspaceId,
+            fileName: file.name,
+            fileType: file.type || file.name.split(".").pop() || "unknown",
+            contentType: file.type || "application/octet-stream",
+          }),
         }),
-      });
+        15000,
+        "Preparing the upload is taking longer than expected. Please try again."
+      );
 
       if (!prepResponse.ok) {
         throw new Error("Could not prepare upload");
