@@ -170,15 +170,6 @@ export default function HomePage() {
         </div>
       </ScrollReveal>
 
-      <ScrollReveal as="section" className="landing-trust">
-        <p className="landing-trust__quote">
-          A clearer way to understand your finances, all in one place.
-        </p>
-        <p className="landing-trust__note">
-          Clover keeps the experience friendly, professional, and trustworthy from the first upload to the last insight.
-        </p>
-      </ScrollReveal>
-
       <ScrollReveal as="section" className="landing-cta">
         <div className="landing-cta__inner">
           <div className="landing-cta__copy">

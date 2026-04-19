@@ -7006,27 +7006,6 @@ input.transaction-inline-edit--amount::placeholder {
   max-width: 26ch;
 }
 
-.landing-trust {
-  display: grid;
-  gap: 8px;
-  padding: 10px 0 20px;
-  border-top: 1px solid rgba(15, 23, 42, 0.06);
-}
-
-.landing-trust__quote {
-  max-width: 22ch;
-  color: var(--text);
-  font-size: clamp(1.6rem, 3vw, 2.2rem);
-  line-height: 1.15;
-  letter-spacing: -0.05em;
-}
-
-.landing-trust__note {
-  max-width: 50ch;
-  color: var(--muted);
-  line-height: 1.7;
-}
-
 .landing-cta {
   margin-top: 24px;
   padding: 24px 0 8px;
