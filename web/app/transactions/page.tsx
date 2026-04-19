@@ -953,6 +953,7 @@ function TransactionsPageContent() {
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
+  const transactionRowRefs = useRef(new Map<string, HTMLDivElement>());
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
@@ -1383,12 +1384,45 @@ function TransactionsPageContent() {
     return null;
   };
 
+  const isReviewableTransaction = (transaction: Transaction) => {
+    if (transaction.isExcluded) {
+      return false;
+    }
+
+    if (!transaction.categoryId) {
+      return true;
+    }
+
+    const signature = [
+      transaction.date.slice(0, 10),
+      Number(transaction.amount).toFixed(2),
+      (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase(),
+    ].join("|");
+
+    return (duplicateLookup.get(signature) ?? 0) > 1;
+  };
+
+  const firstReviewTransaction = useMemo(
+    () => filteredTransactions.find((transaction) => isReviewableTransaction(transaction)) ?? null,
+    [filteredTransactions, duplicateLookup]
+  );
+
   const openTransactionDetail = (transaction: Transaction) => {
     setSelectedTransaction(transaction);
     setDetailDraft({
       ...createDetailDraft(transaction),
       categoryId: transaction.categoryId ?? otherCategoryId,
     });
+  };
+
+  const openTransactionReview = (transaction: Transaction) => {
+    openTransactionDetail(transaction);
+    const row = transactionRowRefs.current.get(transaction.id);
+    if (row) {
+      window.requestAnimationFrame(() => {
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    }
   };
 
   const closeTransactionDetail = () => {
@@ -2342,6 +2376,14 @@ function TransactionsPageContent() {
                 return (
                   <div
                     key={transaction.id}
+                    ref={(node) => {
+                      if (node) {
+                        transactionRowRefs.current.set(transaction.id, node);
+                        return;
+                      }
+
+                      transactionRowRefs.current.delete(transaction.id);
+                    }}
                     className={`line-item ${transaction.isExcluded ? "is-muted" : ""} ${
                       selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
                     }`}
@@ -2472,6 +2514,16 @@ function TransactionsPageContent() {
                   type="button"
                   className="warning-summary-button"
                   title={`${totals.review} transaction${totals.review === 1 ? "" : "s"} still need review`}
+                  onClick={() => {
+                    if (firstReviewTransaction) {
+                      openTransactionReview(firstReviewTransaction);
+                    }
+                  }}
+                  aria-label={
+                    firstReviewTransaction
+                      ? `Open the first transaction needing review: ${firstReviewTransaction.merchantRaw}`
+                      : "Open transactions needing review"
+                  }
                 >
                   <span className="warning-mark warning-mark--small" aria-hidden="true" />
                 </button>
