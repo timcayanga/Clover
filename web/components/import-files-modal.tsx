@@ -268,6 +268,27 @@ export function ImportFilesModal({
     }
   };
 
+  const preflightPasswordProtectedFiles = async () => {
+    let foundPasswordProtected = false;
+
+    const pendingItems = items.filter((item) => item.status === "pending");
+    for (const item of pendingItems) {
+      if (await isLikelyPasswordProtectedPdf(item.file)) {
+        foundPasswordProtected = true;
+        updateItem(item.id, {
+          status: "needs_password",
+          error: `${item.file.name} is password-protected. Enter the password to continue.`,
+          password: "",
+          passwordVisible: false,
+          progress: 0,
+          progressLabel: "Password needed",
+        });
+      }
+    }
+
+    return foundPasswordProtected;
+  };
+
   const ensureTargetAccountId = async (statementAccountName?: string | null, institution?: string | null) => {
     if (statementAccountName) {
       const key = accountKey(statementAccountName, institution ?? null);
@@ -439,9 +460,23 @@ export function ImportFilesModal({
     let blockedCount = 0;
     let stagedCount = 0;
 
+    const pendingPasswordFiles = items.some((item) => item.status === "needs_password");
+    if (!pendingPasswordFiles) {
+      const foundPasswordProtected = await preflightPasswordProtectedFiles();
+      if (foundPasswordProtected) {
+        setMessage("Enter passwords for the locked files to continue importing.");
+        setBusy(false);
+        return;
+      }
+    }
+
     for (const item of items) {
       if (item.confirmationState === "confirmed") {
         continue;
+      }
+
+      if (items.some((queued) => queued.status === "needs_password")) {
+        break;
       }
 
       const result = await processFile(item.id);
@@ -514,6 +549,10 @@ export function ImportFilesModal({
 
   useEffect(() => {
     if (!open || busy || !workspaceId || !autoStartRef.current) {
+      return;
+    }
+
+    if (items.some((item) => item.status === "needs_password")) {
       return;
     }
 
