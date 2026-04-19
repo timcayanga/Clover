@@ -44,13 +44,13 @@ function StepIcon({ name }: { name: "upload" | "insights" | "decision" }) {
 
 function HeroImage() {
   return (
-      <figure className="landing-photo landing-photo--hero" aria-hidden="true">
-        <img src="/landing-images/hero.jpg" alt="" />
-        <div className="landing-photo__overlay">
-          <div className="landing-photo__chips" aria-hidden="true">
-            <span>Upload PDFs</span>
-            <span>Review reports</span>
-            <span>AI insights</span>
+    <figure className="landing-photo landing-photo--hero" aria-hidden="true">
+      <img src="/landing-images/hero.jpg" alt="" />
+      <div className="landing-photo__overlay">
+        <div className="landing-photo__chips" aria-hidden="true">
+          <span>Upload PDFs</span>
+          <span>Review reports</span>
+          <span>AI insights</span>
         </div>
       </div>
       <figcaption className="landing-photo__badge">Clear, confident, and in control</figcaption>
@@ -105,7 +105,7 @@ export default function HomePage() {
           <span className="pill pill-accent">Money clarity, made simple</span>
           <h1>A smarter way to see your money.</h1>
           <p className="landing-hero__lede">
-            Clover helps people upload statements, understand their finances, and discover meaningful insights through reports and AI.
+            Clover helps you upload statements, see every account together, and understand where your money goes through reports and AI.
           </p>
 
           <div className="landing-hero__actions">
@@ -117,7 +117,7 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <p className="landing-hero__note">Friendly, professional, and trustworthy by design.</p>
+          <p className="landing-hero__note">See your money, understand it faster, and take action with more confidence.</p>
         </div>
 
         <HeroImage />
@@ -126,9 +126,9 @@ export default function HomePage() {
       <ScrollReveal as="section" className="landing-gallery-section">
         <div className="landing-gallery__copy">
           <p className="eyebrow">Visual overview</p>
-          <h2>See statements, spending, and sources in one place.</h2>
+          <h2>See every account in one view.</h2>
           <p>
-            Clover makes the financial picture easier to read with a visual-first layout built for clarity, confidence, and faster decisions.
+            Clover turns uploaded statements into a clearer overview so you can spot patterns without manual sorting.
           </p>
         </div>
 
@@ -138,7 +138,7 @@ export default function HomePage() {
       <ScrollReveal as="section" className="landing-flow">
         <div className="landing-flow__copy">
           <p className="eyebrow">How it works</p>
-          <h2>A simple flow from statement upload to confident decisions.</h2>
+          <h2>From statements to useful insights.</h2>
         </div>
 
         <div className="landing-flow__steps" aria-label="How Clover works">
@@ -147,24 +147,24 @@ export default function HomePage() {
               <StepIcon name="upload" />
             </span>
             <span className="landing-flow__number">01</span>
-            <h3>Upload statements</h3>
-            <p>Bring in statement files so Clover can start building your financial overview.</p>
+            <h3>See everything together</h3>
+            <p>Bring in statement files so Clover can build a single financial overview.</p>
           </div>
           <div className="landing-flow__step">
             <span className="landing-flow__icon">
               <StepIcon name="insights" />
             </span>
             <span className="landing-flow__number">02</span>
-            <h3>Review insights</h3>
-            <p>See reports, categories, and patterns that turn raw transactions into something useful.</p>
+            <h3>Spot patterns faster</h3>
+            <p>Clover surfaces reports and trends so spending changes are easier to notice.</p>
           </div>
           <div className="landing-flow__step">
             <span className="landing-flow__icon">
               <StepIcon name="decision" />
             </span>
             <span className="landing-flow__number">03</span>
-            <h3>Make better decisions</h3>
-            <p>Use the clearer view and AI-guided insights to understand what matters most.</p>
+            <h3>Plan your next move</h3>
+            <p>Use the clearer view and AI-guided insights to make better decisions.</p>
           </div>
         </div>
       </ScrollReveal>
@@ -175,7 +175,7 @@ export default function HomePage() {
             <p className="eyebrow">Ready when you are</p>
             <h2>Keep your finances in view, whenever you need them.</h2>
             <p>
-              Clover stays with you as a clear place to upload statements, review insights, and return to your money with more confidence.
+              Clover stays with you as a clear place to upload statements, review insights, and take action with confidence.
             </p>
           </div>
           <div className="landing-cta__actions">
