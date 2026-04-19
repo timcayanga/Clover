@@ -4,8 +4,7 @@ import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { ImportPasswordModal } from "@/components/import-password-modal";
 import { ImportUploadDock } from "@/components/import-upload-dock";
-import { extractTextFromFile } from "@/lib/import-file-text";
-import { detectStatementMetadata } from "@/lib/import-parser";
+import { uploadFileWithProgress } from "@/lib/import-file-upload";
 
 type AccountOption = {
   id: string;
@@ -65,7 +64,6 @@ const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string) => {
   let timeoutId: number | null = null;
   try {
@@ -282,32 +280,6 @@ export function ImportFilesModal({
     }
   };
 
-  const waitForImportToFinish = async (importFileId: string) => {
-    const deadline = Date.now() + 120000;
-
-    while (Date.now() < deadline) {
-      const response = await fetch(`/api/imports/${importFileId}/status`);
-      if (response.ok) {
-        const payload = await response.json();
-        const importFile = payload.importFile as { status?: string } | undefined;
-        const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
-        const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
-
-        if (importFile?.status === "failed") {
-          throw new Error("Import parsing failed.");
-        }
-
-        if (importFile?.status === "done" || parsedRowsCount > 0 || confirmedTransactionsCount > 0) {
-          return { parsedRowsCount, confirmedTransactionsCount };
-        }
-      }
-
-      await sleep(1500);
-    }
-
-    throw new Error("Import is still processing. Please try again in a moment.");
-  };
-
   const ensureTargetAccountId = async (statementAccountName?: string | null, institution?: string | null) => {
     if (statementAccountName) {
       const key = accountKey(statementAccountName, institution ?? null);
@@ -358,7 +330,7 @@ export function ImportFilesModal({
             fileName: item.file.name,
             fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
             contentType: item.file.type || "application/octet-stream",
-            skipUpload: true,
+            skipUpload: false,
           }),
         }),
         15000,
@@ -376,26 +348,43 @@ export function ImportFilesModal({
         throw new Error("The import could not be created.");
       }
 
-      updateItem(itemId, { progress: 20, progressLabel: "Reading the local file" });
+      if (!prepared.upload?.url) {
+        throw new Error("The upload service did not return a destination.");
+      }
+
+      updateItem(itemId, { progress: 20, progressLabel: "Uploading the file" });
       await yieldToPaint();
-      const text = await extractTextFromFile(item.file, item.password.trim() || undefined, ({ pageNumber, totalPages }) => {
+      await uploadFileWithProgress(prepared.upload.url, item.file, (progress) => {
         updateItem(itemId, {
-          progress: Math.max(20, 20 + (pageNumber / Math.max(totalPages, 1)) * 40),
-          progressLabel: `Reading page ${pageNumber} of ${totalPages}`,
-          status: "parsing",
+          progress: 20 + progress * 0.45,
+          progressLabel: `Uploading ${item.file.name}`,
+          status: "importing",
         });
       });
-      const statement = detectStatementMetadata(text);
+
       updateItem(itemId, {
-        progress: 42,
-        progressLabel: statement?.accountName ? `Detected ${statement.accountName}` : "Parsing file",
+        progress: 65,
+        progressLabel: "Parsing the statement on the server",
+        status: "importing",
       });
+
+      let serverProgress = 65;
+      const processingTimer = window.setInterval(() => {
+        serverProgress = Math.min(82, serverProgress + 1);
+        updateItem(itemId, {
+          progress: serverProgress,
+          progressLabel: "Processing the statement on the server",
+          status: "importing",
+        });
+      }, 900);
 
       const processResponse = await fetch(`/api/imports/${importFileId}/process`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ password: item.password.trim() || undefined }),
       });
+
+      window.clearInterval(processingTimer);
 
       if (!processResponse.ok) {
         const payload = await processResponse.json().catch(() => ({}));
@@ -403,13 +392,12 @@ export function ImportFilesModal({
       }
 
       const processPayload = await processResponse.json().catch(() => ({}));
-      const processedMetadata = processPayload?.metadata ?? statement ?? null;
+      const processedMetadata = processPayload?.metadata ?? null;
       updateItem(itemId, {
         progress: 88,
-        progressLabel: "Waiting for the import queue",
+        progressLabel: processedMetadata?.accountName ? `Detected ${processedMetadata.accountName}` : "Server parsing complete",
         status: "importing",
       });
-      await waitForImportToFinish(importFileId);
       const targetAccountId = await ensureTargetAccountId(
         processedMetadata?.accountName ?? null,
         processedMetadata?.institution ?? null
@@ -710,7 +698,7 @@ export function ImportFilesModal({
         <div className="accounts-import-footer-copy">
           <p>{message}</p>
           <p>Accepted files: CSV and PDF. Password-protected files are supported.</p>
-          <p>We parse the file locally, then send the extracted text into the import queue so the workflow stays responsive.</p>
+          <p>We upload the file first, then parse it on the server so the workflow stays responsive.</p>
         </div>
 
         <div className="accounts-import-files">

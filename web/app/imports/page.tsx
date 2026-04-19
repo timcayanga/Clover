@@ -5,8 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportProgressModal } from "@/components/import-progress-modal";
-import { extractTextFromFile } from "@/lib/import-file-text";
-import { detectStatementMetadata } from "@/lib/import-parser";
+import { uploadFileWithProgress } from "@/lib/import-file-upload";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 
 type Workspace = {
@@ -280,11 +279,11 @@ function ImportsPageContent() {
     setCurrentJobId("");
   };
 
-  const processImportedText = async (importFileId: string, text: string) => {
+  const processImportedText = async (importFileId: string) => {
     const response = await fetch(`/api/imports/${importFileId}/process`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({}),
     });
 
     if (!response.ok) {
@@ -459,7 +458,7 @@ function ImportsPageContent() {
             fileName: file.name,
             fileType: file.type || file.name.split(".").pop() || "unknown",
             contentType: file.type || "application/octet-stream",
-            skipUpload: true,
+            skipUpload: false,
           }),
         }),
         15000,
@@ -474,46 +473,66 @@ function ImportsPageContent() {
       const stagedImport = prep.importFile as ImportFile;
       setProgressState((current) =>
         current
-          ? { ...current, progress: 20, detail: "Reading the local file...", statusLabel: "Parsing" }
+          ? { ...current, progress: 20, detail: "Uploading the file...", statusLabel: "Uploading" }
           : current
       );
       await yieldToPaint();
-      const extractedText = await extractTextFromFile(file, undefined, ({ pageNumber, totalPages }) => {
+      if (!prep.upload?.url) {
+        throw new Error("The upload service did not return a destination.");
+      }
+
+      await uploadFileWithProgress(prep.upload.url, file, (progress) => {
         setProgressState((current) =>
           current
             ? {
                 ...current,
-                progress: Math.max(current.progress, 20 + (pageNumber / Math.max(totalPages, 1)) * 40),
-                detail: `Reading page ${pageNumber} of ${totalPages}...`,
-                statusLabel: "Parsing",
+                progress: 20 + progress * 0.45,
+                detail: `Uploading ${file.name}...`,
+                statusLabel: "Uploading",
               }
             : current
         );
       });
-      const detectedStatement = detectStatementMetadata(extractedText);
-      const accountId = await ensureStatementAccount(
-        selectedWorkspaceId,
-        detectedStatement?.accountName ?? null,
-        detectedStatement?.institution ?? null
-      );
+
       setProgressState((current) =>
         current
-          ? { ...current, progress: 82, detail: "Sending the parsed text to the import queue...", statusLabel: "Parsing" }
+          ? { ...current, progress: 65, detail: "Parsing the statement on the server...", statusLabel: "Processing" }
           : current
       );
-      setMessage("Queued for parsing...");
-      const processPayload = await processImportedText(prep.importFile.id, extractedText);
+      setMessage("Parsing on the server...");
+      setCurrentImport({ ...stagedImport, status: "processing" });
+      setCurrentJobId(prep.importFile.id);
+      let serverProgress = 65;
+      const processingTimer = window.setInterval(() => {
+        serverProgress = Math.min(82, serverProgress + 1);
+        setProgressState((current) =>
+          current
+            ? {
+                ...current,
+                progress: serverProgress,
+                detail: "Processing the statement on the server...",
+                statusLabel: "Processing",
+              }
+            : current
+        );
+      }, 900);
+      const processPayload = await processImportedText(prep.importFile.id);
+      window.clearInterval(processingTimer);
+      const processedMetadata = processPayload?.metadata ?? null;
+      const accountId = await ensureStatementAccount(
+        selectedWorkspaceId,
+        processedMetadata?.accountName ?? null,
+        processedMetadata?.institution ?? null
+      );
       setProgressState((current) =>
         current
           ? { ...current, progress: 88, detail: "Waiting for the import to finish...", statusLabel: "Finishing" }
           : current
       );
-      setMessage("Parsing in the background...");
-      setCurrentImport({ ...stagedImport, status: "processing" });
-      setCurrentJobId(String(processPayload?.jobId || prep.jobId || prep.importFile.id || ""));
+      setMessage("Import completed.");
       setSelectedAccountId(accountId);
       setAutoReturnToTransactions(true);
-      setMessage(`Uploaded ${file.name}. Your import is now in the queue and will update automatically.`);
+      setMessage(`Uploaded ${file.name}. The server is parsing it now and will update automatically.`);
     } catch (error) {
       setProgressState(null);
       setAutoReturnToTransactions(false);

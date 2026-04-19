@@ -820,6 +820,11 @@ const parseBpiImportText = (text: string) => {
 };
 
 export const detectStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+  const gcashMetadata = gcashStatementMetadata(text);
+  if (gcashMetadata) {
+    return gcashMetadata;
+  }
+
   const rcbcMetadata = rcbcStatementMetadata(text);
   if (rcbcMetadata) {
     return rcbcMetadata;
@@ -828,11 +833,6 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
   const bpiMetadata = bpiStatementMetadata(text);
   if (bpiMetadata) {
     return bpiMetadata;
-  }
-
-  const gcashMetadata = gcashStatementMetadata(text);
-  if (gcashMetadata) {
-    return gcashMetadata;
   }
 
   const normalized = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -940,6 +940,11 @@ const parseHeuristicLines = (text: string) => {
 };
 
 export const parseImportText = (text: string, fileName: string, fileType: string): ParsedImportRow[] => {
+  const gcashParsed = parseGcashImportText(text);
+  if (gcashParsed && gcashParsed.rows.length > 0) {
+    return gcashParsed.rows;
+  }
+
   const rcbcParsed = parseRcbcImportText(text);
   if (rcbcParsed) {
     return rcbcParsed.rows;
@@ -948,11 +953,6 @@ export const parseImportText = (text: string, fileName: string, fileType: string
   const bpiParsed = parseBpiImportText(text);
   if (bpiParsed) {
     return bpiParsed.rows;
-  }
-
-  const gcashParsed = parseGcashImportText(text);
-  if (gcashParsed && gcashParsed.rows.length > 0) {
-    return gcashParsed.rows;
   }
 
   const delimiter = delimiterForFile(fileType, fileName);

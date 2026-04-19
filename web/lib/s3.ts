@@ -4,7 +4,7 @@ import { getEnv } from "./env";
 
 let client: S3Client | null = null;
 
-const getClient = () => {
+export const getR2Client = () => {
   if (client) return client;
   const env = getEnv();
   if (!env.R2_ACCOUNT_ID || !env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY) {
@@ -35,7 +35,7 @@ export const createUploadUrl = async (key: string, contentType: string) => {
     ContentType: contentType,
   });
 
-  const url = await getSignedUrl(getClient(), command, { expiresIn: 60 * 10 });
+  const url = await getSignedUrl(getR2Client(), command, { expiresIn: 60 * 10 });
 
   return {
     url,
@@ -44,4 +44,3 @@ export const createUploadUrl = async (key: string, contentType: string) => {
     expiresInSeconds: 600,
   };
 };
-
