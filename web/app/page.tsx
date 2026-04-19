@@ -5,6 +5,14 @@ function HeroImage() {
   return (
     <figure className="landing-photo landing-photo--hero" aria-hidden="true">
       <img src="/landing-images/hero.jpg" alt="" />
+      <div className="landing-photo__overlay">
+        <span className="landing-photo__eyebrow">In one place</span>
+        <div className="landing-photo__chips" aria-hidden="true">
+          <span>Upload PDFs</span>
+          <span>Review reports</span>
+          <span>AI insights</span>
+        </div>
+      </div>
       <figcaption className="landing-photo__badge">Calm, clear, and confident</figcaption>
     </figure>
   );
@@ -87,6 +95,40 @@ export default function HomePage() {
         </div>
 
         <VisualGallery />
+      </ScrollReveal>
+
+      <ScrollReveal as="section" className="landing-flow">
+        <div className="landing-flow__copy">
+          <p className="eyebrow">How it works</p>
+          <h2>A simple flow from statement upload to confident decisions.</h2>
+        </div>
+
+        <div className="landing-flow__steps" aria-label="How Clover works">
+          <div className="landing-flow__step">
+            <span className="landing-flow__number">01</span>
+            <h3>Upload statements</h3>
+            <p>Bring in statement files so Clover can start building your financial overview.</p>
+          </div>
+          <div className="landing-flow__step">
+            <span className="landing-flow__number">02</span>
+            <h3>Review insights</h3>
+            <p>See reports, categories, and patterns that turn raw transactions into something useful.</p>
+          </div>
+          <div className="landing-flow__step">
+            <span className="landing-flow__number">03</span>
+            <h3>Make better decisions</h3>
+            <p>Use the clearer view and AI-guided insights to understand what matters most.</p>
+          </div>
+        </div>
+      </ScrollReveal>
+
+      <ScrollReveal as="section" className="landing-trust">
+        <p className="landing-trust__quote">
+          A calmer way to understand your finances, all in one place.
+        </p>
+        <p className="landing-trust__note">
+          Clover keeps the experience friendly, professional, and trustworthy from the first upload to the last insight.
+        </p>
       </ScrollReveal>
 
       <ScrollReveal as="section" className="landing-cta">
