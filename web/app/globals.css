@@ -4953,6 +4953,66 @@ input.transaction-inline-edit--amount::placeholder {
   border-color: #0394ab;
 }
 
+@media (max-width: 1100px) {
+  .transactions-topbar {
+    gap: 10px;
+    padding-bottom: 8px;
+  }
+
+  .transactions-toolbar-row {
+    gap: 8px;
+  }
+
+  .transactions-toolbar-row--top,
+  .transactions-toolbar-row--bottom {
+    grid-template-columns: 1fr;
+  }
+
+  .transactions-toolbar-group {
+    gap: 6px;
+  }
+
+  .transactions-toolbar-group--right {
+    justify-content: flex-start;
+    justify-self: start;
+  }
+
+  .transactions-action-button {
+    min-height: 38px;
+    padding-inline: 10px;
+  }
+
+  .transactions-page .transactions-toolbar-chip.button-secondary,
+  .transactions-page .transactions-toolbar-add.button-primary {
+    width: 38px;
+    min-width: 38px;
+    padding-inline: 0;
+    justify-content: center;
+  }
+
+  .transactions-page .transactions-toolbar-chip.button-secondary .button-icon,
+  .transactions-page .transactions-toolbar-add.button-primary .button-icon {
+    margin-right: 0;
+  }
+
+  .transactions-page .transactions-toolbar-chip.button-secondary > span:not(.button-icon),
+  .transactions-page .transactions-toolbar-add.button-primary > span:not(.button-icon) {
+    display: none;
+  }
+
+  .transactions-page .transactions-toolbar-add.button-primary .button-icon:last-child,
+  .transactions-page .transactions-toolbar-chip.button-secondary .button-icon:last-child {
+    display: none;
+  }
+
+  .transactions-page .transactions-toolbar-chip.button-secondary svg,
+  .transactions-page .transactions-toolbar-add.button-primary svg,
+  .transactions-page .transactions-summary-toggle-button svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
 .dashboard-shell {
   display: grid;
   gap: 18px;
@@ -6322,46 +6382,6 @@ input.transaction-inline-edit--amount::placeholder {
 
   .transactions-toolbar-group {
     gap: 8px;
-  }
-
-  .transactions-toolbar-group--right {
-    justify-content: flex-start;
-    justify-self: start;
-  }
-
-  .transactions-action-button {
-    min-height: 40px;
-    padding-inline: 12px;
-  }
-
-  .transactions-page .transactions-toolbar-chip.button-secondary,
-  .transactions-page .transactions-toolbar-add.button-primary {
-    width: 40px;
-    min-width: 40px;
-    padding-inline: 0;
-    justify-content: center;
-  }
-
-  .transactions-page .transactions-toolbar-chip.button-secondary .button-icon,
-  .transactions-page .transactions-toolbar-add.button-primary .button-icon {
-    margin-right: 0;
-  }
-
-  .transactions-page .transactions-toolbar-chip.button-secondary > span:not(.button-icon),
-  .transactions-page .transactions-toolbar-add.button-primary > span:not(.button-icon) {
-    display: none;
-  }
-
-  .transactions-page .transactions-toolbar-add.button-primary .button-icon:last-child,
-  .transactions-page .transactions-toolbar-chip.button-secondary .button-icon:last-child {
-    display: none;
-  }
-
-  .transactions-page .transactions-toolbar-chip.button-secondary svg,
-  .transactions-page .transactions-toolbar-add.button-primary svg,
-  .transactions-page .transactions-summary-toggle-button svg {
-    width: 14px;
-    height: 14px;
   }
 
   .transactions-table-wrap {
