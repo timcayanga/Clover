@@ -51,6 +51,46 @@ type MonthBucket = {
   net: number;
 };
 
+type ReportsRange = "30d" | "90d" | "ytd";
+
+const reportsRangeLabels: Record<ReportsRange, string> = {
+  "30d": "30 days",
+  "90d": "90 days",
+  ytd: "Year to date",
+};
+
+const normalizeReportsRange = (value: string | undefined): ReportsRange => {
+  if (value === "90d" || value === "ytd") {
+    return value;
+  }
+
+  return "30d";
+};
+
+const getReportWindow = (anchor: Date, range: ReportsRange) => {
+  const currentStart = new Date(anchor);
+  if (range === "30d") {
+    currentStart.setDate(currentStart.getDate() - 30);
+  } else if (range === "90d") {
+    currentStart.setDate(currentStart.getDate() - 90);
+  } else {
+    currentStart.setMonth(0, 1);
+    currentStart.setHours(0, 0, 0, 0);
+  }
+
+  const previousStart = new Date(currentStart);
+  if (range === "30d") {
+    previousStart.setDate(previousStart.getDate() - 30);
+  } else if (range === "90d") {
+    previousStart.setDate(previousStart.getDate() - 90);
+  } else {
+    const durationDays = Math.max(Math.round((anchor.getTime() - currentStart.getTime()) / 86400000), 1);
+    previousStart.setDate(previousStart.getDate() - durationDays);
+  }
+
+  return { currentStart, previousStart };
+};
+
 const formatCurrency = (value: number) => currencyFormatter.format(value);
 
 const formatSignedCurrency = (value: number) => `${value < 0 ? "-" : ""}${currencyFormatter.format(Math.abs(value))}`;
@@ -64,6 +104,8 @@ const toMonthLabel = (date: Date) => monthFormatter.format(date);
 const formatShortDate = (value: Date) => shortDateFormatter.format(value);
 
 const normalizeMerchant = (value: string) => value.trim().toLowerCase();
+
+const buildTransactionsHref = (params: Record<string, string>) => `/transactions?${new URLSearchParams(params).toString()}`;
 
 const goalLabels: Record<string, string> = {
   save_more: "Save more",
@@ -90,13 +132,22 @@ const getMonthBuckets = (anchor: Date) => {
   return buckets;
 };
 
-async function ReportsPageView({ active = "reports" }: { active?: "reports" | "insights" }) {
+async function ReportsPageView({
+  active = "reports",
+  searchParams,
+}: {
+  active?: "reports" | "insights";
+  searchParams?: { range?: string };
+}) {
   const headerList = await headers();
   const hostname = (headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "")
     .split(",")[0]
     .split(":")[0]
     .toLowerCase();
   const isStagingHost = hostname === "staging.clover.ph";
+  const selectedRange = normalizeReportsRange(searchParams?.range);
+  const selectedRangeLabel = reportsRangeLabels[selectedRange];
+  const rangeWindowText = selectedRangeLabel.toLowerCase();
 
   if (isStagingHost) {
     const sampleMonthBuckets = [
@@ -131,6 +182,7 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
     const sampleCurrentMonth = sampleMonthBuckets[sampleMonthBuckets.length - 1];
     const samplePreviousMonth = sampleMonthBuckets[sampleMonthBuckets.length - 2];
     const sampleMonthlyChange = sampleCurrentMonth.net - samplePreviousMonth.net;
+    const sampleFreshness = "Sample staging data refreshed";
 
     const sampleReviewItems: ReportsQueueItem[] = [
       {
@@ -214,21 +266,39 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
           </>
         }
       >
+        <section className="reports-range-switch glass">
+          <div className="reports-range-switch__copy">
+            <span className="eyebrow">Range</span>
+            <p>{selectedRangeLabel}</p>
+          </div>
+          <div className="reports-range-switch__controls" role="tablist" aria-label="Report range">
+            {(["30d", "90d", "ytd"] as const).map((range) => (
+              <Link key={range} className={`pill pill-interactive ${selectedRange === range ? "pill-is-selected" : ""}`} href={`?range=${range}`}>
+                {reportsRangeLabels[range]}
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        <section className="reports-freshness">
+          <span className="pill pill-subtle">{sampleFreshness}</span>
+        </section>
+
         <section className="reports-summary-grid reports-summary-grid--three">
           <article className="metric compact glass">
             <span>Net cash flow</span>
             <strong className="positive">₱41,734.00</strong>
-            <small>Positive over the last 30 days · sample staging data</small>
+            <small>Positive over the last {rangeWindowText} · sample staging data</small>
           </article>
           <article className="metric compact glass">
             <span>Inflow</span>
             <strong>₱45,000.00</strong>
-            <small>Income over the last 30 days · sample staging data</small>
+            <small>Income over the last {rangeWindowText} · sample staging data</small>
           </article>
           <article className="metric compact glass">
             <span>Outflow</span>
             <strong>₱3,266.00</strong>
-            <small>Expenses over the last 30 days · sample staging data</small>
+            <small>Expenses over the last {rangeWindowText} · sample staging data</small>
           </article>
         </section>
 
@@ -262,12 +332,12 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                 ))}
               </svg>
 
-            <div className="report-chart__labels">
+              <div className="report-chart__labels">
                 {cashFlowPoints.map((point) => (
-                  <div key={point.key} className="report-chart__label">
+                  <Link key={point.key} href={buildTransactionsHref({ month: point.key })} className="report-chart__label report-list__item--link">
                     <span>{point.label}</span>
                     <strong>{formatCurrency(point.net)}</strong>
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -320,7 +390,11 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                 {sampleTopCategories.map((category) => {
                   const share = (category.amount / sampleTotalSpend) * 100;
                   return (
-                    <div key={category.label} className="report-donut__legend-item">
+                    <Link
+                      key={category.label}
+                      href={buildTransactionsHref({ category: category.label })}
+                      className="report-donut__legend-item report-list__item--link"
+                    >
                       <span className="report-donut__swatch" style={{ background: category.color }} />
                       <div className="report-donut__meta">
                         <strong>{category.label}</strong>
@@ -328,7 +402,7 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                           {formatCurrency(category.amount)} · {share.toFixed(0)}%
                         </span>
                       </div>
-                    </div>
+                    </Link>
                   );
                 })}
               </div>
@@ -350,7 +424,11 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
 
             <div className="report-list">
               {sampleRecurringPayments.map((payment) => (
-                <div key={payment.label} className="report-list__item">
+                <Link
+                  key={payment.label}
+                  href={buildTransactionsHref({ merchant: payment.label, review: "1" })}
+                  className="report-list__item report-list__item--link"
+                >
                   <div className="report-list__meta">
                     <strong>{payment.label}</strong>
                     <span>
@@ -360,7 +438,7 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                   <div className="report-tags">
                     <span className="pill pill-subtle">Subscription</span>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </article>
@@ -378,7 +456,11 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
 
             <div className="report-list">
               {sampleTopMerchants.map((merchant) => (
-                <div key={merchant.label} className="report-list__item">
+                <Link
+                  key={merchant.label}
+                  href={buildTransactionsHref({ merchant: merchant.label })}
+                  className="report-list__item report-list__item--link"
+                >
                   <div className="report-list__meta">
                     <strong>{merchant.label}</strong>
                     <span>
@@ -388,7 +470,7 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                   <div className="report-list__track" aria-hidden="true">
                     <span className="report-list__fill" style={{ width: `${Math.max((merchant.amount / sampleTopMerchants[0].amount) * 100, 10)}%` }} />
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </article>
@@ -427,6 +509,11 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                 <strong className={sampleMonthlyChange >= 0 ? "positive" : "negative"}>{formatSignedCurrency(sampleMonthlyChange)}</strong>
                 <small>{samplePreviousMonth.label}</small>
               </div>
+            </div>
+            <div className="report-subsection report-subsection--compact">
+              <Link className="pill-link pill-link--inline" href={buildTransactionsHref({ month: sampleCurrentMonth.key })}>
+                Open {sampleCurrentMonth.label}
+              </Link>
             </div>
           </article>
         </section>
@@ -518,11 +605,10 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
 
   try {
     const now = new Date();
-    const thirtyDaysAgo = new Date(now);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const sixtyDaysAgo = new Date(now);
-    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    const { currentStart: currentWindowStart, previousStart: previousWindowStart } = getReportWindow(now, selectedRange);
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    const importFiles = selectedWorkspace.importFiles;
+    const latestImport = importFiles[0];
 
     const [
       currentWindowTransactions,
@@ -536,7 +622,7 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
         where: {
           workspaceId: selectedWorkspace.id,
           isExcluded: false,
-          date: { gte: thirtyDaysAgo },
+          date: { gte: currentWindowStart },
         },
         select: {
           id: true,
@@ -566,8 +652,8 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
           workspaceId: selectedWorkspace.id,
           isExcluded: false,
           date: {
-            gte: sixtyDaysAgo,
-            lt: thirtyDaysAgo,
+            gte: previousWindowStart,
+            lt: currentWindowStart,
           },
         },
         select: {
@@ -591,7 +677,7 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
         where: {
           workspaceId: selectedWorkspace.id,
           isExcluded: false,
-          date: { gte: thirtyDaysAgo },
+          date: { gte: currentWindowStart },
         },
         select: {
           id: true,
@@ -720,7 +806,6 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
       .sort((a, b) => b.length - a.length)
       .slice(0, 3);
 
-    const importFiles = selectedWorkspace.importFiles;
     const importStatusCounts = importFiles.reduce(
       (counts, file) => {
         counts[file.status] += 1;
@@ -734,7 +819,6 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
       }
     );
 
-    const latestImport = importFiles[0];
     const actionableCount =
       uncategorizedTransactions.length + possibleDuplicateGroups.length + importStatusCounts.processing + importStatusCounts.failed;
 
@@ -833,7 +917,7 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
 
     const goalSummary = goalLabel
       ? currentNet >= 0
-        ? `Your ${goalLabel.toLowerCase()} goal has room to move forward because the last 30 days ended positive.`
+        ? `Your ${goalLabel.toLowerCase()} goal has room to move forward because the last ${rangeWindowText} ended positive.`
         : `Your ${goalLabel.toLowerCase()} goal needs a tighter spending pattern or higher income to move faster.`
       : "Set a primary goal so Clover can compare your cash flow and spending against something specific.";
 
@@ -859,7 +943,7 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
         detail:
           previousNet === 0
             ? "No prior baseline to compare"
-            : `${currentNet >= previousNet ? "Ahead of" : "Behind"} the prior 30 days`,
+            : `${currentNet >= previousNet ? "Ahead of" : "Behind"} the prior ${rangeWindowText}`,
         tone: currentNet >= 0 ? "good" : "danger",
       },
       {
@@ -980,6 +1064,23 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
           </article>
         </section>
 
+        <section className="reports-range-switch glass">
+          <div className="reports-range-switch__copy">
+            <span className="eyebrow">Range</span>
+            <p>{selectedRangeLabel}</p>
+            <small>
+              {latestImport ? `Fresh data from ${latestImport.fileName}` : "No imports available yet"}
+            </small>
+          </div>
+          <div className="reports-range-switch__controls" role="tablist" aria-label="Report range">
+            {(["30d", "90d", "ytd"] as const).map((range) => (
+              <Link key={range} className={`pill pill-interactive ${selectedRange === range ? "pill-is-selected" : ""}`} href={`?range=${range}`}>
+                {reportsRangeLabels[range]}
+              </Link>
+            ))}
+          </div>
+        </section>
+
         <section className="reports-ai-grid">
           <article className="report-ai-card report-ai-card--featured glass">
             <p className="eyebrow">AI brief</p>
@@ -1039,7 +1140,7 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
             <span>Net cash flow</span>
             <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
             <small>
-              {currentNet >= 0 ? "Positive" : "Negative"} over the last 30 days ·{" "}
+              {currentNet >= 0 ? "Positive" : "Negative"} over the last {rangeWindowText} ·{" "}
               {previousNet === 0 ? "No prior baseline" : `${currentNet >= previousNet ? "above" : "below"} the prior period`}
             </small>
           </article>
@@ -1085,14 +1186,14 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
 
             <div className="report-insight-grid">
               <div className="report-insight">
-                <span>Current 30 days</span>
+                <span>Current {selectedRangeLabel}</span>
                 <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
                 <small>
-                  {incomeDelta === null ? "No previous baseline" : `${formatPercent(incomeDelta)} vs the prior 30 days`}
+                  {incomeDelta === null ? "No previous baseline" : `${formatPercent(incomeDelta)} vs the prior ${rangeWindowText}`}
                 </small>
               </div>
               <div className="report-insight">
-                <span>Previous 30 days</span>
+                <span>Previous {selectedRangeLabel}</span>
                 <strong className={previousNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(previousNet)}</strong>
                 <small>
                   {previousNet === 0 ? "No prior benchmark" : `${previousNet >= 0 ? "Positive" : "Negative"} cash flow`}
@@ -1106,13 +1207,13 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                 <div className="report-list__item">
                   <div className="report-list__meta">
                     <strong>Spending</strong>
-                    <span>{spendDelta === null ? "No prior comparison period" : `${formatPercent(spendDelta)} vs the previous 30 days`}</span>
+                    <span>{spendDelta === null ? "No prior comparison period" : `${formatPercent(spendDelta)} vs the previous ${rangeWindowText}`}</span>
                   </div>
                 </div>
                 <div className="report-list__item">
                   <div className="report-list__meta">
                     <strong>Income</strong>
-                    <span>{incomeDelta === null ? "No prior comparison period" : `${formatPercent(incomeDelta)} vs the previous 30 days`}</span>
+                    <span>{incomeDelta === null ? "No prior comparison period" : `${formatPercent(incomeDelta)} vs the previous ${rangeWindowText}`}</span>
                   </div>
                 </div>
               </div>
@@ -1122,7 +1223,7 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
               {monthBuckets.map((bucket) => {
                 const width = Math.max((Math.abs(bucket.net) / maxMonthlyNet) * 100, bucket.net === 0 ? 6 : 18);
                 return (
-                  <div key={bucket.key} className="report-timeline__row">
+                  <Link key={bucket.key} href={buildTransactionsHref({ month: bucket.key })} className="report-timeline__row report-list__item--link">
                     <div className="report-timeline__label">{bucket.label}</div>
                     <div className="report-timeline__track" aria-hidden="true">
                       <span
@@ -1133,7 +1234,7 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                     <div className={`report-timeline__value ${bucket.net >= 0 ? "positive" : "negative"}`}>
                       {formatCurrency(bucket.net)}
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
@@ -1157,7 +1258,11 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                 topCategories.map(([categoryName, amount]) => {
                   const share = maxCategorySpend > 0 ? (amount / maxCategorySpend) * 100 : 0;
                   return (
-                    <div key={categoryName} className="report-list__item">
+                    <Link
+                      key={categoryName}
+                      href={buildTransactionsHref({ category: categoryName })}
+                      className="report-list__item report-list__item--link"
+                    >
                       <div className="report-list__meta">
                         <strong>{categoryName}</strong>
                         <span>{formatCurrency(amount)}</span>
@@ -1165,11 +1270,11 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                       <div className="report-list__track" aria-hidden="true">
                         <span className="report-list__fill" style={{ width: `${Math.max(share, 8)}%` }} />
                       </div>
-                    </div>
+                    </Link>
                   );
                 })
               ) : (
-                <div className="empty-state">No categorized expenses yet.</div>
+                <div className="empty-state">No categorized expenses yet. Add transactions to surface the main spending groups.</div>
               )}
             </div>
 
@@ -1191,7 +1296,11 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
             <div className="report-list">
               {recurringMerchants.length > 0 ? (
                 recurringMerchants.map((merchant) => (
-                  <div key={merchant.label} className="report-list__item">
+                  <Link
+                    key={merchant.label}
+                    href={buildTransactionsHref({ merchant: merchant.label, review: "1" })}
+                    className="report-list__item report-list__item--link"
+                  >
                     <div className="report-list__meta">
                       <strong>{merchant.label}</strong>
                       <span>
@@ -1201,10 +1310,10 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                     <div className="report-tags">
                       <span className="pill pill-subtle">Repeat merchant</span>
                     </div>
-                  </div>
+                  </Link>
                 ))
               ) : (
-                <div className="empty-state">No repeat merchants surfaced in the current period.</div>
+                <div className="empty-state">No repeat merchants surfaced yet. Add more transactions to reveal fixed costs.</div>
               )}
             </div>
           </article>
@@ -1223,7 +1332,11 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
             <div className="report-list">
               {topMerchants.length > 0 ? (
                 topMerchants.map((merchant) => (
-                  <div key={merchant.label} className="report-list__item">
+                  <Link
+                    key={merchant.label}
+                    href={buildTransactionsHref({ merchant: merchant.label })}
+                    className="report-list__item report-list__item--link"
+                  >
                     <div className="report-list__meta">
                       <strong>{merchant.label}</strong>
                       <span>
@@ -1233,10 +1346,10 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                     <div className="report-list__track" aria-hidden="true">
                       <span className="report-list__fill" style={{ width: `${Math.max((merchant.amount / currentSpend) * 100, 10)}%` }} />
                     </div>
-                  </div>
+                  </Link>
                 ))
               ) : (
-                <div className="empty-state">No merchants surfaced in the current period.</div>
+                <div className="empty-state">No merchants surfaced yet. More transactions will reveal the concentration points.</div>
               )}
             </div>
           </article>
@@ -1275,6 +1388,11 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                 <strong className={monthlyNetChange >= 0 ? "positive" : "negative"}>{formatSignedCurrency(monthlyNetChange)}</strong>
                 <small>{previousMonthBucket.label}</small>
               </div>
+            </div>
+            <div className="report-subsection report-subsection--compact">
+              <Link className="pill-link pill-link--inline" href={buildTransactionsHref({ month: currentMonthBucket.key })}>
+                Open {currentMonthBucket.label}
+              </Link>
             </div>
           </article>
         </section>
@@ -1456,6 +1574,6 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
   }
 }
 
-export default async function ReportsPage() {
-  return <ReportsPageView active="reports" />;
+export default async function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
+  return <ReportsPageView active="reports" searchParams={searchParams ? await searchParams : undefined} />;
 }

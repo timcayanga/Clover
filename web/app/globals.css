@@ -5989,6 +5989,15 @@ input.transaction-inline-edit--amount::placeholder {
     grid-template-columns: 1fr;
   }
 
+  .reports-range-switch {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .reports-range-switch__controls {
+    justify-content: flex-start;
+  }
+
   .accounts-main-grid {
     grid-template-columns: 1fr;
   }
