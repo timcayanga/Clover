@@ -514,6 +514,43 @@ const normalizeTransactionNotes = (value: string | null | undefined) => {
   return trimmed;
 };
 
+const humanizeTransactionMerchantText = (value: string) => {
+  const normalized = value.replace(/\u00a0/g, " ").trim();
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized
+    .replace(/fundtransfer/gi, "Fund Transfer")
+    .replace(/interestearned/gi, "Interest Earned")
+    .replace(/taxwithheld/gi, "Tax Withheld")
+    .replace(/instapaytransferfee/gi, "InstaPay Transfer Fee")
+    .replace(/transfertootherbank/gi, "Transfer to Other Bank")
+    .replace(/transferfrom/gi, "Transfer from")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Za-z])(\d)/g, "$1 $2")
+    .replace(/(\d)([A-Za-z])/g, "$1 $2")
+    .replace(/\s*:\s*/g, ": ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const summarizeTransactionMerchantText = (value: string) => {
+  const humanized = humanizeTransactionMerchantText(value);
+  const compact = humanized.replace(/[^a-z0-9]+/gi, "").toLowerCase();
+
+  if (compact.includes("fundtransfer")) return "Fund Transfer";
+  if (compact.includes("interestearned")) return "Interest Earned";
+  if (compact.includes("taxwithheld")) return "Tax Withheld";
+  if (compact.includes("instapaytransferfee")) return "InstaPay Transfer Fee";
+  if (compact.includes("transfertootherbank")) return "Transfer to Other Bank";
+  if (/^(cash in|cash out|payment to|received|sent|transfer to|transfer from)\b/i.test(humanized)) {
+    return humanized.split(/\s+/).slice(0, 3).join(" ");
+  }
+
+  return humanized;
+};
+
 const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => ({
   merchantRaw: transaction.merchantRaw,
   merchantClean: transaction.merchantClean ?? "",
@@ -1970,6 +2007,9 @@ function TransactionsPageContent() {
                 const amountToneClass = isPositive ? "positive" : "negative";
                 const categoryValue = transaction.categoryId ?? otherCategoryId;
                 const categoryLabel = categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+                const merchantSummary = summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
+                const merchantDisplay = humanizeTransactionMerchantText(transaction.merchantRaw);
+                const showMerchantSubtext = merchantDisplay && merchantDisplay.toLowerCase() !== merchantSummary.toLowerCase();
                 return (
                   <div
                     key={transaction.id}
@@ -1993,15 +2033,13 @@ function TransactionsPageContent() {
                     <div className="transaction-name-cell">
                       <InlineEditableCell
                         value={transaction.merchantClean ?? transaction.merchantRaw}
-                        displayValue={transaction.merchantClean || transaction.merchantRaw}
+                        displayValue={merchantSummary}
                         ariaLabel={`Edit name for ${transaction.merchantRaw}`}
                         kind="text"
                         className="transaction-inline-edit transaction-inline-edit--name"
                         onCommit={(value) => commitInlineEdit(transaction, "name", value)}
                       />
-                      <small className="transaction-subtext">
-                        {transaction.description || transaction.merchantClean ? transaction.merchantRaw : transaction.accountName}
-                      </small>
+                      {showMerchantSubtext ? <small className="transaction-subtext">{merchantDisplay}</small> : null}
                     </div>
                     <div className="transaction-date-cell">
                       <InlineEditableCell

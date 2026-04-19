@@ -3922,8 +3922,10 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transaction-subtext {
-  color: var(--muted);
-  font-size: 0.84rem;
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.25;
 }
 
 .transaction-date-cell,
