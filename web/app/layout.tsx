@@ -32,7 +32,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   const hostname = await getHostname();
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? process.env.CLERK_PUBLISHABLE_KEY;
   const isStagingHost = stagingHosts.has(hostname);
-  const isProductionDeployment = process.env.NODE_ENV === "production";
+  const isProductionDeployment = process.env.VERCEL_ENV === "production";
 
   if (isProductionDeployment && !isStagingHost) {
     return (

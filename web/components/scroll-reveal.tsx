@@ -20,11 +20,21 @@ export function ScrollReveal({ children, className = "", delay = 0, as = "div" }
       return;
     }
 
+    let settled = false;
+    const reveal = () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      element.classList.add("is-visible");
+      observer.unobserve(element);
+    };
+
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
-          element.classList.add("is-visible");
-          observer.unobserve(element);
+          reveal();
         }
       },
       {
@@ -34,8 +44,11 @@ export function ScrollReveal({ children, className = "", delay = 0, as = "div" }
     );
 
     observer.observe(element);
+    const timeout = window.setTimeout(reveal, Math.max(150, delay + 120));
 
     return () => {
+      settled = true;
+      window.clearTimeout(timeout);
       observer.disconnect();
     };
   }, []);
