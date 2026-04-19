@@ -365,6 +365,14 @@ const downloadTextFile = (filename: string, contents: string, mimeType: string) 
   URL.revokeObjectURL(url);
 };
 
+const escapeHtml = (value: string) =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
 const toIsoDate = (value: Date) => value.toISOString().slice(0, 10);
 
 const dateAtNoon = (value: string) => new Date(`${value.slice(0, 10)}T12:00:00`);
@@ -1798,7 +1806,114 @@ function TransactionsPageContent() {
 
   const downloadPdf = () => {
     if (typeof window !== "undefined") {
-      window.print();
+      const report = window.open("", "_blank", "width=1280,height=900");
+      if (!report) {
+        window.print();
+        return;
+      }
+
+      const rows = filteredTransactions
+        .map((transaction) => {
+          const warningReason = warningReasonFor(transaction);
+          const amount = Number(transaction.amount);
+          const categoryValue = transaction.categoryId ?? otherCategoryId;
+          const categoryLabel = categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+
+          return `
+            <tr>
+              <td>${escapeHtml(summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw))}</td>
+              <td>${escapeHtml(formatDate(transaction.date))}</td>
+              <td>${escapeHtml(transaction.accountName)}</td>
+              <td>${escapeHtml(categoryLabel)}</td>
+              <td class="${transaction.type === "income" ? "positive" : "negative"}">${escapeHtml(
+                currencyFormatter.format(amount)
+              )}</td>
+              <td>${escapeHtml(warningReason ?? "")}</td>
+            </tr>
+          `;
+        })
+        .join("");
+
+      report.document.write(`
+        <html>
+          <head>
+            <title>Transactions</title>
+            <style>
+              @page { size: auto; margin: 14mm; }
+              body {
+                font-family: Arial, sans-serif;
+                color: #111827;
+                margin: 0;
+                padding: 0;
+              }
+              .page {
+                padding: 0;
+              }
+              h1 {
+                font-size: 20px;
+                margin: 0 0 8px;
+              }
+              .meta {
+                color: #6b7280;
+                font-size: 12px;
+                margin-bottom: 18px;
+              }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: fixed;
+              }
+              th, td {
+                text-align: left;
+                vertical-align: top;
+                padding: 9px 8px;
+                border-bottom: 1px solid #e5e7eb;
+                font-size: 11px;
+                word-break: break-word;
+              }
+              th {
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                color: #6b7280;
+              }
+              .positive {
+                color: #16a34a;
+              }
+              .negative {
+                color: #ef4444;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="page">
+              <h1>Transactions</h1>
+              <div class="meta">${escapeHtml(filteredTransactions.length.toString())} transaction${
+                filteredTransactions.length === 1 ? "" : "s"
+              }</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Date</th>
+                    <th>Account</th>
+                    <th>Category</th>
+                    <th>Amount</th>
+                    <th>Warning</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${rows || `<tr><td colspan="6">No transactions to print.</td></tr>`}
+                </tbody>
+              </table>
+            </div>
+            <script>
+              window.onload = () => window.print();
+            </script>
+          </body>
+        </html>
+      `);
+      report.document.close();
     }
   };
 
@@ -1835,6 +1950,7 @@ function TransactionsPageContent() {
                   type="button"
                   onClick={() => searchInputRef.current?.focus()}
                   title="Search"
+                  aria-label="Search transactions"
                 >
                   <span className="button-icon" aria-hidden="true">
                     <ActionIcon name="search" />
@@ -1847,6 +1963,7 @@ function TransactionsPageContent() {
                   type="button"
                   title={dateFilterLabel}
                   onClick={() => setDateFilterOpen(true)}
+                  aria-label="Open date filter"
                 >
                   <span className="button-icon" aria-hidden="true">
                     <ActionIcon name="calendar" />
@@ -1859,6 +1976,7 @@ function TransactionsPageContent() {
                   type="button"
                   title="Filters"
                   onClick={() => setFilterOpen(true)}
+                  aria-label="Open filters"
                 >
                   <span className="button-icon" aria-hidden="true">
                     <ActionIcon name="filters" />
@@ -1892,6 +2010,7 @@ function TransactionsPageContent() {
                       openAddMenu();
                     }}
                     aria-expanded={addMenuOpen}
+                    aria-label="Add transaction"
                   >
                     <span className="button-icon" aria-hidden="true">
                       <ActionIcon name="plus" />
@@ -1932,6 +2051,7 @@ function TransactionsPageContent() {
                   onClick={() => {
                     void undoLastChange();
                   }}
+                  aria-label="Undo last change"
                 >
                   <span className="button-icon" aria-hidden="true">
                     <img src="/undo.svg" alt="" aria-hidden="true" />
@@ -1947,6 +2067,7 @@ function TransactionsPageContent() {
                   onClick={() => {
                     void redoLastChange();
                   }}
+                  aria-label="Redo last change"
                 >
                   <span className="button-icon" aria-hidden="true">
                     <img src="/redo.svg" alt="" aria-hidden="true" />
@@ -1962,6 +2083,7 @@ function TransactionsPageContent() {
                   type="button"
                   onClick={saveView}
                   title="Save view"
+                  aria-label="Save current view"
                 >
                   <span className="button-icon" aria-hidden="true">
                     <ActionIcon name="save" />
@@ -1979,6 +2101,7 @@ function TransactionsPageContent() {
                       openDownloadMenu();
                     }}
                     title="Download"
+                    aria-label="Download transactions"
                   >
                     <span className="button-icon" aria-hidden="true">
                       <ActionIcon name="download" />
