@@ -1818,10 +1818,35 @@ function TransactionsPageContent() {
           const amount = Number(transaction.amount);
           const categoryValue = transaction.categoryId ?? otherCategoryId;
           const categoryLabel = categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+          const categoryIconSrc = new URL(
+            getCategoryIconSrc(transaction.categoryName ?? categoryLabel),
+            window.location.origin
+          ).toString();
+          const categoryTone = getCategoryIconTone(transaction.categoryName ?? categoryLabel);
 
           return `
             <tr>
-              <td>${escapeHtml(summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw))}</td>
+              <td class="icon-cell">
+                <span
+                  class="category-icon"
+                  style="background: ${categoryTone.backgroundColor}; border-color: ${categoryTone.borderColor};"
+                >
+                  <img src="${escapeHtml(categoryIconSrc)}" alt="" />
+                </span>
+              </td>
+              <td>
+                <div class="name-cell">
+                  <div class="name-cell__summary">${escapeHtml(
+                    summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw)
+                  )}</div>
+                  ${
+                    humanizeTransactionMerchantText(transaction.merchantRaw).toLowerCase() !==
+                    summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw).toLowerCase()
+                      ? `<div class="name-cell__subtext">${escapeHtml(humanizeTransactionMerchantText(transaction.merchantRaw))}</div>`
+                      : ""
+                  }
+                </div>
+              </td>
               <td>${escapeHtml(formatDate(transaction.date))}</td>
               <td>${escapeHtml(transaction.accountName)}</td>
               <td>${escapeHtml(categoryLabel)}</td>
@@ -1863,6 +1888,9 @@ function TransactionsPageContent() {
                 border-collapse: collapse;
                 table-layout: fixed;
               }
+              tbody tr:nth-child(even) {
+                background: #f8fafc;
+              }
               th, td {
                 text-align: left;
                 vertical-align: top;
@@ -1870,6 +1898,39 @@ function TransactionsPageContent() {
                 border-bottom: 1px solid #e5e7eb;
                 font-size: 11px;
                 word-break: break-word;
+              }
+              td.icon-cell {
+                width: 46px;
+                padding-right: 0;
+              }
+              .category-icon {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                width: 26px;
+                height: 26px;
+                border-radius: 999px;
+                border: 1px solid transparent;
+                overflow: hidden;
+              }
+              .category-icon img {
+                width: 14px;
+                height: 14px;
+                display: block;
+              }
+              .name-cell {
+                display: grid;
+                gap: 2px;
+              }
+              .name-cell__summary {
+                font-size: 12px;
+                font-weight: 700;
+                line-height: 1.25;
+              }
+              .name-cell__subtext {
+                font-size: 10px;
+                color: #6b7280;
+                line-height: 1.25;
               }
               th {
                 font-size: 10px;
