@@ -66,6 +66,21 @@ const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
 const normalizeMerchant = (value: string) => value.trim().toLowerCase();
 
+const getCategoryGlyph = (categoryName: string) => {
+  const normalized = categoryName.trim().toLowerCase();
+  if (normalized.includes("housing")) return "🏠";
+  if (normalized.includes("grocer")) return "🛒";
+  if (normalized.includes("food") || normalized.includes("dining") || normalized.includes("coffee")) return "☕";
+  if (normalized.includes("transport") || normalized.includes("transit") || normalized.includes("ride")) return "🚌";
+  if (normalized.includes("bill") || normalized.includes("utility") || normalized.includes("internet") || normalized.includes("phone"))
+    return "💡";
+  if (normalized.includes("subscription") || normalized.includes("stream")) return "↻";
+  if (normalized.includes("health") || normalized.includes("pharmacy") || normalized.includes("medicine")) return "✚";
+  if (normalized.includes("income") || normalized.includes("salary") || normalized.includes("payroll")) return "↗";
+  if (normalized.includes("transfer")) return "⇄";
+  return "•";
+};
+
 const getMonthBuckets = (anchor: Date) => {
   const buckets: MonthBucket[] = [];
   for (let offset = 5; offset >= 0; offset -= 1) {
@@ -795,6 +810,29 @@ export default async function InsightsPage() {
     },
   ];
 
+  const heroActions = [
+    {
+      title: goalLabel ? `Keep ${goalLabel.toLowerCase()} in view` : "Set a primary goal",
+      body: goalLabel
+        ? "Use the goal as the benchmark for every future insight."
+        : "A goal gives the page a destination, so the next insight can be measured against something real.",
+      href: goalLabel ? "/settings" : "/onboarding",
+      label: goalLabel ? "Review goal" : "Set goal",
+    },
+    {
+      title: "Review the clean-up queue",
+      body: "Fix uncategorized rows and duplicate matches so the advice is based on the best possible data.",
+      href: "/transactions",
+      label: "Open transactions",
+    },
+    {
+      title: "Compare this month with the last",
+      body: "Look at where cash flow changed first, then trim the biggest pressure point.",
+      href: "/reports",
+      label: "Open reports",
+    },
+  ];
+
   const chartWidth = 520;
   const chartHeight = 150;
   const chartPadding = 18;
@@ -871,6 +909,20 @@ export default async function InsightsPage() {
               </div>
             ))}
           </div>
+
+          <div className="insights-snapshot__actions">
+            {heroActions.map((action) => (
+              <article key={action.title} className="insights-snapshot__action">
+                <div>
+                  <strong>{action.title}</strong>
+                  <span>{action.body}</span>
+                </div>
+                <Link className="pill-link pill-link--inline" href={action.href}>
+                  {action.label}
+                </Link>
+              </article>
+            ))}
+          </div>
         </article>
 
         <article className="insight-panel insight-panel--feature glass">
@@ -935,24 +987,77 @@ export default async function InsightsPage() {
             </div>
           </div>
 
-          <div className="insight-section-note">
-            <div className="insight-section-note__head">
+        </article>
+
+        <article className="insight-panel glass">
+          <div className="insight-panel__head">
+            <div>
               <p className="eyebrow">Where your money went</p>
-              <span>{formatPercent(trackedCategoryShare * 100)} in tracked categories</span>
+              <h4>Category mix</h4>
+            </div>
+            <div className="insight-panel__stat">
+              <strong>{formatPercent(trackedCategoryShare * 100)}</strong>
+              <span>In tracked categories</span>
+            </div>
+          </div>
+
+          <div className="insight-donut">
+            <div className="insight-donut__chart" role="img" aria-label="Spending breakdown donut chart">
+              <svg viewBox="0 0 240 240">
+                <defs>
+                  <linearGradient id="insight-donut-gradient" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0%" stopColor="rgba(3,168,192,0.26)" />
+                    <stop offset="100%" stopColor="rgba(3,168,192,0.8)" />
+                  </linearGradient>
+                </defs>
+                <circle cx="120" cy="120" r="82" className="insight-donut__track" />
+                {topCategories.length > 0
+                  ? (() => {
+                      let offset = 0;
+                      return topCategories.map(([categoryName, amount], index) => {
+                        const share = currentSpend > 0 ? amount / currentSpend : 0;
+                        const circumference = 2 * Math.PI * 82;
+                        const dashLength = share * circumference;
+                        const segment = (
+                          <circle
+                            key={categoryName}
+                            cx="120"
+                            cy="120"
+                            r="82"
+                            className="insight-donut__segment"
+                            style={{
+                              stroke: `var(${index % 2 === 0 ? "--accent" : "--accent-light"})`,
+                              strokeDasharray: `${dashLength} ${circumference}`,
+                              strokeDashoffset: -offset,
+                            }}
+                          />
+                        );
+                        offset += dashLength;
+                        return segment;
+                      });
+                    })()
+                  : null}
+              </svg>
+              <div className="insight-donut__center">
+                <strong>{formatCurrency(currentSpend)}</strong>
+                <span>Total spend</span>
+              </div>
             </div>
 
-            <div className="report-list">
+            <div className="insight-donut__legend">
               {topCategories.length > 0 ? (
                 topCategories.map(([categoryName, amount]) => {
                   const share = currentSpend > 0 ? (amount / currentSpend) * 100 : 0;
                   return (
-                    <div key={categoryName} className="report-list__item">
-                      <div className="report-list__meta">
+                    <div key={categoryName} className="insight-donut__item">
+                      <span className="insight-donut__icon" aria-hidden="true">
+                        {getCategoryGlyph(categoryName)}
+                      </span>
+                      <div className="insight-donut__meta">
                         <strong>{categoryName}</strong>
-                        <span>{formatCurrency(amount)}</span>
-                      </div>
-                      <div className="report-list__track" aria-hidden="true">
-                        <span className="report-list__fill" style={{ width: `${Math.max(share, 8)}%` }} />
+                        <span>
+                          {formatCurrency(amount)} · {formatPercent(share)}
+                        </span>
                       </div>
                     </div>
                   );
@@ -960,13 +1065,13 @@ export default async function InsightsPage() {
               ) : (
                 <div className="empty-state">No categorized expenses yet.</div>
               )}
-              <div className="report-list__item">
-                <div className="report-list__meta">
+              <div className="insight-donut__item">
+                <span className="insight-donut__icon" aria-hidden="true">
+                  •
+                </span>
+                <div className="insight-donut__meta">
                   <strong>Others</strong>
                   <span>{formatCurrency(otherSpend)}</span>
-                </div>
-                <div className="report-list__track" aria-hidden="true">
-                  <span className="report-list__fill" style={{ width: `${Math.max(currentSpend > 0 ? (otherSpend / currentSpend) * 100 : 0, 8)}%` }} />
                 </div>
               </div>
             </div>
@@ -990,6 +1095,9 @@ export default async function InsightsPage() {
               categoryDriverChanges.map((driver) => (
                 <div key={driver.categoryName} className="insight-list__item">
                   <strong>
+                    <span className="insight-list__icon" aria-hidden="true">
+                      {getCategoryGlyph(driver.categoryName)}
+                    </span>
                     {driver.categoryName} {driver.delta > 0 ? "increased" : "decreased"} by {formatCurrency(Math.abs(driver.delta))}
                   </strong>
                   <span>
@@ -1024,7 +1132,12 @@ export default async function InsightsPage() {
                 {recurringMerchants.length > 0 ? (
                   recurringMerchants.map((merchant) => (
                     <div key={merchant.label} className="insight-list__item">
-                      <strong>{merchant.label}</strong>
+                      <strong>
+                        <span className="insight-list__icon" aria-hidden="true">
+                          {getCategoryGlyph(merchant.label)}
+                        </span>
+                        {merchant.label}
+                      </strong>
                       <span>
                         {merchant.count} transaction{merchant.count === 1 ? "" : "s"} over 90 days · {formatCurrency(merchant.amount)} total
                       </span>
@@ -1046,17 +1159,32 @@ export default async function InsightsPage() {
               <p className="eyebrow">Behavioral patterns</p>
               <div className="insight-list">
                 <div className="insight-list__item">
-                  <strong>Weekend spending</strong>
+                  <strong>
+                    <span className="insight-list__icon" aria-hidden="true">
+                      🗓
+                    </span>
+                    Weekend spending
+                  </strong>
                   <span>{weekendInsight}</span>
                 </div>
                 <div className="insight-list__item">
-                  <strong>Concentration</strong>
+                  <strong>
+                    <span className="insight-list__icon" aria-hidden="true">
+                      🎯
+                    </span>
+                    Concentration
+                  </strong>
                   <span>
                     Your top category is {topCategoryShare ? formatPercent(topCategoryShare * 100) : "N/A"} of this month's spending.
                   </span>
                 </div>
                 <div className="insight-list__item">
-                  <strong>Data quality</strong>
+                  <strong>
+                    <span className="insight-list__icon" aria-hidden="true">
+                      🧼
+                    </span>
+                    Data quality
+                  </strong>
                   <span>
                     {importStatusCounts.failed > 0
                       ? `${importStatusCounts.failed} failed import${importStatusCounts.failed === 1 ? "" : "s"} still need attention`
@@ -1064,57 +1192,15 @@ export default async function InsightsPage() {
                   </span>
                 </div>
                 <div className="insight-list__item">
-                  <strong>Goal context</strong>
+                  <strong>
+                    <span className="insight-list__icon" aria-hidden="true">
+                      🎯
+                    </span>
+                    Goal context
+                  </strong>
                   <span>{goalLabel ?? "No primary goal set yet"}</span>
                 </div>
               </div>
-            </div>
-          </div>
-        </article>
-
-        <article className="insight-panel glass">
-          <div className="insight-panel__head">
-            <div>
-              <p className="eyebrow">Suggested actions</p>
-              <h4>What to do next</h4>
-            </div>
-          </div>
-
-          <div className="insight-action-list">
-            <div className="insight-action">
-              <div>
-                <strong>
-                  Reduce {topCategories[0]?.[0] ?? "your top category"} by 20%
-                </strong>
-                <span>
-                  You could save {formatCurrency(topCategoryOpportunity)} a month by trimming the biggest category a little.
-                </span>
-              </div>
-              <Link className="pill-link pill-link--inline" href="/transactions">
-                Review spending
-              </Link>
-            </div>
-            <div className="insight-action">
-              <div>
-                <strong>Cut recurring costs</strong>
-                <span>
-                  A 20% trim on recurring merchants could free up {formatCurrency(recurringSavingsPotential)} a month.
-                </span>
-              </div>
-              <Link className="pill-link pill-link--inline" href="/transactions">
-                Check subscriptions
-              </Link>
-            </div>
-            <div className="insight-action">
-              <div>
-                <strong>Set the goal as the benchmark</strong>
-                <span>
-                  {goalLabel ?? "Add a primary goal"} so the page can judge progress instead of only showing trends.
-                </span>
-              </div>
-              <Link className="pill-link pill-link--inline" href={goalLabel ? "/settings" : "/onboarding"}>
-                {goalLabel ? "Review goal" : "Set goal"}
-              </Link>
             </div>
           </div>
         </article>
