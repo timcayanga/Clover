@@ -22,22 +22,20 @@ function VisualGallery() {
   return (
     <div className="landing-gallery">
       <div className="landing-gallery__layout">
-        <figure className="landing-photo landing-photo--tall">
+        <figure className="landing-photo landing-photo--gallery">
           <img src="/landing-images/statement-upload.jpg" alt="" />
           <figcaption className="landing-photo__badge">Upload statements</figcaption>
         </figure>
 
-        <div className="landing-gallery__stack">
-          <figure className="landing-photo">
-            <img src="/landing-images/reports-ai.jpg" alt="" />
-            <figcaption className="landing-photo__badge">Reports and AI</figcaption>
-          </figure>
+        <figure className="landing-photo landing-photo--gallery">
+          <img src="/landing-images/reports-ai.jpg" alt="" />
+          <figcaption className="landing-photo__badge">Reports and AI</figcaption>
+        </figure>
 
-          <figure className="landing-photo">
-            <img src="/landing-images/smart-overview.jpg" alt="" />
-            <figcaption className="landing-photo__badge">A smarter overview</figcaption>
-          </figure>
-        </div>
+        <figure className="landing-photo landing-photo--gallery">
+          <img src="/landing-images/smart-overview.jpg" alt="" />
+          <figcaption className="landing-photo__badge">A smarter overview</figcaption>
+        </figure>
       </div>
     </div>
   );

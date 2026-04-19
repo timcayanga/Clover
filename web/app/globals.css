@@ -6823,12 +6823,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .landing-gallery__layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.16fr) minmax(280px, 0.84fr);
-  gap: 16px;
-}
-
-.landing-gallery__stack {
-  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -6857,6 +6852,10 @@ input.transaction-inline-edit--amount::placeholder {
 .landing-photo--hero {
   min-height: 560px;
   align-self: stretch;
+}
+
+.landing-photo--gallery {
+  aspect-ratio: 1 / 1;
 }
 
 .landing-photo__overlay {
@@ -6901,10 +6900,6 @@ input.transaction-inline-edit--amount::placeholder {
   border: 1px solid rgba(15, 23, 42, 0.05);
 }
 
-.landing-photo--tall {
-  min-height: 100%;
-}
-
 .landing-photo__badge {
   position: absolute;
   left: 18px;
@@ -6920,11 +6915,6 @@ input.transaction-inline-edit--amount::placeholder {
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-}
-
-.landing-gallery__layout > .landing-photo--tall,
-.landing-gallery__stack .landing-photo {
-  min-height: 0;
 }
 
 .landing-photo::after {
@@ -7063,6 +7053,10 @@ input.transaction-inline-edit--amount::placeholder {
     min-height: 0;
   }
 
+  .landing-photo--gallery {
+    aspect-ratio: 16 / 10;
+  }
+
   .landing-flow__steps {
     grid-template-columns: 1fr;
   }
@@ -7091,10 +7085,6 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .landing-gallery__layout {
-    gap: 12px;
-  }
-
-  .landing-gallery__stack {
     gap: 12px;
   }
 
