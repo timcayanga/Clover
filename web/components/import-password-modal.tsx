@@ -16,7 +16,6 @@ type ImportPasswordModalProps = {
   open: boolean;
   files: PasswordImportFile[];
   activeFileId: string | null;
-  busy: boolean;
   onClose: () => void;
   onPasswordChange: (id: string, password: string) => void;
   onToggleVisibility: (id: string) => void;
@@ -27,7 +26,6 @@ export function ImportPasswordModal({
   open,
   files,
   activeFileId,
-  busy,
   onClose,
   onPasswordChange,
   onToggleVisibility,
@@ -110,11 +108,11 @@ export function ImportPasswordModal({
             </label>
 
             <div className="import-password-actions">
-              <button className="button button-secondary" type="button" onClick={onClose} disabled={busy}>
+              <button className="button button-secondary" type="button" onClick={onClose}>
                 Close
               </button>
-              <button className="button button-primary" type="submit" disabled={busy || !activeFile.password.trim()}>
-                {busy ? "Unlocking..." : "Unlock file"}
+              <button className="button button-primary" type="submit" disabled={!activeFile.password.trim()}>
+                Unlock file
               </button>
             </div>
           </form>

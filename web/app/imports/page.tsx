@@ -856,7 +856,6 @@ function ImportsPageContent() {
               },
             ]}
             activeFileId={passwordPrompt.id}
-            busy={isUploading}
             onClose={() => {
               setPasswordPrompt(null);
               setIsUploading(false);

@@ -508,21 +508,21 @@ export function ImportFilesModal({
   };
 
   const handleRetry = async (itemId: string) => {
-    setBusy(true);
-    setMessage("Retrying password-protected file...");
-    try {
-      const result = await processFile(itemId);
-      if (result === "done") {
-        setMessage("File imported successfully.");
-        if (items.some((item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim()))) {
-          autoStartRef.current = true;
-        }
-      } else {
-        setMessage("Check the password and try again.");
-      }
-    } finally {
-      setBusy(false);
+    updateItem(itemId, {
+      status: "pending",
+      error: null,
+      progress: 0,
+      progressLabel: "Queued",
+    });
+
+    const remainingLockedFiles = items.filter((item) => item.id !== itemId && item.status === "needs_password");
+    if (remainingLockedFiles.length > 0) {
+      setMessage("Password saved. Enter the next password to continue.");
+      return;
     }
+
+    setMessage("All passwords saved. Starting import...");
+    autoStartRef.current = true;
   };
 
   const handleReplayConfirm = async (itemId: string) => {
@@ -595,7 +595,6 @@ export function ImportFilesModal({
           passwordVisible: item.passwordVisible,
         }))}
         activeFileId={activePasswordItem.id}
-        busy={busy}
         onClose={onClose}
         onPasswordChange={(id, password) => updateItem(id, { password, error: null })}
         onToggleVisibility={(id) =>
