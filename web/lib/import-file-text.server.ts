@@ -125,7 +125,11 @@ const ensurePdfJsPolyfills = () => {
 
 const loadPdfJs = async () => {
   ensurePdfJsPolyfills();
-  return import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  if (!pdfjs.GlobalWorkerOptions.workerSrc) {
+    pdfjs.GlobalWorkerOptions.workerSrc = "pdfjs-dist/build/pdf.worker.mjs";
+  }
+  return pdfjs;
 };
 
 const decodeBody = async (body: unknown) => {
