@@ -886,6 +886,180 @@ const parseBpiImportText = (text: string) => {
   };
 };
 
+const unionbankDatePattern = /^\d{2}\/\d{2}\/\d{2}$/;
+const unionbankMoneyPattern = /^PHP\s*[0-9][0-9,]*\.\d{2}$/i;
+const unionbankReferencePattern = /^[A-Z]{1,3}\d{4,}$/i;
+
+const isUnionBankBoilerplateLine = (line: string) =>
+  /^UNIONBANK\b/i.test(line) ||
+  /^ACCOUNT NUMBER\b/i.test(line) ||
+  /^TRANSACTION HISTORY AS OF\b/i.test(line) ||
+  /^DATE$/i.test(line) ||
+  /^CHECK NO\.$/i.test(line) ||
+  /^REF\.?\s*NO\.?$/i.test(line) ||
+  /^DESCRIPTION$/i.test(line) ||
+  /^DEBIT$/i.test(line) ||
+  /^CREDIT$/i.test(line) ||
+  /^BALANCE$/i.test(line) ||
+  /^PAGE\s+\d+\s+OF\s+\d+$/i.test(line) ||
+  /^FOR BEST RESULTS, PRINT YOUR TRANSACTION HISTORY/i.test(line) ||
+  /^FOR BILLING CONCERNS, YOU MAY CONTACT/i.test(line);
+
+const unionbankStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+  const normalized = text.replace(/\u00a0/g, " ").trim();
+  if (!/\bUNIONBANK\b/i.test(normalized) && !/TRANSACTION HISTORY AS OF/i.test(normalized)) {
+    return null;
+  }
+
+  const lines = normalized
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+
+  const accountLineIndex = lines.findIndex((line) => /^ACCOUNT NUMBER\b/i.test(line));
+  const accountLine = accountLineIndex >= 0 ? [lines[accountLineIndex], lines[accountLineIndex + 1] ?? ""].join(" ") : normalized;
+  const accountNumber = accountLine.match(/\d[\d\s-]{6,}\d/)?.[0].replace(/\D/g, "").slice(0, 16) || detectAccountNumberFromText(normalized);
+  const accountName = accountNumber ? `UnionBank Savings ${accountNumber.slice(-4)}` : "UnionBank Savings";
+
+  const statementDateLine = lines.find((line) => /TRANSACTION HISTORY AS OF/i.test(line)) ?? "";
+  const statementDateMatch = statementDateLine.match(/TRANSACTION HISTORY AS OF\s+(.+)$/i);
+  const endDate = statementDateMatch?.[1] ? new Date(statementDateMatch[1]) : null;
+
+  return {
+    institution: "UnionBank",
+    accountNumber,
+    accountName,
+    openingBalance: null,
+    endingBalance: null,
+    startDate: null,
+    endDate: endDate && !Number.isNaN(endDate.getTime()) ? endDate.toISOString() : null,
+  };
+};
+
+const guessUnionBankCategoryName = (description: string, type: TransactionType) => {
+  const lower = description.toLowerCase();
+  if (/^not applicable$/i.test(description)) return "Other";
+  if (/interest earned/.test(lower)) return "Income";
+  if (/bills payment/.test(lower)) return "Transfers";
+  if (/sent to|transfer to|transfer from|online fund transfer|xendit transfer|cash in|cash out|received credit/.test(lower)) {
+    return "Transfers";
+  }
+  if (/online instapay fee|instapay fee|transfer fee|service charge|withholding tax|withheld tax|tax withheld|\bfee\b/.test(lower)) {
+    return "Financial";
+  }
+  if (/incoming credit/.test(lower)) return type === "income" ? "Income" : "Other";
+  return guessCategoryName(description, type);
+};
+
+const parseUnionBankTransactionSegment = (segment: string[], state: { accountName: string }) => {
+  if (segment.length === 0) {
+    return null;
+  }
+
+  const date = parseDateValue(segment[0]);
+  if (!date) {
+    return null;
+  }
+
+  const body = segment.slice(1).filter((line) => line && !isUnionBankBoilerplateLine(line));
+  const moneyIndices = body.flatMap((line, index) => (unionbankMoneyPattern.test(line) ? [index] : []));
+  if (moneyIndices.length < 2) {
+    return null;
+  }
+
+  const transactionAmountLine = body[moneyIndices[0]];
+  const balanceLine = body[moneyIndices.at(-1)!];
+  const transactionAmount = parseMoney(transactionAmountLine?.replace(/^PHP\s*/i, "") ?? null);
+  if (transactionAmount === null) {
+    return null;
+  }
+
+  const refIndex = body.findIndex((line, index) => index < moneyIndices[0] && unionbankReferencePattern.test(line));
+  const descriptionLines = body.slice(Math.max(refIndex, 0) + 1, moneyIndices[0]).filter(Boolean);
+  const fallbackLines = body.slice(0, moneyIndices[0]).filter((line) => !unionbankReferencePattern.test(line));
+  const description = normalizeWhitespace((descriptionLines.length > 0 ? descriptionLines : fallbackLines).join(" "));
+  if (!description || isUnionBankBoilerplateLine(description)) {
+    return null;
+  }
+
+  const descriptionLower = description.toLowerCase();
+  let type: TransactionType = "expense";
+  if (/interest earned/.test(descriptionLower)) {
+    type = "income";
+  } else if (/not applicable|incoming credit|salary|payroll|cash in|received|credit memo/.test(descriptionLower)) {
+    type = "income";
+  } else if (/bills payment|transfer to|transfer from|sent to|received from|online fund transfer|xendit transfer/.test(descriptionLower)) {
+    type = "transfer";
+  } else if (/online instapay fee|instapay fee|transfer fee|service charge|withholding tax|withheld tax|tax withheld|\bfee\b/.test(descriptionLower)) {
+    type = "expense";
+  }
+
+  return {
+    date: date.toISOString().slice(0, 10),
+    amount: transactionAmount.toFixed(2),
+    merchantRaw: humanizeMerchantText(description),
+    merchantClean: summarizeMerchantText(description),
+    description,
+    categoryName: guessUnionBankCategoryName(description, type),
+    accountName: state.accountName,
+    type,
+    rawPayload: {
+      bank: "UnionBank",
+      accountName: state.accountName,
+      line: segment.join(" "),
+      amountText: transactionAmountLine,
+      balanceText: balanceLine,
+      description,
+      referenceNo: refIndex >= 0 ? body[refIndex] : null,
+    },
+  } satisfies ParsedImportRow;
+};
+
+const parseUnionBankImportText = (text: string) => {
+  const metadata = unionbankStatementMetadata(text);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter((line) => line && !isUnionBankBoilerplateLine(line));
+
+  const segments: string[][] = [];
+  let current: string[] = [];
+
+  for (const line of lines) {
+    if (unionbankDatePattern.test(line)) {
+      if (current.length > 0) {
+        segments.push(current);
+      }
+      current = [line];
+      continue;
+    }
+
+    if (current.length > 0) {
+      current.push(line);
+    }
+  }
+
+  if (current.length > 0) {
+    segments.push(current);
+  }
+
+  const rows = segments
+    .map((segment) => parseUnionBankTransactionSegment(segment, { accountName: metadata.accountName ?? "UnionBank Savings" }))
+    .filter(Boolean) as ParsedImportRow[];
+
+  return rows.length > 0
+    ? {
+        metadata,
+        rows,
+      }
+    : null;
+};
+
 export const detectStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const gcashMetadata = gcashStatementMetadata(text);
   if (gcashMetadata) {
@@ -895,6 +1069,11 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
   const rcbcMetadata = rcbcStatementMetadata(text);
   if (rcbcMetadata) {
     return rcbcMetadata;
+  }
+
+  const unionbankMetadata = unionbankStatementMetadata(text);
+  if (unionbankMetadata) {
+    return unionbankMetadata;
   }
 
   const bpiMetadata = bpiStatementMetadata(text);
@@ -1015,6 +1194,11 @@ export const parseImportText = (text: string, fileName: string, fileType: string
   const rcbcParsed = parseRcbcImportText(text);
   if (rcbcParsed) {
     return rcbcParsed.rows;
+  }
+
+  const unionbankParsed = parseUnionBankImportText(text);
+  if (unionbankParsed) {
+    return unionbankParsed.rows;
   }
 
   const bpiParsed = parseBpiImportText(text);
