@@ -126,6 +126,20 @@ const seedStagingSampleTransactions = async (workspaceId: string) => {
   await prisma.transaction.createMany({ data: rows });
 };
 
+const normalizeStarterCashAccount = async (workspaceId: string) => {
+  await prisma.account.updateMany({
+    where: {
+      workspaceId,
+      name: "Cash on hand",
+      institution: "Wallet",
+      type: "cash",
+    },
+    data: {
+      institution: "Cash",
+    },
+  });
+};
+
 export const ensureStarterWorkspace = async (userId: string, email: string, verified: boolean) => {
   const user = await getOrCreateCurrentUser(userId);
   const stagingHost = await isStagingHost();
@@ -139,6 +153,8 @@ export const ensureStarterWorkspace = async (userId: string, email: string, veri
   });
 
   if (existing) {
+    await normalizeStarterCashAccount(existing.id);
+
     if (stagingHost) {
       await seedStagingSampleTransactions(existing.id);
     }
@@ -162,7 +178,7 @@ export const ensureStarterWorkspace = async (userId: string, email: string, veri
           },
           {
             name: "Cash on hand",
-            institution: "Wallet",
+            institution: "Cash",
             type: "cash",
             currency: "PHP",
             source: "manual",
@@ -217,7 +233,7 @@ export const seedWorkspaceDefaults = async (workspaceId: string) => {
         {
           workspaceId,
           name: "Cash on hand",
-          institution: "Wallet",
+          institution: "Cash",
           type: "cash",
           currency: "PHP",
           source: "manual",
@@ -226,6 +242,8 @@ export const seedWorkspaceDefaults = async (workspaceId: string) => {
       ],
     });
   }
+
+  await normalizeStarterCashAccount(workspaceId);
 
   if (await isStagingHost()) {
     await seedStagingSampleTransactions(workspaceId);
