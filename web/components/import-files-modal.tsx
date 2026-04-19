@@ -6,6 +6,7 @@ import { ImportPasswordModal } from "@/components/import-password-modal";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { postFileWithProgress } from "@/lib/import-file-post";
+import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 
 type AccountOption = {
   id: string;
@@ -110,6 +111,7 @@ export function ImportFilesModal({
   }, [accounts, defaultAccountId, open]);
 
   const createStatementAccount = async (name: string, institution: string | null) => {
+    const inferredType = inferAccountTypeFromStatement(institution, name, "bank");
     const response = await fetch("/api/accounts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -117,7 +119,7 @@ export function ImportFilesModal({
         workspaceId,
         name,
         institution,
-        type: "bank",
+        type: inferredType,
         currency: "PHP",
         source: "upload",
       }),
@@ -135,6 +137,27 @@ export function ImportFilesModal({
 
     accountIdByKeyRef.current.set(accountKey(name, institution), accountId);
     return accountId;
+  };
+
+  const syncStatementAccountType = async (accountId: string, name: string, institution: string | null) => {
+    const expectedType = inferAccountTypeFromStatement(institution, name, "bank");
+    const current = accounts.find((account) => account.id === accountId);
+    if (!current || current.type === expectedType) {
+      return;
+    }
+
+    const response = await fetch(`/api/accounts/${accountId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId,
+        type: expectedType,
+      }),
+    });
+
+    if (!response.ok) {
+      return;
+    }
   };
 
   const addFiles = (incoming: FileList | File[]) => {
@@ -295,6 +318,7 @@ export function ImportFilesModal({
       const existing = accountIdByKeyRef.current.get(key) ?? accounts.find((account) => accountKey(account.name, account.institution) === key)?.id;
       if (existing) {
         accountIdByKeyRef.current.set(key, existing);
+        await syncStatementAccountType(existing, statementAccountName, institution ?? null);
         return existing;
       }
 

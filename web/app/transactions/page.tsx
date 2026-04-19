@@ -1822,7 +1822,7 @@ function TransactionsPageContent() {
       transaction.accountName,
       transaction.categoryName ?? "Other",
       transaction.amount,
-      transaction.type,
+      transaction.type === "income" ? "Credit" : "Debit",
       transaction.description ?? "",
       warningReasonFor(transaction) ?? "",
     ]);

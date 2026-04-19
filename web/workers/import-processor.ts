@@ -7,6 +7,7 @@ import {
   buildParsedTransactionInsertData,
   buildStatementFingerprint,
   detectStatementMetadataFromText,
+  findExistingImportedStatement,
   fetchImportFileCompat,
   fetchParsedTransactionRows,
   enrichParsedRowsWithTraining,
@@ -34,6 +35,17 @@ export const processImportFileText = async (importFileId: string, text: string) 
   const parsedRows = parseImportText(text, importFile.fileName, importFile.fileType);
   const metadata = detectStatementMetadataFromText(text);
   const statementFingerprint = buildStatementFingerprint(text, metadata, importFile.fileName, importFile.fileType);
+  const duplicateImportFileId = await findExistingImportedStatement({
+    workspaceId: importFile.workspaceId,
+    statementFingerprint,
+    importFileId,
+  });
+  if (duplicateImportFileId) {
+    await updateImportFileCompat(importFileId, {
+      status: "failed",
+    });
+    throw new Error("This statement appears to have already been imported.");
+  }
   const template = await upsertStatementTemplate({
     workspaceId: importFile.workspaceId,
     fingerprint: statementFingerprint,

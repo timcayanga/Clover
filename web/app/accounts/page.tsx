@@ -6,6 +6,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { ImportFilesModal } from "@/components/import-files-modal";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
+import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 
 type Workspace = {
   id: string;
@@ -69,18 +70,22 @@ const formatDate = (value: string) =>
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
+const getEffectiveAccountType = (account: Account) =>
+  inferAccountTypeFromStatement(account.institution, account.name, account.type);
+
 const getAccountDisplayType = (account: Account) => {
-  if (account.type === "credit_card") return "Credit Card";
-  if (account.type === "cash") return "Cash";
-  if (account.type === "investment") return "Investment";
-  if (account.type === "wallet") return "Wallet";
-  if (account.type === "bank" && account.institution === "Checking") return "Checking";
-  if (account.type === "bank" && account.institution === "Savings") return "Savings";
-  if (account.type === "other") return "-";
+  const effectiveType = getEffectiveAccountType(account);
+  if (effectiveType === "credit_card") return "Credit Card";
+  if (effectiveType === "cash") return "Cash";
+  if (effectiveType === "investment") return "Investment";
+  if (effectiveType === "wallet") return "Wallet";
+  if (effectiveType === "bank" && account.institution === "Checking") return "Checking";
+  if (effectiveType === "bank" && account.institution === "Savings") return "Savings";
+  if (effectiveType === "other") return "-";
   return "Bank";
 };
 
-const getAccountTone = (account: Account) => (account.type === "credit_card" ? "liability" : "asset");
+const getAccountTone = (account: Account) => (getEffectiveAccountType(account) === "credit_card" ? "liability" : "asset");
 
 const getAccountWarning = (account: Account, duplicateCount: number) => {
   if (duplicateCount > 1) return "Possible duplicate";
@@ -303,6 +308,7 @@ function AccountsPageContent() {
       accounts.map((account) => {
         const accountTransactions = transactions.filter((transaction) => transaction.accountId === account.id);
         const accountCheckpoints = drawerAccountId === account.id ? statementCheckpoints : [];
+        const effectiveType = getEffectiveAccountType(account);
         const reconciledBalance = deriveReconciledBalance({
           balance: account.balance,
           transactions: accountTransactions,
@@ -311,6 +317,7 @@ function AccountsPageContent() {
 
         return {
           ...account,
+          type: effectiveType,
           balance: reconciledBalance ?? account.balance,
         };
       }),
@@ -468,7 +475,7 @@ function AccountsPageContent() {
     const term = searchQuery.trim().toLowerCase();
     const base = term
       ? reconciledAccounts.filter((account) => {
-          const haystack = [account.name, account.institution ?? "", account.source, account.type].join(" ").toLowerCase();
+          const haystack = [account.name, account.institution ?? "", account.source, getEffectiveAccountType(account)].join(" ").toLowerCase();
           return haystack.includes(term);
         })
       : reconciledAccounts;
@@ -490,7 +497,7 @@ function AccountsPageContent() {
     return reconciledAccounts.reduce(
       (accumulator, account) => {
         const rawValue = parseAmount(account.balance);
-        const isLiability = account.type === "credit_card";
+        const isLiability = getEffectiveAccountType(account) === "credit_card";
         const signedValue = isLiability ? -Math.abs(rawValue) : rawValue;
         if (signedValue >= 0) {
           accumulator.assets += signedValue;
@@ -509,29 +516,35 @@ function AccountsPageContent() {
       {
         title: "Banks & savings",
         tone: "assets",
-        rows: searchedAccounts.filter((account) => account.type === "bank" || account.type === "wallet" || account.type === "investment"),
+        rows: searchedAccounts.filter((account) => {
+          const effectiveType = getEffectiveAccountType(account);
+          return effectiveType === "bank" || effectiveType === "wallet" || effectiveType === "investment";
+        }),
       },
       {
         title: "Credit cards",
         tone: "liability",
-        rows: searchedAccounts.filter((account) => account.type === "credit_card"),
+        rows: searchedAccounts.filter((account) => getEffectiveAccountType(account) === "credit_card"),
       },
       {
         title: "Imported & other",
         tone: "neutral",
-        rows: searchedAccounts.filter((account) => account.type === "other"),
+        rows: searchedAccounts.filter((account) => getEffectiveAccountType(account) === "other"),
       },
       {
         title: "Cash",
         tone: "cash",
-        rows: searchedAccounts.filter((account) => account.type === "cash"),
+        rows: searchedAccounts.filter((account) => getEffectiveAccountType(account) === "cash"),
       },
     ];
 
     return groups
       .map((group) => ({
         ...group,
-        total: group.rows.reduce((sum, account) => sum + (account.type === "credit_card" ? -Math.abs(parseAmount(account.balance)) : parseAmount(account.balance)), 0),
+        total: group.rows.reduce(
+          (sum, account) => sum + (getEffectiveAccountType(account) === "credit_card" ? -Math.abs(parseAmount(account.balance)) : parseAmount(account.balance)),
+          0
+        ),
       }))
       .filter((group) => group.rows.length > 0);
   }, [searchedAccounts]);
@@ -598,7 +611,7 @@ function AccountsPageContent() {
     setDrawerNotice(null);
     setAccountEditName(account.name);
     setAccountEditInstitution(account.institution ?? "");
-    setAccountEditType(account.type);
+    setAccountEditType(getEffectiveAccountType(account));
     setAccountEditCurrency(account.currency);
     setAccountEditBalance(account.balance?.toString() ?? "");
     setAccountEditSource(account.source);
@@ -920,7 +933,7 @@ function AccountsPageContent() {
                       </div>
                       {group.rows.map((account) => {
                         const value = parseAmount(account.balance);
-                        const isLiability = account.type === "credit_card";
+                        const isLiability = getEffectiveAccountType(account) === "credit_card";
                         const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
                         const warning = getAccountWarning(account, duplicateCounts.get(duplicateKey) ?? 0);
                         return (
@@ -1103,7 +1116,7 @@ function AccountsPageContent() {
                 <span>Last updated</span>
                 <strong>{formatDate(selectedAccount.updatedAt)}</strong>
               </div>
-              {selectedAccount.type !== "cash" ? (
+              {getEffectiveAccountType(selectedAccount) !== "cash" ? (
                 <div>
                   <span>Institution</span>
                   <strong>{selectedAccount.institution ?? "No institution"}</strong>

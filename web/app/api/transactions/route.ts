@@ -41,7 +41,6 @@ export async function GET(request: Request) {
         account: true,
       },
       orderBy: { date: "desc" },
-      take: 100,
     });
 
     return NextResponse.json({

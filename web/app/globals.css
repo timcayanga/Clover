@@ -4370,6 +4370,38 @@ input.transaction-inline-edit--amount::placeholder {
   width: min(780px, 100%);
 }
 
+.date-filter-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 24px 0 14px;
+}
+
+.date-filter-tab {
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(3, 168, 192, 0.2);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.date-filter-tab:hover,
+.date-filter-tab:focus {
+  background: rgba(3, 168, 192, 0.08);
+  border-color: rgba(3, 168, 192, 0.34);
+}
+
+.date-filter-tab.is-active {
+  background: linear-gradient(135deg, var(--accent), #057ea0);
+  border-color: transparent;
+  color: #ffffff;
+}
+
 .detail-warning-box {
   margin-top: 6px;
   display: grid;

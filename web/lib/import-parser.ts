@@ -1,5 +1,7 @@
 import type { TransactionType } from "@prisma/client";
 
+export type ImportedAccountType = "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
+
 export type ParsedImportRow = {
   date?: string;
   amount?: string;
@@ -48,6 +50,32 @@ const guessCategoryName = (text: string, type: TransactionType) => {
   if (/business|invoice|client|contract/.test(lower)) return "Business";
   if (/\bfee\b|interest|loan|financial|bank charge/.test(lower)) return "Financial";
   return "Other";
+};
+
+export const inferAccountTypeFromStatement = (
+  institution?: string | null,
+  accountName?: string | null,
+  fallback: ImportedAccountType = "bank"
+): ImportedAccountType => {
+  const normalized = `${institution ?? ""} ${accountName ?? ""}`.toLowerCase();
+
+  if (/(gcash|maya|wallet)/.test(normalized)) {
+    return "wallet";
+  }
+
+  if (/(rcbc|bankard|credit card|visa platinum|mastercard|amex|card ending)/.test(normalized)) {
+    return "credit_card";
+  }
+
+  if (/(invest|investment|broker|stocks?|fund)/.test(normalized)) {
+    return "investment";
+  }
+
+  if (/\bcash\b/.test(normalized)) {
+    return "cash";
+  }
+
+  return fallback;
 };
 
 const splitLine = (line: string, delimiter: string) => {
@@ -663,6 +691,7 @@ const parseGcashTransactionRecord = (record: string) => {
       referenceNo: match.groups.reference,
       amountText: match.groups.amount,
       balanceText: match.groups.balance,
+      balance: parseMoney(match.groups.balance),
       line: normalized,
     },
   } satisfies ParsedImportRow;
@@ -749,21 +778,61 @@ const parseBpiTransactionLine = (
   }
 ) => {
   const normalized = normalizeWhitespace(line);
-  const match = normalized.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2})\s*(.+)$/i);
+  const match =
+    normalized.match(/^((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*\d{1,2}(?:,\s*\d{4})?)\s+(.+)$/i) ??
+    normalized.match(/^(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\s+(.+)$/i) ??
+    normalized.match(/^(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:,\s*\d{4})?)\s+(.+)$/i);
 
   if (!match) {
     return null;
   }
 
-  const monthIndex = monthIndexByAbbr[match[1].slice(0, 3).toUpperCase()];
-  if (state.previousMonthIndex !== null && monthIndex < state.previousMonthIndex) {
-    state.year += 1;
-  }
-  state.previousMonthIndex = monthIndex;
+  const dateToken = normalizeWhitespace(match[1]);
+  let date = parseDateValue(dateToken);
 
-  const day = Number(match[2]);
-  const date = new Date(Date.UTC(state.year, monthIndex, day, 12));
-  const moneyMatches = normalized.match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
+  if (!date) {
+    const monthMatch = dateToken.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2})(?:,\s*(\d{4}))?$/i);
+    if (monthMatch) {
+      const monthIndex = monthIndexByAbbr[monthMatch[1].slice(0, 3).toUpperCase()];
+      if (monthIndex !== undefined) {
+        const day = Number(monthMatch[2]);
+        const explicitYear = monthMatch[3] ? Number(monthMatch[3]) : null;
+        if (explicitYear !== null) {
+          state.year = explicitYear;
+        } else if (state.previousMonthIndex !== null && monthIndex < state.previousMonthIndex) {
+          state.year += 1;
+        }
+        state.previousMonthIndex = monthIndex;
+        date = new Date(Date.UTC(state.year, monthIndex, day, 12));
+      }
+    } else {
+      const dayMonthMatch = dateToken.match(/^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:,\s*(\d{4}))?$/i);
+      if (dayMonthMatch) {
+        const monthIndex = monthIndexByAbbr[dayMonthMatch[2].slice(0, 3).toUpperCase()];
+        if (monthIndex !== undefined) {
+          const day = Number(dayMonthMatch[1]);
+          const explicitYear = dayMonthMatch[3] ? Number(dayMonthMatch[3]) : null;
+          if (explicitYear !== null) {
+            state.year = explicitYear;
+          } else if (state.previousMonthIndex !== null && monthIndex < state.previousMonthIndex) {
+            state.year += 1;
+          }
+          state.previousMonthIndex = monthIndex;
+          date = new Date(Date.UTC(state.year, monthIndex, day, 12));
+        }
+      }
+    }
+  } else {
+    state.year = date.getUTCFullYear();
+    state.previousMonthIndex = date.getUTCMonth();
+  }
+
+  if (!date) {
+    return null;
+  }
+
+  const body = normalizeWhitespace(match[2]);
+  const moneyMatches = body.match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
   const currentBalance = parseMoney(moneyMatches.at(-1) ?? null);
   const previousBalance = state.previousBalance;
   const amountDelta =
@@ -772,8 +841,7 @@ const parseBpiTransactionLine = (
     state.previousBalance = currentBalance;
   }
 
-  const description = normalized
-    .replace(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*\d{1,2}\s*/i, "")
+  const description = body
     .replace(/[0-9][0-9,]*\.\d{2}/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();

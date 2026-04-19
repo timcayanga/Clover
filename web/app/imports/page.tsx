@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportPasswordModal } from "@/components/import-password-modal";
 import { ImportProgressModal } from "@/components/import-progress-modal";
+import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
@@ -177,9 +178,27 @@ function ImportsPageContent() {
       const existing = accounts.find((account) => accountKey(account.name, account.institution) === key);
       if (existing) {
         setSelectedAccountId(existing.id);
+        const expectedType = inferAccountTypeFromStatement(institution, statementAccountName, "bank");
+        if (existing.type !== expectedType) {
+          void fetch(`/api/accounts/${existing.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              workspaceId,
+              type: expectedType,
+            }),
+          })
+            .then((response) => {
+              if (response.ok) {
+                setAccounts((current) => current.map((account) => (account.id === existing.id ? { ...account, type: expectedType } : account)));
+              }
+            })
+            .catch(() => null);
+        }
         return existing.id;
       }
 
+      const expectedType = inferAccountTypeFromStatement(institution, statementAccountName, "bank");
       const response = await fetch("/api/accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -187,7 +206,7 @@ function ImportsPageContent() {
           workspaceId,
           name: statementAccountName,
           institution: institution ?? null,
-          type: "bank",
+          type: expectedType,
           currency: "PHP",
           source: "upload",
         }),
@@ -225,7 +244,7 @@ function ImportsPageContent() {
         workspaceId,
         name: "Imported transactions",
         institution: "Source upload",
-        type: "bank",
+        type: inferAccountTypeFromStatement("Source upload", "Imported transactions", "bank"),
         currency: "PHP",
         source: "upload",
       }),

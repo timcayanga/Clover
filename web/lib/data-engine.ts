@@ -904,6 +904,46 @@ export const buildStatementFingerprint = (
   return `stmt_${fnv1a(fingerprintSource)}`;
 };
 
+export const findExistingImportedStatement = async (params: {
+  workspaceId: string;
+  statementFingerprint: string;
+  importFileId?: string | null;
+}) => {
+  const parsedColumns = new Set(await getCompatibleParsedTransactionColumns());
+  if (parsedColumns.has("statementFingerprint") && parsedColumns.has("workspaceId")) {
+    const supportsImportFileId = parsedColumns.has("importFileId");
+    const rows = supportsImportFileId
+      ? await prisma.$queryRawUnsafe<Array<{ importFileId: string | null }>>(
+          `SELECT DISTINCT "importFileId" FROM "ParsedTransaction" WHERE "workspaceId" = $1 AND "statementFingerprint" = $2${params.importFileId ? ' AND "importFileId" <> $3' : ""} LIMIT 1`,
+          ...(params.importFileId ? [params.workspaceId, params.statementFingerprint, params.importFileId] : [params.workspaceId, params.statementFingerprint])
+        )
+      : await prisma.$queryRawUnsafe<Array<{ importFileId: string | null }>>(
+          `SELECT NULL::text AS "importFileId" FROM "ParsedTransaction" WHERE "workspaceId" = $1 AND "statementFingerprint" = $2 LIMIT 1`,
+          params.workspaceId,
+          params.statementFingerprint
+        );
+
+    if (rows[0]?.importFileId !== null || rows.length > 0) {
+      return rows[0]?.importFileId ?? "__duplicate__";
+    }
+  }
+
+  const templateColumns = new Set(await getCompatibleStatementTemplateColumns());
+  if (templateColumns.has("fingerprint") && templateColumns.has("workspaceId")) {
+    const rows = await prisma.$queryRawUnsafe<Array<{ fingerprint: string }>>(
+      `SELECT "fingerprint" FROM "StatementTemplate" WHERE "workspaceId" = $1 AND "fingerprint" = $2 LIMIT 1`,
+      params.workspaceId,
+      params.statementFingerprint
+    );
+
+    if (rows.length > 0) {
+      return rows[0]?.fingerprint ?? "__duplicate__";
+    }
+  }
+
+  return null;
+};
+
 const scoreSignal = (tokens: string[], normalizedMerchant: string, signal: TrainingSignalRow) => {
   const exactMatch = signal.merchantKey && signal.merchantKey === normalizedMerchant;
   if (exactMatch) {
