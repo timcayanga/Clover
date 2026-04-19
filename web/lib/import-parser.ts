@@ -778,20 +778,26 @@ const parseBpiTransactionLine = (
   }
 ) => {
   const normalized = normalizeWhitespace(line);
+  const compact = compactWhitespace(normalized);
   const match =
-    normalized.match(/^((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*\d{1,2}(?:,\s*\d{4})?)\s+(.+)$/i) ??
-    normalized.match(/^(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)\s+(.+)$/i) ??
-    normalized.match(/^(\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:,\s*\d{4})?)\s+(.+)$/i);
+    compact.match(/^((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\d{1,2}(?:,\d{4})?)(.+)$/i) ??
+    compact.match(/^(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)(.+)$/i) ??
+    compact.match(/^(\d{1,2}(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:,\d{4})?)(.+)$/i);
 
   if (!match) {
     return null;
   }
 
-  const dateToken = normalizeWhitespace(match[1]);
-  let date = parseDateValue(dateToken);
+  const dateToken = match[1];
+  const body = match[2] ?? "";
+  let date: Date | null = null;
+
+  if (/\//.test(dateToken)) {
+    date = parseDateValue(dateToken);
+  }
 
   if (!date) {
-    const monthMatch = dateToken.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2})(?:,\s*(\d{4}))?$/i);
+    const monthMatch = dateToken.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2})(?:,?(\d{4}))?$/i);
     if (monthMatch) {
       const monthIndex = monthIndexByAbbr[monthMatch[1].slice(0, 3).toUpperCase()];
       if (monthIndex !== undefined) {
@@ -805,8 +811,10 @@ const parseBpiTransactionLine = (
         state.previousMonthIndex = monthIndex;
         date = new Date(Date.UTC(state.year, monthIndex, day, 12));
       }
-    } else {
-      const dayMonthMatch = dateToken.match(/^(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:,\s*(\d{4}))?$/i);
+    }
+
+    if (!date) {
+      const dayMonthMatch = dateToken.match(/^(\d{1,2})(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:,?(\d{4}))?$/i);
       if (dayMonthMatch) {
         const monthIndex = monthIndexByAbbr[dayMonthMatch[2].slice(0, 3).toUpperCase()];
         if (monthIndex !== undefined) {
@@ -831,7 +839,6 @@ const parseBpiTransactionLine = (
     return null;
   }
 
-  const body = normalizeWhitespace(match[2]);
   const moneyMatches = body.match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
   const currentBalance = parseMoney(moneyMatches.at(-1) ?? null);
   const previousBalance = state.previousBalance;
@@ -845,33 +852,34 @@ const parseBpiTransactionLine = (
     .replace(/[0-9][0-9,]*\.\d{2}/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
+  const classificationText = compactWhitespace(description).toLowerCase();
 
   const isOpeningBalance = /^BEGINNING BALANCE$/i.test(description);
   if (isOpeningBalance) {
     return null;
   }
 
-  const descriptionLower = description.toLowerCase();
   let type: TransactionType = amountDelta >= 0 ? "income" : "expense";
-  if (/transfer/.test(descriptionLower) && !/fee/.test(descriptionLower)) {
+  if (/transfer/.test(classificationText) && !/fee/.test(classificationText)) {
     type = "transfer";
-  } else if (/instapay\s*transfer\s*fee|instapaytransferfee|transfer\s*fee|transferfee/.test(descriptionLower)) {
+  } else if (/instapaytransferfee|transferfee/.test(classificationText)) {
     type = "transfer";
-  } else if (/fee|tax withheld|withheld tax|bills payment|payment|withdrawal|service charge/.test(descriptionLower)) {
+  } else if (/fee|taxwithheld|withheldtax|billspayment|payment|withdrawal|servicecharge/.test(classificationText)) {
     type = "expense";
-  } else if (/interest earned/.test(descriptionLower)) {
+  } else if (/interestearned/.test(classificationText)) {
     type = "income";
   }
 
   const amount = Math.abs(amountDelta).toFixed(2);
+  const displayText = description || normalized;
 
   return {
     date: date.toISOString().slice(0, 10),
     amount,
-    merchantRaw: humanizeMerchantText(description || normalized),
-    merchantClean: summarizeMerchantText(description || normalized),
-    description: normalized,
-    categoryName: guessBpiCategoryName(description || normalized, type),
+    merchantRaw: humanizeMerchantText(displayText),
+    merchantClean: summarizeMerchantText(displayText),
+    description: displayText,
+    categoryName: guessBpiCategoryName(displayText, type),
     accountName: state.accountName,
     type,
     rawPayload: {
