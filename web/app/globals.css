@@ -1672,6 +1672,10 @@ label {
   align-items: stretch;
 }
 
+.reports-grid--free {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .reports-grid--equal > .report-card {
   height: 100%;
 }
@@ -5835,6 +5839,7 @@ input.transaction-inline-edit--amount::placeholder {
   .insights-grid,
   .reports-summary-grid,
   .reports-grid,
+  .reports-grid--free,
   .reports-grid--equal,
   .reports-summary-grid--three,
   .report-insight-grid,

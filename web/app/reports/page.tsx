@@ -114,6 +114,24 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
       { label: "Utilities", amount: 510, color: "#14b8a6" },
     ] as const;
 
+    const sampleRecurringPayments = [
+      { label: "Cloud storage", amount: 499, count: 2 },
+      { label: "Music streaming", amount: 199, count: 2 },
+      { label: "Delivery pass", amount: 149, count: 2 },
+    ];
+
+    const sampleTopMerchants = [
+      { label: "Food Mart", amount: 1240, count: 4 },
+      { label: "Ride Share", amount: 980, count: 5 },
+      { label: "Coffee Shop", amount: 640, count: 6 },
+      { label: "Online Store", amount: 510, count: 3 },
+      { label: "Gym", amount: 399, count: 2 },
+    ];
+
+    const sampleCurrentMonth = sampleMonthBuckets[sampleMonthBuckets.length - 1];
+    const samplePreviousMonth = sampleMonthBuckets[sampleMonthBuckets.length - 2];
+    const sampleMonthlyChange = sampleCurrentMonth.net - samplePreviousMonth.net;
+
     const sampleReviewItems: ReportsQueueItem[] = [
       {
         title: "Ride share charge needs a category",
@@ -244,7 +262,7 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                 ))}
               </svg>
 
-              <div className="report-chart__labels">
+            <div className="report-chart__labels">
                 {cashFlowPoints.map((point) => (
                   <div key={point.key} className="report-chart__label">
                     <span>{point.label}</span>
@@ -313,6 +331,101 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section className="reports-grid reports-grid--free">
+          <article className="report-card glass">
+            <div className="report-card__head">
+              <div>
+                <h4>Recurring payments</h4>
+              </div>
+              <div className="report-card__stat">
+                <strong>{sampleRecurringPayments.length}</strong>
+                <span>fixed costs surfaced</span>
+              </div>
+            </div>
+
+            <div className="report-list">
+              {sampleRecurringPayments.map((payment) => (
+                <div key={payment.label} className="report-list__item">
+                  <div className="report-list__meta">
+                    <strong>{payment.label}</strong>
+                    <span>
+                      {payment.count} payments · {formatCurrency(payment.amount)}
+                    </span>
+                  </div>
+                  <div className="report-tags">
+                    <span className="pill pill-subtle">Subscription</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="report-card glass">
+            <div className="report-card__head">
+              <div>
+                <h4>Top merchants</h4>
+              </div>
+              <div className="report-card__stat">
+                <strong>{sampleTopMerchants.length}</strong>
+                <span>where spending concentrates</span>
+              </div>
+            </div>
+
+            <div className="report-list">
+              {sampleTopMerchants.map((merchant) => (
+                <div key={merchant.label} className="report-list__item">
+                  <div className="report-list__meta">
+                    <strong>{merchant.label}</strong>
+                    <span>
+                      {merchant.count} transaction{merchant.count === 1 ? "" : "s"} · {formatCurrency(merchant.amount)}
+                    </span>
+                  </div>
+                  <div className="report-list__track" aria-hidden="true">
+                    <span className="report-list__fill" style={{ width: `${Math.max((merchant.amount / sampleTopMerchants[0].amount) * 100, 10)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <article className="report-card glass">
+            <div className="report-card__head">
+              <div>
+                <h4>Monthly summary</h4>
+              </div>
+              <div className="report-card__stat">
+                <strong className={sampleCurrentMonth.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(sampleCurrentMonth.net)}</strong>
+                <span>
+                  {sampleCurrentMonth.label} · {sampleMonthlyChange >= 0 ? "up" : "down"} vs last month
+                </span>
+              </div>
+            </div>
+
+            <div className="report-insight-grid">
+              <div className="report-insight">
+                <span>Total income</span>
+                <strong>{formatCurrency(sampleCurrentMonth.income)}</strong>
+                <small>{sampleCurrentMonth.label}</small>
+              </div>
+              <div className="report-insight">
+                <span>Total spending</span>
+                <strong>{formatCurrency(sampleCurrentMonth.expense)}</strong>
+                <small>All tracked expenses</small>
+              </div>
+              <div className="report-insight">
+                <span>Net result</span>
+                <strong className={sampleCurrentMonth.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(sampleCurrentMonth.net)}</strong>
+                <small>Income minus spending</small>
+              </div>
+              <div className="report-insight">
+                <span>Change vs last month</span>
+                <strong className={sampleMonthlyChange >= 0 ? "positive" : "negative"}>{formatSignedCurrency(sampleMonthlyChange)}</strong>
+                <small>{samplePreviousMonth.label}</small>
               </div>
             </div>
           </article>
@@ -641,14 +754,14 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
               label: "Check duplicates",
             }
           : importStatusCounts.failed > 0
-            ? {
-                title: `${importStatusCounts.failed} import${importStatusCounts.failed === 1 ? "" : "s"} failed`,
-                body: "Inspect the failed file(s) before importing more data.",
-                href: "/imports",
-                label: "Fix imports",
-              }
-            : importStatusCounts.processing > 0
               ? {
+                  title: `${importStatusCounts.failed} import${importStatusCounts.failed === 1 ? "" : "s"} failed`,
+                  body: "Inspect the failed file(s) before importing more data.",
+                  href: "/imports",
+                  label: "Fix imports",
+                }
+              : importStatusCounts.processing > 0
+                ? {
                   title: `${importStatusCounts.processing} import${importStatusCounts.processing === 1 ? "" : "s"} are still processing`,
                   body: "Wait for the upload pipeline to finish, then review the parsed rows.",
                   href: "/imports",
@@ -709,6 +822,11 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
       .filter((merchant) => merchant.count > 1)
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 3);
+
+    const topMerchants = Array.from(merchantSpend.values()).sort((a, b) => b.amount - a.amount).slice(0, 5);
+    const currentMonthBucket = monthBuckets[monthBuckets.length - 1];
+    const previousMonthBucket = monthBuckets[monthBuckets.length - 2] ?? monthBuckets[monthBuckets.length - 1];
+    const monthlyNetChange = currentMonthBucket.net - previousMonthBucket.net;
 
     const trendDirection = currentNet >= previousNet ? "improving" : "softening";
     const spendDirection = spendDelta === null ? null : spendDelta > 0 ? "up" : spendDelta < 0 ? "down" : "flat";
@@ -1055,23 +1173,107 @@ async function ReportsPageView({ active = "reports" }: { active?: "reports" | "i
               )}
             </div>
 
-            <div className="report-subsection">
-              <p className="eyebrow">Recurring merchants</p>
-              <div className="report-list">
-                {recurringMerchants.length > 0 ? (
-                  recurringMerchants.map((merchant) => (
-                    <div key={merchant.label} className="report-list__item">
-                      <div className="report-list__meta">
-                        <strong>{merchant.label}</strong>
-                        <span>
-                          {merchant.count} transaction{merchant.count === 1 ? "" : "s"} · {formatCurrency(merchant.amount)}
-                        </span>
-                      </div>
+          </article>
+        </section>
+
+        <section className="reports-grid reports-grid--free">
+          <article className="report-card glass">
+            <div className="report-card__head">
+              <div>
+                <h4>Recurring payments</h4>
+              </div>
+              <div className="report-card__stat">
+                <strong>{recurringMerchants.length}</strong>
+                <span>fixed costs surfaced</span>
+              </div>
+            </div>
+
+            <div className="report-list">
+              {recurringMerchants.length > 0 ? (
+                recurringMerchants.map((merchant) => (
+                  <div key={merchant.label} className="report-list__item">
+                    <div className="report-list__meta">
+                      <strong>{merchant.label}</strong>
+                      <span>
+                        {merchant.count} transaction{merchant.count === 1 ? "" : "s"} · {formatCurrency(merchant.amount)}
+                      </span>
                     </div>
-                  ))
-                ) : (
-                  <div className="empty-state">No repeat merchants surfaced in the current period.</div>
-                )}
+                    <div className="report-tags">
+                      <span className="pill pill-subtle">Repeat merchant</span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="empty-state">No repeat merchants surfaced in the current period.</div>
+              )}
+            </div>
+          </article>
+
+          <article className="report-card glass">
+            <div className="report-card__head">
+              <div>
+                <h4>Top merchants</h4>
+              </div>
+              <div className="report-card__stat">
+                <strong>{topMerchants.length}</strong>
+                <span>where spending concentrates</span>
+              </div>
+            </div>
+
+            <div className="report-list">
+              {topMerchants.length > 0 ? (
+                topMerchants.map((merchant) => (
+                  <div key={merchant.label} className="report-list__item">
+                    <div className="report-list__meta">
+                      <strong>{merchant.label}</strong>
+                      <span>
+                        {merchant.count} transaction{merchant.count === 1 ? "" : "s"} · {formatCurrency(merchant.amount)}
+                      </span>
+                    </div>
+                    <div className="report-list__track" aria-hidden="true">
+                      <span className="report-list__fill" style={{ width: `${Math.max((merchant.amount / currentSpend) * 100, 10)}%` }} />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="empty-state">No merchants surfaced in the current period.</div>
+              )}
+            </div>
+          </article>
+
+          <article className="report-card glass">
+            <div className="report-card__head">
+              <div>
+                <h4>Monthly summary</h4>
+              </div>
+              <div className="report-card__stat">
+                <strong className={currentMonthBucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentMonthBucket.net)}</strong>
+                <span>
+                  {currentMonthBucket.label} · {monthlyNetChange >= 0 ? "up" : "down"} vs last month
+                </span>
+              </div>
+            </div>
+
+            <div className="report-insight-grid">
+              <div className="report-insight">
+                <span>Total income</span>
+                <strong>{formatCurrency(currentMonthBucket.income)}</strong>
+                <small>{currentMonthBucket.label}</small>
+              </div>
+              <div className="report-insight">
+                <span>Total spending</span>
+                <strong>{formatCurrency(currentMonthBucket.expense)}</strong>
+                <small>All tracked expenses</small>
+              </div>
+              <div className="report-insight">
+                <span>Net result</span>
+                <strong className={currentMonthBucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentMonthBucket.net)}</strong>
+                <small>Income minus spending</small>
+              </div>
+              <div className="report-insight">
+                <span>Change vs last month</span>
+                <strong className={monthlyNetChange >= 0 ? "positive" : "negative"}>{formatSignedCurrency(monthlyNetChange)}</strong>
+                <small>{previousMonthBucket.label}</small>
               </div>
             </div>
           </article>
