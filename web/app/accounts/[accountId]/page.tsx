@@ -31,6 +31,19 @@ type Transaction = {
   isExcluded: boolean;
 };
 
+type StatementCheckpoint = {
+  id: string;
+  statementStartDate: string | null;
+  statementEndDate: string | null;
+  openingBalance: string | null;
+  endingBalance: string | null;
+  status: "pending" | "reconciled" | "mismatch";
+  mismatchReason: string | null;
+  rowCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
   style: "currency",
   currency: "PHP",
@@ -73,6 +86,7 @@ function AccountDetailPageContent() {
 
   const [account, setAccount] = useState<Account | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [checkpoints, setCheckpoints] = useState<StatementCheckpoint[]>([]);
   const [message, setMessage] = useState("Loading account history...");
 
   useEffect(() => {
@@ -104,6 +118,14 @@ function AccountDetailPageContent() {
           setTransactions(allTransactions.filter((transaction) => transaction.accountId === nextAccount.id));
           setMessage("");
         }
+
+        const checkpointsResponse = await fetch(`/api/accounts/${accountId}/statement-checkpoints`);
+        if (checkpointsResponse.ok) {
+          const checkpointsPayload = await checkpointsResponse.json();
+          if (!cancelled) {
+            setCheckpoints(Array.isArray(checkpointsPayload.checkpoints) ? (checkpointsPayload.checkpoints as StatementCheckpoint[]) : []);
+          }
+        }
       } catch (error) {
         if (!cancelled) {
           setMessage(error instanceof Error ? error.message : "Unable to load this account.");
@@ -121,6 +143,11 @@ function AccountDetailPageContent() {
   const openingBalanceEntry = useMemo(
     () => transactions.find((transaction) => transaction.merchantRaw === "Beginning balance") ?? null,
     [transactions]
+  );
+
+  const latestCheckpoint = useMemo(
+    () => checkpoints[0] ?? null,
+    [checkpoints]
   );
 
   const visibleTransactions = useMemo(
@@ -163,6 +190,21 @@ function AccountDetailPageContent() {
               <div className="panel-muted">Updated</div>
               <strong>{formatDate(account.updatedAt)}</strong>
             </div>
+          </div>
+        ) : null}
+
+        {latestCheckpoint ? (
+          <div className="status-card" style={{ marginTop: 20 }}>
+            <div>
+              <div className="panel-muted">Latest statement checkpoint</div>
+              <strong>
+                {latestCheckpoint.statementEndDate ? formatDate(latestCheckpoint.statementEndDate) : "Unknown date"}
+              </strong>
+              <p className="panel-muted" style={{ margin: 0 }}>
+                {latestCheckpoint.status === "mismatch" ? latestCheckpoint.mismatchReason ?? "Mismatch detected" : latestCheckpoint.status}
+              </p>
+            </div>
+            <strong>{currencyFormatter.format(parseAmount(latestCheckpoint.endingBalance))}</strong>
           </div>
         ) : null}
 

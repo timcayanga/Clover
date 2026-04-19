@@ -37,6 +37,19 @@ type Transaction = {
   isExcluded: boolean;
 };
 
+type StatementCheckpoint = {
+  id: string;
+  statementStartDate: string | null;
+  statementEndDate: string | null;
+  openingBalance: string | null;
+  endingBalance: string | null;
+  status: "pending" | "reconciled" | "mismatch";
+  mismatchReason: string | null;
+  rowCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type SummaryMode = "totals" | "percent";
 type AccountSort = "name" | "balance_desc" | "updated_desc";
 
@@ -248,6 +261,7 @@ function AccountsPageContent() {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [statementCheckpoints, setStatementCheckpoints] = useState<StatementCheckpoint[]>([]);
   const [message, setMessage] = useState("Select a workspace to review accounts.");
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [accountsLoading, setAccountsLoading] = useState(true);
@@ -347,6 +361,42 @@ function AccountsPageContent() {
 
     void loadWorkspaceData(selectedWorkspaceId);
   }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStatementCheckpoints = async () => {
+      if (!drawerAccountId) {
+        setStatementCheckpoints([]);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/accounts/${drawerAccountId}/statement-checkpoints`);
+        if (!response.ok) {
+          if (!cancelled) {
+            setStatementCheckpoints([]);
+          }
+          return;
+        }
+
+        const payload = await response.json();
+        if (!cancelled) {
+          setStatementCheckpoints(Array.isArray(payload.checkpoints) ? (payload.checkpoints as StatementCheckpoint[]) : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setStatementCheckpoints([]);
+        }
+      }
+    };
+
+    void loadStatementCheckpoints();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [drawerAccountId]);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -505,6 +555,8 @@ function AccountsPageContent() {
     () => selectedAccountTransactions.find((transaction) => transaction.merchantRaw === "Beginning balance") ?? null,
     [selectedAccountTransactions]
   );
+
+  const latestCheckpoint = useMemo(() => statementCheckpoints[0] ?? null, [statementCheckpoints]);
 
   const refreshAll = async () => {
     if (!selectedWorkspaceId) return;
@@ -1113,6 +1165,26 @@ function AccountsPageContent() {
                 <div className="accounts-drawer__note">
                   <strong>{formatDate(openingBalanceEntry.date)}</strong>
                   <span>{currencyFormatter.format(parseAmount(openingBalanceEntry.amount))}</span>
+                </div>
+              </section>
+            ) : null}
+
+            {latestCheckpoint ? (
+              <section className="accounts-drawer__section">
+                <div className="accounts-drawer__section-head">
+                  <h5>Latest statement checkpoint</h5>
+                  <ActionIcon name="calendar" />
+                </div>
+                <div className="accounts-drawer__note">
+                  <strong>{latestCheckpoint.statementEndDate ? formatDate(latestCheckpoint.statementEndDate) : "Unknown date"}</strong>
+                  <span>
+                    {latestCheckpoint.status === "mismatch"
+                      ? latestCheckpoint.mismatchReason ?? "Mismatch detected"
+                      : latestCheckpoint.status === "reconciled"
+                        ? "Reconciled"
+                        : "Pending"}
+                  </span>
+                  <span>{currencyFormatter.format(parseAmount(latestCheckpoint.endingBalance))}</span>
                 </div>
               </section>
             ) : null}

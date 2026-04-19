@@ -43,6 +43,12 @@ enum ImportFileStatus {
   deleted
 }
 
+enum StatementCheckpointStatus {
+  pending
+  reconciled
+  mismatch
+}
+
 enum TrainingSignalSource {
   import_confirmation
   manual_recategorization
@@ -80,6 +86,7 @@ model Workspace {
   categories    Category[]
   transactions  Transaction[]
   importFiles   ImportFile[]
+  statementCheckpoints AccountStatementCheckpoint[]
   auditLogs     AuditLog[]
   statementTemplates StatementTemplate[]
   merchantRules MerchantRule[]
@@ -102,6 +109,7 @@ model Account {
   workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   transactions  Transaction[]
   importFiles   ImportFile[]
+  statementCheckpoints AccountStatementCheckpoint[]
 
   @@index([workspaceId])
 }
@@ -180,9 +188,37 @@ model ImportFile {
   parsedRows    ParsedTransaction[]
   transactions  Transaction[]
   trainingSignals TrainingSignal[]
+  statementCheckpoint AccountStatementCheckpoint?
 
   @@index([workspaceId])
   @@index([accountId])
+  @@index([status])
+}
+
+model AccountStatementCheckpoint {
+  id                   String                  @id @default(cuid())
+  workspaceId          String
+  accountId            String?
+  importFileId         String?                 @unique
+  statementStartDate   DateTime?
+  statementEndDate     DateTime?
+  openingBalance       Decimal?                @db.Decimal(18, 2)
+  endingBalance        Decimal?                @db.Decimal(18, 2)
+  status               StatementCheckpointStatus @default(pending)
+  mismatchReason       String?
+  sourceMetadata       Json?
+  rowCount             Int                     @default(0)
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  workspace            Workspace               @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account              Account?                @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  importFile           ImportFile?             @relation(fields: [importFileId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([accountId])
+  @@index([importFileId])
+  @@index([statementStartDate])
+  @@index([statementEndDate])
   @@index([status])
 }
 

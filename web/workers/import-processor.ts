@@ -56,6 +56,34 @@ export const processImportFileText = async (importFileId: string, text: string) 
     rows: parsedTransactionData,
   });
 
+  const metadataStartDate = metadata.startDate ? new Date(metadata.startDate) : null;
+  const metadataEndDate = metadata.endDate ? new Date(metadata.endDate) : null;
+  await prisma.accountStatementCheckpoint.upsert({
+    where: { importFileId },
+    update: {
+      workspaceId: importFile.workspaceId,
+      statementStartDate: metadataStartDate,
+      statementEndDate: metadataEndDate,
+      openingBalance: metadata.openingBalance === null ? null : metadata.openingBalance.toString(),
+      endingBalance: metadata.endingBalance === null ? null : metadata.endingBalance.toString(),
+      status: "pending",
+      mismatchReason: null,
+      sourceMetadata: metadata as Prisma.InputJsonValue,
+      rowCount: rows.length,
+    },
+    create: {
+      workspaceId: importFile.workspaceId,
+      importFileId,
+      statementStartDate: metadataStartDate,
+      statementEndDate: metadataEndDate,
+      openingBalance: metadata.openingBalance === null ? null : metadata.openingBalance.toString(),
+      endingBalance: metadata.endingBalance === null ? null : metadata.endingBalance.toString(),
+      status: "pending",
+      sourceMetadata: metadata as Prisma.InputJsonValue,
+      rowCount: rows.length,
+    },
+  });
+
   await updateImportFileCompat(importFileId, {
     status: "done",
   });
@@ -142,6 +170,141 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     accountId,
     confirmedAt: new Date(),
   });
+
+  const statementCheckpoint = await prisma.accountStatementCheckpoint.findUnique({
+    where: { importFileId },
+  });
+
+  if (statementCheckpoint) {
+    const statementStartDate = statementCheckpoint.statementStartDate ?? null;
+    const statementEndDate = statementCheckpoint.statementEndDate ?? null;
+    const previousCheckpoint = statementStartDate
+      ? await prisma.accountStatementCheckpoint.findFirst({
+          where: {
+            accountId,
+            statementEndDate: {
+              lt: statementStartDate,
+            },
+            status: {
+              in: ["reconciled", "mismatch"],
+            },
+          },
+          orderBy: [{ statementEndDate: "desc" }, { createdAt: "desc" }],
+        })
+      : null;
+
+    let checkpointStatus: "pending" | "reconciled" | "mismatch" = "pending";
+    let mismatchReason: string | null = null;
+
+    if (statementCheckpoint.endingBalance !== null) {
+      checkpointStatus = "reconciled";
+    }
+
+    if (
+      previousCheckpoint &&
+      previousCheckpoint.endingBalance !== null &&
+      statementCheckpoint.openingBalance !== null &&
+      previousCheckpoint.endingBalance.toString() !== statementCheckpoint.openingBalance.toString()
+    ) {
+      checkpointStatus = "mismatch";
+      mismatchReason = "Opening balance does not match the previous statement ending balance.";
+    }
+
+    await prisma.accountStatementCheckpoint.update({
+      where: { id: statementCheckpoint.id },
+      data: {
+        accountId,
+        status: checkpointStatus,
+        mismatchReason,
+      },
+    });
+
+    if (
+      statementCheckpoint.openingBalance !== null &&
+      !(await prisma.transaction.findFirst({
+        where: {
+          accountId,
+          merchantRaw: "Beginning balance",
+        },
+      }))
+    ) {
+      const openingBalanceCategory = await prisma.category.findFirst({
+        where: {
+          workspaceId: importFile.workspaceId,
+          name: "Opening Balance",
+        },
+      });
+
+      const category =
+        openingBalanceCategory ??
+        (await prisma.category.create({
+          data: {
+            workspaceId: importFile.workspaceId,
+            name: "Opening Balance",
+            type: "transfer",
+          },
+        }));
+
+      await insertTransactionCompat({
+        workspaceId: String(importFile.workspaceId),
+        accountId,
+        importFileId,
+        categoryId: category.id,
+        reviewStatus: "confirmed",
+        parserConfidence: 100,
+        categoryConfidence: 100,
+        accountMatchConfidence: 100,
+        duplicateConfidence: 0,
+        transferConfidence: 100,
+        rawPayload: {
+          bank: statementCheckpoint.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object"
+            ? (statementCheckpoint.sourceMetadata as Record<string, unknown>).institution ?? "Statement"
+            : "Statement",
+          kind: "opening_balance",
+          statementStartDate: statementStartDate?.toISOString() ?? null,
+          statementEndDate: statementEndDate?.toISOString() ?? null,
+          openingBalance: statementCheckpoint.openingBalance?.toString() ?? null,
+        } as Prisma.InputJsonValue,
+        normalizedPayload: {
+          kind: "opening_balance",
+          openingBalance: statementCheckpoint.openingBalance?.toString() ?? null,
+          statementStartDate: statementStartDate?.toISOString() ?? null,
+        } as Prisma.InputJsonValue,
+        learnedRuleIdsApplied: [] as Prisma.InputJsonValue,
+        date: statementStartDate ?? new Date(),
+        amount: parseAmountValue(statementCheckpoint.openingBalance?.toString() ?? null) ?? 0,
+        currency: "PHP",
+        type: "transfer" as TransactionType,
+        merchantRaw: "Beginning balance",
+        merchantClean: "Beginning balance",
+        description: statementCheckpoint.openingBalance !== null ? `Opening balance for statement ending ${statementEndDate?.toISOString().slice(0, 10) ?? "unknown"}` : "Opening balance",
+        isTransfer: false,
+        isExcluded: true,
+      });
+    }
+
+    const latestCheckpoint = await prisma.accountStatementCheckpoint.findFirst({
+      where: {
+        accountId,
+        endingBalance: {
+          not: null,
+        },
+      },
+      orderBy: [
+        { statementEndDate: "desc" },
+        { createdAt: "desc" },
+      ],
+    });
+
+    if (latestCheckpoint && latestCheckpoint.endingBalance !== null) {
+      await prisma.account.update({
+        where: { id: accountId },
+        data: {
+          balance: latestCheckpoint.endingBalance.toString(),
+        },
+      });
+    }
+  }
 
   const existingCategories = await prisma.category.findMany({
     where: { workspaceId: importFile.workspaceId },
