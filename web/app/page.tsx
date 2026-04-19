@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { ScrollReveal } from "@/components/scroll-reveal";
 
+// Keep the production landing deployment in lockstep with the asset bundle.
+
 function StepIcon({ name }: { name: "upload" | "insights" | "decision" }) {
   const common = {
     width: 24,
