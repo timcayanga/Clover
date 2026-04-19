@@ -7030,17 +7030,20 @@ input.transaction-inline-edit--amount::placeholder {
 .landing-cta {
   margin-top: 24px;
   padding: 24px 0 8px;
-  max-width: 760px;
-  margin-left: auto;
-  margin-right: auto;
-  display: grid;
-  justify-items: center;
-  gap: 18px;
-  text-align: center;
+  display: flex;
+  justify-content: center;
   background: transparent;
   border: 0;
   box-shadow: none;
   border-radius: 0;
+}
+
+.landing-cta__inner {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  text-align: center;
+  width: min(760px, 100%);
 }
 
 .landing-cta__copy {
@@ -7073,8 +7076,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 @media (max-width: 980px) {
   .landing-hero,
-  .landing-gallery__layout,
-  .landing-cta {
+  .landing-gallery__layout {
     grid-template-columns: 1fr;
   }
 
@@ -7153,6 +7155,10 @@ input.transaction-inline-edit--amount::placeholder {
 
   .landing-cta {
     padding: 30px 0 6px;
+  }
+
+  .landing-cta__inner {
+    width: 100%;
   }
 
   .landing-hero__copy h1 {

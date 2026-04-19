@@ -180,20 +180,22 @@ export default function HomePage() {
       </ScrollReveal>
 
       <ScrollReveal as="section" className="landing-cta">
-        <div className="landing-cta__copy">
-          <p className="eyebrow">Ready when you are</p>
-          <h2>Keep your finances in view, whenever you need them.</h2>
-          <p>
-            Clover stays with you as a clear place to upload statements, review insights, and return to your money with more confidence.
-          </p>
-        </div>
-        <div className="landing-cta__actions">
-          <Link className="button button-primary button-pill" href="/sign-up">
-            Sign up
-          </Link>
-          <Link className="button button-secondary button-pill" href="/sign-in">
-            Log in
-          </Link>
+        <div className="landing-cta__inner">
+          <div className="landing-cta__copy">
+            <p className="eyebrow">Ready when you are</p>
+            <h2>Keep your finances in view, whenever you need them.</h2>
+            <p>
+              Clover stays with you as a clear place to upload statements, review insights, and return to your money with more confidence.
+            </p>
+          </div>
+          <div className="landing-cta__actions">
+            <Link className="button button-primary button-pill" href="/sign-up">
+              Sign up
+            </Link>
+            <Link className="button button-secondary button-pill" href="/sign-in">
+              Log in
+            </Link>
+          </div>
         </div>
       </ScrollReveal>
     </main>
