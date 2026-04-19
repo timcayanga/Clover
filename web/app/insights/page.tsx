@@ -934,46 +934,40 @@ export default async function InsightsPage() {
               ))}
             </div>
           </div>
-        </article>
 
-        <article className="insight-panel glass">
-          <div className="insight-panel__head">
-            <div>
+          <div className="insight-section-note">
+            <div className="insight-section-note__head">
               <p className="eyebrow">Where your money went</p>
-              <h4>Top categories and the rest</h4>
-            </div>
-            <div className="insight-panel__stat">
-              <strong>{formatCurrency(currentSpend)}</strong>
               <span>{formatPercent(trackedCategoryShare * 100)} in tracked categories</span>
             </div>
-          </div>
 
-          <div className="report-list">
-            {topCategories.length > 0 ? (
-              topCategories.map(([categoryName, amount]) => {
-                const share = currentSpend > 0 ? (amount / currentSpend) * 100 : 0;
-                return (
-                  <div key={categoryName} className="report-list__item">
-                    <div className="report-list__meta">
-                      <strong>{categoryName}</strong>
-                      <span>{formatCurrency(amount)}</span>
+            <div className="report-list">
+              {topCategories.length > 0 ? (
+                topCategories.map(([categoryName, amount]) => {
+                  const share = currentSpend > 0 ? (amount / currentSpend) * 100 : 0;
+                  return (
+                    <div key={categoryName} className="report-list__item">
+                      <div className="report-list__meta">
+                        <strong>{categoryName}</strong>
+                        <span>{formatCurrency(amount)}</span>
+                      </div>
+                      <div className="report-list__track" aria-hidden="true">
+                        <span className="report-list__fill" style={{ width: `${Math.max(share, 8)}%` }} />
+                      </div>
                     </div>
-                    <div className="report-list__track" aria-hidden="true">
-                      <span className="report-list__fill" style={{ width: `${Math.max(share, 8)}%` }} />
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="empty-state">No categorized expenses yet.</div>
-            )}
-            <div className="report-list__item">
-              <div className="report-list__meta">
-                <strong>Others</strong>
-                <span>{formatCurrency(otherSpend)}</span>
-              </div>
-              <div className="report-list__track" aria-hidden="true">
-                <span className="report-list__fill" style={{ width: `${Math.max(currentSpend > 0 ? (otherSpend / currentSpend) * 100 : 0, 8)}%` }} />
+                  );
+                })
+              ) : (
+                <div className="empty-state">No categorized expenses yet.</div>
+              )}
+              <div className="report-list__item">
+                <div className="report-list__meta">
+                  <strong>Others</strong>
+                  <span>{formatCurrency(otherSpend)}</span>
+                </div>
+                <div className="report-list__track" aria-hidden="true">
+                  <span className="report-list__fill" style={{ width: `${Math.max(currentSpend > 0 ? (otherSpend / currentSpend) * 100 : 0, 8)}%` }} />
+                </div>
               </div>
             </div>
           </div>
@@ -1014,71 +1008,66 @@ export default async function InsightsPage() {
         <article className="insight-panel glass">
           <div className="insight-panel__head">
             <div>
-              <p className="eyebrow">Recurring costs</p>
-              <h4>Subscriptions and repeated payments</h4>
+              <p className="eyebrow">Patterns to watch</p>
+              <h4>Recurring costs and behavior</h4>
             </div>
             <div className="insight-panel__stat">
-              <strong>{formatCurrency(recurringCostsTotal)}</strong>
-              <span>{formatCurrency(recurringSavingsPotential)} monthly savings if trimmed by 20%</span>
+              <strong>{formatCurrency(recurringSavingsPotential)}</strong>
+              <span>Monthly savings potential</span>
             </div>
           </div>
 
-          <div className="insight-list">
-            {recurringMerchants.length > 0 ? (
-              recurringMerchants.map((merchant) => (
-                <div key={merchant.label} className="insight-list__item">
-                  <strong>{merchant.label}</strong>
+          <div className="insight-pattern-grid">
+            <div className="insight-pattern-card">
+              <p className="eyebrow">Recurring costs</p>
+              <div className="insight-list">
+                {recurringMerchants.length > 0 ? (
+                  recurringMerchants.map((merchant) => (
+                    <div key={merchant.label} className="insight-list__item">
+                      <strong>{merchant.label}</strong>
+                      <span>
+                        {merchant.count} transaction{merchant.count === 1 ? "" : "s"} over 90 days · {formatCurrency(merchant.amount)} total
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-state">No recurring merchants surfaced yet.</div>
+                )}
+                <div className="insight-list__item">
+                  <strong>Potential savings</strong>
                   <span>
-                    {merchant.count} transaction{merchant.count === 1 ? "" : "s"} over 90 days · {formatCurrency(merchant.amount)} total
+                    Cutting recurring costs by 20% could save {formatCurrency(recurringSavingsPotential)} a month, or {formatCurrency(annualRecurringOpportunity)} a year.
                   </span>
                 </div>
-              ))
-            ) : (
-              <div className="empty-state">No recurring merchants surfaced yet.</div>
-            )}
-            <div className="insight-list__item">
-              <strong>Potential savings</strong>
-              <span>
-                Cutting recurring costs by 20% could save {formatCurrency(recurringSavingsPotential)} a month, or {formatCurrency(annualRecurringOpportunity)} a year.
-              </span>
+              </div>
             </div>
-          </div>
-        </article>
 
-        <article className="insight-panel glass">
-          <div className="insight-panel__head">
-            <div>
-              <p className="eyebrow">Behavioral insights</p>
-              <h4>Lightweight patterns worth watching</h4>
-            </div>
-            <div className="insight-panel__stat">
-              <strong>{confidenceLabel}</strong>
-              <span>{Math.round(confidenceScore)}% model confidence</span>
-            </div>
-          </div>
-
-          <div className="insight-list">
-            <div className="insight-list__item">
-              <strong>Weekend spending</strong>
-              <span>{weekendInsight}</span>
-            </div>
-            <div className="insight-list__item">
-              <strong>Concentration</strong>
-              <span>
-                Your top category is {topCategoryShare ? formatPercent(topCategoryShare * 100) : "N/A"} of this month's spending.
-              </span>
-            </div>
-            <div className="insight-list__item">
-              <strong>Data quality</strong>
-              <span>
-                {importStatusCounts.failed > 0
-                  ? `${importStatusCounts.failed} failed import${importStatusCounts.failed === 1 ? "" : "s"} still need attention`
-                  : "Imports look clean enough for guidance"}
-              </span>
-            </div>
-            <div className="insight-list__item">
-              <strong>Goal context</strong>
-              <span>{goalLabel ?? "No primary goal set yet"}</span>
+            <div className="insight-pattern-card">
+              <p className="eyebrow">Behavioral patterns</p>
+              <div className="insight-list">
+                <div className="insight-list__item">
+                  <strong>Weekend spending</strong>
+                  <span>{weekendInsight}</span>
+                </div>
+                <div className="insight-list__item">
+                  <strong>Concentration</strong>
+                  <span>
+                    Your top category is {topCategoryShare ? formatPercent(topCategoryShare * 100) : "N/A"} of this month's spending.
+                  </span>
+                </div>
+                <div className="insight-list__item">
+                  <strong>Data quality</strong>
+                  <span>
+                    {importStatusCounts.failed > 0
+                      ? `${importStatusCounts.failed} failed import${importStatusCounts.failed === 1 ? "" : "s"} still need attention`
+                      : "Imports look clean enough for guidance"}
+                  </span>
+                </div>
+                <div className="insight-list__item">
+                  <strong>Goal context</strong>
+                  <span>{goalLabel ?? "No primary goal set yet"}</span>
+                </div>
+              </div>
             </div>
           </div>
         </article>

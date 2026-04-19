@@ -2475,6 +2475,25 @@ label {
   min-height: auto;
 }
 
+.insight-section-note {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.insight-section-note__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.insight-section-note__head span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .insight-panel__head {
   display: flex;
   align-items: flex-start;
@@ -2591,6 +2610,21 @@ label {
   color: var(--muted);
   line-height: 1.5;
   font-size: 13px;
+}
+
+.insight-pattern-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.insight-pattern-card {
+  padding: 14px 15px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.58);
+  display: grid;
+  gap: 10px;
 }
 
 .insight-action-list {
@@ -6012,6 +6046,7 @@ input.transaction-inline-edit--amount::placeholder {
   .insights-snapshot,
   .insights-hero,
   .insights-grid,
+  .insight-pattern-grid,
   .reports-summary-grid,
   .reports-grid,
   .reports-grid--free,
@@ -6151,6 +6186,10 @@ input.transaction-inline-edit--amount::placeholder {
 
   .insight-action {
     flex-direction: column;
+  }
+
+  .insight-pattern-grid {
+    grid-template-columns: 1fr;
   }
 
   .brand-mark {
