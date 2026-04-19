@@ -976,7 +976,7 @@ function TransactionsPageContent() {
       const items = Array.isArray(data.workspaces) ? data.workspaces : [];
       setWorkspaces(items);
       setSelectedWorkspaceId((current) => {
-        if (current && items.some((workspace) => workspace.id === current)) {
+        if (current && items.some((workspace: Workspace) => workspace.id === current)) {
           return current;
         }
 
