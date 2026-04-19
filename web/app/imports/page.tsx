@@ -5,8 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportProgressModal } from "@/components/import-progress-modal";
+import { extractTextFromFile } from "@/lib/import-file-text";
 import { detectStatementMetadata } from "@/lib/import-parser";
-import { pdfjs } from "@/lib/pdfjs";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 
 type Workspace = {
@@ -48,49 +48,6 @@ type ParsedRow = {
   categoryReason: string | null;
   statementFingerprint: string | null;
   type: "income" | "expense" | "transfer" | null;
-};
-
-const extractTextFromFile = async (file: File) => {
-  const lowerName = file.name.toLowerCase();
-
-  if (lowerName.endsWith(".csv") || lowerName.endsWith(".tsv") || lowerName.endsWith(".txt")) {
-    return file.text();
-  }
-
-  if (lowerName.endsWith(".pdf")) {
-    const data = new Uint8Array(await file.arrayBuffer());
-    const task = pdfjs.getDocument({ data } as any);
-    const pdf = await task.promise;
-    const pages: string[] = [];
-
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      const page = await pdf.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const lines = new Map<number, { x: number; text: string }[]>();
-
-      for (const item of content.items as Array<{ str?: string; transform?: number[] }>) {
-        if (typeof item.str !== "string" || !item.str.trim()) {
-          continue;
-        }
-
-        const y = Math.round(Number(item.transform?.[5] ?? 0));
-        const x = Number(item.transform?.[4] ?? 0);
-        const row = lines.get(y) ?? [];
-        row.push({ x, text: item.str.trim() });
-        lines.set(y, row);
-      }
-
-      const text = Array.from(lines.entries())
-        .sort((a, b) => b[0] - a[0])
-        .map(([, row]) => row.sort((a, b) => a.x - b.x).map((entry) => entry.text).join(" "))
-        .join("\n");
-      pages.push(text);
-    }
-
-    return pages.join("\n");
-  }
-
-  throw new Error("Only PDF, CSV, TSV, and TXT files are supported right now.");
 };
 
 type ProgressState = {
@@ -334,6 +291,8 @@ function ImportsPageContent() {
       const payload = await response.json().catch(() => ({}));
       throw new Error(payload.error || "Unable to process the import.");
     }
+
+    return response.json().catch(() => ({}));
   };
 
   const loadPreview = async (importFileId: string) => {
@@ -519,7 +478,18 @@ function ImportsPageContent() {
           : current
       );
       await yieldToPaint();
-      const extractedText = await extractTextFromFile(file);
+      const extractedText = await extractTextFromFile(file, undefined, ({ pageNumber, totalPages }) => {
+        setProgressState((current) =>
+          current
+            ? {
+                ...current,
+                progress: Math.max(current.progress, 20 + (pageNumber / Math.max(totalPages, 1)) * 40),
+                detail: `Reading page ${pageNumber} of ${totalPages}...`,
+                statusLabel: "Parsing",
+              }
+            : current
+        );
+      });
       const detectedStatement = detectStatementMetadata(extractedText);
       const accountId = await ensureStatementAccount(
         selectedWorkspaceId,
@@ -532,7 +502,7 @@ function ImportsPageContent() {
           : current
       );
       setMessage("Queued for parsing...");
-      await processImportedText(prep.importFile.id, extractedText);
+      const processPayload = await processImportedText(prep.importFile.id, extractedText);
       setProgressState((current) =>
         current
           ? { ...current, progress: 88, detail: "Waiting for the import to finish...", statusLabel: "Finishing" }
@@ -540,7 +510,7 @@ function ImportsPageContent() {
       );
       setMessage("Parsing in the background...");
       setCurrentImport({ ...stagedImport, status: "processing" });
-      setCurrentJobId(String(prep.jobId || ""));
+      setCurrentJobId(String(processPayload?.jobId || prep.jobId || prep.importFile.id || ""));
       setSelectedAccountId(accountId);
       setAutoReturnToTransactions(true);
       setMessage(`Uploaded ${file.name}. Your import is now in the queue and will update automatically.`);

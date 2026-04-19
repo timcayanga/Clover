@@ -4,8 +4,8 @@ import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { ImportPasswordModal } from "@/components/import-password-modal";
 import { ImportUploadDock } from "@/components/import-upload-dock";
+import { extractTextFromFile } from "@/lib/import-file-text";
 import { detectStatementMetadata } from "@/lib/import-parser";
-import { pdfjs } from "@/lib/pdfjs";
 
 type AccountOption = {
   id: string;
@@ -42,50 +42,6 @@ type QueuedFile = {
   progressLabel: string;
 };
 
-const extractTextFromFile = async (file: File, password?: string) => {
-  const lowerName = file.name.toLowerCase();
-
-  if (lowerName.endsWith(".csv") || lowerName.endsWith(".tsv") || lowerName.endsWith(".txt")) {
-    return file.text();
-  }
-
-  if (lowerName.endsWith(".pdf")) {
-    const data = new Uint8Array(await file.arrayBuffer());
-    const options = password ? { data, password } : { data };
-    const loadingTask = pdfjs.getDocument(options as any);
-    const pdf = await loadingTask.promise;
-    const pages: string[] = [];
-
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
-      const page = await pdf.getPage(pageNumber);
-      const content = await page.getTextContent();
-      const lines = new Map<number, { x: number; text: string }[]>();
-
-      for (const item of content.items as Array<{ str?: string; transform?: number[] }>) {
-        if (typeof item.str !== "string" || !item.str.trim()) {
-          continue;
-        }
-
-        const y = Math.round(Number(item.transform?.[5] ?? 0));
-        const x = Number(item.transform?.[4] ?? 0);
-        const row = lines.get(y) ?? [];
-        row.push({ x, text: item.str.trim() });
-        lines.set(y, row);
-      }
-
-      const text = Array.from(lines.entries())
-        .sort((a, b) => b[0] - a[0])
-        .map(([, row]) => row.sort((a, b) => a.x - b.x).map((entry) => entry.text).join(" "))
-        .join("\n");
-      pages.push(text);
-    }
-
-    return pages.join("\n");
-  }
-
-  throw new Error("Only CSV, TSV, TXT, and PDF files are supported.");
-};
-
 const isPasswordError = (error: unknown) => {
   if (!error || typeof error !== "object") return false;
   const name = "name" in error ? String((error as { name?: unknown }).name ?? "") : "";
@@ -109,6 +65,7 @@ const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+const sleep = (ms: number) => new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number, message: string) => {
   let timeoutId: number | null = null;
   try {
@@ -325,6 +282,32 @@ export function ImportFilesModal({
     }
   };
 
+  const waitForImportToFinish = async (importFileId: string) => {
+    const deadline = Date.now() + 120000;
+
+    while (Date.now() < deadline) {
+      const response = await fetch(`/api/imports/${importFileId}/status`);
+      if (response.ok) {
+        const payload = await response.json();
+        const importFile = payload.importFile as { status?: string } | undefined;
+        const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
+        const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
+
+        if (importFile?.status === "failed") {
+          throw new Error("Import parsing failed.");
+        }
+
+        if (importFile?.status === "done" || parsedRowsCount > 0 || confirmedTransactionsCount > 0) {
+          return { parsedRowsCount, confirmedTransactionsCount };
+        }
+      }
+
+      await sleep(1500);
+    }
+
+    throw new Error("Import is still processing. Please try again in a moment.");
+  };
+
   const ensureTargetAccountId = async (statementAccountName?: string | null, institution?: string | null) => {
     if (statementAccountName) {
       const key = accountKey(statementAccountName, institution ?? null);
@@ -395,7 +378,13 @@ export function ImportFilesModal({
 
       updateItem(itemId, { progress: 20, progressLabel: "Reading the local file" });
       await yieldToPaint();
-      const text = await extractTextFromFile(item.file, item.password.trim() || undefined);
+      const text = await extractTextFromFile(item.file, item.password.trim() || undefined, ({ pageNumber, totalPages }) => {
+        updateItem(itemId, {
+          progress: Math.max(20, 20 + (pageNumber / Math.max(totalPages, 1)) * 40),
+          progressLabel: `Reading page ${pageNumber} of ${totalPages}`,
+          status: "parsing",
+        });
+      });
       const statement = detectStatementMetadata(text);
       updateItem(itemId, {
         progress: 42,
@@ -415,6 +404,12 @@ export function ImportFilesModal({
 
       const processPayload = await processResponse.json().catch(() => ({}));
       const processedMetadata = processPayload?.metadata ?? statement ?? null;
+      updateItem(itemId, {
+        progress: 88,
+        progressLabel: "Waiting for the import queue",
+        status: "importing",
+      });
+      await waitForImportToFinish(importFileId);
       const targetAccountId = await ensureTargetAccountId(
         processedMetadata?.accountName ?? null,
         processedMetadata?.institution ?? null

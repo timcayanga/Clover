@@ -26,6 +26,10 @@ export const processImportFileText = async (importFileId: string, text: string) 
     throw new Error("Import file not found");
   }
 
+  await updateImportFileCompat(importFileId, {
+    status: "processing",
+  });
+
   const parsedRows = parseImportText(text, importFile.fileName, importFile.fileType);
   const metadata = detectStatementMetadataFromText(text);
   const statementFingerprint = buildStatementFingerprint(text, metadata, importFile.fileName, importFile.fileType);
