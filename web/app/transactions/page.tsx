@@ -667,6 +667,9 @@ const summarizeTransactionMerchantText = (value: string) => {
   const humanized = humanizeTransactionMerchantText(value);
   const compact = humanized.replace(/[^a-z0-9]+/gi, "").toLowerCase();
 
+  if (/^billspaymentto\b/i.test(humanized) || compact.startsWith("billspaymentto")) {
+    return "Bills Payment";
+  }
   if (compact.includes("fundtransfer")) return "Fund Transfer";
   if (compact.includes("interestearned")) return "Interest Earned";
   if (compact.includes("taxwithheld")) return "Tax Withheld";

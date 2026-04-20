@@ -614,6 +614,11 @@ const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null 
 const normalizeGcashMerchant = (description: string) => {
   const trimmed = normalizeWhitespace(description);
 
+  const billsPaymentMatch = trimmed.match(/^Bills Payment to\s+(.+)$/i);
+  if (billsPaymentMatch?.[1]) {
+    return "Bills Payment";
+  }
+
   const receivedMatch = trimmed.match(/^Received GCash from\s+(.+?)(?:\s+with account ending in|\s+and invno:|$)/i);
   if (receivedMatch?.[1]) {
     return normalizeWhitespace(receivedMatch[1].replace(/\s*\/\s*GCash Family Savings Bank.*$/i, ""));
