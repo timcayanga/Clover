@@ -2,10 +2,16 @@
 
 import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useClerk, useUser } from "@clerk/nextjs";
+import { persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 
-export function ProfileCenter() {
+type ProfileCenterProps = {
+  canSignOut?: boolean;
+};
+
+export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
   const { isLoaded, isSignedIn, user } = useUser();
+  const { signOut } = useClerk();
   const currentDisplayName =
     user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
   const email = user?.primaryEmailAddress?.emailAddress ?? "tim@example.com";
@@ -43,6 +49,20 @@ export function ProfileCenter() {
     });
   };
 
+  const handleSignOut = () => {
+    if (!canSignOut || !isSignedIn) {
+      return;
+    }
+
+    persistSelectedWorkspaceId("");
+
+    void signOut({
+      redirectUrl: "/sign-in",
+    }).catch(() => {
+      window.location.assign("/sign-in");
+    });
+  };
+
   return (
     <section className="profile-layout">
       <article className="panel profile-hero">
@@ -64,6 +84,11 @@ export function ProfileCenter() {
           <Link className="button button-secondary button-small" href="/dashboard">
             Back to dashboard
           </Link>
+          {canSignOut && isSignedIn ? (
+            <button className="button button-secondary button-small" type="button" onClick={handleSignOut}>
+              Sign out
+            </button>
+          ) : null}
         </div>
       </article>
 

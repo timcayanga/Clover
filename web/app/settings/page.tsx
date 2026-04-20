@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { AccountActionsPanel } from "@/components/account-actions-panel";
 import { SettingsCenter, type SettingSection } from "@/components/settings-center";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
@@ -169,6 +170,7 @@ export default async function SettingsPage() {
         </div>
       </section>
       <SettingsCenter sections={sections} />
+      <AccountActionsPanel isGuest={session.isGuest} />
     </CloverShell>
   );
 }

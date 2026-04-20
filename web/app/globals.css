@@ -1418,6 +1418,28 @@ label {
   flex-wrap: wrap;
 }
 
+.account-actions-panel {
+  display: grid;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.account-actions-panel__head {
+  display: grid;
+  gap: 8px;
+}
+
+.account-actions-panel__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.account-actions-panel__note {
+  font-size: 13px;
+  color: var(--muted);
+}
+
 .settings-empty {
   display: grid;
   gap: 8px;
@@ -4456,6 +4478,19 @@ label {
   background: rgba(255, 255, 255, 0.92);
   border-color: rgba(3, 168, 192, 0.24);
   color: var(--accent);
+}
+
+.button-danger {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.24);
+  color: #b91c1c;
+}
+
+.button-danger:hover:not(:disabled),
+.button-danger:focus:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #991b1b;
 }
 
 .button:disabled {
