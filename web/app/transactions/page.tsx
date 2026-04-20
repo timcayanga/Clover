@@ -293,32 +293,38 @@ function InlineEditableCell({
     }
   };
 
-  if (editing) {
-    if (kind === "select") {
-      return (
-        <select
-          ref={(node) => {
-            fieldRef.current = node;
-          }}
-          className={className}
-          value={draft}
-          aria-label={ariaLabel}
+  if (kind === "select") {
+    return (
+      <select
+        ref={(node) => {
+          fieldRef.current = node;
+        }}
+        className={className}
+        value={draft}
+        aria-label={ariaLabel}
+        onFocus={() => setDraft(value)}
           onChange={(event) => {
             const next = event.target.value;
             setDraft(next);
-            void commit(next);
-          }}
-          onBlur={cancelEditor}
-        >
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      );
-    }
+            if (next === value) {
+              return;
+            }
 
+            void Promise.resolve(onCommit(next)).catch(() => {
+              setDraft(value);
+            });
+          }}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (editing) {
     return (
       <input
         ref={(node) => {
@@ -1622,6 +1628,39 @@ function TransactionsPageContent() {
     }
 
     if (Object.keys(payload).length === 0) {
+      return;
+    }
+
+    if (field === "accountId" || field === "categoryId") {
+      const nextPatch: Partial<Transaction> = {};
+      const rollbackPatch: Partial<Transaction> = {
+        accountId: transaction.accountId,
+        accountName: transaction.accountName,
+        categoryId: transaction.categoryId,
+        categoryName: transaction.categoryName,
+      };
+
+      if (field === "accountId") {
+        nextPatch.accountId = value;
+        nextPatch.accountName = accounts.find((account) => account.id === value)?.name ?? transaction.accountName;
+        rollbackPatch.categoryId = transaction.categoryId;
+        rollbackPatch.categoryName = transaction.categoryName;
+      }
+
+      if (field === "categoryId") {
+        nextPatch.categoryId = value || null;
+        nextPatch.categoryName =
+          categories.find((category) => category.id === value)?.name ?? (value ? transaction.categoryName : null);
+        rollbackPatch.accountId = transaction.accountId;
+        rollbackPatch.accountName = transaction.accountName;
+      }
+
+      applyTransactionPatchLocally(transaction.id, nextPatch);
+      void updateTransaction(transaction.id, payload).catch((error) => {
+        applyTransactionPatchLocally(transaction.id, rollbackPatch);
+        setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
+      });
+      setMessage("Transaction updated.");
       return;
     }
 
