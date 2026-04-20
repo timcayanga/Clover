@@ -4,6 +4,7 @@ const isPublicRoute = createRouteMatcher([
   "/",
   "/sign-in(.*)",
   "/sign-up(.*)",
+  "/onboarding(.*)",
   "/sso-callback(.*)",
   "/privacy-policy(.*)",
   "/terms-of-service(.*)",
@@ -13,15 +14,6 @@ const isPublicRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, request) => {
-  const hostname = (request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? "")
-    .split(",")[0]
-    .split(":")[0]
-    .toLowerCase();
-
-  if (hostname === "staging.clover.ph") {
-    return;
-  }
-
   if (!isPublicRoute(request)) {
     await auth.protect();
   }

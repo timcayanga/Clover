@@ -1,3 +1,8 @@
+/*
+!web/
+!web/**
+!.vercelignore
+
 .toolchain
 node_modules
 web/node_modules
@@ -7,3 +12,6 @@ web/.env.local
 .env.local
 tmp
 *.log
+
+# Keep this file in the deployment graph so prod rebuilds when landing assets change.
+# Redeploy marker for production.
