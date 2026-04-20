@@ -596,9 +596,11 @@ label {
   background: transparent;
   color: var(--muted);
   text-align: left;
-  width: 100%;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
   min-height: 46px;
-  padding: 10px 14px;
+  padding: 10px 14px 10px 12px;
   border-radius: 14px;
   font-size: 15px;
   transition: background 160ms ease, color 160ms ease, transform 160ms ease, border-color 160ms ease;
@@ -666,7 +668,7 @@ label {
   justify-content: center;
   width: 42px;
   height: 42px;
-  border-radius: 18px;
+  border-radius: 999px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(247, 249, 250, 0.96);
   overflow: hidden;
@@ -690,7 +692,7 @@ label {
   color: var(--accent);
   font-size: 14px;
   font-weight: 600;
-  border-radius: inherit;
+  border-radius: 999px;
   overflow: hidden;
   line-height: 0;
 }
@@ -701,8 +703,6 @@ label {
   display: block;
   object-fit: cover;
   object-position: center;
-  transform: scale(1.08);
-  transform-origin: center;
 }
 
 .sidebar-popover {
