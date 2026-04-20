@@ -6,6 +6,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { DashboardVisualsIsland } from "@/components/dashboard-visuals-island";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+import { getGoalDefinition } from "@/lib/goals";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -16,11 +17,6 @@ const currencyFormatter = new Intl.NumberFormat("en-PH", {
   style: "currency",
   currency: "PHP",
   minimumFractionDigits: 2,
-});
-
-const percentFormatter = new Intl.NumberFormat("en-PH", {
-  maximumFractionDigits: 0,
-  signDisplay: "always",
 });
 
 const dateFormatter = new Intl.DateTimeFormat("en-PH", {
@@ -97,6 +93,13 @@ type WorkspaceSummary = {
   };
 };
 
+type GoalNextStep = {
+  title: string;
+  body: string;
+  href: string;
+  label: string;
+};
+
 const toAmount = (value: unknown) => Number(value ?? 0);
 const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
@@ -120,8 +123,6 @@ const formatRelativeDate = (value: Date, now = new Date()) => {
 
   return relativeTimeFormatter.format(diffDays, "day");
 };
-
-const formatPercent = (value: number) => percentFormatter.format(value);
 
 const formatRate = (value: number) => `${value.toFixed(0)}%`;
 
@@ -167,6 +168,8 @@ const buildLinePath = (buckets: MonthBucket[], width: number, height: number, pa
 };
 
 const formatCompactPercentage = (value: number) => `${Math.round(value)}%`;
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const summarizeTransactions = (transactions: DashboardTransaction[]): AggregatedTransactionTotals => {
   return transactions.reduce<AggregatedTransactionTotals>(
@@ -340,14 +343,176 @@ export default async function DashboardPage() {
   );
   const sixMonthTransactionWindow = currentTransactions;
   const currentSummary = comparePeriods(currentThirtyDayTransactions, previousTransactionsWindow);
+  const selectedGoalKey = user.primaryGoal?.trim() ?? null;
+  const selectedGoal = getGoalDefinition(selectedGoalKey);
+  const hasPrimaryGoal = Boolean(selectedGoalKey);
+  const currentNet = currentSummary.net;
+  const currentSavingsRate = currentSummary.current.income > 0 ? currentNet / currentSummary.current.income : null;
+  const previousSavingsRate = currentSummary.previous.income > 0 ? currentSummary.previousNet / currentSummary.previous.income : null;
+  const uncategorizedTransactions = currentThirtyDayTransactions.filter(
+    (transaction) => !transaction.category?.name || !transaction.merchantClean
+  );
+  const uncategorizedShare =
+    currentSummary.current.expense > 0
+      ? uncategorizedTransactions.reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0) /
+        currentSummary.current.expense
+      : 0;
+  const duplicateGroups = new Map<string, DashboardTransaction[]>();
+  currentThirtyDayTransactions.forEach((transaction) => {
+    const merchant = (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase();
+    const key = [
+      transaction.date.toISOString().slice(0, 10),
+      transaction.account.name.toLowerCase(),
+      transaction.type,
+      Number(transaction.amount).toFixed(2),
+      merchant,
+    ].join("|");
+
+    const existing = duplicateGroups.get(key) ?? [];
+    existing.push(transaction);
+    duplicateGroups.set(key, existing);
+  });
+  const possibleDuplicateGroups = Array.from(duplicateGroups.values()).filter((group) => group.length > 1);
+  const recurringMerchantSpend = new Map<
+    string,
+    {
+      label: string;
+      amount: number;
+      count: number;
+    }
+  >();
+
+  currentThirtyDayTransactions.forEach((transaction) => {
+    if (transaction.type !== "expense") {
+      return;
+    }
+
+    const label = transaction.merchantClean ?? transaction.merchantRaw;
+    const key = label.trim().toLowerCase();
+    const existing = recurringMerchantSpend.get(key) ?? {
+      label,
+      amount: 0,
+      count: 0,
+    };
+    existing.amount += Math.abs(toAmount(transaction.amount));
+    existing.count += 1;
+    recurringMerchantSpend.set(key, existing);
+  });
+
+  const recurringMerchants = Array.from(recurringMerchantSpend.values())
+    .filter((merchant) => merchant.count > 1)
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 4);
+
+  const recurringDrag = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0);
+  const recurringShare = currentSummary.current.expense > 0 ? recurringDrag / currentSummary.current.expense : 0;
+  const cleanlinessScore = clamp(Math.round(100 - uncategorizedShare * 120 - possibleDuplicateGroups.length * 7), 20, 100);
+  const trendScore = currentSummary.net >= currentSummary.previousNet ? 18 : 8;
+  const consistencyScore =
+    previousSavingsRate !== null && currentSavingsRate !== null && currentSavingsRate >= previousSavingsRate ? 14 : 7;
+  const savingsScore =
+    currentSavingsRate === null ? 16 : clamp(Math.round((currentSavingsRate * 100 / selectedGoal.targetRate) * 55), 12, 65);
+  const dragPenalty = clamp(Math.round(recurringShare * 100 * 0.35 + Math.max(0, recurringMerchants.length - 1) * 4), 0, 22);
+  const goalScore = clamp(Math.round(savingsScore + trendScore + consistencyScore + cleanlinessScore * 0.2 - dragPenalty), 12, 98);
+  const goalProgressLabel =
+    goalScore >= 85 ? "Ahead of pace" : goalScore >= 70 ? "On pace" : goalScore >= 50 ? "Building momentum" : "Early in the climb";
+  const currentSavingsRatePercent = currentSavingsRate === null ? null : currentSavingsRate * 100;
+  const goalRateGap =
+    currentSavingsRate === null ? null : Math.round(selectedGoal.targetRate - currentSavingsRate * 100);
   const reviewAttentionTransactions = currentThirtyDayTransactions.filter(
     (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || transaction.categoryConfidence < 70
   );
-  const reviewPreviewTransactions = reviewAttentionTransactions
-    .slice()
-    .sort((a, b) => a.categoryConfidence - b.categoryConfidence || b.date.getTime() - a.date.getTime())
-    .slice(0, 3);
   const reviewAttentionCount = reviewAttentionTransactions.length;
+  const goalProgressCopy =
+    !hasPrimaryGoal
+      ? "Pick a goal so Clover can show you how close you are and what to focus on next."
+      : currentSavingsRate === null
+        ? "Import enough income and spending to calculate a real pace against your goal."
+        : selectedGoalKey === "track_spending"
+          ? `${uncategorizedTransactions.length} item${uncategorizedTransactions.length === 1 ? "" : "s"} still need categorization, and ${reviewAttentionCount} row${
+              reviewAttentionCount === 1 ? "" : "s"
+            } need a quick review.`
+          : goalRateGap !== null && goalRateGap <= 0
+            ? `You are ${Math.abs(goalRateGap)} percentage point${Math.abs(goalRateGap) === 1 ? "" : "s"} ahead of the target pace.`
+            : `You need about ${Math.max(goalRateGap ?? 0, 0)} more percentage point${Math.max(goalRateGap ?? 0, 0) === 1 ? "" : "s"} of savings pace to hit the goal.`;
+  const goalStatusPill =
+    !hasPrimaryGoal
+      ? "No goal set"
+      : `${selectedGoal.title} · ${selectedGoal.targetRate}% target`;
+  const goalNextSteps: GoalNextStep[] = [
+    {
+      title: hasPrimaryGoal ? `Review ${selectedGoal.title.toLowerCase()}` : "Set your goal",
+      body: hasPrimaryGoal
+        ? "Use the Goal page to see the full lane, then come back here for the at-a-glance pace check."
+        : "Pick a focus so Clover can compare your spending pace against a real target.",
+      href: "/goals",
+      label: hasPrimaryGoal ? "Open goals" : "Choose goal",
+    },
+    {
+      title: "Clear the blockers",
+      body:
+        reviewAttentionCount > 0
+          ? `${reviewAttentionCount} transaction${reviewAttentionCount === 1 ? "" : "s"} still need review or categorization.`
+          : "Nothing is waiting in review right now.",
+      href: "/review",
+      label: reviewAttentionCount > 0 ? "Open review" : "View queue",
+    },
+    {
+      title: recurringMerchants[0] ? `Trim ${recurringMerchants[0].label}` : "Watch recurring drag",
+      body: recurringMerchants[0]
+        ? `That recurring spend is carrying ${formatSignedCurrency(recurringMerchants[0].amount)} of pressure.`
+        : "Recurring spend is light right now, so the goal is mostly about consistency.",
+      href: "/reports",
+      label: "Open reports",
+    },
+  ];
+  const goalPaceLabel =
+    currentSavingsRatePercent === null ? "No pace yet" : `${formatRate(currentSavingsRatePercent)} current pace`;
+  const goalTargetLabel = `${selectedGoal.targetRate}% target pace`;
+  const goalGapLabel =
+    currentSavingsRatePercent === null
+      ? "Import enough income to calculate pace"
+      : goalRateGap !== null && goalRateGap > 0
+        ? `${goalRateGap} pts to target`
+        : goalRateGap !== null
+          ? `${Math.abs(goalRateGap)} pts ahead`
+          : "Pace unavailable";
+  const goalScoreCopy =
+    !hasPrimaryGoal
+      ? "Choose a goal to make the dashboard measurable."
+      : currentSavingsRatePercent === null
+        ? "Import enough income and spending to calculate your pace."
+        : `You are ${Math.abs(goalRateGap ?? 0)} percentage point${Math.abs(goalRateGap ?? 0) === 1 ? "" : "s"} ${
+            goalRateGap !== null && goalRateGap <= 0 ? "ahead of" : "away from"
+          } the target pace.`;
+  const goalSnapshot = [
+    {
+      label: "Current pace",
+      value: goalPaceLabel,
+      note: hasPrimaryGoal ? selectedGoal.signal : "Choose a goal to compare pace.",
+    },
+    {
+      label: "Target pace",
+      value: goalTargetLabel,
+      note: goalGapLabel,
+    },
+    {
+      label: "Data health",
+      value: `${cleanlinessScore}% clean`,
+      note:
+        uncategorizedTransactions.length > 0
+          ? `${uncategorizedTransactions.length} uncategorized transaction${uncategorizedTransactions.length === 1 ? "" : "s"}`
+          : "No uncategorized transactions in the last 30 days",
+    },
+    {
+      label: "Recurring drag",
+      value: recurringMerchants.length > 0 ? formatSignedCurrency(recurringDrag) : "Low",
+      note:
+        recurringMerchants.length > 0
+          ? `${recurringMerchants.length} repeated merchant${recurringMerchants.length === 1 ? "" : "s"}`
+          : "Nothing recurring is pulling hard right now",
+    },
+  ];
 
   const recentConfirmedShare = currentThirtyDayTransactions.length
     ? Math.round((currentSummary.current.confirmed / currentThirtyDayTransactions.length) * 100)
@@ -356,72 +521,12 @@ export default async function DashboardPage() {
     currentThirtyDayTransactions.length > 0
       ? `${recentConfirmedShare}% of the last 30 days is confirmed or edited`
       : "No recent transactions to score yet";
-  const expensePerDay = currentSummary.current.expense / 30;
-  const weeklyExpense = currentThirtyDayTransactions.reduce((sum, transaction) => {
-    const daysOld = (Date.now() - transaction.date.getTime()) / 86400000;
-    if (daysOld <= 7 && transaction.type === "expense") {
-      return sum + Math.abs(toAmount(transaction.amount));
-    }
-    return sum;
-  }, 0);
 
   const latestImport = selectedImportFiles[0] ?? null;
   const recentImports = selectedImportFiles.slice(0, 3);
-  const pendingImports = selectedImportFiles.filter((file) => file.status === "processing").length;
-
-  const reviewPreviewCopy =
-    reviewAttentionCount > 0
-      ? `${reviewAttentionCount} transaction${reviewAttentionCount === 1 ? "" : "s"} still need a quick check.`
-      : "No transactions need review right now.";
-
-  const heroTitle =
-    reviewAttentionCount > 0
-      ? `You have ${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} waiting for a quick check.`
-      : pendingImports > 0
-        ? "Your latest import is still processing."
-        : "You’re caught up. Here’s the latest money story.";
-
-  const heroSubtitle =
-    currentThirtyDayTransactions.length > 0
-      ? `In the last 30 days Clover saw ${currencyFormatter.format(currentSummary.current.income)} in income, ${currencyFormatter.format(
-          currentSummary.current.expense
-        )} in spending, and ${selectedWorkspace._count.transactions} total transactions across ${selectedWorkspace._count.accounts} connected account${
-          selectedWorkspace._count.accounts === 1 ? "" : "s"
-        }.`
-      : "Import a statement or add a transaction to start building the dashboard.";
-
-  const primaryActionHref = reviewAttentionCount > 0 ? "/review" : "/transactions?import=1";
-  const primaryActionLabel = reviewAttentionCount > 0 ? "Review queue" : "Import files";
-
-  const topCategory = currentSummary.topCategory
-    ? {
-        name: currentSummary.topCategory[0],
-        amount: currentSummary.topCategory[1],
-      }
-    : null;
-
-  const topCategoryShare =
-    currentSummary.current.expense > 0 && topCategory ? Math.round((topCategory.amount / currentSummary.current.expense) * 100) : 0;
-
-  const biggestMover = currentSummary.biggestMover
-    ? {
-        name: currentSummary.biggestMover.name,
-        amount: currentSummary.biggestMover.currentAmount,
-        delta: currentSummary.biggestMover.delta,
-        percentage: currentSummary.biggestMover.percentage,
-      }
-    : null;
-
-  const topMerchant = currentSummary.topMerchant
-    ? {
-        name: currentSummary.topMerchant[0],
-        amount: currentSummary.topMerchant[1].amount,
-        count: currentSummary.topMerchant[1].count,
-        lastSeen: currentSummary.topMerchant[1].lastSeen,
-      }
-    : null;
 
   const recentActivityTransactions = currentTransactions.slice(0, 4);
+  const goalRingValue = clamp(goalScore, 0, 100);
   const monthBuckets = getMonthBuckets(new Date());
   sixMonthTransactionWindow.forEach((transaction) => {
     const bucket = getMonthBucket(transaction.date, monthBuckets);
@@ -453,71 +558,114 @@ export default async function DashboardPage() {
   return (
     <CloverShell
       active="dashboard"
-      kicker="At a glance"
-      title={heroTitle}
-      subtitle={heroSubtitle}
+      kicker="Goals first"
+      title={hasPrimaryGoal ? selectedGoal.title : "Set your first goal"}
+      subtitle={
+        hasPrimaryGoal
+          ? `Dashboard progress starts with how close you are to ${selectedGoal.title.toLowerCase()}, then shows the blockers still in the way.`
+          : "Set a goal so the dashboard can show your pace, your blockers, and the next move."
+      }
       showTopbar={false}
       actions={
         <>
-          <Link className="pill-link" href={primaryActionHref}>
-            {primaryActionLabel}
-          </Link>
-          <Link className="pill-link" href="/transactions">
-            Transactions
+          <Link className="pill-link" href="/goals">
+            Goals
           </Link>
           <Link className="pill-link" href="/review">
             Review queue
           </Link>
+          <Link className="pill-link" href="/reports">
+            Reports
+          </Link>
         </>
       }
     >
-      <section className="hero">
-        <div className="hero-copy">
-          <span className="pill pill-accent">Live workspace overview</span>
-          <h3>{heroTitle}</h3>
-          <p>
-            Transactions, analytics, and source-aware imports stay in one place so you can review the exact rows that
-            need you, spot spending patterns, and keep Clover learning from your edits.
-          </p>
-          <div className="hero-actions">
-            <Link className="button button-primary" href={primaryActionHref}>
-              {primaryActionLabel}
-            </Link>
-            <Link className="button button-secondary" href="/reports">
-              Weekly summary
-            </Link>
-            <Link className="button button-secondary" href="/transactions">
-              Transactions
-            </Link>
-          </div>
-        </div>
+      <section className="goals-story">
+        <article className="goals-hero glass">
+          <div className="goals-hero__copy">
+            <div className="goals-hero__header">
+              <span className="pill pill-accent">Goal progress</span>
+              <span className="pill pill-subtle">{goalStatusPill}</span>
+            </div>
+            <h3>
+              {hasPrimaryGoal
+                ? `You are ${goalProgressLabel.toLowerCase()} toward ${selectedGoal.title.toLowerCase()}.`
+                : "Choose a goal so Clover can show how close you are and what to do next."}
+            </h3>
+            <p>{goalProgressCopy}</p>
 
-        <div className="hero-metrics">
-          <article className="metric">
-            <span>Needs attention</span>
-            <strong>{reviewAttentionCount}</strong>
-            <small>
-              {pendingImports > 0
-                ? `${pendingImports} import${pendingImports === 1 ? "" : "s"} processing`
-                : "No imports currently processing"}
-            </small>
-          </article>
-          <article className="metric">
-            <span>30-day net</span>
-            <strong>{formatSignedCurrency(currentSummary.net)}</strong>
-            <small>{currencyFormatter.format(currentSummary.current.expense)} spent in the last 30 days</small>
-          </article>
-          <article className="metric">
-            <span>Daily spend</span>
-            <strong>{currencyFormatter.format(expensePerDay)}</strong>
-            <small>{currencyFormatter.format(weeklyExpense)} spent in the last 7 days</small>
-          </article>
-          <article className="metric">
-            <span>Trusted rows</span>
-            <strong>{formatRate(recentConfirmedShare)}</strong>
-            <small>{reviewCoverageText}</small>
-          </article>
-        </div>
+            <div className="goals-hero__summary">
+              <span className={`pill ${goalScore >= 70 ? "pill-good" : goalScore >= 50 ? "pill-accent" : "pill-warning"}`}>
+                {goalProgressLabel}
+              </span>
+              <span>{hasPrimaryGoal ? selectedGoal.signal : "Set a goal to unlock the pace comparison."}</span>
+              <span>{hasPrimaryGoal ? selectedGoal.coachNote : "The dashboard will show your target, blockers, and momentum."}</span>
+            </div>
+
+            <div className="goals-progress">
+              <div className="goals-progress__head">
+                <strong>{hasPrimaryGoal ? `${selectedGoal.title} pace` : "Goal readiness"}</strong>
+                <span>{goalRingValue} of 100</span>
+              </div>
+              <div className="goals-progress__bar" aria-hidden="true">
+                <div className="goals-progress__fill" style={{ width: `${goalRingValue}%` }} />
+              </div>
+              <p>{goalScoreCopy}</p>
+            </div>
+
+            <div className="hero-actions">
+              <Link className="button button-primary" href="/goals">
+                {hasPrimaryGoal ? "Open goals" : "Choose a goal"}
+              </Link>
+              <Link className="button button-secondary" href={reviewAttentionCount > 0 ? "/review" : "/transactions"}>
+                {reviewAttentionCount > 0 ? "Clear blockers" : "Import more data"}
+              </Link>
+              <Link className="button button-secondary" href="/reports">
+                Weekly summary
+              </Link>
+            </div>
+          </div>
+
+          <div className="goals-hero__visual">
+            <div className="goals-hero__ring-card">
+              <div className="goals-hero__ring" role="img" aria-label={`Goal readiness at ${goalRingValue}%`}>
+                <svg viewBox="0 0 240 240">
+                  <defs>
+                    <linearGradient id="dashboard-goals-ring-gradient" x1="0" x2="1" y1="0" y2="1">
+                      <stop offset="0%" stopColor="rgba(34, 197, 94, 0.25)" />
+                      <stop offset="100%" stopColor="rgba(3, 168, 192, 0.92)" />
+                    </linearGradient>
+                  </defs>
+                  <circle cx="120" cy="120" r="84" className="goals-ring__track" />
+                  <circle
+                    cx="120"
+                    cy="120"
+                    r="84"
+                    className="goals-ring__progress"
+                    stroke="url(#dashboard-goals-ring-gradient)"
+                    style={{
+                      strokeDasharray: `${2 * Math.PI * 84 * (goalRingValue / 100)} ${2 * Math.PI * 84}`,
+                    }}
+                  />
+                </svg>
+                <div className="goals-hero__ring-copy">
+                  <strong>{goalRingValue}%</strong>
+                  <span>{hasPrimaryGoal ? selectedGoal.title : "Goal readiness"}</span>
+                </div>
+              </div>
+
+              <div className="goals-hero__stats">
+                {goalSnapshot.map((item) => (
+                  <div key={item.label} className="goals-stat">
+                    <span>{item.label}</span>
+                    <strong>{item.value}</strong>
+                    <small>{item.note}</small>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </article>
       </section>
 
       <DashboardVisualsIsland
@@ -533,136 +681,69 @@ export default async function DashboardPage() {
         formatCompactPercentage={formatCompactPercentage}
       />
 
-      <section className="feature-grid" id="analytics">
-        <article className="feature-card glass">
-          <p className="eyebrow">Do this next</p>
-          <h3>Open the exact rows Clover wants you to check.</h3>
-          <p>{reviewPreviewCopy}</p>
-          <div className="overview-panel__list">
-            {reviewPreviewTransactions.length > 0 ? (
-              reviewPreviewTransactions.map((transaction) => (
-                <div key={transaction.id} className="overview-panel__item">
-                  <strong>{transaction.merchantClean || transaction.merchantRaw}</strong>
-                  <span>
-                    {transaction.account.name}
-                    {transaction.category?.name ? ` · ${transaction.category.name}` : ""} ·{" "}
-                    {currencyFormatter.format(Math.abs(toAmount(transaction.amount)))} · {transaction.categoryConfidence}%
-                  </span>
+      <article className="goals-actions glass">
+        <div className="goals-panel__head">
+          <div>
+            <p className="eyebrow">What to do next</p>
+            <h4>The three moves that will improve your goal fastest</h4>
+          </div>
+          <div className="goals-panel__stat">
+            <strong>{goalProgressLabel}</strong>
+            <span>{hasPrimaryGoal ? selectedGoal.title : "Set a goal first"}</span>
+          </div>
+        </div>
+
+        <div className="goals-action-grid">
+          {goalNextSteps.map((step, index) => (
+            <article key={step.title} className="goals-action">
+              <div className="goals-lane__top">
+                <div className="goals-lane__icon" aria-hidden="true">
+                  <span>{String(index + 1)}</span>
                 </div>
-              ))
-            ) : (
-              <div className="overview-panel__item">
-                <strong>Everything is reviewed</strong>
-                <span>No rows are waiting in the review queue right now.</span>
+                <span className="pill pill-subtle">{step.label}</span>
               </div>
-            )}
-          </div>
-        </article>
-
-        <article className="feature-card glass">
-          <p className="eyebrow">Patterns</p>
-          <h3>Spot what changed before it becomes a habit.</h3>
-          <p>Trends, category mix, source mix, and recurring behavior are all reflected on the dashboard.</p>
-          <div className="overview-panel__list">
-            <div className="overview-panel__item">
-              <strong>{topCategory ? `${topCategory.name} leads at ${currencyFormatter.format(topCategory.amount)}` : "No spend yet"}</strong>
-              <span>
-                {topCategory
-                  ? `${topCategoryShare}% of recent spending`
-                  : "Import data to see category mix and spending concentration"}
-              </span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>
-                {biggestMover ? `${biggestMover.name} is up ${formatPercent(biggestMover.percentage)}` : "No category shifts yet"}
-              </strong>
-              <span>
-                {biggestMover
-                  ? `${currencyFormatter.format(biggestMover.amount)} this month vs the previous 30 days`
-                  : "Comparisons appear once Clover has two similar periods to compare"}
-              </span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>
-                {topMerchant
-                  ? `${topMerchant.name} repeated ${topMerchant.count} time${topMerchant.count === 1 ? "" : "s"}`
-                  : "No repeated merchant yet"}
-              </strong>
-              <span>
-                {topMerchant
-                  ? `Most recent appearance ${formatRelativeDate(topMerchant.lastSeen)}`
-                  : "Repeated merchants will show up once they start to matter"}
-              </span>
-            </div>
-          </div>
-        </article>
-
-        <article className="feature-card glass">
-          <p className="eyebrow">Trust</p>
-          <h3>Keep confirmed data separate from guesses.</h3>
-          <p>
-            Clover keeps the raw import trail intact, surfaces low-confidence rows for review, and learns from the
-            changes you confirm.
-          </p>
-          <div className="overview-panel__list">
-            <div className="overview-panel__item">
-              <strong>{reviewCoverageText}</strong>
-              <span>Confirmed and edited rows are the ones Clover trusts most.</span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>{selectedWorkspace._count.importFiles} import{selectedWorkspace._count.importFiles === 1 ? "" : "s"} processed</strong>
-              <span>{latestImport ? `Latest: ${latestImport.fileName}` : "No statement files imported yet"}</span>
-            </div>
-          </div>
-        </article>
-
-        <article className="feature-card glass">
-          <p className="eyebrow">Habit loop</p>
-          <h3>Make Clover a weekly check-in, not just an upload tool.</h3>
-          <p>
-            A quick review every week keeps the dashboard fresh, catches category drift early, and turns imports into a
-            repeatable routine.
-          </p>
-          <div className="overview-panel__list">
-            <div className="overview-panel__item">
-              <strong>Weekly summary</strong>
-              <span>Open Reports to compare the same window and spot drift before it spreads.</span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>Next best action</strong>
-              <span>{reviewAttentionCount > 0 ? "Clear the review queue first" : "Import the next statement when it lands"}</span>
-            </div>
-          </div>
-        </article>
-      </section>
+              <div>
+                <strong>{step.title}</strong>
+                <span>{step.body}</span>
+              </div>
+              <Link className="pill-link pill-link--inline" href={step.href}>
+                {step.label}
+              </Link>
+            </article>
+          ))}
+        </div>
+      </article>
 
       <section className="overview-insight-grid" id="insights">
         <article className="glass insight-card overview-panel overview-panel--large">
-          <p className="eyebrow">What changed</p>
-          <h4>Recent movement, compared with the prior 30 days</h4>
+          <p className="eyebrow">Goal health</p>
+          <h4>What is helping or slowing the goal</h4>
           <div className="overview-panel__list overview-panel__list--wide">
             <div className="overview-panel__item">
-              <strong>Workspace</strong>
-              <span>{selectedWorkspace.name}</span>
+              <strong>Current pace</strong>
+              <span>{goalPaceLabel}</span>
             </div>
             <div className="overview-panel__item">
-              <strong>Income</strong>
-              <span>{formatSignedCurrency(currentSummary.incomeDelta)} vs the previous 30 days</span>
+              <strong>Target pace</strong>
+              <span>{goalTargetLabel}</span>
             </div>
             <div className="overview-panel__item">
-              <strong>Spending</strong>
-              <span>{formatSignedCurrency(currentSummary.expenseDelta)} vs the previous 30 days</span>
+              <strong>Gap</strong>
+              <span>{goalGapLabel}</span>
             </div>
             <div className="overview-panel__item">
-              <strong>Net</strong>
-              <span>{formatSignedCurrency(currentSummary.netDelta)} versus the previous 30 days</span>
+              <strong>Data health</strong>
+              <span>
+                {reviewCoverageText}
+                {uncategorizedTransactions.length > 0 ? ` · ${uncategorizedTransactions.length} need categorization` : ""}
+              </span>
             </div>
           </div>
         </article>
 
         <article className="glass insight-card overview-panel">
           <p className="eyebrow">Latest import</p>
-          <h4>Keep the next handoff visible</h4>
+          <h4>Keep the trail visible</h4>
           <div className="overview-panel__list">
             <div className="overview-panel__item">
               <strong>{latestImport ? latestImport.fileName : "No import yet"}</strong>
