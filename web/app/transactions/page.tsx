@@ -2015,18 +2015,6 @@ function TransactionsPageContent() {
     });
   }, [selectedWorkspaceId, isWorkspaceDataReady, accounts, categories, transactions, imports]);
 
-  useEffect(() => {
-    if (!uploadInsightsSummary) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setUploadInsightsSummary(null);
-    }, 12000);
-
-    return () => window.clearTimeout(timer);
-  }, [uploadInsightsSummary]);
-
   return (
     <CloverShell active="transactions" title="Transactions" showTopbar={false}>
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`}>

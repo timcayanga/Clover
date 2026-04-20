@@ -393,18 +393,6 @@ function AccountsPageContent() {
   }, [router, searchParams]);
 
   useEffect(() => {
-    if (!uploadInsightsSummary) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      setUploadInsightsSummary(null);
-    }, 12000);
-
-    return () => window.clearTimeout(timer);
-  }, [uploadInsightsSummary]);
-
-  useEffect(() => {
     if (!selectedWorkspaceId) {
       return;
     }

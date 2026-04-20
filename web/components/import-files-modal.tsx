@@ -527,6 +527,8 @@ export function ImportFilesModal({
     let importedCount = 0;
     let blockedCount = 0;
     let stagedCount = 0;
+    let errorCount = 0;
+    const alreadyConfirmedCount = items.filter((item) => item.confirmationState === "confirmed").length;
 
     const pendingPasswordFiles = items.some((item) => item.status === "needs_password" && !item.password.trim());
     if (!pendingPasswordFiles) {
@@ -560,6 +562,10 @@ export function ImportFilesModal({
         blockedCount += 1;
         break;
       }
+
+      if (result === "error") {
+        errorCount += 1;
+      }
     }
 
     if (blockedCount > 0) {
@@ -573,6 +579,16 @@ export function ImportFilesModal({
     }
 
     setBusy(false);
+
+    const finishedCleanly =
+      blockedCount === 0 &&
+      stagedCount === 0 &&
+      errorCount === 0 &&
+      alreadyConfirmedCount + importedCount === items.length;
+
+    if (finishedCleanly) {
+      onClose();
+    }
   };
 
   const handleRetry = async (itemId: string) => {
