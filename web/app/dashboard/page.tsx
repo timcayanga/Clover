@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { DashboardVisualsIsland } from "@/components/dashboard-visuals-island";
+import { PostHogEvent, analyticsOnceKey } from "@/components/posthog-analytics";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getGoalDefinition } from "@/lib/goals";
@@ -580,6 +581,16 @@ export default async function DashboardPage() {
         </>
       }
     >
+      <PostHogEvent
+        event="dashboard_viewed"
+        onceKey={analyticsOnceKey("dashboard_viewed", "session")}
+        properties={{
+          workspace_name: selectedWorkspace.name,
+          account_count: selectedWorkspace._count.accounts,
+          transaction_count: selectedWorkspace._count.transactions,
+          import_count: selectedWorkspace._count.importFiles,
+        }}
+      />
       <section className="goals-story">
         <article className="goals-hero glass">
           <div className="goals-hero__copy">
@@ -668,6 +679,7 @@ export default async function DashboardPage() {
         </article>
       </section>
 
+      {/* Keep the dashboard visuals as a separate client island so the shell can stream cleanly. */}
       <DashboardVisualsIsland
         currentNetDelta={currentSummary.netDelta}
         currentExpense={currentSummary.current.expense}
