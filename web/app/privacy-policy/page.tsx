@@ -1,7 +1,21 @@
+import Link from "next/link";
+
 export default function PrivacyPolicyPage() {
   return (
     <main className="legal-page">
       <div className="legal-page__inner">
+        <nav className="legal-page__nav" aria-label="Legal page navigation">
+          <Link className="landing-brand" href="/" aria-label="Clover home">
+            <img className="landing-brand__mark" src="/favicon.svg" alt="" aria-hidden="true" />
+            <span>Clover</span>
+          </Link>
+          <div className="legal-page__nav-links">
+            <Link href="/">Home</Link>
+            <Link href="/sign-in">Log in</Link>
+            <Link href="/sign-up">Sign up</Link>
+          </div>
+        </nav>
+
         <header className="legal-page__header">
           <span className="legal-page__eyebrow">Clover</span>
           <h1>Privacy Policy</h1>
@@ -10,6 +24,11 @@ export default function PrivacyPolicyPage() {
             This policy explains what information Clover collects, how we use it, and the choices you have when you use the app.
           </p>
         </header>
+
+        <div className="legal-page__quick-links" aria-label="Quick links">
+          <Link href="/">Back to home</Link>
+          <Link href="/terms-of-service">View terms</Link>
+        </div>
 
         <section className="legal-page__section">
           <h2>Information we collect</h2>

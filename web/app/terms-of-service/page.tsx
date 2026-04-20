@@ -1,7 +1,21 @@
+import Link from "next/link";
+
 export default function TermsOfServicePage() {
   return (
     <main className="legal-page">
       <div className="legal-page__inner">
+        <nav className="legal-page__nav" aria-label="Legal page navigation">
+          <Link className="landing-brand" href="/" aria-label="Clover home">
+            <img className="landing-brand__mark" src="/favicon.svg" alt="" aria-hidden="true" />
+            <span>Clover</span>
+          </Link>
+          <div className="legal-page__nav-links">
+            <Link href="/">Home</Link>
+            <Link href="/sign-in">Log in</Link>
+            <Link href="/sign-up">Sign up</Link>
+          </div>
+        </nav>
+
         <header className="legal-page__header">
           <span className="legal-page__eyebrow">Clover</span>
           <h1>Terms of Service</h1>
@@ -10,6 +24,11 @@ export default function TermsOfServicePage() {
             These terms govern your use of Clover and explain your responsibilities when you access the app and its features.
           </p>
         </header>
+
+        <div className="legal-page__quick-links" aria-label="Quick links">
+          <Link href="/">Back to home</Link>
+          <Link href="/privacy-policy">View privacy policy</Link>
+        </div>
 
         <section className="legal-page__section">
           <h2>Acceptance of these terms</h2>
