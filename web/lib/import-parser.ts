@@ -993,8 +993,8 @@ const unionbankStatementMetadata = (text: string): DetectedStatementMetadata | n
     .filter(Boolean);
 
   const accountLineIndex = lines.findIndex((line) => /^ACCOUNT NUMBER\b/i.test(line));
-  const accountLine = accountLineIndex >= 0 ? [lines[accountLineIndex], lines[accountLineIndex + 1] ?? ""].join(" ") : normalized;
-  const accountNumber = accountLine.match(/\d[\d\s-]{6,}\d/)?.[0].replace(/\D/g, "").slice(0, 16) || detectAccountNumberFromText(normalized);
+  const accountLine = accountLineIndex >= 0 ? lines[accountLineIndex] : normalized;
+  const accountNumber = accountLine.match(/\b(?:ACCOUNT NUMBER|ACCOUNT NO\.?|ACCOUNT #)\b.*?(\d[\d\s-]{6,}\d)\b/i)?.[1]?.replace(/\D/g, "").slice(0, 16) || detectAccountNumberFromText(normalized);
   const accountName = accountNumber ? `UnionBank Savings ${accountNumber.slice(-4)}` : "UnionBank Savings";
 
   const statementDateLine = lines.find((line) => /TRANSACTION HISTORY AS OF/i.test(line)) ?? "";
