@@ -120,6 +120,7 @@ type TransactionHistoryEntry = {
 
 type UpdateTransactionOptions = {
   recordHistory?: boolean;
+  historyBefore?: Transaction | null;
 };
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
@@ -1555,7 +1556,10 @@ function TransactionsPageContent() {
     body: Record<string, unknown>,
     options: UpdateTransactionOptions = {}
   ) => {
-    const before = options.recordHistory === false ? null : transactions.find((entry) => entry.id === transactionId) ?? null;
+    const before =
+      options.recordHistory === false
+        ? null
+        : options.historyBefore ?? transactions.find((entry) => entry.id === transactionId) ?? null;
     const response = await fetch(`/api/transactions/${transactionId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -1706,6 +1710,28 @@ function TransactionsPageContent() {
         setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
       });
       setMessage("Transaction updated.");
+      return;
+    }
+
+    if (field === "name") {
+      const nextMerchantClean = value.trim() || null;
+      applyTransactionPatchLocally(transaction.id, {
+        merchantClean: nextMerchantClean,
+      });
+
+      setMessage("Transaction updated.");
+      void updateTransaction(
+        transaction.id,
+        {
+          merchantClean: nextMerchantClean,
+        },
+        { historyBefore: transaction }
+      ).catch((error) => {
+        applyTransactionPatchLocally(transaction.id, {
+          merchantClean: transaction.merchantClean,
+        });
+        setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
+      });
       return;
     }
 
