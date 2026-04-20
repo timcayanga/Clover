@@ -6,12 +6,13 @@ import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { getSessionContext, isStagingHost } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
-import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Insights",
 };
+
+const selectedWorkspaceKey = "clover.selected-workspace-id.v1";
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
   style: "currency",
