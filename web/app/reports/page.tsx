@@ -606,11 +606,24 @@ async function ReportsPageView({
 
   if (!selectedWorkspaceId) {
     const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
+    const starterWorkspaceId = starterWorkspace?.id;
+    if (!starterWorkspaceId) {
+      console.error("Reports starter workspace could not be resolved", {
+        clerkUserId: user.clerkUserId,
+        userId: user.id,
+      });
+      redirect("/dashboard");
+    }
     const starterWorkspaceData = await prisma.workspace.findUnique({
-      where: { id: starterWorkspace.id },
+      where: { id: starterWorkspaceId },
       select: { id: true },
     });
-    if (!starterWorkspaceData) {
+    if (!starterWorkspaceData?.id) {
+      console.error("Reports starter workspace lookup failed", {
+        clerkUserId: user.clerkUserId,
+        userId: user.id,
+        starterWorkspaceId,
+      });
       redirect("/dashboard");
     }
     selectedWorkspaceId = starterWorkspaceData.id;
