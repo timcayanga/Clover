@@ -916,11 +916,10 @@ export const findExistingImportedStatement = async (params: {
   if (parsedColumns.has("statementFingerprint") && parsedColumns.has("workspaceId") && supportsStatusGate) {
     const supportsImportFileId = parsedColumns.has("importFileId");
     const completedGateParts: string[] = [];
-    if (importFileColumns.has("status")) {
-      completedGateParts.push(`i."status" = 'done'`);
-    }
     if (importFileColumns.has("confirmedAt")) {
       completedGateParts.push(`i."confirmedAt" IS NOT NULL`);
+    } else if (importFileColumns.has("status")) {
+      completedGateParts.push(`i."status" = 'done'`);
     }
 
     if (completedGateParts.length > 0 && supportsImportFileId) {
