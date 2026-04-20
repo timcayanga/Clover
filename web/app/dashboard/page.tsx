@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
+import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
@@ -78,6 +78,22 @@ type VisualCategory = {
   name: string;
   amount: number;
   share: number;
+};
+
+type WorkspaceSummary = {
+  id: string;
+  name: string;
+  importFiles: Array<{
+    id: string;
+    fileName: string;
+    status: "processing" | "done" | "failed" | "deleted";
+    uploadedAt: Date;
+  }>;
+  _count: {
+    accounts: number;
+    importFiles: number;
+    transactions: number;
+  };
 };
 
 const toAmount = (value: unknown) => Number(value ?? 0);
@@ -255,22 +271,43 @@ export default async function DashboardPage() {
   }
 
   const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
-  await seedWorkspaceDefaults(starterWorkspace.id);
-
-  const workspaces = await prisma.workspace.findMany({
-    where: { userId: user.id },
-    include: {
-      accounts: true,
-      importFiles: {
-        orderBy: { uploadedAt: "desc" },
-        take: 5,
+  const selectedWorkspace =
+    (await prisma.workspace.findFirst({
+      where: { userId: user.id },
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        name: true,
+        importFiles: {
+          orderBy: { uploadedAt: "desc" },
+          take: 5,
+          select: {
+            id: true,
+            fileName: true,
+            status: true,
+            uploadedAt: true,
+          },
+        },
+        _count: {
+          select: {
+            accounts: true,
+            importFiles: true,
+            transactions: true,
+          },
+        },
       },
-    },
-    orderBy: { createdAt: "asc" },
-  });
+    })) ?? ({
+      id: starterWorkspace.id,
+      name: starterWorkspace.name,
+      importFiles: [],
+      _count: {
+        accounts: starterWorkspace.accounts.length,
+        importFiles: 0,
+        transactions: 0,
+      },
+    } satisfies WorkspaceSummary);
 
-  const selectedWorkspace = workspaces[0] ?? starterWorkspace;
-  const selectedImportFiles = "importFiles" in selectedWorkspace ? selectedWorkspace.importFiles : [];
+  const selectedImportFiles = selectedWorkspace.importFiles;
 
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -279,113 +316,47 @@ export default async function DashboardPage() {
   const oneHundredEightyDaysAgo = new Date();
   oneHundredEightyDaysAgo.setDate(oneHundredEightyDaysAgo.getDate() - 180);
 
-  const [
-    recentTransactions,
-    previousTransactions,
-    sixMonthTransactions,
-    reviewPreviewTransactions,
-    reviewAttentionCount,
-    totalTransactions,
-    totalAccounts,
-    totalImports,
-  ] = await Promise.all([
-    prisma.transaction.findMany({
-      where: {
-        workspaceId: selectedWorkspace.id,
-        isExcluded: false,
-        date: {
-          gte: thirtyDaysAgo,
-        },
+  const recentTransactions = await prisma.transaction.findMany({
+    where: {
+      workspaceId: selectedWorkspace.id,
+      isExcluded: false,
+      date: {
+        gte: oneHundredEightyDaysAgo,
       },
-      include: {
-        category: true,
-        account: true,
-      },
-      orderBy: { date: "desc" },
-      take: 120,
-    }),
-    prisma.transaction.findMany({
-      where: {
-        workspaceId: selectedWorkspace.id,
-        isExcluded: false,
-        date: {
-          gte: sixtyDaysAgo,
-          lt: thirtyDaysAgo,
-        },
-      },
-      include: {
-        category: true,
-        account: true,
-      },
-      orderBy: { date: "desc" },
-      take: 120,
-    }),
-    prisma.transaction.findMany({
-      where: {
-        workspaceId: selectedWorkspace.id,
-        isExcluded: false,
-        date: {
-          gte: oneHundredEightyDaysAgo,
-        },
-      },
-      include: {
-        category: true,
-        account: true,
-      },
-      orderBy: { date: "desc" },
-      take: 240,
-    }),
-    prisma.transaction.findMany({
-      where: {
-        workspaceId: selectedWorkspace.id,
-        OR: [
-          { reviewStatus: { not: "confirmed" } },
-          { categoryId: null },
-          { categoryConfidence: { lt: 70 } },
-        ],
-      },
-      include: {
-        category: true,
-        account: true,
-      },
-      orderBy: [{ categoryConfidence: "asc" }, { date: "desc" }],
-      take: 3,
-    }),
-    prisma.transaction.count({
-      where: {
-        workspaceId: selectedWorkspace.id,
-        OR: [
-          { reviewStatus: { not: "confirmed" } },
-          { categoryId: null },
-          { categoryConfidence: { lt: 70 } },
-        ],
-      },
-    }),
-    prisma.transaction.count({
-      where: { workspaceId: selectedWorkspace.id },
-    }),
-    prisma.account.count({
-      where: { workspaceId: selectedWorkspace.id },
-    }),
-    prisma.importFile.count({
-      where: { workspaceId: selectedWorkspace.id },
-    }),
-  ]);
+    },
+    include: {
+      category: true,
+      account: true,
+    },
+    orderBy: { date: "desc" },
+    take: 240,
+  });
 
   const currentTransactions = recentTransactions as DashboardTransaction[];
-  const previousTransactionsWindow = previousTransactions as DashboardTransaction[];
-  const sixMonthTransactionWindow = sixMonthTransactions as DashboardTransaction[];
-  const currentSummary = comparePeriods(currentTransactions, previousTransactionsWindow);
+  const currentThirtyDayTransactions = currentTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo);
+  const previousTransactionsWindow = currentTransactions.filter(
+    (transaction) => transaction.date >= sixtyDaysAgo && transaction.date < thirtyDaysAgo
+  );
+  const sixMonthTransactionWindow = currentTransactions;
+  const currentSummary = comparePeriods(currentThirtyDayTransactions, previousTransactionsWindow);
+  const reviewAttentionTransactions = currentThirtyDayTransactions.filter(
+    (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || transaction.categoryConfidence < 70
+  );
+  const reviewPreviewTransactions = reviewAttentionTransactions
+    .slice()
+    .sort((a, b) => a.categoryConfidence - b.categoryConfidence || b.date.getTime() - a.date.getTime())
+    .slice(0, 3);
+  const reviewAttentionCount = reviewAttentionTransactions.length;
 
-  const recentConfirmedShare = currentTransactions.length
-    ? Math.round((currentSummary.current.confirmed / currentTransactions.length) * 100)
+  const recentConfirmedShare = currentThirtyDayTransactions.length
+    ? Math.round((currentSummary.current.confirmed / currentThirtyDayTransactions.length) * 100)
     : 0;
   const reviewCoverageText =
-    currentTransactions.length > 0
+    currentThirtyDayTransactions.length > 0
       ? `${recentConfirmedShare}% of the last 30 days is confirmed or edited`
       : "No recent transactions to score yet";
   const expensePerDay = currentSummary.current.expense / 30;
-  const weeklyExpense = currentTransactions.reduce((sum, transaction) => {
+  const weeklyExpense = currentThirtyDayTransactions.reduce((sum, transaction) => {
     const daysOld = (Date.now() - transaction.date.getTime()) / 86400000;
     if (daysOld <= 7 && transaction.type === "expense") {
       return sum + Math.abs(toAmount(transaction.amount));
@@ -410,11 +381,11 @@ export default async function DashboardPage() {
         : "You’re caught up. Here’s the latest money story.";
 
   const heroSubtitle =
-    currentTransactions.length > 0
+    currentThirtyDayTransactions.length > 0
       ? `In the last 30 days Clover saw ${currencyFormatter.format(currentSummary.current.income)} in income, ${currencyFormatter.format(
           currentSummary.current.expense
-        )} in spending, and ${totalTransactions} total transactions across ${totalAccounts} connected account${
-          totalAccounts === 1 ? "" : "s"
+        )} in spending, and ${selectedWorkspace._count.transactions} total transactions across ${selectedWorkspace._count.accounts} connected account${
+          selectedWorkspace._count.accounts === 1 ? "" : "s"
         }.`
       : "Import a statement or add a transaction to start building the dashboard.";
 
@@ -708,7 +679,7 @@ export default async function DashboardPage() {
               <span>Confirmed and edited rows are the ones Clover trusts most.</span>
             </div>
             <div className="overview-panel__item">
-              <strong>{totalImports} import{totalImports === 1 ? "" : "s"} processed</strong>
+              <strong>{selectedWorkspace._count.importFiles} import{selectedWorkspace._count.importFiles === 1 ? "" : "s"} processed</strong>
               <span>{latestImport ? `Latest: ${latestImport.fileName}` : "No statement files imported yet"}</span>
             </div>
           </div>
