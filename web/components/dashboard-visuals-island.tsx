@@ -21,8 +21,6 @@ type DashboardVisualsIslandProps = {
     amount: number;
     share: number;
   }>;
-  formatSignedCurrency: (value: number) => string;
-  formatCompactPercentage: (value: number) => string;
 };
 
 const DashboardVisuals = dynamic(() => import("@/components/dashboard-visuals").then((module) => module.DashboardVisuals), {

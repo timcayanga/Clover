@@ -23,9 +23,16 @@ type DashboardVisualsProps = {
   chartHeight: number;
   chartPadding: number;
   topCategoryRows: CategoryRow[];
-  formatSignedCurrency: (value: number) => string;
-  formatCompactPercentage: (value: number) => string;
 };
+
+const currencyFormatter = new Intl.NumberFormat("en-PH", {
+  style: "currency",
+  currency: "PHP",
+  maximumFractionDigits: 2,
+});
+
+const formatSignedCurrency = (value: number) => `${value < 0 ? "-" : ""}${currencyFormatter.format(Math.abs(value))}`;
+const formatCompactPercentage = (value: number) => `${Math.round(value)}%`;
 
 export function DashboardVisuals({
   currentNetDelta,
@@ -36,8 +43,6 @@ export function DashboardVisuals({
   chartHeight,
   chartPadding,
   topCategoryRows,
-  formatSignedCurrency,
-  formatCompactPercentage,
 }: DashboardVisualsProps) {
   const currentNetTrend = currentNetDelta >= 0 ? "positive" : "negative";
 

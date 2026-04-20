@@ -677,8 +677,6 @@ export default async function DashboardPage() {
         chartHeight={chartHeight}
         chartPadding={chartPadding}
         topCategoryRows={topCategoryRows}
-        formatSignedCurrency={formatSignedCurrency}
-        formatCompactPercentage={formatCompactPercentage}
       />
 
       <article className="goals-actions glass">
