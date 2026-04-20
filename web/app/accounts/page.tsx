@@ -8,6 +8,7 @@ import { ImportFilesModal } from "@/components/import-files-modal";
 import { UploadInsightsToast, type UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 
 type Workspace = {
   id: string;
@@ -339,7 +340,7 @@ function AccountsPageContent() {
     const data = await response.json();
     const items = Array.isArray(data.workspaces) ? data.workspaces : [];
     setWorkspaces(items);
-    setSelectedWorkspaceId((current) => current || items[0]?.id || "");
+    setSelectedWorkspaceId((current) => chooseWorkspaceId(items, current));
     setWorkspacesLoading(false);
   };
 
@@ -379,6 +380,10 @@ function AccountsPageContent() {
   useEffect(() => {
     void loadWorkspaces();
   }, []);
+
+  useEffect(() => {
+    persistSelectedWorkspaceId(selectedWorkspaceId);
+  }, [selectedWorkspaceId]);
 
   useEffect(() => {
     if (searchParams.get("import") === "1") {

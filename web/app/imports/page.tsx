@@ -9,6 +9,7 @@ import { ImportProgressModal } from "@/components/import-progress-modal";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
+import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 
 type Workspace = {
@@ -139,9 +140,7 @@ function ImportsPageContent() {
     const items = Array.isArray(data.workspaces) ? data.workspaces : [];
     setWorkspaces(items);
 
-    if (items.length > 0) {
-      setSelectedWorkspaceId((current) => current || items[0].id);
-    }
+    setSelectedWorkspaceId((current) => chooseWorkspaceId(items, current));
   };
 
   const loadAccounts = async (workspaceId: string) => {
@@ -167,6 +166,10 @@ function ImportsPageContent() {
   useEffect(() => {
     void loadWorkspaces();
   }, []);
+
+  useEffect(() => {
+    persistSelectedWorkspaceId(selectedWorkspaceId);
+  }, [selectedWorkspaceId]);
 
   useEffect(() => {
     void loadAccounts(selectedWorkspaceId);

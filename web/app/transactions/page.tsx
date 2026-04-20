@@ -6,6 +6,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { ImportFilesModal } from "@/components/import-files-modal";
 import { UploadInsightsToast, type UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
+import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 
 type Workspace = {
   id: string;
@@ -968,11 +969,7 @@ function TransactionsPageContent() {
       const items = Array.isArray(data.workspaces) ? data.workspaces : [];
       setWorkspaces(items);
       setSelectedWorkspaceId((current) => {
-        if (current && items.some((workspace: Workspace) => workspace.id === current)) {
-          return current;
-        }
-
-        return items[0]?.id || current;
+        return chooseWorkspaceId(items, current);
       });
     } finally {
       setIsWorkspacesLoaded(true);
@@ -1023,6 +1020,10 @@ function TransactionsPageContent() {
   useEffect(() => {
     void loadWorkspaces();
   }, []);
+
+  useEffect(() => {
+    persistSelectedWorkspaceId(selectedWorkspaceId);
+  }, [selectedWorkspaceId]);
 
   useEffect(() => {
     if (!isWorkspacesLoaded) {
