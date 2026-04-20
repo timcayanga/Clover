@@ -189,6 +189,13 @@ export default function HomePage() {
           </div>
         </div>
       </ScrollReveal>
+
+      <footer className="landing-footer" aria-label="Legal links">
+        <nav className="landing-footer__nav" aria-label="Legal">
+          <Link href="/privacy-policy">Privacy Policy</Link>
+          <Link href="/terms-of-service">Terms of Service</Link>
+        </nav>
+      </footer>
     </main>
   );
 }
