@@ -294,7 +294,7 @@ export function ImportFilesModal({
   const preflightPasswordProtectedFiles = async () => {
     let foundPasswordProtected = false;
 
-    const pendingItems = items.filter((item) => item.status === "pending");
+    const pendingItems = items.filter((item) => item.status === "pending" && !item.password.trim());
     for (const item of pendingItems) {
       if (await isLikelyPasswordProtectedPdf(item.file)) {
         foundPasswordProtected = true;
@@ -499,7 +499,7 @@ export function ImportFilesModal({
     let blockedCount = 0;
     let stagedCount = 0;
 
-    const pendingPasswordFiles = items.some((item) => item.status === "needs_password");
+    const pendingPasswordFiles = items.some((item) => item.status === "needs_password" && !item.password.trim());
     if (!pendingPasswordFiles) {
       const foundPasswordProtected = await preflightPasswordProtectedFiles();
       if (foundPasswordProtected) {
