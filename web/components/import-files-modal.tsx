@@ -45,6 +45,12 @@ type QueuedFile = {
   progressLabel: string;
 };
 
+type ImportProcessResult = {
+  status: "done" | "needs_password" | "error" | "staged";
+  importedRows: number | null;
+  summary: UploadInsightsSummary | null;
+};
+
 const isPasswordError = (error: unknown) => {
   if (!error || typeof error !== "object") return false;
   const name = "name" in error ? String((error as { name?: unknown }).name ?? "") : "";
@@ -66,6 +72,41 @@ const fileTypeLabel = (file: File) => {
 
 const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
+
+const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): UploadInsightsSummary => {
+  const [firstSummary] = summaries;
+  const rowsImported = summaries.reduce((total, summary) => total + summary.rowsImported, 0);
+  const incomeTotal = summaries.reduce((total, summary) => total + summary.incomeTotal, 0);
+  const expenseTotal = summaries.reduce((total, summary) => total + summary.expenseTotal, 0);
+  const netTotal = summaries.reduce((total, summary) => total + summary.netTotal, 0);
+  const sharedAccountName = summaries.every((summary) => summary.accountName === firstSummary.accountName)
+    ? firstSummary.accountName
+    : null;
+  const sharedInstitution = summaries.every((summary) => summary.institution === firstSummary.institution)
+    ? firstSummary.institution
+    : null;
+  const topCategory = [...summaries]
+    .filter((summary) => summary.topCategoryName && summary.topCategoryAmount !== null)
+    .sort((left, right) => (right.topCategoryAmount ?? 0) - (left.topCategoryAmount ?? 0))[0];
+  const topMerchant = [...summaries]
+    .filter((summary) => summary.topMerchantName && summary.topMerchantCount !== null)
+    .sort((left, right) => (right.topMerchantCount ?? 0) - (left.topMerchantCount ?? 0))[0];
+
+  return {
+    fileName: summaries.length === 1 ? firstSummary.fileName : `${summaries.length} files`,
+    rowsImported,
+    accountName: sharedAccountName,
+    institution: sharedInstitution,
+    incomeTotal,
+    expenseTotal,
+    netTotal,
+    topCategoryName: topCategory?.topCategoryName ?? null,
+    topCategoryAmount: topCategory?.topCategoryAmount ?? null,
+    topCategoryShare: topCategory?.topCategoryShare ?? null,
+    topMerchantName: topMerchant?.topMerchantName ?? null,
+    topMerchantCount: topMerchant?.topMerchantCount ?? null,
+  };
+};
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
@@ -241,7 +282,7 @@ export function ImportFilesModal({
     importFileId: string,
     accountId: string,
     summaryContext: { fileName: string; accountName: string | null; institution: string | null }
-  ) => {
+  ): Promise<ImportProcessResult> => {
     let finalizingProgress = 92;
     const finalizingTimer = window.setInterval(() => {
       finalizingProgress = Math.min(98, finalizingProgress + 1);
@@ -272,11 +313,11 @@ export function ImportFilesModal({
         updateItem(itemId, {
           status: "error",
           confirmationState: "staged",
-          error: payload.error || "Unable to confirm this import.",
-          progress: 0,
-          progressLabel: "Confirmation failed",
-        });
-        return null;
+        error: payload.error || "Unable to confirm this import.",
+        progress: 0,
+        progressLabel: "Confirmation failed",
+      });
+        return { status: "error", importedRows: null, summary: null };
       }
 
       const confirmed = await confirmResponse.json();
@@ -292,24 +333,23 @@ export function ImportFilesModal({
         progress: 100,
         progressLabel: "Done",
       });
-      if (insightSummary) {
-        void onImported({
-          fileName: summaryContext.fileName,
-          rowsImported: importedRows,
-          accountName: summaryContext.accountName,
-          institution: summaryContext.institution ?? null,
-          incomeTotal: Number(insightSummary.incomeTotal ?? 0),
-          expenseTotal: Number(insightSummary.expenseTotal ?? 0),
-          netTotal: Number(insightSummary.netTotal ?? 0),
-          topCategoryName: insightSummary.topCategoryName ?? null,
-          topCategoryAmount: insightSummary.topCategoryAmount === null ? null : Number(insightSummary.topCategoryAmount),
-          topCategoryShare:
-            insightSummary.topCategoryShare === null ? null : Number(insightSummary.topCategoryShare),
-          topMerchantName: insightSummary.topMerchantName ?? null,
-          topMerchantCount: insightSummary.topMerchantCount === null ? null : Number(insightSummary.topMerchantCount),
-        });
-      }
-      return importedRows;
+      const summary = insightSummary
+        ? {
+            fileName: summaryContext.fileName,
+            rowsImported: importedRows,
+            accountName: summaryContext.accountName,
+            institution: summaryContext.institution ?? null,
+            incomeTotal: Number(insightSummary.incomeTotal ?? 0),
+            expenseTotal: Number(insightSummary.expenseTotal ?? 0),
+            netTotal: Number(insightSummary.netTotal ?? 0),
+            topCategoryName: insightSummary.topCategoryName ?? null,
+            topCategoryAmount: insightSummary.topCategoryAmount === null ? null : Number(insightSummary.topCategoryAmount),
+            topCategoryShare: insightSummary.topCategoryShare === null ? null : Number(insightSummary.topCategoryShare),
+            topMerchantName: insightSummary.topMerchantName ?? null,
+            topMerchantCount: insightSummary.topMerchantCount === null ? null : Number(insightSummary.topMerchantCount),
+          }
+        : null;
+      return { status: "done", importedRows, summary };
     } finally {
       window.clearInterval(finalizingTimer);
     }
@@ -366,13 +406,13 @@ export function ImportFilesModal({
     setItems((current) => current.filter((item) => item.id !== id));
   };
 
-  const processFile = async (itemId: string): Promise<"done" | "needs_password" | "error" | "staged"> => {
+  const processFile = async (itemId: string): Promise<ImportProcessResult> => {
     const item = items.find((entry) => entry.id === itemId);
-    if (!item) return "error";
+    if (!item) return { status: "error", importedRows: null, summary: null };
 
     if (!workspaceId) {
       updateItem(itemId, { status: "error", error: "Select a workspace before importing files." });
-      return "error";
+      return { status: "error", importedRows: null, summary: null };
     }
 
     if (await isLikelyPasswordProtectedPdf(item.file) && !item.password.trim()) {
@@ -382,7 +422,7 @@ export function ImportFilesModal({
         progress: 0,
         progressLabel: "Password needed",
       });
-      return "needs_password";
+      return { status: "needs_password", importedRows: null, summary: null };
     }
 
     try {
@@ -434,7 +474,7 @@ export function ImportFilesModal({
           progressLabel: "Already imported in this workspace",
         });
         setMessage(duplicateMessage);
-        return "done";
+        return { status: "done", importedRows: 0, summary: null };
       }
 
       updateItem(itemId, {
@@ -454,12 +494,11 @@ export function ImportFilesModal({
         progress: 88,
         progressLabel: "Ready to confirm",
       });
-      const importedRows = await confirmItemImport(itemId, importFileId, targetAccountId, {
+      return await confirmItemImport(itemId, importFileId, targetAccountId, {
         fileName: item.file.name,
         accountName: processedMetadata?.accountName ?? null,
         institution: processedMetadata?.institution ?? null,
       });
-      return importedRows === null ? "staged" : "done";
     } catch (error) {
       if (isPasswordError(error)) {
         const needsPasswordMessage = item.password.trim()
@@ -473,7 +512,7 @@ export function ImportFilesModal({
           progress: 0,
           progressLabel: "Password needed",
         });
-        return "needs_password";
+        return { status: "needs_password", importedRows: null, summary: null };
       }
 
       updateItem(itemId, {
@@ -483,7 +522,7 @@ export function ImportFilesModal({
         progress: 0,
         progressLabel: "Error",
       });
-      return "error";
+      return { status: "error", importedRows: null, summary: null };
     }
   };
 
@@ -529,6 +568,7 @@ export function ImportFilesModal({
     let stagedCount = 0;
     let errorCount = 0;
     const alreadyConfirmedCount = items.filter((item) => item.confirmationState === "confirmed").length;
+    const uploadInsightsSummaries: UploadInsightsSummary[] = [];
 
     const pendingPasswordFiles = items.some((item) => item.status === "needs_password" && !item.password.trim());
     if (!pendingPasswordFiles) {
@@ -550,20 +590,23 @@ export function ImportFilesModal({
       }
 
       const result = await processFile(item.id);
-      if (result === "done") {
+      if (result.status === "done") {
         importedCount += 1;
+        if (result.summary) {
+          uploadInsightsSummaries.push(result.summary);
+        }
       }
 
-      if (result === "staged") {
+      if (result.status === "staged") {
         stagedCount += 1;
       }
 
-      if (result === "needs_password") {
+      if (result.status === "needs_password") {
         blockedCount += 1;
         break;
       }
 
-      if (result === "error") {
+      if (result.status === "error") {
         errorCount += 1;
       }
     }
@@ -587,6 +630,13 @@ export function ImportFilesModal({
       alreadyConfirmedCount + importedCount === items.length;
 
     if (finishedCleanly) {
+      if (uploadInsightsSummaries.length > 0) {
+        void onImported(
+          uploadInsightsSummaries.length === 1
+            ? uploadInsightsSummaries[0]
+            : combineUploadInsightsSummaries(uploadInsightsSummaries)
+        );
+      }
       onClose();
     }
   };
@@ -620,13 +670,16 @@ export function ImportFilesModal({
     setMessage("Retrying confirmation...");
     try {
       const accountId = item.targetAccountId || selectedAccountId || (await ensureTargetAccountId());
-      const importedRows = await confirmItemImport(itemId, item.importFileId, accountId, {
+      const result = await confirmItemImport(itemId, item.importFileId, accountId, {
         fileName: item.file.name,
         accountName: null,
         institution: null,
       });
-      if (typeof importedRows === "number") {
-        setMessage(`Confirmed ${importedRows} imported row${importedRows === 1 ? "" : "s"}.`);
+      if (typeof result.importedRows === "number") {
+        setMessage(`Confirmed ${result.importedRows} imported row${result.importedRows === 1 ? "" : "s"}.`);
+      }
+      if (result.summary) {
+        void onImported(result.summary);
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to confirm this import.");
