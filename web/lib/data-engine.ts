@@ -929,22 +929,9 @@ export const findExistingImportedStatement = async (params: {
         ...(params.importFileId ? [params.workspaceId, params.statementFingerprint, params.importFileId] : [params.workspaceId, params.statementFingerprint])
       );
 
-      if (rows[0]?.importFileId !== null || rows.length > 0) {
+      if (rows.length > 0 && rows[0]?.importFileId !== null) {
         return rows[0]?.importFileId ?? "__duplicate__";
       }
-    }
-  }
-
-  const templateColumns = new Set(await getCompatibleStatementTemplateColumns());
-  if (templateColumns.has("fingerprint") && templateColumns.has("workspaceId")) {
-    const rows = await prisma.$queryRawUnsafe<Array<{ fingerprint: string }>>(
-      `SELECT "fingerprint" FROM "StatementTemplate" WHERE "workspaceId" = $1 AND "fingerprint" = $2 LIMIT 1`,
-      params.workspaceId,
-      params.statementFingerprint
-    );
-
-    if (rows.length > 0) {
-      return rows[0]?.fingerprint ?? "__duplicate__";
     }
   }
 
