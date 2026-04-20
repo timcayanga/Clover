@@ -3781,7 +3781,6 @@ label {
     transform: translateY(-8px) scale(1.04);
   }
 }
-}
 
 .goals-action strong {
   display: block;
@@ -7644,6 +7643,16 @@ input.transaction-inline-edit--amount::placeholder {
     grid-template-columns: 1fr;
   }
 
+  .goals-editor__head,
+  .settings-goal-strip {
+    flex-direction: column;
+  }
+
+  .goals-editor__status,
+  .settings-goal-strip__meta {
+    text-align: left;
+  }
+
   .report-donut__chart {
     width: min(100%, 220px);
   }
@@ -7662,6 +7671,10 @@ input.transaction-inline-edit--amount::placeholder {
 
   .goals-lane-grid,
   .goals-action-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .goals-editor__grid {
     grid-template-columns: 1fr;
   }
 
