@@ -12,7 +12,11 @@ export async function GET() {
     const clerkUser = await syncClerkUser(userId);
     const user = await prisma.user.findUnique({
       where: { clerkUserId: clerkUser.clerkUserId },
-      include: { workspaces: true },
+      include: {
+        workspaces: {
+          orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+        },
+      },
     });
 
     if (user?.workspaces?.length) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportFilesModal } from "@/components/import-files-modal";
@@ -959,25 +959,6 @@ function TransactionsPageContent() {
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
-
-  useLayoutEffect(() => {
-    const cache = readTransactionsWorkspaceCache();
-    if (!cache?.selectedWorkspaceId) {
-      return;
-    }
-
-    const snapshot = cache.snapshots[cache.selectedWorkspaceId];
-    if (!snapshot) {
-      return;
-    }
-
-    setSelectedWorkspaceId(cache.selectedWorkspaceId);
-    setAccounts(snapshot.accounts);
-    setCategories(snapshot.categories);
-    setTransactions(snapshot.transactions);
-    setImports(snapshot.imports);
-    setIsWorkspaceDataReady(true);
-  }, []);
 
   const loadWorkspaces = async () => {
     try {
