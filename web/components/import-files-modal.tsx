@@ -4,6 +4,7 @@ import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { ImportPasswordModal } from "@/components/import-password-modal";
 import { ImportUploadDock } from "@/components/import-upload-dock";
+import { formatDuplicateImportMessage } from "@/lib/import-duplicate-message";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
@@ -419,7 +420,9 @@ export function ImportFilesModal({
       }
 
       const processPayload = await processResponse.json().catch(() => ({}));
+      const processedMetadata = processPayload?.metadata ?? null;
       if (processPayload?.duplicate) {
+        const duplicateMessage = formatDuplicateImportMessage(item.file.name, processedMetadata?.accountName ?? null);
         updateItem(itemId, {
           status: "done",
           confirmationState: "confirmed",
@@ -428,13 +431,12 @@ export function ImportFilesModal({
           targetAccountId: null,
           importedRows: 0,
           progress: 100,
-          progressLabel: "Already imported",
+          progressLabel: "Already imported in this workspace",
         });
-        setMessage(`${item.file.name} was already imported and was skipped.`);
+        setMessage(duplicateMessage);
         return "done";
       }
 
-      const processedMetadata = processPayload?.metadata ?? null;
       updateItem(itemId, {
         progress: 88,
         progressLabel: processedMetadata?.accountName ? `Detected ${processedMetadata.accountName}` : "Server parsing complete",
@@ -826,7 +828,9 @@ export function ImportFilesModal({
                   <div className="accounts-import-file__foot">
                     <span>
                       {item.confirmationState === "confirmed"
-                        ? `Imported ${item.importedRows ?? 0} row${item.importedRows === 1 ? "" : "s"}`
+                        ? item.importedRows === 0
+                          ? item.progressLabel || "Already imported in this workspace"
+                          : `Imported ${item.importedRows ?? 0} row${item.importedRows === 1 ? "" : "s"}`
                         : item.confirmationState === "staged"
                           ? "Parsed and ready for confirmation"
                         : item.status === "importing"

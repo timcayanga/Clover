@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportPasswordModal } from "@/components/import-password-modal";
 import { ImportProgressModal } from "@/components/import-progress-modal";
+import { formatDuplicateImportMessage } from "@/lib/import-duplicate-message";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
@@ -35,6 +36,7 @@ type ImportFile = {
   confirmedAt: string | null;
   confirmedTransactionsCount?: number;
   confirmationStatus?: "failed" | "confirmed" | "staged" | "processing";
+  statusNote?: string | null;
 };
 
 type ParsedRow = {
@@ -516,17 +518,29 @@ function ImportsPageContent() {
 
       const processPayload = await processResponse.json().catch(() => ({}));
       if (processPayload?.duplicate) {
+        const duplicateMessage = formatDuplicateImportMessage(file.name, processPayload?.metadata?.accountName ?? null);
         setProgressState((current) =>
           current
             ? {
                 ...current,
                 progress: 100,
-                detail: "This statement was already imported and was skipped.",
-                statusLabel: "Skipped",
+                detail: duplicateMessage,
+                statusLabel: "Already imported",
               }
             : current
         );
-        setMessage(`${file.name} was already imported and was skipped.`);
+        setCurrentImport({
+          id: importId,
+          fileName: file.name,
+          fileType: file.type || "unknown",
+          status: "done",
+          accountId: null,
+          confirmedAt: new Date().toISOString(),
+          confirmedTransactionsCount: 0,
+          confirmationStatus: "confirmed",
+          statusNote: duplicateMessage,
+        });
+        setMessage(duplicateMessage);
         setAutoReturnToTransactions(true);
         return;
       }
@@ -611,17 +625,29 @@ function ImportsPageContent() {
 
       const processPayload = await processResponse.json().catch(() => ({}));
       if (processPayload?.duplicate) {
+        const duplicateMessage = formatDuplicateImportMessage(file.name, processPayload?.metadata?.accountName ?? null);
         setProgressState((current) =>
           current
             ? {
                 ...current,
                 progress: 100,
-                detail: "This statement was already imported and was skipped.",
-                statusLabel: "Skipped",
+                detail: duplicateMessage,
+                statusLabel: "Already imported",
               }
             : current
         );
-        setMessage(`${file.name} was already imported and was skipped.`);
+        setCurrentImport({
+          id: importId,
+          fileName: file.name,
+          fileType: file.type || "unknown",
+          status: "done",
+          accountId: null,
+          confirmedAt: new Date().toISOString(),
+          confirmedTransactionsCount: 0,
+          confirmationStatus: "confirmed",
+          statusNote: duplicateMessage,
+        });
+        setMessage(duplicateMessage);
         setAutoReturnToTransactions(true);
         return;
       }
@@ -726,15 +752,17 @@ function ImportsPageContent() {
                 : "Ready";
 
   const confirmationDetail =
-    currentImport?.confirmationStatus === "confirmed"
-      ? `Confirmed ${currentImport.confirmedTransactionsCount ?? previewRows.length} transaction${(currentImport.confirmedTransactionsCount ?? previewRows.length) === 1 ? "" : "s"} into ${currentImport.accountId ? "the linked account" : "an account"}.`
-      : currentImport?.confirmationStatus === "staged"
-        ? "The import is parsed but has not been confirmed into transactions yet."
-        : currentImport?.confirmationStatus === "failed"
-          ? "The import was parsed, but confirmation did not finish writing transactions."
-          : currentImport?.status === "processing" || currentJobId
-            ? "The file is still being processed."
-            : "Upload a file to start the import workflow.";
+    currentImport?.statusNote
+      ? currentImport.statusNote
+      : currentImport?.confirmationStatus === "confirmed"
+        ? `Confirmed ${currentImport.confirmedTransactionsCount ?? previewRows.length} transaction${(currentImport.confirmedTransactionsCount ?? previewRows.length) === 1 ? "" : "s"} into ${currentImport.accountId ? "the linked account" : "an account"}.`
+        : currentImport?.confirmationStatus === "staged"
+          ? "The import is parsed but has not been confirmed into transactions yet."
+          : currentImport?.confirmationStatus === "failed"
+            ? "The import was parsed, but confirmation did not finish writing transactions."
+            : currentImport?.status === "processing" || currentJobId
+              ? "The file is still being processed."
+              : "Upload a file to start the import workflow.";
 
   return (
     <CloverShell

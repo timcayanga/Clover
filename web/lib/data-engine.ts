@@ -924,7 +924,7 @@ export const findExistingImportedStatement = async (params: {
 
     if (completedGateParts.length > 0 && supportsImportFileId) {
       const rows = await prisma.$queryRawUnsafe<Array<{ importFileId: string | null }>>(
-        `SELECT DISTINCT pt."importFileId" FROM "ParsedTransaction" pt INNER JOIN "ImportFile" i ON i."id" = pt."importFileId" WHERE pt."workspaceId" = $1 AND pt."statementFingerprint" = $2${params.importFileId ? ' AND pt."importFileId" <> $3' : ""} AND (${completedGateParts.join(" OR ")}) LIMIT 1`,
+        `SELECT DISTINCT pt."importFileId" FROM "ParsedTransaction" pt INNER JOIN "ImportFile" i ON i."id" = pt."importFileId" LEFT JOIN "Account" a ON a."id" = i."accountId" WHERE pt."workspaceId" = $1 AND pt."statementFingerprint" = $2${params.importFileId ? ' AND pt."importFileId" <> $3' : ""} AND (${completedGateParts.join(" OR ")}) AND i."accountId" IS NOT NULL AND a."id" IS NOT NULL LIMIT 1`,
         ...(params.importFileId ? [params.workspaceId, params.statementFingerprint, params.importFileId] : [params.workspaceId, params.statementFingerprint])
       );
 
