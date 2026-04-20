@@ -721,7 +721,7 @@ label {
 }
 
 .sidebar-popover--profile {
-  width: 228px;
+  width: 220px;
 }
 
 .sidebar-popover__head {
@@ -767,6 +767,14 @@ label {
   transform: translateX(1px);
 }
 
+.sidebar-popover__button {
+  appearance: none;
+  border: 1px solid var(--stroke);
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
 .sidebar-popover__link strong,
 .sidebar-popover__item strong {
   font-size: 14px;
@@ -789,6 +797,61 @@ label {
   border-radius: 14px;
   background: rgba(248, 251, 252, 0.96);
   border: 1px dashed var(--stroke);
+}
+
+.sidebar-plan-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(248, 251, 252, 0.96);
+  border: 1px solid var(--stroke);
+}
+
+.sidebar-plan-card__meta {
+  display: grid;
+  gap: 4px;
+}
+
+.sidebar-plan-card__meta strong {
+  font-size: 16px;
+  color: var(--text);
+}
+
+.sidebar-plan-card__meta span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sidebar-plan-card__limits {
+  display: grid;
+  gap: 8px;
+}
+
+.sidebar-plan-card__limit {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #ffffff;
+  border: 1px solid var(--stroke);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.sidebar-popover__back {
+  appearance: none;
+  border: 1px solid var(--stroke);
+  background: #ffffff;
+  color: var(--text);
+  border-radius: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.sidebar-popover__back:hover {
+  background: var(--accent-soft);
+  border-color: rgba(3, 168, 192, 0.16);
 }
 
 .profile-layout,
@@ -3795,6 +3858,227 @@ label {
   color: var(--muted);
   line-height: 1.45;
   font-size: 13px;
+}
+
+.goals-intel-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.goals-history,
+.goals-milestones,
+.goals-weekly,
+.goals-checklist,
+.goals-alerts {
+  padding: 20px;
+  border-radius: 28px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.goals-history__timeline,
+.goals-milestones__list,
+.goals-alerts__list {
+  display: grid;
+  gap: 10px;
+}
+
+.goals-history__item {
+  padding: 14px 15px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  display: grid;
+  gap: 4px;
+}
+
+.goals-history__label,
+.goals-weekly__card span {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.goals-history__item strong {
+  font-size: 14px;
+  line-height: 1.5;
+  letter-spacing: -0.02em;
+}
+
+.goals-milestone {
+  padding: 14px 15px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.68);
+  display: grid;
+  gap: 10px;
+}
+
+.goals-milestone.is-reached {
+  border-color: rgba(34, 197, 94, 0.18);
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 34%),
+    rgba(255, 255, 255, 0.84);
+}
+
+.goals-milestone__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.goals-milestone__head strong {
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+.goals-milestone__head span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.goals-milestone p,
+.goals-alerts__item p {
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.goals-milestone__bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.goals-milestone__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(34, 197, 94, 0.9), rgba(3, 168, 192, 0.95));
+}
+
+.goals-weekly__grid,
+.goals-checklist__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.goals-weekly__card {
+  padding: 14px 15px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.68);
+  display: grid;
+  gap: 4px;
+}
+
+.goals-weekly__card.positive {
+  border-color: rgba(34, 197, 94, 0.16);
+}
+
+.goals-weekly__card.negative {
+  border-color: rgba(239, 68, 68, 0.16);
+}
+
+.goals-weekly__card.neutral {
+  border-color: rgba(3, 168, 192, 0.14);
+}
+
+.goals-weekly__card strong {
+  font-size: 22px;
+  letter-spacing: -0.04em;
+}
+
+.goals-weekly__card small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.goals-checklist__item {
+  padding: 14px 15px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.68);
+  display: grid;
+  gap: 10px;
+}
+
+.goals-checklist__item.is-done {
+  border-color: rgba(34, 197, 94, 0.18);
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.12), transparent 34%),
+    rgba(255, 255, 255, 0.84);
+}
+
+.goals-checklist__toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  width: 100%;
+}
+
+.goals-checklist__checkbox {
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  border: 1px solid rgba(3, 168, 192, 0.24);
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--accent);
+  background: rgba(3, 168, 192, 0.08);
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.goals-checklist__copy {
+  display: grid;
+  gap: 4px;
+}
+
+.goals-checklist__copy strong {
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+.goals-checklist__copy span {
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.goals-alerts__item {
+  padding: 14px 15px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.68);
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr);
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.goals-alerts__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  margin-top: 5px;
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.95), rgba(3, 168, 192, 0.95));
 }
 
 .actions {

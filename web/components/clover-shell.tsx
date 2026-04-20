@@ -161,6 +161,7 @@ export function CloverShell({
   const pathname = usePathname();
   const shellRef = useRef<HTMLDivElement | null>(null);
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | null>(null);
+  const [profilePanel, setProfilePanel] = useState<"menu" | "plan">("menu");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
@@ -171,6 +172,7 @@ export function CloverShell({
 
   useEffect(() => {
     setIsSidebarOpen(false);
+    setProfilePanel("menu");
     syncSelectedWorkspaceCookie();
     const handlePointerDown = (event: MouseEvent) => {
       if (!shellRef.current || event.target instanceof Node === false) {
@@ -200,11 +202,16 @@ export function CloverShell({
   const notificationCount = notifications.length;
   const profileMenuLinks = useMemo(
     () => [
-      { href: "/profile", label: "Profile", description: "Open your account hub" },
-      { href: "/settings", label: "Settings", description: "Adjust Clover defaults" },
+      { href: "/profile", label: "Profile" },
+      { href: "/settings", label: "Settings" },
     ],
     []
   );
+  const planSummary = {
+    name: "Free",
+    description: "Active during the beta",
+    limits: ["Unlimited transactions", "Unlimited imports", "Unlimited accounts", "Unlimited review items"],
+  };
 
   return (
     <div className={`app-shell ${isSidebarOpen ? "is-sidebar-open" : ""}`} ref={shellRef}>
@@ -244,7 +251,16 @@ export function CloverShell({
             aria-label={`Open ${displayName} profile menu`}
             aria-expanded={isProfileMenuOpen}
             aria-haspopup="menu"
-            onClick={() => setOpenMenu((current) => (current === "profile" ? null : "profile"))}
+            onClick={() =>
+              setOpenMenu((current) => {
+                if (current === "profile") {
+                  return null;
+                }
+
+                setProfilePanel("menu");
+                return "profile";
+              })
+            }
           >
             <span className="sidebar-profile__avatar" aria-hidden="true">
               {profileImage ? <img src={profileImage} alt="" /> : <span>{profileInitial}</span>}
@@ -264,18 +280,50 @@ export function CloverShell({
 
           {isProfileMenuOpen ? (
             <div className="sidebar-popover sidebar-popover--profile" role="menu" aria-label="Profile menu">
-              <div className="sidebar-popover__head">
-                <span className="sidebar-popover__title">{displayName}</span>
-                <span className="sidebar-popover__subtitle">{user?.primaryEmailAddress?.emailAddress ?? "Account"}</span>
-              </div>
-              <div className="sidebar-popover__links">
-                {profileMenuLinks.map((item) => (
-                  <Link key={item.href} className="sidebar-popover__link" role="menuitem" href={item.href}>
-                    <strong>{item.label}</strong>
-                    <span>{item.description}</span>
-                  </Link>
-                ))}
-              </div>
+              {profilePanel === "menu" ? (
+                <>
+                  <div className="sidebar-popover__head">
+                    <span className="sidebar-popover__title">{displayName}</span>
+                  </div>
+                  <div className="sidebar-popover__links">
+                    {profileMenuLinks.map((item) => (
+                      <Link key={item.href} className="sidebar-popover__link" role="menuitem" href={item.href}>
+                        <strong>{item.label}</strong>
+                      </Link>
+                    ))}
+                    <button
+                      className="sidebar-popover__link sidebar-popover__button"
+                      type="button"
+                      onClick={() => setProfilePanel("plan")}
+                      role="menuitem"
+                    >
+                      <strong>Plan</strong>
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="sidebar-popover__head">
+                    <span className="sidebar-popover__title">Plan</span>
+                  </div>
+                  <div className="sidebar-plan-card">
+                    <div className="sidebar-plan-card__meta">
+                      <strong>{planSummary.name}</strong>
+                      <span>{planSummary.description}</span>
+                    </div>
+                    <div className="sidebar-plan-card__limits">
+                      {planSummary.limits.map((limit) => (
+                        <div key={limit} className="sidebar-plan-card__limit">
+                          {limit}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <button className="sidebar-popover__back" type="button" onClick={() => setProfilePanel("menu")}>
+                    Back
+                  </button>
+                </>
+              )}
             </div>
           ) : null}
 
