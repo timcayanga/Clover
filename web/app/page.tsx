@@ -1,7 +1,5 @@
+import { ScrollReveal } from "../components/scroll-reveal";
 import Link from "next/link";
-import { ScrollReveal } from "@/components/scroll-reveal";
-
-// Keep the production landing deployment in lockstep with the asset bundle.
 
 function StepIcon({ name }: { name: "upload" | "insights" | "decision" }) {
   const common = {
@@ -105,10 +103,10 @@ export default function HomePage() {
       <ScrollReveal as="section" className="landing-hero">
         <div className="landing-hero__copy">
           <span className="pill pill-accent">Money clarity, made simple</span>
-          <h1>See reports and insights in minutes.</h1>
+          <h1>8 hours a week, turned into minutes.</h1>
           <p className="landing-hero__lede">
-            Tracking finances takes time. Clover helps you upload statements, see every account together, and turn that data into faster reports and
-            AI insights.
+            Tracking finances takes time. Clover helps you upload statements, see every account together, and turn that data into faster reports,
+            insights, and smarter money moves.
           </p>
 
           <div className="landing-hero__actions">
@@ -124,14 +122,6 @@ export default function HomePage() {
         </div>
 
         <HeroImage />
-      </ScrollReveal>
-
-      <ScrollReveal as="section" className="landing-proof" aria-label="Value proof">
-        <div className="landing-proof__item">
-          <strong>8 hrs/week</strong>
-          <span>Average time spent thinking about and dealing with personal finances</span>
-        </div>
-        <p className="landing-proof__source">Source: TIAA Institute-GFLEC Personal Finance Index (2024).</p>
       </ScrollReveal>
 
       <ScrollReveal as="section" className="landing-gallery-section">
@@ -199,6 +189,13 @@ export default function HomePage() {
           </div>
         </div>
       </ScrollReveal>
+
+      <footer className="landing-footer" aria-label="Legal links">
+        <nav className="landing-footer__nav" aria-label="Legal">
+          <Link href="/privacy-policy">Privacy Policy</Link>
+          <Link href="/terms-of-service">Terms of Service</Link>
+        </nav>
+      </footer>
     </main>
   );
 }
