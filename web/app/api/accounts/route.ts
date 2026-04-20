@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
+import { loadAccountRules, upsertAccountRule } from "@/lib/data-engine";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +22,9 @@ export async function GET(request: Request) {
       where: { workspaceId },
       orderBy: { createdAt: "desc" },
     });
+    const accountRules = await loadAccountRules(workspaceId);
 
-    return NextResponse.json({ accounts });
+    return NextResponse.json({ accounts, accountRules });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -51,6 +53,16 @@ export async function POST(request: Request) {
         source: body?.source ? String(body.source) : "upload",
       },
     });
+
+    void upsertAccountRule({
+      workspaceId,
+      accountId: account.id,
+      accountName: account.name,
+      institution: account.institution,
+      accountType: account.type,
+      source: "manual_account_creation",
+      confidence: 100,
+    }).catch(() => null);
 
     return NextResponse.json({ account });
   } catch {

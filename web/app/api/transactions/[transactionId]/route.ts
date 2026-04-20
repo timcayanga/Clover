@@ -3,7 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { recordTrainingSignal } from "@/lib/data-engine";
+import { recordTrainingSignal, upsertAccountRule, upsertMerchantRule } from "@/lib/data-engine";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +75,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       },
     });
 
+    const account = await prisma.account.findUnique({
+      where: { id: updated.accountId },
+    });
+
     if (categoryChanged && payload.categoryId) {
       const category = await prisma.category.findUnique({
         where: { id: payload.categoryId },
@@ -95,9 +99,38 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       }
     }
 
-    const account = await prisma.account.findUnique({
-      where: { id: updated.accountId },
-    });
+    if (payload.merchantRaw || payload.merchantClean || payload.categoryId !== undefined) {
+      const merchantText = payload.merchantClean || payload.merchantRaw || updated.merchantClean || updated.merchantRaw;
+      const categoryForRule = updated.categoryId
+        ? await prisma.category.findUnique({
+            where: { id: updated.categoryId },
+          })
+        : null;
+
+      if (merchantText && categoryForRule) {
+        void upsertMerchantRule({
+          workspaceId: transaction.workspaceId,
+          merchantText,
+          normalizedName: payload.merchantClean || merchantText,
+          categoryId: categoryForRule.id,
+          categoryName: categoryForRule.name,
+          source: "manual_recategorization",
+          confidence: 100,
+        }).catch(() => null);
+      }
+    }
+
+    if (payload.accountId) {
+      void upsertAccountRule({
+        workspaceId: transaction.workspaceId,
+        accountId: updated.accountId,
+        accountName: account?.name ?? "",
+        institution: account?.institution ?? null,
+        accountType: (account?.type ?? "bank") as "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other",
+        source: "manual_transaction_reassignment",
+        confidence: 100,
+      }).catch(() => null);
+    }
     const category = updated.categoryId
       ? await prisma.category.findUnique({
           where: { id: updated.categoryId },

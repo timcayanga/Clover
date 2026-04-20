@@ -27,6 +27,12 @@ type Account = {
   currency: string;
 };
 
+type AccountRule = {
+  accountId: string | null;
+  accountName: string;
+  institution: string | null;
+};
+
 type ImportFile = {
   id: string;
   fileName: string;
@@ -81,6 +87,9 @@ const isPasswordError = (error: unknown) => {
 const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
+const accountRuleKey = (name: string, institution: string | null) =>
+  `${(institution ?? "").trim().toLowerCase()}::${String(name).replace(/\D/g, "").slice(-4) || name.trim().toLowerCase()}`;
+
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
 const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
@@ -115,6 +124,7 @@ function ImportsPageContent() {
   const [isUploading, setIsUploading] = useState(false);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountRules, setAccountRules] = useState<AccountRule[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [workspaceName, setWorkspaceName] = useState("");
@@ -148,6 +158,7 @@ function ImportsPageContent() {
   const loadAccounts = async (workspaceId: string) => {
     if (!workspaceId) {
       setAccounts([]);
+      setAccountRules([]);
       setSelectedAccountId("");
       return;
     }
@@ -155,6 +166,7 @@ function ImportsPageContent() {
     const response = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
     if (!response.ok) {
       setAccounts([]);
+      setAccountRules([]);
       setSelectedAccountId("");
       return;
     }
@@ -162,6 +174,7 @@ function ImportsPageContent() {
     const data = await response.json();
     const items = Array.isArray(data.accounts) ? data.accounts : [];
     setAccounts(items);
+    setAccountRules(Array.isArray(data.accountRules) ? data.accountRules : []);
     setSelectedAccountId((current) => current || items[0]?.id || "");
   };
 
@@ -201,6 +214,30 @@ function ImportsPageContent() {
             .catch(() => null);
         }
         return existing.id;
+      }
+
+      const rule = accountRules.find((entry) => accountRuleKey(entry.accountName, entry.institution) === accountRuleKey(statementAccountName, institution ?? null));
+      if (rule?.accountId) {
+        const matched = accounts.find((account) => account.id === rule.accountId);
+        if (matched) {
+          setSelectedAccountId(matched.id);
+          const expectedType = inferAccountTypeFromStatement(institution, statementAccountName, "bank");
+          if (matched.type !== expectedType) {
+            void fetch(`/api/accounts/${matched.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                workspaceId,
+                type: expectedType,
+              }),
+            }).then((response) => {
+              if (response.ok) {
+                setAccounts((current) => current.map((account) => (account.id === matched.id ? { ...account, type: expectedType } : account)));
+              }
+            }).catch(() => null);
+          }
+          return matched.id;
+        }
       }
 
       const expectedType = inferAccountTypeFromStatement(institution, statementAccountName, "bank");

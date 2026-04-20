@@ -18,6 +18,7 @@ import {
   hasCompatibleTable,
   recordTrainingSignal,
   updateImportFileCompat,
+  upsertAccountRule,
   upsertStatementTemplate,
 } from "@/lib/data-engine";
 
@@ -271,6 +272,13 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     throw new Error("Import file not found");
   }
 
+  const account = await prisma.account.findUnique({
+    where: { id: accountId },
+  });
+  if (!account) {
+    throw new Error("Account not found");
+  }
+
   await deleteTransactionsByImportFileCompat(importFileId);
 
   await prisma.trainingSignal.deleteMany({
@@ -398,6 +406,19 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
         isExcluded: true,
       });
     }
+  }
+
+  const statementRow = parsedRows.find((row) => typeof row.accountName === "string" && row.accountName.trim()) ?? parsedRows[0] ?? null;
+  if (statementRow && typeof statementRow.accountName === "string" && statementRow.accountName.trim()) {
+    void upsertAccountRule({
+      workspaceId: importFile.workspaceId,
+      accountId,
+      accountName: statementRow.accountName.trim(),
+      institution: typeof statementRow.institution === "string" && statementRow.institution.trim() ? statementRow.institution.trim() : null,
+      accountType: account.type,
+      source: "import_confirmation",
+      confidence: 100,
+    }).catch(() => null);
   }
 
   const latestExplicitBalance = [...parsedRows]

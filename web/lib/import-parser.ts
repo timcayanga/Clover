@@ -10,8 +10,10 @@ export type ParsedImportRow = {
   description?: string;
   categoryName?: string;
   accountName?: string;
+  institution?: string | null;
   type?: TransactionType;
   rawPayload?: Record<string, unknown>;
+  learnedRuleIdsApplied?: string[];
 };
 
 export type DetectedStatementMetadata = {

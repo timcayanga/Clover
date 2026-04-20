@@ -90,6 +90,7 @@ model Workspace {
   auditLogs     AuditLog[]
   statementTemplates StatementTemplate[]
   merchantRules MerchantRule[]
+  accountRules  AccountRule[]
   trainingSignals TrainingSignal[]
 
   @@index([userId])
@@ -110,6 +111,7 @@ model Account {
   transactions  Transaction[]
   importFiles   ImportFile[]
   statementCheckpoints AccountStatementCheckpoint[]
+  accountRules  AccountRule[]
 
   @@index([workspaceId])
 }
@@ -291,6 +293,29 @@ model MerchantRule {
   @@unique([workspaceId, merchantKey])
   @@index([workspaceId])
   @@index([merchantKey])
+}
+
+model AccountRule {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  accountId      String?
+  ruleKey        String
+  accountName    String
+  institution    String?
+  accountType    AccountType
+  source         String    @default("manual")
+  confidence     Int       @default(100)
+  timesConfirmed Int       @default(1)
+  lastUsedAt     DateTime  @default(now())
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account        Account?   @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, ruleKey])
+  @@index([workspaceId])
+  @@index([accountId])
+  @@index([ruleKey])
 }
 
 model TrainingSignal {

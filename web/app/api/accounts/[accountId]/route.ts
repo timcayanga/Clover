@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { upsertAccountRule } from "@/lib/data-engine";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
         balance: payload.balance === undefined ? undefined : payload.balance === null || payload.balance === "" ? null : payload.balance.toString(),
       },
     });
+
+    void upsertAccountRule({
+      workspaceId: account.workspaceId,
+      accountId: account.id,
+      accountName: account.name,
+      institution: account.institution,
+      accountType: account.type,
+      source: "manual_account_update",
+      confidence: 100,
+    }).catch(() => null);
 
     return NextResponse.json({
       account: {

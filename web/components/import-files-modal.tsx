@@ -17,10 +17,18 @@ type AccountOption = {
   type: string;
 };
 
+type AccountRule = {
+  accountId: string | null;
+  accountName: string;
+  institution: string | null;
+  accountType: string;
+};
+
 type ImportFilesModalProps = {
   open: boolean;
   workspaceId: string;
   accounts: AccountOption[];
+  accountRules?: AccountRule[];
   defaultAccountId?: string | null;
   onClose: () => void;
   onImported: (summary: UploadInsightsSummary) => Promise<void> | void;
@@ -73,6 +81,16 @@ const fileTypeLabel = (file: File) => {
 const accountKey = (name: string, institution: string | null) =>
   `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
+const extractLastFourDigits = (value?: string | null) => {
+  if (!value) return null;
+  const digits = String(value).replace(/\D/g, "");
+  if (digits.length < 4) return null;
+  return digits.slice(-4);
+};
+
+const accountRuleKey = (name: string, institution: string | null) =>
+  `${(institution ?? "").trim().toLowerCase()}::${extractLastFourDigits(name) ?? name.trim().toLowerCase()}`;
+
 const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): UploadInsightsSummary => {
   const [firstSummary] = summaries;
   const rowsImported = summaries.reduce((total, summary) => total + summary.rowsImported, 0);
@@ -114,6 +132,7 @@ export function ImportFilesModal({
   open,
   workspaceId,
   accounts,
+  accountRules = [],
   defaultAccountId,
   onClose,
   onImported,
@@ -384,6 +403,16 @@ export function ImportFilesModal({
         accountIdByKeyRef.current.set(key, existing);
         await syncStatementAccountType(existing, statementAccountName, institution ?? null);
         return existing;
+      }
+
+      const rule = accountRules.find((entry) => accountRuleKey(entry.accountName, entry.institution) === accountRuleKey(statementAccountName, institution ?? null));
+      if (rule?.accountId) {
+        const matchedAccount = accounts.find((account) => account.id === rule.accountId);
+        if (matchedAccount) {
+          accountIdByKeyRef.current.set(accountKey(matchedAccount.name, matchedAccount.institution), matchedAccount.id);
+          await syncStatementAccountType(matchedAccount.id, statementAccountName, institution ?? null);
+          return matchedAccount.id;
+        }
       }
 
       return createStatementAccount(statementAccountName, institution ?? null);

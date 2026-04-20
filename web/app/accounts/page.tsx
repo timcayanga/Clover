@@ -28,6 +28,13 @@ type Account = {
   createdAt: string;
 };
 
+type AccountRule = {
+  accountId: string | null;
+  accountName: string;
+  institution: string | null;
+  accountType: string;
+};
+
 type Transaction = {
   id: string;
   accountId: string;
@@ -272,6 +279,7 @@ function AccountsPageContent() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountRules, setAccountRules] = useState<AccountRule[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [statementCheckpoints, setStatementCheckpoints] = useState<StatementCheckpoint[]>([]);
   const [message, setMessage] = useState("Select a workspace to review accounts.");
@@ -347,6 +355,7 @@ function AccountsPageContent() {
   const loadWorkspaceData = async (workspaceId: string) => {
     if (!workspaceId) {
       setAccounts([]);
+      setAccountRules([]);
       setTransactions([]);
       setAccountsLoading(false);
       return;
@@ -363,6 +372,7 @@ function AccountsPageContent() {
     if (accountsResponse.ok) {
       const payload = await accountsResponse.json();
       setAccounts(Array.isArray(payload.accounts) ? payload.accounts : []);
+      setAccountRules(Array.isArray(payload.accountRules) ? payload.accountRules : []);
     }
 
     setAccountsLoading(false);
@@ -1348,6 +1358,7 @@ function AccountsPageContent() {
         open={importOpen}
         workspaceId={selectedWorkspaceId}
         accounts={accounts}
+        accountRules={accountRules}
         defaultAccountId={selectedAccount?.id ?? accounts[0]?.id ?? null}
         onClose={() => setImportOpen(false)}
         onImported={async (summary) => {
