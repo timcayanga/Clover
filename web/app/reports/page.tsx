@@ -2,7 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
+import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { ReportsReviewQueue, type ReportsQueueItem } from "@/components/reports-review-queue";
 import { getSessionContext } from "@/lib/auth";
@@ -152,7 +152,7 @@ async function ReportsPageView({
   const selectedRangeLabel = reportsRangeLabels[selectedRange];
   const rangeWindowText = selectedRangeLabel.toLowerCase();
 
-  if (isStagingHost) {
+  if (false && isStagingHost) {
     const sampleMonthBuckets = [
       { key: "2026-01", label: "Jan 2026", income: 38000, expense: 11200, net: 26800 },
       { key: "2026-02", label: "Feb 2026", income: 40250, expense: 9800, net: 30450 },
@@ -571,13 +571,13 @@ async function ReportsPageView({
   }
 
   const session = await getSessionContext();
-  const user = await getOrCreateCurrentUser(session.userId);
+  const existingUser = await prisma.user.findUnique({
+    where: { clerkUserId: session.userId },
+  });
+  const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
-
-  const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
-  await seedWorkspaceDefaults(starterWorkspace.id);
 
   const workspaces = await prisma.workspace.findMany({
     where: { userId: user.id },
@@ -590,9 +590,11 @@ async function ReportsPageView({
     orderBy: { createdAt: "asc" },
   });
 
-  const selectedWorkspace =
-    workspaces[0] ??
-    (await prisma.workspace.findUnique({
+  let selectedWorkspace = workspaces[0] ?? null;
+
+  if (!selectedWorkspace) {
+    const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
+    const starterWorkspaceData = await prisma.workspace.findUnique({
       where: { id: starterWorkspace.id },
       include: {
         accounts: true,
@@ -600,7 +602,12 @@ async function ReportsPageView({
           orderBy: { uploadedAt: "desc" },
         },
       },
-    }));
+    });
+    if (!starterWorkspaceData) {
+      redirect("/dashboard");
+    }
+    selectedWorkspace = starterWorkspaceData;
+  }
 
   if (!selectedWorkspace) {
     redirect("/dashboard");

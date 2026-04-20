@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
+import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { getSessionContext, isStagingHost } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
@@ -387,13 +387,13 @@ const createStagingInsightsSampleData = (anchor: Date) => {
 
 export default async function InsightsPage() {
   const session = await getSessionContext();
-  const user = await getOrCreateCurrentUser(session.userId);
+  const existingUser = await prisma.user.findUnique({
+    where: { clerkUserId: session.userId },
+  });
+  const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
   if (!hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
-
-  const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
-  await seedWorkspaceDefaults(starterWorkspace.id);
 
   const workspaces = await prisma.workspace.findMany({
     where: { userId: user.id },
@@ -406,9 +406,11 @@ export default async function InsightsPage() {
     orderBy: { createdAt: "asc" },
   });
 
-  const selectedWorkspace =
-    workspaces[0] ??
-    (await prisma.workspace.findUnique({
+  let selectedWorkspace = workspaces[0] ?? null;
+
+  if (!selectedWorkspace) {
+    const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
+    const starterWorkspaceData = await prisma.workspace.findUnique({
       where: { id: starterWorkspace.id },
       include: {
         accounts: true,
@@ -416,7 +418,12 @@ export default async function InsightsPage() {
           orderBy: { uploadedAt: "desc" },
         },
       },
-    }));
+    });
+    if (!starterWorkspaceData) {
+      redirect("/dashboard");
+    }
+    selectedWorkspace = starterWorkspaceData;
+  }
 
   if (!selectedWorkspace) {
     redirect("/dashboard");
