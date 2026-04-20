@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { analyticsOnceKey, PostHogEvent } from "@/components/posthog-analytics";
 
 type GoalOption = {
   value: string;
@@ -83,7 +84,7 @@ const START_OPTIONS: StartOption[] = [
     value: "statement",
     title: "Import files",
     description: "Upload a bank statement to auto-populate your dashboard, transactions, and review queue.",
-    href: "/transactions?import=1",
+    href: "/dashboard?import=1",
     featured: true,
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -171,13 +172,20 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
 
   return (
     <section className="glass onboarding-card">
+      <PostHogEvent
+        event="onboarding_started"
+        onceKey={analyticsOnceKey("onboarding_started", "session")}
+        properties={{
+          current_goal: currentGoal ?? null,
+        }}
+      />
       <div className="onboarding-card__brand" aria-label="Clover">
         <img className="onboarding-card__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
       </div>
 
       {step === "goals" ? (
         <>
-          <h3>What do you want Clover to help you with first?</h3>
+          <h3>Welcome to Clover</h3>
           <p className="onboarding-card__copy">Pick one or more goals and we’ll tune the first experience around them.</p>
 
           <div className="onboarding-grid" role="list" aria-label="Financial goals">

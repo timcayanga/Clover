@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
+import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext, isStagingHost } from "@/lib/auth";
@@ -583,6 +584,7 @@ export default async function InsightsPage() {
   const ninetyDayInsightTransactions = ninetyDayTransactions;
   const sixMonthInsightTransactions = sixMonthTransactions as InsightTransaction[];
   const selectedGoal = selectedGoalValue;
+  const isEmptyWorkspace = workspaceAccounts.length <= 1 && importFiles.length === 0 && currentWindowTransactions.length === 0;
 
   const currentSummary = currentWindowTransactions.reduce(
     (accumulator, transaction) => {
@@ -960,23 +962,17 @@ export default async function InsightsPage() {
           chart_type: "timeline",
         }}
       />
-      {isFreshResetWorkspace ? (
-        <section className="transactions-empty-state" style={{ marginBottom: 20 }}>
-          <p className="transactions-empty-state__eyebrow">Fresh start</p>
-          <h3>Import files to wake up your insights.</h3>
-          <p className="transactions-empty-state__copy">
-            Clover needs a statement or account activity before it can spot patterns, trends, and habits. Upload one file and the
-            insights page will start filling itself in.
-          </p>
-          <div className="transactions-empty-state__actions">
-            <Link className="button button-primary button-small" href="/transactions?import=1">
-              Import files
-            </Link>
-            <Link className="button button-secondary button-small" href="/accounts">
-              Add an account
-            </Link>
-          </div>
-        </section>
+      {isEmptyWorkspace ? (
+        <div style={{ marginBottom: 20 }}>
+          <EmptyDataCta
+            eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
+            title="Import files to wake up your insights."
+            copy="Clover needs a statement or account activity before it can spot patterns, trends, and habits. Upload one file to start filling this page in."
+            importHref="/dashboard?import=1"
+            accountHref="/accounts"
+            transactionHref="/transactions?manual=1"
+          />
+        </div>
       ) : null}
       <section className="insights-story">
         <article className="insights-snapshot insights-snapshot--hero glass">

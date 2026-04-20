@@ -3,7 +3,9 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
+import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
 import { DashboardVisualsIsland } from "@/components/dashboard-visuals-island";
+import { EmptyDataCta } from "@/components/empty-data-cta";
 import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
@@ -82,6 +84,13 @@ type VisualCategory = {
 type WorkspaceSummary = {
   id: string;
   name: string;
+  accounts: Array<{
+    id: string;
+    name: string;
+    institution: string | null;
+    type: string;
+    currency: string;
+  }>;
   importFiles: Array<{
     id: string;
     fileName: string;
@@ -269,7 +278,12 @@ const comparePeriods = (currentTransactions: DashboardTransaction[], previousTra
   };
 };
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ import?: string }>;
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
@@ -284,6 +298,15 @@ export default async function DashboardPage() {
       select: {
         id: true,
         name: true,
+        accounts: {
+          select: {
+            id: true,
+            name: true,
+            institution: true,
+            type: true,
+            currency: true,
+          },
+        },
         importFiles: {
           orderBy: { uploadedAt: "desc" },
           take: 5,
@@ -305,6 +328,13 @@ export default async function DashboardPage() {
     })) ?? ({
       id: starterWorkspace.id,
       name: starterWorkspace.name,
+      accounts: starterWorkspace.accounts.map((account) => ({
+        id: account.id,
+        name: account.name,
+        institution: account.institution,
+        type: account.type,
+        currency: account.currency,
+      })),
       importFiles: [],
       _count: {
         accounts: starterWorkspace.accounts.length,
@@ -314,6 +344,7 @@ export default async function DashboardPage() {
     } satisfies WorkspaceSummary);
 
   const selectedImportFiles = selectedWorkspace.importFiles;
+  const isEmptyWorkspace = selectedWorkspace._count.accounts <= 1 && selectedWorkspace._count.transactions === 0 && selectedWorkspace._count.importFiles === 0;
 
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -592,23 +623,19 @@ export default async function DashboardPage() {
           import_count: selectedWorkspace._count.importFiles,
         }}
       />
-      {user.dataWipedAt && selectedWorkspace._count.accounts <= 1 && selectedWorkspace._count.importFiles === 0 ? (
-        <section className="transactions-empty-state">
-          <p className="transactions-empty-state__eyebrow">Fresh start</p>
-          <h3>Your Clover workspace is clean again.</h3>
-          <p className="transactions-empty-state__copy">
-            Import a statement to repopulate your dashboard, reports, insights, and goals. You can also add an account if you want
-            to start manually.
-          </p>
-          <div className="transactions-empty-state__actions">
-            <Link className="button button-primary button-small" href="/transactions?import=1">
-              Import files
-            </Link>
-            <Link className="button button-secondary button-small" href="/accounts">
-              Add an account
-            </Link>
-          </div>
-        </section>
+      {isEmptyWorkspace ? (
+        <EmptyDataCta
+          eyebrow={user.dataWipedAt ? "Fresh start" : "No data yet"}
+          title={user.dataWipedAt ? "Your Clover workspace is clean again." : "Import a statement to unlock the dashboard."}
+          copy={
+            user.dataWipedAt
+              ? "Bring Clover back to life by importing a statement, adding an account, or entering a transaction manually."
+              : "Importing a statement is the fastest way to populate the dashboard. You can also add an account or enter a transaction manually."
+          }
+          importHref="/dashboard?import=1"
+          accountHref="/accounts"
+          transactionHref="/transactions?manual=1"
+        />
       ) : null}
       <section className="goals-story">
         <article className="goals-hero glass">
@@ -709,6 +736,8 @@ export default async function DashboardPage() {
         chartPadding={chartPadding}
         topCategoryRows={topCategoryRows}
       />
+
+      <DashboardImportLauncher workspaceId={selectedWorkspace.id} accounts={selectedWorkspace.accounts} initialOpen={resolvedSearchParams?.import === "1"} />
 
       <article className="goals-actions glass">
         <div className="goals-panel__head">

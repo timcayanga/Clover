@@ -56,11 +56,12 @@ async function main() {
     create: {
       id: "seed-demo-account",
       workspaceId: workspace.id,
-      name: "Imported transactions",
-      institution: "Source upload",
-      type: "bank",
+      name: "Cash",
+      institution: "Cash",
+      type: "cash",
       currency: "PHP",
-      source: "upload",
+      source: "manual",
+      balance: 0,
     },
   });
 

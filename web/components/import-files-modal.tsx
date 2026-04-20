@@ -4,6 +4,7 @@ import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { ImportPasswordModal } from "@/components/import-password-modal";
 import { ImportUploadDock } from "@/components/import-upload-dock";
+import { capturePostHogClientEvent, capturePostHogClientEventOnce, analyticsOnceKey } from "@/components/posthog-analytics";
 import { formatDuplicateImportMessage } from "@/lib/import-duplicate-message";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { postFileWithProgress } from "@/lib/import-file-post";
@@ -250,6 +251,10 @@ export function ImportFilesModal({
         }
 
         additionsCount += 1;
+        capturePostHogClientEvent("file_upload_started", {
+          file_type: fileTypeLabel(file),
+          file_size_bytes: file.size,
+        });
         return [
           {
             id: crypto.randomUUID(),
@@ -274,6 +279,12 @@ export function ImportFilesModal({
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooLarge} file${skippedTooLarge === 1 ? "" : "s"} over 2 MB.`;
       } else if (skippedTooMany > 0) {
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the 10-file limit.`;
+        capturePostHogClientEvent("plan_limit_reached", {
+          limit_type: "upload_file_count",
+          current_usage: current.length + additionsCount,
+          limit_value: 10,
+          workspace_id: workspaceId || null,
+        });
       } else if (additions.length > 0) {
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"} to the queue.`;
       } else {
@@ -336,22 +347,15 @@ export function ImportFilesModal({
         progress: 0,
         progressLabel: "Confirmation failed",
       });
+        capturePostHogClientEvent("import_failed", {
+          error_stage: "confirm",
+        });
         return { status: "error", importedRows: null, summary: null };
       }
 
       const confirmed = await confirmResponse.json();
       const importedRows = Number(confirmed.result?.imported ?? 0);
       const insightSummary = confirmed.result?.insightSummary ?? null;
-      updateItem(itemId, {
-        status: "done",
-        confirmationState: "confirmed",
-        error: null,
-        importFileId,
-        targetAccountId: accountId,
-        importedRows,
-        progress: 100,
-        progressLabel: "Done",
-      });
       const summary = insightSummary
         ? {
             fileName: summaryContext.fileName,
@@ -368,6 +372,26 @@ export function ImportFilesModal({
             topMerchantCount: insightSummary.topMerchantCount === null ? null : Number(insightSummary.topMerchantCount),
           }
         : null;
+      updateItem(itemId, {
+        status: "done",
+        confirmationState: "confirmed",
+        error: null,
+        importFileId,
+        targetAccountId: accountId,
+        importedRows,
+        progress: 100,
+        progressLabel: "Done",
+      });
+      capturePostHogClientEvent("import_confirmed", {
+        file_type: summaryContext.fileName.split(".").pop()?.toUpperCase() ?? "FILE",
+        transaction_count: importedRows,
+        institution: summaryContext.institution ?? null,
+      });
+      capturePostHogClientEvent("transaction_imported", {
+        transaction_count: importedRows,
+        income_total: summary?.incomeTotal ?? 0,
+        expense_total: summary?.expenseTotal ?? 0,
+      });
       return { status: "done", importedRows, summary };
     } finally {
       window.clearInterval(finalizingTimer);
@@ -428,7 +452,7 @@ export function ImportFilesModal({
       return fallback;
     }
 
-    return createStatementAccount("Imported transactions", "Source upload");
+    return createStatementAccount("Cash", "Cash");
   };
 
   const removeItem = (id: string) => {
@@ -456,9 +480,17 @@ export function ImportFilesModal({
 
     try {
       const importFileId = crypto.randomUUID();
+      capturePostHogClientEvent("import_started", {
+        file_type: fileTypeLabel(item.file),
+        file_size_bytes: item.file.size,
+      });
       updateItem(itemId, { status: "importing", error: null, progress: 8, progressLabel: "Starting upload", importFileId });
       updateItem(itemId, { progress: 20, progressLabel: "Uploading the file" });
       await yieldToPaint();
+      capturePostHogClientEvent("import_parsing_started", {
+        file_type: fileTypeLabel(item.file),
+        file_size_bytes: item.file.size,
+      });
       const processResponse = await postFileWithProgress(
         `/api/imports/${importFileId}/process`,
         item.file,
@@ -476,6 +508,10 @@ export function ImportFilesModal({
           });
         }
       );
+      capturePostHogClientEvent("file_uploaded", {
+        file_type: fileTypeLabel(item.file),
+        file_size_bytes: item.file.size,
+      });
 
       updateItem(itemId, {
         progress: 65,
@@ -485,6 +521,10 @@ export function ImportFilesModal({
 
       if (!processResponse.ok) {
         const payload = await processResponse.json().catch(() => ({}));
+        capturePostHogClientEvent("file_upload_failed", {
+          error_stage: "upload",
+          error_code: String(payload.error ?? "unknown"),
+        });
         throw new Error(payload.error || "Unable to parse this file.");
       }
 
@@ -504,6 +544,20 @@ export function ImportFilesModal({
         });
         setMessage(duplicateMessage);
         return { status: "done", importedRows: 0, summary: null };
+      }
+
+      capturePostHogClientEvent("import_parsed_successfully", {
+        file_type: fileTypeLabel(item.file),
+        file_size_bytes: item.file.size,
+        transaction_count: Number(processPayload?.imported ?? 0) || undefined,
+        institution: processedMetadata?.institution ?? null,
+      });
+      if (processPayload?.warnings?.length) {
+        capturePostHogClientEvent("import_parsed_with_warnings", {
+          file_type: fileTypeLabel(item.file),
+          file_size_bytes: item.file.size,
+          warning_count: processPayload.warnings.length,
+        });
       }
 
       updateItem(itemId, {
@@ -544,6 +598,10 @@ export function ImportFilesModal({
         return { status: "needs_password", importedRows: null, summary: null };
       }
 
+      capturePostHogClientEvent("import_failed", {
+        error_stage: "process",
+        error_code: error instanceof Error ? error.message : "unknown_error",
+      });
       updateItem(itemId, {
         status: "error",
         confirmationState: item.importFileId ? "staged" : "none",
@@ -591,6 +649,13 @@ export function ImportFilesModal({
 
     setBusy(true);
     setMessage("Working through selected files...");
+    capturePostHogClientEventOnce(
+      "first_import_started",
+      {
+        file_count: items.length,
+      },
+      analyticsOnceKey("first_import_started", "session")
+    );
 
     let importedCount = 0;
     let blockedCount = 0;
@@ -659,6 +724,16 @@ export function ImportFilesModal({
       alreadyConfirmedCount + importedCount === items.length;
 
     if (finishedCleanly) {
+      capturePostHogClientEventOnce(
+        "first_import_completed",
+        {
+          file_count: uploadInsightsSummaries.length || importedCount,
+          transaction_count: uploadInsightsSummaries.reduce((total, summary) => total + summary.rowsImported, 0),
+          income_total: uploadInsightsSummaries.reduce((total, summary) => total + summary.incomeTotal, 0),
+          expense_total: uploadInsightsSummaries.reduce((total, summary) => total + summary.expenseTotal, 0),
+        },
+        analyticsOnceKey("first_import_completed", "session")
+      );
       if (uploadInsightsSummaries.length > 0) {
         void onImported(
           uploadInsightsSummaries.length === 1

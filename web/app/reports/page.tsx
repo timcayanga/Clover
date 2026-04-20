@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
+import { EmptyDataCta } from "@/components/empty-data-cta";
 import { ReportsReviewQueue, type ReportsQueueItem } from "@/components/reports-review-queue";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
@@ -763,6 +764,10 @@ async function ReportsPageView({
           uploadedAt: Date;
         }
       | null;
+    const isEmptyWorkspace =
+      Number(accountStats._count.id ?? 0) <= 1 &&
+      currentWindowTransactions.length === 0 &&
+      Object.values(importStatusCounts).every((count) => count === 0);
 
     const currentSummary = currentWindowTransactions.reduce(
       (accumulator, transaction) => {
@@ -1160,23 +1165,17 @@ async function ReportsPageView({
             chart_type: "timeline",
           }}
         />
-        {isFreshResetWorkspace ? (
-          <section className="transactions-empty-state" style={{ marginBottom: 20 }}>
-            <p className="transactions-empty-state__eyebrow">Fresh start</p>
-            <h3>Your reports are ready for a new import.</h3>
-            <p className="transactions-empty-state__copy">
-              Import a statement to populate cash flow, spending, review items, and goal-aware summaries. Clover will fill the rest
-              in as soon as the first file lands.
-            </p>
-            <div className="transactions-empty-state__actions">
-              <Link className="button button-primary button-small" href="/transactions?import=1">
-                Import files
-              </Link>
-              <Link className="button button-secondary button-small" href="/accounts">
-                Add an account
-              </Link>
-            </div>
-          </section>
+        {isEmptyWorkspace ? (
+          <div style={{ marginBottom: 20 }}>
+            <EmptyDataCta
+              eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
+              title="Your reports are ready for a new import."
+              copy="Import a statement to populate cash flow, spending, review items, and goal-aware summaries. Clover will fill the rest in as soon as the first file lands."
+              importHref="/dashboard?import=1"
+              accountHref="/accounts"
+              transactionHref="/transactions?manual=1"
+            />
+          </div>
         ) : null}
         <section className="reports-hero">
           <div className="reports-hero__copy glass">

@@ -1177,6 +1177,13 @@ function TransactionsPageContent() {
     }
   }, [searchParams]);
 
+  useEffect(() => {
+    if (searchParams.get("manual") === "1") {
+      setManualOpen(true);
+      window.history.replaceState({}, "", "/transactions");
+    }
+  }, [searchParams]);
+
   const ensureDefaultAccount = async (workspaceId: string) => {
     const preferredAccount = accounts.find((account) => account.type !== "cash" && account.type !== "other" && account.type !== "investment");
     if (preferredAccount) {

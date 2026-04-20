@@ -104,7 +104,7 @@ const seedStagingSampleTransactions = async (workspaceId: string) => {
     prisma.category.findMany({ where: { workspaceId } }),
   ]);
 
-  const primaryAccount = accounts.find((account) => account.name === "Imported transactions") ?? accounts[0];
+  const primaryAccount = accounts[0];
   const fallbackAccount = accounts.find((account) => account.type === "cash") ?? primaryAccount;
   const categoryByName = new Map(categories.map((category) => [category.name.trim().toLowerCase(), category]));
 
@@ -178,34 +178,16 @@ export const ensureStarterWorkspace = async (userId: string, email: string, veri
       name: "Personal",
       type: "personal",
       accounts: {
-        create: useFreshStartWorkspace
-          ? [
-              {
-                name: "Cash",
-                institution: "Cash",
-                type: "cash",
-                currency: "PHP",
-                source: "manual",
-                balance: 0,
-              },
-            ]
-          : [
-              {
-                name: "Imported transactions",
-                institution: "Source upload",
-                type: "bank",
-                currency: "PHP",
-                source: "upload",
-              },
-              {
-                name: "Cash",
-                institution: "Cash",
-                type: "cash",
-                currency: "PHP",
-                source: "manual",
-                balance: 0,
-              },
-            ],
+        create: [
+          {
+            name: "Cash",
+            institution: "Cash",
+            type: "cash",
+            currency: "PHP",
+            source: "manual",
+            balance: 0,
+          },
+        ],
       },
       categories: {
         create: DEFAULT_CATEGORY_ROWS.map((category) => ({

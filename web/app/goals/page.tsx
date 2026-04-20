@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
+import { EmptyDataCta } from "@/components/empty-data-cta";
 import { GoalsEditor } from "@/components/goals-editor";
 import { GoalsChecklist } from "@/components/goals-checklist";
 import { GoalGlyph, GoalIllustration } from "@/components/goals-visuals";
@@ -305,6 +306,7 @@ export default async function GoalsPage() {
   const selectedGoalKey = user.primaryGoal?.trim() ?? null;
   const selectedGoal = getGoalDefinition(selectedGoalKey);
   const playbook = getGoalPlaybook(selectedGoalKey);
+  const isEmptyWorkspace = resolvedWorkspace.accounts.length <= 1 && resolvedWorkspace.importFiles.length === 0 && currentWindowTransactions.length === 0;
 
   const currentSummary = currentWindowTransactions.reduce(
     (accumulator, transaction) => {
@@ -667,23 +669,17 @@ export default async function GoalsPage() {
       subtitle="A visual, encouraging view of the goal you set in onboarding, with the next best move front and center."
       showTopbar={false}
     >
-      {user.dataWipedAt && resolvedWorkspace.accounts.length <= 1 && resolvedWorkspace.importFiles.length === 0 ? (
-        <section className="transactions-empty-state" style={{ marginBottom: 20 }}>
-          <p className="transactions-empty-state__eyebrow">Fresh start</p>
-          <h3>Set a new goal once your data comes back.</h3>
-          <p className="transactions-empty-state__copy">
-            Your goals page will become more useful again after you import a statement or add accounts and transactions. Until then,
-            Clover is ready for a clean import-first setup.
-          </p>
-          <div className="transactions-empty-state__actions">
-            <Link className="button button-primary button-small" href="/transactions?import=1">
-              Import files
-            </Link>
-            <Link className="button button-secondary button-small" href="/accounts">
-              Add an account
-            </Link>
-          </div>
-        </section>
+      {isEmptyWorkspace ? (
+        <div style={{ marginBottom: 20 }}>
+          <EmptyDataCta
+            eyebrow={user.dataWipedAt ? "Fresh start" : "No data yet"}
+            title="Set a new goal once your data comes back."
+            copy="Your goals page will become more useful again after you import a statement or add accounts and transactions. Clover is ready for a clean import-first setup."
+            importHref="/dashboard?import=1"
+            accountHref="/accounts"
+            transactionHref="/transactions?manual=1"
+          />
+        </div>
       ) : null}
       <section className="goals-story">
         <article className="goals-hero glass">
