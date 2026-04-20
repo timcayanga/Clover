@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
+import { syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 
 type CloverShellProps = {
   active: "dashboard" | "accounts" | "transactions" | "reports" | "insights" | "settings" | "profile" | "notifications";
@@ -157,6 +158,7 @@ export function CloverShell({
 
   useEffect(() => {
     setIsSidebarOpen(false);
+    syncSelectedWorkspaceCookie();
     const handlePointerDown = (event: MouseEvent) => {
       if (!shellRef.current || event.target instanceof Node === false) {
         return;

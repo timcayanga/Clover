@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
@@ -7,6 +7,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { ReportsReviewQueue, type ReportsQueueItem } from "@/components/reports-review-queue";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -143,11 +144,13 @@ async function ReportsPageView({
   searchParams?: { range?: string };
 }) {
   const headerList = await headers();
+  const cookieStore = await cookies();
   const hostname = (headerList.get("x-forwarded-host") ?? headerList.get("host") ?? "")
     .split(",")[0]
     .split(":")[0]
     .toLowerCase();
   const isStagingHost = hostname === "staging.clover.ph";
+  const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
   const selectedRange = normalizeReportsRange(searchParams?.range);
   const selectedRangeLabel = reportsRangeLabels[selectedRange];
   const rangeWindowText = selectedRangeLabel.toLowerCase();
@@ -579,29 +582,34 @@ async function ReportsPageView({
     redirect("/onboarding");
   }
 
-  const workspaces = await prisma.workspace.findMany({
-    where: { userId: user.id },
-    include: {
-      accounts: true,
-      importFiles: {
-        orderBy: { uploadedAt: "desc" },
-      },
+  const workspaceInclude = {
+    accounts: true,
+    importFiles: {
+      orderBy: { uploadedAt: "desc" },
     },
-    orderBy: { createdAt: "asc" },
-  });
+  } as const;
 
-  let selectedWorkspace = workspaces[0] ?? null;
+  let selectedWorkspace =
+    (selectedWorkspaceCookieId
+      ? await prisma.workspace.findFirst({
+          where: {
+            id: selectedWorkspaceCookieId,
+            userId: user.id,
+          },
+          include: workspaceInclude,
+        })
+      : null) ??
+    (await prisma.workspace.findFirst({
+      where: { userId: user.id },
+      include: workspaceInclude,
+      orderBy: { createdAt: "asc" },
+    }));
 
   if (!selectedWorkspace) {
     const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
     const starterWorkspaceData = await prisma.workspace.findUnique({
       where: { id: starterWorkspace.id },
-      include: {
-        accounts: true,
-        importFiles: {
-          orderBy: { uploadedAt: "desc" },
-        },
-      },
+      include: workspaceInclude,
     });
     if (!starterWorkspaceData) {
       redirect("/dashboard");

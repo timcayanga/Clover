@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import type { TransactionType } from "@prisma/client";
+import type { AccountType, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { detectStatementMetadata, parseAmountValue, parseDateValue, type ParsedImportRow } from "@/lib/import-parser";
 
@@ -20,6 +20,17 @@ type MerchantRuleRow = {
   normalizedName: string;
   categoryId: string | null;
   categoryName: string | null;
+  source: string;
+  confidence: number;
+  timesConfirmed: number;
+};
+
+type AccountRuleRow = {
+  ruleKey: string;
+  accountId: string | null;
+  accountName: string;
+  institution: string | null;
+  accountType: AccountType;
   source: string;
   confidence: number;
   timesConfirmed: number;
@@ -144,6 +155,22 @@ const MERCHANT_RULE_COLUMNS = [
   "updatedAt",
 ] as const;
 
+const ACCOUNT_RULE_COLUMNS = [
+  "id",
+  "workspaceId",
+  "accountId",
+  "ruleKey",
+  "accountName",
+  "institution",
+  "accountType",
+  "source",
+  "confidence",
+  "timesConfirmed",
+  "lastUsedAt",
+  "createdAt",
+  "updatedAt",
+] as const;
+
 const IMPORT_FILE_COLUMNS = [
   "id",
   "workspaceId",
@@ -215,6 +242,18 @@ const fnv1a = (value: string) => {
 };
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+
+export const normalizeAccountRuleKey = (accountName?: string | null, institution?: string | null) =>
+  normalizeMerchantText(
+    `${institution ?? ""} ${extractLastFourDigits(accountName) ?? normalizeWhitespace(String(accountName ?? ""))}`
+  );
+
+export const extractLastFourDigits = (value?: string | null) => {
+  if (!value) return null;
+  const digits = String(value).replace(/\D/g, "");
+  if (digits.length < 4) return null;
+  return digits.slice(-4);
+};
 
 const getHardcodedCategoryOverride = (merchantText: string) => {
   const lower = merchantText.toLowerCase();
@@ -479,6 +518,25 @@ export const getCompatibleMerchantRuleColumns = async () => {
 
   const existing = new Set(columns.map((column) => column.column_name));
   const compatible = MERCHANT_RULE_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleAccountRuleColumns = async () => {
+  const cacheKey = "AccountRule";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'AccountRule'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = ACCOUNT_RULE_COLUMNS.filter((column) => existing.has(column));
   columnCache.set(cacheKey, compatible as string[]);
   return compatible as string[];
 };
@@ -822,6 +880,42 @@ export const loadMerchantRules = async (workspaceId: string) => {
   }));
 };
 
+export const loadAccountRules = async (workspaceId: string) => {
+  let rules: Array<{
+    ruleKey: string;
+    accountId: string | null;
+    accountName: string;
+    institution: string | null;
+    accountType: AccountType;
+    source: string;
+    confidence: number;
+    timesConfirmed: number;
+  }> = [];
+
+  try {
+    rules = await prisma.accountRule.findMany({
+      where: { workspaceId },
+      orderBy: [{ timesConfirmed: "desc" }, { updatedAt: "desc" }],
+      take: 250,
+    });
+  } catch (error) {
+    if (!isMissingDatabaseRelationError(error, "AccountRule")) {
+      throw error;
+    }
+  }
+
+  return rules.map((rule) => ({
+    ruleKey: rule.ruleKey,
+    accountId: rule.accountId,
+    accountName: rule.accountName,
+    institution: rule.institution,
+    accountType: rule.accountType,
+    source: rule.source,
+    confidence: rule.confidence,
+    timesConfirmed: rule.timesConfirmed,
+  }));
+};
+
 export const upsertMerchantRule = async (params: {
   workspaceId: string;
   merchantText: string;
@@ -871,6 +965,113 @@ export const upsertMerchantRule = async (params: {
 
     throw error;
   }
+};
+
+export const upsertAccountRule = async (params: {
+  workspaceId: string;
+  accountId?: string | null;
+  accountName: string;
+  institution?: string | null;
+  accountType: AccountType;
+  source: string;
+  confidence?: number;
+}) => {
+  const ruleKey = normalizeAccountRuleKey(params.accountName, params.institution);
+
+  try {
+    return await prisma.accountRule.upsert({
+      where: {
+        workspaceId_ruleKey: {
+          workspaceId: params.workspaceId,
+          ruleKey,
+        },
+      },
+      update: {
+        accountId: params.accountId ?? null,
+        accountName: params.accountName.trim(),
+        institution: params.institution?.trim() || null,
+        accountType: params.accountType,
+        source: params.source,
+        confidence: params.confidence ?? 100,
+        timesConfirmed: { increment: 1 },
+        lastUsedAt: new Date(),
+      },
+      create: {
+        workspaceId: params.workspaceId,
+        accountId: params.accountId ?? null,
+        ruleKey,
+        accountName: params.accountName.trim(),
+        institution: params.institution?.trim() || null,
+        accountType: params.accountType,
+        source: params.source,
+        confidence: params.confidence ?? 100,
+        timesConfirmed: 1,
+        lastUsedAt: new Date(),
+      },
+    });
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "AccountRule")) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+const scoreAccountRule = (
+  accountName: string | null | undefined,
+  institution: string | null | undefined,
+  rule: AccountRuleRow
+) => {
+  const normalizedRuleKey = normalizeAccountRuleKey(rule.accountName, rule.institution);
+  const normalizedInputKey = normalizeAccountRuleKey(accountName, institution);
+  if (normalizedRuleKey === normalizedInputKey) {
+    return 120 + rule.confidence + rule.timesConfirmed * 2;
+  }
+
+  const inputName = normalizeMerchantText(accountName ?? "");
+  const ruleName = normalizeMerchantText(rule.accountName);
+  const inputTokens = new Set(tokenizeMerchant(accountName ?? ""));
+  const ruleTokens = tokenizeMerchant(rule.accountName);
+  const ruleTokenSet = new Set(ruleTokens);
+  let overlap = 0;
+
+  for (const token of inputTokens) {
+    if (ruleTokenSet.has(token)) {
+      overlap += 1;
+    }
+  }
+
+  if (overlap === 0 && inputName !== ruleName) {
+    return 0;
+  }
+
+  return overlap * 22 + rule.confidence * 0.75 + rule.timesConfirmed;
+};
+
+const findBestAccountRule = (
+  accountName: string | null | undefined,
+  institution: string | null | undefined,
+  accountRules: AccountRuleRow[]
+) => {
+  let bestRule: AccountRuleRow | null = null;
+  let bestScore = 0;
+
+  for (const rule of accountRules) {
+    const score = scoreAccountRule(accountName, institution, rule);
+    if (score > bestScore) {
+      bestScore = score;
+      bestRule = rule;
+    }
+  }
+
+  return bestRule && bestScore >= 20
+    ? {
+        rule: bestRule,
+        score: bestScore,
+        exact: normalizeAccountRuleKey(bestRule.accountName, bestRule.institution) === normalizeAccountRuleKey(accountName, institution),
+      }
+    : null;
 };
 
 export const buildStatementFingerprint = (
@@ -1205,10 +1406,13 @@ export const enrichParsedRowsWithTraining = async (params: {
   rows: ParsedImportRow[];
 }) => {
   const merchantRules = await loadMerchantRules(params.workspaceId);
+  const accountRules = await loadAccountRules(params.workspaceId);
   const trainingSignals = await loadTrainingSignals(params.workspaceId);
 
   return params.rows.map((row) => {
+    const rowWithInstitution = row as ParsedImportRow & { institution?: string | null };
     const merchantText = row.merchantClean || row.merchantRaw || row.description || "";
+    const accountMatch = findBestAccountRule(row.accountName ?? null, rowWithInstitution.institution ?? null, accountRules);
     const learned = classifyMerchant({
       merchantText,
       type: row.type ?? "expense",
@@ -1218,9 +1422,16 @@ export const enrichParsedRowsWithTraining = async (params: {
     });
 
     const categoryName = learned.categoryName || row.categoryName || defaultCategoryForType(row.type ?? "expense");
+    const accountName = row.accountName ?? null;
+    const learnedRuleIdsApplied = [
+      ...(Array.isArray(row.learnedRuleIdsApplied) ? (row.learnedRuleIdsApplied as string[]) : []),
+      ...(accountMatch ? [`account-rule:${accountMatch.rule.ruleKey}`] : []),
+    ];
     return {
       ...row,
       merchantClean: row.merchantClean || merchantText || undefined,
+      accountName: accountMatch?.rule.accountName ?? accountName ?? undefined,
+      institution: rowWithInstitution.institution ?? accountMatch?.rule.institution ?? undefined,
       categoryName,
       confidence: learned.confidence,
       categoryReason: learned.categoryReason,
@@ -1228,13 +1439,16 @@ export const enrichParsedRowsWithTraining = async (params: {
       reviewStatus: learned.confidence >= 80 ? "suggested" : "pending_review",
       parserConfidence: 100,
       categoryConfidence: learned.confidence,
-      accountMatchConfidence: 0,
+      accountMatchConfidence: accountMatch ? Math.min(99, Math.round(Math.max(70, accountMatch.score))) : 0,
       duplicateConfidence: 0,
       transferConfidence: row.type === "transfer" ? 100 : 0,
+      learnedRuleIdsApplied,
       normalizedPayload: {
         merchantClean: row.merchantClean || merchantText || null,
         categoryName,
         type: row.type ?? "expense",
+        accountName: accountMatch?.rule.accountName ?? accountName ?? null,
+        institution: row.institution ?? accountMatch?.rule.institution ?? null,
       } as Prisma.InputJsonValue,
       rawPayload: {
         ...(row.rawPayload ?? {}),
@@ -1244,6 +1458,8 @@ export const enrichParsedRowsWithTraining = async (params: {
           merchantTokens: learned.merchantTokens,
           categoryReason: learned.categoryReason,
           confidence: learned.confidence,
+          accountRuleKey: accountMatch?.rule.ruleKey ?? null,
+          accountRuleConfidence: accountMatch ? Math.round(accountMatch.score) : null,
         },
       },
     } satisfies EnrichedParsedImportRow;
