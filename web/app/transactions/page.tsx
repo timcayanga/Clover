@@ -1604,6 +1604,47 @@ function TransactionsPageContent() {
     });
   };
 
+  const applyTransactionPatchesLocally = (patches: Array<{ transactionId: string; patch: Partial<Transaction> }>) => {
+    if (!patches.length) {
+      return;
+    }
+
+    const patchMap = new Map(patches.map(({ transactionId, patch }) => [transactionId, patch] as const));
+
+    setTransactions((current) =>
+      current.map((entry) => {
+        const patch = patchMap.get(entry.id);
+        return patch ? { ...entry, ...patch } : entry;
+      })
+    );
+
+    setSelectedTransaction((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const patch = patchMap.get(current.id);
+      return patch ? { ...current, ...patch } : current;
+    });
+
+    setDetailDraft((current) => {
+      if (!current || !selectedTransaction) {
+        return current;
+      }
+
+      const patch = patchMap.get(selectedTransaction.id);
+      if (!patch) {
+        return current;
+      }
+
+      return {
+        ...current,
+        isExcluded: patch.isExcluded ?? current.isExcluded,
+        isTransfer: patch.isTransfer ?? current.isTransfer,
+      };
+    });
+  };
+
   const deleteTransaction = async (transactionId: string) => {
     const response = await fetch(`/api/transactions/${transactionId}`, {
       method: "DELETE",
@@ -1721,33 +1762,96 @@ function TransactionsPageContent() {
     }
 
     setIsSaving(true);
-    try {
-      const updates = selectedTransactionIds.map((transactionId) =>
-        updateTransaction(transactionId, {
-          accountId: bulkEditForm.accountId || undefined,
-          categoryId: bulkEditForm.categoryId || undefined,
-          type: bulkEditForm.type || undefined,
-          description: bulkEditForm.description ? bulkEditForm.description : undefined,
-          isExcluded:
-            bulkEditForm.isExcluded === ""
-              ? undefined
-              : bulkEditForm.isExcluded === "exclude",
-          isTransfer:
-            bulkEditForm.isTransfer === ""
-              ? undefined
-              : bulkEditForm.isTransfer === "true",
-        })
-      );
+    const count = selectedTransactionIds.length;
+    const selected = selectedTransactionIds
+      .map((transactionId) => transactions.find((entry) => entry.id === transactionId))
+      .filter((entry): entry is Transaction => Boolean(entry));
+    const originalTransactions = new Map(selected.map((transaction) => [transaction.id, transaction] as const));
+    const accountNames = new Map(accounts.map((account) => [account.id, account.name] as const));
+    const categoryNames = new Map(categories.map((category) => [category.id, category.name] as const));
 
-      await Promise.all(updates);
-      setBulkEditOpen(false);
-      clearSelection();
-      setMessage(`${selectedTransactionIds.length} transaction${selectedTransactionIds.length === 1 ? "" : "s"} updated.`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to update transactions.");
-    } finally {
-      setIsSaving(false);
-    }
+    const payloads = selected.map((transaction) => ({
+      transaction,
+      payload: {
+        accountId: bulkEditForm.accountId || undefined,
+        categoryId: bulkEditForm.categoryId || undefined,
+        type: bulkEditForm.type || undefined,
+        description: bulkEditForm.description ? bulkEditForm.description : undefined,
+        isExcluded:
+          bulkEditForm.isExcluded === ""
+            ? undefined
+            : bulkEditForm.isExcluded === "exclude",
+        isTransfer:
+          bulkEditForm.isTransfer === ""
+            ? undefined
+            : bulkEditForm.isTransfer === "true",
+      },
+    }));
+
+    applyTransactionPatchesLocally(
+      payloads.map(({ transaction, payload }) => ({
+        transactionId: transaction.id,
+        patch: {
+          ...(payload.accountId
+            ? {
+                accountId: payload.accountId,
+                accountName: accountNames.get(payload.accountId) ?? transaction.accountName,
+              }
+            : {}),
+          ...(payload.categoryId
+            ? {
+                categoryId: payload.categoryId,
+                categoryName: categoryNames.get(payload.categoryId) ?? transaction.categoryName,
+              }
+            : {}),
+          ...(payload.type ? { type: payload.type as Transaction["type"] } : {}),
+          ...(payload.description !== undefined ? { description: payload.description ?? null } : {}),
+          ...(payload.isExcluded !== undefined ? { isExcluded: payload.isExcluded } : {}),
+          ...(payload.isTransfer !== undefined ? { isTransfer: payload.isTransfer } : {}),
+        },
+      }))
+    );
+
+    setBulkEditOpen(false);
+    clearSelection();
+    setUndoStack([]);
+    setRedoStack([]);
+    setMessage(`${count} transaction${count === 1 ? "" : "s"} updated.`);
+
+    void (async () => {
+      try {
+        const results = await Promise.allSettled(
+          payloads.map(({ transaction, payload }) =>
+            updateTransaction(transaction.id, payload, {
+              recordHistory: false,
+            })
+          )
+        );
+
+        const failedTransactions = results
+          .map((result, index) => ({ result, transaction: payloads[index].transaction }))
+          .filter(
+            (
+              entry
+            ): entry is {
+              result: PromiseRejectedResult;
+              transaction: Transaction;
+            } => entry.result.status === "rejected"
+          );
+
+        if (failedTransactions.length) {
+          applyTransactionPatchesLocally(
+            failedTransactions.map(({ transaction }) => ({
+              transactionId: transaction.id,
+              patch: originalTransactions.get(transaction.id) ?? transaction,
+            }))
+          );
+          setMessage("Some transactions could not be updated. Please try again.");
+        }
+      } finally {
+        setIsSaving(false);
+      }
+    })();
   };
 
   const bulkUpdateSelectedTransactions = async (payloadFactory: (transaction: Transaction) => Record<string, unknown>) => {
@@ -1757,27 +1861,91 @@ function TransactionsPageContent() {
     }
 
     setIsSaving(true);
-    try {
-      const selected = selectedTransactionIds
-        .map((transactionId) => transactions.find((entry) => entry.id === transactionId))
-        .filter((entry): entry is Transaction => Boolean(entry));
+    const selected = selectedTransactionIds
+      .map((transactionId) => transactions.find((entry) => entry.id === transactionId))
+      .filter((entry): entry is Transaction => Boolean(entry));
+    const originalTransactions = new Map(selected.map((transaction) => [transaction.id, transaction] as const));
+    const payloads = selected.map((transaction) => ({
+      transaction,
+      payload: payloadFactory(transaction),
+    }));
 
-      await Promise.all(
-        selected.map((transaction) =>
-          updateTransaction(transaction.id, payloadFactory(transaction), {
-            recordHistory: false,
-          })
-        )
-      );
+    applyTransactionPatchesLocally(
+      payloads.map(({ transaction, payload }) => {
+        const patch: Partial<Transaction> = {};
 
-      setUndoStack([]);
-      setRedoStack([]);
-      setMessage(`${selected.length} transaction${selected.length === 1 ? "" : "s"} updated.`);
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to update transactions.");
-    } finally {
-      setIsSaving(false);
-    }
+        if (Object.prototype.hasOwnProperty.call(payload, "isExcluded")) {
+          patch.isExcluded = Boolean(payload.isExcluded);
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "isTransfer")) {
+          patch.isTransfer = Boolean(payload.isTransfer);
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "accountId") && typeof payload.accountId === "string") {
+          patch.accountId = payload.accountId;
+          patch.accountName = accounts.find((account) => account.id === payload.accountId)?.name ?? transaction.accountName;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "categoryId")) {
+          const categoryId = typeof payload.categoryId === "string" ? payload.categoryId : null;
+          patch.categoryId = categoryId;
+          patch.categoryName = categories.find((category) => category.id === categoryId)?.name ?? transaction.categoryName;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "type") && typeof payload.type === "string") {
+          patch.type = payload.type as Transaction["type"];
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, "description")) {
+          patch.description = typeof payload.description === "string" ? payload.description : null;
+        }
+
+        return {
+          transactionId: transaction.id,
+          patch,
+        };
+      })
+    );
+
+    setUndoStack([]);
+    setRedoStack([]);
+    setMessage(`${selected.length} transaction${selected.length === 1 ? "" : "s"} updated.`);
+
+    void (async () => {
+      try {
+        const results = await Promise.allSettled(
+          payloads.map(({ transaction, payload }) =>
+            updateTransaction(transaction.id, payload, {
+              recordHistory: false,
+            })
+          )
+        );
+
+        const failedTransactions = results
+          .map((result, index) => ({ result, transaction: payloads[index].transaction }))
+          .filter(
+            (
+              entry
+            ): entry is {
+              result: PromiseRejectedResult;
+              transaction: Transaction;
+            } => entry.result.status === "rejected"
+          );
+
+        if (failedTransactions.length) {
+          applyTransactionPatchesLocally(
+            failedTransactions.map(({ transaction }) => ({
+              transactionId: transaction.id,
+              patch: originalTransactions.get(transaction.id) ?? transaction,
+            }))
+          );
+          setMessage("Some transactions could not be updated. Please try again.");
+        }
+      } finally {
+        setIsSaving(false);
+      }
+    })();
   };
 
   const deleteSelectedTransactions = async () => {
