@@ -2187,9 +2187,10 @@ function TransactionsPageContent() {
                 line-height: 1.25;
               }
               .name-cell__subtext {
-                font-size: 10px;
-                color: #6b7280;
-                line-height: 1.25;
+                font-size: 9px;
+                color: #9ca3af;
+                line-height: 1.2;
+                letter-spacing: -0.01em;
               }
               th {
                 font-size: 10px;
