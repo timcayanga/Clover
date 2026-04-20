@@ -118,6 +118,13 @@ type TransactionHistoryEntry = {
   after: Transaction;
 };
 
+type MerchantRenameSuggestion = {
+  sourceTransactionId: string;
+  sourceMerchantRaw: string;
+  targetMerchantClean: string;
+  matchingTransactionIds: string[];
+};
+
 type UpdateTransactionOptions = {
   recordHistory?: boolean;
   historyBefore?: Transaction | null;
@@ -628,6 +635,13 @@ const normalizeTransactionNotes = (value: string | null | undefined) => {
   return trimmed;
 };
 
+const normalizeMerchantGroupKey = (value: string) =>
+  value
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
 const humanizeTransactionMerchantText = (value: string) => {
   const normalized = value.replace(/\u00a0/g, " ").trim();
   if (!normalized) {
@@ -971,6 +985,8 @@ function TransactionsPageContent() {
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
   const [uploadInsightsSummary, setUploadInsightsSummary] = useState<UploadInsightsSummary | null>(null);
+  const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
+  const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
   const transactionRowRefs = useRef(new Map<string, HTMLDivElement>());
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
@@ -1590,6 +1606,70 @@ function TransactionsPageContent() {
     return updated;
   };
 
+  const suggestMerchantRenameForSimilarTransactions = (transaction: Transaction, nextMerchantClean: string) => {
+    const target = nextMerchantClean.trim();
+    if (!target) {
+      return;
+    }
+
+    const sourceKey = normalizeMerchantGroupKey(transaction.merchantRaw);
+    const matchingTransactionIds = transactions
+      .filter((entry) => entry.id !== transaction.id && normalizeMerchantGroupKey(entry.merchantRaw) === sourceKey)
+      .filter((entry) => normalizeMerchantGroupKey(entry.merchantClean ?? entry.merchantRaw) !== normalizeMerchantGroupKey(target))
+      .map((entry) => entry.id);
+
+    if (matchingTransactionIds.length === 0) {
+      return;
+    }
+
+    setMerchantRenameSuggestion({
+      sourceTransactionId: transaction.id,
+      sourceMerchantRaw: transaction.merchantRaw,
+      targetMerchantClean: target,
+      matchingTransactionIds,
+    });
+  };
+
+  const applyMerchantRenameSuggestion = async () => {
+    if (!merchantRenameSuggestion) {
+      return;
+    }
+
+    setMerchantRenameBusy(true);
+    try {
+      const transactionsToUpdate = merchantRenameSuggestion.matchingTransactionIds
+        .map((transactionId) => transactions.find((entry) => entry.id === transactionId))
+        .filter((entry): entry is Transaction => Boolean(entry));
+
+      if (!transactionsToUpdate.length) {
+        setMerchantRenameSuggestion(null);
+        setMessage("No matching transactions were found.");
+        return;
+      }
+
+      await Promise.allSettled(
+        transactionsToUpdate.map((transaction) =>
+          updateTransaction(
+            transaction.id,
+            {
+              merchantClean: merchantRenameSuggestion.targetMerchantClean,
+            },
+            { recordHistory: false }
+          )
+        )
+      );
+
+      setMerchantRenameSuggestion(null);
+      setMessage(
+        `Applied "${merchantRenameSuggestion.targetMerchantClean}" to ${transactionsToUpdate.length} similar transaction${
+          transactionsToUpdate.length === 1 ? "" : "s"
+        }.`
+      );
+    } finally {
+      setMerchantRenameBusy(false);
+    }
+  };
+
   const applyTransactionPatchLocally = (transactionId: string, patch: Partial<Transaction>) => {
     setTransactions((current) =>
       current.map((entry) => (entry.id === transactionId ? { ...entry, ...patch } : entry))
@@ -1726,12 +1806,18 @@ function TransactionsPageContent() {
           merchantClean: nextMerchantClean,
         },
         { historyBefore: transaction }
-      ).catch((error) => {
-        applyTransactionPatchLocally(transaction.id, {
-          merchantClean: transaction.merchantClean,
+      )
+        .then((updated) => {
+          if (nextMerchantClean) {
+            suggestMerchantRenameForSimilarTransactions(updated, nextMerchantClean);
+          }
+        })
+        .catch((error) => {
+          applyTransactionPatchLocally(transaction.id, {
+            merchantClean: transaction.merchantClean,
+          });
+          setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
         });
-        setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
-      });
       return;
     }
 
@@ -3473,6 +3559,66 @@ function TransactionsPageContent() {
               </button>
               <button className="button button-primary" type="button" disabled={isSaving} onClick={saveDetailDraft}>
                 {isSaving ? "Saving..." : "Save changes"}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {merchantRenameSuggestion ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setMerchantRenameSuggestion(null)}>
+          <section
+            className="modal-card modal-card--wide glass"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="merchant-rename-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Merchant cleanup</p>
+                <h4 id="merchant-rename-title">Apply this cleaner name everywhere?</h4>
+                <p className="modal-copy">
+                  You changed <strong>{merchantRenameSuggestion.sourceMerchantRaw}</strong> to{" "}
+                  <strong>{merchantRenameSuggestion.targetMerchantClean}</strong>. There{" "}
+                  {merchantRenameSuggestion.matchingTransactionIds.length === 1 ? "is 1 other matching transaction" : `are ${merchantRenameSuggestion.matchingTransactionIds.length} other matching transactions`}{" "}
+                  with the same statement label.
+                </p>
+              </div>
+              <button
+                className="icon-button"
+                type="button"
+                onClick={() => setMerchantRenameSuggestion(null)}
+                aria-label="Close merchant rename suggestion"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="detail-warning-box">
+              <p>
+                If you accept, Clover will update the matching transactions to use{" "}
+                <strong>{merchantRenameSuggestion.targetMerchantClean}</strong> as the bold name, while keeping the raw
+                statement text in gray for reference.
+              </p>
+            </div>
+
+            <div className="form-actions detail-actions">
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => setMerchantRenameSuggestion(null)}
+                disabled={merchantRenameBusy}
+              >
+                Ignore
+              </button>
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={() => void applyMerchantRenameSuggestion()}
+                disabled={merchantRenameBusy}
+              >
+                {merchantRenameBusy ? "Applying..." : `Apply to ${merchantRenameSuggestion.matchingTransactionIds.length} more`}
               </button>
             </div>
           </section>
