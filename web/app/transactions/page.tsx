@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent }
 import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportFilesModal } from "@/components/import-files-modal";
+import { UploadInsightsToast, type UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 
 type Workspace = {
@@ -953,6 +954,7 @@ function TransactionsPageContent() {
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
+  const [uploadInsightsSummary, setUploadInsightsSummary] = useState<UploadInsightsSummary | null>(null);
   const transactionRowRefs = useRef(new Map<string, HTMLDivElement>());
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
@@ -2030,6 +2032,18 @@ function TransactionsPageContent() {
       imports,
     });
   }, [selectedWorkspaceId, isWorkspaceDataReady, accounts, categories, transactions, imports]);
+
+  useEffect(() => {
+    if (!uploadInsightsSummary) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setUploadInsightsSummary(null);
+    }, 12000);
+
+    return () => window.clearTimeout(timer);
+  }, [uploadInsightsSummary]);
 
   return (
     <CloverShell active="transactions" title="Transactions" showTopbar={false}>
@@ -3196,15 +3210,19 @@ function TransactionsPageContent() {
         accounts={accounts}
         defaultAccountId={accounts[0]?.id ?? null}
         onClose={() => setImportOpen(false)}
-        onImported={async () => {
+        onImported={async (summary) => {
           if (!selectedWorkspaceId) {
             return;
           }
 
+          setUploadInsightsSummary(summary);
           await loadWorkspaceData(selectedWorkspaceId);
-          setMessage("Import complete. Transactions refreshed.");
+          setMessage("Import complete. Insights are ready.");
         }}
       />
+      {uploadInsightsSummary ? (
+        <UploadInsightsToast summary={uploadInsightsSummary} onClose={() => setUploadInsightsSummary(null)} />
+      ) : null}
     </CloverShell>
   );
 }

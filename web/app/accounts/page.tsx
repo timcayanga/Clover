@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { ImportFilesModal } from "@/components/import-files-modal";
+import { UploadInsightsToast, type UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 
@@ -295,6 +296,7 @@ function AccountsPageContent() {
   const [accountDeleteBusy, setAccountDeleteBusy] = useState(false);
   const [balanceDraft, setBalanceDraft] = useState("");
   const [drawerNotice, setDrawerNotice] = useState<string | null>(null);
+  const [uploadInsightsSummary, setUploadInsightsSummary] = useState<UploadInsightsSummary | null>(null);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
 
@@ -384,6 +386,18 @@ function AccountsPageContent() {
       router.replace("/accounts");
     }
   }, [router, searchParams]);
+
+  useEffect(() => {
+    if (!uploadInsightsSummary) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setUploadInsightsSummary(null);
+    }, 12000);
+
+    return () => window.clearTimeout(timer);
+  }, [uploadInsightsSummary]);
 
   useEffect(() => {
     if (!selectedWorkspaceId) {
@@ -1343,8 +1357,15 @@ function AccountsPageContent() {
         accounts={accounts}
         defaultAccountId={selectedAccount?.id ?? accounts[0]?.id ?? null}
         onClose={() => setImportOpen(false)}
-        onImported={refreshAll}
+        onImported={async (summary) => {
+          setUploadInsightsSummary(summary);
+          await refreshAll();
+          setMessage("Import complete. Insights are ready.");
+        }}
       />
+      {uploadInsightsSummary ? (
+        <UploadInsightsToast summary={uploadInsightsSummary} onClose={() => setUploadInsightsSummary(null)} />
+      ) : null}
     </CloverShell>
   );
 }

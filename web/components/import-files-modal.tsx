@@ -7,6 +7,7 @@ import { ImportUploadDock } from "@/components/import-upload-dock";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 
 type AccountOption = {
   id: string;
@@ -21,7 +22,7 @@ type ImportFilesModalProps = {
   accounts: AccountOption[];
   defaultAccountId?: string | null;
   onClose: () => void;
-  onImported: () => Promise<void> | void;
+  onImported: (summary: UploadInsightsSummary) => Promise<void> | void;
 };
 
 type ImportStatus = "pending" | "needs_password" | "parsing" | "importing" | "done" | "error";
@@ -234,7 +235,12 @@ export function ImportFilesModal({
     setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   };
 
-  const confirmItemImport = async (itemId: string, importFileId: string, accountId: string) => {
+  const confirmItemImport = async (
+    itemId: string,
+    importFileId: string,
+    accountId: string,
+    summaryContext: { fileName: string; accountName: string | null; institution: string | null }
+  ) => {
     let finalizingProgress = 92;
     const finalizingTimer = window.setInterval(() => {
       finalizingProgress = Math.min(98, finalizingProgress + 1);
@@ -274,6 +280,7 @@ export function ImportFilesModal({
 
       const confirmed = await confirmResponse.json();
       const importedRows = Number(confirmed.result?.imported ?? 0);
+      const insightSummary = confirmed.result?.insightSummary ?? null;
       updateItem(itemId, {
         status: "done",
         confirmationState: "confirmed",
@@ -284,7 +291,23 @@ export function ImportFilesModal({
         progress: 100,
         progressLabel: "Done",
       });
-      void onImported();
+      if (insightSummary) {
+        void onImported({
+          fileName: summaryContext.fileName,
+          rowsImported: importedRows,
+          accountName: summaryContext.accountName,
+          institution: summaryContext.institution ?? null,
+          incomeTotal: Number(insightSummary.incomeTotal ?? 0),
+          expenseTotal: Number(insightSummary.expenseTotal ?? 0),
+          netTotal: Number(insightSummary.netTotal ?? 0),
+          topCategoryName: insightSummary.topCategoryName ?? null,
+          topCategoryAmount: insightSummary.topCategoryAmount === null ? null : Number(insightSummary.topCategoryAmount),
+          topCategoryShare:
+            insightSummary.topCategoryShare === null ? null : Number(insightSummary.topCategoryShare),
+          topMerchantName: insightSummary.topMerchantName ?? null,
+          topMerchantCount: insightSummary.topMerchantCount === null ? null : Number(insightSummary.topMerchantCount),
+        });
+      }
       return importedRows;
     } finally {
       window.clearInterval(finalizingTimer);
@@ -429,7 +452,11 @@ export function ImportFilesModal({
         progress: 88,
         progressLabel: "Ready to confirm",
       });
-      const importedRows = await confirmItemImport(itemId, importFileId, targetAccountId);
+      const importedRows = await confirmItemImport(itemId, importFileId, targetAccountId, {
+        fileName: item.file.name,
+        accountName: processedMetadata?.accountName ?? null,
+        institution: processedMetadata?.institution ?? null,
+      });
       return importedRows === null ? "staged" : "done";
     } catch (error) {
       if (isPasswordError(error)) {
@@ -575,7 +602,11 @@ export function ImportFilesModal({
     setMessage("Retrying confirmation...");
     try {
       const accountId = item.targetAccountId || selectedAccountId || (await ensureTargetAccountId());
-      const importedRows = await confirmItemImport(itemId, item.importFileId, accountId);
+      const importedRows = await confirmItemImport(itemId, item.importFileId, accountId, {
+        fileName: item.file.name,
+        accountName: null,
+        institution: null,
+      });
       if (typeof importedRows === "number") {
         setMessage(`Confirmed ${importedRows} imported row${importedRows === 1 ? "" : "s"}.`);
       }

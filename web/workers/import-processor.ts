@@ -21,6 +21,27 @@ import {
   upsertStatementTemplate,
 } from "@/lib/data-engine";
 
+type ImportInsightSummary = {
+  incomeTotal: number;
+  expenseTotal: number;
+  netTotal: number;
+  topCategoryName: string | null;
+  topCategoryAmount: number | null;
+  topCategoryShare: number | null;
+  topMerchantName: string | null;
+  topMerchantCount: number | null;
+};
+
+type ImportInsightSourceRow = {
+  amount?: unknown;
+  type?: unknown;
+  merchantRaw?: unknown;
+  merchantClean?: unknown;
+  description?: unknown;
+  categoryName?: unknown;
+  rawPayload?: unknown;
+};
+
 export const processImportFileText = async (importFileId: string, text: string) => {
   const importFile = await fetchImportFileCompat(importFileId);
 
@@ -111,6 +132,68 @@ export const processImportFileText = async (importFileId: string, text: string) 
   });
 
   return { imported: rows.length, duplicate: false as const };
+};
+
+const normalizeImportMerchant = (transaction: {
+  merchantRaw?: unknown;
+  merchantClean?: unknown;
+  description?: unknown;
+}) => {
+  return String(transaction.merchantClean ?? transaction.merchantRaw ?? transaction.description ?? "Imported transaction")
+    .trim()
+    .toLowerCase();
+};
+
+const buildImportInsightSummary = (
+  transactions: ImportInsightSourceRow[]
+): ImportInsightSummary => {
+  const categoryTotals = new Map<string, number>();
+  const merchantCounts = new Map<string, { count: number; label: string }>();
+
+  let incomeTotal = 0;
+  let expenseTotal = 0;
+
+  for (const transaction of transactions) {
+    const amount = Math.abs(Number(transaction.amount ?? 0));
+    const kind =
+      transaction.rawPayload && typeof transaction.rawPayload === "object" && !Array.isArray(transaction.rawPayload)
+        ? ((transaction.rawPayload as Record<string, unknown>).kind as string | undefined)
+        : undefined;
+
+    if (kind === "opening_balance") {
+      continue;
+    }
+
+    if (transaction.type === "income") {
+      incomeTotal += amount;
+    } else if (transaction.type === "expense") {
+      expenseTotal += amount;
+      const categoryName = typeof transaction.categoryName === "string" && transaction.categoryName.trim() ? transaction.categoryName.trim() : "Other";
+      categoryTotals.set(categoryName, (categoryTotals.get(categoryName) ?? 0) + amount);
+    }
+
+    const merchantKey = normalizeImportMerchant(transaction);
+    const merchantLabel = String(transaction.merchantClean ?? transaction.merchantRaw ?? transaction.description ?? "Imported transaction").trim();
+    const currentMerchant = merchantCounts.get(merchantKey);
+    merchantCounts.set(merchantKey, {
+      count: (currentMerchant?.count ?? 0) + 1,
+      label: currentMerchant?.label ?? merchantLabel,
+    });
+  }
+
+  const topCategory = Array.from(categoryTotals.entries()).sort((a, b) => b[1] - a[1])[0] ?? null;
+  const topMerchant = Array.from(merchantCounts.values()).sort((a, b) => b.count - a.count)[0] ?? null;
+
+  return {
+    incomeTotal,
+    expenseTotal,
+    netTotal: incomeTotal - expenseTotal,
+    topCategoryName: topCategory?.[0] ?? null,
+    topCategoryAmount: topCategory?.[1] ?? null,
+    topCategoryShare: topCategory && expenseTotal > 0 ? topCategory[1] / expenseTotal : null,
+    topMerchantName: topMerchant?.label ?? null,
+    topMerchantCount: topMerchant?.count ?? null,
+  };
 };
 
 const snapshotBalanceToString = (value: unknown) => {
@@ -369,7 +452,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
   });
   const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
 
-  const transactions = [];
+  const transactions: ImportInsightSourceRow[] = [];
   const trainingSignalJobs: Promise<unknown>[] = [];
   const coerceAmountToString = (value: unknown) => {
     if (value === null || value === undefined) {
@@ -437,7 +520,9 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       isExcluded: typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance",
     });
 
-    transactions.push(transaction);
+    if (transaction) {
+      transactions.push(transaction as ImportInsightSourceRow);
+    }
 
     trainingSignalJobs.push(
       recordTrainingSignal({
@@ -465,5 +550,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
 
   void Promise.allSettled(trainingSignalJobs);
 
-  return { imported: transactions.length };
+  const insightSummary = buildImportInsightSummary(transactions);
+
+  return { imported: transactions.length, insightSummary };
 };
