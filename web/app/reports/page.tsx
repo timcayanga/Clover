@@ -582,63 +582,57 @@ async function ReportsPageView({
     redirect("/onboarding");
   }
 
-  const workspaceInclude = {
-    accounts: true,
-    importFiles: {
-      orderBy: { uploadedAt: "desc" },
-    },
-  } as const;
+  let selectedWorkspaceId: string =
+    (
+      (selectedWorkspaceCookieId
+        ? await prisma.workspace.findFirst({
+            where: {
+              id: selectedWorkspaceCookieId,
+              userId: user.id,
+            },
+            select: { id: true },
+          })
+        : null) ??
+      (await prisma.workspace.findFirst({
+        where: { userId: user.id },
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+      }))
+    )?.id ?? "";
 
-  let selectedWorkspace =
-    (selectedWorkspaceCookieId
-      ? await prisma.workspace.findFirst({
-          where: {
-            id: selectedWorkspaceCookieId,
-            userId: user.id,
-          },
-          include: workspaceInclude,
-        })
-      : null) ??
-    (await prisma.workspace.findFirst({
-      where: { userId: user.id },
-      include: workspaceInclude,
-      orderBy: { createdAt: "asc" },
-    }));
-
-  if (!selectedWorkspace) {
+  if (!selectedWorkspaceId) {
     const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
     const starterWorkspaceData = await prisma.workspace.findUnique({
       where: { id: starterWorkspace.id },
-      include: workspaceInclude,
+      select: { id: true },
     });
     if (!starterWorkspaceData) {
       redirect("/dashboard");
     }
-    selectedWorkspace = starterWorkspaceData;
-  }
-
-  if (!selectedWorkspace) {
-    redirect("/dashboard");
+    selectedWorkspaceId = starterWorkspaceData.id;
   }
 
   try {
     const now = new Date();
     const { currentStart: currentWindowStart, previousStart: previousWindowStart } = getReportWindow(now, selectedRange);
     const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-    const importFiles = selectedWorkspace.importFiles;
-    const latestImport = importFiles[0];
 
     const [
       currentWindowTransactions,
-      previousWindowTransactions,
+      previousWindowSummaryRows,
       sixMonthTransactions,
-      duplicateWindowTransactions,
       importedTransactionStats,
       manualTransactionStats,
+      accountStats,
+      latestImport,
+      processingImportCount,
+      doneImportCount,
+      failedImportCount,
+      deletedImportCount,
     ] = await Promise.all([
       prisma.transaction.findMany({
         where: {
-          workspaceId: selectedWorkspace.id,
+          workspaceId: selectedWorkspaceId,
           isExcluded: false,
           date: { gte: currentWindowStart },
         },
@@ -649,7 +643,6 @@ async function ReportsPageView({
           type: true,
           merchantRaw: true,
           merchantClean: true,
-          description: true,
           account: {
             select: {
               name: true,
@@ -660,28 +653,27 @@ async function ReportsPageView({
               name: true,
             },
           },
-          importFileId: true,
         },
         orderBy: { date: "desc" },
         take: 500,
       }),
-      prisma.transaction.findMany({
+      prisma.transaction.groupBy({
         where: {
-          workspaceId: selectedWorkspace.id,
+          workspaceId: selectedWorkspaceId,
           isExcluded: false,
           date: {
             gte: previousWindowStart,
             lt: currentWindowStart,
           },
         },
-        select: {
+        by: ["type"],
+        _sum: {
           amount: true,
-          type: true,
         },
       }),
       prisma.transaction.findMany({
         where: {
-          workspaceId: selectedWorkspace.id,
+          workspaceId: selectedWorkspaceId,
           isExcluded: false,
           date: { gte: sixMonthsAgo },
         },
@@ -693,7 +685,7 @@ async function ReportsPageView({
       }),
       prisma.transaction.findMany({
         where: {
-          workspaceId: selectedWorkspace.id,
+          workspaceId: selectedWorkspaceId,
           isExcluded: false,
           date: { gte: currentWindowStart },
         },
@@ -715,7 +707,7 @@ async function ReportsPageView({
       }),
       prisma.transaction.aggregate({
         where: {
-          workspaceId: selectedWorkspace.id,
+          workspaceId: selectedWorkspaceId,
           isExcluded: false,
           importFileId: { not: null },
         },
@@ -724,14 +716,48 @@ async function ReportsPageView({
       }),
       prisma.transaction.aggregate({
         where: {
-          workspaceId: selectedWorkspace.id,
+          workspaceId: selectedWorkspaceId,
           isExcluded: false,
           importFileId: null,
         },
         _count: { id: true },
         _sum: { amount: true },
       }),
+      prisma.account.aggregate({
+        where: {
+          workspaceId: selectedWorkspaceId,
+        },
+        _sum: { balance: true },
+        _count: { id: true, balance: true },
+      }),
+      prisma.importFile.findFirst({
+        where: { workspaceId: selectedWorkspaceId },
+        orderBy: { uploadedAt: "desc" },
+        select: {
+          fileName: true,
+          status: true,
+          uploadedAt: true,
+        },
+      }),
+      prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "processing" } }),
+      prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "done" } }),
+      prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "failed" } }),
+      prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "deleted" } }),
     ]);
+
+    const importStatusCounts = {
+      processing: Number(processingImportCount ?? 0),
+      done: Number(doneImportCount ?? 0),
+      failed: Number(failedImportCount ?? 0),
+      deleted: Number(deletedImportCount ?? 0),
+    };
+    const latestImportSummary = latestImport as unknown as
+      | {
+          fileName: string;
+          status: string;
+          uploadedAt: Date;
+        }
+      | null;
 
     const currentSummary = currentWindowTransactions.reduce(
       (accumulator, transaction) => {
@@ -762,12 +788,12 @@ async function ReportsPageView({
       }
     );
 
-    const previousSummary = previousWindowTransactions.reduce(
-      (accumulator, transaction) => {
-        const amount = Number(transaction.amount);
-        if (transaction.type === "income") {
+    const previousSummary = previousWindowSummaryRows.reduce(
+      (accumulator, row) => {
+        const amount = Number(row._sum.amount ?? 0);
+        if (row.type === "income") {
           accumulator.income += amount;
-        } else if (transaction.type === "expense") {
+        } else if (row.type === "expense") {
           accumulator.expense += amount;
         } else {
           accumulator.transfer += amount;
@@ -797,14 +823,19 @@ async function ReportsPageView({
       bucket.net = bucket.income - bucket.expense;
     });
 
-    const activeAccounts = selectedWorkspace.accounts.filter((account) => account.balance !== null);
-    const totalAccountBalance = activeAccounts.reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
+    const accountStatsSummary = accountStats as unknown as {
+      _sum: { balance: number | null };
+      _count: { id: number; balance: number };
+    };
+    const totalAccountBalance = Number(accountStatsSummary._sum.balance ?? 0);
+    const activeAccountCount = accountStatsSummary._count.balance;
+    const accountCount = accountStatsSummary._count.id;
     const uncategorizedTransactions = currentWindowTransactions.filter(
       (transaction) => !transaction.category?.name || !transaction.merchantClean
     );
 
-    const duplicateGroups = new Map<string, (typeof duplicateWindowTransactions)[number][]>();
-    duplicateWindowTransactions.forEach((transaction) => {
+    const duplicateGroups = new Map<string, (typeof currentWindowTransactions)[number][]>();
+    currentWindowTransactions.forEach((transaction) => {
       const merchant = normalizeMerchant(transaction.merchantClean ?? transaction.merchantRaw);
       const key = [
         transaction.date.toISOString().slice(0, 10),
@@ -823,19 +854,6 @@ async function ReportsPageView({
       .filter((group) => group.length > 1)
       .sort((a, b) => b.length - a.length)
       .slice(0, 3);
-
-    const importStatusCounts = importFiles.reduce(
-      (counts, file) => {
-        counts[file.status] += 1;
-        return counts;
-      },
-      {
-        processing: 0,
-        done: 0,
-        failed: 0,
-        deleted: 0,
-      }
-    );
 
     const actionableCount =
       uncategorizedTransactions.length + possibleDuplicateGroups.length + importStatusCounts.processing + importStatusCounts.failed;
@@ -891,10 +909,18 @@ async function ReportsPageView({
     const spendDelta = previousSpend > 0 ? ((currentSpend - previousSpend) / previousSpend) * 100 : null;
     const incomeDelta = previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
     const topCategoryShare = currentSpend > 0 ? maxCategorySpend / currentSpend : null;
-    const importedTransactions = importedTransactionStats._count.id;
-    const manualTransactions = manualTransactionStats._count.id;
-    const importedAmount = Number(importedTransactionStats._sum.amount ?? 0);
-    const manualAmount = Number(manualTransactionStats._sum.amount ?? 0);
+    const importedTransactionStatsSummary = importedTransactionStats as unknown as {
+      _count: { id: number };
+      _sum: { amount: number | null };
+    };
+    const manualTransactionStatsSummary = manualTransactionStats as unknown as {
+      _count: { id: number };
+      _sum: { amount: number | null };
+    };
+    const importedTransactions = importedTransactionStatsSummary._count.id;
+    const manualTransactions = manualTransactionStatsSummary._count.id;
+    const importedAmount = Number(importedTransactionStatsSummary._sum.amount ?? 0);
+    const manualAmount = Number(manualTransactionStatsSummary._sum.amount ?? 0);
     const goalKey = user.primaryGoal?.trim() ?? null;
     const goalLabel = goalKey ? goalLabels[goalKey] ?? goalKey : null;
 
@@ -1077,7 +1103,7 @@ async function ReportsPageView({
               <span>
                 {actionableCount} item{actionableCount === 1 ? "" : "s"} need attention
               </span>
-              <span>{selectedWorkspace.accounts.length} account{selectedWorkspace.accounts.length === 1 ? "" : "s"}</span>
+              <span>{accountCount} account{accountCount === 1 ? "" : "s"}</span>
             </div>
           </article>
         </section>
@@ -1087,7 +1113,7 @@ async function ReportsPageView({
             <span className="eyebrow">Range</span>
             <p>{selectedRangeLabel}</p>
             <small>
-              {latestImport ? `Fresh data from ${latestImport.fileName}` : "No imports available yet"}
+              {latestImportSummary ? `Fresh data from ${latestImportSummary.fileName}` : "No imports available yet"}
             </small>
           </div>
           <div className="reports-range-switch__controls" role="tablist" aria-label="Report range">
@@ -1486,7 +1512,7 @@ async function ReportsPageView({
               </div>
               <div className="report-card__stat">
                 <strong>{formatCurrency(totalAccountBalance)}</strong>
-                <span>{activeAccounts.length} account{activeAccounts.length === 1 ? "" : "s"} with balances</span>
+                <span>{activeAccountCount} account{activeAccountCount === 1 ? "" : "s"} with balances</span>
               </div>
             </div>
 
@@ -1536,18 +1562,18 @@ async function ReportsPageView({
 
             <div className="report-subsection">
               <p className="eyebrow">Latest import</p>
-              {latestImport ? (
+              {latestImportSummary ? (
                 <div className="report-list">
                   <div className="report-list__item">
                     <div className="report-list__meta">
-                      <strong>{latestImport.fileName}</strong>
+                      <strong>{latestImportSummary.fileName}</strong>
                       <span>
-                        {formatShortDate(new Date(latestImport.uploadedAt))} · {latestImport.status}
+                        {formatShortDate(new Date(latestImportSummary.uploadedAt))} · {latestImportSummary.status}
                       </span>
                     </div>
                     <div className="report-tags">
-                      <span className={`pill pill-${latestImport.status === "done" ? "good" : latestImport.status === "failed" ? "danger" : "subtle"}`}>
-                        {latestImport.status}
+                      <span className={`pill pill-${latestImportSummary.status === "done" ? "good" : latestImportSummary.status === "failed" ? "danger" : "subtle"}`}>
+                        {latestImportSummary.status}
                       </span>
                     </div>
                   </div>
