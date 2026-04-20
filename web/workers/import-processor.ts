@@ -42,9 +42,9 @@ export const processImportFileText = async (importFileId: string, text: string) 
   });
   if (duplicateImportFileId) {
     await updateImportFileCompat(importFileId, {
-      status: "failed",
+      status: "done",
     });
-    throw new Error("This statement appears to have already been imported.");
+    return { imported: 0, duplicate: true as const };
   }
   const template = await upsertStatementTemplate({
     workspaceId: importFile.workspaceId,
@@ -110,7 +110,7 @@ export const processImportFileText = async (importFileId: string, text: string) 
     status: "done",
   });
 
-  return { count: rows.length };
+  return { imported: rows.length, duplicate: false as const };
 };
 
 const snapshotBalanceToString = (value: unknown) => {

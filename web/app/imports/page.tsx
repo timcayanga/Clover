@@ -512,6 +512,22 @@ function ImportsPageContent() {
       }
 
       const processPayload = await processResponse.json().catch(() => ({}));
+      if (processPayload?.duplicate) {
+        setProgressState((current) =>
+          current
+            ? {
+                ...current,
+                progress: 100,
+                detail: "This statement was already imported and was skipped.",
+                statusLabel: "Skipped",
+              }
+            : current
+        );
+        setMessage(`${file.name} was already imported and was skipped.`);
+        setAutoReturnToTransactions(true);
+        return;
+      }
+
       const processedMetadata = processPayload?.metadata ?? null;
       const accountId = await ensureStatementAccount(
         selectedWorkspaceId,
@@ -591,6 +607,22 @@ function ImportsPageContent() {
       }
 
       const processPayload = await processResponse.json().catch(() => ({}));
+      if (processPayload?.duplicate) {
+        setProgressState((current) =>
+          current
+            ? {
+                ...current,
+                progress: 100,
+                detail: "This statement was already imported and was skipped.",
+                statusLabel: "Skipped",
+              }
+            : current
+        );
+        setMessage(`${file.name} was already imported and was skipped.`);
+        setAutoReturnToTransactions(true);
+        return;
+      }
+
       const processedMetadata = processPayload?.metadata ?? null;
       const accountId = await ensureStatementAccount(
         selectedWorkspaceId,

@@ -396,6 +396,21 @@ export function ImportFilesModal({
       }
 
       const processPayload = await processResponse.json().catch(() => ({}));
+      if (processPayload?.duplicate) {
+        updateItem(itemId, {
+          status: "done",
+          confirmationState: "confirmed",
+          error: null,
+          importFileId,
+          targetAccountId: null,
+          importedRows: 0,
+          progress: 100,
+          progressLabel: "Already imported",
+        });
+        setMessage(`${item.file.name} was already imported and was skipped.`);
+        return "done";
+      }
+
       const processedMetadata = processPayload?.metadata ?? null;
       updateItem(itemId, {
         progress: 88,
