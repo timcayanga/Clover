@@ -98,7 +98,7 @@ const getMonthBuckets = (anchor: Date) => {
 
 const createStagingInsightsSampleData = (anchor: Date) => {
   const sampleAccount = { name: "Imported transactions" };
-  const cashAccount = { name: "Cash on hand" };
+  const cashAccount = { name: "Cash" };
 
   const makeDate = (daysAgo: number) => {
     const date = new Date(anchor);

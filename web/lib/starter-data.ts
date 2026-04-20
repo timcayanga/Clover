@@ -96,7 +96,7 @@ const seedStagingSampleTransactions = async (workspaceId: string) => {
   ]);
 
   const primaryAccount = accounts.find((account) => account.name === "Imported transactions") ?? accounts[0];
-  const fallbackAccount = accounts.find((account) => account.name === "Cash on hand") ?? primaryAccount;
+  const fallbackAccount = accounts.find((account) => account.type === "cash") ?? primaryAccount;
   const categoryByName = new Map(categories.map((category) => [category.name.trim().toLowerCase(), category]));
 
   if (!primaryAccount || !fallbackAccount) {
@@ -131,10 +131,10 @@ const normalizeStarterCashAccount = async (workspaceId: string) => {
     where: {
       workspaceId,
       name: "Cash on hand",
-      institution: "Wallet",
       type: "cash",
     },
     data: {
+      name: "Cash",
       institution: "Cash",
     },
   });
@@ -177,7 +177,7 @@ export const ensureStarterWorkspace = async (userId: string, email: string, veri
             source: "upload",
           },
           {
-            name: "Cash on hand",
+            name: "Cash",
             institution: "Cash",
             type: "cash",
             currency: "PHP",
@@ -232,7 +232,7 @@ export const seedWorkspaceDefaults = async (workspaceId: string) => {
         },
         {
           workspaceId,
-          name: "Cash on hand",
+          name: "Cash",
           institution: "Cash",
           type: "cash",
           currency: "PHP",
