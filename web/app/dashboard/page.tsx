@@ -592,6 +592,24 @@ export default async function DashboardPage() {
           import_count: selectedWorkspace._count.importFiles,
         }}
       />
+      {user.dataWipedAt && selectedWorkspace._count.accounts <= 1 && selectedWorkspace._count.importFiles === 0 ? (
+        <section className="transactions-empty-state">
+          <p className="transactions-empty-state__eyebrow">Fresh start</p>
+          <h3>Your Clover workspace is clean again.</h3>
+          <p className="transactions-empty-state__copy">
+            Import a statement to repopulate your dashboard, reports, insights, and goals. You can also add an account if you want
+            to start manually.
+          </p>
+          <div className="transactions-empty-state__actions">
+            <Link className="button button-primary button-small" href="/transactions?import=1">
+              Import files
+            </Link>
+            <Link className="button button-secondary button-small" href="/accounts">
+              Add an account
+            </Link>
+          </div>
+        </section>
+      ) : null}
       <section className="goals-story">
         <article className="goals-hero glass">
           <div className="goals-hero__copy">

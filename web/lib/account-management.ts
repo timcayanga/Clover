@@ -19,7 +19,7 @@ export const wipeLocalUserData = async (clerkUserId: string) => {
       where: { id: user.id },
       data: {
         primaryGoal: null,
-        onboardingCompletedAt: null,
+        dataWipedAt: new Date(),
       },
     });
   });

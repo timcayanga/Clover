@@ -15,6 +15,7 @@ export async function GET() {
         planTier: user.planTier,
         primaryGoal: user.primaryGoal,
         onboardingCompletedAt: user.onboardingCompletedAt,
+        dataWipedAt: user.dataWipedAt,
       },
     });
   } catch {

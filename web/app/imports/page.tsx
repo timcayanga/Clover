@@ -284,11 +284,11 @@ function ImportsPageContent() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         workspaceId,
-        name: "Imported transactions",
-        institution: "Source upload",
-        type: inferAccountTypeFromStatement("Source upload", "Imported transactions", "bank"),
+        name: "Cash",
+        institution: "Cash",
+        type: inferAccountTypeFromStatement("Cash", "Cash", "cash"),
         currency: "PHP",
-        source: "upload",
+        source: "manual",
       }),
     });
 

@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useUser } from "@clerk/nextjs";
-import { syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
+import { useClerk, useUser } from "@clerk/nextjs";
+import { persistSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 
 type CloverShellProps = {
   active: "dashboard" | "accounts" | "transactions" | "reports" | "insights" | "goals" | "settings" | "profile" | "notifications";
@@ -158,6 +158,7 @@ export function CloverShell({
   children,
 }: CloverShellProps) {
   const { user } = useUser();
+  const { signOut } = useClerk();
   const pathname = usePathname();
   const shellRef = useRef<HTMLDivElement | null>(null);
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | null>(null);
@@ -211,6 +212,15 @@ export function CloverShell({
     name: "Free",
     description: "Active during the beta",
     limits: ["Unlimited transactions", "Unlimited imports", "Unlimited accounts", "Unlimited review items"],
+  };
+
+  const handleSignOut = () => {
+    persistSelectedWorkspaceId("");
+    void signOut({
+      redirectUrl: "/sign-in",
+    }).catch(() => {
+      window.location.assign("/sign-in");
+    });
   };
 
   return (
@@ -298,6 +308,14 @@ export function CloverShell({
                       role="menuitem"
                     >
                       <strong>Plan</strong>
+                    </button>
+                    <button
+                      className="sidebar-popover__link sidebar-popover__button sidebar-popover__button--danger"
+                      type="button"
+                      onClick={handleSignOut}
+                      role="menuitem"
+                    >
+                      <strong>Sign out</strong>
                     </button>
                   </div>
                 </>

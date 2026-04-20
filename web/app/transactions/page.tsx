@@ -4,6 +4,11 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ImportFilesModal } from "@/components/import-files-modal";
+import {
+  analyticsOnceKey,
+  capturePostHogClientEvent,
+  capturePostHogClientEventOnce,
+} from "@/components/posthog-analytics";
 import { UploadInsightsToast, type UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
@@ -1187,11 +1192,11 @@ function TransactionsPageContent() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         workspaceId,
-        name: "Imported transactions",
-        institution: "Source upload",
-        type: "bank",
+        name: "Cash",
+        institution: "Cash",
+        type: "cash",
         currency: "PHP",
-        source: "upload",
+        source: "manual",
       }),
     });
 
@@ -1455,6 +1460,19 @@ function TransactionsPageContent() {
 
   const openTransactionReview = (transaction: Transaction) => {
     openTransactionDetail(transaction);
+    const warningReason = warningReasonFor(transaction);
+    if (warningReason) {
+      capturePostHogClientEventOnce(
+        "review_item_opened",
+        {
+          workspace_id: selectedWorkspaceId || null,
+          transaction_id: transaction.id,
+          review_reason: warningReason,
+          review_status: transaction.reviewStatus ?? null,
+        },
+        analyticsOnceKey("review_item_opened", `transaction:${transaction.id}`)
+      );
+    }
     const row = transactionRowRefs.current.get(transaction.id);
     if (row) {
       window.requestAnimationFrame(() => {
@@ -1466,9 +1484,30 @@ function TransactionsPageContent() {
   const resolveTransactionWarning = (
     transaction: Transaction,
     patch: Pick<Transaction, "isExcluded" | "isTransfer" | "reviewStatus">,
-    successMessage: string
+    successMessage: string,
+    outcome: "accepted" | "rejected"
   ) => {
     const nextReviewTransaction = nextReviewTransactionAfter(transaction.id);
+
+    capturePostHogClientEvent(
+      outcome === "accepted" ? "review_item_accepted" : "review_item_rejected",
+      {
+        workspace_id: selectedWorkspaceId || null,
+        transaction_id: transaction.id,
+        review_reason: warningReasonFor(transaction),
+        review_status: patch.reviewStatus,
+        is_excluded: patch.isExcluded,
+        is_transfer: patch.isTransfer,
+      }
+    );
+
+    if (warningReasonFor(transaction) === "Possible duplicate" && outcome === "rejected") {
+      capturePostHogClientEvent("transaction_split", {
+        workspace_id: selectedWorkspaceId || null,
+        transaction_id: transaction.id,
+        split_reason: "duplicate_review",
+      });
+    }
 
     applyTransactionPatchLocally(transaction.id, patch);
     setMessage(successMessage);
@@ -1674,6 +1713,19 @@ function TransactionsPageContent() {
       return;
     }
 
+    capturePostHogClientEventOnce(
+      "ai_suggestion_shown",
+      {
+        workspace_id: selectedWorkspaceId || null,
+        suggestion_type: "merchant_rename",
+        source_transaction_id: transaction.id,
+        source_merchant_raw: transaction.merchantRaw,
+        target_merchant_clean: target,
+        matching_count: matchingTransactionIds.length,
+      },
+      analyticsOnceKey("ai_suggestion_shown", `merchant:${transaction.id}:${target}`)
+    );
+
     setMerchantRenameSuggestion({
       sourceTransactionId: transaction.id,
       sourceMerchantRaw: transaction.merchantRaw,
@@ -1710,6 +1762,21 @@ function TransactionsPageContent() {
           )
         )
       );
+
+      capturePostHogClientEvent("ai_suggestion_accepted", {
+        workspace_id: selectedWorkspaceId || null,
+        suggestion_type: "merchant_rename",
+        source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+        source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+        target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+        matching_count: transactionsToUpdate.length,
+      });
+      capturePostHogClientEvent("transaction_merged", {
+        workspace_id: selectedWorkspaceId || null,
+        source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+        target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+        merged_count: transactionsToUpdate.length,
+      });
 
       setMerchantRenameSuggestion(null);
       setMessage(
@@ -2162,6 +2229,10 @@ function TransactionsPageContent() {
       };
 
       await updateTransaction(selectedTransaction.id, payload);
+      capturePostHogClientEvent("feature_used", {
+        workspace_id: selectedWorkspaceId || null,
+        feature_name: "transaction_detail_edit",
+      });
       setMessage("Transaction details updated.");
       closeTransactionDetail();
     } catch (error) {
@@ -2186,6 +2257,16 @@ function TransactionsPageContent() {
         merchantFilters,
       })
     );
+    capturePostHogClientEvent("report_filtered", {
+      workspace_id: selectedWorkspaceId || null,
+      view: "transactions",
+      filter_type_count: typeFilters.length,
+      filter_category_count: categoryFilters.length,
+      filter_account_count: accountFilters.length,
+      filter_merchant_count: merchantFilters.length,
+      query_length: query.trim().length,
+      date_filter_mode: dateFilterMode,
+    });
     setMessage("Current view saved.");
   };
 
@@ -2224,6 +2305,12 @@ function TransactionsPageContent() {
       )
       .join("\n");
 
+    capturePostHogClientEvent("report_exported", {
+      workspace_id: selectedWorkspaceId || null,
+      export_format: "csv",
+      row_count: filteredTransactions.length,
+      selected_count: selectedTransactionIds.length,
+    });
     downloadTextFile("clover-transactions.csv", csv, "text/csv;charset=utf-8;");
   };
 
@@ -2399,6 +2486,12 @@ function TransactionsPageContent() {
         </html>
       `);
       report.document.close();
+      capturePostHogClientEvent("report_exported", {
+        workspace_id: selectedWorkspaceId || null,
+        export_format: "pdf",
+        row_count: filteredTransactions.length,
+        selected_count: selectedTransactionIds.length,
+      });
     }
   };
 
@@ -3095,11 +3188,28 @@ function TransactionsPageContent() {
                   setDateFilterAnchor(todayIso);
                   setCustomStart("");
                   setCustomEnd("");
+                  capturePostHogClientEvent("report_filtered", {
+                    workspace_id: selectedWorkspaceId || null,
+                    view: "transactions",
+                    action: "date_filter_reset",
+                  });
                 }}
               >
                 Reset
               </button>
-              <button className="button button-primary" type="button" onClick={() => setDateFilterOpen(false)}>
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={() => {
+                  capturePostHogClientEvent("report_filtered", {
+                    workspace_id: selectedWorkspaceId || null,
+                    view: "transactions",
+                    action: "date_filter_applied",
+                    date_filter_mode: dateFilterMode,
+                  });
+                  setDateFilterOpen(false);
+                }}
+              >
                 Done
               </button>
             </div>
@@ -3190,11 +3300,32 @@ function TransactionsPageContent() {
                   setTypeFilters([]);
                   setMerchantFilters([]);
                   setMerchantFilterInput("");
+                  capturePostHogClientEvent("report_filtered", {
+                    workspace_id: selectedWorkspaceId || null,
+                    view: "transactions",
+                    action: "filters_reset",
+                  });
                 }}
               >
                 Reset
               </button>
-              <button className="button button-primary" type="button" onClick={() => setFilterOpen(false)}>
+              <button
+                className="button button-primary"
+                type="button"
+                onClick={() => {
+                  capturePostHogClientEvent("report_filtered", {
+                    workspace_id: selectedWorkspaceId || null,
+                    view: "transactions",
+                    action: "filters_applied",
+                    filter_type_count: typeFilters.length,
+                    filter_category_count: categoryFilters.length,
+                    filter_account_count: accountFilters.length,
+                    filter_merchant_count: merchantFilters.length,
+                    query_length: query.trim().length,
+                  });
+                  setFilterOpen(false);
+                }}
+              >
                 Done
               </button>
             </div>
@@ -3539,7 +3670,8 @@ function TransactionsPageContent() {
                           isTransfer: false,
                           reviewStatus: "confirmed",
                         },
-                        "Warning accepted."
+                        "Warning accepted.",
+                        "accepted"
                       );
                     }}
                   >
@@ -3556,7 +3688,8 @@ function TransactionsPageContent() {
                           isTransfer: selectedTransaction.isTransfer,
                           reviewStatus: "rejected",
                         },
-                        "Transaction ignored."
+                        "Transaction ignored.",
+                        "rejected"
                       );
                     }}
                   >
@@ -3578,7 +3711,8 @@ function TransactionsPageContent() {
                       isTransfer: selectedTransaction.isTransfer,
                       reviewStatus: "rejected",
                     },
-                    "Transaction ignored."
+                    "Transaction ignored.",
+                    "rejected"
                   );
                 }}
               >
@@ -3615,7 +3749,16 @@ function TransactionsPageContent() {
               <button
                 className="icon-button"
                 type="button"
-                onClick={() => setMerchantRenameSuggestion(null)}
+                onClick={() => {
+                  capturePostHogClientEvent("ai_suggestion_rejected", {
+                    workspace_id: selectedWorkspaceId || null,
+                    suggestion_type: "merchant_rename",
+                    source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+                    source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+                    target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+                  });
+                  setMerchantRenameSuggestion(null);
+                }}
                 aria-label="Close merchant rename suggestion"
               >
                 ×
@@ -3634,7 +3777,16 @@ function TransactionsPageContent() {
               <button
                 className="button button-secondary"
                 type="button"
-                onClick={() => setMerchantRenameSuggestion(null)}
+                onClick={() => {
+                  capturePostHogClientEvent("ai_suggestion_rejected", {
+                    workspace_id: selectedWorkspaceId || null,
+                    suggestion_type: "merchant_rename",
+                    source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+                    source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+                    target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+                  });
+                  setMerchantRenameSuggestion(null);
+                }}
                 disabled={merchantRenameBusy}
               >
                 Ignore

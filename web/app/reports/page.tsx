@@ -754,6 +754,8 @@ async function ReportsPageView({
       failed: Number(failedImportCount ?? 0),
       deleted: Number(deletedImportCount ?? 0),
     };
+    const isFreshResetWorkspace =
+      user.dataWipedAt !== null && Number(accountStats._count.id ?? 0) <= 1 && Object.values(importStatusCounts).every((count) => count === 0);
     const latestImportSummary = latestImport as unknown as
       | {
           fileName: string;
@@ -1158,6 +1160,24 @@ async function ReportsPageView({
             chart_type: "timeline",
           }}
         />
+        {isFreshResetWorkspace ? (
+          <section className="transactions-empty-state" style={{ marginBottom: 20 }}>
+            <p className="transactions-empty-state__eyebrow">Fresh start</p>
+            <h3>Your reports are ready for a new import.</h3>
+            <p className="transactions-empty-state__copy">
+              Import a statement to populate cash flow, spending, review items, and goal-aware summaries. Clover will fill the rest
+              in as soon as the first file lands.
+            </p>
+            <div className="transactions-empty-state__actions">
+              <Link className="button button-primary button-small" href="/transactions?import=1">
+                Import files
+              </Link>
+              <Link className="button button-secondary button-small" href="/accounts">
+                Add an account
+              </Link>
+            </div>
+          </section>
+        ) : null}
         <section className="reports-hero">
           <div className="reports-hero__copy glass">
             <span className="pill pill-accent">Goal-aware insights</span>

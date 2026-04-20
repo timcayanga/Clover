@@ -403,6 +403,7 @@ export default async function InsightsPage() {
   let importFiles: Array<{ status: "processing" | "done" | "failed" | "deleted" }> = [];
   let selectedGoalValue: string | null = null;
   let workspaceId = "staging-demo";
+  let isFreshResetWorkspace = false;
 
   if (stagingHost) {
     stagingDemoData = createStagingInsightsSampleData(now);
@@ -573,6 +574,7 @@ export default async function InsightsPage() {
     }));
     importFiles = resolvedWorkspace.importFiles;
     selectedGoalValue = user.primaryGoal?.trim() ?? null;
+    isFreshResetWorkspace = user.dataWipedAt !== null && resolvedWorkspace.accounts.length <= 1 && resolvedWorkspace.importFiles.length === 0;
   }
 
   const reportType = "insights";
@@ -958,6 +960,24 @@ export default async function InsightsPage() {
           chart_type: "timeline",
         }}
       />
+      {isFreshResetWorkspace ? (
+        <section className="transactions-empty-state" style={{ marginBottom: 20 }}>
+          <p className="transactions-empty-state__eyebrow">Fresh start</p>
+          <h3>Import files to wake up your insights.</h3>
+          <p className="transactions-empty-state__copy">
+            Clover needs a statement or account activity before it can spot patterns, trends, and habits. Upload one file and the
+            insights page will start filling itself in.
+          </p>
+          <div className="transactions-empty-state__actions">
+            <Link className="button button-primary button-small" href="/transactions?import=1">
+              Import files
+            </Link>
+            <Link className="button button-secondary button-small" href="/accounts">
+              Add an account
+            </Link>
+          </div>
+        </section>
+      ) : null}
       <section className="insights-story">
         <article className="insights-snapshot insights-snapshot--hero glass">
           <div className="insights-snapshot__copy">

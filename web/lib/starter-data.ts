@@ -152,6 +152,7 @@ const normalizeStarterCashAccount = async (workspaceId: string) => {
 export const ensureStarterWorkspace = async (userId: string, email: string, verified: boolean) => {
   const user = await getOrCreateCurrentUser(userId);
   const stagingHost = await isStagingHost();
+  const useFreshStartWorkspace = user.dataWipedAt !== null;
 
   const existing = await prisma.workspace.findFirst({
     where: { userId: user.id },
@@ -164,7 +165,7 @@ export const ensureStarterWorkspace = async (userId: string, email: string, veri
   if (existing) {
     await normalizeStarterCashAccount(existing.id);
 
-    if (stagingHost) {
+    if (stagingHost && !useFreshStartWorkspace) {
       await seedStagingSampleTransactions(existing.id);
     }
 
@@ -177,23 +178,34 @@ export const ensureStarterWorkspace = async (userId: string, email: string, veri
       name: "Personal",
       type: "personal",
       accounts: {
-        create: [
-          {
-            name: "Imported transactions",
-            institution: "Source upload",
-            type: "bank",
-            currency: "PHP",
-            source: "upload",
-          },
-          {
-            name: "Cash",
-            institution: "Cash",
-            type: "cash",
-            currency: "PHP",
-            source: "manual",
-            balance: 0,
-          },
-        ],
+        create: useFreshStartWorkspace
+          ? [
+              {
+                name: "Cash",
+                institution: "Cash",
+                type: "cash",
+                currency: "PHP",
+                source: "manual",
+                balance: 0,
+              },
+            ]
+          : [
+              {
+                name: "Imported transactions",
+                institution: "Source upload",
+                type: "bank",
+                currency: "PHP",
+                source: "upload",
+              },
+              {
+                name: "Cash",
+                institution: "Cash",
+                type: "cash",
+                currency: "PHP",
+                source: "manual",
+                balance: 0,
+              },
+            ],
       },
       categories: {
         create: DEFAULT_CATEGORY_ROWS.map((category) => ({
@@ -236,14 +248,6 @@ export const seedWorkspaceDefaults = async (workspaceId: string) => {
       data: [
         {
           workspaceId,
-          name: "Imported transactions",
-          institution: "Source upload",
-          type: "bank",
-          currency: "PHP",
-          source: "upload",
-        },
-        {
-          workspaceId,
           name: "Cash",
           institution: "Cash",
           type: "cash",
@@ -257,7 +261,7 @@ export const seedWorkspaceDefaults = async (workspaceId: string) => {
 
   await normalizeStarterCashAccount(workspaceId);
 
-  if (await isStagingHost()) {
+  if ((await isStagingHost()) && existingAccounts.some((account) => account.name === "Imported transactions" || account.source === "upload")) {
     await seedStagingSampleTransactions(workspaceId);
   }
 };
