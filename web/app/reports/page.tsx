@@ -1698,6 +1698,11 @@ async function ReportsPageView({
     );
   } catch (error) {
     console.error("Reports page failed to load", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorDigest =
+      error && typeof error === "object" && "digest" in error && typeof (error as { digest?: unknown }).digest === "string"
+        ? (error as { digest: string }).digest
+        : "";
 
     return (
       <CloverShell
@@ -1722,6 +1727,13 @@ async function ReportsPageView({
           <p className="panel-muted">
             Try again in a moment. If the problem keeps happening, the imports or database connection may need a quick check.
           </p>
+          <details className="report-error-details">
+            <summary>Technical details</summary>
+            <pre>
+              {errorMessage}
+              {errorDigest ? `\nDigest: ${errorDigest}` : ""}
+            </pre>
+          </details>
         </section>
       </CloverShell>
     );
