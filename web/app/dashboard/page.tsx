@@ -32,10 +32,16 @@ const relativeTimeFormatter = new Intl.RelativeTimeFormat("en-PH", {
   numeric: "auto",
 });
 
+const monthFormatter = new Intl.DateTimeFormat("en-PH", {
+  month: "short",
+  year: "numeric",
+});
+
 type DashboardTransaction = {
   id: string;
   date: Date;
   amount: unknown;
+  isExcluded: boolean;
   reviewStatus: "pending_review" | "suggested" | "confirmed" | "edited" | "rejected" | "duplicate_skipped";
   categoryConfidence: number;
   categoryId: string | null;
@@ -60,7 +66,23 @@ type AggregatedTransactionTotals = {
   expenseMerchants: Map<string, { amount: number; count: number; lastSeen: Date }>;
 };
 
+type MonthBucket = {
+  key: string;
+  label: string;
+  income: number;
+  expense: number;
+  net: number;
+};
+
+type VisualCategory = {
+  name: string;
+  amount: number;
+  share: number;
+};
+
 const toAmount = (value: unknown) => Number(value ?? 0);
+const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+const toMonthLabel = (date: Date) => monthFormatter.format(date);
 
 const formatSignedCurrency = (value: number) => `${value < 0 ? "-" : ""}${currencyFormatter.format(Math.abs(value))}`;
 
@@ -85,6 +107,49 @@ const formatRelativeDate = (value: Date, now = new Date()) => {
 const formatPercent = (value: number) => percentFormatter.format(value);
 
 const formatRate = (value: number) => `${value.toFixed(0)}%`;
+
+const getMonthBuckets = (anchor: Date) => {
+  const buckets: MonthBucket[] = [];
+  for (let offset = 5; offset >= 0; offset -= 1) {
+    const date = new Date(anchor.getFullYear(), anchor.getMonth() - offset, 1);
+    buckets.push({
+      key: toIsoMonth(date),
+      label: toMonthLabel(date),
+      income: 0,
+      expense: 0,
+      net: 0,
+    });
+  }
+  return buckets;
+};
+
+const getMonthBucket = (date: Date, buckets: MonthBucket[]) => buckets.find((bucket) => bucket.key === toIsoMonth(date));
+
+const buildLinePath = (buckets: MonthBucket[], width: number, height: number, padding: number) => {
+  const values = buckets.map((bucket) => bucket.net);
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = Math.max(max - min, 1);
+  const xSpan = width - padding * 2;
+  const ySpan = height - padding * 2;
+  const points = buckets.map((bucket, index) => {
+    const x = padding + (index / Math.max(buckets.length - 1, 1)) * xSpan;
+    const normalized = (bucket.net - min) / range;
+    const y = padding + (1 - normalized) * ySpan;
+    return { ...bucket, x, y };
+  });
+
+  const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+
+  return {
+    points,
+    linePath,
+    min,
+    max,
+  };
+};
+
+const formatCompactPercentage = (value: number) => `${Math.round(value)}%`;
 
 const summarizeTransactions = (transactions: DashboardTransaction[]): AggregatedTransactionTotals => {
   return transactions.reduce<AggregatedTransactionTotals>(
@@ -211,10 +276,13 @@ export default async function DashboardPage() {
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const sixtyDaysAgo = new Date();
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const oneHundredEightyDaysAgo = new Date();
+  oneHundredEightyDaysAgo.setDate(oneHundredEightyDaysAgo.getDate() - 180);
 
   const [
     recentTransactions,
     previousTransactions,
+    sixMonthTransactions,
     reviewPreviewTransactions,
     reviewAttentionCount,
     totalTransactions,
@@ -255,6 +323,21 @@ export default async function DashboardPage() {
     prisma.transaction.findMany({
       where: {
         workspaceId: selectedWorkspace.id,
+        isExcluded: false,
+        date: {
+          gte: oneHundredEightyDaysAgo,
+        },
+      },
+      include: {
+        category: true,
+        account: true,
+      },
+      orderBy: { date: "desc" },
+      take: 240,
+    }),
+    prisma.transaction.findMany({
+      where: {
+        workspaceId: selectedWorkspace.id,
         OR: [
           { reviewStatus: { not: "confirmed" } },
           { categoryId: null },
@@ -291,6 +374,7 @@ export default async function DashboardPage() {
 
   const currentTransactions = recentTransactions as DashboardTransaction[];
   const previousTransactionsWindow = previousTransactions as DashboardTransaction[];
+  const sixMonthTransactionWindow = sixMonthTransactions as DashboardTransaction[];
   const currentSummary = comparePeriods(currentTransactions, previousTransactionsWindow);
 
   const recentConfirmedShare = currentTransactions.length
@@ -366,6 +450,35 @@ export default async function DashboardPage() {
     : null;
 
   const recentActivityTransactions = currentTransactions.slice(0, 4);
+  const monthBuckets = getMonthBuckets(new Date());
+  sixMonthTransactionWindow.forEach((transaction) => {
+    const bucket = getMonthBucket(transaction.date, monthBuckets);
+    if (!bucket || transaction.isExcluded) {
+      return;
+    }
+
+    const amount = Math.abs(toAmount(transaction.amount));
+    if (transaction.type === "income") {
+      bucket.income += amount;
+    } else if (transaction.type === "expense") {
+      bucket.expense += amount;
+    }
+    bucket.net = bucket.income - bucket.expense;
+  });
+
+  const chartWidth = 520;
+  const chartHeight = 210;
+  const chartPadding = 24;
+  const { points: monthPoints, linePath } = buildLinePath(monthBuckets, chartWidth, chartHeight, chartPadding);
+  const topCategoryRows: VisualCategory[] = Array.from(currentSummary.current.expenseCategories.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 4)
+    .map(([name, amount]) => ({
+      name,
+      amount,
+      share: currentSummary.current.expense > 0 ? (amount / currentSummary.current.expense) * 100 : 0,
+    }));
+  const currentNetTrend = currentSummary.netDelta >= 0 ? "positive" : "negative";
 
   return (
     <CloverShell
@@ -435,6 +548,87 @@ export default async function DashboardPage() {
             <small>{reviewCoverageText}</small>
           </article>
         </div>
+      </section>
+
+      <section className="dashboard-visual-grid">
+        <article className="glass dashboard-visual-card dashboard-visual-card--trend">
+          <div className="dashboard-visual-card__head">
+            <div>
+              <p className="eyebrow">Trend</p>
+              <h4>Six-month net cash flow</h4>
+            </div>
+            <span className={`dashboard-visual-pill ${currentNetTrend}`}>{formatSignedCurrency(currentSummary.netDelta)}</span>
+          </div>
+          <div className="dashboard-line-chart" role="img" aria-label="Net cash flow over the last six months">
+            <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
+              <defs>
+                <linearGradient id="dashboard-flow-gradient" x1="0" x2="0" y1="0" y2="1">
+                  <stop offset="0%" stopColor="rgba(3, 168, 192, 0.34)" />
+                  <stop offset="100%" stopColor="rgba(3, 168, 192, 0.03)" />
+                </linearGradient>
+              </defs>
+              <path
+                d={`${linePath} L ${monthPoints[monthPoints.length - 1].x.toFixed(1)} ${chartHeight - chartPadding} L ${monthPoints[0].x.toFixed(1)} ${chartHeight - chartPadding} Z`}
+                fill="url(#dashboard-flow-gradient)"
+              />
+              <path d={linePath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+              {monthPoints.map((point) => (
+                <circle key={point.key} cx={point.x} cy={point.y} r="4.5" fill="white" stroke="var(--accent)" strokeWidth="3" />
+              ))}
+            </svg>
+            <div className="dashboard-line-chart__labels">
+              {monthPoints.map((point) => (
+                <div key={point.key} className="dashboard-line-chart__label">
+                  <strong>{point.label}</strong>
+                  <span
+                    className={point.net >= 0 ? "positive" : "negative"}
+                    aria-label={`${point.label} net ${formatSignedCurrency(point.net)}`}
+                  >
+                    {formatSignedCurrency(point.net)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </article>
+
+        <article className="glass dashboard-visual-card dashboard-visual-card--mix">
+          <div className="dashboard-visual-card__head">
+            <div>
+              <p className="eyebrow">Mix</p>
+              <h4>Where the money went</h4>
+            </div>
+            <span className="dashboard-visual-pill">{formatSignedCurrency(currentSummary.current.expense)}</span>
+          </div>
+          <div className="dashboard-category-bars">
+            {topCategoryRows.length > 0 ? (
+              topCategoryRows.map((category, index) => {
+                const width = Math.max(category.share, category.amount > 0 ? 8 : 0);
+                return (
+                  <div key={category.name} className="dashboard-category-bars__item">
+                    <div className="dashboard-category-bars__meta">
+                      <strong>{category.name}</strong>
+                      <span>
+                        {currencyFormatter.format(category.amount)} · {formatCompactPercentage(category.share)}
+                      </span>
+                    </div>
+                    <div className="dashboard-category-bars__track" aria-hidden="true">
+                      <div
+                        className={`dashboard-category-bars__fill dashboard-category-bars__fill--${index % 4}`}
+                        style={{ width: `${Math.min(width, 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="dashboard-empty-visual">
+                <strong>No spending yet</strong>
+                <span>Import a statement to see a simple category breakdown here.</span>
+              </div>
+            )}
+          </div>
+        </article>
       </section>
 
       <section className="feature-grid" id="analytics">
