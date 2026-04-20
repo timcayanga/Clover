@@ -95,7 +95,42 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       }
     }
 
-    return NextResponse.json({ transaction: updated });
+    const account = await prisma.account.findUnique({
+      where: { id: updated.accountId },
+    });
+    const category = updated.categoryId
+      ? await prisma.category.findUnique({
+          where: { id: updated.categoryId },
+        })
+      : null;
+
+    return NextResponse.json({
+      transaction: {
+        id: updated.id,
+        workspaceId: updated.workspaceId,
+        accountId: updated.accountId,
+        accountName: account?.name ?? "",
+        categoryId: updated.categoryId,
+        categoryName: category?.name ?? null,
+        reviewStatus: updated.reviewStatus,
+        parserConfidence: updated.parserConfidence,
+        categoryConfidence: updated.categoryConfidence,
+        accountMatchConfidence: updated.accountMatchConfidence,
+        duplicateConfidence: updated.duplicateConfidence,
+        transferConfidence: updated.transferConfidence,
+        date: updated.date.toISOString(),
+        amount: updated.amount.toString(),
+        currency: updated.currency,
+        type: updated.type,
+        merchantRaw: updated.merchantRaw,
+        merchantClean: updated.merchantClean,
+        description: updated.description,
+        isTransfer: updated.isTransfer,
+        isExcluded: updated.isExcluded,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString(),
+      },
+    });
   } catch {
     return NextResponse.json({ error: "Unable to update transaction" }, { status: 400 });
   }
