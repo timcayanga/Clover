@@ -1433,6 +1433,18 @@ function TransactionsPageContent() {
     [filteredTransactions, duplicateLookup]
   );
 
+  const warningTransactionCount = useMemo(
+    () => filteredTransactions.filter((transaction) => warningReasonFor(transaction) !== null).length,
+    [filteredTransactions, duplicateLookup]
+  );
+
+  const nextReviewTransactionAfter = (transactionId: string) => {
+    const startIndex = filteredTransactions.findIndex((transaction) => transaction.id === transactionId);
+    const start = startIndex >= 0 ? startIndex + 1 : 0;
+    const ordered = [...filteredTransactions.slice(start), ...filteredTransactions.slice(0, start)];
+    return ordered.find((transaction) => isReviewableTransaction(transaction)) ?? null;
+  };
+
   const openTransactionDetail = (transaction: Transaction) => {
     setSelectedTransaction(transaction);
     setDetailDraft({
@@ -1449,6 +1461,43 @@ function TransactionsPageContent() {
         row.scrollIntoView({ behavior: "smooth", block: "center" });
       });
     }
+  };
+
+  const resolveTransactionWarning = (
+    transaction: Transaction,
+    patch: Pick<Transaction, "isExcluded" | "isTransfer" | "reviewStatus">,
+    successMessage: string
+  ) => {
+    const nextReviewTransaction = nextReviewTransactionAfter(transaction.id);
+
+    applyTransactionPatchLocally(transaction.id, patch);
+    setMessage(successMessage);
+
+    void updateTransaction(
+      transaction.id,
+      {
+        isExcluded: patch.isExcluded,
+        isTransfer: patch.isTransfer,
+        reviewStatus: patch.reviewStatus,
+      },
+      { recordHistory: false }
+    ).catch((error) => {
+      applyTransactionPatchLocally(transaction.id, {
+        isExcluded: transaction.isExcluded,
+        isTransfer: transaction.isTransfer,
+        reviewStatus: transaction.reviewStatus,
+      });
+      setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
+    });
+
+    if (nextReviewTransaction) {
+      window.requestAnimationFrame(() => {
+        openTransactionReview(nextReviewTransaction);
+      });
+      return;
+    }
+
+    closeTransactionDetail();
   };
 
   const closeTransactionDetail = () => {
@@ -2354,7 +2403,7 @@ function TransactionsPageContent() {
   };
 
   const netGain = totals.income - totals.expense;
-  const hasReviewItems = reviewTransactionCount > 0;
+  const hasReviewItems = warningTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
   const isTableLoading = !selectedWorkspaceId ? !isWorkspacesLoaded : !isWorkspaceDataReady;
   const hasSelectedTransactions = selectedTransactionIds.length > 0;
@@ -2817,6 +2866,7 @@ function TransactionsPageContent() {
                           type="button"
                           className="warning-chip"
                           title={warningReason}
+                          aria-label={warningReason}
                           onClick={() => openTransactionDetail(transaction)}
                         >
                           <span className="warning-mark warning-mark--small" aria-hidden="true" />
@@ -2850,11 +2900,11 @@ function TransactionsPageContent() {
           <div className="transactions-footer">
             <div className="table-footer__summary">
               <span className="pill pill-neutral">{filteredTransactions.length} transactions</span>
-              {hasReviewItems ? (
+          {warningTransactionCount > 0 ? (
                 <button
                   type="button"
                   className="warning-summary-button"
-                  title={`${totals.review} transaction${totals.review === 1 ? "" : "s"} need review. Open the first one.`}
+                  title={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning. Open the first one.`}
                   onClick={() => {
                     if (firstReviewTransaction) {
                       openTransactionReview(firstReviewTransaction);
@@ -2862,8 +2912,8 @@ function TransactionsPageContent() {
                   }}
                   aria-label={
                     firstReviewTransaction
-                      ? `${totals.review} transaction${totals.review === 1 ? "" : "s"} need review. Open the first one: ${firstReviewTransaction.merchantRaw}`
-                      : `${totals.review} transaction${totals.review === 1 ? "" : "s"} need review`
+                      ? `${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning. Open the first one: ${firstReviewTransaction.merchantRaw}`
+                      : `${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning`
                   }
                 >
                   <span className="warning-mark warning-mark--small" aria-hidden="true" />
@@ -3482,25 +3532,15 @@ function TransactionsPageContent() {
                     className="button button-primary button-small"
                     type="button"
                     onClick={() => {
-                      const transactionId = selectedTransaction.id;
-                      setMessage("Warning accepted.");
-                      applyTransactionPatchLocally(transactionId, {
-                        isExcluded: false,
-                        isTransfer: false,
-                        reviewStatus: "confirmed",
-                      });
-                      closeTransactionDetail();
-                      void updateTransaction(
-                        transactionId,
+                      resolveTransactionWarning(
+                        selectedTransaction,
                         {
                           isExcluded: false,
                           isTransfer: false,
                           reviewStatus: "confirmed",
                         },
-                        { recordHistory: false }
-                      ).catch((error) => {
-                        setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
-                      });
+                        "Warning accepted."
+                      );
                     }}
                   >
                     Accept
@@ -3509,23 +3549,15 @@ function TransactionsPageContent() {
                     className="button button-secondary button-small detail-warning-delete"
                     type="button"
                     onClick={() => {
-                      const transactionId = selectedTransaction.id;
-                      setMessage("Transaction ignored.");
-                      applyTransactionPatchLocally(transactionId, {
-                        isExcluded: true,
-                        reviewStatus: "rejected",
-                      });
-                      closeTransactionDetail();
-                      void updateTransaction(
-                        transactionId,
+                      resolveTransactionWarning(
+                        selectedTransaction,
                         {
                           isExcluded: true,
+                          isTransfer: selectedTransaction.isTransfer,
                           reviewStatus: "rejected",
                         },
-                        { recordHistory: false }
-                      ).catch((error) => {
-                        setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
-                      });
+                        "Transaction ignored."
+                      );
                     }}
                   >
                     Ignore
@@ -3539,23 +3571,15 @@ function TransactionsPageContent() {
                 className="button button-secondary"
                 type="button"
                 onClick={() => {
-                  const transactionId = selectedTransaction.id;
-                  setMessage("Transaction ignored.");
-                  applyTransactionPatchLocally(transactionId, {
-                    isExcluded: true,
-                    reviewStatus: "rejected",
-                  });
-                  closeTransactionDetail();
-                  void updateTransaction(
-                    transactionId,
+                  resolveTransactionWarning(
+                    selectedTransaction,
                     {
                       isExcluded: true,
+                      isTransfer: selectedTransaction.isTransfer,
                       reviewStatus: "rejected",
                     },
-                    { recordHistory: false }
-                  ).catch((error) => {
-                    setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
-                  });
+                    "Transaction ignored."
+                  );
                 }}
               >
                 Ignore
