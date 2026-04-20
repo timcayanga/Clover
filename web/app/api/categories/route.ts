@@ -3,6 +3,7 @@ import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,24 @@ export async function GET(request: Request) {
     }
 
     await assertWorkspaceAccess(userId, workspaceId);
+
+    const existingCategories = await prisma.category.findMany({
+      where: { workspaceId },
+      select: { name: true, type: true },
+    });
+    const categoryKey = (name: string) => name.trim().toLowerCase();
+    const existingCategoryNames = new Set(existingCategories.map((category) => categoryKey(category.name)));
+    const missingDefaultCategories = DEFAULT_CATEGORY_ROWS.filter((category) => !existingCategoryNames.has(categoryKey(category.name)));
+    if (missingDefaultCategories.length > 0) {
+      await prisma.category.createMany({
+        data: missingDefaultCategories.map((category) => ({
+          workspaceId,
+          name: category.name,
+          type: category.type,
+        })),
+        skipDuplicates: true,
+      });
+    }
 
     const categories = await prisma.category.findMany({
       where: { workspaceId },

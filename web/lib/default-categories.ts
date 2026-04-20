@@ -7,6 +7,7 @@ export const DEFAULT_CATEGORY_ROWS = [
   { name: "Housing", type: "expense" },
   { name: "Bills & Utilities", type: "expense" },
   { name: "Travel & Lifestyle", type: "expense" },
+  { name: "Entertainment", type: "expense" },
   { name: "Shopping", type: "expense" },
   { name: "Health & Wellness", type: "expense" },
   { name: "Education", type: "expense" },

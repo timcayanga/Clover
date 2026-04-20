@@ -164,6 +164,8 @@ const getCategoryIconSrc = (categoryName: string | null | undefined) => {
       return "/category-icons/utilities.svg";
     case "travel & lifestyle":
       return "/category-icons/travel.svg";
+    case "entertainment":
+      return "/category-icons/entertainment.svg";
     case "shopping":
       return "/category-icons/shopping.svg";
     case "health & wellness":
@@ -211,6 +213,8 @@ const getCategoryIconTone = (categoryName: string | null | undefined) => {
       return { backgroundColor: "rgba(14, 165, 233, 0.14)", borderColor: "rgba(14, 165, 233, 0.24)" };
     case "travel & lifestyle":
       return { backgroundColor: "rgba(236, 72, 153, 0.14)", borderColor: "rgba(236, 72, 153, 0.24)" };
+    case "entertainment":
+      return { backgroundColor: "rgba(245, 158, 11, 0.14)", borderColor: "rgba(245, 158, 11, 0.24)" };
     case "shopping":
       return { backgroundColor: "rgba(244, 63, 94, 0.14)", borderColor: "rgba(244, 63, 94, 0.24)" };
     case "health & wellness":

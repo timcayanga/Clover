@@ -167,6 +167,7 @@ async function ReportsPageView({
       { label: "Food & Dining", amount: 3266, color: "#0ea5c8" },
       { label: "Transport", amount: 1880, color: "#36b6e0" },
       { label: "Subscriptions", amount: 970, color: "#7dd3fc" },
+      { label: "Entertainment", amount: 820, color: "#f59e0b" },
       { label: "Groceries", amount: 740, color: "#8b5cf6" },
       { label: "Utilities", amount: 510, color: "#14b8a6" },
     ] as const;
@@ -195,7 +196,7 @@ async function ReportsPageView({
         title: "Ride share charge needs a category",
         description: "Assign this imported transport transaction so the spending report stays tidy.",
         tags: ["No category", "Imported transactions", "₱180.00"],
-        categoryOptions: ["Transport", "Food & Dining", "Groceries", "Utilities", "Subscriptions"],
+        categoryOptions: ["Transport", "Food & Dining", "Groceries", "Utilities", "Subscriptions", "Entertainment"],
         actions: [
           { label: "Review transaction", href: "/transactions" },
           { label: "Open imports", href: "/imports", variant: "secondary" },

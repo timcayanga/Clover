@@ -78,6 +78,7 @@ const getCategoryGlyph = (categoryName: string) => {
   if (normalized.includes("bill") || normalized.includes("utility") || normalized.includes("internet") || normalized.includes("phone"))
     return "💡";
   if (normalized.includes("subscription") || normalized.includes("stream")) return "↻";
+  if (normalized.includes("entertainment") || normalized.includes("movie") || normalized.includes("cinema") || normalized.includes("concert")) return "🎬";
   if (normalized.includes("health") || normalized.includes("pharmacy") || normalized.includes("medicine")) return "✚";
   if (normalized.includes("income") || normalized.includes("salary") || normalized.includes("payroll")) return "↗";
   if (normalized.includes("transfer")) return "⇄";

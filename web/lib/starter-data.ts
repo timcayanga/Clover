@@ -50,6 +50,15 @@ const stagingSampleTransactions = [
     daysAgo: 8,
   },
   {
+    merchantRaw: "CineMax Downtown",
+    merchantClean: "Movie night",
+    description: "Cinema tickets and snacks",
+    categoryName: "Entertainment",
+    type: "expense",
+    amount: "980.00",
+    daysAgo: 9,
+  },
+  {
     merchantRaw: "Green Basket Market",
     merchantClean: "Groceries",
     description: "Weekend grocery run",
@@ -208,14 +217,17 @@ export const ensureStarterWorkspace = async (userId: string, email: string, veri
 
 export const seedWorkspaceDefaults = async (workspaceId: string) => {
   const existingCategories = await prisma.category.findMany({ where: { workspaceId } });
-  if (existingCategories.length === 0) {
-    await prisma.category.createMany({
-      data: DEFAULT_CATEGORY_ROWS.map((category) => ({
-        workspaceId,
-        name: category.name,
-        type: category.type,
-      })),
-    });
+  const categoryByName = new Map(existingCategories.map((category) => [category.name.trim().toLowerCase(), category]));
+  for (const category of DEFAULT_CATEGORY_ROWS) {
+    if (!categoryByName.has(category.name.trim().toLowerCase())) {
+      await prisma.category.create({
+        data: {
+          workspaceId,
+          name: category.name,
+          type: category.type,
+        },
+      });
+    }
   }
 
   const existingAccounts = await prisma.account.findMany({ where: { workspaceId } });

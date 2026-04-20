@@ -29,7 +29,7 @@ export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
   const currentIndex = hasItems ? index % items.length : 0;
   const current = hasItems ? items[currentIndex] : null;
   const currentCategory = current ? selectedCategories[currentIndex] ?? null : null;
-  const categoryOptions = current?.categoryOptions ?? ["Food & Dining", "Transport", "Groceries", "Utilities", "Subscriptions"];
+  const categoryOptions = current?.categoryOptions ?? ["Food & Dining", "Transport", "Groceries", "Utilities", "Subscriptions", "Entertainment"];
   const canPickCategory = current?.tags.includes("No category") ?? false;
 
   useEffect(() => {
