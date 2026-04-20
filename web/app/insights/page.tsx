@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { getSessionContext, isStagingHost } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -386,179 +388,191 @@ const createStagingInsightsSampleData = (anchor: Date) => {
 };
 
 export default async function InsightsPage() {
-  const session = await getSessionContext();
-  const existingUser = await prisma.user.findUnique({
-    where: { clerkUserId: session.userId },
-  });
-  const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
-  if (!hasCompletedOnboarding(user)) {
-    redirect("/onboarding");
-  }
+  const stagingHost = await isStagingHost();
+  const now = new Date();
+  let stagingDemoData: ReturnType<typeof createStagingInsightsSampleData> | null = null;
+  let currentWindowTransactionsRaw: InsightTransaction[] = [];
+  let previousWindowTransactionsRaw: InsightTransaction[] = [];
+  let ninetyDayTransactions: InsightTransaction[] = [];
+  let sixMonthTransactions: Array<Pick<InsightTransaction, "date" | "amount" | "type">> = [];
+  let workspaceAccounts: Array<{ name: string; balance: number | null }> = [];
+  let importFiles: Array<{ status: "processing" | "done" | "failed" | "deleted" }> = [];
+  let selectedGoalValue: string | null = null;
 
-  const workspaces = await prisma.workspace.findMany({
-    where: { userId: user.id },
-    include: {
+  if (stagingHost) {
+    stagingDemoData = createStagingInsightsSampleData(now);
+    currentWindowTransactionsRaw = stagingDemoData.currentWindowTransactions;
+    previousWindowTransactionsRaw = stagingDemoData.previousWindowTransactions as InsightTransaction[];
+    ninetyDayTransactions = stagingDemoData.ninetyDayTransactions;
+    sixMonthTransactions = stagingDemoData.sixMonthTransactions;
+    workspaceAccounts = stagingDemoData.accounts;
+    importFiles = stagingDemoData.importFiles;
+    selectedGoalValue = stagingDemoData.selectedGoal;
+  } else {
+    const session = await getSessionContext();
+    const existingUser = await prisma.user.findUnique({
+      where: { clerkUserId: session.userId },
+    });
+    const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
+    if (!hasCompletedOnboarding(user)) {
+      redirect("/onboarding");
+    }
+
+    const cookieStore = await cookies();
+    const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
+    const workspaceInclude = {
       accounts: true,
       importFiles: {
         orderBy: { uploadedAt: "desc" },
       },
-    },
-    orderBy: { createdAt: "asc" },
-  });
+    } as const;
 
-  let selectedWorkspace = workspaces[0] ?? null;
+    const selectedWorkspace =
+      (selectedWorkspaceCookieId
+        ? await prisma.workspace.findFirst({
+            where: {
+              id: selectedWorkspaceCookieId,
+              userId: user.id,
+            },
+            include: workspaceInclude,
+          })
+        : null) ??
+      (await prisma.workspace.findFirst({
+        where: { userId: user.id },
+        include: workspaceInclude,
+        orderBy: { createdAt: "asc" },
+      }));
 
-  if (!selectedWorkspace) {
-    const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
-    const starterWorkspaceData = await prisma.workspace.findUnique({
-      where: { id: starterWorkspace.id },
-      include: {
-        accounts: true,
-        importFiles: {
-          orderBy: { uploadedAt: "desc" },
-        },
-      },
-    });
-    if (!starterWorkspaceData) {
+    const resolvedWorkspace =
+      selectedWorkspace ??
+      (await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified).then(async (starterWorkspace) => {
+        const starterWorkspaceData = await prisma.workspace.findUnique({
+          where: { id: starterWorkspace.id },
+          include: workspaceInclude,
+        });
+        if (!starterWorkspaceData) {
+          redirect("/dashboard");
+        }
+        return starterWorkspaceData;
+      }));
+
+    if (!resolvedWorkspace) {
       redirect("/dashboard");
     }
-    selectedWorkspace = starterWorkspaceData;
+
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const sixtyDaysAgo = new Date(now);
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    const ninetyDaysAgo = new Date(now);
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+    const [currentWindowTransactionsQuery, previousWindowTransactionsQuery, ninetyDayTransactionsQuery, sixMonthTransactionsQuery] = await Promise.all([
+      prisma.transaction.findMany({
+        where: {
+          workspaceId: resolvedWorkspace.id,
+          isExcluded: false,
+          date: { gte: thirtyDaysAgo },
+        },
+        select: {
+          id: true,
+          date: true,
+          amount: true,
+          type: true,
+          merchantRaw: true,
+          merchantClean: true,
+          account: {
+            select: {
+              name: true,
+            },
+          },
+          category: {
+            select: {
+              name: true,
+            },
+          },
+        },
+        orderBy: { date: "desc" },
+        take: 500,
+      }),
+      prisma.transaction.findMany({
+        where: {
+          workspaceId: resolvedWorkspace.id,
+          isExcluded: false,
+          date: {
+            gte: sixtyDaysAgo,
+            lt: thirtyDaysAgo,
+          },
+        },
+        select: {
+          amount: true,
+          type: true,
+          category: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      }),
+      prisma.transaction.findMany({
+        where: {
+          workspaceId: resolvedWorkspace.id,
+          isExcluded: false,
+          date: { gte: ninetyDaysAgo },
+        },
+        select: {
+          id: true,
+          date: true,
+          amount: true,
+          type: true,
+          merchantRaw: true,
+          merchantClean: true,
+          account: {
+            select: {
+              name: true,
+            },
+          },
+          category: {
+            select: {
+              name: true,
+            },
+          },
+        },
+        orderBy: { date: "desc" },
+        take: 500,
+      }),
+      prisma.transaction.findMany({
+        where: {
+          workspaceId: resolvedWorkspace.id,
+          isExcluded: false,
+          date: { gte: sixMonthsAgo },
+        },
+        select: {
+          date: true,
+          amount: true,
+          type: true,
+        },
+      }),
+    ]);
+
+    currentWindowTransactionsRaw = currentWindowTransactionsQuery as InsightTransaction[];
+    previousWindowTransactionsRaw = previousWindowTransactionsQuery as InsightTransaction[];
+    ninetyDayTransactions = ninetyDayTransactionsQuery as InsightTransaction[];
+    sixMonthTransactions = sixMonthTransactionsQuery as Array<Pick<InsightTransaction, "date" | "amount" | "type">>;
+    workspaceAccounts = resolvedWorkspace.accounts.map((account) => ({
+      name: account.name,
+      balance: account.balance === null ? null : Number(account.balance),
+    }));
+    importFiles = resolvedWorkspace.importFiles;
+    selectedGoalValue = user.primaryGoal?.trim() ?? null;
   }
 
-  if (!selectedWorkspace) {
-    redirect("/dashboard");
-  }
-
-  const stagingHost = await isStagingHost();
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const sixtyDaysAgo = new Date(now);
-  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-  const ninetyDaysAgo = new Date(now);
-  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-
-  const [
-    currentWindowTransactionsRaw,
-    previousWindowTransactionsRaw,
-    ninetyDayTransactions,
-    sixMonthTransactions,
-    importedTransactionStats,
-    manualTransactionStats,
-  ] = await Promise.all([
-    prisma.transaction.findMany({
-      where: {
-        workspaceId: selectedWorkspace.id,
-        isExcluded: false,
-        date: { gte: thirtyDaysAgo },
-      },
-      select: {
-        id: true,
-        date: true,
-        amount: true,
-        type: true,
-        merchantRaw: true,
-        merchantClean: true,
-        account: {
-          select: {
-            name: true,
-          },
-        },
-        category: {
-          select: {
-            name: true,
-          },
-        },
-      },
-      orderBy: { date: "desc" },
-      take: 500,
-    }),
-    prisma.transaction.findMany({
-      where: {
-        workspaceId: selectedWorkspace.id,
-        isExcluded: false,
-        date: {
-          gte: sixtyDaysAgo,
-          lt: thirtyDaysAgo,
-        },
-      },
-      select: {
-        amount: true,
-        type: true,
-        category: {
-          select: {
-            name: true,
-          },
-        },
-      },
-    }),
-    prisma.transaction.findMany({
-      where: {
-        workspaceId: selectedWorkspace.id,
-        isExcluded: false,
-        date: { gte: ninetyDaysAgo },
-      },
-      select: {
-        id: true,
-        date: true,
-        amount: true,
-        type: true,
-        merchantRaw: true,
-        merchantClean: true,
-        account: {
-          select: {
-            name: true,
-          },
-        },
-        category: {
-          select: {
-            name: true,
-          },
-        },
-      },
-      orderBy: { date: "desc" },
-      take: 500,
-    }),
-    prisma.transaction.findMany({
-      where: {
-        workspaceId: selectedWorkspace.id,
-        isExcluded: false,
-        date: { gte: sixMonthsAgo },
-      },
-      select: {
-        date: true,
-        amount: true,
-        type: true,
-      },
-    }),
-    prisma.transaction.aggregate({
-      where: {
-        workspaceId: selectedWorkspace.id,
-        isExcluded: false,
-        importFileId: { not: null },
-      },
-      _count: { id: true },
-      _sum: { amount: true },
-    }),
-    prisma.transaction.aggregate({
-      where: {
-        workspaceId: selectedWorkspace.id,
-        isExcluded: false,
-        importFileId: null,
-      },
-      _count: { id: true },
-      _sum: { amount: true },
-    }),
-  ]);
-
-  const stagingDemoData = stagingHost && currentWindowTransactionsRaw.length === 0 ? createStagingInsightsSampleData(now) : null;
-  const currentWindowTransactions = (stagingDemoData?.currentWindowTransactions ?? currentWindowTransactionsRaw) as InsightTransaction[];
-  const previousWindowTransactions = (stagingDemoData?.previousWindowTransactions ?? previousWindowTransactionsRaw) as InsightTransaction[];
-  const ninetyDayInsightTransactions = (stagingDemoData?.ninetyDayTransactions ?? ninetyDayTransactions) as InsightTransaction[];
-  const sixMonthInsightTransactions = (stagingDemoData?.sixMonthTransactions ?? sixMonthTransactions) as InsightTransaction[];
-  const workspaceAccounts = stagingDemoData?.accounts ?? selectedWorkspace.accounts;
-  const importFiles = stagingDemoData?.importFiles ?? selectedWorkspace.importFiles;
+  const currentWindowTransactions = currentWindowTransactionsRaw;
+  const previousWindowTransactions = previousWindowTransactionsRaw;
+  const ninetyDayInsightTransactions = ninetyDayTransactions;
+  const sixMonthInsightTransactions = sixMonthTransactions as InsightTransaction[];
+  const selectedGoal = selectedGoalValue;
 
   const currentSummary = currentWindowTransactions.reduce(
     (accumulator, transaction) => {
@@ -749,7 +763,6 @@ export default async function InsightsPage() {
     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
     .slice(0, 4);
 
-  const selectedGoal = stagingDemoData?.selectedGoal ?? user.primaryGoal?.trim() ?? null;
   const goalLabel = selectedGoal ? goalLabels[selectedGoal] ?? selectedGoal : null;
 
   const confidenceScore = Math.max(
