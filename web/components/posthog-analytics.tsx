@@ -4,6 +4,7 @@ import Script from "next/script";
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
+import { analyticsOnceKey, shouldTrackAnalytics, type AnalyticsEventName, type AnalyticsProperties } from "@/lib/analytics";
 
 declare global {
   interface Window {
@@ -108,3 +109,84 @@ export function PostHogClerkIdentity() {
 
   return <PostHogIdentity />;
 }
+
+type PostHogEventProps = {
+  event: AnalyticsEventName;
+  properties?: AnalyticsProperties;
+  onceKey?: string;
+};
+
+export function PostHogEvent({ event, properties = {}, onceKey }: PostHogEventProps) {
+  useEffect(() => {
+    if (!shouldTrackAnalytics() || !window.posthog) {
+      return;
+    }
+
+    if (onceKey) {
+      try {
+        if (window.localStorage.getItem(onceKey)) {
+          return;
+        }
+        window.localStorage.setItem(onceKey, "1");
+      } catch {
+        // Ignore storage failures and still attempt capture.
+      }
+    }
+
+    window.posthog.capture(event, properties);
+  }, [event, onceKey, properties]);
+
+  return null;
+}
+
+export function PostHogPageEvent({ event, properties }: Omit<PostHogEventProps, "onceKey">) {
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const search = searchParams.toString();
+
+  useEffect(() => {
+    if (!shouldTrackAnalytics() || !window.posthog) {
+      return;
+    }
+
+    window.posthog.capture(event, {
+      ...properties,
+      $current_url: window.location.href,
+      $pathname: pathname,
+      $search: search,
+    });
+  }, [event, pathname, properties, search]);
+
+  return null;
+}
+
+export const capturePostHogClientEvent = (event: AnalyticsEventName, properties: AnalyticsProperties = {}) => {
+  if (!shouldTrackAnalytics() || !window.posthog) {
+    return;
+  }
+
+  window.posthog.capture(event, properties);
+};
+
+export const capturePostHogClientEventOnce = (
+  event: AnalyticsEventName,
+  properties: AnalyticsProperties,
+  onceKey: string
+) => {
+  if (!shouldTrackAnalytics() || !window.posthog) {
+    return;
+  }
+
+  try {
+    if (window.localStorage.getItem(onceKey)) {
+      return;
+    }
+    window.localStorage.setItem(onceKey, "1");
+  } catch {
+    // Ignore storage failures and still attempt capture.
+  }
+
+  window.posthog.capture(event, properties);
+};
+
+export { analyticsOnceKey };
