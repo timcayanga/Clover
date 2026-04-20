@@ -910,21 +910,28 @@ export const findExistingImportedStatement = async (params: {
   importFileId?: string | null;
 }) => {
   const parsedColumns = new Set(await getCompatibleParsedTransactionColumns());
-  if (parsedColumns.has("statementFingerprint") && parsedColumns.has("workspaceId")) {
-    const supportsImportFileId = parsedColumns.has("importFileId");
-    const rows = supportsImportFileId
-      ? await prisma.$queryRawUnsafe<Array<{ importFileId: string | null }>>(
-          `SELECT DISTINCT "importFileId" FROM "ParsedTransaction" WHERE "workspaceId" = $1 AND "statementFingerprint" = $2${params.importFileId ? ' AND "importFileId" <> $3' : ""} LIMIT 1`,
-          ...(params.importFileId ? [params.workspaceId, params.statementFingerprint, params.importFileId] : [params.workspaceId, params.statementFingerprint])
-        )
-      : await prisma.$queryRawUnsafe<Array<{ importFileId: string | null }>>(
-          `SELECT NULL::text AS "importFileId" FROM "ParsedTransaction" WHERE "workspaceId" = $1 AND "statementFingerprint" = $2 LIMIT 1`,
-          params.workspaceId,
-          params.statementFingerprint
-        );
+  const importFileColumns = new Set(await getCompatibleImportFileColumns());
+  const supportsStatusGate = importFileColumns.has("status") || importFileColumns.has("confirmedAt");
 
-    if (rows[0]?.importFileId !== null || rows.length > 0) {
-      return rows[0]?.importFileId ?? "__duplicate__";
+  if (parsedColumns.has("statementFingerprint") && parsedColumns.has("workspaceId") && supportsStatusGate) {
+    const supportsImportFileId = parsedColumns.has("importFileId");
+    const completedGateParts: string[] = [];
+    if (importFileColumns.has("status")) {
+      completedGateParts.push(`i."status" = 'done'`);
+    }
+    if (importFileColumns.has("confirmedAt")) {
+      completedGateParts.push(`i."confirmedAt" IS NOT NULL`);
+    }
+
+    if (completedGateParts.length > 0 && supportsImportFileId) {
+      const rows = await prisma.$queryRawUnsafe<Array<{ importFileId: string | null }>>(
+        `SELECT DISTINCT pt."importFileId" FROM "ParsedTransaction" pt INNER JOIN "ImportFile" i ON i."id" = pt."importFileId" WHERE pt."workspaceId" = $1 AND pt."statementFingerprint" = $2${params.importFileId ? ' AND pt."importFileId" <> $3' : ""} AND (${completedGateParts.join(" OR ")}) LIMIT 1`,
+        ...(params.importFileId ? [params.workspaceId, params.statementFingerprint, params.importFileId] : [params.workspaceId, params.statementFingerprint])
+      );
+
+      if (rows[0]?.importFileId !== null || rows.length > 0) {
+        return rows[0]?.importFileId ?? "__duplicate__";
+      }
     }
   }
 
