@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { ReportsReviewQueue, type ReportsQueueItem } from "@/components/reports-review-queue";
+import { PostHogEvent, analyticsOnceKey } from "@/components/posthog-analytics";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -1020,7 +1021,7 @@ async function ReportsPageView({
         body: goalLabel
           ? "Use the goal as the benchmark when you judge spend, savings, and monthly momentum."
           : "A target gives the page a clear direction, so insights can explain progress instead of only trends.",
-        href: goalLabel ? "/settings" : "/onboarding",
+        href: "/goals",
         label: goalLabel ? "Review goal" : "Set goal",
       },
       {
@@ -1041,13 +1042,13 @@ async function ReportsPageView({
       ? {
           title: `Keep ${goalLabel.toLowerCase()} in view`,
           body: "Use goal-aware insights to see whether spending and cash flow are helping or slowing you down.",
-          href: "/settings",
-          label: "Open settings",
+          href: "/goals",
+          label: "Open goals",
         }
       : {
           title: "Choose a goal to sharpen the insights",
           body: "A goal gives the page a destination, so every trend can be evaluated against progress instead of noise.",
-          href: "/onboarding",
+          href: "/goals",
           label: "Set a goal",
         };
 
@@ -1068,6 +1069,28 @@ async function ReportsPageView({
           </>
         }
       >
+        <PostHogEvent
+          event="report_viewed"
+          onceKey={analyticsOnceKey("report_viewed", `workspace:${selectedWorkspaceId}:${selectedRange}`)}
+          properties={{
+            report_type: selectedRange,
+            workspace_id: selectedWorkspaceId,
+            transaction_count: currentWindowTransactions.length,
+            import_count:
+              Number(doneImportCount ?? 0) +
+              Number(processingImportCount ?? 0) +
+              Number(failedImportCount ?? 0) +
+              Number(deletedImportCount ?? 0),
+          }}
+        />
+        <PostHogEvent
+          event="first_report_viewed"
+          onceKey={analyticsOnceKey("first_report_viewed", "session")}
+          properties={{
+            report_type: selectedRange,
+            workspace_id: selectedWorkspaceId,
+          }}
+        />
         <section className="reports-hero">
           <div className="reports-hero__copy glass">
             <span className="pill pill-accent">Goal-aware insights</span>

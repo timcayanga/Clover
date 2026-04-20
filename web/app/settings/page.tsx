@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { SettingsCenter, type SettingSection } from "@/components/settings-center";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+import { getGoalDefinition } from "@/lib/goals";
 
 export const metadata = {
   title: "Settings",
@@ -141,13 +143,31 @@ export default async function SettingsPage() {
     redirect("/onboarding");
   }
 
+  const currentGoal = getGoalDefinition(user.primaryGoal ?? null);
+
   return (
     <CloverShell
       active="settings"
       title="Settings"
       kicker="Workspace controls"
       subtitle="Search, jump, and tune Clover's defaults."
+      actions={
+        <Link className="button button-primary button-small" href="/goals">
+          Set/Change goal
+        </Link>
+      }
     >
+      <section className="settings-goal-strip glass">
+        <div>
+          <p className="eyebrow">Goal alignment</p>
+          <h4>{currentGoal.title}</h4>
+          <p>{currentGoal.description}</p>
+        </div>
+        <div className="settings-goal-strip__meta">
+          <strong>{currentGoal.signal}</strong>
+          <span>Open Goals to update the plan or check momentum.</span>
+        </div>
+      </section>
       <SettingsCenter sections={sections} />
     </CloverShell>
   );

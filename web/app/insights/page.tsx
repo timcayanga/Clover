@@ -838,7 +838,7 @@ export default async function InsightsPage() {
       body: goalLabel
         ? "Use the goal as the benchmark for every future insight."
         : "A goal gives the page a destination, so the next insight can be measured against something real.",
-      href: goalLabel ? "/settings" : "/onboarding",
+      href: "/goals",
       label: goalLabel ? "Review goal" : "Set goal",
     },
     {

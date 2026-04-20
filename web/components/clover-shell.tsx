@@ -7,7 +7,7 @@ import { useUser } from "@clerk/nextjs";
 import { syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 
 type CloverShellProps = {
-  active: "dashboard" | "accounts" | "transactions" | "reports" | "insights" | "settings" | "profile" | "notifications";
+  active: "dashboard" | "accounts" | "transactions" | "reports" | "insights" | "goals" | "settings" | "profile" | "notifications";
   title: string;
   kicker?: string;
   subtitle?: string;
@@ -22,6 +22,7 @@ const navItems = [
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/reports", label: "Reports", key: "reports" as const },
   { href: "/insights", label: "Insights", key: "insights" as const },
+  { href: "/goals", label: "Goals", key: "goals" as const },
 ];
 
 type IconName =
@@ -30,6 +31,7 @@ type IconName =
   | "transactions"
   | "reports"
   | "insights"
+  | "goals"
   | "search"
   | "notifications"
   | "profile";
@@ -112,6 +114,17 @@ function MenuIcon({ name }: { name: IconName }) {
         <svg {...common}>
           <path d="M12 3.5l1.87 4.63L18.5 10l-4.63 1.87L12 16.5l-1.87-4.63L5.5 10l4.63-1.87L12 3.5Z" />
           <path d="M19.5 14l.95 2.35L22.5 17l-2.05.65L19.5 20l-.95-2.35L16.5 17l2.05-.65L19.5 14Z" />
+        </svg>
+      );
+    case "goals":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="7.5" />
+          <circle cx="12" cy="12" r="3.2" />
+          <path d="M12 4.5v2.2" />
+          <path d="M19.5 12h-2.2" />
+          <path d="M12 17.3v2.2" />
+          <path d="M4.5 12h2.2" />
         </svg>
       );
   }
