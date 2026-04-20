@@ -5,7 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { ReportsReviewQueue, type ReportsQueueItem } from "@/components/reports-review-queue";
-import { PostHogEvent, analyticsOnceKey } from "@/components/posthog-analytics";
+import { PostHogEvent } from "@/components/posthog-analytics";
+import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -1089,6 +1090,72 @@ async function ReportsPageView({
           properties={{
             report_type: selectedRange,
             workspace_id: selectedWorkspaceId,
+          }}
+        />
+        <PostHogEvent
+          event="report_filtered"
+          onceKey={analyticsOnceKey("report_filtered", `workspace:${selectedWorkspaceId}:${selectedRange}`)}
+          properties={{
+            report_type: selectedRange,
+            workspace_id: selectedWorkspaceId,
+            view: "reports",
+            filter_type: "range",
+          }}
+        />
+        <PostHogEvent
+          event="insight_generated"
+          onceKey={analyticsOnceKey("insight_generated", `workspace:${selectedWorkspaceId}:${selectedRange}`)}
+          properties={{
+            workspace_id: selectedWorkspaceId,
+            report_type: selectedRange,
+            goal: goalLabel ?? null,
+            current_net: currentNet,
+            savings_rate: savingsRate === null ? null : Math.round(savingsRate * 100),
+          }}
+        />
+        <PostHogEvent
+          event="insight_opened"
+          onceKey={analyticsOnceKey("insight_opened", `workspace:${selectedWorkspaceId}:${selectedRange}`)}
+          properties={{
+            workspace_id: selectedWorkspaceId,
+            report_type: selectedRange,
+            insight_type: "reports_overview",
+          }}
+        />
+        <PostHogEvent
+          event="cashflow_viewed"
+          onceKey={analyticsOnceKey("cashflow_viewed", `workspace:${selectedWorkspaceId}:${selectedRange}`)}
+          properties={{
+            workspace_id: selectedWorkspaceId,
+            report_type: selectedRange,
+            chart_type: "line",
+          }}
+        />
+        <PostHogEvent
+          event="category_mix_viewed"
+          onceKey={analyticsOnceKey("category_mix_viewed", `workspace:${selectedWorkspaceId}:${selectedRange}`)}
+          properties={{
+            workspace_id: selectedWorkspaceId,
+            report_type: selectedRange,
+            chart_type: "donut",
+          }}
+        />
+        <PostHogEvent
+          event="top_sources_viewed"
+          onceKey={analyticsOnceKey("top_sources_viewed", `workspace:${selectedWorkspaceId}:${selectedRange}`)}
+          properties={{
+            workspace_id: selectedWorkspaceId,
+            report_type: selectedRange,
+            chart_type: "list",
+          }}
+        />
+        <PostHogEvent
+          event="trend_line_viewed"
+          onceKey={analyticsOnceKey("trend_line_viewed", `workspace:${selectedWorkspaceId}:${selectedRange}`)}
+          properties={{
+            workspace_id: selectedWorkspaceId,
+            report_type: selectedRange,
+            chart_type: "timeline",
           }}
         />
         <section className="reports-hero">

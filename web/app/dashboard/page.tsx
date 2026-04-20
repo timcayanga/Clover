@@ -4,10 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { DashboardVisualsIsland } from "@/components/dashboard-visuals-island";
-import { PostHogEvent, analyticsOnceKey } from "@/components/posthog-analytics";
 import { getSessionContext } from "@/lib/auth";
+import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getGoalDefinition } from "@/lib/goals";
+import { PostHogEvent } from "@/components/posthog-analytics";
 
 export const dynamic = "force-dynamic";
 export const metadata = {

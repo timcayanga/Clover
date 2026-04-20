@@ -4,6 +4,8 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
+import { PostHogEvent } from "@/components/posthog-analytics";
+import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext, isStagingHost } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
@@ -400,6 +402,7 @@ export default async function InsightsPage() {
   let workspaceAccounts: Array<{ name: string; balance: number | null }> = [];
   let importFiles: Array<{ status: "processing" | "done" | "failed" | "deleted" }> = [];
   let selectedGoalValue: string | null = null;
+  let workspaceId = "staging-demo";
 
   if (stagingHost) {
     stagingDemoData = createStagingInsightsSampleData(now);
@@ -461,6 +464,8 @@ export default async function InsightsPage() {
     if (!resolvedWorkspace) {
       redirect("/dashboard");
     }
+
+    workspaceId = resolvedWorkspace.id;
 
     const thirtyDaysAgo = new Date(now);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -570,6 +575,7 @@ export default async function InsightsPage() {
     selectedGoalValue = user.primaryGoal?.trim() ?? null;
   }
 
+  const reportType = "insights";
   const currentWindowTransactions = currentWindowTransactionsRaw;
   const previousWindowTransactions = previousWindowTransactionsRaw;
   const ninetyDayInsightTransactions = ninetyDayTransactions;
@@ -896,11 +902,62 @@ export default async function InsightsPage() {
   const trackedCategoryShare = currentSpend > 0 ? trackedCategorySpend / currentSpend : 0;
 
   return (
-    <CloverShell
-      active="insights"
-      title="Insights"
-      showTopbar={false}
-    >
+    <CloverShell active="insights" title="Insights" showTopbar={false}>
+      <PostHogEvent
+        event="insight_generated"
+        onceKey={analyticsOnceKey("insight_generated", `workspace:${workspaceId}:${reportType}`)}
+        properties={{
+          workspace_id: workspaceId,
+          report_type: reportType,
+          goal: goalLabel ?? null,
+          confidence_score: confidenceScore,
+        }}
+      />
+      <PostHogEvent
+        event="insight_opened"
+        onceKey={analyticsOnceKey("insight_opened", `workspace:${workspaceId}:${reportType}`)}
+        properties={{
+          workspace_id: workspaceId,
+          report_type: reportType,
+          insight_type: "insights_overview",
+        }}
+      />
+      <PostHogEvent
+        event="cashflow_viewed"
+        onceKey={analyticsOnceKey("cashflow_viewed", `workspace:${workspaceId}:${reportType}`)}
+        properties={{
+          workspace_id: workspaceId,
+          report_type: reportType,
+          chart_type: "line",
+        }}
+      />
+      <PostHogEvent
+        event="category_mix_viewed"
+        onceKey={analyticsOnceKey("category_mix_viewed", `workspace:${workspaceId}:${reportType}`)}
+        properties={{
+          workspace_id: workspaceId,
+          report_type: reportType,
+          chart_type: "donut",
+        }}
+      />
+      <PostHogEvent
+        event="top_sources_viewed"
+        onceKey={analyticsOnceKey("top_sources_viewed", `workspace:${workspaceId}:${reportType}`)}
+        properties={{
+          workspace_id: workspaceId,
+          report_type: reportType,
+          chart_type: "list",
+        }}
+      />
+      <PostHogEvent
+        event="trend_line_viewed"
+        onceKey={analyticsOnceKey("trend_line_viewed", `workspace:${workspaceId}:${reportType}`)}
+        properties={{
+          workspace_id: workspaceId,
+          report_type: reportType,
+          chart_type: "timeline",
+        }}
+      />
       <section className="insights-story">
         <article className="insights-snapshot insights-snapshot--hero glass">
           <div className="insights-snapshot__copy">

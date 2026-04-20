@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
+import { PostHogEvent } from "@/components/posthog-analytics";
+import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
@@ -82,6 +84,16 @@ export default async function ReviewPage() {
       subtitle="Transactions with low confidence, missing categories, or manual edits show up here so you can confirm the model’s guesses."
       showTopbar={false}
     >
+      <PostHogEvent
+        event="review_queue_opened"
+        onceKey={analyticsOnceKey("review_queue_opened", `workspace:${selectedWorkspace.id}`)}
+        properties={{
+          workspace_id: selectedWorkspace.id,
+          queue_count: counts.total,
+          pending_count: counts.pending,
+          low_confidence_count: counts.lowConfidence,
+        }}
+      />
       <section className="panel">
         <h2>Review queue</h2>
         <p className="panel-muted">
