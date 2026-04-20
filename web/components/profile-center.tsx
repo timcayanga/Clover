@@ -1,14 +1,47 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState, useTransition } from "react";
 import { useUser } from "@clerk/nextjs";
 
 export function ProfileCenter() {
-  const { user } = useUser();
-  const displayName = user?.fullName ?? user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
+  const { isLoaded, isSignedIn, user } = useUser();
+  const currentDisplayName =
+    user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
   const email = user?.primaryEmailAddress?.emailAddress ?? "tim@example.com";
-  const initial = displayName.trim().slice(0, 1).toUpperCase();
+  const [displayName, setDisplayName] = useState(currentDisplayName);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
   const avatar = user?.imageUrl ?? null;
+
+  useEffect(() => {
+    setDisplayName(currentDisplayName);
+  }, [currentDisplayName]);
+
+  const initial = displayName.trim().slice(0, 1).toUpperCase();
+
+  const handleSave = () => {
+    if (!isLoaded || !isSignedIn || !user) {
+      setSaveMessage("Sign in again to update your profile.");
+      return;
+    }
+
+    const nextName = displayName.trim();
+    if (!nextName) {
+      setSaveMessage("Display name cannot be empty.");
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        await user.update({ firstName: nextName });
+        await user.reload();
+        setSaveMessage("Display name updated.");
+      } catch (error) {
+        setSaveMessage(error instanceof Error ? error.message : "Unable to save your display name.");
+      }
+    });
+  };
 
   return (
     <section className="profile-layout">
@@ -37,29 +70,33 @@ export function ProfileCenter() {
       <div className="profile-grid">
         <article className="panel">
           <p className="eyebrow">Identity</p>
-          <h4>What Clover knows about you</h4>
           <div className="profile-list">
-            <div>
+            <label className="profile-edit-field">
               <span>Display name</span>
-              <strong>{displayName}</strong>
-            </div>
+              <input
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                placeholder="Enter your display name"
+              />
+            </label>
             <div>
               <span>Primary email</span>
               <strong>{email}</strong>
             </div>
-            <div>
-              <span>Avatar</span>
-              <strong>{avatar ? "Synced from Clerk" : "Initial fallback"}</strong>
+            {saveMessage ? <p className="profile-feedback">{saveMessage}</p> : null}
+            <div className="profile-actions-row">
+              <button className="button button-primary button-small" type="button" onClick={handleSave} disabled={isPending}>
+                {isPending ? "Saving..." : "Save display name"}
+              </button>
             </div>
           </div>
         </article>
 
         <article className="panel">
           <p className="eyebrow">Shortcuts</p>
-          <h4>Quick access</h4>
           <div className="profile-shortcuts">
-            <Link className="profile-shortcut" href="/notifications">
-              View notifications
+            <Link className="profile-shortcut" href="/dashboard">
+              Open dashboard
             </Link>
             <Link className="profile-shortcut" href="/settings">
               Open settings

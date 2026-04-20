@@ -664,7 +664,7 @@ label {
   justify-content: center;
   width: 42px;
   height: 42px;
-  border-radius: 14px;
+  border-radius: 18px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(247, 249, 250, 0.96);
   overflow: hidden;
@@ -690,6 +690,8 @@ label {
   color: var(--accent);
   font-size: 14px;
   font-weight: 600;
+  border-radius: 18px;
+  overflow: hidden;
 }
 
 .sidebar-profile__avatar img {
@@ -825,7 +827,7 @@ label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 20px;
+  border-radius: 22px;
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 700;
@@ -859,6 +861,36 @@ label {
   border-radius: 18px;
   background: rgba(248, 251, 252, 0.96);
   border: 1px solid var(--stroke);
+}
+
+.profile-edit-field {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(248, 251, 252, 0.96);
+  border: 1px solid var(--stroke);
+}
+
+.profile-edit-field span {
+  color: var(--muted-2);
+  font-size: 13px;
+}
+
+.profile-edit-field input {
+  appearance: none;
+  border: 1px solid var(--stroke);
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 12px 14px;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.profile-edit-field input:focus {
+  outline: none;
+  border-color: rgba(3, 168, 192, 0.48);
+  box-shadow: 0 0 0 4px rgba(3, 168, 192, 0.14);
 }
 
 .profile-list span,
@@ -895,6 +927,19 @@ label {
   background: var(--accent-soft);
   border-color: rgba(3, 168, 192, 0.16);
   transform: translateX(1px);
+}
+
+.profile-actions-row {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: 2px;
+}
+
+.profile-feedback {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .notifications-list {
