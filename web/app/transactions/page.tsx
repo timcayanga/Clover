@@ -10,6 +10,7 @@ import {
   capturePostHogClientEventOnce,
 } from "@/components/posthog-analytics";
 import { UploadInsightsToast, type UploadInsightsSummary } from "@/components/upload-insights-toast";
+import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 
@@ -25,6 +26,20 @@ type Account = {
   institution: string | null;
   type: "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
   currency: string;
+};
+
+const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account | null => {
+  if (!summary.accountId || !summary.accountName) {
+    return null;
+  }
+
+  return {
+    id: summary.accountId,
+    name: summary.accountName,
+    institution: summary.institution,
+    type: inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
+    currency: "PHP",
+  };
 };
 
 type Category = {
@@ -980,6 +995,7 @@ function TransactionsPageContent() {
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
+  const [transactionDeleteConfirmOpen, setTransactionDeleteConfirmOpen] = useState(false);
   const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>("ltd");
   const [dateFilterAnchor, setDateFilterAnchor] = useState(todayIso);
   const [customStart, setCustomStart] = useState("");
@@ -1459,6 +1475,7 @@ function TransactionsPageContent() {
 
   const openTransactionDetail = (transaction: Transaction) => {
     setSelectedTransaction(transaction);
+    setTransactionDeleteConfirmOpen(false);
     setDetailDraft({
       ...createDetailDraft(transaction),
       categoryId: transaction.categoryId ?? otherCategoryId,
@@ -1549,6 +1566,7 @@ function TransactionsPageContent() {
   const closeTransactionDetail = () => {
     setSelectedTransaction(null);
     setDetailDraft(null);
+    setTransactionDeleteConfirmOpen(false);
   };
 
   const toggleSelectedTransaction = (transactionId: string, selected: boolean) => {
@@ -1865,6 +1883,24 @@ function TransactionsPageContent() {
     }
 
     syncAfterTransactionRemoval(transactionId);
+  };
+
+  const confirmDeleteTransaction = async () => {
+    if (!selectedTransaction) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await deleteTransaction(selectedTransaction.id);
+      setTransactionDeleteConfirmOpen(false);
+      closeTransactionDetail();
+      setMessage("Transaction deleted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete transaction.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const commitInlineEdit = async (transaction: Transaction, field: EditableTransactionField, value: string) => {
@@ -3725,6 +3761,35 @@ function TransactionsPageContent() {
               >
                 Ignore
               </button>
+              {transactionDeleteConfirmOpen ? (
+                <div className="detail-warning-box transaction-delete-confirm">
+                  <p>
+                    <strong>Delete transaction:</strong> This cannot be undone.
+                  </p>
+                  <div className="detail-warning-actions">
+                    <button
+                      className="button button-secondary button-small"
+                      type="button"
+                      onClick={() => setTransactionDeleteConfirmOpen(false)}
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </button>
+                    <button className="button button-danger button-small" type="button" onClick={() => void confirmDeleteTransaction()} disabled={isSaving}>
+                      {isSaving ? "Deleting..." : "Delete transaction"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={() => setTransactionDeleteConfirmOpen(true)}
+                  disabled={isSaving}
+                >
+                  Delete transaction
+                </button>
+              )}
               <button className="button button-primary" type="button" disabled={isSaving} onClick={saveDetailDraft}>
                 {isSaving ? "Saving..." : "Save changes"}
               </button>
@@ -3823,7 +3888,17 @@ function TransactionsPageContent() {
           }
 
           setUploadInsightsSummary(summary);
-          await loadWorkspaceData(selectedWorkspaceId);
+          const optimisticAccount = buildOptimisticImportedAccount(summary);
+          if (optimisticAccount) {
+            setAccounts((current) => {
+              const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
+              if (existingIndex >= 0) {
+                return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
+              }
+              return [optimisticAccount, ...current];
+            });
+          }
+          void loadWorkspaceData(selectedWorkspaceId);
           setMessage("Import complete. Insights are ready.");
         }}
       />

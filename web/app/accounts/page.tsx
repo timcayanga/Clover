@@ -28,6 +28,24 @@ type Account = {
   createdAt: string;
 };
 
+const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account | null => {
+  if (!summary.accountId || !summary.accountName) {
+    return null;
+  }
+
+  return {
+    id: summary.accountId,
+    name: summary.accountName,
+    institution: summary.institution,
+    type: inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
+    currency: "PHP",
+    source: "upload",
+    balance: null,
+    updatedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  };
+};
+
 type AccountRule = {
   accountId: string | null;
   accountName: string;
@@ -303,6 +321,7 @@ function AccountsPageContent() {
   const [accountEditSource, setAccountEditSource] = useState("manual");
   const [accountEditBusy, setAccountEditBusy] = useState(false);
   const [accountDeleteBusy, setAccountDeleteBusy] = useState(false);
+  const [accountDeleteConfirmOpen, setAccountDeleteConfirmOpen] = useState(false);
   const [balanceDraft, setBalanceDraft] = useState("");
   const [drawerNotice, setDrawerNotice] = useState<string | null>(null);
   const [uploadInsightsSummary, setUploadInsightsSummary] = useState<UploadInsightsSummary | null>(null);
@@ -362,8 +381,6 @@ function AccountsPageContent() {
     }
 
     setAccountsLoading(true);
-    setAccounts([]);
-    setTransactions([]);
 
     const accountsRequest = fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
     const transactionsRequest = fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`);
@@ -625,6 +642,7 @@ function AccountsPageContent() {
 
   const openAccountDrawer = (account: Account) => {
     setDrawerAccountId(account.id);
+    setAccountDeleteConfirmOpen(false);
     setDrawerNotice(null);
     setAccountEditName(account.name);
     setAccountEditInstitution(account.institution ?? "");
@@ -689,7 +707,6 @@ function AccountsPageContent() {
 
   const deleteAccount = async () => {
     if (!selectedWorkspaceId || !selectedAccount) return;
-    if (!window.confirm(`Delete ${selectedAccount.name}? This cannot be undone.`)) return;
 
     setAccountDeleteBusy(true);
     try {
@@ -708,6 +725,7 @@ function AccountsPageContent() {
       setAccounts((current) => current.filter((account) => account.id !== selectedAccount.id));
       setTransactions((current) => current.filter((transaction) => transaction.accountId !== selectedAccount.id));
       setDrawerAccountId(null);
+      setAccountDeleteConfirmOpen(false);
       setMessage(`Account "${selectedAccount.name}" deleted.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to delete account.");
@@ -1265,9 +1283,35 @@ function AccountsPageContent() {
                 <ActionIcon name="warning" />
               </div>
               <p className="accounts-drawer__note">This removes the account and its linked transactions from the workspace.</p>
-              <button className="button button-secondary button-small accounts-drawer__delete" type="button" onClick={() => void deleteAccount()} disabled={accountDeleteBusy}>
-                Delete account
-              </button>
+              {accountDeleteConfirmOpen ? (
+                <div className="detail-warning-box accounts-drawer__delete-confirm">
+                  <p>
+                    <strong>Delete account:</strong> This cannot be undone. All linked transactions will be removed too.
+                  </p>
+                  <div className="detail-warning-actions">
+                    <button
+                      className="button button-secondary button-small"
+                      type="button"
+                      onClick={() => setAccountDeleteConfirmOpen(false)}
+                      disabled={accountDeleteBusy}
+                    >
+                      Cancel
+                    </button>
+                    <button className="button button-danger button-small" type="button" onClick={() => void deleteAccount()} disabled={accountDeleteBusy}>
+                      {accountDeleteBusy ? "Deleting..." : "Delete account"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  className="button button-secondary button-small accounts-drawer__delete"
+                  type="button"
+                  onClick={() => setAccountDeleteConfirmOpen(true)}
+                  disabled={accountDeleteBusy}
+                >
+                  Delete account
+                </button>
+              )}
             </section>
 
             <section className="accounts-drawer__section">
@@ -1363,7 +1407,18 @@ function AccountsPageContent() {
         onClose={() => setImportOpen(false)}
         onImported={async (summary) => {
           setUploadInsightsSummary(summary);
-          await refreshAll();
+          const optimisticAccount = buildOptimisticImportedAccount(summary);
+          if (optimisticAccount) {
+            setAccounts((current) => {
+              const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
+              if (existingIndex >= 0) {
+                return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
+              }
+              return [optimisticAccount, ...current];
+            });
+            setDrawerAccountId(optimisticAccount.id);
+          }
+          void refreshAll();
           setMessage("Import complete. Insights are ready.");
         }}
       />
