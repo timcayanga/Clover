@@ -742,6 +742,14 @@ export function ImportFilesModal({
       const targetAccountId = await ensureTargetAccountId(guessedIdentity?.accountName ?? null, guessedIdentity?.institution ?? null);
 
       if (processPayload?.queued) {
+        const optimisticSummary = buildOptimisticUploadSummary(
+          item.file.name,
+          0,
+          targetAccountId,
+          guessedIdentity?.accountName ?? null,
+          guessedIdentity?.institution ?? null,
+          item.optimisticAccountId
+        );
         updateItem(itemId, {
           importFileId,
           targetAccountId,
@@ -750,6 +758,7 @@ export function ImportFilesModal({
           progressLabel: "Queued for background processing",
           status: "importing",
         });
+        void onImported(optimisticSummary);
 
         void monitorQueuedImportAndConfirm(itemId, importFileId, targetAccountId, {
           fileName: item.file.name,
@@ -762,14 +771,7 @@ export function ImportFilesModal({
         return {
           status: "staged",
           importedRows: 0,
-          summary: buildOptimisticUploadSummary(
-            item.file.name,
-            0,
-            targetAccountId,
-            guessedIdentity?.accountName ?? null,
-            guessedIdentity?.institution ?? null,
-            item.optimisticAccountId
-          ),
+          summary: optimisticSummary,
         };
       }
 
