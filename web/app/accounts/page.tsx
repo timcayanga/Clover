@@ -46,6 +46,15 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
   };
 };
 
+const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentAccounts: Account[]) => {
+  const fetchedIds = new Set(fetchedAccounts.map((account) => account.id));
+  const optimisticAccounts = currentAccounts.filter(
+    (account) => account.source === "upload" && account.balance === null && !fetchedIds.has(account.id)
+  );
+
+  return [...optimisticAccounts, ...fetchedAccounts];
+};
+
 type AccountRule = {
   accountId: string | null;
   accountName: string;
@@ -388,7 +397,8 @@ function AccountsPageContent() {
     const accountsResponse = await accountsRequest;
     if (accountsResponse.ok) {
       const payload = await accountsResponse.json();
-      setAccounts(Array.isArray(payload.accounts) ? payload.accounts : []);
+      const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+      setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
       setAccountRules(Array.isArray(payload.accountRules) ? payload.accountRules : []);
     }
 

@@ -26,6 +26,8 @@ type Account = {
   institution: string | null;
   type: "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
   currency: string;
+  source?: string;
+  balance?: string | null;
 };
 
 const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account | null => {
@@ -40,6 +42,15 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     type: inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
     currency: "PHP",
   };
+};
+
+const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentAccounts: Account[]) => {
+  const fetchedIds = new Set(fetchedAccounts.map((account) => account.id));
+  const optimisticAccounts = currentAccounts.filter(
+    (account) => account.source === "upload" && account.balance === null && !fetchedIds.has(account.id)
+  );
+
+  return [...optimisticAccounts, ...fetchedAccounts];
 };
 
 type Category = {
@@ -1058,7 +1069,8 @@ function TransactionsPageContent() {
 
     if (accountsResponse.ok) {
       const payload = await accountsResponse.json();
-      setAccounts(Array.isArray(payload.accounts) ? payload.accounts : []);
+      const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+      setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
     }
 
     if (categoriesResponse.ok) {
