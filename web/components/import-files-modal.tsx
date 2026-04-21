@@ -596,6 +596,17 @@ export function ImportFilesModal({
 
         if (importFile?.status === "done" || parsedRowsCount > 0) {
           const resolvedIdentity = await resolveStatementIdentityFromPreview();
+          if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
+            updateItem(itemId, {
+              status: "importing",
+              progress: Math.min(95, 84 + attempt * 0.1),
+              progressLabel: "Waiting for account details",
+              targetAccountId: accountId,
+            });
+            await sleep(1500);
+            continue;
+          }
+
           let resolvedAccountId = accountId;
           if (!resolvedAccountId) {
             resolvedAccountId = await ensureTargetAccountId(resolvedIdentity.accountName ?? null, resolvedIdentity.institution ?? null);
