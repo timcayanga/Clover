@@ -1,12 +1,11 @@
 import { requireAuth } from "@/lib/auth";
 import { buildImportKey } from "@/lib/import-keys";
-import { enqueueImportProcessing } from "@/lib/import-queue";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { fetchImportFileCompat, updateImportFileCompat } from "@/lib/data-engine";
 import { uploadObject } from "@/lib/s3";
 import { prisma } from "@/lib/prisma";
 import { processImportFileText } from "@/workers/import-processor";
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 
 export const dynamic = "force-dynamic";
 
@@ -61,8 +60,17 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const file = uploadedFile as File;
       const bytes = new Uint8Array(await file.arrayBuffer());
       await uploadObject(String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)), bytes, file.type || "application/octet-stream");
-      stage = "queueing import job";
-      await enqueueImportProcessing({ importFileId: importId, password });
+      stage = "scheduling background processing";
+      after(async () => {
+        try {
+          await processImportFileText(importId, { password });
+        } catch (error) {
+          console.error("Background import processing failed", { importId, error });
+          await updateImportFileCompat(importId, {
+            status: "failed",
+          });
+        }
+      });
       queued = true;
     } else {
       stage = "loading import record";
