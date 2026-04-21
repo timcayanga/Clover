@@ -23,6 +23,7 @@ import {
   upsertAccountRule,
   upsertStatementTemplate,
 } from "@/lib/data-engine";
+import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 
 type ImportInsightSummary = {
   incomeTotal: number;
@@ -69,6 +70,71 @@ const chunkArray = <T,>(items: T[], size: number) => {
     chunks.push(items.slice(index, index + size));
   }
   return chunks;
+};
+
+const resolveConfirmationAccount = async (params: {
+  importFile: { workspaceId: unknown; fileName?: unknown };
+  parsedRows: Array<{
+    accountName?: unknown;
+    institution?: unknown;
+  }>;
+  accountId: string;
+}) => {
+  const workspaceId = String(params.importFile.workspaceId);
+  const candidateRow =
+    params.parsedRows.find((row) => typeof row.accountName === "string" && row.accountName.trim()) ??
+    params.parsedRows.find((row) => typeof row.institution === "string" && row.institution.trim()) ??
+    null;
+
+  const inferredAccountName =
+    typeof candidateRow?.accountName === "string" && candidateRow.accountName.trim()
+      ? candidateRow.accountName.trim()
+      : typeof candidateRow?.institution === "string" && candidateRow.institution.trim()
+        ? candidateRow.institution.trim()
+        : typeof params.importFile.fileName === "string"
+          ? params.importFile.fileName.replace(/\.[^.]+$/, "").trim()
+          : null;
+
+  const inferredInstitution =
+    typeof candidateRow?.institution === "string" && candidateRow.institution.trim()
+      ? candidateRow.institution.trim()
+      : null;
+
+  const isOptimisticId = params.accountId.startsWith("optimistic-");
+  const directAccount = !isOptimisticId
+    ? await prisma.account.findUnique({
+        where: { id: params.accountId },
+      })
+    : null;
+  if (directAccount) {
+    return directAccount;
+  }
+
+  if (inferredAccountName) {
+    const existing = await prisma.account.findFirst({
+      where: {
+        workspaceId,
+        name: inferredAccountName,
+        ...(inferredInstitution ? { institution: inferredInstitution } : {}),
+      },
+    });
+    if (existing) {
+      return existing;
+    }
+
+    return prisma.account.create({
+      data: {
+        workspaceId,
+        name: inferredAccountName,
+        institution: inferredInstitution,
+        type: inferAccountTypeFromStatement(inferredInstitution, inferredAccountName, "bank"),
+        currency: "PHP",
+        source: "upload",
+      },
+    });
+  }
+
+  return null;
 };
 
 const buildTransactionInsertRecord = (params: {
@@ -383,12 +449,15 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     throw new Error("Import file not found");
   }
 
-  const account = await prisma.account.findUnique({
-    where: { id: accountId },
+  const account = await resolveConfirmationAccount({
+    importFile,
+    parsedRows,
+    accountId,
   });
   if (!account) {
     throw new Error("Account not found");
   }
+  const resolvedAccountId = account.id;
 
   await deleteTransactionsByImportFileCompat(importFileId);
 
@@ -400,7 +469,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
   });
 
   await updateImportFileCompat(importFileId, {
-    accountId,
+    accountId: resolvedAccountId,
     confirmedAt: new Date(),
   });
 
@@ -416,7 +485,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     const previousCheckpoint = statementStartDate
       ? await prisma.accountStatementCheckpoint.findFirst({
           where: {
-            accountId,
+            accountId: resolvedAccountId,
             statementEndDate: {
               lt: statementStartDate,
             },
@@ -448,7 +517,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     await prisma.accountStatementCheckpoint.update({
       where: { id: statementCheckpoint.id },
       data: {
-        accountId,
+        accountId: resolvedAccountId,
         status: checkpointStatus,
         mismatchReason,
       },
@@ -458,7 +527,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       statementCheckpoint.openingBalance !== null &&
       !(await prisma.transaction.findFirst({
         where: {
-          accountId,
+          accountId: resolvedAccountId,
           merchantRaw: "Beginning balance",
         },
       }))
@@ -482,7 +551,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
 
       await insertTransactionCompat({
         workspaceId: String(importFile.workspaceId),
-        accountId,
+        accountId: resolvedAccountId,
         importFileId,
         categoryId: category.id,
         reviewStatus: "confirmed",
@@ -523,7 +592,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
   if (statementRow && typeof statementRow.accountName === "string" && statementRow.accountName.trim()) {
     void upsertAccountRule({
       workspaceId: importFile.workspaceId,
-      accountId,
+      accountId: resolvedAccountId,
       accountName: statementRow.accountName.trim(),
       institution: typeof statementRow.institution === "string" && statementRow.institution.trim() ? statementRow.institution.trim() : null,
       accountType: account.type,
@@ -572,7 +641,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
 
   if (reconciledBalance !== null) {
     await prisma.account.update({
-      where: { id: accountId },
+      where: { id: resolvedAccountId },
       data: {
         balance: reconciledBalance,
       },
@@ -634,7 +703,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       "Imported transaction";
     const insertRow = buildTransactionInsertRecord({
       workspaceId: String(importFile.workspaceId),
-      accountId,
+      accountId: resolvedAccountId,
       importFileId,
       categoryId,
       reviewStatus: rowConfidence < 80 ? "pending_review" : "confirmed",
@@ -707,7 +776,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
 
   await updateImportFileCompat(importFileId, {
     status: "done",
-    accountId,
+    accountId: resolvedAccountId,
   });
 
   void Promise.allSettled(trainingSignalJobs);

@@ -430,7 +430,9 @@ export function ImportFilesModal({
     }
   ): Promise<ImportProcessResult> => {
     const resolvedAccountId =
-      accountId ?? (await ensureTargetAccountId(summaryContext.accountName, summaryContext.institution));
+      accountId && !accountId.startsWith("optimistic-")
+        ? accountId
+        : await ensureTargetAccountId(summaryContext.accountName, summaryContext.institution);
 
     if (!resolvedAccountId) {
       throw new Error("Unable to determine the destination account for this statement.");
@@ -610,7 +612,11 @@ export function ImportFilesModal({
             continue;
           }
 
-          const hasValidCurrentAccount = Boolean(accountId && accounts.some((account) => account.id === accountId));
+          const hasValidCurrentAccount = Boolean(
+            accountId &&
+              !accountId.startsWith("optimistic-") &&
+              accounts.some((account) => account.id === accountId)
+          );
           let resolvedAccountId = hasValidCurrentAccount ? accountId : null;
           if (!resolvedAccountId || resolvedAccountId.startsWith("optimistic-")) {
             const accountName = resolvedIdentity.accountName ?? summaryContext.accountName ?? null;
