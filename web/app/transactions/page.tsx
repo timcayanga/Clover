@@ -3970,7 +3970,7 @@ function TransactionsPageContent() {
           }
           window.setTimeout(() => {
             void loadWorkspaceData(selectedWorkspaceId);
-          }, 750);
+          }, 0);
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />

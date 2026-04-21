@@ -553,11 +553,13 @@ export function ImportFilesModal({
         return {
           accountName: summaryContext.accountName,
           institution: summaryContext.institution,
+          balance: null as string | null,
         };
       }
 
       const payload = await response.json();
       const parsedRows = Array.isArray(payload.parsedRows) ? payload.parsedRows : [];
+      const statementCheckpoint = payload.statementCheckpoint && typeof payload.statementCheckpoint === "object" ? payload.statementCheckpoint : null;
       const previewRow = parsedRows.find(
         (row: { accountName?: unknown; institution?: unknown }) => typeof row.accountName === "string" && row.accountName.trim()
       ) ?? parsedRows[0] ?? null;
@@ -571,6 +573,10 @@ export function ImportFilesModal({
           typeof previewRow?.institution === "string" && previewRow.institution.trim()
             ? previewRow.institution.trim()
             : summaryContext.institution,
+        balance:
+          typeof statementCheckpoint?.endingBalance === "string" && statementCheckpoint.endingBalance.trim()
+            ? statementCheckpoint.endingBalance.trim()
+            : null,
       };
     };
 
@@ -633,6 +639,20 @@ export function ImportFilesModal({
           }
           if (!resolvedAccountId) {
             throw new Error("Unable to determine the destination account for this statement.");
+          }
+
+          if (resolvedIdentity.balance) {
+            void onImported(
+              buildOptimisticUploadSummary(
+                summaryContext.fileName,
+                0,
+                resolvedAccountId,
+                resolvedIdentity.accountName ?? null,
+                resolvedIdentity.institution ?? null,
+                summaryContext.optimisticAccountId,
+                resolvedIdentity.balance
+              )
+            );
           }
 
           updateItem(itemId, {

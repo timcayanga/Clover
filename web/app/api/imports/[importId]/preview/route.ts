@@ -1,6 +1,7 @@
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { fetchImportFileCompat, fetchParsedTransactionRows } from "@/lib/data-engine";
+import { fetchImportFileCompat, fetchParsedTransactionRows, hasCompatibleTable } from "@/lib/data-engine";
+import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -18,10 +19,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
 
     await assertWorkspaceAccess(userId, importFile.workspaceId as string);
     const parsedRows = await fetchParsedTransactionRows(importId);
+    const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
+      ? await prisma.accountStatementCheckpoint.findUnique({
+          where: { importFileId: importId },
+        })
+      : null;
 
     return NextResponse.json({
       importFile,
       parsedRows,
+      statementCheckpoint,
     });
   } catch {
     return NextResponse.json({ error: "Unable to load preview" }, { status: 400 });
