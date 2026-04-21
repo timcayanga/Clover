@@ -1,7 +1,9 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 
+const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? process.env.CLERK_PUBLISHABLE_KEY;
+
 export default clerkMiddleware({
-  publishableKey: "pk_test_YWNlLWthdHlkaWQtMy5jbGVyay5hY2NvdW50cy5kZXYk",
+  publishableKey,
   debug: true,
 });
 
