@@ -49,6 +49,7 @@ type QueuedFile = {
   passwordVisible: boolean;
   importFileId: string | null;
   targetAccountId: string | null;
+  optimisticAccountId: string | null;
   importedRows: number | null;
   progress: number;
   progressLabel: string;
@@ -92,6 +93,32 @@ const extractLastFourDigits = (value?: string | null) => {
 const accountRuleKey = (name: string, institution: string | null) =>
   `${(institution ?? "").trim().toLowerCase()}::${extractLastFourDigits(name) ?? name.trim().toLowerCase()}`;
 
+const guessStatementIdentity = (fileName: string) => {
+  const lowerName = fileName.toLowerCase();
+
+  if (lowerName.includes("gcash")) {
+    return { accountName: "GCash", institution: "GCash" };
+  }
+
+  if (lowerName.includes("rcbc")) {
+    const match = lowerName.match(/(\d{4})(?:_unlocked)?\.pdf$/i) ?? lowerName.match(/(\d{4})/);
+    return {
+      accountName: match ? `RCBC ${match[1]}` : "RCBC",
+      institution: "RCBC",
+    };
+  }
+
+  if (lowerName.includes("unionbank") || lowerName.includes("union bank")) {
+    return { accountName: "UnionBank Savings", institution: "UnionBank" };
+  }
+
+  if (lowerName.includes("bpi")) {
+    return { accountName: "BPI", institution: "BPI" };
+  }
+
+  return null;
+};
+
 const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): UploadInsightsSummary => {
   const [firstSummary] = summaries;
   const rowsImported = summaries.reduce((total, summary) => total + summary.rowsImported, 0);
@@ -127,6 +154,10 @@ const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): Upl
     topCategoryShare: topCategory?.topCategoryShare ?? null,
     topMerchantName: topMerchant?.topMerchantName ?? null,
     topMerchantCount: topMerchant?.topMerchantCount ?? null,
+    optimistic: false,
+    optimisticAccountId: summaries.every((summary) => summary.optimisticAccountId === firstSummary.optimisticAccountId)
+      ? firstSummary.optimisticAccountId ?? null
+      : null,
   };
 };
 
@@ -254,10 +285,31 @@ export function ImportFilesModal({
         }
 
         additionsCount += 1;
+        const guessedIdentity = guessStatementIdentity(file.name);
+        const optimisticAccountId = !selectedAccountId && guessedIdentity ? `optimistic-${crypto.randomUUID()}` : null;
         capturePostHogClientEvent("file_upload_started", {
           file_type: fileTypeLabel(file),
           file_size_bytes: file.size,
         });
+        if (guessedIdentity && optimisticAccountId) {
+          void onImported({
+            fileName: file.name,
+            rowsImported: 0,
+            accountId: optimisticAccountId,
+            accountName: guessedIdentity.accountName,
+            institution: guessedIdentity.institution,
+            incomeTotal: 0,
+            expenseTotal: 0,
+            netTotal: 0,
+            topCategoryName: null,
+            topCategoryAmount: null,
+            topCategoryShare: null,
+            topMerchantName: null,
+            topMerchantCount: null,
+            optimistic: true,
+            optimisticAccountId,
+          });
+        }
         return [
           {
             id: crypto.randomUUID(),
@@ -269,6 +321,7 @@ export function ImportFilesModal({
             passwordVisible: false,
             importFileId: null,
             targetAccountId: null,
+            optimisticAccountId,
             importedRows: null,
             progress: 1,
             progressLabel: "Queued",
@@ -314,7 +367,12 @@ export function ImportFilesModal({
     itemId: string,
     importFileId: string,
     accountId: string,
-    summaryContext: { fileName: string; accountName: string | null; institution: string | null }
+    summaryContext: {
+      fileName: string;
+      accountName: string | null;
+      institution: string | null;
+      optimisticAccountId: string | null;
+    }
   ): Promise<ImportProcessResult> => {
     let finalizingProgress = 92;
     const finalizingTimer = window.setInterval(() => {
@@ -366,6 +424,7 @@ export function ImportFilesModal({
             accountId,
             accountName: summaryContext.accountName,
             institution: summaryContext.institution ?? null,
+            optimisticAccountId: summaryContext.optimisticAccountId ?? null,
             incomeTotal: Number(insightSummary.incomeTotal ?? 0),
             expenseTotal: Number(insightSummary.expenseTotal ?? 0),
             netTotal: Number(insightSummary.netTotal ?? 0),
@@ -484,6 +543,7 @@ export function ImportFilesModal({
 
     try {
       const importFileId = crypto.randomUUID();
+
       capturePostHogClientEvent("import_started", {
         file_type: fileTypeLabel(item.file),
         file_size_bytes: item.file.size,
@@ -569,6 +629,7 @@ export function ImportFilesModal({
         progressLabel: processedMetadata?.accountName ? `Detected ${processedMetadata.accountName}` : "Server parsing complete",
         status: "importing",
       });
+
       const targetAccountId = await ensureTargetAccountId(
         processedMetadata?.accountName ?? null,
         processedMetadata?.institution ?? null
@@ -585,6 +646,7 @@ export function ImportFilesModal({
         fileName: item.file.name,
         accountName: processedMetadata?.accountName ?? null,
         institution: processedMetadata?.institution ?? null,
+        optimisticAccountId: item.optimisticAccountId,
       });
     } catch (error) {
       if (isPasswordError(error)) {
@@ -782,6 +844,7 @@ export function ImportFilesModal({
         fileName: item.file.name,
         accountName: null,
         institution: null,
+        optimisticAccountId: item.targetAccountId,
       });
       if (typeof result.importedRows === "number") {
         setMessage(`Confirmed ${result.importedRows} imported row${result.importedRows === 1 ? "" : "s"}.`);

@@ -8,6 +8,8 @@ export type UploadInsightsSummary = {
   accountId: string | null;
   accountName: string | null;
   institution: string | null;
+  optimistic?: boolean;
+  optimisticAccountId?: string | null;
   incomeTotal: number;
   expenseTotal: number;
   netTotal: number;

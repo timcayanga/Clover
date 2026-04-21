@@ -1406,6 +1406,23 @@ function AccountsPageContent() {
         defaultAccountId={selectedAccount?.id ?? accounts[0]?.id ?? null}
         onClose={() => setImportOpen(false)}
         onImported={async (summary) => {
+          if (summary.optimistic) {
+            const optimisticAccount = buildOptimisticImportedAccount(summary);
+            if (optimisticAccount) {
+              setAccounts((current) => {
+                const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
+                if (existingIndex >= 0) {
+                  return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
+                }
+                return [optimisticAccount, ...current];
+              });
+            }
+            return;
+          }
+
+          if (summary.optimisticAccountId) {
+            setAccounts((current) => current.filter((account) => account.id !== summary.optimisticAccountId));
+          }
           setUploadInsightsSummary(summary);
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           if (optimisticAccount) {
