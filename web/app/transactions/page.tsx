@@ -1003,6 +1003,7 @@ function TransactionsPageContent() {
   const [importOpen, setImportOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
@@ -1595,6 +1596,7 @@ function TransactionsPageContent() {
 
   const clearSelection = () => {
     setSelectedTransactionIds([]);
+    setBulkDeleteConfirmOpen(false);
   };
 
   const syncAfterTransactionRemoval = (transactionId: string) => {
@@ -2241,18 +2243,11 @@ function TransactionsPageContent() {
     }
 
     const count = selectedTransactionIds.length;
-    const confirmed = typeof window !== "undefined"
-      ? window.confirm(`Delete ${count} selected transaction${count === 1 ? "" : "s"}? This cannot be undone.`)
-      : false;
-
-    if (!confirmed) {
-      return;
-    }
-
     setIsSaving(true);
     try {
       await Promise.all(selectedTransactionIds.map((transactionId) => deleteTransaction(transactionId)));
       clearSelection();
+      setBulkDeleteConfirmOpen(false);
       setUndoStack([]);
       setRedoStack([]);
       setMessage(`${count} transaction${count === 1 ? "" : "s"} deleted.`);
@@ -2809,9 +2804,7 @@ function TransactionsPageContent() {
                 <button
                   className="button button-secondary button-small transactions-action-button transactions-selection-bar__danger"
                   type="button"
-                  onClick={() => {
-                    void deleteSelectedTransactions();
-                  }}
+                  onClick={() => setBulkDeleteConfirmOpen(true)}
                   disabled={isSaving}
                 >
                   Delete
@@ -2825,6 +2818,54 @@ function TransactionsPageContent() {
                   Clear
                 </button>
               </div>
+            </div>
+          ) : null}
+
+          {bulkDeleteConfirmOpen ? (
+            <div className="modal-backdrop" role="presentation" onClick={() => setBulkDeleteConfirmOpen(false)}>
+              <section
+                className="modal-card glass"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="bulk-delete-title"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div className="modal-head">
+                  <div>
+                    <p className="eyebrow">Delete transactions</p>
+                    <h4 id="bulk-delete-title">
+                      Delete {selectedTransactionIds.length} selected transaction{selectedTransactionIds.length === 1 ? "" : "s"}?
+                    </h4>
+                    <p className="modal-copy">This cannot be undone.</p>
+                  </div>
+                  <button
+                    className="icon-button"
+                    type="button"
+                    onClick={() => setBulkDeleteConfirmOpen(false)}
+                    aria-label="Close delete confirmation"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="modal-actions">
+                  <button
+                    className="button button-secondary"
+                    type="button"
+                    onClick={() => setBulkDeleteConfirmOpen(false)}
+                    disabled={isSaving}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="button button-danger"
+                    type="button"
+                    onClick={() => void deleteSelectedTransactions()}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
+              </section>
             </div>
           ) : null}
 
