@@ -3972,7 +3972,7 @@ function TransactionsPageContent() {
           window.setTimeout(() => {
             void loadWorkspaceData(selectedWorkspaceId);
           }, 750);
-          setMessage("Import complete. Insights are ready.");
+          setMessage("Import complete. Accounts and Transactions are updated. Insights are preparing in the background.");
         }}
       />
       {uploadInsightsSummary ? (

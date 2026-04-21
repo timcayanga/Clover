@@ -56,12 +56,12 @@ export function UploadInsightsToast({ summary, onClose }: UploadInsightsToastPro
 
   return (
     <aside className="upload-insights-toast glass" role="status" aria-live="polite">
-      <div className="upload-insights-toast__eyebrow">Insights generated</div>
+      <div className="upload-insights-toast__eyebrow">Import complete</div>
       <div className="upload-insights-toast__title-row">
         <div>
-          <h4>Upload complete</h4>
+          <h4>Your statement has been imported</h4>
           <p>
-            {summary.rowsImported} row{summary.rowsImported === 1 ? "" : "s"} from {summary.fileName} are now categorized and ready to review.
+            {summary.rowsImported} row{summary.rowsImported === 1 ? "" : "s"} from {summary.fileName} are categorized and ready to review.
           </p>
         </div>
         <button type="button" className="icon-button upload-insights-toast__close" onClick={onClose} aria-label="Close insights popup">
@@ -70,7 +70,7 @@ export function UploadInsightsToast({ summary, onClose }: UploadInsightsToastPro
       </div>
 
       <div className="upload-insights-toast__callout">
-        Upload statement → auto categorize → insights
+        Accounts and Transactions update first. Insights continue in the background.
       </div>
 
       <ul className="upload-insights-toast__list">

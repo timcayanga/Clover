@@ -1451,7 +1451,7 @@ function AccountsPageContent() {
           window.setTimeout(() => {
             void refreshAll();
           }, 750);
-          setMessage("Import complete. Insights are ready.");
+          setMessage("Import complete. Accounts and Transactions are updated. Insights are preparing in the background.");
         }}
       />
       {uploadInsightsSummary ? (
