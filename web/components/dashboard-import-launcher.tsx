@@ -35,10 +35,6 @@ export function DashboardImportLauncher({ workspaceId, accounts, initialOpen }: 
   };
 
   const handleImported = async (_summary: UploadInsightsSummary) => {
-    if (_summary.optimistic) {
-      return;
-    }
-
     router.refresh();
     handleClose();
   };

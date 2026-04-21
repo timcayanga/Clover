@@ -608,7 +608,7 @@ export function ImportFilesModal({
           }
 
           let resolvedAccountId = accountId;
-          if (!resolvedAccountId) {
+          if (!resolvedAccountId || resolvedAccountId.startsWith("optimistic-")) {
             resolvedAccountId = await ensureTargetAccountId(resolvedIdentity.accountName ?? null, resolvedIdentity.institution ?? null);
           }
           if (!resolvedAccountId) {
@@ -812,22 +812,19 @@ export function ImportFilesModal({
         institution: guessedIdentity?.institution ?? null,
       });
 
-      let targetAccountId: string | null = guessedIdentity
-        ? await ensureTargetAccountId(guessedIdentity.accountName ?? null, guessedIdentity.institution ?? null)
-        : null;
-
       if (processPayload?.queued) {
+        const optimisticAccountId = item.optimisticAccountId ?? null;
         const optimisticSummary = buildOptimisticUploadSummary(
           item.file.name,
           0,
-          targetAccountId,
+          optimisticAccountId,
           guessedIdentity?.accountName ?? null,
           guessedIdentity?.institution ?? null,
           item.optimisticAccountId
         );
         updateItem(itemId, {
           importFileId,
-          targetAccountId,
+          targetAccountId: optimisticAccountId,
           confirmationState: "staged",
           progress: 92,
           progressLabel: "Queued for background processing",
@@ -835,7 +832,7 @@ export function ImportFilesModal({
         });
         void onImported(optimisticSummary);
 
-        void monitorQueuedImportAndConfirm(itemId, importFileId, targetAccountId, {
+        void monitorQueuedImportAndConfirm(itemId, importFileId, optimisticAccountId, {
           fileName: item.file.name,
           accountName: guessedIdentity?.accountName ?? null,
           institution: guessedIdentity?.institution ?? null,
@@ -849,6 +846,10 @@ export function ImportFilesModal({
           summary: optimisticSummary,
         };
       }
+
+      const targetAccountId: string | null = guessedIdentity
+        ? await ensureTargetAccountId(guessedIdentity.accountName ?? null, guessedIdentity.institution ?? null)
+        : null;
 
       updateItem(itemId, {
         importFileId,

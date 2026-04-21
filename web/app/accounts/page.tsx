@@ -400,9 +400,7 @@ function AccountsPageContent() {
     if (accountsResponse.ok) {
       const payload = await accountsResponse.json();
       const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
-      setAccounts((current) =>
-        options?.silent ? mergeAccountsWithOptimisticImports(fetchedAccounts, current) : fetchedAccounts
-      );
+      setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
       setAccountRules(Array.isArray(payload.accountRules) ? payload.accountRules : []);
     }
 
