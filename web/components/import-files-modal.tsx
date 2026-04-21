@@ -95,6 +95,31 @@ const accountRuleKey = (name: string, institution: string | null) =>
 
 const PDF_ENCRYPTION_MARKERS = ["/Encrypt", "/Standard", "/V 2", "/V 4", "/V 5"];
 
+const buildOptimisticUploadSummary = (
+  fileName: string,
+  importedRows: number,
+  accountId: string | null,
+  accountName: string | null,
+  institution: string | null,
+  optimisticAccountId: string | null
+): UploadInsightsSummary => ({
+  fileName,
+  rowsImported: importedRows,
+  accountId,
+  accountName,
+  institution,
+  optimistic: true,
+  optimisticAccountId,
+  incomeTotal: 0,
+  expenseTotal: 0,
+  netTotal: 0,
+  topCategoryName: null,
+  topCategoryAmount: null,
+  topCategoryShare: null,
+  topMerchantName: null,
+  topMerchantCount: null,
+});
+
 const isQuickPasswordProtectedPdf = async (file: File) => {
   const lowerName = file.name.toLowerCase();
   if (!lowerName.endsWith(".pdf") && file.type !== "application/pdf") {
@@ -666,15 +691,33 @@ export function ImportFilesModal({
         importFileId,
         targetAccountId,
         confirmationState: "staged",
-        progress: 88,
-        progressLabel: "Ready to confirm",
+        progress: 92,
+        progressLabel: "Finalizing in background",
       });
-      return await confirmItemImport(itemId, importFileId, targetAccountId, {
+
+      void confirmItemImport(itemId, importFileId, targetAccountId, {
         fileName: item.file.name,
         accountName: processedMetadata?.accountName ?? null,
         institution: processedMetadata?.institution ?? null,
         optimisticAccountId: item.optimisticAccountId,
+      }).then((result) => {
+        if (result.summary) {
+          void onImported(result.summary);
+        }
       });
+
+      return {
+        status: "staged",
+        importedRows: Number(processPayload?.imported ?? 0) || null,
+        summary: buildOptimisticUploadSummary(
+          item.file.name,
+          Number(processPayload?.imported ?? 0) || 0,
+          targetAccountId,
+          processedMetadata?.accountName ?? null,
+          processedMetadata?.institution ?? null,
+          item.optimisticAccountId
+        ),
+      };
     } catch (error) {
       if (isPasswordError(error)) {
         const needsPasswordMessage = item.password.trim()
@@ -801,7 +844,11 @@ export function ImportFilesModal({
     if (blockedCount > 0) {
       setMessage("Enter passwords for the locked files to finish the remaining imports.");
     } else if (stagedCount > 0) {
-      setMessage("Some files are staged and can be confirmed again.");
+      setMessage(
+        importedCount > 0
+          ? `Imported ${importedCount} file${importedCount === 1 ? "" : "s"}; confirmation continues in the background.`
+          : `Parsed ${stagedCount} file${stagedCount === 1 ? "" : "s"}; confirmation continues in the background.`
+      );
     } else if (importedCount > 0) {
       setMessage(`Imported ${importedCount} file${importedCount === 1 ? "" : "s"}.`);
     } else {
@@ -810,13 +857,9 @@ export function ImportFilesModal({
 
     setBusy(false);
 
-    const finishedCleanly =
-      blockedCount === 0 &&
-      stagedCount === 0 &&
-      errorCount === 0 &&
-      alreadyConfirmedCount + importedCount === items.length;
+    const finishedEnough = blockedCount === 0 && errorCount === 0 && (importedCount > 0 || stagedCount > 0 || alreadyConfirmedCount === items.length);
 
-    if (finishedCleanly) {
+    if (finishedEnough) {
       capturePostHogClientEventOnce(
         "first_import_completed",
         {
