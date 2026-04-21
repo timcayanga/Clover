@@ -9,7 +9,7 @@ import {
   capturePostHogClientEvent,
   capturePostHogClientEventOnce,
 } from "@/components/posthog-analytics";
-import { UploadInsightsToast, type UploadInsightsSummary } from "@/components/upload-insights-toast";
+import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
@@ -1020,7 +1020,6 @@ function TransactionsPageContent() {
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
-  const [uploadInsightsSummary, setUploadInsightsSummary] = useState<UploadInsightsSummary | null>(null);
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
   const transactionRowRefs = useRef(new Map<string, HTMLDivElement>());
@@ -3958,7 +3957,6 @@ function TransactionsPageContent() {
             return;
           }
 
-          setUploadInsightsSummary(summary);
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           if (optimisticAccount) {
             setAccounts((current) => {
@@ -3972,12 +3970,9 @@ function TransactionsPageContent() {
           window.setTimeout(() => {
             void loadWorkspaceData(selectedWorkspaceId);
           }, 750);
-          setMessage("Import complete. Accounts and Transactions are updated. Insights are preparing in the background.");
+          setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />
-      {uploadInsightsSummary ? (
-        <UploadInsightsToast summary={uploadInsightsSummary} onClose={() => setUploadInsightsSummary(null)} />
-      ) : null}
     </CloverShell>
   );
 }
