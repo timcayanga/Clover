@@ -41,6 +41,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     institution: summary.institution,
     type: inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
     currency: "PHP",
+    balance: summary.balance,
   };
 };
 

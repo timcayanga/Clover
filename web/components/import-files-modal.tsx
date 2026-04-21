@@ -101,13 +101,15 @@ const buildOptimisticUploadSummary = (
   accountId: string | null,
   accountName: string | null,
   institution: string | null,
-  optimisticAccountId: string | null
+  optimisticAccountId: string | null,
+  balance: string | null = null
 ): UploadInsightsSummary => ({
   fileName,
   rowsImported: importedRows,
   accountId,
   accountName,
   institution,
+  balance,
   optimistic: true,
   optimisticAccountId,
   incomeTotal: 0,
@@ -185,6 +187,9 @@ const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): Upl
       : null,
     accountName: sharedAccountName,
     institution: sharedInstitution,
+    balance: summaries.every((summary) => summary.balance === firstSummary.balance)
+      ? firstSummary.balance
+      : null,
     incomeTotal,
     expenseTotal,
     netTotal,
@@ -340,6 +345,7 @@ export function ImportFilesModal({
             accountId: optimisticAccountId,
             accountName: guessedIdentity.accountName,
             institution: guessedIdentity.institution,
+            balance: null,
             incomeTotal: 0,
             expenseTotal: 0,
             netTotal: 0,
@@ -480,6 +486,7 @@ export function ImportFilesModal({
 
       const confirmed = await confirmResponse.json();
       const importedRows = Number(confirmed.result?.imported ?? 0);
+      const accountBalance = typeof confirmed.result?.accountBalance === "string" ? confirmed.result.accountBalance : null;
       const insightSummary = confirmed.result?.insightSummary ?? null;
       const summary = insightSummary
         ? {
@@ -488,6 +495,7 @@ export function ImportFilesModal({
             accountId: resolvedAccountId,
             accountName: summaryContext.accountName,
             institution: summaryContext.institution ?? null,
+            balance: accountBalance,
             optimisticAccountId: summaryContext.optimisticAccountId ?? null,
             incomeTotal: Number(insightSummary.incomeTotal ?? 0),
             expenseTotal: Number(insightSummary.expenseTotal ?? 0),
@@ -632,14 +640,14 @@ export function ImportFilesModal({
           });
 
           void onImported(
-            buildOptimisticUploadSummary(
-              summaryContext.fileName,
-              0,
-              resolvedAccountId,
-              resolvedIdentity.accountName ?? null,
-              resolvedIdentity.institution ?? null,
-              summaryContext.optimisticAccountId
-            )
+          buildOptimisticUploadSummary(
+            summaryContext.fileName,
+            0,
+            resolvedAccountId,
+            resolvedIdentity.accountName ?? null,
+            resolvedIdentity.institution ?? null,
+            summaryContext.optimisticAccountId
+          )
           );
 
           const result = await confirmItemImport(itemId, importFileId, resolvedAccountId, {

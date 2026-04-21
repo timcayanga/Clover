@@ -8,6 +8,7 @@ export type UploadInsightsSummary = {
   accountId: string | null;
   accountName: string | null;
   institution: string | null;
+  balance: string | null;
   optimistic?: boolean;
   optimisticAccountId?: string | null;
   incomeTotal: number;
@@ -39,6 +40,9 @@ export function UploadInsightsToast({ summary, onClose }: UploadInsightsToastPro
   const sampleInsights = [
     summary.accountName
       ? `Clover matched this upload to ${summary.accountName}${summary.institution ? ` (${summary.institution})` : ""}.`
+      : null,
+    summary.balance
+      ? `Reconciled account balance: ${summary.balance}.`
       : null,
     summary.topCategoryName && summary.topCategoryShare !== null && summary.topCategoryAmount !== null
       ? `${summary.topCategoryName} was the biggest spending bucket, at ${formatAmount(summary.topCategoryAmount)} or ${formatPercent(summary.topCategoryShare)} of expenses.`

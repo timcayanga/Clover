@@ -40,7 +40,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     type: inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
     currency: "PHP",
     source: "upload",
-    balance: null,
+    balance: summary.balance,
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
   };

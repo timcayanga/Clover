@@ -783,5 +783,5 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
 
   const insightSummary = buildImportInsightSummary(transactions);
 
-  return { imported: transactions.length, insightSummary };
+  return { imported: transactions.length, insightSummary, accountBalance: reconciledBalance };
 };
