@@ -299,9 +299,9 @@ export function CloverShell({
               <div className="sidebar-popover__head">
                 <span className="sidebar-popover__title">{displayName}</span>
               </div>
-              <div className="sidebar-popover__links">
+              <div className="sidebar-popover__links sidebar-popover__links--bare">
                 <Link
-                  className="sidebar-popover__link sidebar-popover__link--compact"
+                  className="sidebar-popover__link sidebar-popover__link--bare"
                   role="menuitem"
                   href="/settings"
                   onClick={() => setOpenMenu(null)}
@@ -312,7 +312,7 @@ export function CloverShell({
                   <span>Settings</span>
                 </Link>
                 <button
-                  className="sidebar-popover__link sidebar-popover__button sidebar-popover__button--danger sidebar-popover__link--compact"
+                  className="sidebar-popover__link sidebar-popover__button sidebar-popover__button--danger sidebar-popover__link--bare"
                   type="button"
                   onClick={handleSignOut}
                   role="menuitem"

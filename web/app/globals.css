@@ -759,6 +759,10 @@ label {
   gap: 6px;
 }
 
+.sidebar-popover__links--bare {
+  gap: 4px;
+}
+
 .sidebar-popover__link,
 .sidebar-popover__item {
   display: grid;
@@ -777,6 +781,17 @@ label {
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 
+.sidebar-popover__link--bare,
+.sidebar-popover__link--bare:hover {
+  background: transparent;
+  border-color: transparent;
+  transform: none;
+}
+
+.sidebar-popover__link--bare:hover {
+  background: rgba(3, 168, 192, 0.08);
+}
+
 .sidebar-popover__link:hover {
   background: var(--accent-soft);
   border-color: rgba(3, 168, 192, 0.16);
@@ -785,11 +800,14 @@ label {
 
 .sidebar-popover__button {
   appearance: none;
-  border: 1px solid var(--stroke);
   width: 100%;
   text-align: left;
   cursor: pointer;
   font: inherit;
+}
+
+.sidebar-popover__button.sidebar-popover__link--bare {
+  border-color: transparent;
 }
 
 .sidebar-popover__button--danger {
@@ -808,6 +826,10 @@ label {
   color: inherit;
   font-size: 14px;
   font-weight: 400;
+}
+
+.sidebar-popover__link--bare > span:last-child {
+  font-size: 14px;
 }
 
 .sidebar-popover__link-icon {
@@ -836,6 +858,18 @@ label {
   border-radius: 14px;
   background: rgba(248, 251, 252, 0.96);
   border: 1px solid var(--stroke);
+}
+
+.settings-page-heading {
+  padding: 8px 2px 0;
+}
+
+.settings-page-heading h2 {
+  margin: 0 0 12px;
+  font-size: 2rem;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: var(--text);
 }
 
 .sidebar-plan-card__meta {

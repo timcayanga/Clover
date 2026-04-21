@@ -143,7 +143,10 @@ export default async function SettingsPage() {
   }
 
   return (
-    <CloverShell active="settings" title="Settings">
+    <CloverShell active="settings" title="Settings" showTopbar={false}>
+      <div className="settings-page-heading">
+        <h2>Settings</h2>
+      </div>
       <SettingsCenter sections={sections} />
       <AccountActionsPanel isGuest={session.isGuest} />
     </CloverShell>
