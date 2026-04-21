@@ -673,7 +673,7 @@ export const countTransactionsByImportFileCompat = async (importFileId: string) 
   return Number(result[0]?.count ?? 0n);
 };
 
-export const insertTransactionCompat = async (params: {
+type TransactionInsertParams = {
   workspaceId: string;
   accountId: string;
   importFileId?: string | null;
@@ -696,8 +696,10 @@ export const insertTransactionCompat = async (params: {
   description?: string | null;
   isTransfer?: boolean;
   isExcluded?: boolean;
-}) => {
-  const columns = new Set(await getCompatibleTransactionColumns());
+};
+
+const buildTransactionInsertRecord = async (params: TransactionInsertParams, columns?: Set<string>) => {
+  const columnSet = columns ?? new Set(await getCompatibleTransactionColumns());
   const record: Record<string, unknown> = {};
   const amount = parseAmountValue(typeof params.amount === "number" ? String(params.amount) : params.amount ?? null);
 
@@ -705,32 +707,41 @@ export const insertTransactionCompat = async (params: {
     throw new Error("Invalid transaction amount.");
   }
 
-  if (columns.has("id")) record.id = crypto.randomUUID();
-  if (columns.has("workspaceId")) record.workspaceId = params.workspaceId;
-  if (columns.has("accountId")) record.accountId = params.accountId;
-  if (columns.has("importFileId") && params.importFileId !== undefined) record.importFileId = params.importFileId ?? null;
-  if (columns.has("categoryId")) record.categoryId = params.categoryId ?? null;
-  if (columns.has("reviewStatus")) record.reviewStatus = params.reviewStatus ?? "suggested";
-  if (columns.has("parserConfidence")) record.parserConfidence = params.parserConfidence ?? 0;
-  if (columns.has("categoryConfidence")) record.categoryConfidence = params.categoryConfidence ?? 0;
-  if (columns.has("accountMatchConfidence")) record.accountMatchConfidence = params.accountMatchConfidence ?? 0;
-  if (columns.has("duplicateConfidence")) record.duplicateConfidence = params.duplicateConfidence ?? 0;
-  if (columns.has("transferConfidence")) record.transferConfidence = params.transferConfidence ?? 0;
-  if (columns.has("rawPayload")) record.rawPayload = params.rawPayload ?? null;
-  if (columns.has("normalizedPayload")) record.normalizedPayload = params.normalizedPayload ?? null;
-  if (columns.has("learnedRuleIdsApplied")) record.learnedRuleIdsApplied = params.learnedRuleIdsApplied ?? null;
-  if (columns.has("date")) record.date = params.date;
-  if (columns.has("amount")) record.amount = amount;
-  if (columns.has("currency")) record.currency = params.currency;
-  if (columns.has("type")) record.type = params.type;
-  if (columns.has("merchantRaw")) record.merchantRaw = params.merchantRaw;
-  if (columns.has("merchantClean")) record.merchantClean = params.merchantClean ?? null;
-  if (columns.has("description")) record.description = params.description ?? null;
-  if (columns.has("isTransfer")) record.isTransfer = params.isTransfer ?? false;
-  if (columns.has("isExcluded")) record.isExcluded = params.isExcluded ?? false;
-  if (columns.has("createdAt")) record.createdAt = new Date();
-  if (columns.has("updatedAt")) record.updatedAt = new Date();
+  if (columnSet.has("id")) record.id = crypto.randomUUID();
+  if (columnSet.has("workspaceId")) record.workspaceId = params.workspaceId;
+  if (columnSet.has("accountId")) record.accountId = params.accountId;
+  if (columnSet.has("importFileId") && params.importFileId !== undefined) record.importFileId = params.importFileId ?? null;
+  if (columnSet.has("categoryId")) record.categoryId = params.categoryId ?? null;
+  if (columnSet.has("reviewStatus")) record.reviewStatus = params.reviewStatus ?? "suggested";
+  if (columnSet.has("parserConfidence")) record.parserConfidence = params.parserConfidence ?? 0;
+  if (columnSet.has("categoryConfidence")) record.categoryConfidence = params.categoryConfidence ?? 0;
+  if (columnSet.has("accountMatchConfidence")) record.accountMatchConfidence = params.accountMatchConfidence ?? 0;
+  if (columnSet.has("duplicateConfidence")) record.duplicateConfidence = params.duplicateConfidence ?? 0;
+  if (columnSet.has("transferConfidence")) record.transferConfidence = params.transferConfidence ?? 0;
+  if (columnSet.has("rawPayload")) record.rawPayload = params.rawPayload ?? null;
+  if (columnSet.has("normalizedPayload")) record.normalizedPayload = params.normalizedPayload ?? null;
+  if (columnSet.has("learnedRuleIdsApplied")) record.learnedRuleIdsApplied = params.learnedRuleIdsApplied ?? null;
+  if (columnSet.has("date")) record.date = params.date;
+  if (columnSet.has("amount")) record.amount = amount;
+  if (columnSet.has("currency")) record.currency = params.currency;
+  if (columnSet.has("type")) record.type = params.type;
+  if (columnSet.has("merchantRaw")) record.merchantRaw = params.merchantRaw;
+  if (columnSet.has("merchantClean")) record.merchantClean = params.merchantClean ?? null;
+  if (columnSet.has("description")) record.description = params.description ?? null;
+  if (columnSet.has("isTransfer")) record.isTransfer = params.isTransfer ?? false;
+  if (columnSet.has("isExcluded")) record.isExcluded = params.isExcluded ?? false;
+  if (columnSet.has("createdAt")) record.createdAt = new Date();
+  if (columnSet.has("updatedAt")) record.updatedAt = new Date();
 
+  return {
+    record,
+    amount,
+  };
+};
+
+export const insertTransactionCompat = async (params: TransactionInsertParams) => {
+  const columns = new Set(await getCompatibleTransactionColumns());
+  const { record } = await buildTransactionInsertRecord(params, columns);
   const keys = Object.keys(record);
   if (keys.length === 0) {
     return null;
@@ -744,6 +755,20 @@ export const insertTransactionCompat = async (params: {
   );
 
   return record;
+};
+
+export const insertTransactionManyCompat = async (params: {
+  records: Record<string, unknown>[];
+}) => {
+  if (params.records.length === 0) {
+    return [];
+  }
+
+  await prisma.transaction.createMany({
+    data: params.records as Prisma.TransactionCreateManyInput[],
+  });
+
+  return params.records;
 };
 
 export const buildParsedTransactionInsertData = async (params: {

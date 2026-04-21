@@ -14,6 +14,7 @@ import {
   defaultCategoryForType,
   deleteTransactionsByImportFileCompat,
   insertTransactionCompat,
+  insertTransactionManyCompat,
   insertParsedTransactionsCompat,
   hasCompatibleTable,
   recordTrainingSignal,
@@ -41,6 +42,95 @@ type ImportInsightSourceRow = {
   description?: unknown;
   categoryName?: unknown;
   rawPayload?: unknown;
+};
+
+type PreparedImportTransaction = {
+  transactionId: string | null;
+  insertRow: Record<string, unknown>;
+  insightRow: ImportInsightSourceRow;
+  trainingSignal: {
+    merchantText: string;
+    categoryId: string;
+    categoryName: string;
+    type: "income" | "expense" | "transfer";
+    confidence: number;
+    notes: string | null;
+  };
+};
+
+const chunkArray = <T,>(items: T[], size: number) => {
+  if (size <= 0) {
+    return [items];
+  }
+
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+};
+
+const buildTransactionInsertRecord = (params: {
+  workspaceId: string;
+  accountId: string;
+  importFileId?: string | null;
+  categoryId?: string | null;
+  reviewStatus?: string;
+  parserConfidence?: number;
+  categoryConfidence?: number;
+  accountMatchConfidence?: number;
+  duplicateConfidence?: number;
+  transferConfidence?: number;
+  rawPayload?: Prisma.InputJsonValue | null;
+  normalizedPayload?: Prisma.InputJsonValue | null;
+  learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
+  date: Date;
+  amount: string | number;
+  currency: string;
+  type: TransactionType;
+  merchantRaw: string;
+  merchantClean?: string | null;
+  description?: string | null;
+  isTransfer?: boolean;
+  isExcluded?: boolean;
+}) => {
+  const amount = parseAmountValue(typeof params.amount === "number" ? String(params.amount) : params.amount ?? null);
+  if (amount === null) {
+    throw new Error("Invalid transaction amount.");
+  }
+
+  const record: Record<string, unknown> = {
+    id: crypto.randomUUID(),
+    workspaceId: params.workspaceId,
+    accountId: params.accountId,
+    categoryId: params.categoryId ?? null,
+    reviewStatus: params.reviewStatus ?? "suggested",
+    parserConfidence: params.parserConfidence ?? 0,
+    categoryConfidence: params.categoryConfidence ?? 0,
+    accountMatchConfidence: params.accountMatchConfidence ?? 0,
+    duplicateConfidence: params.duplicateConfidence ?? 0,
+    transferConfidence: params.transferConfidence ?? 0,
+    rawPayload: params.rawPayload ?? null,
+    normalizedPayload: params.normalizedPayload ?? null,
+    learnedRuleIdsApplied: params.learnedRuleIdsApplied ?? null,
+    date: params.date,
+    amount,
+    currency: params.currency,
+    type: params.type,
+    merchantRaw: params.merchantRaw,
+    merchantClean: params.merchantClean ?? null,
+    description: params.description ?? null,
+    isTransfer: params.isTransfer ?? false,
+    isExcluded: params.isExcluded ?? false,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  if (params.importFileId !== undefined) {
+    record.importFileId = params.importFileId ?? null;
+  }
+
+  return record;
 };
 
 export const processImportFileText = async (importFileId: string, text: string) => {
@@ -475,6 +565,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
 
   const transactions: ImportInsightSourceRow[] = [];
   const trainingSignalJobs: Promise<unknown>[] = [];
+  const preparedTransactions: PreparedImportTransaction[] = [];
   const coerceAmountToString = (value: unknown) => {
     if (value === null || value === undefined) {
       return null;
@@ -516,7 +607,11 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       categoryByName.set(categoryName.toLowerCase(), categoryId);
     }
 
-    const transaction = await insertTransactionCompat({
+    const merchantText =
+      (typeof row.merchantClean === "string" && row.merchantClean) ||
+      (typeof row.merchantRaw === "string" && row.merchantRaw) ||
+      "Imported transaction";
+    const insertRow = buildTransactionInsertRecord({
       workspaceId: String(importFile.workspaceId),
       accountId,
       importFileId,
@@ -540,26 +635,51 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       isTransfer: rowType === "transfer",
       isExcluded: typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance",
     });
+    const transactionId = String(insertRow.id ?? crypto.randomUUID());
 
-    if (transaction) {
-      transactions.push(transaction as ImportInsightSourceRow);
-    }
+    preparedTransactions.push({
+      transactionId,
+      insertRow,
+      insightRow: {
+        amount: row.amount,
+        type: rowType ?? "expense",
+        merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+        merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+        description: extractHumanReadableDescription(row.rawPayload ?? null),
+        categoryName,
+        rawPayload: (row.rawPayload ?? {}) as Prisma.InputJsonValue,
+      },
+      trainingSignal: {
+        merchantText,
+        categoryId,
+        categoryName,
+        type: rowType ?? "expense",
+        confidence: typeof row.confidence === "number" ? row.confidence : 100,
+        notes: typeof row.categoryReason === "string" ? row.categoryReason : null,
+      },
+    });
+  }
 
+  for (const batch of chunkArray(preparedTransactions, 25)) {
+    await insertTransactionManyCompat({
+      records: batch.map((entry) => entry.insertRow as any),
+    });
+  }
+
+  for (const entry of preparedTransactions) {
+    transactions.push(entry.insightRow);
     trainingSignalJobs.push(
       recordTrainingSignal({
         workspaceId: importFile.workspaceId,
         importFileId,
-        transactionId: typeof transaction?.id === "string" ? transaction.id : null,
-        merchantText:
-          (typeof row.merchantClean === "string" && row.merchantClean) ||
-          (typeof row.merchantRaw === "string" && row.merchantRaw) ||
-          "Imported transaction",
-        categoryId,
-        categoryName,
-        type: rowType ?? "expense",
+        transactionId: entry.transactionId,
+        merchantText: entry.trainingSignal.merchantText,
+        categoryId: entry.trainingSignal.categoryId,
+        categoryName: entry.trainingSignal.categoryName,
+        type: entry.trainingSignal.type,
         source: "import_confirmation",
-        confidence: typeof row.confidence === "number" ? row.confidence : 100,
-        notes: typeof row.categoryReason === "string" ? row.categoryReason : null,
+        confidence: entry.trainingSignal.confidence,
+        notes: entry.trainingSignal.notes,
       }).catch(() => null)
     );
   }
