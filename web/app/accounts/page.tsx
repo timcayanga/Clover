@@ -380,7 +380,7 @@ function AccountsPageContent() {
     setWorkspacesLoading(false);
   };
 
-  const loadWorkspaceData = async (workspaceId: string) => {
+  const loadWorkspaceData = async (workspaceId: string, options?: { silent?: boolean }) => {
     if (!workspaceId) {
       setAccounts([]);
       setAccountRules([]);
@@ -389,7 +389,9 @@ function AccountsPageContent() {
       return;
     }
 
-    setAccountsLoading(true);
+    if (!options?.silent) {
+      setAccountsLoading(true);
+    }
 
     const accountsRequest = fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
     const transactionsRequest = fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`);
@@ -398,11 +400,15 @@ function AccountsPageContent() {
     if (accountsResponse.ok) {
       const payload = await accountsResponse.json();
       const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
-      setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
+      setAccounts((current) =>
+        options?.silent ? mergeAccountsWithOptimisticImports(fetchedAccounts, current) : fetchedAccounts
+      );
       setAccountRules(Array.isArray(payload.accountRules) ? payload.accountRules : []);
     }
 
-    setAccountsLoading(false);
+    if (!options?.silent) {
+      setAccountsLoading(false);
+    }
 
     void transactionsRequest.then(async (transactionsResponse) => {
       if (!transactionsResponse.ok) {
@@ -641,7 +647,7 @@ function AccountsPageContent() {
 
   const refreshAll = async () => {
     if (!selectedWorkspaceId) return;
-    await loadWorkspaceData(selectedWorkspaceId);
+    await loadWorkspaceData(selectedWorkspaceId, { silent: true });
     setMessage(`Workspace "${selectedWorkspace?.name ?? "selected"}" refreshed.`);
   };
 
