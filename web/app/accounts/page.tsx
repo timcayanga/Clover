@@ -1417,7 +1417,9 @@ function AccountsPageContent() {
               return [optimisticAccount, ...current];
             });
           }
-          void refreshAll();
+          window.setTimeout(() => {
+            void refreshAll();
+          }, 750);
           setMessage("Import complete. Insights are ready.");
         }}
       />

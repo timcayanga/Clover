@@ -3898,7 +3898,9 @@ function TransactionsPageContent() {
               return [optimisticAccount, ...current];
             });
           }
-          void loadWorkspaceData(selectedWorkspaceId);
+          window.setTimeout(() => {
+            void loadWorkspaceData(selectedWorkspaceId);
+          }, 750);
           setMessage("Import complete. Insights are ready.");
         }}
       />
