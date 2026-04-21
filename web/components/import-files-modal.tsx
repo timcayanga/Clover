@@ -418,7 +418,7 @@ export function ImportFilesModal({
   const confirmItemImport = async (
     itemId: string,
     importFileId: string,
-    accountId: string,
+    accountId: string | null,
     summaryContext: {
       fileName: string;
       accountName: string | null;
@@ -426,6 +426,13 @@ export function ImportFilesModal({
       optimisticAccountId: string | null;
     }
   ): Promise<ImportProcessResult> => {
+    const resolvedAccountId =
+      accountId ?? (await ensureTargetAccountId(summaryContext.accountName, summaryContext.institution));
+
+    if (!resolvedAccountId) {
+      throw new Error("Unable to determine the destination account for this statement.");
+    }
+
     let finalizingProgress = 92;
     const finalizingTimer = window.setInterval(() => {
       finalizingProgress = Math.min(98, finalizingProgress + 1);
@@ -433,7 +440,7 @@ export function ImportFilesModal({
         status: "importing",
         progress: finalizingProgress,
         progressLabel: "Finalizing import",
-        targetAccountId: accountId,
+        targetAccountId: resolvedAccountId,
       });
     }, 700);
 
@@ -441,14 +448,14 @@ export function ImportFilesModal({
       status: "importing",
       progress: finalizingProgress,
       progressLabel: "Finalizing import",
-      targetAccountId: accountId,
+      targetAccountId: resolvedAccountId,
     });
 
     try {
       const confirmResponse = await fetch(`/api/imports/${importFileId}/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId }),
+        body: JSON.stringify({ accountId: resolvedAccountId }),
       });
 
       if (!confirmResponse.ok) {
@@ -473,7 +480,7 @@ export function ImportFilesModal({
         ? {
             fileName: summaryContext.fileName,
             rowsImported: importedRows,
-            accountId,
+            accountId: resolvedAccountId,
             accountName: summaryContext.accountName,
             institution: summaryContext.institution ?? null,
             optimisticAccountId: summaryContext.optimisticAccountId ?? null,
@@ -492,7 +499,7 @@ export function ImportFilesModal({
         confirmationState: "confirmed",
         error: null,
         importFileId,
-        targetAccountId: accountId,
+        targetAccountId: resolvedAccountId,
         importedRows,
         progress: 100,
         progressLabel: "Done",
@@ -516,7 +523,7 @@ export function ImportFilesModal({
   const monitorQueuedImportAndConfirm = async (
     itemId: string,
     importFileId: string,
-    accountId: string,
+    accountId: string | null,
     summaryContext: {
       fileName: string;
       accountName: string | null;
@@ -526,6 +533,33 @@ export function ImportFilesModal({
     }
   ) => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+    const resolveStatementIdentityFromPreview = async () => {
+      const response = await fetch(`/api/imports/${importFileId}/preview`);
+      if (!response.ok) {
+        return {
+          accountName: summaryContext.accountName,
+          institution: summaryContext.institution,
+        };
+      }
+
+      const payload = await response.json();
+      const parsedRows = Array.isArray(payload.parsedRows) ? payload.parsedRows : [];
+      const previewRow = parsedRows.find(
+        (row: { accountName?: unknown; institution?: unknown }) => typeof row.accountName === "string" && row.accountName.trim()
+      ) ?? parsedRows[0] ?? null;
+
+      return {
+        accountName:
+          typeof previewRow?.accountName === "string" && previewRow.accountName.trim()
+            ? previewRow.accountName.trim()
+            : summaryContext.accountName,
+        institution:
+          typeof previewRow?.institution === "string" && previewRow.institution.trim()
+            ? previewRow.institution.trim()
+            : summaryContext.institution,
+      };
+    };
 
     for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
@@ -561,7 +595,35 @@ export function ImportFilesModal({
         }
 
         if (importFile?.status === "done" || parsedRowsCount > 0) {
-          const result = await confirmItemImport(itemId, importFileId, accountId, summaryContext);
+          const resolvedIdentity = await resolveStatementIdentityFromPreview();
+          let resolvedAccountId = accountId;
+          if (!resolvedAccountId) {
+            resolvedAccountId = await ensureTargetAccountId(resolvedIdentity.accountName ?? null, resolvedIdentity.institution ?? null);
+          }
+          if (!resolvedAccountId) {
+            throw new Error("Unable to determine the destination account for this statement.");
+          }
+
+          updateItem(itemId, {
+            targetAccountId: resolvedAccountId,
+          });
+
+          void onImported(
+            buildOptimisticUploadSummary(
+              summaryContext.fileName,
+              0,
+              resolvedAccountId,
+              resolvedIdentity.accountName ?? null,
+              resolvedIdentity.institution ?? null,
+              summaryContext.optimisticAccountId
+            )
+          );
+
+          const result = await confirmItemImport(itemId, importFileId, resolvedAccountId, {
+            ...summaryContext,
+            accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
+            institution: resolvedIdentity.institution ?? summaryContext.institution,
+          });
           if (result.summary) {
             void onImported(result.summary);
           }
@@ -739,7 +801,9 @@ export function ImportFilesModal({
         institution: guessedIdentity?.institution ?? null,
       });
 
-      const targetAccountId = await ensureTargetAccountId(guessedIdentity?.accountName ?? null, guessedIdentity?.institution ?? null);
+      let targetAccountId: string | null = guessedIdentity
+        ? await ensureTargetAccountId(guessedIdentity.accountName ?? null, guessedIdentity.institution ?? null)
+        : null;
 
       if (processPayload?.queued) {
         const optimisticSummary = buildOptimisticUploadSummary(
