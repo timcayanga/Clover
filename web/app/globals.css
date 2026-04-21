@@ -5813,6 +5813,27 @@ input.transaction-inline-edit--amount::placeholder {
   width: 100%;
 }
 
+.transaction-account-cell .transaction-inline-edit--select,
+.transaction-category-cell .transaction-inline-edit--select {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+  line-height: 1.35;
+}
+
+.transaction-account-cell .transaction-inline-edit--select:focus,
+.transaction-category-cell .transaction-inline-edit--select:focus {
+  outline: none;
+  box-shadow: none;
+}
+
 .transaction-subtext {
   color: var(--muted-2);
   font-size: 0.8rem;
