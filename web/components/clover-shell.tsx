@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
@@ -34,7 +34,9 @@ type IconName =
   | "goals"
   | "search"
   | "notifications"
-  | "profile";
+  | "profile"
+  | "settings"
+  | "sign-out";
 
 function MenuIcon({ name }: { name: IconName }) {
   const common = {
@@ -78,6 +80,21 @@ function MenuIcon({ name }: { name: IconName }) {
         <svg {...common}>
           <circle cx="12" cy="8.5" r="3.2" />
           <path d="M5.5 19c1.5-3.2 4.1-5 6.5-5s5 1.8 6.5 5" />
+        </svg>
+      );
+    case "settings":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="3.2" />
+          <path d="M19.4 13a7.8 7.8 0 0 0 .1-2l2-1.2-1.9-3.2-2.3.7a8.1 8.1 0 0 0-1.7-1l-.3-2.4H10l-.3 2.4a8.1 8.1 0 0 0-1.7 1l-2.3-.7-1.9 3.2 2 1.2a7.8 7.8 0 0 0 0 2l-2 1.2 1.9 3.2 2.3-.7a8.1 8.1 0 0 0 1.7 1l.3 2.4h4.1l.3-2.4a8.1 8.1 0 0 0 1.7-1l2.3.7 1.9-3.2-2-1.2Z" />
+        </svg>
+      );
+    case "sign-out":
+      return (
+        <svg {...common}>
+          <path d="M10 6H6.5A1.5 1.5 0 0 0 5 7.5v9A1.5 1.5 0 0 0 6.5 18H10" />
+          <path d="m14 8 4 4-4 4" />
+          <path d="M18 12H10" />
         </svg>
       );
     case "accounts":
@@ -162,7 +179,6 @@ export function CloverShell({
   const pathname = usePathname();
   const shellRef = useRef<HTMLDivElement | null>(null);
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | null>(null);
-  const [profilePanel, setProfilePanel] = useState<"menu" | "plan">("menu");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
@@ -173,7 +189,6 @@ export function CloverShell({
 
   useEffect(() => {
     setIsSidebarOpen(false);
-    setProfilePanel("menu");
     syncSelectedWorkspaceCookie();
     const handlePointerDown = (event: MouseEvent) => {
       if (!shellRef.current || event.target instanceof Node === false) {
@@ -201,19 +216,6 @@ export function CloverShell({
   }, [pathname]);
 
   const notificationCount = notifications.length;
-  const profileMenuLinks = useMemo(
-    () => [
-      { href: "/profile", label: "Profile" },
-      { href: "/settings", label: "Settings" },
-    ],
-    []
-  );
-  const planSummary = {
-    name: "Free",
-    description: "Active during the beta",
-    limits: ["Unlimited transactions", "Unlimited imports", "Unlimited accounts", "Unlimited review items"],
-  };
-
   const handleSignOut = () => {
     persistSelectedWorkspaceId("");
     void signOut({
@@ -272,7 +274,6 @@ export function CloverShell({
                   return null;
                 }
 
-                setProfilePanel("menu");
                 return "profile";
               })
             }
@@ -295,58 +296,33 @@ export function CloverShell({
 
           {isProfileMenuOpen ? (
             <div className="sidebar-popover sidebar-popover--profile" role="menu" aria-label="Profile menu">
-              {profilePanel === "menu" ? (
-                <>
-                  <div className="sidebar-popover__head">
-                    <span className="sidebar-popover__title">{displayName}</span>
-                  </div>
-                  <div className="sidebar-popover__links">
-                    {profileMenuLinks.map((item) => (
-                      <Link key={item.href} className="sidebar-popover__link" role="menuitem" href={item.href}>
-                        <strong>{item.label}</strong>
-                      </Link>
-                    ))}
-                    <button
-                      className="sidebar-popover__link sidebar-popover__button"
-                      type="button"
-                      onClick={() => setProfilePanel("plan")}
-                      role="menuitem"
-                    >
-                      <strong>Plan</strong>
-                    </button>
-                    <button
-                      className="sidebar-popover__link sidebar-popover__button sidebar-popover__button--danger"
-                      type="button"
-                      onClick={handleSignOut}
-                      role="menuitem"
-                    >
-                      <strong>Sign out</strong>
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="sidebar-popover__head">
-                    <span className="sidebar-popover__title">Plan</span>
-                  </div>
-                  <div className="sidebar-plan-card">
-                    <div className="sidebar-plan-card__meta">
-                      <strong>{planSummary.name}</strong>
-                      <span>{planSummary.description}</span>
-                    </div>
-                    <div className="sidebar-plan-card__limits">
-                      {planSummary.limits.map((limit) => (
-                        <div key={limit} className="sidebar-plan-card__limit">
-                          {limit}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <button className="sidebar-popover__back" type="button" onClick={() => setProfilePanel("menu")}>
-                    Back
-                  </button>
-                </>
-              )}
+              <div className="sidebar-popover__head">
+                <span className="sidebar-popover__title">{displayName}</span>
+              </div>
+              <div className="sidebar-popover__links">
+                <Link
+                  className="sidebar-popover__link sidebar-popover__link--compact"
+                  role="menuitem"
+                  href="/settings"
+                  onClick={() => setOpenMenu(null)}
+                >
+                  <span className="sidebar-popover__link-icon" aria-hidden="true">
+                    <MenuIcon name="settings" />
+                  </span>
+                  <span>Settings</span>
+                </Link>
+                <button
+                  className="sidebar-popover__link sidebar-popover__button sidebar-popover__button--danger sidebar-popover__link--compact"
+                  type="button"
+                  onClick={handleSignOut}
+                  role="menuitem"
+                >
+                  <span className="sidebar-popover__link-icon" aria-hidden="true">
+                    <MenuIcon name="sign-out" />
+                  </span>
+                  <span>Sign Out</span>
+                </button>
+              </div>
             </div>
           ) : null}
 
