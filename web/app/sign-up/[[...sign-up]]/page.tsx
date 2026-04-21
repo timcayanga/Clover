@@ -1,5 +1,4 @@
 import { ClerkAuthScreen } from "@/components/clerk-auth-screen";
-import { ClerkProvider } from "@clerk/nextjs";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 
@@ -12,10 +11,8 @@ export const metadata = {
 export default function SignUpPage() {
   return (
     <main className="auth-page auth-page--signup">
-      <ClerkProvider publishableKey={publishableKey ?? ""}>
-        <PostHogEvent event="signup_started" onceKey={analyticsOnceKey("signup_started", "session")} />
-        <ClerkAuthScreen enabled={Boolean(publishableKey)} mode="sign-up" />
-      </ClerkProvider>
+      <PostHogEvent event="signup_started" onceKey={analyticsOnceKey("signup_started", "session")} />
+      <ClerkAuthScreen enabled={Boolean(publishableKey)} mode="sign-up" />
     </main>
   );
 }
