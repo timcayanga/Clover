@@ -5,6 +5,7 @@ import Link from "next/link";
 export type UploadInsightsSummary = {
   fileName: string;
   rowsImported: number;
+  accountId: string | null;
   accountName: string | null;
   institution: string | null;
   incomeTotal: number;

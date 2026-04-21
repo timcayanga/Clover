@@ -114,6 +114,9 @@ const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): Upl
   return {
     fileName: summaries.length === 1 ? firstSummary.fileName : `${summaries.length} files`,
     rowsImported,
+    accountId: summaries.every((summary) => summary.accountId === firstSummary.accountId)
+      ? firstSummary.accountId
+      : null,
     accountName: sharedAccountName,
     institution: sharedInstitution,
     incomeTotal,
@@ -360,6 +363,7 @@ export function ImportFilesModal({
         ? {
             fileName: summaryContext.fileName,
             rowsImported: importedRows,
+            accountId,
             accountName: summaryContext.accountName,
             institution: summaryContext.institution ?? null,
             incomeTotal: Number(insightSummary.incomeTotal ?? 0),
