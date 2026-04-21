@@ -5688,7 +5688,7 @@ label {
   grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
   gap: 12px;
   align-items: center;
-  padding: 16px 4px;
+  padding: 10px 4px;
   border-bottom: 1px solid rgba(215, 228, 233, 0.82);
 }
 
@@ -7952,8 +7952,8 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-loading-row {
-  min-height: 88px;
-  padding: 0 0 12px;
+  min-height: 72px;
+  padding: 0 0 8px;
   border-bottom: 1px solid rgba(229, 231, 235, 0.6);
 }
 
