@@ -328,7 +328,7 @@ export function ImportFilesModal({
 
         additionsCount += 1;
         const guessedIdentity = guessStatementIdentity(file.name);
-        const optimisticAccountId = !selectedAccountId && guessedIdentity ? `optimistic-${crypto.randomUUID()}` : null;
+        const optimisticAccountId = guessedIdentity ? `optimistic-${crypto.randomUUID()}` : null;
         capturePostHogClientEvent("file_upload_started", {
           file_type: fileTypeLabel(file),
           file_size_bytes: file.size,
