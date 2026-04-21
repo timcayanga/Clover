@@ -309,6 +309,19 @@ export function ImportFilesModal({
             optimistic: true,
             optimisticAccountId,
           });
+
+          if (nextFiles.length === 1) {
+            void (async () => {
+              const locked = await isLikelyPasswordProtectedPdf(file);
+              if (locked) {
+                return;
+              }
+
+              window.setTimeout(() => {
+                onClose();
+              }, 750);
+            })();
+          }
         }
         return [
           {
