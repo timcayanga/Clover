@@ -233,7 +233,7 @@ export function CloverShell({
       />
       <aside className="sidebar" aria-label="Primary">
         <div className="sidebar-brand">
-          <Link className="sidebar-brand-link" href="/dashboard" aria-label="Go to dashboard">
+          <Link className="sidebar-brand-link" href="/dashboard" aria-label="Go to dashboard" prefetch={false}>
             <img className="brand-mark brand-mark--sidebar" src="/favicon.svg" alt="" aria-hidden="true" />
           </Link>
         </div>
@@ -245,7 +245,12 @@ export function CloverShell({
 
         <nav className="sidebar-nav" aria-label="Primary" id="primary-navigation">
           {navItems.map((item) => (
-            <Link key={item.key} className={`nav-link ${active === item.key ? "is-active" : ""}`} href={item.href}>
+            <Link
+              key={item.key}
+              className={`nav-link ${active === item.key ? "is-active" : ""}`}
+              href={item.href}
+              prefetch={false}
+            >
               <span className="nav-link__icon" aria-hidden="true">
                 <MenuIcon name={item.key} />
               </span>

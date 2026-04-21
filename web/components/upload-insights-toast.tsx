@@ -80,7 +80,7 @@ export function UploadInsightsToast({ summary, onClose }: UploadInsightsToastPro
       </ul>
 
       <div className="upload-insights-toast__actions">
-        <Link href="/insights" className="button button-primary button-small" onClick={onClose}>
+        <Link href="/insights" className="button button-primary button-small" onClick={onClose} prefetch={false}>
           Open Insights
         </Link>
         <button type="button" className="button button-secondary button-small" onClick={onClose}>
