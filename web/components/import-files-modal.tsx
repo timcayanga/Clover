@@ -93,6 +93,20 @@ const extractLastFourDigits = (value?: string | null) => {
 const accountRuleKey = (name: string, institution: string | null) =>
   `${(institution ?? "").trim().toLowerCase()}::${extractLastFourDigits(name) ?? name.trim().toLowerCase()}`;
 
+const PDF_ENCRYPTION_MARKERS = ["/Encrypt", "/Standard", "/V 2", "/V 4", "/V 5"];
+
+const isQuickPasswordProtectedPdf = async (file: File) => {
+  const lowerName = file.name.toLowerCase();
+  if (!lowerName.endsWith(".pdf") && file.type !== "application/pdf") {
+    return false;
+  }
+
+  const bytes = await file.slice(0, 65536).arrayBuffer();
+  const header = new TextDecoder("latin1").decode(bytes);
+  const normalized = header.replace(/\s+/g, " ");
+  return PDF_ENCRYPTION_MARKERS.some((marker) => normalized.includes(marker));
+};
+
 const guessStatementIdentity = (fileName: string) => {
   const lowerName = fileName.toLowerCase();
 
@@ -312,7 +326,7 @@ export function ImportFilesModal({
 
           if (nextFiles.length === 1) {
             void (async () => {
-              const locked = await isLikelyPasswordProtectedPdf(file);
+              const locked = await isQuickPasswordProtectedPdf(file);
               if (locked) {
                 return;
               }
@@ -479,7 +493,7 @@ export function ImportFilesModal({
 
     const pendingItems = items.filter((item) => item.status === "pending" && !item.password.trim());
     for (const item of pendingItems) {
-      if (await isLikelyPasswordProtectedPdf(item.file)) {
+      if (await isQuickPasswordProtectedPdf(item.file)) {
         foundPasswordProtected = true;
         updateItem(item.id, {
           status: "needs_password",
