@@ -240,7 +240,10 @@ export function ImportFilesModal({
     accountIdByKeyRef.current = map;
 
     setSelectedAccountId((current) => {
-      if (current) return current;
+      if (current && accounts.some((account) => account.id === current)) {
+        return current;
+      }
+
       return defaultAccountId ?? accounts[0]?.id ?? "";
     });
     setMessage("Upload CSV or PDF files to import transactions and balances.");
@@ -607,9 +610,12 @@ export function ImportFilesModal({
             continue;
           }
 
-          let resolvedAccountId = accountId;
+          const hasValidCurrentAccount = Boolean(accountId && accounts.some((account) => account.id === accountId));
+          let resolvedAccountId = hasValidCurrentAccount ? accountId : null;
           if (!resolvedAccountId || resolvedAccountId.startsWith("optimistic-")) {
-            resolvedAccountId = await ensureTargetAccountId(resolvedIdentity.accountName ?? null, resolvedIdentity.institution ?? null);
+            const accountName = resolvedIdentity.accountName ?? summaryContext.accountName ?? null;
+            const institution = resolvedIdentity.institution ?? summaryContext.institution ?? null;
+            resolvedAccountId = await ensureTargetAccountId(accountName, institution);
           }
           if (!resolvedAccountId) {
             throw new Error("Unable to determine the destination account for this statement.");
