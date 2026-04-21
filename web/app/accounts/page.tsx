@@ -1416,7 +1416,6 @@ function AccountsPageContent() {
               }
               return [optimisticAccount, ...current];
             });
-            setDrawerAccountId(optimisticAccount.id);
           }
           void refreshAll();
           setMessage("Import complete. Insights are ready.");
