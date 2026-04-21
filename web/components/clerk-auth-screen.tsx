@@ -147,6 +147,23 @@ function SocialIcon({ provider }: { provider: "google" | "facebook" }) {
 }
 
 export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
+  if (!enabled) {
+    return (
+      <section className="glass" style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>
+        <p className="eyebrow">Authentication setup</p>
+        <h1>Clerk is not configured for this environment yet.</h1>
+        <p>
+          Add <code>NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code> and <code>CLERK_SECRET_KEY</code> to the staging
+          environment, then redeploy to enable the auth form.
+        </p>
+      </section>
+    );
+  }
+
+  return <ClerkAuthScreenInner mode={mode} />;
+}
+
+function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
   const router = useRouter();
   const auth = useAuth();
   const signInState = useSignIn();
@@ -200,19 +217,6 @@ export function ClerkAuthScreen({ enabled, mode }: ClerkAuthScreenProps) {
     setEmail("");
     setPassword("");
   }, [mode]);
-
-  if (!enabled) {
-    return (
-      <section className="glass" style={{ maxWidth: 640, margin: "0 auto", padding: 24 }}>
-        <p className="eyebrow">Authentication setup</p>
-        <h1>Clerk is not configured for this environment yet.</h1>
-        <p>
-          Add <code>NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code> and <code>CLERK_SECRET_KEY</code> to the staging
-          environment, then redeploy to enable the auth form.
-        </p>
-      </section>
-    );
-  }
 
   if (!isReady) {
     return (
