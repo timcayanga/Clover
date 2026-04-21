@@ -8,8 +8,8 @@ const connection = getRedisConnection();
 const worker = new Worker(
   "import-processing",
   async (job) => {
-    const { importFileId, text } = job.data;
-    return processImportFileText(importFileId, text);
+    const { importFileId, password } = job.data;
+    return processImportFileText(importFileId, { password });
   },
   {
     connection,

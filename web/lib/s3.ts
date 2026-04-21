@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { getEnv } from "./env";
 
@@ -43,4 +43,20 @@ export const createUploadUrl = async (key: string, contentType: string) => {
     bucket: env.R2_BUCKET_NAME,
     expiresInSeconds: 600,
   };
+};
+
+export const uploadObject = async (key: string, body: Uint8Array | Buffer, contentType: string) => {
+  const env = getEnv();
+  if (!env.R2_BUCKET_NAME) {
+    throw new Error("Missing bucket name");
+  }
+
+  await getR2Client().send(
+    new PutObjectCommand({
+      Bucket: env.R2_BUCKET_NAME,
+      Key: key,
+      Body: body,
+      ContentType: contentType,
+    })
+  );
 };

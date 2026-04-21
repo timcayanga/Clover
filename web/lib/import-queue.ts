@@ -4,7 +4,7 @@ import { getEnv } from "@/lib/env";
 
 type ImportJobPayload = {
   importFileId: string;
-  text: string;
+  password?: string;
 };
 
 const redisUrl = getEnv().REDIS_URL ?? "redis://127.0.0.1:6379";

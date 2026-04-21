@@ -1,10 +1,11 @@
 import { requireAuth } from "@/lib/auth";
 import { buildImportKey } from "@/lib/import-keys";
+import { enqueueImportProcessing } from "@/lib/import-queue";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { detectStatementMetadataFromText, fetchImportFileCompat, updateImportFileCompat } from "@/lib/data-engine";
-import { readImportedFileText, readUploadedFileText } from "@/lib/import-file-text.server";
-import { processImportFileText } from "@/workers/import-processor";
+import { fetchImportFileCompat, updateImportFileCompat } from "@/lib/data-engine";
+import { uploadObject } from "@/lib/s3";
 import { prisma } from "@/lib/prisma";
+import { processImportFileText } from "@/workers/import-processor";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -18,8 +19,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     const isMultipart = contentType.includes("multipart/form-data");
 
     let importFile = await fetchImportFileCompat(importId);
-    let text = "";
     let password: string | undefined;
+    let queued = false;
 
     if (isMultipart) {
       stage = "reading multipart form";
@@ -52,26 +53,17 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         await assertWorkspaceAccess(userId, importFile.workspaceId as string);
       }
 
-      if (
-        uploadedFile &&
-        typeof uploadedFile === "object" &&
-        typeof (uploadedFile as { arrayBuffer?: unknown }).arrayBuffer === "function"
-      ) {
-        stage = "reading uploaded file";
-        text = await readUploadedFileText(uploadedFile as File, password);
-      } else if (importFile.storageKey) {
-        stage = "reading stored file";
-        text = await readImportedFileText(
-          {
-            storageKey: String(importFile.storageKey ?? ""),
-            fileType: String(importFile.fileType ?? ""),
-            fileName: String(importFile.fileName ?? ""),
-          },
-          password
-        );
-      } else {
+      if (!uploadedFile || typeof uploadedFile !== "object" || typeof (uploadedFile as { arrayBuffer?: unknown }).arrayBuffer !== "function") {
         return NextResponse.json({ error: "Missing uploaded file." }, { status: 400 });
       }
+
+      stage = "uploading raw file";
+      const file = uploadedFile as File;
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      await uploadObject(String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)), bytes, file.type || "application/octet-stream");
+      stage = "queueing import job";
+      await enqueueImportProcessing({ importFileId: importId, password });
+      queued = true;
     } else {
       stage = "loading import record";
       if (!importFile) {
@@ -81,46 +73,39 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       await assertWorkspaceAccess(userId, importFile.workspaceId as string);
       stage = "reading json body";
       const body = await _request.json().catch(() => ({}));
-      text = typeof body?.text === "string" ? body.text : "";
+      const text = typeof body?.text === "string" ? body.text : "";
       password = typeof body?.password === "string" ? body.password : undefined;
 
       if (!text) {
-        stage = "reading stored file";
-        const storageKey = String(importFile.storageKey ?? "");
-
-        if (!storageKey) {
-          return NextResponse.json({ error: "Missing extracted statement text." }, { status: 400 });
-        }
-
-        text = await readImportedFileText(
-          {
-            storageKey,
-            fileType: String(importFile.fileType ?? ""),
-            fileName: String(importFile.fileName ?? ""),
-          },
-          password
-        );
+        return NextResponse.json({ error: "Missing extracted statement text." }, { status: 400 });
       }
+
+      stage = "updating import status";
+      await updateImportFileCompat(importId, {
+        status: "processing",
+      });
+
+      stage = "processing statement text";
+      const result = await processImportFileText(importId, { text, password });
+
+      return NextResponse.json({
+        ok: true,
+        queued: false,
+        processed: true,
+        importedRows: result.imported,
+        duplicate: Boolean(result.duplicate),
+        status: "done",
+        importFileId: importId,
+      });
     }
-
-    stage = "updating import status";
-    await updateImportFileCompat(importId, {
-      status: "processing",
-    });
-
-    stage = "processing statement text";
-    const result = await processImportFileText(importId, text);
-    stage = "detecting metadata";
-    const metadata = detectStatementMetadataFromText(text);
 
     return NextResponse.json({
       ok: true,
-      queued: false,
-      processed: true,
-      importedRows: result.imported,
-      duplicate: Boolean(result.duplicate),
-      metadata,
-      status: "done",
+      queued,
+      processed: false,
+      importedRows: 0,
+      duplicate: false,
+      status: "queued",
       importFileId: importId,
     });
   } catch (error) {

@@ -513,6 +513,82 @@ export function ImportFilesModal({
     }
   };
 
+  const monitorQueuedImportAndConfirm = async (
+    itemId: string,
+    importFileId: string,
+    accountId: string,
+    summaryContext: {
+      fileName: string;
+      accountName: string | null;
+      institution: string | null;
+      optimisticAccountId: string | null;
+      password?: string;
+    }
+  ) => {
+    const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      try {
+        const response = await fetch(`/api/imports/${importFileId}/status`);
+        if (!response.ok) {
+          throw new Error("Unable to load import status.");
+        }
+
+        const payload = await response.json();
+        const importFile = payload.importFile as { status?: string } | undefined;
+        const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
+        const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
+
+        if (importFile?.status === "failed") {
+          updateItem(itemId, {
+            status: "error",
+            confirmationState: "staged",
+            error: "Import parsing failed in the background.",
+            progress: 0,
+            progressLabel: "Import failed",
+          });
+          return;
+        }
+
+        if (confirmedTransactionsCount > 0) {
+          updateItem(itemId, {
+            status: "done",
+            confirmationState: "confirmed",
+            progress: 100,
+            progressLabel: "Done",
+          });
+          return;
+        }
+
+        if (importFile?.status === "done" || parsedRowsCount > 0) {
+          const result = await confirmItemImport(itemId, importFileId, accountId, summaryContext);
+          if (result.summary) {
+            void onImported(result.summary);
+          }
+          return;
+        }
+
+        updateItem(itemId, {
+          status: "importing",
+          progress: Math.min(95, 82 + attempt * 0.1),
+          progressLabel: "Parsing in background",
+          targetAccountId: accountId,
+        });
+      } catch (error) {
+        updateItem(itemId, {
+          status: "error",
+          confirmationState: "staged",
+          error: error instanceof Error ? error.message : "Unable to monitor import.",
+          progress: 0,
+          progressLabel: "Monitoring failed",
+        });
+        return;
+      }
+
+      await sleep(1500);
+    }
+  };
+
   const preflightPasswordProtectedFiles = async () => {
     let foundPasswordProtected = false;
 
@@ -577,6 +653,7 @@ export function ImportFilesModal({
   const processFile = async (itemId: string): Promise<ImportProcessResult> => {
     const item = items.find((entry) => entry.id === itemId);
     if (!item) return { status: "error", importedRows: null, summary: null };
+    const guessedIdentity = guessStatementIdentity(item.file.name);
 
     if (!workspaceId) {
       updateItem(itemId, { status: "error", error: "Select a workspace before importing files." });
@@ -629,12 +706,6 @@ export function ImportFilesModal({
         file_size_bytes: item.file.size,
       });
 
-      updateItem(itemId, {
-        progress: 65,
-        progressLabel: "Parsing the statement on the server",
-        status: "importing",
-      });
-
       if (!processResponse.ok) {
         const payload = await processResponse.json().catch(() => ({}));
         capturePostHogClientEvent("file_upload_failed", {
@@ -645,9 +716,8 @@ export function ImportFilesModal({
       }
 
       const processPayload = await processResponse.json().catch(() => ({}));
-      const processedMetadata = processPayload?.metadata ?? null;
       if (processPayload?.duplicate) {
-        const duplicateMessage = formatDuplicateImportMessage(item.file.name, processedMetadata?.accountName ?? null);
+        const duplicateMessage = formatDuplicateImportMessage(item.file.name, guessedIdentity?.accountName ?? null);
         updateItem(itemId, {
           status: "done",
           confirmationState: "confirmed",
@@ -666,26 +736,42 @@ export function ImportFilesModal({
         file_type: fileTypeLabel(item.file),
         file_size_bytes: item.file.size,
         transaction_count: Number(processPayload?.imported ?? 0) || undefined,
-        institution: processedMetadata?.institution ?? null,
+        institution: guessedIdentity?.institution ?? null,
       });
-      if (processPayload?.warnings?.length) {
-        capturePostHogClientEvent("import_parsed_with_warnings", {
-          file_type: fileTypeLabel(item.file),
-          file_size_bytes: item.file.size,
-          warning_count: processPayload.warnings.length,
+
+      const targetAccountId = await ensureTargetAccountId(guessedIdentity?.accountName ?? null, guessedIdentity?.institution ?? null);
+
+      if (processPayload?.queued) {
+        updateItem(itemId, {
+          importFileId,
+          targetAccountId,
+          confirmationState: "staged",
+          progress: 92,
+          progressLabel: "Queued for background processing",
+          status: "importing",
         });
+
+        void monitorQueuedImportAndConfirm(itemId, importFileId, targetAccountId, {
+          fileName: item.file.name,
+          accountName: guessedIdentity?.accountName ?? null,
+          institution: guessedIdentity?.institution ?? null,
+          optimisticAccountId: item.optimisticAccountId,
+          password: item.password.trim() || undefined,
+        });
+
+        return {
+          status: "staged",
+          importedRows: 0,
+          summary: buildOptimisticUploadSummary(
+            item.file.name,
+            0,
+            targetAccountId,
+            guessedIdentity?.accountName ?? null,
+            guessedIdentity?.institution ?? null,
+            item.optimisticAccountId
+          ),
+        };
       }
-
-      updateItem(itemId, {
-        progress: 88,
-        progressLabel: processedMetadata?.accountName ? `Detected ${processedMetadata.accountName}` : "Server parsing complete",
-        status: "importing",
-      });
-
-      const targetAccountId = await ensureTargetAccountId(
-        processedMetadata?.accountName ?? null,
-        processedMetadata?.institution ?? null
-      );
 
       updateItem(itemId, {
         importFileId,
@@ -697,8 +783,8 @@ export function ImportFilesModal({
 
       void confirmItemImport(itemId, importFileId, targetAccountId, {
         fileName: item.file.name,
-        accountName: processedMetadata?.accountName ?? null,
-        institution: processedMetadata?.institution ?? null,
+        accountName: guessedIdentity?.accountName ?? null,
+        institution: guessedIdentity?.institution ?? null,
         optimisticAccountId: item.optimisticAccountId,
       }).then((result) => {
         if (result.summary) {
@@ -713,8 +799,8 @@ export function ImportFilesModal({
           item.file.name,
           Number(processPayload?.imported ?? 0) || 0,
           targetAccountId,
-          processedMetadata?.accountName ?? null,
-          processedMetadata?.institution ?? null,
+          guessedIdentity?.accountName ?? null,
+          guessedIdentity?.institution ?? null,
           item.optimisticAccountId
         ),
       };

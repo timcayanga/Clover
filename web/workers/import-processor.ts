@@ -2,6 +2,7 @@ import type { Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { parseAmountValue, parseImportText } from "@/lib/import-parser";
+import { readImportedFileText } from "@/lib/import-file-text.server";
 import {
   DATA_ENGINE_VERSION,
   buildParsedTransactionInsertData,
@@ -133,7 +134,10 @@ const buildTransactionInsertRecord = (params: {
   return record;
 };
 
-export const processImportFileText = async (importFileId: string, text: string) => {
+export const processImportFileText = async (
+  importFileId: string,
+  options: { text?: string; password?: string } = {}
+) => {
   const importFile = await fetchImportFileCompat(importFileId);
 
   if (!importFile) {
@@ -143,6 +147,23 @@ export const processImportFileText = async (importFileId: string, text: string) 
   await updateImportFileCompat(importFileId, {
     status: "processing",
   });
+
+  let text = options.text ?? "";
+  if (!text) {
+    const storageKey = String(importFile.storageKey ?? "");
+    if (!storageKey) {
+      throw new Error("Missing imported file.");
+    }
+
+    text = await readImportedFileText(
+      {
+        storageKey,
+        fileType: String(importFile.fileType ?? ""),
+        fileName: String(importFile.fileName ?? ""),
+      },
+      options.password
+    );
+  }
 
   const parsedRows = parseImportText(text, importFile.fileName, importFile.fileType);
   const metadata = detectStatementMetadataFromText(text);
