@@ -1053,6 +1053,7 @@ function TransactionsPageContent() {
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
   const transactionRowRefs = useRef(new Map<string, HTMLDivElement>());
+  const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
@@ -2608,6 +2609,32 @@ function TransactionsPageContent() {
     });
   }, [selectedWorkspaceId, isWorkspaceDataReady, accounts, categories, transactions, imports]);
 
+  useEffect(() => {
+    if (!importOpen || !pendingImportSummary || !isWorkspaceDataReady) {
+      return;
+    }
+
+    const targetAccountId = pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
+    if (!targetAccountId) {
+      return;
+    }
+
+    const visibleTransactionCount = transactions.filter((transaction) => transaction.accountId === targetAccountId).length;
+    const importedRows = pendingImportSummary.rowsImported ?? 0;
+    if (importedRows > 0 && visibleTransactionCount < importedRows) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setImportOpen(false);
+      setPendingImportSummary(null);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [importOpen, isWorkspaceDataReady, pendingImportSummary, transactions]);
+
   return (
     <CloverShell active="transactions" title="Transactions" showTopbar={false}>
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`}>
@@ -3980,6 +4007,7 @@ function TransactionsPageContent() {
         defaultAccountId={accounts[0]?.id ?? null}
         onClose={() => setImportOpen(false)}
         onImported={async (summary) => {
+          setPendingImportSummary(summary);
           if (summary.optimistic) {
             const optimisticAccount = buildOptimisticImportedAccount(summary);
             if (optimisticAccount) {

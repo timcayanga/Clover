@@ -368,6 +368,7 @@ function AccountsPageContent() {
   const [drawerNotice, setDrawerNotice] = useState<string | null>(null);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
+  const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
@@ -471,6 +472,35 @@ function AccountsPageContent() {
       router.replace("/accounts");
     }
   }, [router, searchParams]);
+
+  useEffect(() => {
+    if (!importOpen || !pendingImportSummary || accountsLoading) {
+      return;
+    }
+
+    const targetAccountId = pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
+    if (!targetAccountId) {
+      return;
+    }
+
+    const visibleAccount = accounts.find((account) => account.id === targetAccountId);
+    if (!visibleAccount) {
+      return;
+    }
+
+    if (pendingImportSummary.balance !== null && visibleAccount.balance !== pendingImportSummary.balance) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setImportOpen(false);
+      setPendingImportSummary(null);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [accounts, accountsLoading, importOpen, pendingImportSummary]);
 
   useEffect(() => {
     if (!selectedWorkspaceId) {
@@ -1493,6 +1523,7 @@ function AccountsPageContent() {
         defaultAccountId={selectedAccount?.id ?? accounts[0]?.id ?? null}
         onClose={() => setImportOpen(false)}
         onImported={async (summary) => {
+          setPendingImportSummary(summary);
           if (summary.optimistic) {
             const optimisticAccount = buildOptimisticImportedAccount(summary);
             if (optimisticAccount) {
