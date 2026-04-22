@@ -1,0 +1,31 @@
+# BPI Parser Rules
+
+## Scope
+
+Use these rules for BPI savings and related statement imports.
+
+## Core Patterns
+
+- `Tax Withheld` and `TAXWITHHELD` map to `Financial`.
+- `InstaPay Transfer Fee` and compact variants like `InstaPayTransferFeeTRANSFERTOOTHERBANK` map to `Transfers`.
+- `InstaPay Transfer` and `Fund Transfer` map to `Transfers`.
+- `Interest Earned` maps to `Income`.
+- `Bills Payment` maps to `Bills & Utilities`.
+- BPI credit card statements should preserve the card account suffix when present, and `BE########`-style identifiers should still resolve to BPI rather than falling back to a generic account.
+
+## Parsing Guidance
+
+- Prefer deterministic parsing from the line item text before any fallback.
+- Compact BPI labels often remove spaces, so parser checks should handle normalized and compact forms.
+- Fee rows that are clearly transfer-related should stay in the transfer flow instead of falling back to generic expense handling.
+- BPI OCR can merge adjacent month, day, and merchant tokens; parsing should decompact those tokens before extracting the date and merchant text.
+
+## Notes Handling
+
+- Do not write raw parser JSON into transaction notes.
+- Keep transaction notes human-readable and concise.
+- If there is no human-readable note, leave notes empty instead of storing the raw import payload.
+
+## Review
+
+- Unexpected `Other` categories for BPI should be treated as a parser bug when the line item clearly matches one of the learned patterns above.
