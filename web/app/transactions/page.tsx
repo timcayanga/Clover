@@ -12,6 +12,7 @@ import {
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
+import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 
 type Workspace = {
@@ -1001,7 +1002,7 @@ function TransactionsPageContent() {
   const selectAllRef = useRef<HTMLInputElement>(null);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(() => readSelectedWorkspaceId());
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -1123,10 +1124,6 @@ function TransactionsPageContent() {
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
-    if (!isWorkspacesLoaded) {
-      return;
-    }
-
     let active = true;
 
     setSelectedTransactionIds([]);

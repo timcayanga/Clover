@@ -7,6 +7,7 @@ import { deriveReconciledBalance } from "@/lib/account-balance";
 import { ImportFilesModal } from "@/components/import-files-modal";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { useOnboardingAccess } from "@/lib/use-onboarding-access";
+import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 
@@ -321,7 +322,7 @@ function AccountsPageContent() {
   const addRef = useRef<HTMLDivElement>(null);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(() => readSelectedWorkspaceId());
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountRules, setAccountRules] = useState<AccountRule[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
