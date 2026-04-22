@@ -181,6 +181,8 @@ model ImportFile {
   fileType      String
   storageKey    String
   status        ImportFileStatus @default(processing)
+  parsedRowsCount Int            @default(0)
+  confirmedTransactionsCount Int @default(0)
   confirmedAt   DateTime?
   uploadedAt    DateTime         @default(now())
   deletedAt     DateTime?

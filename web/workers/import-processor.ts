@@ -274,6 +274,9 @@ export const processImportFileText = async (
     importFileId,
     rows: parsedTransactionData,
   });
+  await updateImportFileCompat(importFileId, {
+    parsedRowsCount: rows.length,
+  });
 
   if (await hasCompatibleTable("AccountStatementCheckpoint")) {
     const metadataStartDate = metadata.startDate ? new Date(metadata.startDate) : null;
@@ -478,6 +481,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
         where: { importFileId },
       })
     : null;
+  let openingBalanceInserted = false;
 
   if (statementCheckpoint) {
     const statementStartDate = statementCheckpoint.statementStartDate ?? null;
@@ -585,6 +589,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
         isTransfer: false,
         isExcluded: true,
       });
+      openingBalanceInserted = true;
     }
   }
 
@@ -777,6 +782,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
   await updateImportFileCompat(importFileId, {
     status: "done",
     accountId: resolvedAccountId,
+    confirmedTransactionsCount: preparedTransactions.length + (openingBalanceInserted ? 1 : 0),
   });
 
   void Promise.allSettled(trainingSignalJobs);

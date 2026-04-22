@@ -179,6 +179,8 @@ const IMPORT_FILE_COLUMNS = [
   "fileType",
   "storageKey",
   "status",
+  "parsedRowsCount",
+  "confirmedTransactionsCount",
   "confirmedAt",
   "uploadedAt",
   "deletedAt",
@@ -561,6 +563,8 @@ export const buildImportFileInsertData = async (params: {
   if (columns.has("fileType")) record.fileType = params.fileType;
   if (columns.has("storageKey")) record.storageKey = params.storageKey;
   if (columns.has("status")) record.status = params.status ?? "processing";
+  if (columns.has("parsedRowsCount")) record.parsedRowsCount = 0;
+  if (columns.has("confirmedTransactionsCount")) record.confirmedTransactionsCount = 0;
   if (columns.has("confirmedAt")) record.confirmedAt = null;
   if (columns.has("uploadedAt")) record.uploadedAt = new Date();
   if (columns.has("deletedAt")) record.deletedAt = null;

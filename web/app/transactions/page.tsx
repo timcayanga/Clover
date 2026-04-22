@@ -1060,7 +1060,7 @@ function TransactionsPageContent() {
     }
   };
 
-  const loadWorkspaceData = async (workspaceId: string) => {
+  const loadWorkspaceData = async (workspaceId: string, options?: { skipMetadata?: boolean }) => {
     if (!workspaceId) {
       setAccounts([]);
       setCategories([]);
@@ -1078,6 +1078,18 @@ function TransactionsPageContent() {
     }
 
     setIsWorkspaceDataReady(true);
+
+    if (options?.skipMetadata) {
+      const accountsResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
+
+      if (accountsResponse.ok) {
+        const payload = await accountsResponse.json();
+        const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+        setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
+      }
+
+      return;
+    }
 
     const [accountsResponse, categoriesResponse, importResponse] = await Promise.all([
       fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
@@ -3986,7 +3998,7 @@ function TransactionsPageContent() {
             });
           }
           window.setTimeout(() => {
-            void loadWorkspaceData(selectedWorkspaceId);
+            void loadWorkspaceData(selectedWorkspaceId, { skipMetadata: true });
           }, 0);
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}

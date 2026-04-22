@@ -1,11 +1,6 @@
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import {
-  countParsedTransactionRows,
-  countTransactionsByImportFileCompat,
-  fetchImportFileCompat,
-  hasCompatibleTable,
-} from "@/lib/data-engine";
+import { fetchImportFileCompat, hasCompatibleTable } from "@/lib/data-engine";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -23,8 +18,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     }
 
     await assertWorkspaceAccess(userId, importFile.workspaceId as string);
-    const parsedRowsCount = await countParsedTransactionRows(importId);
-    const confirmedTransactionsCount = await countTransactionsByImportFileCompat(importId);
+    const parsedRowsCount = Number(importFile.parsedRowsCount ?? 0);
+    const confirmedTransactionsCount = Number(importFile.confirmedTransactionsCount ?? 0);
     const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
       ? await prisma.accountStatementCheckpoint.findUnique({
           where: { importFileId: importId },
@@ -35,9 +30,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         ? "failed"
         : confirmedTransactionsCount > 0
           ? "confirmed"
-          : parsedRowsCount > 0
-            ? "staged"
-            : "processing";
+          : importFile.status === "done"
+            ? "done"
+            : parsedRowsCount > 0
+              ? "staged"
+              : "processing";
 
     return NextResponse.json({
       importFile: {

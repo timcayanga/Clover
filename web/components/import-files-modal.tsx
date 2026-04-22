@@ -582,9 +582,19 @@ export function ImportFilesModal({
 
         if (importFile?.status === "done" || parsedRowsCount > 0) {
           const statementCheckpoint = payload.statementCheckpoint && typeof payload.statementCheckpoint === "object" ? payload.statementCheckpoint : null;
+          const statementMetadata =
+            statementCheckpoint?.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object"
+              ? (statementCheckpoint.sourceMetadata as Record<string, unknown>)
+              : null;
           const resolvedIdentity = {
-            accountName: summaryContext.accountName,
-            institution: summaryContext.institution,
+            accountName:
+              typeof statementMetadata?.accountName === "string" && statementMetadata.accountName.trim()
+                ? statementMetadata.accountName.trim()
+                : summaryContext.accountName,
+            institution:
+              typeof statementMetadata?.institution === "string" && statementMetadata.institution.trim()
+                ? statementMetadata.institution.trim()
+                : summaryContext.institution,
             balance:
               typeof statementCheckpoint?.endingBalance === "string" && statementCheckpoint.endingBalance.trim()
                 ? statementCheckpoint.endingBalance.trim()
