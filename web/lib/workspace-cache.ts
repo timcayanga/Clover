@@ -243,3 +243,29 @@ export const syncImportedWorkspaceAccountCaches = (workspaceId: string, account:
     },
   } satisfies TransactionsWorkspaceCacheState);
 };
+
+export const clearWorkspaceCache = (workspaceId: string) => {
+  if (!workspaceId) {
+    return;
+  }
+
+  const accountsCache = readAccountsWorkspaceCache();
+  if (accountsCache?.snapshots[workspaceId]) {
+    const nextAccountsSnapshots = { ...accountsCache.snapshots };
+    delete nextAccountsSnapshots[workspaceId];
+    writeJsonCache(accountsWorkspaceCacheKey, {
+      selectedWorkspaceId: accountsCache.selectedWorkspaceId === workspaceId ? "" : accountsCache.selectedWorkspaceId,
+      snapshots: nextAccountsSnapshots,
+    } satisfies AccountsWorkspaceCacheState);
+  }
+
+  const transactionsCache = readTransactionsWorkspaceCache();
+  if (transactionsCache?.snapshots[workspaceId]) {
+    const nextTransactionsSnapshots = { ...transactionsCache.snapshots };
+    delete nextTransactionsSnapshots[workspaceId];
+    writeJsonCache(transactionsWorkspaceCacheKey, {
+      selectedWorkspaceId: transactionsCache.selectedWorkspaceId === workspaceId ? "" : transactionsCache.selectedWorkspaceId,
+      snapshots: nextTransactionsSnapshots,
+    } satisfies TransactionsWorkspaceCacheState);
+  }
+};

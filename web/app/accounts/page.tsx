@@ -9,6 +9,7 @@ import { ImportFilesModal } from "@/components/import-files-modal";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
+  clearWorkspaceCache,
   getCachedAccountsWorkspace,
   persistAccountsWorkspaceCache,
 } from "@/lib/workspace-cache";
@@ -829,6 +830,7 @@ function AccountsPageContent() {
       setDrawerAccountId(null);
       setAccountDeleteConfirmOpen(false);
       setMessage(`Account "${selectedAccount.name}" deleted.`);
+      clearWorkspaceCache(selectedWorkspaceId);
       workspaceLoadSeqRef.current += 1;
       void loadWorkspaceData(selectedWorkspaceId, { silent: true });
     } catch (error) {
