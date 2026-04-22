@@ -450,7 +450,14 @@ function AccountsPageContent() {
   };
 
   useEffect(() => {
-    void loadWorkspaces();
+    const start = () => {
+      void loadWorkspaces();
+    };
+
+    const idleCallback = window.setTimeout(start, 250);
+    return () => {
+      window.clearTimeout(idleCallback);
+    };
   }, []);
 
   useEffect(() => {

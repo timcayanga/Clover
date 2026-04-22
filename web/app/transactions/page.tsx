@@ -1045,7 +1045,7 @@ function TransactionsPageContent() {
   const [manualForm, setManualForm] = useState<ManualTransactionForm>(createEmptyManualForm());
   const [isSaving, setIsSaving] = useState(false);
   const [isWorkspacesLoaded, setIsWorkspacesLoaded] = useState(false);
-  const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(() => Boolean(initialCachedWorkspace));
+  const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(true);
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
@@ -1126,7 +1126,14 @@ function TransactionsPageContent() {
   };
 
   useEffect(() => {
-    void loadWorkspaces();
+    const start = () => {
+      void loadWorkspaces();
+    };
+
+    const idleCallback = window.setTimeout(start, 250);
+    return () => {
+      window.clearTimeout(idleCallback);
+    };
   }, []);
 
   useEffect(() => {
@@ -1165,7 +1172,7 @@ function TransactionsPageContent() {
       setCategories([]);
       setTransactions([]);
       setImports([]);
-      setIsWorkspaceDataReady(false);
+      setIsWorkspaceDataReady(true);
     }
 
     void (async () => {
