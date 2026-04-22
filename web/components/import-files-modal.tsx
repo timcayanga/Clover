@@ -1243,6 +1243,15 @@ export function ImportFilesModal({
     event.target.value = "";
   };
 
+  const openFilePicker = () => {
+    if (!fileInputRef.current) {
+      return;
+    }
+
+    fileInputRef.current.value = "";
+    fileInputRef.current.click();
+  };
+
   const readyToImport = items.some((item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim()) || item.confirmationState === "staged");
 
   if (!open) {
@@ -1323,8 +1332,9 @@ export function ImportFilesModal({
           </button>
         </div>
 
-        <label
+        <div
           className={`accounts-import-dropzone accounts-import-dropzone--hero ${dragActive ? "is-active" : ""}`}
+          role="presentation"
           onDragEnter={(event) => {
             event.preventDefault();
             setDragActive(true);
@@ -1344,6 +1354,11 @@ export function ImportFilesModal({
               addFiles(event.dataTransfer.files);
             }
           }}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              openFilePicker();
+            }
+          }}
         >
           <input
             ref={fileInputRef}
@@ -1355,10 +1370,10 @@ export function ImportFilesModal({
           />
           <strong>Drop files here</strong>
           <span>or browse for files from your computer.</span>
-          <button className="button button-secondary button-small" type="button" onClick={() => fileInputRef.current?.click()}>
+          <button className="button button-secondary button-small" type="button" onClick={openFilePicker}>
             Choose files
           </button>
-        </label>
+        </div>
 
         <div className="accounts-import-footer-copy">
           <p>{message}</p>
