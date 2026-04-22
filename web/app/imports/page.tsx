@@ -11,7 +11,6 @@ import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
-import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 
 type Workspace = {
   id: string;
@@ -95,25 +94,9 @@ const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(reso
 const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
 
 export default function ImportsPage() {
-  const onboardingStatus = useOnboardingAccess();
-
   useEffect(() => {
     document.title = "Clover | Imports";
   }, []);
-
-  if (onboardingStatus !== "ready") {
-    return (
-      <CloverShell
-        active="dashboard"
-        title="Checking your setup..."
-        kicker="One moment"
-        subtitle="We’re confirming your onboarding status before opening Imports."
-        showTopbar={false}
-      >
-        <section className="empty-state">Checking your setup...</section>
-      </CloverShell>
-    );
-  }
 
   return <ImportsPageContent />;
 }

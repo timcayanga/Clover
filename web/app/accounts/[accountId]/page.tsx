@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { deriveReconciledBalance } from "@/lib/account-balance";
-import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 
 type Account = {
   id: string;
@@ -61,25 +60,9 @@ const formatDate = (value: string) =>
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
 export default function AccountDetailPage() {
-  const onboardingStatus = useOnboardingAccess();
-
   useEffect(() => {
     document.title = "Clover | Account";
   }, []);
-
-  if (onboardingStatus !== "ready") {
-    return (
-      <CloverShell
-        active="accounts"
-        title="Checking your setup..."
-        kicker="One moment"
-        subtitle="We’re confirming your onboarding status before opening this account."
-        showTopbar={false}
-      >
-        <section className="empty-state">Checking your setup...</section>
-      </CloverShell>
-    );
-  }
 
   return <AccountDetailPageContent />;
 }
