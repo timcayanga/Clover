@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { flushSync } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { deriveReconciledBalance } from "@/lib/account-balance";
@@ -358,6 +359,7 @@ function AccountsPageContent() {
   const [accountEditInstitution, setAccountEditInstitution] = useState("");
   const [accountEditType, setAccountEditType] = useState<Account["type"]>("bank");
   const [accountEditCurrency, setAccountEditCurrency] = useState("PHP");
+  const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const [accountEditBalance, setAccountEditBalance] = useState("");
   const [accountEditSource, setAccountEditSource] = useState("manual");
   const [accountEditBusy, setAccountEditBusy] = useState(false);
@@ -470,6 +472,35 @@ function AccountsPageContent() {
       router.replace("/accounts");
     }
   }, [router, searchParams]);
+
+  useEffect(() => {
+    if (!importOpen || !pendingImportSummary) {
+      return;
+    }
+
+    const targetAccountId = pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
+    if (!targetAccountId) {
+      return;
+    }
+
+    const visibleAccount = accounts.find((account) => account.id === targetAccountId);
+    if (!visibleAccount) {
+      return;
+    }
+
+    if (pendingImportSummary.balance !== null && visibleAccount.balance !== pendingImportSummary.balance) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setImportOpen(false);
+      setPendingImportSummary(null);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [accounts, importOpen, pendingImportSummary]);
 
   useEffect(() => {
     if (!selectedWorkspaceId) {
@@ -1492,16 +1523,19 @@ function AccountsPageContent() {
         defaultAccountId={selectedAccount?.id ?? accounts[0]?.id ?? null}
         onClose={() => setImportOpen(false)}
         onImported={async (summary) => {
+          setPendingImportSummary(summary);
           if (summary.optimistic) {
             const optimisticAccount = buildOptimisticImportedAccount(summary);
             if (optimisticAccount) {
-              setAccountsLoading(false);
-              setAccounts((current) => {
-                const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
-                if (existingIndex >= 0) {
-                  return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
-                }
-                return [optimisticAccount, ...current];
+              flushSync(() => {
+                setAccountsLoading(false);
+                setAccounts((current) => {
+                  const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
+                  if (existingIndex >= 0) {
+                    return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
+                  }
+                  return [optimisticAccount, ...current];
+                });
               });
             }
             return;
@@ -1512,13 +1546,15 @@ function AccountsPageContent() {
           }
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           if (optimisticAccount) {
-            setAccountsLoading(false);
-            setAccounts((current) => {
-              const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
-              if (existingIndex >= 0) {
-                return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
-              }
-              return [optimisticAccount, ...current];
+            flushSync(() => {
+              setAccountsLoading(false);
+              setAccounts((current) => {
+                const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
+                if (existingIndex >= 0) {
+                  return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
+                }
+                return [optimisticAccount, ...current];
+              });
             });
           }
           window.setTimeout(() => {
