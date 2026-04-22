@@ -227,6 +227,14 @@ const guessStatementIdentity = (fileName: string) => {
   return null;
 };
 
+const isSpecificOptimisticAccountName = (accountName?: string | null) => {
+  if (!accountName) {
+    return false;
+  }
+
+  return /\b\d{4}\b/.test(accountName);
+};
+
 const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): UploadInsightsSummary => {
   const [firstSummary] = summaries;
   const rowsImported = summaries.reduce((total, summary) => total + summary.rowsImported, 0);
@@ -410,7 +418,8 @@ export function ImportFilesModal({
 
         additionsCount += 1;
         const guessedIdentity = guessStatementIdentity(file.name);
-        const optimisticAccountId = guessedIdentity ? `optimistic-${crypto.randomUUID()}` : null;
+        const canUseOptimisticGuess = isSpecificOptimisticAccountName(guessedIdentity?.accountName ?? null);
+        const optimisticAccountId = guessedIdentity && canUseOptimisticGuess ? `optimistic-${crypto.randomUUID()}` : null;
         const selectedAccount = selectedAccountId ? accounts.find((account) => account.id === selectedAccountId) : null;
         capturePostHogClientEvent("file_upload_started", {
           file_type: fileTypeLabel(file),
@@ -441,7 +450,6 @@ export function ImportFilesModal({
           } satisfies UploadInsightsSummary;
           seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
           void onImported(optimisticSummary);
-
         }
         return [
           {
@@ -839,6 +847,7 @@ export function ImportFilesModal({
     const item = items.find((entry) => entry.id === itemId);
     if (!item) return { status: "error", importedRows: null, summary: null };
     const guessedIdentity = guessStatementIdentity(item.file.name);
+    const canUseOptimisticGuess = isSpecificOptimisticAccountName(guessedIdentity?.accountName ?? null);
 
     if (!workspaceId) {
       updateItem(itemId, { status: "error", error: "Select a workspace before importing files." });
@@ -925,31 +934,35 @@ export function ImportFilesModal({
       });
 
       if (processPayload?.queued) {
-        const optimisticAccountId = item.optimisticAccountId ?? null;
-        const optimisticSummary = buildOptimisticUploadSummary(
-          item.file.name,
-          0,
-          optimisticAccountId,
-          guessedIdentity?.accountName ?? null,
-          guessedIdentity?.institution ?? null,
-          item.optimisticAccountId
-        );
+        const optimisticAccountId = canUseOptimisticGuess ? item.optimisticAccountId ?? null : null;
+        const optimisticSummary = canUseOptimisticGuess
+          ? buildOptimisticUploadSummary(
+              item.file.name,
+              0,
+              optimisticAccountId,
+              guessedIdentity?.accountName ?? null,
+              guessedIdentity?.institution ?? null,
+              item.optimisticAccountId
+            )
+          : null;
         updateItem(itemId, {
           importFileId,
           targetAccountId: optimisticAccountId,
           confirmationState: "staged",
           progress: 92,
-          progressLabel: "Queued for background processing",
+          progressLabel: canUseOptimisticGuess ? "Queued for background processing" : "Waiting for account details",
           status: "importing",
         });
-        seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
-        void onImported(optimisticSummary);
+        if (optimisticSummary) {
+          seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
+          void onImported(optimisticSummary);
+        }
 
         void monitorQueuedImportAndConfirm(itemId, importFileId, optimisticAccountId, {
           fileName: item.file.name,
-          accountName: guessedIdentity?.accountName ?? null,
-          institution: guessedIdentity?.institution ?? null,
-          optimisticAccountId: item.optimisticAccountId,
+          accountName: canUseOptimisticGuess ? guessedIdentity?.accountName ?? null : null,
+          institution: canUseOptimisticGuess ? guessedIdentity?.institution ?? null : null,
+          optimisticAccountId: canUseOptimisticGuess ? item.optimisticAccountId : null,
           password: item.password.trim() || undefined,
         });
 
@@ -960,7 +973,7 @@ export function ImportFilesModal({
         };
       }
 
-      const targetAccountId: string | null = guessedIdentity
+      const targetAccountId: string | null = guessedIdentity && canUseOptimisticGuess
         ? await ensureTargetAccountId(guessedIdentity.accountName ?? null, guessedIdentity.institution ?? null)
         : null;
 
@@ -969,32 +982,44 @@ export function ImportFilesModal({
         targetAccountId,
         confirmationState: "staged",
         progress: 92,
-        progressLabel: "Finalizing in background",
+        progressLabel: canUseOptimisticGuess ? "Finalizing in background" : "Waiting for account details",
       });
 
-      void confirmItemImport(itemId, importFileId, targetAccountId, {
-        fileName: item.file.name,
-        accountName: guessedIdentity?.accountName ?? null,
-        institution: guessedIdentity?.institution ?? null,
-        optimisticAccountId: item.optimisticAccountId,
-      }).then((result) => {
-        if (result.summary) {
-          seedImportedWorkspaceCaches(workspaceId, result.summary);
-          void onImported(result.summary);
-        }
-      });
+      if (canUseOptimisticGuess) {
+        void confirmItemImport(itemId, importFileId, targetAccountId, {
+          fileName: item.file.name,
+          accountName: guessedIdentity?.accountName ?? null,
+          institution: guessedIdentity?.institution ?? null,
+          optimisticAccountId: item.optimisticAccountId,
+        }).then((result) => {
+          if (result.summary) {
+            seedImportedWorkspaceCaches(workspaceId, result.summary);
+            void onImported(result.summary);
+          }
+        });
+      } else {
+        void monitorQueuedImportAndConfirm(itemId, importFileId, null, {
+          fileName: item.file.name,
+          accountName: null,
+          institution: null,
+          optimisticAccountId: null,
+          password: item.password.trim() || undefined,
+        });
+      }
 
       return {
         status: "staged",
         importedRows: Number(processPayload?.imported ?? 0) || null,
-        summary: buildOptimisticUploadSummary(
-          item.file.name,
-          Number(processPayload?.imported ?? 0) || 0,
-          targetAccountId,
-          guessedIdentity?.accountName ?? null,
-          guessedIdentity?.institution ?? null,
-          item.optimisticAccountId
-        ),
+        summary: canUseOptimisticGuess
+          ? buildOptimisticUploadSummary(
+              item.file.name,
+              Number(processPayload?.imported ?? 0) || 0,
+              targetAccountId,
+              guessedIdentity?.accountName ?? null,
+              guessedIdentity?.institution ?? null,
+              item.optimisticAccountId
+            )
+          : null,
       };
     } catch (error) {
       if (isPasswordError(error)) {
