@@ -808,7 +808,8 @@ function AccountsPageContent() {
       });
 
       if (!response.ok) {
-        throw new Error("Unable to delete account.");
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error ?? "Unable to delete account.");
       }
 
       setAccounts((current) => current.filter((account) => account.id !== selectedAccount.id));

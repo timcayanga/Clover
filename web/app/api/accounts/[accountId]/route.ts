@@ -100,8 +100,29 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
 
     await assertWorkspaceAccess(userId, existingAccount.workspaceId);
 
-    const account = await prisma.account.delete({
-      where: { id: accountId },
+    const account = await prisma.$transaction(async (tx) => {
+      await tx.transaction.deleteMany({
+        where: { accountId },
+      });
+
+      await tx.importFile.updateMany({
+        where: { accountId },
+        data: { accountId: null },
+      });
+
+      await tx.accountStatementCheckpoint.updateMany({
+        where: { accountId },
+        data: { accountId: null },
+      });
+
+      await tx.accountRule.updateMany({
+        where: { accountId },
+        data: { accountId: null },
+      });
+
+      return tx.account.delete({
+        where: { id: accountId },
+      });
     });
 
     return NextResponse.json({
