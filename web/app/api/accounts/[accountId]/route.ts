@@ -100,25 +100,57 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
 
     await assertWorkspaceAccess(userId, existingAccount.workspaceId);
 
+    const mergeTarget = await prisma.account.findFirst({
+      where: {
+        workspaceId: existingAccount.workspaceId,
+        id: { not: accountId },
+        name: existingAccount.name,
+        institution: existingAccount.institution,
+        type: existingAccount.type,
+      },
+    });
+
     const account = await prisma.$transaction(async (tx) => {
-      await tx.transaction.deleteMany({
-        where: { accountId },
-      });
+      if (mergeTarget) {
+        await tx.transaction.updateMany({
+          where: { accountId },
+          data: { accountId: mergeTarget.id },
+        });
 
-      await tx.importFile.updateMany({
-        where: { accountId },
-        data: { accountId: null },
-      });
+        await tx.importFile.updateMany({
+          where: { accountId },
+          data: { accountId: mergeTarget.id },
+        });
 
-      await tx.accountStatementCheckpoint.updateMany({
-        where: { accountId },
-        data: { accountId: null },
-      });
+        await tx.accountStatementCheckpoint.updateMany({
+          where: { accountId },
+          data: { accountId: mergeTarget.id },
+        });
 
-      await tx.accountRule.updateMany({
-        where: { accountId },
-        data: { accountId: null },
-      });
+        await tx.accountRule.updateMany({
+          where: { accountId },
+          data: { accountId: mergeTarget.id },
+        });
+      } else {
+        await tx.transaction.deleteMany({
+          where: { accountId },
+        });
+
+        await tx.importFile.updateMany({
+          where: { accountId },
+          data: { accountId: null },
+        });
+
+        await tx.accountStatementCheckpoint.updateMany({
+          where: { accountId },
+          data: { accountId: null },
+        });
+
+        await tx.accountRule.updateMany({
+          where: { accountId },
+          data: { accountId: null },
+        });
+      }
 
       return tx.account.delete({
         where: { id: accountId },
@@ -133,7 +165,12 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
         updatedAt: account.updatedAt.toISOString(),
       },
     });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Unable to delete account.",
+      },
+      { status: 400 }
+    );
   }
 }
