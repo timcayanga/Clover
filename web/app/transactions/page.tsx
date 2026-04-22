@@ -1365,8 +1365,10 @@ function TransactionsPageContent() {
 
         if (transaction.type === "income") {
           accumulator.income += amount;
+        } else if (transaction.type === "transfer") {
+          accumulator.transfers += amount;
         } else {
-          accumulator.expense += amount;
+          accumulator.spending += amount;
         }
 
         if (hasReviewIssue) {
@@ -1375,7 +1377,7 @@ function TransactionsPageContent() {
 
         return accumulator;
       },
-      { income: 0, expense: 0, review: 0 }
+      { income: 0, spending: 0, transfers: 0, review: 0 }
     );
   }, [filteredTransactions, duplicateLookup]);
 
@@ -2562,7 +2564,7 @@ function TransactionsPageContent() {
     }
   };
 
-  const netGain = totals.income - totals.expense;
+  const netCashFlow = totals.income - totals.spending;
   const hasReviewItems = warningTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
   const isTableLoading = !selectedWorkspaceId ? !isWorkspacesLoaded : !isWorkspaceDataReady;
@@ -3152,9 +3154,29 @@ function TransactionsPageContent() {
                 </button>
               ) : null}
             </div>
-            <span className={`pill transactions-net-pill ${netGain >= 0 ? "is-positive" : "is-negative"}`}>
-              {netGain >= 0 ? "Net gain" : "Net loss"} {currencyFormatter.format(Math.abs(netGain))}
-            </span>
+            <div className="transactions-footer-snapshot" aria-label="Cash flow snapshot">
+              <span className="transactions-footer-snapshot__label">This view</span>
+              <div className="transactions-footer-snapshot__metrics">
+                <div className="transactions-footer-snapshot__metric">
+                  <span className="transactions-footer-snapshot__metric-label">Spending</span>
+                  <span className="transactions-footer-snapshot__metric-value negative">
+                    {currencyFormatter.format(totals.spending)}
+                  </span>
+                </div>
+                <div className="transactions-footer-snapshot__metric">
+                  <span className="transactions-footer-snapshot__metric-label">Transfers</span>
+                  <span className="transactions-footer-snapshot__metric-value">
+                    {currencyFormatter.format(totals.transfers)}
+                  </span>
+                </div>
+                <div className="transactions-footer-snapshot__metric transactions-footer-snapshot__metric--net">
+                  <span className="transactions-footer-snapshot__metric-label">Net cash flow</span>
+                  <span className={`transactions-footer-snapshot__metric-value ${netCashFlow >= 0 ? "positive" : "negative"}`}>
+                    {currencyFormatter.format(netCashFlow)}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -3175,11 +3197,15 @@ function TransactionsPageContent() {
             </div>
             <div>
               <dt>Spending</dt>
-              <dd className="negative">{currencyFormatter.format(totals.expense)}</dd>
+              <dd className="negative">{currencyFormatter.format(totals.spending)}</dd>
             </div>
             <div>
-              <dt>Net</dt>
-              <dd className={netGain >= 0 ? "positive" : "negative"}>{currencyFormatter.format(netGain)}</dd>
+              <dt>Transfers</dt>
+              <dd>{currencyFormatter.format(totals.transfers)}</dd>
+            </div>
+            <div>
+              <dt>Net cash flow</dt>
+              <dd className={netCashFlow >= 0 ? "positive" : "negative"}>{currencyFormatter.format(netCashFlow)}</dd>
             </div>
             <div>
               <dt>Review items</dt>
