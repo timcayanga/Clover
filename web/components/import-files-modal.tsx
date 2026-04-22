@@ -547,39 +547,6 @@ export function ImportFilesModal({
   ) => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
 
-    const resolveStatementIdentityFromPreview = async () => {
-      const response = await fetch(`/api/imports/${importFileId}/preview`);
-      if (!response.ok) {
-        return {
-          accountName: summaryContext.accountName,
-          institution: summaryContext.institution,
-          balance: null as string | null,
-        };
-      }
-
-      const payload = await response.json();
-      const parsedRows = Array.isArray(payload.parsedRows) ? payload.parsedRows : [];
-      const statementCheckpoint = payload.statementCheckpoint && typeof payload.statementCheckpoint === "object" ? payload.statementCheckpoint : null;
-      const previewRow = parsedRows.find(
-        (row: { accountName?: unknown; institution?: unknown }) => typeof row.accountName === "string" && row.accountName.trim()
-      ) ?? parsedRows[0] ?? null;
-
-      return {
-        accountName:
-          typeof previewRow?.accountName === "string" && previewRow.accountName.trim()
-            ? previewRow.accountName.trim()
-            : summaryContext.accountName,
-        institution:
-          typeof previewRow?.institution === "string" && previewRow.institution.trim()
-            ? previewRow.institution.trim()
-            : summaryContext.institution,
-        balance:
-          typeof statementCheckpoint?.endingBalance === "string" && statementCheckpoint.endingBalance.trim()
-            ? statementCheckpoint.endingBalance.trim()
-            : null,
-      };
-    };
-
     for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
         const response = await fetch(`/api/imports/${importFileId}/status`);
@@ -614,7 +581,43 @@ export function ImportFilesModal({
         }
 
         if (importFile?.status === "done" || parsedRowsCount > 0) {
-          const resolvedIdentity = await resolveStatementIdentityFromPreview();
+          const statementCheckpoint = payload.statementCheckpoint && typeof payload.statementCheckpoint === "object" ? payload.statementCheckpoint : null;
+          const resolvedIdentity = {
+            accountName: summaryContext.accountName,
+            institution: summaryContext.institution,
+            balance:
+              typeof statementCheckpoint?.endingBalance === "string" && statementCheckpoint.endingBalance.trim()
+                ? statementCheckpoint.endingBalance.trim()
+                : null,
+          };
+
+          if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
+            const previewResponse = await fetch(`/api/imports/${importFileId}/preview`);
+            if (previewResponse.ok) {
+              const payload = await previewResponse.json();
+              const parsedRows = Array.isArray(payload.parsedRows) ? payload.parsedRows : [];
+              const previewStatementCheckpoint =
+                payload.statementCheckpoint && typeof payload.statementCheckpoint === "object" ? payload.statementCheckpoint : null;
+              const previewRow =
+                parsedRows.find(
+                  (row: { accountName?: unknown; institution?: unknown }) =>
+                    typeof row.accountName === "string" && row.accountName.trim()
+                ) ?? parsedRows[0] ?? null;
+
+              resolvedIdentity.accountName =
+                typeof previewRow?.accountName === "string" && previewRow.accountName.trim()
+                  ? previewRow.accountName.trim()
+                  : summaryContext.accountName;
+              resolvedIdentity.institution =
+                typeof previewRow?.institution === "string" && previewRow.institution.trim()
+                  ? previewRow.institution.trim()
+                  : summaryContext.institution;
+              if (typeof previewStatementCheckpoint?.endingBalance === "string" && previewStatementCheckpoint.endingBalance.trim()) {
+                resolvedIdentity.balance = previewStatementCheckpoint.endingBalance.trim();
+              }
+            }
+          }
+
           if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
             updateItem(itemId, {
               status: "importing",
@@ -622,7 +625,7 @@ export function ImportFilesModal({
               progressLabel: "Waiting for account details",
               targetAccountId: accountId,
             });
-            await sleep(1500);
+            await sleep(parsedRowsCount > 0 ? 300 : 600);
             continue;
           }
 
@@ -685,7 +688,7 @@ export function ImportFilesModal({
         return;
       }
 
-      await sleep(1500);
+      await sleep(600);
     }
   };
 

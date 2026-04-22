@@ -47,12 +47,29 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
 };
 
 const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentAccounts: Account[]) => {
-  const fetchedIds = new Set(fetchedAccounts.map((account) => account.id));
-  const optimisticAccounts = currentAccounts.filter(
-    (account) => account.source === "upload" && !fetchedIds.has(account.id)
-  );
+  const fetchedById = new Map(fetchedAccounts.map((account) => [account.id, account] as const));
+  const mergedFetchedAccounts = fetchedAccounts.map((account) => {
+    const optimistic = currentAccounts.find((currentAccount) => currentAccount.id === account.id && currentAccount.source === "upload");
+    if (!optimistic) {
+      return account;
+    }
 
-  return [...optimisticAccounts, ...fetchedAccounts];
+    return {
+      ...account,
+      balance: account.balance ?? optimistic.balance,
+      source: optimistic.source ?? account.source,
+    };
+  });
+
+  const optimisticAccounts = currentAccounts.filter((account) => {
+    if (account.source !== "upload") {
+      return false;
+    }
+
+    return !fetchedById.has(account.id);
+  });
+
+  return [...optimisticAccounts, ...mergedFetchedAccounts];
 };
 
 type AccountRule = {

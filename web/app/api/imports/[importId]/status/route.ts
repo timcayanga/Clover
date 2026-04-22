@@ -1,6 +1,12 @@
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { countParsedTransactionRows, countTransactionsByImportFileCompat, fetchImportFileCompat } from "@/lib/data-engine";
+import {
+  countParsedTransactionRows,
+  countTransactionsByImportFileCompat,
+  fetchImportFileCompat,
+  hasCompatibleTable,
+} from "@/lib/data-engine";
+import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +25,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     await assertWorkspaceAccess(userId, importFile.workspaceId as string);
     const parsedRowsCount = await countParsedTransactionRows(importId);
     const confirmedTransactionsCount = await countTransactionsByImportFileCompat(importId);
+    const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
+      ? await prisma.accountStatementCheckpoint.findUnique({
+          where: { importFileId: importId },
+        })
+      : null;
     const confirmationStatus =
       importFile.status === "failed"
         ? "failed"
@@ -43,6 +54,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       parsedRowsCount,
       confirmedTransactionsCount,
       confirmationStatus,
+      statementCheckpoint,
     });
   } catch {
     return NextResponse.json({ error: "Unable to load import status" }, { status: 400 });
