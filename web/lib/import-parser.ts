@@ -119,6 +119,24 @@ const formatUnionBankAccountName = (accountNumber?: string | null) => {
   return suffix ? `UnionBank ${suffix}` : "UnionBank";
 };
 
+const monthNamePattern = "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
+
+const decompactOcrText = (value: string) => {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return normalized;
+  }
+
+  return normalized
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Za-z])(\d)/g, "$1 $2")
+    .replace(/(\d)([A-Za-z])/g, "$1 $2")
+    .replace(new RegExp(`(${monthNamePattern})(\\d)`, "gi"), "$1 $2")
+    .replace(new RegExp(`(\\d)(${monthNamePattern})`, "gi"), "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
 export const getTrailingBalanceFromParsedRows = (rows: ParsedImportRow[]) => {
   const lastBalanceText = [...rows]
     .reverse()
@@ -132,7 +150,7 @@ const normalizeBpiText = (text: string) =>
   text
     .split(/\r?\n/)
     .map((line) => {
-      const normalized = normalizeWhitespace(line);
+      const normalized = decompactOcrText(line);
       if (!normalized) {
         return normalized;
       }
@@ -302,7 +320,7 @@ const parseBpiDate = (value?: string | null) => {
   if (!value) return null;
   const normalized = normalizeWhitespace(value);
   const compact = compactWhitespace(normalized);
-  const match = compact.match(/^([A-Z]{3})(\d{1,2}),(\d{4})$/i);
+  const match = compact.match(/^([A-Z]{3,9})(\d{1,2})(?:,(\d{4}))?$/i);
   if (!match) {
     const parsed = new Date(normalized);
     return Number.isNaN(parsed.getTime()) ? null : parsed;
@@ -313,7 +331,8 @@ const parseBpiDate = (value?: string | null) => {
     return null;
   }
 
-  return new Date(Date.UTC(Number(match[3]), monthIndex, Number(match[2]), 12));
+  const year = match[3] ? Number(match[3]) : new Date().getUTCFullYear();
+  return new Date(Date.UTC(year, monthIndex, Number(match[2]), 12));
 };
 
 const parseRcbcDate = (value?: string | null) => {
@@ -408,24 +427,29 @@ const monthIndexByAbbr: Record<string, number> = {
 
 const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = normalizeBpiText(text).trim();
-  if (!/BANK OF THE PHILIPPINE ISLANDS|\bBPI\b|FORBES\s*PARK\s*SAVINGS\s*BET\-?PHP/i.test(normalized)) {
+  if (!/BANK OF THE PHILIPPINE ISLANDS|\bBPI\b|\bBE\d{8}\b|FORBES\s*PARK\s*SAVINGS\s*BET\-?PHP/i.test(normalized)) {
     return null;
   }
 
   const lines = normalized
     .split(/\r?\n/)
-    .map((line) => normalizeWhitespace(line))
+    .map((line) => decompactOcrText(line))
     .filter(Boolean);
   const headerLine =
     lines.find((line) => /PERIOD\s*COVERED/i.test(line)) ??
     lines.find((line) => /FORBES\s*PARK\s*SAVINGS/i.test(line)) ??
     normalized;
   const headerCompact = compactWhitespace(headerLine);
+  const cardAccountMatch = normalized.match(/\bBE\d{8}\b/i)?.[0] ?? null;
   const accountSection =
     headerCompact.match(/(?:PERIODCOVERED.*?NO|ACCOUNT(?:NO|NUMBER|#)|ACCT(?:NO|NUMBER|#)|A\/C(?:NO|NUMBER|#)|NO):?([0-9-]{8,})/i)?.[1] ??
     headerCompact.match(/NO:([0-9-]{8,})/i)?.[1] ??
+    cardAccountMatch ??
     "";
-  const accountNumber = accountSection.replace(/\D/g, "").slice(0, 10) || null;
+  const accountNumber =
+    (/^BE\d{8}$/i.test(accountSection) ? accountSection.toUpperCase() : null) ||
+    accountSection.replace(/\D/g, "").slice(0, 10) ||
+    null;
   const accountName = accountNumber ? `BPI ${accountNumber.slice(-4)}` : "BPI";
 
   const periodMatch =
@@ -808,9 +832,9 @@ const parseBpiTransactionLine = (
   const normalized = normalizeWhitespace(line);
   const compact = compactWhitespace(normalized);
   const match =
-    compact.match(/^((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\d{1,2}(?:,\d{4})?)(.+)$/i) ??
+    compact.match(new RegExp(`^(${monthNamePattern}\\d{1,2}(?:,\\d{4})?|\\d{1,2}${monthNamePattern}(?:,\\d{4})?)(.+)$`, "i")) ??
     compact.match(/^(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)(.+)$/i) ??
-    compact.match(/^(\d{1,2}(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:,\d{4})?)(.+)$/i);
+    compact.match(new RegExp(`^(\\d{1,2}(?:${monthNamePattern})(?:,\\d{4})?)(.+)$`, "i"));
 
   if (!match) {
     return null;
@@ -825,7 +849,7 @@ const parseBpiTransactionLine = (
   }
 
   if (!date) {
-    const monthMatch = dateToken.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2})(?:,?(\d{4}))?$/i);
+    const monthMatch = dateToken.match(new RegExp(`^(${monthNamePattern})\\s*(\\d{1,2})(?:,?(\\d{4}))?$`, "i"));
     if (monthMatch) {
       const monthIndex = monthIndexByAbbr[monthMatch[1].slice(0, 3).toUpperCase()];
       if (monthIndex !== undefined) {
@@ -842,7 +866,7 @@ const parseBpiTransactionLine = (
     }
 
     if (!date) {
-      const dayMonthMatch = dateToken.match(/^(\d{1,2})(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(?:,?(\d{4}))?$/i);
+      const dayMonthMatch = dateToken.match(new RegExp(`^(\\d{1,2})(${monthNamePattern})(?:,?(\\d{4}))?$`, "i"));
       if (dayMonthMatch) {
         const monthIndex = monthIndexByAbbr[dayMonthMatch[2].slice(0, 3).toUpperCase()];
         if (monthIndex !== undefined) {
