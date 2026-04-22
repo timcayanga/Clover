@@ -1,0 +1,245 @@
+type CachedRecord = Record<string, unknown>;
+
+export type AccountsWorkspaceCacheSnapshot = {
+  workspaceId: string;
+  accounts: CachedRecord[];
+  accountRules: CachedRecord[];
+  transactions: CachedRecord[];
+  statementCheckpoints: CachedRecord[];
+  updatedAt: number;
+};
+
+export type AccountsWorkspaceCacheState = {
+  selectedWorkspaceId: string;
+  snapshots: Record<string, AccountsWorkspaceCacheSnapshot>;
+};
+
+export type TransactionsWorkspaceCacheSnapshot = {
+  workspaceId: string;
+  accounts: CachedRecord[];
+  categories: CachedRecord[];
+  transactions: CachedRecord[];
+  imports: CachedRecord[];
+  updatedAt: number;
+};
+
+export type TransactionsWorkspaceCacheState = {
+  selectedWorkspaceId: string;
+  snapshots: Record<string, TransactionsWorkspaceCacheSnapshot>;
+};
+
+export type ImportedWorkspaceAccount = CachedRecord & {
+  id: string;
+  optimisticAccountId?: string | null;
+};
+
+export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v1";
+export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v1";
+
+const isCachedRecordArray = (value: unknown): value is CachedRecord[] =>
+  Array.isArray(value) && value.every((entry) => entry && typeof entry === "object");
+
+const readJsonCache = <T>(key: string): T | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) {
+      return null;
+    }
+
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+};
+
+const writeJsonCache = (key: string, value: unknown) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(key, JSON.stringify(value));
+};
+
+const createImportedAccountCandidates = (account: ImportedWorkspaceAccount) => {
+  const ids = new Set<string>([account.id]);
+  if (typeof account.optimisticAccountId === "string" && account.optimisticAccountId.trim()) {
+    ids.add(account.optimisticAccountId);
+  }
+  return ids;
+};
+
+const mergeImportedAccount = <T extends CachedRecord>(items: T[], account: ImportedWorkspaceAccount) => {
+  const idsToReplace = createImportedAccountCandidates(account);
+  const filtered = items.filter((entry) => {
+    const id = typeof entry.id === "string" ? entry.id : "";
+    return !idsToReplace.has(id);
+  });
+
+  return [account as T, ...filtered];
+};
+
+export const readAccountsWorkspaceCache = (): AccountsWorkspaceCacheState | null => {
+  const cache = readJsonCache<AccountsWorkspaceCacheState>(accountsWorkspaceCacheKey);
+  if (!cache || typeof cache !== "object" || typeof cache.selectedWorkspaceId !== "string") {
+    return null;
+  }
+
+  const snapshots = cache.snapshots && typeof cache.snapshots === "object" ? cache.snapshots : {};
+  return {
+    selectedWorkspaceId: cache.selectedWorkspaceId,
+    snapshots: Object.fromEntries(
+      Object.entries(snapshots).filter(([, snapshot]) => {
+        return (
+          snapshot &&
+          typeof snapshot === "object" &&
+          typeof snapshot.workspaceId === "string" &&
+          isCachedRecordArray(snapshot.accounts) &&
+          isCachedRecordArray(snapshot.accountRules) &&
+          isCachedRecordArray(snapshot.transactions) &&
+          isCachedRecordArray(snapshot.statementCheckpoints)
+        );
+      })
+    ) as Record<string, AccountsWorkspaceCacheSnapshot>,
+  };
+};
+
+export const getCachedAccountsWorkspace = (workspaceId: string): AccountsWorkspaceCacheSnapshot | null => {
+  if (!workspaceId) {
+    return null;
+  }
+
+  const cache = readAccountsWorkspaceCache();
+  return cache?.snapshots[workspaceId] ?? null;
+};
+
+export const persistAccountsWorkspaceCache = (
+  workspaceId: string,
+  snapshot: Omit<AccountsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
+) => {
+  if (!workspaceId) {
+    return;
+  }
+
+  const cache = readAccountsWorkspaceCache();
+  const nextSnapshot: AccountsWorkspaceCacheSnapshot = {
+    workspaceId,
+    updatedAt: Date.now(),
+    ...snapshot,
+  };
+
+  const nextState: AccountsWorkspaceCacheState = {
+    selectedWorkspaceId: workspaceId,
+    snapshots: {
+      ...(cache?.snapshots ?? {}),
+      [workspaceId]: nextSnapshot,
+    },
+  };
+
+  writeJsonCache(accountsWorkspaceCacheKey, nextState);
+};
+
+export const readTransactionsWorkspaceCache = (): TransactionsWorkspaceCacheState | null => {
+  const cache = readJsonCache<TransactionsWorkspaceCacheState>(transactionsWorkspaceCacheKey);
+  if (!cache || typeof cache !== "object" || typeof cache.selectedWorkspaceId !== "string") {
+    return null;
+  }
+
+  const snapshots = cache.snapshots && typeof cache.snapshots === "object" ? cache.snapshots : {};
+  return {
+    selectedWorkspaceId: cache.selectedWorkspaceId,
+    snapshots: Object.fromEntries(
+      Object.entries(snapshots).filter(([, snapshot]) => {
+        return (
+          snapshot &&
+          typeof snapshot === "object" &&
+          typeof snapshot.workspaceId === "string" &&
+          isCachedRecordArray(snapshot.accounts) &&
+          isCachedRecordArray(snapshot.categories) &&
+          isCachedRecordArray(snapshot.transactions) &&
+          isCachedRecordArray(snapshot.imports)
+        );
+      })
+    ) as Record<string, TransactionsWorkspaceCacheSnapshot>,
+  };
+};
+
+export const getCachedTransactionsWorkspace = (workspaceId: string): TransactionsWorkspaceCacheSnapshot | null => {
+  if (!workspaceId) {
+    return null;
+  }
+
+  const cache = readTransactionsWorkspaceCache();
+  return cache?.snapshots[workspaceId] ?? null;
+};
+
+export const persistTransactionsWorkspaceCache = (
+  workspaceId: string,
+  snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
+) => {
+  if (!workspaceId) {
+    return;
+  }
+
+  const cache = readTransactionsWorkspaceCache();
+  const nextSnapshot: TransactionsWorkspaceCacheSnapshot = {
+    workspaceId,
+    updatedAt: Date.now(),
+    ...snapshot,
+  };
+
+  const nextState: TransactionsWorkspaceCacheState = {
+    selectedWorkspaceId: workspaceId,
+    snapshots: {
+      ...(cache?.snapshots ?? {}),
+      [workspaceId]: nextSnapshot,
+    },
+  };
+
+  writeJsonCache(transactionsWorkspaceCacheKey, nextState);
+};
+
+export const syncImportedWorkspaceAccountCaches = (workspaceId: string, account: ImportedWorkspaceAccount) => {
+  if (!workspaceId || !account.id) {
+    return;
+  }
+
+  const accountsCache = readAccountsWorkspaceCache();
+  const nextAccountsSnapshot: AccountsWorkspaceCacheSnapshot = {
+    workspaceId,
+    updatedAt: Date.now(),
+    accounts: mergeImportedAccount(accountsCache?.snapshots[workspaceId]?.accounts ?? [], account),
+    accountRules: accountsCache?.snapshots[workspaceId]?.accountRules ?? [],
+    transactions: accountsCache?.snapshots[workspaceId]?.transactions ?? [],
+    statementCheckpoints: accountsCache?.snapshots[workspaceId]?.statementCheckpoints ?? [],
+  };
+
+  const transactionsCache = readTransactionsWorkspaceCache();
+  const nextTransactionsSnapshot: TransactionsWorkspaceCacheSnapshot = {
+    workspaceId,
+    updatedAt: Date.now(),
+    accounts: mergeImportedAccount(transactionsCache?.snapshots[workspaceId]?.accounts ?? [], account),
+    categories: transactionsCache?.snapshots[workspaceId]?.categories ?? [],
+    transactions: transactionsCache?.snapshots[workspaceId]?.transactions ?? [],
+    imports: transactionsCache?.snapshots[workspaceId]?.imports ?? [],
+  };
+
+  writeJsonCache(accountsWorkspaceCacheKey, {
+    selectedWorkspaceId: workspaceId,
+    snapshots: {
+      ...(accountsCache?.snapshots ?? {}),
+      [workspaceId]: nextAccountsSnapshot,
+    },
+  } satisfies AccountsWorkspaceCacheState);
+
+  writeJsonCache(transactionsWorkspaceCacheKey, {
+    selectedWorkspaceId: workspaceId,
+    snapshots: {
+      ...(transactionsCache?.snapshots ?? {}),
+      [workspaceId]: nextTransactionsSnapshot,
+    },
+  } satisfies TransactionsWorkspaceCacheState);
+};

@@ -1000,13 +1000,23 @@ function TransactionsPageContent() {
   const addMenuRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
+  const initialWorkspaceId = readSelectedWorkspaceId();
+  const initialCachedWorkspace = getCachedTransactionsWorkspace(initialWorkspaceId);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(() => readSelectedWorkspaceId());
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [imports, setImports] = useState<ImportFile[]>([]);
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
+  const [accounts, setAccounts] = useState<Account[]>(
+    () => (initialCachedWorkspace?.accounts as Account[]) ?? []
+  );
+  const [categories, setCategories] = useState<Category[]>(
+    () => (initialCachedWorkspace?.categories as Category[]) ?? []
+  );
+  const [transactions, setTransactions] = useState<Transaction[]>(
+    () => (initialCachedWorkspace?.transactions as Transaction[]) ?? []
+  );
+  const [imports, setImports] = useState<ImportFile[]>(
+    () => (initialCachedWorkspace?.imports as ImportFile[]) ?? []
+  );
   const [query, setQuery] = useState("");
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
   const [accountFilters, setAccountFilters] = useState<string[]>([]);
@@ -1035,7 +1045,7 @@ function TransactionsPageContent() {
   const [manualForm, setManualForm] = useState<ManualTransactionForm>(createEmptyManualForm());
   const [isSaving, setIsSaving] = useState(false);
   const [isWorkspacesLoaded, setIsWorkspacesLoaded] = useState(false);
-  const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
+  const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(() => Boolean(initialCachedWorkspace));
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);

@@ -9,6 +9,7 @@ import { formatDuplicateImportMessage } from "@/lib/import-duplicate-message";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { syncImportedWorkspaceAccountCaches } from "@/lib/workspace-cache";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 
 type AccountOption = {
@@ -142,6 +143,35 @@ const toBalanceString = (value: unknown): string | null => {
   } catch {
     return null;
   }
+};
+
+const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
+  const accountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+  if (!accountId || !summary.accountName) {
+    return null;
+  }
+
+  return {
+    id: accountId,
+    optimisticAccountId: summary.optimisticAccountId ?? null,
+    name: summary.accountName,
+    institution: summary.institution,
+    type: inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
+    currency: "PHP",
+    source: "upload",
+    balance: summary.balance,
+    updatedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+  };
+};
+
+const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsightsSummary) => {
+  const importedAccount = buildImportedWorkspaceAccount(summary);
+  if (!importedAccount) {
+    return;
+  }
+
+  syncImportedWorkspaceAccountCaches(workspaceId, importedAccount);
 };
 
 const isQuickPasswordProtectedPdf = async (file: File) => {
@@ -361,7 +391,7 @@ export function ImportFilesModal({
           file_size_bytes: file.size,
         });
         if (guessedIdentity && optimisticAccountId) {
-          void onImported({
+          const optimisticSummary = {
             fileName: file.name,
             rowsImported: 0,
             accountId: optimisticAccountId,
@@ -378,7 +408,9 @@ export function ImportFilesModal({
             topMerchantCount: null,
             optimistic: true,
             optimisticAccountId,
-          });
+          } satisfies UploadInsightsSummary;
+          seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
+          void onImported(optimisticSummary);
 
           if (nextFiles.length === 1) {
             void (async () => {
@@ -688,6 +720,7 @@ export function ImportFilesModal({
             targetAccountId: resolvedAccountId,
           });
 
+          seedImportedWorkspaceCaches(workspaceId, previewSummary);
           void onImported(previewSummary);
 
           const result = await confirmItemImport(itemId, importFileId, resolvedAccountId, {
@@ -696,6 +729,7 @@ export function ImportFilesModal({
             institution: resolvedIdentity.institution ?? summaryContext.institution,
           });
           if (result.summary) {
+            seedImportedWorkspaceCaches(workspaceId, result.summary);
             void onImported(result.summary);
           }
           return;
@@ -890,6 +924,7 @@ export function ImportFilesModal({
           progressLabel: "Queued for background processing",
           status: "importing",
         });
+        seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
         void onImported(optimisticSummary);
 
         void monitorQueuedImportAndConfirm(itemId, importFileId, optimisticAccountId, {
@@ -926,6 +961,7 @@ export function ImportFilesModal({
         optimisticAccountId: item.optimisticAccountId,
       }).then((result) => {
         if (result.summary) {
+          seedImportedWorkspaceCaches(workspaceId, result.summary);
           void onImported(result.summary);
         }
       });
@@ -1095,6 +1131,9 @@ export function ImportFilesModal({
         analyticsOnceKey("first_import_completed", "session")
       );
       if (uploadInsightsSummaries.length > 0) {
+        for (const summary of uploadInsightsSummaries) {
+          seedImportedWorkspaceCaches(workspaceId, summary);
+        }
         void onImported(
           uploadInsightsSummaries.length === 1
             ? uploadInsightsSummaries[0]
