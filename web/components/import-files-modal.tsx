@@ -1049,7 +1049,21 @@ export function ImportFilesModal({
   const overallProgress = items.length > 0
     ? ((completedFileCount + (activeProgressItem ? activeProgressItem.progress / 100 : 0)) / items.length) * 100
     : 0;
-  const hasCompletedAllFiles = items.length > 0 && items.every((item) => item.confirmationState === "confirmed");
+  const shouldCloseDock = open && Math.round(overallProgress) >= 100;
+
+  useEffect(() => {
+    if (!shouldCloseDock) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      onClose();
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [onClose, shouldCloseDock]);
 
   useEffect(() => {
     if (!open || passwordItems.length === 0) {
