@@ -698,13 +698,13 @@ export function ImportFilesModal({
             }
           }
 
-          if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
-            updateItem(itemId, {
-              status: "importing",
-              progress: Math.min(95, 84 + attempt * 0.1),
-              progressLabel: "Waiting for account details",
-              targetAccountId: accountId,
-            });
+        if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
+          updateItem(itemId, {
+            status: "importing",
+            progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
+            progressLabel: "Waiting for account details",
+            targetAccountId: accountId,
+          });
             await sleep(parsedRowsCount > 0 ? 300 : 600);
             continue;
           }
@@ -755,7 +755,7 @@ export function ImportFilesModal({
 
         updateItem(itemId, {
           status: "importing",
-          progress: Math.min(95, 82 + attempt * 0.1),
+          progress: Math.max(92, Math.min(95, 92 + attempt * 0.1)),
           progressLabel: "Parsing in background",
           targetAccountId: accountId,
         });
