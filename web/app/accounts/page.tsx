@@ -1488,6 +1488,7 @@ function AccountsPageContent() {
           if (summary.optimistic) {
             const optimisticAccount = buildOptimisticImportedAccount(summary);
             if (optimisticAccount) {
+              setAccountsLoading(false);
               setAccounts((current) => {
                 const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
                 if (existingIndex >= 0) {
@@ -1504,6 +1505,7 @@ function AccountsPageContent() {
           }
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           if (optimisticAccount) {
+            setAccountsLoading(false);
             setAccounts((current) => {
               const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
               if (existingIndex >= 0) {

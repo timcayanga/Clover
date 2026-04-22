@@ -3975,6 +3975,7 @@ function TransactionsPageContent() {
           if (summary.optimistic) {
             const optimisticAccount = buildOptimisticImportedAccount(summary);
             if (optimisticAccount) {
+              setIsWorkspaceDataReady(true);
               setAccounts((current) => {
                 const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
                 if (existingIndex >= 0) {
@@ -3996,6 +3997,7 @@ function TransactionsPageContent() {
 
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           if (optimisticAccount) {
+            setIsWorkspaceDataReady(true);
             setAccounts((current) => {
               const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
               if (existingIndex >= 0) {
