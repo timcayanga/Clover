@@ -57,10 +57,16 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
   };
 };
 
-const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentAccounts: Account[]) => {
-  const fetchedById = new Map(fetchedAccounts.map((account) => [account.id, account] as const));
-  const mergedFetchedAccounts = fetchedAccounts.map((account) => {
-    const optimistic = currentAccounts.find((currentAccount) => currentAccount.id === account.id && currentAccount.source === "upload");
+const mergeAccountsWithOptimisticImports = (
+  fetchedAccounts: Account[],
+  currentAccounts: Account[],
+  deletedAccountIds: Set<string>
+) => {
+  const visibleFetchedAccounts = fetchedAccounts.filter((account) => !deletedAccountIds.has(account.id));
+  const visibleCurrentAccounts = currentAccounts.filter((account) => !deletedAccountIds.has(account.id));
+  const fetchedById = new Map(visibleFetchedAccounts.map((account) => [account.id, account] as const));
+  const mergedFetchedAccounts = visibleFetchedAccounts.map((account) => {
+    const optimistic = visibleCurrentAccounts.find((currentAccount) => currentAccount.id === account.id && currentAccount.source === "upload");
     if (!optimistic) {
       return account;
     }
@@ -72,7 +78,7 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
     };
   });
 
-  const optimisticAccounts = currentAccounts.filter((account) => {
+  const optimisticAccounts = visibleCurrentAccounts.filter((account) => {
     if (account.source !== "upload") {
       return false;
     }
@@ -315,6 +321,7 @@ function AccountsPageContent() {
   const searchParams = useSearchParams();
   const addRef = useRef<HTMLDivElement>(null);
   const workspaceLoadSeqRef = useRef(0);
+  const deletedAccountIdsRef = useRef(new Set<string>());
   const initialWorkspaceId = readSelectedWorkspaceId();
   const initialCachedWorkspace = getCachedAccountsWorkspace(initialWorkspaceId);
 
@@ -430,7 +437,7 @@ function AccountsPageContent() {
       if (accountsResponse.ok) {
         const payload = await accountsResponse.json();
         const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
-        setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
+        setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current, deletedAccountIdsRef.current));
         setAccountRules(Array.isArray(payload.accountRules) ? payload.accountRules : []);
       }
 
@@ -829,12 +836,15 @@ function AccountsPageContent() {
         throw new Error(payload?.error ?? "Unable to delete account.");
       }
 
-      setAccounts((current) => current.filter((account) => account.id !== selectedAccount.id));
-      setTransactions((current) => current.filter((transaction) => transaction.accountId !== selectedAccount.id));
-      setAccountRules((current) => current.filter((rule) => rule.accountId !== selectedAccount.id));
-      setDrawerAccountId(null);
-      setAccountDeleteConfirmOpen(false);
-      setMessage(`Account "${selectedAccount.name}" deleted.`);
+      deletedAccountIdsRef.current.add(selectedAccount.id);
+      flushSync(() => {
+        setAccounts((current) => current.filter((account) => account.id !== selectedAccount.id));
+        setTransactions((current) => current.filter((transaction) => transaction.accountId !== selectedAccount.id));
+        setAccountRules((current) => current.filter((rule) => rule.accountId !== selectedAccount.id));
+        setDrawerAccountId(null);
+        setAccountDeleteConfirmOpen(false);
+        setMessage(`Account "${selectedAccount.name}" deleted.`);
+      });
       clearWorkspaceCache(selectedWorkspaceId);
       workspaceLoadSeqRef.current += 1;
       void loadWorkspaceData(selectedWorkspaceId, { silent: true });
