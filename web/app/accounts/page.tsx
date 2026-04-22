@@ -753,6 +753,7 @@ function AccountsPageContent() {
   };
 
   const openImportFiles = () => {
+    setPendingImportSummary(null);
     setAddOpen(false);
     setImportOpen(true);
   };
