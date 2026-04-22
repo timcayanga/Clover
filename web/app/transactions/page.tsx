@@ -12,7 +12,6 @@ import {
 } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
-import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 
@@ -972,25 +971,9 @@ function MerchantFilterGroup({
 }
 
 export default function TransactionsPage() {
-  const onboardingStatus = useOnboardingAccess();
-
   useEffect(() => {
     document.title = "Clover | Transactions";
   }, []);
-
-  if (onboardingStatus !== "ready") {
-    return (
-      <CloverShell
-        active="transactions"
-        title="Checking your setup..."
-        kicker="One moment"
-        subtitle="We’re confirming your onboarding status before opening Transactions."
-        showTopbar={false}
-      >
-        <section className="empty-state">Checking your setup...</section>
-      </CloverShell>
-    );
-  }
 
   return <TransactionsPageContent />;
 }
@@ -1073,7 +1056,7 @@ function TransactionsPageContent() {
     }
   };
 
-  const loadWorkspaceData = async (workspaceId: string, options?: { skipMetadata?: boolean }) => {
+  const loadWorkspaceData = async (workspaceId: string, options?: { skipMetadata?: boolean; background?: boolean }) => {
     if (!workspaceId) {
       setAccounts([]);
       setCategories([]);
@@ -1083,17 +1066,35 @@ function TransactionsPageContent() {
       return;
     }
 
-    const transactionsResponse = await fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`);
-
-    if (transactionsResponse.ok) {
-      const payload = await transactionsResponse.json();
-      setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
+    if (!options?.background) {
+      setIsWorkspaceDataReady(false);
     }
 
-    setIsWorkspaceDataReady(true);
+    try {
+      const transactionsResponse = await fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`);
 
-    if (options?.skipMetadata) {
-      const accountsResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
+      if (transactionsResponse.ok) {
+        const payload = await transactionsResponse.json();
+        setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
+      }
+
+      if (options?.skipMetadata) {
+        const accountsResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
+
+        if (accountsResponse.ok) {
+          const payload = await accountsResponse.json();
+          const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+          setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
+        }
+
+        return;
+      }
+
+      const [accountsResponse, categoriesResponse, importResponse] = await Promise.all([
+        fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
+        fetch(`/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`),
+        fetch(`/api/imports?workspaceId=${encodeURIComponent(workspaceId)}`),
+      ]);
 
       if (accountsResponse.ok) {
         const payload = await accountsResponse.json();
@@ -1101,41 +1102,24 @@ function TransactionsPageContent() {
         setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
       }
 
-      return;
-    }
+      if (categoriesResponse.ok) {
+        const payload = await categoriesResponse.json();
+        setCategories(Array.isArray(payload.categories) ? payload.categories : []);
+      }
 
-    const [accountsResponse, categoriesResponse, importResponse] = await Promise.all([
-      fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
-      fetch(`/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`),
-      fetch(`/api/imports?workspaceId=${encodeURIComponent(workspaceId)}`),
-    ]);
-
-    if (accountsResponse.ok) {
-      const payload = await accountsResponse.json();
-      const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
-      setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
-    }
-
-    if (categoriesResponse.ok) {
-      const payload = await categoriesResponse.json();
-      setCategories(Array.isArray(payload.categories) ? payload.categories : []);
-    }
-
-    if (importResponse.ok) {
-      const payload = await importResponse.json();
-      setImports(Array.isArray(payload.importFiles) ? payload.importFiles : []);
+      if (importResponse.ok) {
+        const payload = await importResponse.json();
+        setImports(Array.isArray(payload.importFiles) ? payload.importFiles : []);
+      }
+    } finally {
+      if (!options?.background) {
+        setIsWorkspaceDataReady(true);
+      }
     }
   };
 
   useEffect(() => {
-    const start = () => {
-      void loadWorkspaces();
-    };
-
-    const idleCallback = window.setTimeout(start, 250);
-    return () => {
-      window.clearTimeout(idleCallback);
-    };
+    void loadWorkspaces();
   }, []);
 
   useEffect(() => {
@@ -1143,8 +1127,6 @@ function TransactionsPageContent() {
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
-    let active = true;
-
     setSelectedTransactionIds([]);
     setSelectedTransaction(null);
     setDetailDraft(null);
@@ -1157,9 +1139,7 @@ function TransactionsPageContent() {
       setTransactions([]);
       setImports([]);
       setIsWorkspaceDataReady(true);
-      return () => {
-        active = false;
-      };
+      return;
     }
 
     const cachedSnapshot = getCachedTransactionsWorkspace(selectedWorkspaceId);
@@ -1169,24 +1149,16 @@ function TransactionsPageContent() {
       setTransactions(cachedSnapshot.transactions);
       setImports(cachedSnapshot.imports);
       setIsWorkspaceDataReady(true);
-    } else {
-      setAccounts([]);
-      setCategories([]);
-      setTransactions([]);
-      setImports([]);
-      setIsWorkspaceDataReady(true);
+      void loadWorkspaceData(selectedWorkspaceId, { skipMetadata: true, background: true });
+      return;
     }
 
-    void (async () => {
-      await loadWorkspaceData(selectedWorkspaceId);
-      if (active) {
-        setIsWorkspaceDataReady(true);
-      }
-    })();
-
-    return () => {
-      active = false;
-    };
+    setAccounts([]);
+    setCategories([]);
+    setTransactions([]);
+    setImports([]);
+    setIsWorkspaceDataReady(false);
+    void loadWorkspaceData(selectedWorkspaceId);
   }, [selectedWorkspaceId]);
 
   useEffect(() => {

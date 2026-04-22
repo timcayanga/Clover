@@ -7,7 +7,6 @@ import { CloverShell } from "@/components/clover-shell";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { ImportFilesModal } from "@/components/import-files-modal";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
-import { useOnboardingAccess } from "@/lib/use-onboarding-access";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   getCachedAccountsWorkspace,
@@ -298,25 +297,9 @@ function ActionIcon({
 }
 
 export default function AccountsPage() {
-  const onboardingStatus = useOnboardingAccess();
-
   useEffect(() => {
     document.title = "Clover | Accounts";
   }, []);
-
-  if (onboardingStatus !== "ready") {
-    return (
-      <CloverShell
-        active="accounts"
-        title="Checking your setup..."
-        kicker="One moment"
-        subtitle="We’re confirming your onboarding status before opening Accounts."
-        showTopbar={false}
-      >
-        <section className="empty-state">Checking your setup...</section>
-      </CloverShell>
-    );
-  }
 
   return <AccountsPageContent />;
 }
@@ -426,40 +409,32 @@ function AccountsPageContent() {
       setAccountsLoading(true);
     }
 
-    const accountsRequest = fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
-    const transactionsRequest = fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`);
+    try {
+      const accountsRequest = fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
+      const transactionsRequest = fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`);
 
-    const accountsResponse = await accountsRequest;
-    if (accountsResponse.ok) {
-      const payload = await accountsResponse.json();
-      const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
-      setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
-      setAccountRules(Array.isArray(payload.accountRules) ? payload.accountRules : []);
-    }
-
-    if (!options?.silent) {
-      setAccountsLoading(false);
-    }
-
-    void transactionsRequest.then(async (transactionsResponse) => {
-      if (!transactionsResponse.ok) {
-        return;
+      const accountsResponse = await accountsRequest;
+      if (accountsResponse.ok) {
+        const payload = await accountsResponse.json();
+        const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+        setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
+        setAccountRules(Array.isArray(payload.accountRules) ? payload.accountRules : []);
       }
 
-      const payload = await transactionsResponse.json();
-      setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
-    });
+      const transactionsResponse = await transactionsRequest;
+      if (transactionsResponse.ok) {
+        const payload = await transactionsResponse.json();
+        setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
+      }
+    } finally {
+      if (!options?.silent) {
+        setAccountsLoading(false);
+      }
+    }
   };
 
   useEffect(() => {
-    const start = () => {
-      void loadWorkspaces();
-    };
-
-    const idleCallback = window.setTimeout(start, 250);
-    return () => {
-      window.clearTimeout(idleCallback);
-    };
+    void loadWorkspaces();
   }, []);
 
   useEffect(() => {
@@ -527,8 +502,8 @@ function AccountsPageContent() {
     setAccountRules([]);
     setTransactions([]);
     setStatementCheckpoints([]);
-    setAccountsLoading(false);
-    void loadWorkspaceData(selectedWorkspaceId, { silent: true });
+    setAccountsLoading(true);
+    void loadWorkspaceData(selectedWorkspaceId);
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
