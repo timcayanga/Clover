@@ -1168,7 +1168,7 @@ function TransactionsPageContent() {
     return () => {
       active = false;
     };
-  }, [selectedWorkspaceId, isWorkspacesLoaded]);
+  }, [selectedWorkspaceId]);
 
   useEffect(() => {
     if (!addMenuOpen && !downloadMenuOpen) {

@@ -106,6 +106,20 @@ type StatementCheckpoint = {
   updatedAt: string;
 };
 
+type AccountsWorkspaceCacheSnapshot = {
+  workspaceId: string;
+  accounts: Account[];
+  accountRules: AccountRule[];
+  transactions: Transaction[];
+  statementCheckpoints: StatementCheckpoint[];
+  updatedAt: number;
+};
+
+type AccountsWorkspaceCacheState = {
+  selectedWorkspaceId: string;
+  snapshots: Record<string, AccountsWorkspaceCacheSnapshot>;
+};
+
 type SummaryMode = "totals" | "percent";
 type AccountSort = "name" | "balance_desc" | "updated_desc";
 
@@ -115,6 +129,8 @@ const currencyFormatter = new Intl.NumberFormat("en-PH", {
   minimumFractionDigits: 2,
 });
 
+const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v1";
+
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", {
     day: "2-digit",
@@ -123,6 +139,79 @@ const formatDate = (value: string) =>
   });
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
+
+const readAccountsWorkspaceCache = (): AccountsWorkspaceCacheState | null => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(accountsWorkspaceCacheKey);
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<AccountsWorkspaceCacheState> | null;
+    if (!parsed || typeof parsed !== "object" || typeof parsed.selectedWorkspaceId !== "string") {
+      return null;
+    }
+
+    const snapshots = parsed.snapshots && typeof parsed.snapshots === "object" ? parsed.snapshots : {};
+    return {
+      selectedWorkspaceId: parsed.selectedWorkspaceId,
+      snapshots: Object.fromEntries(
+        Object.entries(snapshots).filter(([, snapshot]) => {
+          return (
+            snapshot &&
+            typeof snapshot === "object" &&
+            typeof snapshot.workspaceId === "string" &&
+            Array.isArray(snapshot.accounts) &&
+            Array.isArray(snapshot.accountRules) &&
+            Array.isArray(snapshot.transactions) &&
+            Array.isArray(snapshot.statementCheckpoints)
+          );
+        })
+      ) as Record<string, AccountsWorkspaceCacheSnapshot>,
+    };
+  } catch {
+    return null;
+  }
+};
+
+const getCachedAccountsWorkspace = (workspaceId: string): AccountsWorkspaceCacheSnapshot | null => {
+  if (!workspaceId) {
+    return null;
+  }
+
+  const cache = readAccountsWorkspaceCache();
+  return cache?.snapshots[workspaceId] ?? null;
+};
+
+const persistAccountsWorkspaceCache = (
+  workspaceId: string,
+  snapshot: Omit<AccountsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
+) => {
+  if (typeof window === "undefined" || !workspaceId) {
+    return;
+  }
+
+  const cache = readAccountsWorkspaceCache();
+  const nextSnapshot: AccountsWorkspaceCacheSnapshot = {
+    workspaceId,
+    updatedAt: Date.now(),
+    ...snapshot,
+  };
+
+  const nextState: AccountsWorkspaceCacheState = {
+    selectedWorkspaceId: workspaceId,
+    snapshots: {
+      ...(cache?.snapshots ?? {}),
+      [workspaceId]: nextSnapshot,
+    },
+  };
+
+  window.localStorage.setItem(accountsWorkspaceCacheKey, JSON.stringify(nextState));
+};
 
 const getEffectiveAccountType = (account: Account) =>
   inferAccountTypeFromStatement(account.institution, account.name, account.type);
@@ -452,11 +541,45 @@ function AccountsPageContent() {
 
   useEffect(() => {
     if (!selectedWorkspaceId) {
+      setAccounts([]);
+      setAccountRules([]);
+      setTransactions([]);
+      setStatementCheckpoints([]);
+      setAccountsLoading(false);
       return;
     }
 
+    const cachedSnapshot = getCachedAccountsWorkspace(selectedWorkspaceId);
+    if (cachedSnapshot) {
+      setAccounts(cachedSnapshot.accounts);
+      setAccountRules(cachedSnapshot.accountRules);
+      setTransactions(cachedSnapshot.transactions);
+      setStatementCheckpoints(cachedSnapshot.statementCheckpoints);
+      setAccountsLoading(false);
+      void loadWorkspaceData(selectedWorkspaceId, { silent: true });
+      return;
+    }
+
+    setAccounts([]);
+    setAccountRules([]);
+    setTransactions([]);
+    setStatementCheckpoints([]);
+    setAccountsLoading(true);
     void loadWorkspaceData(selectedWorkspaceId);
   }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || accountsLoading) {
+      return;
+    }
+
+    persistAccountsWorkspaceCache(selectedWorkspaceId, {
+      accounts,
+      accountRules,
+      transactions,
+      statementCheckpoints,
+    });
+  }, [accounts, accountRules, accountsLoading, selectedWorkspaceId, statementCheckpoints, transactions]);
 
   useEffect(() => {
     let cancelled = false;
