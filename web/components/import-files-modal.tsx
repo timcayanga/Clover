@@ -82,8 +82,22 @@ const fileTypeLabel = (file: File) => {
   return "File";
 };
 
+const normalizeStatementAccountName = (name: string, institution?: string | null) => {
+  const trimmed = name.trim();
+  if ((institution ?? "").trim().toLowerCase() !== "unionbank") {
+    return trimmed;
+  }
+
+  const normalized = trimmed.replace(/^UnionBank\s+Savings\s+/i, "UnionBank ");
+  if (/^UnionBank\s+Savings$/i.test(normalized)) {
+    return "UnionBank";
+  }
+
+  return normalized;
+};
+
 const accountKey = (name: string, institution: string | null) =>
-  `${name.trim().toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
+  `${normalizeStatementAccountName(name, institution).toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
 const extractLastFourDigits = (value?: string | null) => {
   if (!value) return null;
@@ -166,12 +180,14 @@ const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
     return null;
   }
 
+  const normalizedAccountName = normalizeStatementAccountName(summary.accountName, summary.institution);
+
   return {
     id: accountId,
     optimisticAccountId: summary.optimisticAccountId ?? null,
-    name: summary.accountName,
+    name: normalizedAccountName,
     institution: summary.institution,
-    type: inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
+    type: inferAccountTypeFromStatement(summary.institution, normalizedAccountName, "bank"),
     currency: "PHP",
     source: "upload",
     balance: summary.balance,
@@ -217,7 +233,7 @@ const guessStatementIdentity = (fileName: string) => {
   }
 
   if (lowerName.includes("unionbank") || lowerName.includes("union bank")) {
-    return { accountName: "UnionBank Savings", institution: "UnionBank" };
+    return { accountName: "UnionBank", institution: "UnionBank" };
   }
 
   if (lowerName.includes("bpi")) {
@@ -368,20 +384,30 @@ export function ImportFilesModal({
     return accountId;
   };
 
-  const syncStatementAccountType = async (accountId: string, name: string, institution: string | null) => {
-    const expectedType = inferAccountTypeFromStatement(institution, name, "bank");
+  const syncStatementAccountIdentity = async (accountId: string, name: string, institution: string | null) => {
+    const normalizedName = normalizeStatementAccountName(name, institution);
+    const expectedType = inferAccountTypeFromStatement(institution, normalizedName, "bank");
     const current = accounts.find((account) => account.id === accountId);
-    if (!current || current.type === expectedType) {
+    if (!current) {
+      return;
+    }
+
+    const nextPayload: Record<string, string | null | undefined> = { workspaceId };
+    if (current.type !== expectedType) {
+      nextPayload.type = expectedType;
+    }
+    if (current.name !== normalizedName) {
+      nextPayload.name = normalizedName;
+    }
+
+    if (Object.keys(nextPayload).length === 1) {
       return;
     }
 
     const response = await fetch(`/api/accounts/${accountId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        workspaceId,
-        type: expectedType,
-      }),
+      body: JSON.stringify(nextPayload),
     });
 
     if (!response.ok) {
@@ -809,7 +835,7 @@ export function ImportFilesModal({
       const existing = accountIdByKeyRef.current.get(key) ?? accounts.find((account) => accountKey(account.name, account.institution) === key)?.id;
       if (existing) {
         accountIdByKeyRef.current.set(key, existing);
-        await syncStatementAccountType(existing, statementAccountName, institution ?? null);
+        await syncStatementAccountIdentity(existing, statementAccountName, institution ?? null);
         return existing;
       }
 
@@ -818,7 +844,7 @@ export function ImportFilesModal({
         const matchedAccount = accounts.find((account) => account.id === rule.accountId);
         if (matchedAccount) {
           accountIdByKeyRef.current.set(accountKey(matchedAccount.name, matchedAccount.institution), matchedAccount.id);
-          await syncStatementAccountType(matchedAccount.id, statementAccountName, institution ?? null);
+          await syncStatementAccountIdentity(matchedAccount.id, statementAccountName, institution ?? null);
           return matchedAccount.id;
         }
       }

@@ -114,6 +114,11 @@ const splitLine = (line: string, delimiter: string) => {
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
+const formatUnionBankAccountName = (accountNumber?: string | null) => {
+  const suffix = accountNumber?.slice(-4) ?? "";
+  return suffix ? `UnionBank ${suffix}` : "UnionBank";
+};
+
 const normalizeBpiText = (text: string) =>
   text
     .split(/\r?\n/)
@@ -1004,7 +1009,7 @@ const unionbankStatementMetadata = (text: string): DetectedStatementMetadata | n
   const accountLineIndex = lines.findIndex((line) => /^ACCOUNT NUMBER\b/i.test(line));
   const accountLine = accountLineIndex >= 0 ? lines[accountLineIndex] : normalized;
   const accountNumber = accountLine.match(/\b(?:ACCOUNT NUMBER|ACCOUNT NO\.?|ACCOUNT #)\b.*?(\d[\d\s-]{6,}\d)\b/i)?.[1]?.replace(/\D/g, "").slice(0, 16) || detectAccountNumberFromText(normalized);
-  const accountName = accountNumber ? `UnionBank Savings ${accountNumber.slice(-4)}` : "UnionBank Savings";
+  const accountName = formatUnionBankAccountName(accountNumber);
 
   const statementDateLine = lines.find((line) => /TRANSACTION HISTORY AS OF/i.test(line)) ?? "";
   const statementDateMatch = statementDateLine.match(/TRANSACTION HISTORY AS OF\s+(.+)$/i);
@@ -1145,7 +1150,7 @@ const parseUnionBankImportText = (text: string) => {
   }
 
   const rows = segments
-    .map((segment) => parseUnionBankTransactionSegment(segment, { accountName: metadata.accountName ?? "UnionBank Savings" }))
+    .map((segment) => parseUnionBankTransactionSegment(segment, { accountName: metadata.accountName ?? "UnionBank" }))
     .filter(Boolean) as ParsedImportRow[];
 
   return rows.length > 0
