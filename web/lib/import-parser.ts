@@ -1153,9 +1153,19 @@ const parseUnionBankImportText = (text: string) => {
     .map((segment) => parseUnionBankTransactionSegment(segment, { accountName: metadata.accountName ?? "UnionBank" }))
     .filter(Boolean) as ParsedImportRow[];
 
+  const lastRow = rows.at(-1);
+  const endingBalanceText =
+    lastRow?.rawPayload && typeof lastRow.rawPayload === "object" && typeof lastRow.rawPayload.balanceText === "string"
+      ? lastRow.rawPayload.balanceText
+      : null;
+  const endingBalance = parseMoney(endingBalanceText?.replace(/^PHP\s*/i, "") ?? null);
+
   return rows.length > 0
     ? {
-        metadata,
+        metadata: {
+          ...metadata,
+          endingBalance,
+        },
         rows,
       }
     : null;
