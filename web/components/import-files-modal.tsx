@@ -442,18 +442,6 @@ export function ImportFilesModal({
           seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
           void onImported(optimisticSummary);
 
-          if (nextFiles.length === 1) {
-            void (async () => {
-              const locked = await isQuickPasswordProtectedPdf(file);
-              if (locked) {
-                return;
-              }
-
-              window.setTimeout(() => {
-                onClose();
-              }, 750);
-            })();
-          }
         }
         return [
           {
