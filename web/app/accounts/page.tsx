@@ -49,7 +49,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
 const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentAccounts: Account[]) => {
   const fetchedIds = new Set(fetchedAccounts.map((account) => account.id));
   const optimisticAccounts = currentAccounts.filter(
-    (account) => account.source === "upload" && account.balance === null && !fetchedIds.has(account.id)
+    (account) => account.source === "upload" && !fetchedIds.has(account.id)
   );
 
   return [...optimisticAccounts, ...fetchedAccounts];

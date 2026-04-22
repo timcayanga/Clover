@@ -641,34 +641,21 @@ export function ImportFilesModal({
             throw new Error("Unable to determine the destination account for this statement.");
           }
 
-          if (resolvedIdentity.balance) {
-            void onImported(
-              buildOptimisticUploadSummary(
-                summaryContext.fileName,
-                0,
-                resolvedAccountId,
-                resolvedIdentity.accountName ?? null,
-                resolvedIdentity.institution ?? null,
-                summaryContext.optimisticAccountId,
-                resolvedIdentity.balance
-              )
-            );
-          }
-
-          updateItem(itemId, {
-            targetAccountId: resolvedAccountId,
-          });
-
-          void onImported(
-          buildOptimisticUploadSummary(
+          const previewSummary = buildOptimisticUploadSummary(
             summaryContext.fileName,
             0,
             resolvedAccountId,
             resolvedIdentity.accountName ?? null,
             resolvedIdentity.institution ?? null,
-            summaryContext.optimisticAccountId
-          )
+            summaryContext.optimisticAccountId,
+            resolvedIdentity.balance
           );
+
+          updateItem(itemId, {
+            targetAccountId: resolvedAccountId,
+          });
+
+          void onImported(previewSummary);
 
           const result = await confirmItemImport(itemId, importFileId, resolvedAccountId, {
             ...summaryContext,
