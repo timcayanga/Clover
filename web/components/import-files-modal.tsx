@@ -1039,6 +1039,20 @@ export function ImportFilesModal({
     : 0;
 
   useEffect(() => {
+    if (!open || busy || !activeProgressItem || activeProgressItem.progressLabel !== "Finalizing import") {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      onClose();
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [activeProgressItem?.progressLabel, busy, onClose, open]);
+
+  useEffect(() => {
     if (!open || passwordItems.length === 0) {
       setSelectedPasswordItemId(null);
       return;
