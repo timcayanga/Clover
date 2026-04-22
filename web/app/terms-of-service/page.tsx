@@ -64,6 +64,18 @@ export default function TermsOfServicePage() {
         </section>
 
         <section className="legal-page__section">
+          <h2>Plans and refunds</h2>
+          <p>
+            Clover may offer a free plan and one or more paid plans. Free plans may include limits on the number of accounts, transaction rows,
+            monthly reports, and AI insights you can use. Paid plans are intended to provide higher limits and additional capacity.
+          </p>
+          <p>
+            When paid subscriptions become available, Clover will publish the billing terms, renewal terms, and refund policy that apply at the
+            time of purchase. Unless required by law or stated otherwise in the then-current policy, charges may not be refundable.
+          </p>
+        </section>
+
+        <section className="legal-page__section">
           <h2>Ownership</h2>
           <p>
             Clover and its branding, software, and content are owned by us or our licensors. You retain rights to the content you upload, subject to

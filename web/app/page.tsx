@@ -81,6 +81,96 @@ function VisualGallery() {
   );
 }
 
+function PlanIcon({ name }: { name: "starter" | "growth" }) {
+  const common = {
+    width: 24,
+    height: 24,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  if (name === "starter") {
+    return (
+      <svg {...common}>
+        <path d="M12 3 4 8l8 5 8-5-8-5Z" />
+        <path d="M4 16l8 5 8-5" />
+        <path d="M4 12l8 5 8-5" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...common}>
+      <path d="M4 19V5" />
+      <path d="M8 15l4-4 4 3 4-6" />
+      <path d="M16 8h4v4" />
+    </svg>
+  );
+}
+
+function PlansSection() {
+  return (
+    <section className="landing-plans">
+      <div className="landing-plans__copy">
+        <p className="eyebrow">Plans</p>
+        <h2>Start free, then upgrade when you need more room to grow.</h2>
+        <p>
+          Clover will begin with a free tier for getting comfortable, then a paid tier for people who need more accounts, more rows, and more monthly
+          reporting power.
+        </p>
+      </div>
+
+      <div className="landing-plans__grid" aria-label="Clover plans">
+        <article className="landing-plan-card">
+          <div className="landing-plan-card__head">
+            <span className="landing-plan-card__icon">
+              <PlanIcon name="starter" />
+            </span>
+            <div>
+              <p className="landing-plan-card__eyebrow">Free</p>
+              <h3>For trying Clover and keeping a lighter overview.</h3>
+            </div>
+          </div>
+          <ul>
+            <li>Limited number of accounts</li>
+            <li>Limited transaction rows</li>
+            <li>Limited reports per month</li>
+            <li>Limited AI insights per month</li>
+          </ul>
+        </article>
+
+        <article className="landing-plan-card landing-plan-card--featured">
+          <div className="landing-plan-card__head">
+            <span className="landing-plan-card__icon">
+              <PlanIcon name="growth" />
+            </span>
+            <div>
+              <p className="landing-plan-card__eyebrow">Paid</p>
+              <h3>For deeper analysis and a higher monthly ceiling.</h3>
+            </div>
+          </div>
+          <ul>
+            <li>Higher account limits</li>
+            <li>Higher transaction row limits</li>
+            <li>More reports each month</li>
+            <li>More AI insights each month</li>
+          </ul>
+        </article>
+      </div>
+
+      <p className="landing-plans__note">
+        Refund policy: once paid subscriptions launch, Clover will publish the applicable billing and refund terms before charging users. Any refund
+        requests will be handled under the policy then in effect and any applicable consumer protection rules.
+      </p>
+    </section>
+  );
+}
+
 export default function HomePage() {
   return (
     <main className="landing-page">
@@ -168,6 +258,10 @@ export default function HomePage() {
             <p>Use the clearer view and AI-guided insights to make better decisions.</p>
           </div>
         </div>
+      </ScrollReveal>
+
+      <ScrollReveal as="section" className="landing-plans-section">
+        <PlansSection />
       </ScrollReveal>
 
       <ScrollReveal as="section" className="landing-cta">

@@ -8982,6 +8982,113 @@ input.transaction-inline-edit--amount::placeholder {
   max-width: 26ch;
 }
 
+.landing-plans-section {
+  padding: 8px 0 10px;
+}
+
+.landing-plans {
+  display: grid;
+  gap: 18px;
+  padding: 34px 0 40px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.landing-plans__copy {
+  display: grid;
+  gap: 12px;
+}
+
+.landing-plans__copy h2 {
+  max-width: 16ch;
+  font-size: clamp(2rem, 3.6vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: -0.05em;
+}
+
+.landing-plans__copy p {
+  max-width: 52ch;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.landing-plans__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.landing-plan-card {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border-radius: 28px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 38%),
+    rgba(255, 255, 255, 0.78);
+  box-shadow: var(--shadow-soft);
+}
+
+.landing-plan-card--featured {
+  border-color: rgba(3, 168, 192, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.14), transparent 34%),
+    rgba(255, 255, 255, 0.82);
+}
+
+.landing-plan-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.landing-plan-card__icon {
+  width: 48px;
+  height: 48px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  background: rgba(3, 168, 192, 0.08);
+  color: var(--accent);
+}
+
+.landing-plan-card__eyebrow {
+  margin: 0 0 4px;
+  color: var(--muted-2);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.landing-plan-card h3 {
+  font-size: 22px;
+  line-height: 1.12;
+  letter-spacing: -0.04em;
+}
+
+.landing-plan-card ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.landing-plan-card li::marker {
+  color: var(--accent);
+}
+
+.landing-plans__note {
+  max-width: 70ch;
+  color: var(--muted);
+  line-height: 1.7;
+  font-size: 15px;
+}
+
 .landing-cta {
   margin-top: 24px;
   padding: 24px 0 8px;
@@ -9306,6 +9413,18 @@ input.transaction-inline-edit--amount::placeholder {
   .landing-flow__icon {
     width: 42px;
     height: 42px;
+  }
+
+  .landing-plans__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .landing-plan-card {
+    padding: 18px;
+  }
+
+  .landing-plan-card h3 {
+    font-size: 20px;
   }
 
   .landing-cta {
