@@ -1,7 +1,5 @@
 "use client";
 
-import { pdfjs } from "@/lib/pdfjs";
-
 const PDF_ENCRYPTION_MARKERS = ["/Encrypt", "/Standard", "/V 2", "/V 4", "/V 5"];
 
 const isPasswordError = (error: unknown) => {
@@ -26,6 +24,7 @@ export const isLikelyPasswordProtectedPdf = async (file: File) => {
   }
 
   try {
+    const { pdfjs } = await import("@/lib/pdfjs");
     const data = new Uint8Array(await file.arrayBuffer());
     const loadingTask = pdfjs.getDocument({ data } as any);
     await loadingTask.promise;
