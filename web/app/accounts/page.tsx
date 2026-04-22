@@ -1523,7 +1523,6 @@ function AccountsPageContent() {
         defaultAccountId={selectedAccount?.id ?? accounts[0]?.id ?? null}
         onClose={() => setImportOpen(false)}
         onImported={async (summary) => {
-          setPendingImportSummary(summary);
           if (summary.optimistic) {
             const optimisticAccount = buildOptimisticImportedAccount(summary);
             if (optimisticAccount) {
@@ -1540,6 +1539,8 @@ function AccountsPageContent() {
             }
             return;
           }
+
+          setPendingImportSummary(summary);
 
           if (summary.optimisticAccountId) {
             setAccounts((current) => current.filter((account) => account.id !== summary.optimisticAccountId));
