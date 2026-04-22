@@ -3154,9 +3154,29 @@ function TransactionsPageContent() {
                 </button>
               ) : null}
             </div>
-            <span className={`pill transactions-net-pill ${netCashFlow >= 0 ? "is-positive" : "is-negative"}`}>
-              Net cash flow {currencyFormatter.format(netCashFlow)}
-            </span>
+            <div className="transactions-footer-snapshot" aria-label="Cash flow snapshot">
+              <span className="transactions-footer-snapshot__label">This view</span>
+              <div className="transactions-footer-snapshot__metrics">
+                <div className="transactions-footer-snapshot__metric">
+                  <span className="transactions-footer-snapshot__metric-label">Spending</span>
+                  <span className="transactions-footer-snapshot__metric-value negative">
+                    {currencyFormatter.format(totals.spending)}
+                  </span>
+                </div>
+                <div className="transactions-footer-snapshot__metric">
+                  <span className="transactions-footer-snapshot__metric-label">Transfers</span>
+                  <span className="transactions-footer-snapshot__metric-value">
+                    {currencyFormatter.format(totals.transfers)}
+                  </span>
+                </div>
+                <div className="transactions-footer-snapshot__metric transactions-footer-snapshot__metric--net">
+                  <span className="transactions-footer-snapshot__metric-label">Net cash flow</span>
+                  <span className={`transactions-footer-snapshot__metric-value ${netCashFlow >= 0 ? "positive" : "negative"}`}>
+                    {currencyFormatter.format(netCashFlow)}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
