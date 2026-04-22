@@ -2,6 +2,7 @@
 
 import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ImportPasswordModal } from "@/components/import-password-modal";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import { capturePostHogClientEvent, capturePostHogClientEventOnce, analyticsOnceKey } from "@/components/posthog-analytics";
@@ -268,6 +269,7 @@ export function ImportFilesModal({
   onClose,
   onImported,
 }: ImportFilesModalProps) {
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const accountIdByKeyRef = useRef(new Map<string, string>());
   const autoStartRef = useRef(false);
@@ -288,6 +290,15 @@ export function ImportFilesModal({
       accountIdByKeyRef.current.clear();
       setMessage("Upload CSV or PDF files to import transactions and balances.");
       return;
+    }
+
+    router.prefetch("/accounts");
+    router.prefetch("/transactions");
+    if (workspaceId) {
+      void Promise.all([
+        fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
+        fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`),
+      ]);
     }
 
     const map = new Map<string, string>();

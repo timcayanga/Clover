@@ -343,7 +343,7 @@ function AccountsPageContent() {
   );
   const [message, setMessage] = useState("Select a workspace to review accounts.");
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
-  const [accountsLoading, setAccountsLoading] = useState(() => !initialCachedWorkspace);
+  const [accountsLoading, setAccountsLoading] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
@@ -489,8 +489,8 @@ function AccountsPageContent() {
     setAccountRules([]);
     setTransactions([]);
     setStatementCheckpoints([]);
-    setAccountsLoading(true);
-    void loadWorkspaceData(selectedWorkspaceId);
+    setAccountsLoading(false);
+    void loadWorkspaceData(selectedWorkspaceId, { silent: true });
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
