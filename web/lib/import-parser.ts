@@ -119,7 +119,7 @@ const formatUnionBankAccountName = (accountNumber?: string | null) => {
   return suffix ? `UnionBank ${suffix}` : "UnionBank";
 };
 
-const getTrailingBalanceFromRows = (rows: ParsedImportRow[]) => {
+export const getTrailingBalanceFromParsedRows = (rows: ParsedImportRow[]) => {
   const lastBalanceText = [...rows]
     .reverse()
     .find((row) => typeof row.rawPayload === "object" && row.rawPayload !== null && typeof row.rawPayload.balanceText === "string")
@@ -768,7 +768,7 @@ const parseGcashImportText = (text: string) => {
     .map((record) => parseGcashTransactionRecord(record))
     .filter(Boolean) as ParsedImportRow[];
 
-  const endingBalance = getTrailingBalanceFromRows(rows);
+  const endingBalance = getTrailingBalanceFromParsedRows(rows);
 
   return {
     metadata: {

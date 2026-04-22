@@ -23,7 +23,7 @@ import {
   upsertAccountRule,
   upsertStatementTemplate,
 } from "@/lib/data-engine";
-import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { getTrailingBalanceFromParsedRows, inferAccountTypeFromStatement } from "@/lib/import-parser";
 
 type ImportInsightSummary = {
   incomeTotal: number;
@@ -233,6 +233,11 @@ export const processImportFileText = async (
 
   const parsedRows = parseImportText(text, importFile.fileName, importFile.fileType);
   const metadata = detectStatementMetadataFromText(text);
+  const parsedEndingBalance = getTrailingBalanceFromParsedRows(parsedRows);
+  const resolvedMetadata = {
+    ...metadata,
+    endingBalance: metadata.endingBalance ?? parsedEndingBalance,
+  };
   const statementFingerprint = buildStatementFingerprint(text, metadata, importFile.fileName, importFile.fileType);
   const duplicateImportFileId = await findExistingImportedStatement({
     workspaceId: importFile.workspaceId,
@@ -248,7 +253,7 @@ export const processImportFileText = async (
   const template = await upsertStatementTemplate({
     workspaceId: importFile.workspaceId,
     fingerprint: statementFingerprint,
-    metadata,
+    metadata: resolvedMetadata,
     fileType: importFile.fileType,
   });
 
@@ -267,7 +272,7 @@ export const processImportFileText = async (
     importFileId,
     workspaceId: importFile.workspaceId,
     rows,
-    metadata,
+    metadata: resolvedMetadata,
     statementFingerprint: template?.fingerprint ?? statementFingerprint,
   });
   await insertParsedTransactionsCompat({
@@ -280,18 +285,18 @@ export const processImportFileText = async (
 
   if (await hasCompatibleTable("AccountStatementCheckpoint")) {
     const metadataStartDate = metadata.startDate ? new Date(metadata.startDate) : null;
-    const metadataEndDate = metadata.endDate ? new Date(metadata.endDate) : null;
+    const metadataEndDate = resolvedMetadata.endDate ? new Date(resolvedMetadata.endDate) : null;
     await prisma.accountStatementCheckpoint.upsert({
       where: { importFileId },
       update: {
         workspaceId: importFile.workspaceId,
         statementStartDate: metadataStartDate,
         statementEndDate: metadataEndDate,
-        openingBalance: metadata.openingBalance === null ? null : metadata.openingBalance.toString(),
-        endingBalance: metadata.endingBalance === null ? null : metadata.endingBalance.toString(),
+        openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
+        endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
         status: "pending",
         mismatchReason: null,
-        sourceMetadata: metadata as Prisma.InputJsonValue,
+        sourceMetadata: resolvedMetadata as Prisma.InputJsonValue,
         rowCount: rows.length,
       },
       create: {
@@ -299,10 +304,10 @@ export const processImportFileText = async (
         importFileId,
         statementStartDate: metadataStartDate,
         statementEndDate: metadataEndDate,
-        openingBalance: metadata.openingBalance === null ? null : metadata.openingBalance.toString(),
-        endingBalance: metadata.endingBalance === null ? null : metadata.endingBalance.toString(),
+        openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
+        endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
         status: "pending",
-        sourceMetadata: metadata as Prisma.InputJsonValue,
+        sourceMetadata: resolvedMetadata as Prisma.InputJsonValue,
         rowCount: rows.length,
       },
     });
