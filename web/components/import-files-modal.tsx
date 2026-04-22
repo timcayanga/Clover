@@ -251,6 +251,11 @@ const isSpecificOptimisticAccountName = (accountName?: string | null) => {
   return /\b\d{4}\b/.test(accountName);
 };
 
+const deriveFallbackAccountNameFromFileName = (fileName: string) => {
+  const stem = fileName.replace(/\.[^.]+$/, "").trim();
+  return stem || "Imported statement";
+};
+
 const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): UploadInsightsSummary => {
   const [firstSummary] = summaries;
   const rowsImported = summaries.reduce((total, summary) => total + summary.rowsImported, 0);
@@ -645,6 +650,7 @@ export function ImportFilesModal({
     accountId: string | null,
     summaryContext: {
       fileName: string;
+      fallbackAccountName: string;
       accountName: string | null;
       institution: string | null;
       optimisticAccountId: string | null;
@@ -704,7 +710,8 @@ export function ImportFilesModal({
             balance: toBalanceString(statementCheckpoint?.endingBalance),
           };
 
-          if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
+          const shouldUseFallbackIdentity = !resolvedIdentity.accountName && !resolvedIdentity.institution && attempt >= 4;
+          if (!resolvedIdentity.accountName && !resolvedIdentity.institution && !shouldUseFallbackIdentity) {
             const previewResponse = await fetch(`/api/imports/${importFileId}/preview`);
             if (previewResponse.ok) {
               const payload = await previewResponse.json();
@@ -730,6 +737,10 @@ export function ImportFilesModal({
                 resolvedIdentity.balance = previewBalance;
               }
             }
+          }
+
+          if (!resolvedIdentity.accountName && !resolvedIdentity.institution && shouldUseFallbackIdentity) {
+            resolvedIdentity.accountName = summaryContext.fallbackAccountName;
           }
 
         if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
@@ -986,6 +997,7 @@ export function ImportFilesModal({
 
         void monitorQueuedImportAndConfirm(itemId, importFileId, optimisticAccountId, {
           fileName: item.file.name,
+          fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
           accountName: canUseOptimisticGuess ? guessedIdentity?.accountName ?? null : null,
           institution: canUseOptimisticGuess ? guessedIdentity?.institution ?? null : null,
           optimisticAccountId: canUseOptimisticGuess ? item.optimisticAccountId : null,
@@ -1026,6 +1038,7 @@ export function ImportFilesModal({
       } else {
         void monitorQueuedImportAndConfirm(itemId, importFileId, null, {
           fileName: item.file.name,
+          fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
           accountName: null,
           institution: null,
           optimisticAccountId: null,
