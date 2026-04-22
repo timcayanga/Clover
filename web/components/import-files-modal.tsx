@@ -122,6 +122,28 @@ const buildOptimisticUploadSummary = (
   topMerchantCount: null,
 });
 
+const toBalanceString = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value.toFixed(2) : null;
+  }
+
+  try {
+    const stringified = String(value).trim();
+    return stringified ? stringified : null;
+  } catch {
+    return null;
+  }
+};
+
 const isQuickPasswordProtectedPdf = async (file: File) => {
   const lowerName = file.name.toLowerCase();
   if (!lowerName.endsWith(".pdf") && file.type !== "application/pdf") {
@@ -595,10 +617,7 @@ export function ImportFilesModal({
               typeof statementMetadata?.institution === "string" && statementMetadata.institution.trim()
                 ? statementMetadata.institution.trim()
                 : summaryContext.institution,
-            balance:
-              typeof statementCheckpoint?.endingBalance === "string" && statementCheckpoint.endingBalance.trim()
-                ? statementCheckpoint.endingBalance.trim()
-                : null,
+            balance: toBalanceString(statementCheckpoint?.endingBalance),
           };
 
           if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
@@ -622,8 +641,9 @@ export function ImportFilesModal({
                 typeof previewRow?.institution === "string" && previewRow.institution.trim()
                   ? previewRow.institution.trim()
                   : summaryContext.institution;
-              if (typeof previewStatementCheckpoint?.endingBalance === "string" && previewStatementCheckpoint.endingBalance.trim()) {
-                resolvedIdentity.balance = previewStatementCheckpoint.endingBalance.trim();
+              const previewBalance = toBalanceString(previewStatementCheckpoint?.endingBalance);
+              if (previewBalance) {
+                resolvedIdentity.balance = previewBalance;
               }
             }
           }
