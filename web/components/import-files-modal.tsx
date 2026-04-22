@@ -124,6 +124,20 @@ const buildOptimisticUploadSummary = (
   topMerchantCount: null,
 });
 
+const buildOptimisticUploadSummaryFromAccount = (
+  fileName: string,
+  account: AccountOption & { balance?: string | null }
+): UploadInsightsSummary =>
+  buildOptimisticUploadSummary(
+    fileName,
+    0,
+    account.id,
+    account.name,
+    account.institution,
+    account.id,
+    account.balance ?? null
+  );
+
 const toBalanceString = (value: unknown): string | null => {
   if (value === null || value === undefined) {
     return null;
@@ -397,11 +411,29 @@ export function ImportFilesModal({
         additionsCount += 1;
         const guessedIdentity = guessStatementIdentity(file.name);
         const optimisticAccountId = guessedIdentity ? `optimistic-${crypto.randomUUID()}` : null;
+        const selectedAccount = selectedAccountId ? accounts.find((account) => account.id === selectedAccountId) : null;
         capturePostHogClientEvent("file_upload_started", {
           file_type: fileTypeLabel(file),
           file_size_bytes: file.size,
         });
-        if (guessedIdentity && optimisticAccountId) {
+        if (selectedAccount) {
+          const optimisticSummary = buildOptimisticUploadSummaryFromAccount(file.name, selectedAccount);
+          seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
+          void onImported(optimisticSummary);
+
+          if (nextFiles.length === 1) {
+            void (async () => {
+              const locked = await isQuickPasswordProtectedPdf(file);
+              if (locked) {
+                return;
+              }
+
+              window.setTimeout(() => {
+                onClose();
+              }, 750);
+            })();
+          }
+        } else if (guessedIdentity && optimisticAccountId) {
           const optimisticSummary = {
             fileName: file.name,
             rowsImported: 0,
