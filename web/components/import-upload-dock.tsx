@@ -11,6 +11,7 @@ type ImportUploadDockProps = {
   progress: number;
   detail: string;
   statusLabel?: string;
+  onClose?: () => void;
 };
 
 const clampProgress = (value: number) => Math.max(0, Math.min(100, value));
@@ -24,6 +25,7 @@ export function ImportUploadDock({
   progress,
   detail,
   statusLabel = "Uploading",
+  onClose,
 }: ImportUploadDockProps) {
   if (!open) {
     return null;
@@ -47,7 +49,14 @@ export function ImportUploadDock({
             <strong>{fileLabel}</strong>
             <p>{detail}</p>
           </div>
-          <span className="import-upload-dock__status">{statusLabel}</span>
+          <div className="import-upload-dock__header-actions">
+            <span className="import-upload-dock__status">{statusLabel}</span>
+            {onClose ? (
+              <button className="import-upload-dock__close" type="button" onClick={onClose} aria-label="Close import progress">
+                ×
+              </button>
+            ) : null}
+          </div>
         </div>
 
         <div className="import-upload-dock__body">

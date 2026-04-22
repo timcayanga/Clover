@@ -420,19 +420,6 @@ export function ImportFilesModal({
           const optimisticSummary = buildOptimisticUploadSummaryFromAccount(file.name, selectedAccount);
           seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
           void onImported(optimisticSummary);
-
-          if (nextFiles.length === 1) {
-            void (async () => {
-              const locked = await isQuickPasswordProtectedPdf(file);
-              if (locked) {
-                return;
-              }
-
-              window.setTimeout(() => {
-                onClose();
-              }, 750);
-            })();
-          }
         } else if (guessedIdentity && optimisticAccountId) {
           const optimisticSummary = {
             fileName: file.name,
@@ -1065,14 +1052,6 @@ export function ImportFilesModal({
   const hasCompletedAllFiles = items.length > 0 && items.every((item) => item.confirmationState === "confirmed");
 
   useEffect(() => {
-    if (!open || !hasCompletedAllFiles) {
-      return;
-    }
-
-    onClose();
-  }, [hasCompletedAllFiles, onClose, open]);
-
-  useEffect(() => {
     if (!open || passwordItems.length === 0) {
       setSelectedPasswordItemId(null);
       return;
@@ -1183,7 +1162,6 @@ export function ImportFilesModal({
             : combineUploadInsightsSummaries(uploadInsightsSummaries)
         );
       }
-      onClose();
     }
   };
 
@@ -1320,6 +1298,7 @@ export function ImportFilesModal({
               ? "Working"
               : "Queued"
         }
+        onClose={onClose}
         />
     );
   }
