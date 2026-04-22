@@ -805,10 +805,6 @@ function AccountsPageContent() {
     try {
       const response = await fetch(`/api/accounts/${selectedAccount.id}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspaceId: selectedWorkspaceId,
-        }),
       });
 
       if (!response.ok) {

@@ -89,14 +89,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
   try {
     const { userId } = await requireAuth();
     const { accountId } = await params;
-    const body = await request.json().catch(() => ({}));
-    const workspaceId = String(body?.workspaceId || "");
-
-    if (!workspaceId) {
-      return NextResponse.json({ error: "workspaceId is required" }, { status: 400 });
-    }
-
-    await assertWorkspaceAccess(userId, workspaceId);
 
     const existingAccount = await prisma.account.findUnique({
       where: { id: accountId },
@@ -106,9 +98,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }
 
-    if (existingAccount.workspaceId !== workspaceId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    await assertWorkspaceAccess(userId, existingAccount.workspaceId);
 
     const account = await prisma.account.delete({
       where: { id: accountId },
