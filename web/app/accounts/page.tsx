@@ -308,6 +308,7 @@ function AccountsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const addRef = useRef<HTMLDivElement>(null);
+  const workspaceLoadSeqRef = useRef(0);
   const initialWorkspaceId = readSelectedWorkspaceId();
   const initialCachedWorkspace = getCachedAccountsWorkspace(initialWorkspaceId);
 
@@ -397,6 +398,8 @@ function AccountsPageContent() {
   };
 
   const loadWorkspaceData = async (workspaceId: string, options?: { silent?: boolean }) => {
+    const loadSeq = ++workspaceLoadSeqRef.current;
+
     if (!workspaceId) {
       setAccounts([]);
       setAccountRules([]);
@@ -414,6 +417,10 @@ function AccountsPageContent() {
       const transactionsRequest = fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`);
 
       const accountsResponse = await accountsRequest;
+      if (workspaceLoadSeqRef.current !== loadSeq) {
+        return;
+      }
+
       if (accountsResponse.ok) {
         const payload = await accountsResponse.json();
         const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
@@ -422,6 +429,10 @@ function AccountsPageContent() {
       }
 
       const transactionsResponse = await transactionsRequest;
+      if (workspaceLoadSeqRef.current !== loadSeq) {
+        return;
+      }
+
       if (transactionsResponse.ok) {
         const payload = await transactionsResponse.json();
         setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
@@ -814,9 +825,12 @@ function AccountsPageContent() {
 
       setAccounts((current) => current.filter((account) => account.id !== selectedAccount.id));
       setTransactions((current) => current.filter((transaction) => transaction.accountId !== selectedAccount.id));
+      setAccountRules((current) => current.filter((rule) => rule.accountId !== selectedAccount.id));
       setDrawerAccountId(null);
       setAccountDeleteConfirmOpen(false);
       setMessage(`Account "${selectedAccount.name}" deleted.`);
+      workspaceLoadSeqRef.current += 1;
+      void loadWorkspaceData(selectedWorkspaceId, { silent: true });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to delete account.");
     } finally {
