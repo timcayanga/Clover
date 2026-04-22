@@ -256,6 +256,19 @@ const deriveFallbackAccountNameFromFileName = (fileName: string) => {
   return stem || "Imported statement";
 };
 
+const hasStatementSuffix = (name?: string | null) => /\b\d{4}\b/.test(name ?? "");
+
+const isGenericSameInstitutionAccount = (account: AccountOption, institution: string | null) => {
+  if (!institution) {
+    return false;
+  }
+
+  return (
+    account.institution?.trim().toLowerCase() === institution.trim().toLowerCase() &&
+    !hasStatementSuffix(account.name)
+  );
+};
+
 const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): UploadInsightsSummary => {
   const [firstSummary] = summaries;
   const rowsImported = summaries.reduce((total, summary) => total + summary.rowsImported, 0);
@@ -842,25 +855,38 @@ export function ImportFilesModal({
 
   const ensureTargetAccountId = async (statementAccountName?: string | null, institution?: string | null) => {
     if (statementAccountName) {
-      const key = accountKey(statementAccountName, institution ?? null);
+      const normalizedStatementAccountName = normalizeStatementAccountName(statementAccountName, institution ?? null);
+      const key = accountKey(normalizedStatementAccountName, institution ?? null);
       const existing = accountIdByKeyRef.current.get(key) ?? accounts.find((account) => accountKey(account.name, account.institution) === key)?.id;
       if (existing) {
         accountIdByKeyRef.current.set(key, existing);
-        await syncStatementAccountIdentity(existing, statementAccountName, institution ?? null);
+        await syncStatementAccountIdentity(existing, normalizedStatementAccountName, institution ?? null);
         return existing;
       }
 
-      const rule = accountRules.find((entry) => accountRuleKey(entry.accountName, entry.institution) === accountRuleKey(statementAccountName, institution ?? null));
+      const genericMatch =
+        hasStatementSuffix(normalizedStatementAccountName)
+          ? accounts.find((account) => isGenericSameInstitutionAccount(account, institution ?? null))
+          : null;
+      if (genericMatch) {
+        accountIdByKeyRef.current.set(accountKey(genericMatch.name, genericMatch.institution), genericMatch.id);
+        await syncStatementAccountIdentity(genericMatch.id, normalizedStatementAccountName, institution ?? null);
+        return genericMatch.id;
+      }
+
+      const rule = accountRules.find(
+        (entry) => accountRuleKey(entry.accountName, entry.institution) === accountRuleKey(normalizedStatementAccountName, institution ?? null)
+      );
       if (rule?.accountId) {
         const matchedAccount = accounts.find((account) => account.id === rule.accountId);
         if (matchedAccount) {
           accountIdByKeyRef.current.set(accountKey(matchedAccount.name, matchedAccount.institution), matchedAccount.id);
-          await syncStatementAccountIdentity(matchedAccount.id, statementAccountName, institution ?? null);
+          await syncStatementAccountIdentity(matchedAccount.id, normalizedStatementAccountName, institution ?? null);
           return matchedAccount.id;
         }
       }
 
-      return createStatementAccount(statementAccountName, institution ?? null);
+      return createStatementAccount(normalizedStatementAccountName, institution ?? null);
     }
 
     if (selectedAccountId) {
