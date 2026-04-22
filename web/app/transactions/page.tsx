@@ -4008,7 +4008,7 @@ function TransactionsPageContent() {
           }
           window.setTimeout(() => {
             void loadWorkspaceData(selectedWorkspaceId, { skipMetadata: true });
-          }, 2000);
+          }, 10000);
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />

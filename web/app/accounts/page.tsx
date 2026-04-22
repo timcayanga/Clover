@@ -1516,7 +1516,7 @@ function AccountsPageContent() {
           }
           window.setTimeout(() => {
             void refreshAll();
-          }, 2000);
+          }, 10000);
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />
