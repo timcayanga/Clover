@@ -7,7 +7,9 @@ type OnboardingStatus = "checking" | "ready";
 
 export const useOnboardingAccess = () => {
   const router = useRouter();
-  const [status, setStatus] = useState<OnboardingStatus>("checking");
+  const [status, setStatus] = useState<OnboardingStatus>(() =>
+    typeof window !== "undefined" && window.location.hostname === "staging.clover.ph" ? "ready" : "checking"
+  );
 
   useEffect(() => {
     let cancelled = false;
