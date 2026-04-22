@@ -119,6 +119,15 @@ const formatUnionBankAccountName = (accountNumber?: string | null) => {
   return suffix ? `UnionBank ${suffix}` : "UnionBank";
 };
 
+const getTrailingBalanceFromRows = (rows: ParsedImportRow[]) => {
+  const lastBalanceText = [...rows]
+    .reverse()
+    .find((row) => typeof row.rawPayload === "object" && row.rawPayload !== null && typeof row.rawPayload.balanceText === "string")
+    ?.rawPayload?.balanceText;
+
+  return parseMoney(typeof lastBalanceText === "string" ? lastBalanceText.replace(/^PHP\s*/i, "") : null);
+};
+
 const normalizeBpiText = (text: string) =>
   text
     .split(/\r?\n/)
@@ -759,8 +768,13 @@ const parseGcashImportText = (text: string) => {
     .map((record) => parseGcashTransactionRecord(record))
     .filter(Boolean) as ParsedImportRow[];
 
+  const endingBalance = getTrailingBalanceFromRows(rows);
+
   return {
-    metadata,
+    metadata: {
+      ...metadata,
+      endingBalance: metadata.endingBalance ?? endingBalance,
+    },
     rows,
   };
 };
