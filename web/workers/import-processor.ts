@@ -260,6 +260,7 @@ export const processImportFileText = async (
   const rows = await enrichParsedRowsWithTraining({
     workspaceId: importFile.workspaceId,
     rows: parsedRows,
+    statementConfidence: resolvedMetadata.confidence ?? 0,
   });
 
   if (await hasCompatibleTable("ParsedTransaction")) {
@@ -599,7 +600,12 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
   }
 
   const statementRow = parsedRows.find((row) => typeof row.accountName === "string" && row.accountName.trim()) ?? parsedRows[0] ?? null;
-  if (statementRow && typeof statementRow.accountName === "string" && statementRow.accountName.trim()) {
+  const statementConfidence =
+    typeof statementCheckpoint?.sourceMetadata === "object" && statementCheckpoint?.sourceMetadata !== null
+      ? Number((statementCheckpoint.sourceMetadata as Record<string, unknown>).confidence ?? 0)
+      : 0;
+
+  if (statementRow && typeof statementRow.accountName === "string" && statementRow.accountName.trim() && statementConfidence >= 70) {
     void upsertAccountRule({
       workspaceId: importFile.workspaceId,
       accountId: resolvedAccountId,

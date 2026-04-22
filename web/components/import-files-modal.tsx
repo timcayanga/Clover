@@ -711,12 +711,16 @@ export function ImportFilesModal({
             statementCheckpoint?.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object"
               ? (statementCheckpoint.sourceMetadata as Record<string, unknown>)
               : null;
+          const statementConfidence = Number(statementMetadata?.confidence ?? 0);
+          const trustStatementIdentity = statementConfidence >= 70;
           const resolvedIdentity = {
             accountName:
+              trustStatementIdentity &&
               typeof statementMetadata?.accountName === "string" && statementMetadata.accountName.trim()
                 ? statementMetadata.accountName.trim()
                 : summaryContext.accountName,
             institution:
+              trustStatementIdentity &&
               typeof statementMetadata?.institution === "string" && statementMetadata.institution.trim()
                 ? statementMetadata.institution.trim()
                 : summaryContext.institution,
@@ -738,10 +742,12 @@ export function ImportFilesModal({
                 ) ?? parsedRows[0] ?? null;
 
               resolvedIdentity.accountName =
+                trustStatementIdentity &&
                 typeof previewRow?.accountName === "string" && previewRow.accountName.trim()
                   ? previewRow.accountName.trim()
                   : summaryContext.accountName;
               resolvedIdentity.institution =
+                trustStatementIdentity &&
                 typeof previewRow?.institution === "string" && previewRow.institution.trim()
                   ? previewRow.institution.trim()
                   : summaryContext.institution;

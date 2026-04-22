@@ -338,6 +338,20 @@ export const detectStatementMetadataFromText = (text: string) => {
   const accountName =
     metadata?.accountName ??
     (institution && accountNumber ? `${institution} ${accountNumber.slice(-4)}` : institution ?? null);
+  const confidence =
+    metadata?.confidence ??
+    Math.min(
+      100,
+      [
+        institution ? 35 : 0,
+        accountNumber ? 35 : 0,
+        accountName ? 10 : 0,
+        metadata?.startDate ? 5 : 0,
+        metadata?.endDate ? 5 : 0,
+        metadata?.openingBalance !== null ? 5 : 0,
+        metadata?.endingBalance !== null ? 5 : 0,
+      ].reduce((total, part) => total + part, 0)
+    );
 
   return {
     institution,
@@ -347,6 +361,7 @@ export const detectStatementMetadataFromText = (text: string) => {
     endingBalance: metadata?.endingBalance ?? null,
     startDate: metadata?.startDate ?? null,
     endDate: metadata?.endDate ?? null,
+    confidence,
   };
 };
 
@@ -1435,10 +1450,12 @@ export const recordTrainingSignal = async (params: {
 export const enrichParsedRowsWithTraining = async (params: {
   workspaceId: string;
   rows: ParsedImportRow[];
+  statementConfidence?: number;
 }) => {
   const merchantRules = await loadMerchantRules(params.workspaceId);
   const accountRules = await loadAccountRules(params.workspaceId);
   const trainingSignals = await loadTrainingSignals(params.workspaceId);
+  const statementConfidence = typeof params.statementConfidence === "number" ? params.statementConfidence : 100;
 
   return params.rows.map((row) => {
     const rowWithInstitution = row as ParsedImportRow & { institution?: string | null };
@@ -1454,6 +1471,7 @@ export const enrichParsedRowsWithTraining = async (params: {
 
     const categoryName = learned.categoryName || row.categoryName || defaultCategoryForType(row.type ?? "expense");
     const accountName = row.accountName ?? null;
+    const effectiveConfidence = Math.max(0, Math.min(100, Math.min(learned.confidence, statementConfidence)));
     const learnedRuleIdsApplied = [
       ...(Array.isArray(row.learnedRuleIdsApplied) ? (row.learnedRuleIdsApplied as string[]) : []),
       ...(accountMatch ? [`account-rule:${accountMatch.rule.ruleKey}`] : []),
@@ -1464,13 +1482,13 @@ export const enrichParsedRowsWithTraining = async (params: {
       accountName: accountMatch?.rule.accountName ?? accountName ?? undefined,
       institution: rowWithInstitution.institution ?? accountMatch?.rule.institution ?? undefined,
       categoryName,
-      confidence: learned.confidence,
+      confidence: effectiveConfidence,
       categoryReason: learned.categoryReason,
       parserVersion: DATA_ENGINE_VERSION,
-      reviewStatus: learned.confidence >= 80 ? "suggested" : "pending_review",
-      parserConfidence: 100,
-      categoryConfidence: learned.confidence,
-      accountMatchConfidence: accountMatch ? Math.min(99, Math.round(Math.max(70, accountMatch.score))) : 0,
+      reviewStatus: effectiveConfidence >= 80 ? "suggested" : "pending_review",
+      parserConfidence: statementConfidence,
+      categoryConfidence: effectiveConfidence,
+      accountMatchConfidence: accountMatch ? Math.min(99, Math.round(Math.min(Math.max(70, accountMatch.score), statementConfidence))) : 0,
       duplicateConfidence: 0,
       transferConfidence: row.type === "transfer" ? 100 : 0,
       learnedRuleIdsApplied,
@@ -1488,9 +1506,10 @@ export const enrichParsedRowsWithTraining = async (params: {
           merchantKey: learned.merchantKey,
           merchantTokens: learned.merchantTokens,
           categoryReason: learned.categoryReason,
-          confidence: learned.confidence,
+          confidence: effectiveConfidence,
           accountRuleKey: accountMatch?.rule.ruleKey ?? null,
           accountRuleConfidence: accountMatch ? Math.round(accountMatch.score) : null,
+          statementConfidence,
         },
       },
     } satisfies EnrichedParsedImportRow;

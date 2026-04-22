@@ -24,6 +24,7 @@ export type DetectedStatementMetadata = {
   endingBalance: number | null;
   startDate: string | null;
   endDate: string | null;
+  confidence: number;
 };
 
 const delimiterForFile = (fileType: string, fileName: string) => {
@@ -113,6 +114,18 @@ const splitLine = (line: string, delimiter: string) => {
 };
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+
+const scoreMetadataConfidence = (metadata: Omit<DetectedStatementMetadata, "confidence">) => {
+  let score = 0;
+  if (metadata.institution) score += 35;
+  if (metadata.accountNumber) score += 35;
+  if (metadata.accountName) score += 10;
+  if (metadata.startDate) score += 5;
+  if (metadata.endDate) score += 5;
+  if (metadata.openingBalance !== null) score += 5;
+  if (metadata.endingBalance !== null) score += 5;
+  return Math.min(100, score);
+};
 
 const formatUnionBankAccountName = (accountNumber?: string | null) => {
   const suffix = accountNumber?.slice(-4) ?? "";
@@ -407,6 +420,7 @@ const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null =
     endingBalance,
     startDate: startDate ? startDate.toISOString() : null,
     endDate: endDate ? endDate.toISOString() : null,
+    confidence: accountNumber ? 95 : 85,
   };
 };
 
@@ -482,6 +496,7 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     endingBalance,
     startDate: startDate ? startDate.toISOString() : null,
     endDate: endDate ? endDate.toISOString() : null,
+    confidence: accountNumber ? 95 : 85,
   };
 };
 
@@ -646,6 +661,7 @@ const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null 
     endingBalance: null,
     startDate: parseLooseDate(dateRangeMatch?.[1] ?? null)?.toISOString() ?? null,
     endDate: parseLooseDate(dateRangeMatch?.[2] ?? null)?.toISOString() ?? null,
+    confidence: accountNumber ? 88 : 74,
   };
 };
 
@@ -1061,6 +1077,7 @@ const unionbankStatementMetadata = (text: string): DetectedStatementMetadata | n
     endingBalance: null,
     startDate: null,
     endDate: endDate && !Number.isNaN(endDate.getTime()) ? endDate.toISOString() : null,
+    confidence: accountNumber ? 90 : 78,
   };
 };
 
@@ -1255,6 +1272,15 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     endingBalance,
     startDate: startDate ? startDate.toISOString() : null,
     endDate: endDate ? endDate.toISOString() : null,
+    confidence: scoreMetadataConfidence({
+      institution,
+      accountNumber,
+      accountName,
+      openingBalance,
+      endingBalance,
+      startDate: startDate ? startDate.toISOString() : null,
+      endDate: endDate ? endDate.toISOString() : null,
+    }),
   };
 };
 
