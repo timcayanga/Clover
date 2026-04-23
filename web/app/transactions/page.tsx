@@ -1039,6 +1039,7 @@ function TransactionsPageContent() {
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
   const transactionRowRefs = useRef(new Map<string, HTMLDivElement>());
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
+  const reviewTransactionParamRef = useRef<string | null>(null);
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
@@ -1209,6 +1210,25 @@ function TransactionsPageContent() {
       manualNameInputRef.current?.focus();
     }
   }, [manualOpen]);
+
+  useEffect(() => {
+    const reviewTransactionId = searchParams.get("review");
+    if (!reviewTransactionId || !isWorkspaceDataReady || !transactions.length) {
+      return;
+    }
+
+    if (reviewTransactionParamRef.current === reviewTransactionId) {
+      return;
+    }
+
+    const reviewTransaction = transactions.find((transaction) => transaction.id === reviewTransactionId);
+    if (!reviewTransaction) {
+      return;
+    }
+
+    reviewTransactionParamRef.current = reviewTransactionId;
+    openTransactionReview(reviewTransaction);
+  }, [isWorkspaceDataReady, searchParams, transactions]);
 
   const closeToolbarMenus = () => {
     setAddMenuOpen(false);

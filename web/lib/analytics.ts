@@ -33,6 +33,7 @@ export type AnalyticsEventName =
   | "transaction_undone"
   | "review_item_opened"
   | "review_item_accepted"
+  | "review_item_edited"
   | "review_item_rejected"
   | "merchant_rule_created"
   | "merchant_rule_updated"
