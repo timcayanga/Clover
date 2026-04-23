@@ -128,11 +128,20 @@ const formatSignedCurrency = (value: number) => `${value < 0 ? "-" : ""}${curren
 
 const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
 
-const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+const isValidDate = (value: unknown): value is Date =>
+  value instanceof Date && Number.isFinite(value.getTime());
 
-const toMonthLabel = (date: Date) => monthFormatter.format(date);
+const toIsoMonth = (date: Date) => (isValidDate(date) ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}` : "");
 
-const formatShortDate = (value: Date) => shortDateFormatter.format(value);
+const toMonthLabel = (date: Date) => (isValidDate(date) ? monthFormatter.format(date) : "");
+
+const formatShortDate = (value: unknown) => {
+  if (!isValidDate(value)) {
+    return "";
+  }
+
+  return shortDateFormatter.format(value);
+};
 
 const normalizeMerchant = (value: string) => value.trim().toLowerCase();
 
@@ -148,7 +157,14 @@ const goalLabels: Record<string, string> = {
   invest_better: "Invest better",
 };
 
-const bucketMonth = (date: Date, buckets: MonthBucket[]) => buckets.find((bucket) => bucket.key === toIsoMonth(date));
+const bucketMonth = (date: Date, buckets: MonthBucket[]) => {
+  if (!isValidDate(date)) {
+    return null;
+  }
+
+  const monthKey = toIsoMonth(date);
+  return monthKey ? buckets.find((bucket) => bucket.key === monthKey) ?? null : null;
+};
 
 const getMonthBuckets = (anchor: Date) => {
   const buckets: MonthBucket[] = [];
@@ -947,6 +963,10 @@ async function ReportsPageView({
 
     const duplicateGroups = new Map<string, (typeof reportCurrentWindowTransactions)[number][]>();
     reportCurrentWindowTransactions.forEach((transaction) => {
+      if (!isValidDate(transaction.date)) {
+        return;
+      }
+
       const merchant = normalizeMerchant(transaction.merchantClean ?? transaction.merchantRaw);
       const key = [
         transaction.date.toISOString().slice(0, 10),
@@ -1015,6 +1035,10 @@ async function ReportsPageView({
     >();
 
     [...reportPreviousWindowTransactions, ...reportCurrentWindowTransactions].forEach((transaction) => {
+      if (!isValidDate(transaction.date)) {
+        return;
+      }
+
       if (transaction.type !== "expense") {
         return;
       }
@@ -1030,7 +1054,16 @@ async function ReportsPageView({
     const recurringMerchants: RecurringMerchant[] = Array.from(recurringMerchantHistory.values())
       .filter((merchant) => merchant.dates.length > 1)
       .map((merchant) => {
-        const sortedDates = [...merchant.dates].sort((a, b) => a.getTime() - b.getTime());
+        const sortedDates = [...merchant.dates].filter(isValidDate).sort((a, b) => a.getTime() - b.getTime());
+        if (sortedDates.length <= 1) {
+          return {
+            ...merchant,
+            count: sortedDates.length,
+            cadenceLabel: "Repeat merchant",
+            nextDueDate: null,
+          };
+        }
+
         const intervals = sortedDates
           .slice(1)
           .map((date, index) => (date.getTime() - sortedDates[index].getTime()) / 86400000)
@@ -1048,10 +1081,9 @@ async function ReportsPageView({
                   : "Periodic";
         const nextDueDate =
           averageGapDays === null ? null : new Date(sortedDates[sortedDates.length - 1].getTime() + averageGapDays * 86400000);
-
         return {
           ...merchant,
-          count: merchant.dates.length,
+          count: sortedDates.length,
           cadenceLabel,
           nextDueDate,
         };
@@ -2034,7 +2066,7 @@ async function ReportsPageView({
                     <div className="report-list__meta">
                       <strong>{latestImportSummary.fileName}</strong>
                       <span>
-                        {formatShortDate(new Date(latestImportSummary.uploadedAt))} · {latestImportSummary.status}
+        {formatShortDate(latestImportSummary.uploadedAt)} · {latestImportSummary.status}
                       </span>
                     </div>
                     <div className="report-tags">
