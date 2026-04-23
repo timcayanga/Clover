@@ -1,4 +1,5 @@
 import type { TransactionType } from "@prisma/client";
+import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 
 export type ImportedAccountType = "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
 
@@ -25,6 +26,12 @@ export type DetectedStatementMetadata = {
   startDate: string | null;
   endDate: string | null;
   confidence: number;
+};
+
+export type ImportParseContext = {
+  institution?: string | null;
+  accountName?: string | null;
+  accountNumber?: string | null;
 };
 
 const delimiterForFile = (fileType: string, fileName: string) => {
@@ -180,73 +187,6 @@ const normalizeBpiText = (text: string) =>
     .join("\n");
 
 const compactWhitespace = (value: string) => normalizeWhitespace(value).replace(/\s+/g, "");
-
-const humanizeMerchantText = (value: string) => {
-  const normalized = normalizeWhitespace(value);
-  if (!normalized) {
-    return "";
-  }
-
-  const replacements: Array<[RegExp, string]> = [
-    [/fundtransfer/gi, "Fund Transfer"],
-    [/interestearned/gi, "Interest Earned"],
-    [/taxwithheld/gi, "Tax Withheld"],
-    [/instapaytransferfee/gi, "InstaPay Transfer Fee"],
-    [/transfertootherbank/gi, "Transfer to Other Bank"],
-    [/transferto/gi, "Transfer to"],
-    [/transferfrom/gi, "Transfer from"],
-  ];
-
-  let next = normalized;
-  for (const [pattern, replacement] of replacements) {
-    next = next.replace(pattern, replacement);
-  }
-
-  next = next
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/([A-Za-z])(\d)/g, "$1 $2")
-    .replace(/(\d)([A-Za-z])/g, "$1 $2")
-    .replace(/\s*:\s*/g, ": ")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return next;
-};
-
-const summarizeMerchantText = (value: string) => {
-  const humanized = humanizeMerchantText(value);
-  const compact = humanized.replace(/[^a-z0-9]+/gi, "").toLowerCase();
-
-  if (!humanized) {
-    return humanized;
-  }
-
-  if (compact.includes("fundtransfer")) {
-    return "Fund Transfer";
-  }
-
-  if (compact.includes("interestearned")) {
-    return "Interest Earned";
-  }
-
-  if (compact.includes("taxwithheld")) {
-    return "Tax Withheld";
-  }
-
-  if (compact.includes("instapaytransferfee")) {
-    return "InstaPay Transfer Fee";
-  }
-
-  if (compact.includes("transfertootherbank")) {
-    return "Transfer to Other Bank";
-  }
-
-  if (/^(cash in|cash out|payment to|received|sent|transfer to|transfer from)\b/i.test(humanized)) {
-    return humanized.split(/\s+/).slice(0, 3).join(" ");
-  }
-
-  return humanized;
-};
 
 const MAX_DECIMAL_AMOUNT = 9_999_999_999_999_999.99;
 
@@ -625,6 +565,7 @@ const parseBpiCreditCardTransactionLine = (
   state: {
     year: number;
     accountName: string;
+    institution: string | null;
     statementDate: string | null;
     paymentDueDate: string | null;
   }
@@ -678,7 +619,7 @@ const parseBpiCreditCardTransactionLine = (
   }
 
   const merchantRaw = humanizeMerchantText(descriptionSource);
-  const merchantClean = summarizeMerchantText(descriptionSource);
+  const merchantClean = summarizeMerchantText(descriptionSource, state.institution);
   const categoryName = guessBpiCreditCategoryName(descriptionSource, type);
 
   return {
@@ -689,6 +630,7 @@ const parseBpiCreditCardTransactionLine = (
     description: descriptionSource,
     categoryName,
     accountName: state.accountName,
+    institution: state.institution ?? undefined,
     type,
     rawPayload: {
       bank: "BPI",
@@ -754,6 +696,7 @@ const parseBpiCreditCardImportText = (text: string) => {
       parseBpiCreditCardSegment(segment, {
         year: startYear,
         accountName: metadata.accountName ?? "BPI Signature",
+        institution: metadata.institution ?? "BPI",
         statementDate: metadata.startDate,
         paymentDueDate: metadata.endDate,
       })
@@ -819,6 +762,7 @@ const parseBpiCreditCardSegment = (
   state: {
     year: number;
     accountName: string;
+    institution: string | null;
     statementDate: string | null;
     paymentDueDate: string | null;
   }
@@ -889,7 +833,7 @@ const parseBpiCreditCardSegment = (
   }
 
   const merchantRaw = humanizeMerchantText(descriptionSource);
-  const merchantClean = summarizeMerchantText(descriptionSource);
+  const merchantClean = summarizeMerchantText(descriptionSource, state.institution);
   const categoryName = guessBpiCreditCategoryName(descriptionSource, type);
 
   return {
@@ -900,6 +844,7 @@ const parseBpiCreditCardSegment = (
     description: descriptionSource,
     categoryName,
     accountName: state.accountName,
+    institution: state.institution ?? undefined,
     type,
     rawPayload: {
       bank: "BPI",
@@ -933,6 +878,7 @@ const parseRcbcTransactionLine = (
   state: {
     accountName: string;
     cardNumber: string | null;
+    institution: string | null;
   }
 ) => {
   const normalized = normalizeWhitespace(line);
@@ -961,10 +907,11 @@ const parseRcbcTransactionLine = (
     date: saleDate.toISOString().slice(0, 10),
     amount: amount.toFixed(2),
     merchantRaw: humanizeMerchantText(description),
-    merchantClean: summarizeMerchantText(description),
+    merchantClean: summarizeMerchantText(description, state.institution),
     description,
     categoryName,
     accountName: state.accountName,
+    institution: state.institution ?? undefined,
     type,
     rawPayload: {
       bank: "RCBC",
@@ -1022,6 +969,7 @@ const parseRcbcImportText = (text: string) => {
     const parsed = parseRcbcTransactionLine(line, {
       accountName: metadata.accountName ?? "RCBC",
       cardNumber: metadata.accountNumber,
+      institution: metadata.institution ?? "RCBC",
     });
 
     if (parsed) {
@@ -1123,7 +1071,7 @@ const guessGcashCategoryName = (description: string, type: TransactionType) => {
   return guessCategoryName(merchant, type);
 };
 
-const parseGcashTransactionRecord = (record: string) => {
+const parseGcashTransactionRecord = (record: string, institution?: string | null) => {
   const normalized = normalizeWhitespace(record);
   const match = normalized.match(
     /^(?<date>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s+(?<body>.+?)\s+(?<reference>\d{10,})\s+(?<amount>\d[\d,]*\.\d{2})\s+(?<balance>\d[\d,]*\.\d{2})$/
@@ -1163,9 +1111,10 @@ const parseGcashTransactionRecord = (record: string) => {
     date: date.toISOString().slice(0, 10),
     amount: amount.toFixed(2),
     merchantRaw: humanizeMerchantText(description),
-    merchantClean: summarizeMerchantText(merchantClean),
+    merchantClean: summarizeMerchantText(merchantClean, institution),
     description,
     categoryName,
+    institution: institution ?? undefined,
     type,
     rawPayload: {
       bank: "GCash",
@@ -1223,7 +1172,7 @@ const parseGcashImportText = (text: string) => {
   }
 
   const rows = records
-    .map((record) => parseGcashTransactionRecord(record))
+    .map((record) => parseGcashTransactionRecord(record, metadata.institution))
     .filter(Boolean) as ParsedImportRow[];
 
   const endingBalance = getTrailingBalanceFromParsedRows(rows);
@@ -1260,6 +1209,7 @@ const parseBpiTransactionLine = (
     previousMonthIndex: number | null;
     previousBalance: number | null;
     accountName: string;
+    institution: string | null;
     statementStartDate: string | null;
   }
 ) => {
@@ -1363,10 +1313,11 @@ const parseBpiTransactionLine = (
     date: date.toISOString().slice(0, 10),
     amount,
     merchantRaw: humanizeMerchantText(displayText),
-    merchantClean: summarizeMerchantText(displayText),
+    merchantClean: summarizeMerchantText(displayText, state.institution),
     description: displayText,
     categoryName: guessBpiCategoryName(displayText, type),
     accountName: state.accountName,
+    institution: state.institution ?? undefined,
     type,
     rawPayload: {
       bank: "BPI",
@@ -1404,6 +1355,7 @@ const parseBpiImportText = (text: string) => {
     previousMonthIndex,
     previousBalance,
     accountName: metadata.accountName ?? "BPI",
+    institution: metadata.institution ?? "BPI",
     statementStartDate: metadata.startDate,
   };
 
@@ -1418,6 +1370,7 @@ const parseBpiImportText = (text: string) => {
       description: `Beginning balance for ${metadata.accountName}`,
       categoryName: "Opening Balance",
       accountName: metadata.accountName ?? "BPI",
+      institution: metadata.institution ?? "BPI",
       type: "transfer",
       rawPayload: {
         bank: "BPI",
@@ -1514,7 +1467,10 @@ const guessUnionBankCategoryName = (description: string, type: TransactionType) 
   return guessCategoryName(description, type);
 };
 
-const parseUnionBankTransactionSegment = (segment: string[], state: { accountName: string }) => {
+const parseUnionBankTransactionSegment = (
+  segment: string[],
+  state: { accountName: string; institution: string | null }
+) => {
   if (segment.length === 0) {
     return null;
   }
@@ -1572,10 +1528,11 @@ const parseUnionBankTransactionSegment = (segment: string[], state: { accountNam
     date: date.toISOString().slice(0, 10),
     amount: transactionAmount.toFixed(2),
     merchantRaw: humanizeMerchantText(description),
-    merchantClean: summarizeMerchantText(description),
+    merchantClean: summarizeMerchantText(description, state.institution),
     description,
     categoryName: guessUnionBankCategoryName(description, type),
     accountName: state.accountName,
+    institution: state.institution ?? undefined,
     type,
     rawPayload: {
       bank: "UnionBank",
@@ -1623,7 +1580,12 @@ const parseUnionBankImportText = (text: string) => {
   }
 
   const rows = segments
-    .map((segment) => parseUnionBankTransactionSegment(segment, { accountName: metadata.accountName ?? "UnionBank" }))
+    .map((segment) =>
+      parseUnionBankTransactionSegment(segment, {
+        accountName: metadata.accountName ?? "UnionBank",
+        institution: metadata.institution ?? "UnionBank",
+      })
+    )
     .filter(Boolean) as ParsedImportRow[];
 
   const lastRow = rows.at(-1);
@@ -1707,7 +1669,7 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
   };
 };
 
-const parseDelimitedText = (text: string, delimiter: string) => {
+const parseDelimitedText = (text: string, delimiter: string, institution?: string | null) => {
   const rows = text
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -1736,7 +1698,7 @@ const inferType = (record: Record<string, string>): TransactionType => {
   return amount >= 0 ? "income" : "expense";
 };
 
-const parseHeuristicLines = (text: string) => {
+const parseHeuristicLines = (text: string, institution?: string | null) => {
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -1773,9 +1735,10 @@ const parseHeuristicLines = (text: string) => {
         date: dateMatch?.[0],
         amount: normalizedAmount,
         merchantRaw: humanizeMerchantText(merchant || line),
-        merchantClean: summarizeMerchantText(merchant || line),
+        merchantClean: summarizeMerchantText(merchant || line, institution),
         description: line,
         categoryName: guessCategoryName(line, type),
+        institution: institution ?? undefined,
         type,
         rawPayload: { line },
       } satisfies ParsedImportRow;
@@ -1783,7 +1746,13 @@ const parseHeuristicLines = (text: string) => {
     .filter(Boolean) as ParsedImportRow[];
 };
 
-export const parseImportText = (text: string, fileName: string, fileType: string): ParsedImportRow[] => {
+export const parseImportText = (
+  text: string,
+  fileName: string,
+  fileType: string,
+  context: ImportParseContext = {}
+): ParsedImportRow[] => {
+  const institution = context.institution ?? null;
   const gcashParsed = parseGcashImportText(text);
   if (gcashParsed && gcashParsed.rows.length > 0) {
     return gcashParsed.rows;
@@ -1814,19 +1783,20 @@ export const parseImportText = (text: string, fileName: string, fileType: string
   const looksDelimited = /,|\t|;/.test(firstLine);
 
   if (!looksDelimited) {
-    return parseHeuristicLines(text);
+    return parseHeuristicLines(text, institution);
   }
 
-  const records = parseDelimitedText(text, delimiter);
+  const records = parseDelimitedText(text, delimiter, institution);
 
   return records.map((record) => ({
     date: record.date || record.transaction_date || record.posted_at || record.posted,
     amount: record.amount || record.value || record.debit || record.credit,
     merchantRaw: humanizeMerchantText(record.merchant || record.description || record.name || record.payee || record.label || ""),
-    merchantClean: summarizeMerchantText(record.merchant_clean || record.clean_merchant || record.name || record.merchant || record.description || ""),
+    merchantClean: summarizeMerchantText(record.merchant_clean || record.clean_merchant || record.name || record.merchant || record.description || "", institution),
     description: record.description || record.memo || record.notes || record.detail,
     categoryName: record.category || record.category_name || guessCategoryName(record.description || record.merchant || "", inferType(record)),
     accountName: record.account || record.account_name || record.source,
+    institution: institution ?? undefined,
     type: inferType(record),
     rawPayload: record,
   }));

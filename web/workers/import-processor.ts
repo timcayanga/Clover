@@ -230,8 +230,12 @@ export const processImportFileText = async (
     );
   }
 
-  const parsedRows = parseImportText(text, importFile.fileName, importFile.fileType);
   const metadata = detectStatementMetadataFromText(text);
+  const parsedRows = parseImportText(text, importFile.fileName, importFile.fileType, {
+    institution: metadata.institution,
+    accountName: metadata.accountName,
+    accountNumber: metadata.accountNumber,
+  });
   const parsedEndingBalance = getTrailingBalanceFromParsedRows(parsedRows);
   const resolvedMetadata = {
     ...metadata,
