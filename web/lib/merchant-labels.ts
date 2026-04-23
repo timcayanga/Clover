@@ -73,6 +73,18 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
   ],
   BPI: [
     {
+      patterns: [/elink\s+transfer/i, /elink\s+payment/i],
+      replacement: "Payroll Credit",
+    },
+    {
+      patterns: [/e-wallet\s+load-?gcash/i, /to:\s*gcash\s+cash\s+in/i],
+      replacement: "GCash Cash In",
+    },
+    {
+      patterns: [/from:\s*non-bpi\s+terminal/i, /atm\s+withdrawal/i, /\bwithdrawal\b/i],
+      replacement: "ATM Withdrawal",
+    },
+    {
       patterns: [/tax\s*withheld/i, /taxwithheld/i, /withheld\s*tax/i],
       replacement: "Tax Withheld",
     },
@@ -91,6 +103,18 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     {
       patterns: [/bills?\s*payment/i, /billspayment/i],
       replacement: "Bills Payment",
+    },
+    {
+      patterns: [/payment\s+to\s+merchant/i],
+      replacement: "Merchant Payment",
+    },
+    {
+      patterns: [/transfer\s+to\s+other\s+bank/i],
+      replacement: "Bank Transfer",
+    },
+    {
+      patterns: [/inter-?bank\s+fund\s+transfer/i],
+      replacement: "Bank Transfer",
     },
   ],
   UnionBank: [

@@ -26,6 +26,7 @@ Use these rules for BPI savings and related statement imports.
 - Use the PHP equivalent as the primary amount when a foreign-currency line shows both the source currency and the PHP conversion.
 - Keep the original source-currency amount in notes or raw payload metadata instead of making it a second transaction row.
 - Treat `Payment - Thank You` as a card payment / transfer-style credit, not an expense.
+- The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable BPI simplifications such as `Payroll Credit`, `GCash Cash In`, `ATM Withdrawal`, `Merchant Payment`, and `Bank Transfer`.
 
 ## Notes Handling
 
