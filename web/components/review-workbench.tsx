@@ -577,7 +577,7 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
 
           <div className="review-workbench__actions">
             <button
-              className="button button-primary"
+              className="button button-primary review-workbench__button-primary"
               type="button"
               onClick={() => void resolveCurrent("confirmed")}
               disabled={isSaving}
@@ -585,7 +585,7 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
               {draftChanged ? "Apply & confirm" : "Accept"}
             </button>
             <button
-              className="button button-secondary"
+              className="button button-secondary review-workbench__button-secondary"
               type="button"
               onClick={() => void ignoreCurrent()}
               disabled={isSaving}

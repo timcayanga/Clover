@@ -9057,6 +9057,36 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 10px;
 }
 
+.review-workbench__button-primary {
+  min-height: 48px;
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow:
+    0 12px 24px rgba(3, 168, 192, 0.18),
+    0 0 0 1px rgba(255, 255, 255, 0.14) inset;
+}
+
+.review-workbench__button-primary:hover:not(:disabled),
+.review-workbench__button-primary:focus:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow:
+    0 14px 28px rgba(3, 168, 192, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.18) inset;
+}
+
+.review-workbench__button-secondary {
+  min-height: 44px;
+  color: var(--muted);
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+.review-workbench__button-secondary:hover:not(:disabled),
+.review-workbench__button-secondary:focus:not(:disabled) {
+  color: var(--text);
+  border-color: rgba(148, 163, 184, 0.32);
+  background: rgba(255, 255, 255, 0.96);
+}
+
 .review-workbench__nav {
   display: flex;
   gap: 10px;
