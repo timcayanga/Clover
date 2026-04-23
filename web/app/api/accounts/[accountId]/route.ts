@@ -110,7 +110,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
       },
     });
 
-    const account = await prisma.$transaction(async (tx) => {
+    const account = await prisma.$transaction(async (tx: any) => {
       if (mergeTarget) {
         await tx.transaction.updateMany({
           where: { accountId },

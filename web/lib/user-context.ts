@@ -1,4 +1,4 @@
-import { Prisma, type User } from "@prisma/client";
+import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { syncClerkUser } from "@/lib/clerk";
 
@@ -20,8 +20,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
       },
     });
   } catch (error) {
-    const isUniqueConflict =
-      error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+    const isUniqueConflict = typeof error === "object" && error !== null && "code" in error && String((error as { code?: unknown }).code ?? "") === "P2002";
 
     if (!isUniqueConflict) {
       throw error;

@@ -155,20 +155,20 @@ const getMonthBuckets = (anchor: Date) => {
 const getMonthBucket = (date: Date, buckets: MonthBucket[]) => buckets.find((bucket) => bucket.key === toIsoMonth(date));
 
 const buildLinePath = (buckets: MonthBucket[], width: number, height: number, padding: number) => {
-  const values = buckets.map((bucket) => bucket.net);
+  const values = buckets.map((bucket: any) => bucket.net);
   const max = Math.max(...values);
   const min = Math.min(...values);
   const range = Math.max(max - min, 1);
   const xSpan = width - padding * 2;
   const ySpan = height - padding * 2;
-  const points = buckets.map((bucket, index) => {
+  const points = buckets.map((bucket: any, index: number) => {
     const x = padding + (index / Math.max(buckets.length - 1, 1)) * xSpan;
     const normalized = (bucket.net - min) / range;
     const y = padding + (1 - normalized) * ySpan;
     return { ...bucket, x, y };
   });
 
-  const linePath = points.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+  const linePath = points.map((point: any, index: number) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
 
   return {
     points,
@@ -247,7 +247,7 @@ const comparePeriods = (currentTransactions: DashboardTransaction[], previousTra
   const incomeDelta = current.income - previous.income;
   const netDelta = net - previousNet;
 
-  const categoryEntries = Array.from(new Set([...current.expenseCategories.keys(), ...previous.expenseCategories.keys()])).map((name) => {
+  const categoryEntries = Array.from(new Set([...current.expenseCategories.keys(), ...previous.expenseCategories.keys()])).map((name: string) => {
     const currentAmount = current.expenseCategories.get(name) ?? 0;
     const previousAmount = previous.expenseCategories.get(name) ?? 0;
     const delta = currentAmount - previousAmount;
@@ -328,7 +328,7 @@ export default async function DashboardPage({
     })) ?? ({
       id: starterWorkspace.id,
       name: starterWorkspace.name,
-      accounts: starterWorkspace.accounts.map((account) => ({
+      accounts: starterWorkspace.accounts.map((account: any) => ({
         id: account.id,
         name: account.name,
         institution: account.institution,
@@ -583,7 +583,7 @@ export default async function DashboardPage({
   const topCategoryRows: VisualCategory[] = Array.from(currentSummary.current.expenseCategories.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 4)
-    .map(([name, amount]) => ({
+    .map(([name, amount]: any) => ({
       name,
       amount,
       share: currentSummary.current.expense > 0 ? (amount / currentSummary.current.expense) * 100 : 0,
@@ -712,7 +712,7 @@ export default async function DashboardPage({
               </div>
 
               <div className="goals-hero__stats">
-                {goalSnapshot.map((item) => (
+                {goalSnapshot.map((item: any) => (
                   <div key={item.label} className="goals-stat">
                     <span>{item.label}</span>
                     <strong>{item.value}</strong>
@@ -752,7 +752,7 @@ export default async function DashboardPage({
         </div>
 
         <div className="goals-action-grid">
-          {goalNextSteps.map((step, index) => (
+          {goalNextSteps.map((step: any, index: number) => (
             <article key={step.title} className="goals-action">
               <div className="goals-lane__top">
                 <div className="goals-lane__icon" aria-hidden="true">
@@ -813,7 +813,7 @@ export default async function DashboardPage({
               <strong>Recent uploads</strong>
               <span>
                 {recentImports.length > 0
-                  ? recentImports.map((file) => `${file.fileName} (${file.status})`).join(" · ")
+                  ? recentImports.map((file: any) => `${file.fileName} (${file.status})`).join(" · ")
                   : "No uploads in this workspace yet"}
               </span>
             </div>
@@ -830,7 +830,7 @@ export default async function DashboardPage({
             </div>
           </div>
           <div className="overview-activity-list">
-            {recentImports.map((file) => (
+            {recentImports.map((file: any) => (
               <div key={file.id} className="overview-panel__item">
                 <strong>{file.fileName}</strong>
                 <span>
@@ -838,7 +838,7 @@ export default async function DashboardPage({
                 </span>
               </div>
             ))}
-            {recentActivityTransactions.map((transaction) => (
+            {recentActivityTransactions.map((transaction: any) => (
               <div key={transaction.id} className="overview-panel__item">
                 <strong>{transaction.merchantClean || transaction.merchantRaw}</strong>
                 <span>

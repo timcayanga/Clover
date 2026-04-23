@@ -1,8 +1,8 @@
-import type { Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { parseAmountValue, parseImportText } from "@/lib/import-parser";
 import { readImportedFileText } from "@/lib/import-file-text.server";
+import type { JsonValue, TransactionType } from "@/lib/domain-types";
 import {
   DATA_ENGINE_VERSION,
   buildParsedTransactionInsertData,
@@ -147,9 +147,9 @@ const buildTransactionInsertRecord = (params: {
   accountMatchConfidence?: number;
   duplicateConfidence?: number;
   transferConfidence?: number;
-  rawPayload?: Prisma.InputJsonValue | null;
-  normalizedPayload?: Prisma.InputJsonValue | null;
-  learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
+  rawPayload?: JsonValue | null;
+  normalizedPayload?: JsonValue | null;
+  learnedRuleIdsApplied?: JsonValue | null;
   date: Date;
   amount: string | number;
   currency: string;
@@ -296,7 +296,7 @@ export const processImportFileText = async (
         endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
         status: "pending",
         mismatchReason: null,
-        sourceMetadata: resolvedMetadata as Prisma.InputJsonValue,
+        sourceMetadata: resolvedMetadata as any,
         rowCount: rows.length,
       },
       create: {
@@ -307,7 +307,7 @@ export const processImportFileText = async (
         openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
         endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
         status: "pending",
-        sourceMetadata: resolvedMetadata as Prisma.InputJsonValue,
+        sourceMetadata: resolvedMetadata as any,
         rowCount: rows.length,
       },
     });
@@ -409,7 +409,7 @@ const looksLikeJsonBlob = (value: string) => {
   }
 };
 
-const extractHumanReadableDescription = (rawPayload: Prisma.InputJsonValue | null | undefined) => {
+const extractHumanReadableDescription = (rawPayload: JsonValue | null | undefined) => {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
     return null;
   }
@@ -489,7 +489,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     return null;
   };
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: any) => {
     await tx.transaction.deleteMany({
       where: { importFileId },
     });
@@ -607,13 +607,13 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
             statementStartDate: statementStartDate?.toISOString() ?? null,
             statementEndDate: statementEndDate?.toISOString() ?? null,
             openingBalance: statementCheckpoint.openingBalance?.toString() ?? null,
-          } as Prisma.InputJsonValue,
+          } as JsonValue,
           normalizedPayload: {
             kind: "opening_balance",
             openingBalance: statementCheckpoint.openingBalance?.toString() ?? null,
             statementStartDate: statementStartDate?.toISOString() ?? null,
-          } as Prisma.InputJsonValue,
-          learnedRuleIdsApplied: [] as Prisma.InputJsonValue,
+          } as JsonValue,
+          learnedRuleIdsApplied: [] as JsonValue,
           date: statementStartDate ?? new Date(),
           amount: parseAmountValue(statementCheckpoint.openingBalance?.toString() ?? null) ?? 0,
           currency: "PHP",
@@ -623,7 +623,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
           description: statementCheckpoint.openingBalance !== null ? `Opening balance for statement ending ${statementEndDate?.toISOString().slice(0, 10) ?? "unknown"}` : "Opening balance",
           isTransfer: false,
           isExcluded: true,
-        }) as Prisma.TransactionCreateInput,
+        }) as any,
       });
       openingBalanceInserted = true;
     }
@@ -692,7 +692,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
   const existingCategories = await tx.category.findMany({
     where: { workspaceId: importFile.workspaceId },
   });
-  const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
+  const categoryByName = new Map<string, string>(existingCategories.map((category: any) => [category.name.toLowerCase(), category.id]));
 
   for (const row of parsedRows) {
     const rowType =
@@ -703,7 +703,8 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     const rowAccountMatchConfidence = typeof row.accountMatchConfidence === "number" ? row.accountMatchConfidence : 100;
     const rowDuplicateConfidence = typeof row.duplicateConfidence === "number" ? row.duplicateConfidence : 0;
     const rowTransferConfidence = typeof row.transferConfidence === "number" ? row.transferConfidence : rowType === "transfer" ? 100 : 0;
-    const categoryName = (typeof row.categoryName === "string" && row.categoryName) || defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense");
+    const categoryName: string =
+      (typeof row.categoryName === "string" && row.categoryName) || defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense");
     let categoryId = categoryByName.get(categoryName.toLowerCase());
 
     if (!categoryId) {
@@ -716,7 +717,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       });
 
       categoryId = created.id;
-      categoryByName.set(categoryName.toLowerCase(), categoryId);
+      categoryByName.set(categoryName.toLowerCase(), categoryId as string);
     }
 
     const merchantText =
@@ -734,9 +735,9 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       accountMatchConfidence: rowAccountMatchConfidence,
       duplicateConfidence: rowDuplicateConfidence,
       transferConfidence: rowTransferConfidence,
-      rawPayload: (row.rawPayload ?? {}) as Prisma.InputJsonValue,
-      normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
-      learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
+      rawPayload: (row.rawPayload ?? {}) as JsonValue,
+      normalizedPayload: (row.normalizedPayload ?? {}) as JsonValue,
+      learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as JsonValue,
       date: row.date instanceof Date ? row.date : row.date ? new Date(String(row.date)) : new Date(),
       amount: parseAmountValue(coerceAmountToString(row.amount)) ?? 0,
       currency: "PHP",
@@ -759,11 +760,11 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
         merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
         description: extractHumanReadableDescription(row.rawPayload ?? null),
         categoryName,
-        rawPayload: (row.rawPayload ?? {}) as Prisma.InputJsonValue,
+        rawPayload: (row.rawPayload ?? {}) as JsonValue,
       },
       trainingSignal: {
         merchantText,
-        categoryId,
+        categoryId: categoryId as string,
         categoryName,
         type: rowType ?? "expense",
         confidence: typeof row.confidence === "number" ? row.confidence : 100,
@@ -774,7 +775,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
 
   for (const batch of chunkArray(preparedTransactions, 25)) {
     await tx.transaction.createMany({
-      data: batch.map((entry) => entry.insertRow as any),
+      data: batch.map((entry: any) => entry.insertRow as any),
     });
   }
 

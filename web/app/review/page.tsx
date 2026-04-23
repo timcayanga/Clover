@@ -66,7 +66,7 @@ export default async function ReviewPage() {
   });
 
   const counts = reviewTransactions.reduce(
-    (accumulator, transaction) => {
+    (accumulator: any, transaction: any) => {
       accumulator.total += 1;
       if (transaction.reviewStatus === "pending_review") accumulator.pending += 1;
       if (transaction.reviewStatus === "edited") accumulator.edited += 1;
@@ -128,7 +128,7 @@ export default async function ReviewPage() {
                 </tr>
               </thead>
               <tbody>
-                {reviewTransactions.map((transaction) => (
+                {reviewTransactions.map((transaction: any) => (
                   <tr key={transaction.id}>
                     <td>{formatDate(transaction.date)}</td>
                     <td>{transaction.merchantClean ?? transaction.merchantRaw}</td>

@@ -225,7 +225,7 @@ async function ReportsPageView({
       },
     ];
 
-    const sampleTotalSpend = sampleTopCategories.reduce((sum, category) => sum + category.amount, 0);
+    const sampleTotalSpend = sampleTopCategories.reduce((sum: number, category: any) => sum + category.amount, 0);
     const activeAccounts = [
       { name: "BPI Checking" },
       { name: "Union Savings" },
@@ -241,18 +241,18 @@ async function ReportsPageView({
     const chartPadding = 24;
     const chartXSpan = chartWidth - chartPadding * 2;
     const chartYSpan = chartHeight - chartPadding * 2;
-    const cashFlowValues = sampleMonthBuckets.map((bucket) => bucket.net);
+    const cashFlowValues = sampleMonthBuckets.map((bucket: any) => bucket.net);
     const cashFlowMax = Math.max(...cashFlowValues);
     const cashFlowMin = Math.min(...cashFlowValues);
     const cashFlowRange = Math.max(cashFlowMax - cashFlowMin, 1);
-    const cashFlowPoints = sampleMonthBuckets.map((bucket, index) => {
+    const cashFlowPoints = sampleMonthBuckets.map((bucket: any, index: number) => {
       const x = chartPadding + (index / Math.max(sampleMonthBuckets.length - 1, 1)) * chartXSpan;
       const normalized = (bucket.net - cashFlowMin) / cashFlowRange;
       const y = chartPadding + (1 - normalized) * chartYSpan;
       return { ...bucket, x, y };
     });
     const cashFlowPath = cashFlowPoints
-      .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
+      .map((point: any, index: number) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
       .join(" ");
     const donutRadius = 72;
     const donutCircumference = 2 * Math.PI * donutRadius;
@@ -337,13 +337,13 @@ async function ReportsPageView({
                   fill="url(#cash-flow-gradient)"
                 />
                 <path d={cashFlowPath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                {cashFlowPoints.map((point) => (
+                {cashFlowPoints.map((point: any) => (
                   <circle key={point.key} cx={point.x} cy={point.y} r="6" fill="white" stroke="var(--accent)" strokeWidth="3" />
                 ))}
               </svg>
 
               <div className="report-chart__labels">
-                {cashFlowPoints.map((point) => (
+                {cashFlowPoints.map((point: any) => (
                   <Link key={point.key} href={buildTransactionsHref({ month: point.key })} className="report-chart__label report-list__item--link">
                     <span>{point.label}</span>
                     <strong>{formatCurrency(point.net)}</strong>
@@ -368,7 +368,7 @@ async function ReportsPageView({
               <div className="report-donut__chart" aria-label="Spending donut chart" role="img">
                 <svg viewBox="0 0 240 240">
                   <circle cx="120" cy="120" r={donutRadius} className="report-donut__track" />
-                  {sampleTopCategories.map((category) => {
+                  {sampleTopCategories.map((category: any) => {
                     const share = (category.amount / sampleTotalSpend) * 100;
                     const segmentLength = (share / 100) * donutCircumference;
                     const dashArray = `${segmentLength} ${donutCircumference}`;
@@ -397,7 +397,7 @@ async function ReportsPageView({
               </div>
 
               <div className="report-donut__legend">
-                {sampleTopCategories.map((category) => {
+                {sampleTopCategories.map((category: any) => {
                   const share = (category.amount / sampleTotalSpend) * 100;
                   return (
                     <Link
@@ -433,7 +433,7 @@ async function ReportsPageView({
             </div>
 
             <div className="report-list">
-              {sampleRecurringPayments.map((payment) => (
+              {sampleRecurringPayments.map((payment: any) => (
                 <Link
                   key={payment.label}
                   href={buildTransactionsHref({ merchant: payment.label, review: "1" })}
@@ -465,7 +465,7 @@ async function ReportsPageView({
             </div>
 
             <div className="report-list">
-              {sampleTopMerchants.map((merchant) => (
+              {sampleTopMerchants.map((merchant: any) => (
                 <Link
                   key={merchant.label}
                   href={buildTransactionsHref({ merchant: merchant.label })}
@@ -783,7 +783,7 @@ async function ReportsPageView({
       Object.values(importStatusCounts).every((count) => count === 0);
 
     const currentSummary = currentWindowTransactions.reduce(
-      (accumulator, transaction) => {
+      (accumulator: any, transaction: any) => {
         const amount = Number(transaction.amount);
         if (transaction.type === "income") {
           accumulator.income += amount;
@@ -812,7 +812,7 @@ async function ReportsPageView({
     );
 
     const previousSummary = previousWindowSummaryRows.reduce(
-      (accumulator, row) => {
+      (accumulator: any, row: any) => {
         const amount = Number(row._sum.amount ?? 0);
         if (row.type === "income") {
           accumulator.income += amount;
@@ -831,7 +831,7 @@ async function ReportsPageView({
     );
 
     const monthBuckets = getMonthBuckets(now);
-    sixMonthTransactions.forEach((transaction) => {
+    sixMonthTransactions.forEach((transaction: any) => {
       const bucket = bucketMonth(transaction.date, monthBuckets);
       if (!bucket) {
         return;
@@ -854,11 +854,11 @@ async function ReportsPageView({
     const activeAccountCount = accountStatsSummary._count.balance;
     const accountCount = accountStatsSummary._count.id;
     const uncategorizedTransactions = currentWindowTransactions.filter(
-      (transaction) => !transaction.category?.name || !transaction.merchantClean
+      (transaction: any) => !transaction.category?.name || !transaction.merchantClean
     );
 
     const duplicateGroups = new Map<string, (typeof currentWindowTransactions)[number][]>();
-    currentWindowTransactions.forEach((transaction) => {
+    currentWindowTransactions.forEach((transaction: any) => {
       const merchant = normalizeMerchant(transaction.merchantClean ?? transaction.merchantRaw);
       const key = [
         transaction.date.toISOString().slice(0, 10),
@@ -874,7 +874,7 @@ async function ReportsPageView({
     });
 
     const possibleDuplicateGroups = Array.from(duplicateGroups.values())
-      .filter((group) => group.length > 1)
+      .filter((group: any) => group.length > 1)
       .sort((a, b) => b.length - a.length)
       .slice(0, 3);
 
@@ -917,12 +917,12 @@ async function ReportsPageView({
                   label: "Open transactions",
                 };
 
-    const topCategories = Array.from(currentSummary.expenseCategories.entries())
-      .sort((a, b) => b[1] - a[1])
+    const topCategories = (Array.from(currentSummary.expenseCategories.entries()) as Array<[string, number]>)
+      .sort((a: [string, number], b: [string, number]) => b[1] - a[1])
       .slice(0, 5);
 
     const maxCategorySpend = topCategories[0]?.[1] ?? 0;
-    const maxMonthlyNet = Math.max(...monthBuckets.map((bucket) => Math.abs(bucket.net)), 1);
+    const maxMonthlyNet = Math.max(...monthBuckets.map((bucket: any) => Math.abs(bucket.net)), 1);
 
     const currentNet = currentSummary.income - currentSummary.expense;
     const previousNet = previousSummary.income - previousSummary.expense;
@@ -956,7 +956,7 @@ async function ReportsPageView({
       }
     >();
 
-    currentWindowTransactions.forEach((transaction) => {
+    currentWindowTransactions.forEach((transaction: any) => {
       if (transaction.type !== "expense") {
         return;
       }
@@ -969,12 +969,14 @@ async function ReportsPageView({
       merchantSpend.set(key, existing);
     });
 
-    const recurringMerchants = Array.from(merchantSpend.values())
-      .filter((merchant) => merchant.count > 1)
-      .sort((a, b) => b.amount - a.amount)
+    const recurringMerchants: Array<{ label: string; amount: number; count: number }> = Array.from(merchantSpend.values())
+      .filter((merchant: any) => merchant.count > 1)
+      .sort((a: { amount: number }, b: { amount: number }) => b.amount - a.amount)
       .slice(0, 3);
 
-    const topMerchants = Array.from(merchantSpend.values()).sort((a, b) => b.amount - a.amount).slice(0, 5);
+    const topMerchants: Array<{ label: string; amount: number; count: number }> = Array.from(merchantSpend.values())
+      .sort((a: { amount: number }, b: { amount: number }) => b.amount - a.amount)
+      .slice(0, 5);
     const currentMonthBucket = monthBuckets[monthBuckets.length - 1];
     const previousMonthBucket = monthBuckets[monthBuckets.length - 2] ?? monthBuckets[monthBuckets.length - 1];
     const monthlyNetChange = currentMonthBucket.net - previousMonthBucket.net;
@@ -1270,7 +1272,7 @@ async function ReportsPageView({
               </div>
             </div>
             <div className="report-ai-signal-grid">
-              {aiSignals.map((signal) => (
+              {aiSignals.map((signal: any) => (
                 <div key={signal.label} className={`report-ai-signal report-ai-signal--${signal.tone}`}>
                   <span>{signal.label}</span>
                   <strong>{signal.value}</strong>
@@ -1287,7 +1289,7 @@ async function ReportsPageView({
               </div>
             </div>
             <div className="report-list">
-              {aiActions.map((action) => (
+              {aiActions.map((action: any) => (
                 <div key={action.title} className="report-list__item report-list__item--compact">
                   <div className="report-list__meta">
                     <strong>{action.title}</strong>
@@ -1387,7 +1389,7 @@ async function ReportsPageView({
             </div>
 
             <div className="report-timeline">
-              {monthBuckets.map((bucket) => {
+              {monthBuckets.map((bucket: any) => {
                 const width = Math.max((Math.abs(bucket.net) / maxMonthlyNet) * 100, bucket.net === 0 ? 6 : 18);
                 return (
                   <Link key={bucket.key} href={buildTransactionsHref({ month: bucket.key })} className="report-timeline__row report-list__item--link">
@@ -1422,7 +1424,7 @@ async function ReportsPageView({
 
             <div className="report-list">
               {topCategories.length > 0 ? (
-                topCategories.map(([categoryName, amount]) => {
+                topCategories.map(([categoryName, amount]: any) => {
                   const share = maxCategorySpend > 0 ? (amount / maxCategorySpend) * 100 : 0;
                   return (
                     <Link
@@ -1462,7 +1464,7 @@ async function ReportsPageView({
 
             <div className="report-list">
               {recurringMerchants.length > 0 ? (
-                recurringMerchants.map((merchant) => (
+                recurringMerchants.map((merchant: any) => (
                   <Link
                     key={merchant.label}
                     href={buildTransactionsHref({ merchant: merchant.label, review: "1" })}
@@ -1498,7 +1500,7 @@ async function ReportsPageView({
 
             <div className="report-list">
               {topMerchants.length > 0 ? (
-                topMerchants.map((merchant) => (
+                topMerchants.map((merchant: any) => (
                   <Link
                     key={merchant.label}
                     href={buildTransactionsHref({ merchant: merchant.label })}
@@ -1580,7 +1582,7 @@ async function ReportsPageView({
               <p className="eyebrow">Uncategorized</p>
               <div className="report-list">
                 {uncategorizedTransactions.length > 0 ? (
-                  uncategorizedTransactions.slice(0, 4).map((transaction) => (
+                  uncategorizedTransactions.slice(0, 4).map((transaction: any) => (
                     <div key={transaction.id} className="report-list__item">
                       <div className="report-list__meta">
                         <strong>{transaction.merchantClean ?? transaction.merchantRaw}</strong>
@@ -1604,9 +1606,9 @@ async function ReportsPageView({
               <p className="eyebrow">Possible duplicates</p>
               <div className="report-list">
                 {possibleDuplicateGroups.length > 0 ? (
-                  possibleDuplicateGroups.map((group) => {
+                  possibleDuplicateGroups.map((group: any) => {
                     const representative = group[0];
-                    const total = group.reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+                    const total = group.reduce((sum: number, transaction: any) => sum + Number(transaction.amount), 0);
                     return (
                       <div key={`${representative.id}-${group.length}`} className="report-list__item">
                         <div className="report-list__meta">

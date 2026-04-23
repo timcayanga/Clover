@@ -1,4 +1,4 @@
-import type { TransactionType } from "@prisma/client";
+import type { TransactionType } from "@/lib/domain-types";
 
 export type ImportedAccountType = "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
 

@@ -4,6 +4,7 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
+import type { TransactionType } from "@/lib/domain-types";
 
 export const dynamic = "force-dynamic";
 
@@ -31,11 +32,11 @@ export async function GET(request: Request) {
       select: { name: true, type: true },
     });
     const categoryKey = (name: string) => name.trim().toLowerCase();
-    const existingCategoryNames = new Set(existingCategories.map((category) => categoryKey(category.name)));
+    const existingCategoryNames = new Set(existingCategories.map((category: { name: string }) => categoryKey(category.name)));
     const missingDefaultCategories = DEFAULT_CATEGORY_ROWS.filter((category) => !existingCategoryNames.has(categoryKey(category.name)));
     if (missingDefaultCategories.length > 0) {
       await prisma.category.createMany({
-        data: missingDefaultCategories.map((category) => ({
+      data: missingDefaultCategories.map((category: { name: string; type: TransactionType }) => ({
           workspaceId,
           name: category.name,
           type: category.type,

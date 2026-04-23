@@ -569,7 +569,7 @@ export default async function InsightsPage() {
     previousWindowTransactionsRaw = previousWindowTransactionsQuery as InsightTransaction[];
     ninetyDayTransactions = ninetyDayTransactionsQuery as InsightTransaction[];
     sixMonthTransactions = sixMonthTransactionsQuery as Array<Pick<InsightTransaction, "date" | "amount" | "type">>;
-    workspaceAccounts = resolvedWorkspace.accounts.map((account) => ({
+    workspaceAccounts = resolvedWorkspace.accounts.map((account: any) => ({
       name: account.name,
       balance: account.balance === null ? null : Number(account.balance),
     }));
@@ -758,7 +758,7 @@ export default async function InsightsPage() {
   const categoryDriverChanges = Array.from(
     new Set([...currentSummary.expenseCategories.keys(), ...previousSummary.expenseCategories.keys()])
   )
-    .map((categoryName) => {
+    .map((categoryName: string) => {
       const currentAmount = currentSummary.expenseCategories.get(categoryName) ?? 0;
       const previousAmount = previousSummary.expenseCategories.get(categoryName) ?? 0;
       const delta = currentAmount - previousAmount;
@@ -870,17 +870,17 @@ export default async function InsightsPage() {
   const chartPadding = 18;
   const chartXSpan = chartWidth - chartPadding * 2;
   const chartYSpan = chartHeight - chartPadding * 2;
-  const monthValues = monthBuckets.map((bucket) => bucket.net);
+  const monthValues = monthBuckets.map((bucket: any) => bucket.net);
   const chartMax = Math.max(...monthValues);
   const chartMin = Math.min(...monthValues);
   const chartRange = Math.max(chartMax - chartMin, 1);
-  const chartPoints = monthBuckets.map((bucket, index) => {
+  const chartPoints = monthBuckets.map((bucket: any, index: number) => {
     const x = chartPadding + (index / Math.max(monthBuckets.length - 1, 1)) * chartXSpan;
     const normalized = (bucket.net - chartMin) / chartRange;
     const y = chartPadding + (1 - normalized) * chartYSpan;
     return { ...bucket, x, y };
   });
-  const chartPath = chartPoints.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+  const chartPath = chartPoints.map((point: any, index: number) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
 
   const headlineNetLabel =
     currentNet >= previousNet
@@ -993,7 +993,7 @@ export default async function InsightsPage() {
           </div>
 
           <div className="insights-snapshot__metrics" aria-label="Insights snapshot metrics">
-            {primarySnapshotItems.map((item) => (
+            {primarySnapshotItems.map((item: any) => (
               <div key={item.label} className="insights-snapshot__metric">
                 <span>{item.label}</span>
                 <strong className={item.tone === "positive" ? "positive" : item.tone === "negative" ? "negative" : undefined}>
@@ -1006,7 +1006,7 @@ export default async function InsightsPage() {
           </div>
 
           <div className="insights-snapshot__actions">
-            {heroActions.map((action) => (
+            {heroActions.map((action: any) => (
               <article key={action.title} className="insights-snapshot__action">
                 <div>
                   <strong>{action.title}</strong>
@@ -1068,12 +1068,12 @@ export default async function InsightsPage() {
                 fill="url(#insight-flow-gradient)"
               />
               <path d={chartPath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-              {chartPoints.map((point) => (
+              {chartPoints.map((point: any) => (
                 <circle key={point.key} cx={point.x} cy={point.y} r="5.5" fill="white" stroke="var(--accent)" strokeWidth="3" />
               ))}
             </svg>
             <div className="insight-chart__labels">
-              {chartPoints.map((point) => (
+              {chartPoints.map((point: any) => (
                 <div key={point.key} className="insight-chart__label">
                   <span>{point.label}</span>
                   <strong>{formatCurrency(point.net)}</strong>
@@ -1109,7 +1109,7 @@ export default async function InsightsPage() {
                 {topCategories.length > 0
                   ? (() => {
                       let offset = 0;
-                      return topCategories.map(([categoryName, amount], index) => {
+                      return topCategories.map(([categoryName, amount]: any, index: number) => {
                         const share = currentSpend > 0 ? amount / currentSpend : 0;
                         const circumference = 2 * Math.PI * 82;
                         const dashLength = share * circumference;
@@ -1141,7 +1141,7 @@ export default async function InsightsPage() {
 
             <div className="insight-donut__legend">
               {topCategories.length > 0 ? (
-                topCategories.map(([categoryName, amount]) => {
+                topCategories.map(([categoryName, amount]: any) => {
                   const share = currentSpend > 0 ? (amount / currentSpend) * 100 : 0;
                   return (
                     <div key={categoryName} className="insight-donut__item">
@@ -1187,7 +1187,7 @@ export default async function InsightsPage() {
 
           <div className="insight-list">
             {categoryDriverChanges.length > 0 ? (
-              categoryDriverChanges.map((driver) => (
+              categoryDriverChanges.map((driver: any) => (
                 <div key={driver.categoryName} className="insight-list__item">
                   <strong>
                     <span className="insight-list__icon" aria-hidden="true">
@@ -1225,7 +1225,7 @@ export default async function InsightsPage() {
               <p className="eyebrow">Recurring costs</p>
               <div className="insight-list">
                 {recurringMerchants.length > 0 ? (
-                  recurringMerchants.map((merchant) => (
+                  recurringMerchants.map((merchant: any) => (
                     <div key={merchant.label} className="insight-list__item">
                       <strong>
                         <span className="insight-list__icon" aria-hidden="true">

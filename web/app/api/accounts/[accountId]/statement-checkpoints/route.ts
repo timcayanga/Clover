@@ -37,7 +37,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
     });
 
     return NextResponse.json({
-      checkpoints: checkpoints.map((checkpoint) => ({
+      checkpoints: checkpoints.map((checkpoint: any) => ({
         ...checkpoint,
         openingBalance: checkpoint.openingBalance?.toString() ?? null,
         endingBalance: checkpoint.endingBalance?.toString() ?? null,

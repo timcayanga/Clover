@@ -10,7 +10,7 @@ export const wipeLocalUserData = async (clerkUserId: string) => {
     return false;
   }
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: any) => {
     await tx.workspace.deleteMany({
       where: { userId: user.id },
     });

@@ -1,4 +1,4 @@
-import type { TransactionType } from "@prisma/client";
+import type { TransactionType } from "@/lib/domain-types";
 
 export const DEFAULT_CATEGORY_ROWS = [
   { name: "Income", type: "income" },

@@ -44,7 +44,7 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json({
-      transactions: transactions.map((transaction) => ({
+      transactions: transactions.map((transaction: any) => ({
         id: transaction.id,
         workspaceId: transaction.workspaceId,
         accountId: transaction.accountId,
