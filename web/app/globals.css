@@ -8765,6 +8765,22 @@ input.transaction-inline-edit--amount::placeholder {
   white-space: nowrap;
 }
 
+.review-workbench__progress {
+  grid-column: 1 / -1;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+  overflow: hidden;
+  border: 1px solid rgba(3, 168, 192, 0.08);
+}
+
+.review-workbench__progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-light));
+}
+
 .review-workbench__grid {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.95fr);

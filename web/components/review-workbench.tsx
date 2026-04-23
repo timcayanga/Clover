@@ -409,6 +409,9 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
           <span>of {summary.total}</span>
           {primaryReason ? <small className="review-workbench__badge-reason">{primaryReason.label}</small> : null}
         </div>
+        <div className="review-workbench__progress" aria-label={`Review progress ${currentIndex + 1} of ${summary.total}`}>
+          <span style={{ width: `${Math.max(4, Math.min(((currentIndex + 1) / Math.max(summary.total, 1)) * 100, 100))}%` }} />
+        </div>
       </div>
 
       <div className="status-card status-card--review review-workbench__summary">
