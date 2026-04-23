@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
-import { loadAccountRules, upsertAccountRule } from "@/lib/data-engine";
+import { hasCompatibleTable, loadAccountRules, upsertAccountRule } from "@/lib/data-engine";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +24,55 @@ export async function GET(request: Request) {
     });
     const accountRules = await loadAccountRules(workspaceId);
 
-    return NextResponse.json({ accounts, accountRules });
+    const statementCheckpoints = await (async () => {
+      if (!(await hasCompatibleTable("AccountStatementCheckpoint"))) {
+        return [];
+      }
+
+      const checkpoints = await prisma.accountStatementCheckpoint.findMany({
+        where: { workspaceId },
+        orderBy: [
+          { statementEndDate: "desc" },
+          { createdAt: "desc" },
+        ],
+      });
+
+      const latestByAccountId = new Map<string, (typeof checkpoints)[number]>();
+      for (const checkpoint of checkpoints) {
+        if (!checkpoint.accountId) {
+          continue;
+        }
+
+        const current = latestByAccountId.get(checkpoint.accountId);
+        const checkpointTime = Math.max(
+          checkpoint.statementEndDate?.getTime() ?? 0,
+          checkpoint.createdAt.getTime()
+        );
+        const currentTime = current
+          ? Math.max(
+              current.statementEndDate?.getTime() ?? 0,
+              current.createdAt.getTime()
+            )
+          : -1;
+
+        if (!current || checkpointTime >= currentTime) {
+          latestByAccountId.set(checkpoint.accountId, checkpoint);
+        }
+      }
+
+      return Array.from(latestByAccountId.values()).map((checkpoint) => ({
+        ...checkpoint,
+        openingBalance: checkpoint.openingBalance?.toString() ?? null,
+        endingBalance: checkpoint.endingBalance?.toString() ?? null,
+        statementStartDate: checkpoint.statementStartDate?.toISOString() ?? null,
+        statementEndDate: checkpoint.statementEndDate?.toISOString() ?? null,
+        createdAt: checkpoint.createdAt.toISOString(),
+        updatedAt: checkpoint.updatedAt.toISOString(),
+        sourceMetadata: checkpoint.sourceMetadata ?? null,
+      }));
+    })();
+
+    return NextResponse.json({ accounts, accountRules, statementCheckpoints });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

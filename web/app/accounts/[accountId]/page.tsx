@@ -222,7 +222,7 @@ function AccountDetailPageContent() {
               <p className="eyebrow">Account details</p>
               <h2>{account?.name ?? "Account"}</h2>
               <p className="panel-muted">
-                {account ? `${accountBrand.label} · ${account.currency} · ${account.source}` : message}
+                {account ? `${accountBrand.label} · ${formatAccountType(account.type)} · ${account.currency} · ${account.source}` : message}
               </p>
             </div>
           </div>

@@ -113,6 +113,7 @@ type Transaction = {
 
 type StatementCheckpoint = {
   id: string;
+  accountId: string | null;
   statementStartDate: string | null;
   statementEndDate: string | null;
   openingBalance: string | null;
@@ -164,6 +165,29 @@ const getAccountWarning = (account: Account, duplicateCount: number) => {
   if (account.source === "imported" && !account.institution) return "Needs category";
   if (account.balance === null) return "Add balance";
   return null;
+};
+
+const getCheckpointTone = (status?: StatementCheckpoint["status"] | null) => {
+  if (status === "reconciled") return "good";
+  if (status === "mismatch") return "danger";
+  return "neutral";
+};
+
+const getCheckpointTrustLabel = (checkpoint: StatementCheckpoint | null | undefined) => {
+  if (!checkpoint) {
+    return "No statement checkpoint yet";
+  }
+
+  const endingDate = checkpoint.statementEndDate ? formatDate(checkpoint.statementEndDate) : null;
+  if (checkpoint.status === "mismatch") {
+    return `Needs review${endingDate ? ` · ${endingDate}` : ""}`;
+  }
+
+  if (checkpoint.status === "reconciled") {
+    return `Reconciled${endingDate ? ` · ${endingDate}` : ""}`;
+  }
+
+  return `Checkpoint pending${endingDate ? ` · ${endingDate}` : ""}`;
 };
 
 function ActionIcon({
@@ -322,6 +346,7 @@ function AccountsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const addRef = useRef<HTMLDivElement>(null);
+  const balanceInputRef = useRef<HTMLInputElement>(null);
   const workspaceLoadSeqRef = useRef(0);
   const deletedAccountIdsRef = useRef(new Set<string>());
   const initialWorkspaceId = readSelectedWorkspaceId();
@@ -349,6 +374,7 @@ function AccountsPageContent() {
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<AccountSort>("updated_desc");
+  const [showNeedsReviewOnly, setShowNeedsReviewOnly] = useState(false);
   const [summaryMode, setSummaryMode] = useState<SummaryMode>("totals");
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
@@ -441,6 +467,7 @@ function AccountsPageContent() {
         const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
         setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current, deletedAccountIdsRef.current));
         setAccountRules(Array.isArray(payload.accountRules) ? payload.accountRules : []);
+        setStatementCheckpoints(Array.isArray(payload.statementCheckpoints) ? (payload.statementCheckpoints as StatementCheckpoint[]) : []);
       }
 
       const transactionsResponse = await transactionsRequest;
@@ -623,6 +650,37 @@ function AccountsPageContent() {
     return counts;
   }, [reconciledAccounts]);
 
+  const latestCheckpointsByAccountId = useMemo(() => {
+    const checkpointsByAccountId = new Map<string, StatementCheckpoint>();
+
+    for (const checkpoint of statementCheckpoints) {
+      if (!checkpoint.accountId) {
+        continue;
+      }
+
+      const current = checkpointsByAccountId.get(checkpoint.accountId);
+      if (!current) {
+        checkpointsByAccountId.set(checkpoint.accountId, checkpoint);
+        continue;
+      }
+
+      const checkpointTime = Math.max(
+        checkpoint.statementEndDate ? new Date(checkpoint.statementEndDate).getTime() : 0,
+        new Date(checkpoint.createdAt).getTime()
+      );
+      const currentTime = Math.max(
+        current.statementEndDate ? new Date(current.statementEndDate).getTime() : 0,
+        new Date(current.createdAt).getTime()
+      );
+
+      if (checkpointTime >= currentTime) {
+        checkpointsByAccountId.set(checkpoint.accountId, checkpoint);
+      }
+    }
+
+    return checkpointsByAccountId;
+  }, [statementCheckpoints]);
+
   const searchedAccounts = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
     const base = term
@@ -644,6 +702,17 @@ function AccountsPageContent() {
       return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
     });
   }, [reconciledAccounts, searchQuery, sortBy]);
+
+  const visibleAccounts = useMemo(() => {
+    if (!showNeedsReviewOnly) {
+      return searchedAccounts;
+    }
+
+    return searchedAccounts.filter((account) => {
+      const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
+      return Boolean(getAccountWarning(account, duplicateCounts.get(duplicateKey) ?? 0));
+    });
+  }, [duplicateCounts, searchedAccounts, showNeedsReviewOnly]);
 
   const totals = useMemo(() => {
     return reconciledAccounts.reduce(
@@ -668,7 +737,7 @@ function AccountsPageContent() {
       {
         title: "Banks & savings",
         tone: "assets",
-        rows: searchedAccounts.filter((account) => {
+        rows: visibleAccounts.filter((account) => {
           const effectiveType = getEffectiveAccountType(account);
           return effectiveType === "bank" || effectiveType === "wallet" || effectiveType === "investment";
         }),
@@ -676,17 +745,17 @@ function AccountsPageContent() {
       {
         title: "Credit cards",
         tone: "liability",
-        rows: searchedAccounts.filter((account) => getEffectiveAccountType(account) === "credit_card"),
+        rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "credit_card"),
       },
       {
         title: "Imported & other",
         tone: "neutral",
-        rows: searchedAccounts.filter((account) => getEffectiveAccountType(account) === "other"),
+        rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "other"),
       },
       {
         title: "Cash",
         tone: "cash",
-        rows: searchedAccounts.filter((account) => getEffectiveAccountType(account) === "cash"),
+        rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "cash"),
       },
     ];
 
@@ -699,7 +768,7 @@ function AccountsPageContent() {
         ),
       }))
       .filter((group) => group.rows.length > 0);
-  }, [searchedAccounts]);
+  }, [visibleAccounts]);
 
   const selectedAccount = useMemo(
     () => reconciledAccounts.find((account) => account.id === drawerAccountId) ?? null,
@@ -1048,6 +1117,14 @@ function AccountsPageContent() {
                     <option value="balance_desc">Balance</option>
                   </select>
                 </label>
+                <button
+                  className={`button button-secondary button-small ${showNeedsReviewOnly ? "is-active" : ""}`}
+                  type="button"
+                  onClick={() => setShowNeedsReviewOnly((current) => !current)}
+                  aria-pressed={showNeedsReviewOnly}
+                >
+                  Needs review only
+                </button>
               </div>
             </div>
 
@@ -1092,6 +1169,8 @@ function AccountsPageContent() {
                             name: account.name,
                             type: getEffectiveAccountType(account),
                           });
+                          const checkpoint = latestCheckpointsByAccountId.get(account.id) ?? null;
+                          const checkpointTone = getCheckpointTone(checkpoint?.status ?? null);
                           const balanceValue = isLiability ? -Math.abs(value) : value;
                           const sourceLabel = account.source === "manual" ? "Manual" : "Imported";
                           return (
@@ -1167,6 +1246,9 @@ function AccountsPageContent() {
                                   <span>{sourceLabel}</span>
                                   <span>{formatDate(account.updatedAt)}</span>
                                 </div>
+                                <div className="accounts-account-card__trust">
+                                  <span className={`accounts-summary-chip is-${checkpointTone}`}>{getCheckpointTrustLabel(checkpoint)}</span>
+                                </div>
                               </div>
                             </article>
                           );
@@ -1176,8 +1258,12 @@ function AccountsPageContent() {
                 ))
               ) : (
                 <div className="empty-state">
-                  <strong>No matches right now.</strong>
-                  <p>Try clearing your search or sorting, or open a different account group to keep browsing.</p>
+                  <strong>{showNeedsReviewOnly ? "No accounts need review right now." : "No matches right now."}</strong>
+                  <p>
+                    {showNeedsReviewOnly
+                      ? "Everything visible is reconciled and ready. Turn off the filter to see the full account list."
+                      : "Try clearing your search or sorting, or open a different account group to keep browsing."}
+                  </p>
                 </div>
               )}
             </div>
@@ -1367,7 +1453,13 @@ function AccountsPageContent() {
               <div className="accounts-drawer__mini-form">
                 <label>
                   Balance
-                  <input value={balanceDraft} onChange={(event) => setBalanceDraft(event.target.value)} inputMode="decimal" placeholder="0.00" />
+                  <input
+                    ref={balanceInputRef}
+                    value={balanceDraft}
+                    onChange={(event) => setBalanceDraft(event.target.value)}
+                    inputMode="decimal"
+                    placeholder="0.00"
+                  />
                 </label>
                 <button
                   className="button button-secondary button-small"
@@ -1401,16 +1493,33 @@ function AccountsPageContent() {
                   <h5>Latest statement checkpoint</h5>
                   <ActionIcon name="calendar" />
                 </div>
-                <div className="accounts-drawer__note">
-                  <strong>{latestCheckpoint.statementEndDate ? formatDate(latestCheckpoint.statementEndDate) : "Unknown date"}</strong>
-                  <span>
-                    {latestCheckpoint.status === "mismatch"
-                      ? latestCheckpoint.mismatchReason ?? "Mismatch detected"
-                      : latestCheckpoint.status === "reconciled"
-                        ? "Reconciled"
-                        : "Pending"}
-                  </span>
-                  <span>{currencyFormatter.format(parseAmount(latestCheckpoint.endingBalance))}</span>
+                <div className="accounts-drawer__checkpoint">
+                  <div className="accounts-drawer__note">
+                    <strong>{latestCheckpoint.statementEndDate ? formatDate(latestCheckpoint.statementEndDate) : "Unknown date"}</strong>
+                    <span>
+                      {latestCheckpoint.status === "mismatch"
+                        ? latestCheckpoint.mismatchReason ?? "Mismatch detected"
+                        : latestCheckpoint.status === "reconciled"
+                          ? "Reconciled"
+                          : "Pending"}
+                    </span>
+                    <span>{currencyFormatter.format(parseAmount(latestCheckpoint.endingBalance))}</span>
+                  </div>
+                  <div className="accounts-drawer__actions">
+                    <button className="button button-secondary button-small" type="button" onClick={openFullAccountPage}>
+                      {latestCheckpoint.status === "mismatch" ? "Review mismatch" : "View checkpoint"}
+                    </button>
+                    <button className="button button-secondary button-small" type="button" onClick={openImportFiles}>
+                      Import files
+                    </button>
+                    <button
+                      className="button button-secondary button-small"
+                      type="button"
+                      onClick={() => balanceInputRef.current?.focus()}
+                    >
+                      Add balance
+                    </button>
+                  </div>
                 </div>
               </section>
             ) : null}
