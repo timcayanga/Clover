@@ -981,6 +981,7 @@ export default function TransactionsPage() {
 function TransactionsPageContent() {
   const searchParams = useSearchParams();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const manualNameInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -1019,6 +1020,7 @@ function TransactionsPageContent() {
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const hasSelectedTransactions = selectedTransactionIds.length > 0;
   const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
   const [transactionDeleteConfirmOpen, setTransactionDeleteConfirmOpen] = useState(false);
   const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>("ltd");
@@ -1195,6 +1197,18 @@ function TransactionsPageContent() {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [addMenuOpen, downloadMenuOpen]);
+
+  useEffect(() => {
+    if (filterOpen) {
+      searchInputRef.current?.focus();
+    }
+  }, [filterOpen]);
+
+  useEffect(() => {
+    if (manualOpen) {
+      manualNameInputRef.current?.focus();
+    }
+  }, [manualOpen]);
 
   const closeToolbarMenus = () => {
     setAddMenuOpen(false);
@@ -1636,6 +1650,15 @@ function TransactionsPageContent() {
     setBulkEditOpen(true);
   };
 
+  const openSearchFilters = () => {
+    if (filterOpen) {
+      searchInputRef.current?.focus();
+      return;
+    }
+
+    setFilterOpen(true);
+  };
+
   const openManualAdd = async () => {
     setAddMenuOpen(false);
 
@@ -1652,6 +1675,117 @@ function TransactionsPageContent() {
       setMessage(error instanceof Error ? error.message : "Unable to prepare transaction form.");
     }
   };
+
+  useEffect(() => {
+    const handleKeyboardShortcuts = (event: KeyboardEvent) => {
+      const target = event.target;
+      const isEditableTarget =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable);
+
+      if (event.key === "Escape") {
+        if (merchantRenameSuggestion) {
+          setMerchantRenameSuggestion(null);
+          return;
+        }
+
+        if (transactionDeleteConfirmOpen) {
+          setTransactionDeleteConfirmOpen(false);
+          return;
+        }
+
+        if (selectedTransaction) {
+          closeTransactionDetail();
+          return;
+        }
+
+        if (bulkDeleteConfirmOpen) {
+          setBulkDeleteConfirmOpen(false);
+          return;
+        }
+
+        if (manualOpen) {
+          setManualOpen(false);
+          return;
+        }
+
+        if (bulkEditOpen) {
+          setBulkEditOpen(false);
+          return;
+        }
+
+        if (filterOpen) {
+          setFilterOpen(false);
+          return;
+        }
+
+        if (dateFilterOpen) {
+          setDateFilterOpen(false);
+          return;
+        }
+
+        if (addMenuOpen || downloadMenuOpen) {
+          closeToolbarMenus();
+        }
+
+        return;
+      }
+
+      if (isEditableTarget || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === "/") {
+        event.preventDefault();
+        openSearchFilters();
+        return;
+      }
+
+      if (key === "f") {
+        event.preventDefault();
+        openSearchFilters();
+        return;
+      }
+
+      if (key === "a") {
+        event.preventDefault();
+        void openManualAdd();
+        return;
+      }
+
+      if (key === "i") {
+        event.preventDefault();
+        openImportFiles();
+        return;
+      }
+
+      if (key === "b" && hasSelectedTransactions) {
+        event.preventDefault();
+        openBulkEdit();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyboardShortcuts);
+    return () => document.removeEventListener("keydown", handleKeyboardShortcuts);
+  }, [
+    addMenuOpen,
+    bulkDeleteConfirmOpen,
+    bulkEditOpen,
+    dateFilterOpen,
+    downloadMenuOpen,
+    filterOpen,
+    hasSelectedTransactions,
+    manualOpen,
+    merchantRenameSuggestion,
+    openSearchFilters,
+    openBulkEdit,
+    openManualAdd,
+    selectedTransaction,
+    transactionDeleteConfirmOpen,
+  ]);
 
   const saveManualTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -2568,7 +2702,6 @@ function TransactionsPageContent() {
   const hasReviewItems = warningTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
   const isTableLoading = !selectedWorkspaceId ? !isWorkspacesLoaded : !isWorkspaceDataReady;
-  const hasSelectedTransactions = selectedTransactionIds.length > 0;
 
   useEffect(() => {
     if (!selectedWorkspaceId || !isWorkspaceDataReady) {
@@ -2621,9 +2754,10 @@ function TransactionsPageContent() {
                   className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-search-trigger"
                   style={toolbarChipStyle}
                   type="button"
-                  onClick={() => searchInputRef.current?.focus()}
-                  title="Search"
+                  onClick={openSearchFilters}
+                  title="Search (/)"
                   aria-label="Search transactions"
+                  aria-keyshortcuts="/"
                 >
                   <span className="button-icon" aria-hidden="true">
                     <ActionIcon name="search" />
@@ -2647,9 +2781,10 @@ function TransactionsPageContent() {
                   className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
                   style={toolbarChipStyle}
                   type="button"
-                  title="Filters"
-                  onClick={() => setFilterOpen(true)}
+                  title="Filters (F)"
+                  onClick={openSearchFilters}
                   aria-label="Open filters"
+                  aria-keyshortcuts="f"
                 >
                   <span className="button-icon" aria-hidden="true">
                     <ActionIcon name="filters" />
@@ -2682,8 +2817,10 @@ function TransactionsPageContent() {
                     onClick={() => {
                       openAddMenu();
                     }}
+                    title="Add transaction (A)"
                     aria-expanded={addMenuOpen}
                     aria-label="Add transaction"
+                    aria-keyshortcuts="a"
                   >
                     <span className="button-icon" aria-hidden="true">
                       <ActionIcon name="plus" />
@@ -3406,6 +3543,7 @@ function TransactionsPageContent() {
               <label className="span-2">
                 Search
                 <input
+                  ref={searchInputRef}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search by merchant, note, or alias"
@@ -3628,6 +3766,7 @@ function TransactionsPageContent() {
                 <label>
                   Name
                   <input
+                    ref={manualNameInputRef}
                     value={manualForm.merchantRaw}
                     onChange={(event) => setManualForm((current) => ({ ...current, merchantRaw: event.target.value }))}
                     placeholder="Merchant or payee"
