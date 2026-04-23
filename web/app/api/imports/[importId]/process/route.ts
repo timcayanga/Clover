@@ -1,6 +1,13 @@
 import { requireAuth } from "@/lib/auth";
 import { buildImportKey } from "@/lib/import-keys";
-import { detectStatementMetadataFromText, fetchImportFileCompat, updateImportFileCompat } from "@/lib/data-engine";
+import {
+  detectStatementMetadataFromText,
+  fetchImportFileCompat,
+  loadStatementTemplate,
+  mergeStatementMetadataWithTemplate,
+  updateImportFileCompat,
+  buildStatementFingerprint,
+} from "@/lib/data-engine";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { readImportedFileText } from "@/lib/import-file-text.server";
 import { uploadObject } from "@/lib/s3";
@@ -71,7 +78,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           },
           password
         );
-        metadata = detectStatementMetadataFromText(text);
+        const detectedMetadata = detectStatementMetadataFromText(text);
+        const statementFingerprint = buildStatementFingerprint(text, detectedMetadata, file.name || String(importFile.fileName ?? "imported-file"), file.type || "application/octet-stream");
+        const template = await loadStatementTemplate({
+          workspaceId: String(importFile.workspaceId),
+          fingerprint: statementFingerprint,
+        });
+        metadata = mergeStatementMetadataWithTemplate(detectedMetadata, template?.metadata && typeof template.metadata === "object" && !Array.isArray(template.metadata)
+          ? (template.metadata as Record<string, unknown>)
+          : null);
       } catch (error) {
         console.warn("Unable to pre-read statement metadata", { importId, error });
       }

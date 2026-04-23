@@ -400,6 +400,57 @@ export const detectStatementMetadataFromText = (text: string) => {
   };
 };
 
+export const mergeStatementMetadataWithTemplate = (
+  detected: ReturnType<typeof detectStatementMetadataFromText>,
+  template?: {
+    institution?: string | null;
+    accountNumber?: string | null;
+    accountName?: string | null;
+    openingBalance?: number | null;
+    endingBalance?: number | null;
+    startDate?: string | null;
+    endDate?: string | null;
+  } | null
+) => {
+  if (!template) {
+    return detected;
+  }
+
+  const preferTemplateIdentity = (detected.confidence ?? 0) < 80;
+  const templateIdentityConfidence = Math.min(
+    100,
+    [
+      template.institution ? 35 : 0,
+      template.accountNumber ? 35 : 0,
+      template.accountName ? 10 : 0,
+      template.startDate ? 5 : 0,
+      template.endDate ? 5 : 0,
+      template.openingBalance !== null ? 5 : 0,
+      template.endingBalance !== null ? 5 : 0,
+    ].reduce((total, part) => total + part, 0)
+  );
+
+  return {
+    institution:
+      preferTemplateIdentity && template.institution
+        ? template.institution
+        : detected.institution ?? template.institution ?? null,
+    accountNumber:
+      preferTemplateIdentity && template.accountNumber
+        ? template.accountNumber
+        : detected.accountNumber ?? template.accountNumber ?? null,
+    accountName:
+      preferTemplateIdentity && template.accountName
+        ? template.accountName
+        : detected.accountName ?? template.accountName ?? null,
+    openingBalance: detected.openingBalance ?? template.openingBalance ?? null,
+    endingBalance: detected.endingBalance ?? template.endingBalance ?? null,
+    startDate: detected.startDate ?? template.startDate ?? null,
+    endDate: detected.endDate ?? template.endDate ?? null,
+    confidence: Math.max(detected.confidence ?? 0, templateIdentityConfidence),
+  };
+};
+
 export const isMissingDatabaseRelationError = (error: unknown, tableName: string) => {
   if (!error || typeof error !== "object") {
     return false;

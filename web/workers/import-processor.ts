@@ -17,6 +17,7 @@ import {
   hasCompatibleTable,
   recordTrainingSignal,
   loadStatementTemplate,
+  mergeStatementMetadataWithTemplate,
   updateImportFileCompat,
   upsertAccountRule,
   upsertStatementTemplate,
@@ -78,34 +79,6 @@ const chunkArray = <T,>(items: T[], size: number) => {
     chunks.push(items.slice(index, index + size));
   }
   return chunks;
-};
-
-const mergeStatementMetadata = (
-  detected: ReturnType<typeof detectStatementMetadataFromText>,
-  template?: {
-    institution?: string | null;
-    accountNumber?: string | null;
-    accountName?: string | null;
-    openingBalance?: number | null;
-    endingBalance?: number | null;
-    startDate?: string | null;
-    endDate?: string | null;
-  } | null
-) => {
-  if (!template) {
-    return detected;
-  }
-
-  return {
-    institution: detected.institution ?? template.institution ?? null,
-    accountNumber: detected.accountNumber ?? template.accountNumber ?? null,
-    accountName: detected.accountName ?? template.accountName ?? null,
-    openingBalance: detected.openingBalance ?? template.openingBalance ?? null,
-    endingBalance: detected.endingBalance ?? template.endingBalance ?? null,
-    startDate: detected.startDate ?? template.startDate ?? null,
-    endDate: detected.endDate ?? template.endDate ?? null,
-    confidence: Math.max(detected.confidence, 0),
-  };
 };
 
 const resolveConfirmationAccount = async (params: {
@@ -287,7 +260,7 @@ export const processImportFileText = async (
     existingTemplate?.metadata && typeof existingTemplate.metadata === "object" && !Array.isArray(existingTemplate.metadata)
       ? (existingTemplate.metadata as Record<string, unknown>)
       : null;
-  const mergedMetadata = mergeStatementMetadata(metadata, {
+  const mergedMetadata = mergeStatementMetadataWithTemplate(metadata, {
     institution:
       typeof templateMetadata?.institution === "string" && templateMetadata.institution.trim()
         ? templateMetadata.institution.trim()
