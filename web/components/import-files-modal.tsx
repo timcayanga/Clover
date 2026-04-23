@@ -727,8 +727,7 @@ export function ImportFilesModal({
             balance: toBalanceString(statementCheckpoint?.endingBalance),
           };
 
-          const shouldUseFallbackIdentity = !resolvedIdentity.accountName && !resolvedIdentity.institution && attempt >= 4;
-          if (!resolvedIdentity.accountName && !resolvedIdentity.institution && !shouldUseFallbackIdentity) {
+          if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
             const previewResponse = await fetch(`/api/imports/${importFileId}/preview`);
             if (previewResponse.ok) {
               const payload = await previewResponse.json();
@@ -758,15 +757,11 @@ export function ImportFilesModal({
             }
           }
 
-          if (!resolvedIdentity.accountName && !resolvedIdentity.institution && shouldUseFallbackIdentity) {
-            resolvedIdentity.accountName = summaryContext.fallbackAccountName;
-          }
-
-        if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
+          if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
           updateItem(itemId, {
             status: "importing",
             progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
-            progressLabel: "Waiting for account details",
+            progressLabel: "Waiting for statement identity",
             targetAccountId: accountId,
           });
             await sleep(parsedRowsCount > 0 ? 300 : 600);
@@ -779,6 +774,17 @@ export function ImportFilesModal({
               accounts.some((account) => account.id === accountId)
           );
           let resolvedAccountId = hasValidCurrentAccount ? accountId : null;
+          if (hasValidCurrentAccount && trustStatementIdentity) {
+            const currentAccountId = accountId as string;
+            const syncAccountName = resolvedIdentity.accountName ?? summaryContext.fallbackAccountName;
+            const syncInstitution = resolvedIdentity.institution ?? summaryContext.institution;
+            void syncStatementAccountIdentity(
+              currentAccountId,
+              syncAccountName,
+              syncInstitution
+            ).catch(() => null);
+          }
+
           if (!resolvedAccountId || resolvedAccountId.startsWith("optimistic-")) {
             const accountName = resolvedIdentity.accountName ?? summaryContext.accountName ?? null;
             const institution = resolvedIdentity.institution ?? summaryContext.institution ?? null;
@@ -836,6 +842,14 @@ export function ImportFilesModal({
 
       await sleep(600);
     }
+
+    updateItem(itemId, {
+      status: "error",
+      confirmationState: "staged",
+      error: "Timed out waiting for trusted statement identity.",
+      progress: 0,
+      progressLabel: "Waiting for statement identity",
+    });
   };
 
   const preflightPasswordProtectedFiles = async () => {
