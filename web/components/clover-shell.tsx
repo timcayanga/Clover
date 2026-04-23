@@ -25,6 +25,8 @@ const navItems = [
   { href: "/goals", label: "Goals", key: "goals" as const },
 ];
 
+const mobileNavItems = navItems.slice(0, 4);
+
 type IconName =
   | "dashboard"
   | "accounts"
@@ -33,6 +35,7 @@ type IconName =
   | "insights"
   | "goals"
   | "search"
+  | "more"
   | "notifications"
   | "profile"
   | "settings"
@@ -65,6 +68,14 @@ function MenuIcon({ name }: { name: IconName }) {
         <svg {...common}>
           <circle cx="11" cy="11" r="6" />
           <path d="m20 20-4.2-4.2" />
+        </svg>
+      );
+    case "more":
+      return (
+        <svg {...common}>
+          <circle cx="6.5" cy="12" r="1.25" />
+          <circle cx="12" cy="12" r="1.25" />
+          <circle cx="17.5" cy="12" r="1.25" />
         </svg>
       );
     case "notifications":
@@ -355,18 +366,6 @@ export function CloverShell({
       </aside>
 
       <main className="content">
-        <div className="content-mobile-bar">
-          <button
-            className="content-mobile-bar__toggle"
-            type="button"
-            aria-label={isSidebarOpen ? "Close navigation" : "Open navigation"}
-            aria-expanded={isSidebarOpen}
-            aria-controls="primary-navigation"
-            onClick={() => setIsSidebarOpen((current) => !current)}
-          >
-            <img className="content-mobile-bar__mark" src="/favicon.svg" alt="" aria-hidden="true" />
-          </button>
-        </div>
         {showTopbar ? (
           <header className="topbar glass">
             <div>
@@ -380,6 +379,39 @@ export function CloverShell({
 
         <div className="content-body">{children}</div>
       </main>
+
+      <nav className="mobile-nav glass" aria-label="Quick navigation">
+        {mobileNavItems.map((item) => (
+          <Link
+            key={item.key}
+            className={`mobile-nav__item ${active === item.key ? "is-active" : ""}`}
+            href={item.href}
+            aria-current={active === item.key ? "page" : undefined}
+            prefetch={false}
+          >
+            <span className="mobile-nav__icon" aria-hidden="true">
+              <MenuIcon name={item.key} />
+            </span>
+            <span className="mobile-nav__label">{item.label}</span>
+          </Link>
+        ))}
+        <button
+          className="mobile-nav__item mobile-nav__item--button"
+          type="button"
+          aria-label="Open more navigation"
+          aria-expanded={isSidebarOpen}
+          aria-controls="primary-navigation"
+          onClick={() => {
+            setOpenMenu(null);
+            setIsSidebarOpen(true);
+          }}
+        >
+          <span className="mobile-nav__icon" aria-hidden="true">
+            <MenuIcon name="more" />
+          </span>
+          <span className="mobile-nav__label">More</span>
+        </button>
+      </nav>
     </div>
   );
 }
