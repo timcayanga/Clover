@@ -2,7 +2,6 @@ import { Prisma, type User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { syncClerkUser } from "@/lib/clerk";
 import { capturePostHogServerEvent } from "@/lib/analytics";
-import { reconcileUserBilling } from "@/lib/billing";
 
 export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User> => {
   const clerkUser = await syncClerkUser(clerkUserId);
@@ -34,12 +33,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
       });
     }
 
-    await reconcileUserBilling(user);
-    const refreshed = await prisma.user.findUnique({
-      where: { id: user.id },
-    });
-
-    return refreshed ?? user;
+    return user;
   } catch (error) {
     const isUniqueConflict =
       error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
@@ -64,12 +58,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
       },
     });
 
-    await reconcileUserBilling(updated);
-    const refreshed = await prisma.user.findUnique({
-      where: { id: updated.id },
-    });
-
-    return refreshed ?? updated;
+    return updated;
   }
 };
 

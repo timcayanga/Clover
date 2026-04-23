@@ -1,10 +1,8 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { CloverShell } from "@/components/clover-shell";
 import { AccountActionsPanel } from "@/components/account-actions-panel";
 import { SettingsCenter, type SettingSection } from "@/components/settings-center";
 import { getSessionContext } from "@/lib/auth";
-import { getEnv } from "@/lib/env";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const metadata = {
@@ -142,7 +140,6 @@ const sections: SettingSection[] = [
 export default async function SettingsPage() {
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
-  const env = getEnv();
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
@@ -154,23 +151,6 @@ export default async function SettingsPage() {
       kicker="Control room"
       subtitle="Keep your workspace, formatting, and automation defaults in one place."
     >
-      <section className="glass settings-billing-card">
-        <p className="eyebrow">Billing</p>
-        <h3 style={{ marginTop: 8 }}>Plan status</h3>
-        <p style={{ marginTop: 8 }}>
-          Current plan: <strong>{user.planTier === "pro" ? "Pro" : "Free"}</strong>.
-          {user.planTier === "pro"
-            ? " Gumroad is handling your paid access right now."
-            : " Upgrade through Gumroad when you are ready to unlock paid access."}
-        </p>
-        {user.planTier === "free" ? (
-          <p style={{ marginTop: 16 }}>
-            <Link className="button button-primary button-small" href={env.GUMROAD_UPGRADE_URL ?? "/"}>
-              Upgrade with Gumroad
-            </Link>
-          </p>
-        ) : null}
-      </section>
       <SettingsCenter sections={sections} />
       <AccountActionsPanel isGuest={session.isGuest} />
     </CloverShell>
