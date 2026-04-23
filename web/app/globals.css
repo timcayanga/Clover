@@ -9785,6 +9785,7 @@ input.transaction-inline-edit--amount::placeholder {
   .transactions-footer {
     gap: 10px;
     padding-top: 10px;
+    bottom: calc(86px + env(safe-area-inset-bottom));
   }
 
   .transactions-footer-snapshot {
@@ -9922,14 +9923,14 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .content {
-    padding: 12px 12px 116px;
+    padding: 12px 12px calc(116px + env(safe-area-inset-bottom));
   }
 
   .mobile-nav {
     left: 12px;
     right: 12px;
-    bottom: 12px;
-    padding: 8px 6px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    padding: 8px 6px calc(8px + env(safe-area-inset-bottom));
   }
 
   .mobile-nav__label {
@@ -10203,6 +10204,98 @@ input.transaction-inline-edit--amount::placeholder {
 
   .reports-review-queue__nav {
     justify-content: space-between;
+  }
+
+  .review-workbench {
+    padding: 16px;
+  }
+
+  .review-workbench__grid {
+    gap: 12px;
+  }
+
+  .review-workbench__card {
+    padding: 16px;
+  }
+
+  .review-workbench__card--main {
+    gap: 14px;
+  }
+
+  .review-workbench__card--side {
+    position: sticky;
+    bottom: calc(86px + env(safe-area-inset-bottom));
+    z-index: 6;
+  }
+
+  .review-workbench__head {
+    gap: 12px;
+  }
+
+  .review-workbench__shortcuts {
+    display: none;
+  }
+
+  .review-workbench__confidence-grid,
+  .review-workbench__edit-grid,
+  .review-workbench__amount-row {
+    grid-template-columns: 1fr;
+  }
+
+  .review-workbench__actions {
+    position: sticky;
+    bottom: calc(86px + env(safe-area-inset-bottom));
+    z-index: 6;
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid var(--stroke);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .review-workbench__actions .button,
+  .review-workbench__nav .button {
+    width: 100%;
+  }
+
+  .review-workbench__nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .review-workbench__nav .button {
+    min-height: 44px;
+  }
+
+  .modal-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal-card {
+    width: 100%;
+    max-height: calc(100dvh - env(safe-area-inset-bottom) - 12px);
+    overflow: auto;
+    border-radius: 26px 26px 0 0;
+    padding: 16px;
+  }
+
+  .modal-card--wide {
+    width: 100%;
+  }
+
+  .accounts-drawer-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .accounts-drawer {
+    width: 100%;
+    height: calc(100dvh - env(safe-area-inset-bottom));
+    border-radius: 26px 26px 0 0;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
   }
 }
 

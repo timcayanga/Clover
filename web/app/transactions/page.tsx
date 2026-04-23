@@ -1022,6 +1022,7 @@ function TransactionsPageContent() {
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const reviewTransactionParamRef = useRef<string | null>(null);
   const drilldownParamRef = useRef<string | null>(null);
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
@@ -2822,6 +2823,18 @@ function TransactionsPageContent() {
     };
   }, [importOpen, isWorkspaceDataReady, pendingImportSummary, transactions]);
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 720px)");
+    const updateViewport = () => setIsCompactViewport(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateViewport);
+    };
+  }, []);
+
   return (
     <CloverShell active="transactions" title="Transactions" showTopbar={false}>
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`}>
@@ -3131,7 +3144,7 @@ function TransactionsPageContent() {
             </div>
           ) : null}
 
-          <div className="line-item-header" role="row" aria-label="Transaction columns">
+          <div className="line-item-header" role="row" aria-label="Transaction columns" hidden={isCompactViewport}>
             <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
               <input
                 ref={selectAllRef}
@@ -3172,7 +3185,7 @@ function TransactionsPageContent() {
             <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
           </div>
 
-          <div className="table-wrap transactions-table-wrap" aria-busy={isTableLoading}>
+          <div className="table-wrap transactions-table-wrap" aria-busy={isTableLoading} hidden={isCompactViewport}>
             {isTableLoading ? (
               <div className="transactions-loading-state" role="status" aria-live="polite" aria-label="Loading transactions">
                 <div className="transactions-loading-header">
@@ -3352,7 +3365,7 @@ function TransactionsPageContent() {
             )}
           </div>
 
-          <div className="transactions-mobile-view">
+          <div className="transactions-mobile-view" hidden={!isCompactViewport}>
             {isTableLoading ? (
               <div className="transactions-mobile-loading" role="status" aria-live="polite" aria-label="Loading transactions">
                 {Array.from({ length: 6 }).map((_, index) => (
@@ -3592,7 +3605,11 @@ function TransactionsPageContent() {
           </div>
         </div>
 
-        <aside className={`transactions-summary-panel glass ${summaryOpen ? "" : "is-hidden"}`} aria-label="Transaction summary">
+        <aside
+          className={`transactions-summary-panel glass ${summaryOpen ? "" : "is-hidden"}`}
+          aria-label="Transaction summary"
+          hidden={isCompactViewport}
+        >
           <div className="transactions-summary-panel__head">
             <p className="eyebrow">Summary</p>
             <h4>Overview</h4>
