@@ -832,8 +832,9 @@ async function ReportsPageView({
       ? previousWindowTransactions.filter(isDefined)
       : [];
     const reportSixMonthTransactions = Array.isArray(sixMonthTransactions) ? sixMonthTransactions.filter(isDefined) : [];
+    const accountStatsCountId = Number((accountStats as { _count?: { id?: number } } | null | undefined)?._count?.id ?? 0);
     const isFreshResetWorkspace =
-      user.dataWipedAt !== null && Number(accountStats._count.id ?? 0) <= 1 && Object.values(importStatusCounts).every((count) => count === 0);
+      user.dataWipedAt !== null && accountStatsCountId <= 1 && Object.values(importStatusCounts).every((count) => count === 0);
     const latestImportSummary = latestImport as unknown as
       | {
           fileName: string;
@@ -841,10 +842,7 @@ async function ReportsPageView({
           uploadedAt: Date;
         }
       | null;
-    const isEmptyWorkspace =
-      Number(accountStats._count.id ?? 0) <= 1 &&
-      reportCurrentWindowTransactions.length === 0 &&
-      Object.values(importStatusCounts).every((count) => count === 0);
+    const isEmptyWorkspace = accountStatsCountId <= 1 && reportCurrentWindowTransactions.length === 0 && Object.values(importStatusCounts).every((count) => count === 0);
 
     const currentSummary: WindowSummary = reportCurrentWindowTransactions.reduce(
       (accumulator, transaction) => {
@@ -920,8 +918,8 @@ async function ReportsPageView({
     });
 
     const accountStatsSummary = accountStats as unknown as {
-      _sum: { balance: number | null };
-      _count: { id: number; balance: number };
+      _sum?: { balance?: number | null };
+      _count?: { id?: number; balance?: number };
     };
     const workspaceAccountSummaries = Array.isArray(workspaceAccountSnapshots)
       ? (workspaceAccountSnapshots as Array<WorkspaceAccountSnapshot | null | undefined>).flatMap((account) => {
@@ -940,9 +938,9 @@ async function ReportsPageView({
           ];
         })
       : [];
-    const totalAccountBalance = Number(accountStatsSummary._sum.balance ?? 0);
-    const activeAccountCount = accountStatsSummary._count.balance;
-    const accountCount = accountStatsSummary._count.id;
+    const totalAccountBalance = Number(accountStatsSummary._sum?.balance ?? 0);
+    const activeAccountCount = Number(accountStatsSummary._count?.balance ?? 0);
+    const accountCount = Number(accountStatsSummary._count?.id ?? 0);
     const uncategorizedTransactions = reportCurrentWindowTransactions.filter(
       (transaction) => !transaction.category?.name || !transaction.merchantClean
     );
@@ -1076,17 +1074,17 @@ async function ReportsPageView({
     const incomeDelta = previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
     const topCategoryShare = currentSpend > 0 ? maxCategorySpend / currentSpend : null;
     const importedTransactionStatsSummary = importedTransactionStats as unknown as {
-      _count: { id: number };
-      _sum: { amount: number | null };
+      _count?: { id?: number };
+      _sum?: { amount?: number | null };
     };
     const manualTransactionStatsSummary = manualTransactionStats as unknown as {
-      _count: { id: number };
-      _sum: { amount: number | null };
+      _count?: { id?: number };
+      _sum?: { amount?: number | null };
     };
-    const importedTransactions = importedTransactionStatsSummary._count.id;
-    const manualTransactions = manualTransactionStatsSummary._count.id;
-    const importedAmount = Number(importedTransactionStatsSummary._sum.amount ?? 0);
-    const manualAmount = Number(manualTransactionStatsSummary._sum.amount ?? 0);
+    const importedTransactions = Number(importedTransactionStatsSummary._count?.id ?? 0);
+    const manualTransactions = Number(manualTransactionStatsSummary._count?.id ?? 0);
+    const importedAmount = Number(importedTransactionStatsSummary._sum?.amount ?? 0);
+    const manualAmount = Number(manualTransactionStatsSummary._sum?.amount ?? 0);
     const goalKey = user.primaryGoal?.trim() ?? null;
     const goalLabel = goalKey ? goalLabels[goalKey] ?? goalKey : null;
 
