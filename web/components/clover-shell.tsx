@@ -237,6 +237,7 @@ export function CloverShell({
         <div className="sidebar-brand">
           <Link className="sidebar-brand-link" href="/dashboard" aria-label="Go to dashboard" prefetch={false}>
             <img className="brand-mark brand-mark--sidebar" src="/favicon.svg" alt="" aria-hidden="true" />
+            <img className="brand-wordmark brand-wordmark--sidebar" src="/clover-name-teal.svg" alt="Clover" />
           </Link>
         </div>
 
@@ -251,6 +252,7 @@ export function CloverShell({
               key={item.key}
               className={`nav-link ${active === item.key ? "is-active" : ""}`}
               href={item.href}
+              aria-current={active === item.key ? "page" : undefined}
               prefetch={false}
             >
               <span className="nav-link__icon" aria-hidden="true">
@@ -369,7 +371,7 @@ export function CloverShell({
           <header className="topbar glass">
             <div>
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
-              <h2>{title}</h2>
+              <h1>{title}</h1>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
             </div>
             <div className="topbar-actions">{actions}</div>
