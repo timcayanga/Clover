@@ -8781,6 +8781,23 @@ input.transaction-inline-edit--amount::placeholder {
   background: linear-gradient(90deg, var(--accent), var(--accent-light));
 }
 
+.review-workbench__shortcuts {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.review-workbench__shortcuts span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(248, 251, 252, 0.92);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
 .review-workbench__grid {
   display: grid;
   grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.95fr);

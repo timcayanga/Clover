@@ -234,13 +234,13 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
       if (event.metaKey || event.ctrlKey || event.altKey) return;
 
       const key = event.key.toLowerCase();
-      if (key === "j" || key === "n") {
+      if (key === "j" || key === "n" || key === "arrowright") {
         event.preventDefault();
         const nextId = nextItemId(items, current.id);
         if (nextId) setSelectedId(nextId);
         return;
       }
-      if (key === "k" || key === "p") {
+      if (key === "k" || key === "p" || key === "arrowleft") {
         event.preventDefault();
         const currentIndex = items.findIndex((item) => item.id === current.id);
         setSelectedId(items[currentIndex - 1]?.id ?? current.id);
@@ -411,6 +411,12 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
         </div>
         <div className="review-workbench__progress" aria-label={`Review progress ${currentIndex + 1} of ${summary.total}`}>
           <span style={{ width: `${Math.max(4, Math.min(((currentIndex + 1) / Math.max(summary.total, 1)) * 100, 100))}%` }} />
+        </div>
+        <div className="review-workbench__shortcuts" aria-label="Review shortcuts">
+          <span>← previous</span>
+          <span>→ next</span>
+          <span>A accept</span>
+          <span>I ignore</span>
         </div>
       </div>
 
