@@ -1537,20 +1537,97 @@ const parseCimbTransactionSegment = (
 
   const rows: ParsedImportRow[] = [];
   const dateStartPattern = new RegExp(`^(${cimbDatePattern})(?:\\s+(.+))?$`, "i");
-  let pendingDescription: string[] = [];
-  let lastRow: ParsedImportRow | null = null;
+  let pendingPrelude: string[] = [];
+  let activeRow: {
+    date: Date;
+    amountDelta: number;
+    deposit: number;
+    withdrawal: number;
+    balance: number;
+    descriptionParts: string[];
+    reference: string | null;
+    isOpeningBalance: boolean;
+    rawLine: string;
+    confidence: number;
+  } | null = null;
 
-  const pushPendingDescription = (line: string) => {
-    const normalized = normalizeWhitespace(line);
-    if (!normalized) {
+  const finalizeActiveRow = () => {
+    if (!activeRow) {
       return;
     }
 
-    if (isCimbBoilerplateLine(normalized) || /^REFERENCE\s+NO\.?/i.test(normalized)) {
+    const description = normalizeWhitespace(activeRow.descriptionParts.join(" "));
+    if (activeRow.isOpeningBalance) {
+      rows.push({
+        date: activeRow.date.toISOString().slice(0, 10),
+        amount: activeRow.balance.toFixed(2),
+        merchantRaw: "Beginning balance",
+        merchantClean: "Beginning balance",
+        description: `Opening balance for ${state.accountName}`,
+        categoryName: "Opening Balance",
+        accountName: state.accountName,
+        institution: state.institution ?? undefined,
+        type: "transfer",
+        rawPayload: {
+          bank: "CIMB",
+          kind: "opening_balance",
+          accountName: state.accountName,
+          statementStartDate: state.statementStartDate,
+          statementEndDate: state.statementEndDate,
+          openingBalance: activeRow.balance.toFixed(2),
+          balance: activeRow.balance.toFixed(2),
+          line: activeRow.rawLine,
+          ref: activeRow.reference,
+        },
+        confidence: 100,
+      });
+      activeRow = null;
       return;
     }
 
-    pendingDescription.push(normalized);
+    const descriptionLower = description.toLowerCase();
+    const transferLike =
+      /transfer|instapay|inward transfer|outward transfer|cash in|cash out|send money|receive money/.test(descriptionLower);
+
+    let type: TransactionType = activeRow.amountDelta >= 0 ? "income" : "expense";
+    if (/credit interest/.test(descriptionLower)) {
+      type = "income";
+    } else if (/tax rate|withheld tax|tax withheld/.test(descriptionLower)) {
+      type = "expense";
+    } else if (transferLike) {
+      type = "transfer";
+    }
+
+    const ambiguousTransfer = /transfer to/.test(descriptionLower) && activeRow.deposit > 0 && activeRow.withdrawal === 0;
+    const confidence = ambiguousTransfer ? 72 : activeRow.confidence;
+
+    rows.push({
+      date: activeRow.date.toISOString().slice(0, 10),
+      amount: Math.abs(activeRow.amountDelta).toFixed(2),
+      merchantRaw: humanizeMerchantText(description || activeRow.rawLine),
+      merchantClean: summarizeMerchantText(description || activeRow.rawLine, state.institution),
+      description: description || activeRow.rawLine,
+      categoryName: guessCimbCategoryName(description || activeRow.rawLine, type),
+      accountName: state.accountName,
+      institution: state.institution ?? undefined,
+      type,
+      rawPayload: {
+        bank: "CIMB",
+        accountName: state.accountName,
+        statementStartDate: state.statementStartDate,
+        statementEndDate: state.statementEndDate,
+        amountDelta: activeRow.amountDelta.toFixed(2),
+        depositText: activeRow.deposit.toFixed(2),
+        withdrawalText: activeRow.withdrawal.toFixed(2),
+        balanceText: activeRow.balance.toFixed(2),
+        balance: activeRow.balance.toFixed(2),
+        line: activeRow.rawLine,
+        ref: activeRow.reference,
+      },
+      confidence,
+    });
+
+    activeRow = null;
   };
 
   for (const rawLine of segmentLines) {
@@ -1560,63 +1637,66 @@ const parseCimbTransactionSegment = (
     }
 
     const referenceMatch = line.match(/^Reference\s+No\.?\s*(.+)$/i);
-    if (referenceMatch && lastRow?.rawPayload && typeof lastRow.rawPayload === "object") {
-      (lastRow.rawPayload as Record<string, unknown>).ref = normalizeWhitespace(referenceMatch[1]);
+    if (referenceMatch) {
+      if (activeRow) {
+        activeRow.reference = normalizeWhitespace(referenceMatch[1]);
+      }
       continue;
     }
 
     const dateMatch = line.match(dateStartPattern);
     if (!dateMatch) {
-      pushPendingDescription(line);
+      if (activeRow) {
+        activeRow.descriptionParts.push(line);
+      } else {
+        pendingPrelude.push(line);
+      }
       continue;
     }
 
+    finalizeActiveRow();
+
     const date = parseCimbDate(dateMatch[1]);
     if (!date) {
-      pendingDescription = [];
+      pendingPrelude = [];
       continue;
     }
 
     const tail = normalizeWhitespace(dateMatch[2] ?? "");
     const moneyMatches = tail.match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
-    const leadingText = moneyMatches.length > 0 && moneyMatches[0] ? tail.slice(0, tail.indexOf(moneyMatches[0])) : tail;
-    const description = normalizeWhitespace([...pendingDescription, leadingText].filter(Boolean).join(" "));
+    const leadingText =
+      moneyMatches.length > 0 && moneyMatches[0]
+        ? tail.slice(0, tail.indexOf(moneyMatches[0])).replace(/\bPHP\b/gi, "").replace(/\s+/g, " ").trim()
+        : tail.replace(/\bPHP\b/gi, "").replace(/\s+/g, " ").trim();
+    const descriptionParts = [...pendingPrelude];
+    if (leadingText) {
+      descriptionParts.push(leadingText);
+    }
 
-    if (/opening\s+balance/i.test(tail)) {
+    const isOpeningBalance = /opening\s+balance/i.test(tail);
+    if (isOpeningBalance) {
       const openingBalance = parseMoney(moneyMatches.at(-1) ?? null);
       if (openingBalance !== null) {
-        const row: ParsedImportRow = {
-          date: date.toISOString().slice(0, 10),
-          amount: openingBalance.toFixed(2),
-          merchantRaw: "Beginning balance",
-          merchantClean: "Beginning balance",
-          description: `Opening balance for ${state.accountName}`,
-          categoryName: "Opening Balance",
-          accountName: state.accountName,
-          institution: state.institution ?? undefined,
-          type: "transfer",
-          rawPayload: {
-            bank: "CIMB",
-            kind: "opening_balance",
-            accountName: state.accountName,
-            statementStartDate: state.statementStartDate,
-            statementEndDate: state.statementEndDate,
-            openingBalance: openingBalance.toFixed(2),
-            balance: openingBalance.toFixed(2),
-            line,
-          },
+        activeRow = {
+          date,
+          amountDelta: 0,
+          deposit: 0,
+          withdrawal: 0,
+          balance: openingBalance,
+          descriptionParts,
+          reference: null,
+          isOpeningBalance: true,
+          rawLine: line,
           confidence: 100,
         };
-        rows.push(row);
-        lastRow = row;
+        finalizeActiveRow();
       }
-
-      pendingDescription = [];
+      pendingPrelude = [];
       continue;
     }
 
     if (moneyMatches.length < 3) {
-      pendingDescription = [];
+      pendingPrelude = [];
       continue;
     }
 
@@ -1624,57 +1704,26 @@ const parseCimbTransactionSegment = (
     const withdrawal = parseMoney(moneyMatches[1]);
     const balance = parseMoney(moneyMatches[2]);
     if (deposit === null || withdrawal === null || balance === null) {
-      pendingDescription = [];
+      pendingPrelude = [];
       continue;
     }
 
-    const amountDelta = deposit - withdrawal;
-    const descriptionLower = description.toLowerCase();
-    const transferLike =
-      /transfer|instapay|inward transfer|outward transfer|cash in|cash out|send money|receive money/.test(descriptionLower);
-
-    let type: TransactionType = amountDelta >= 0 ? "income" : "expense";
-    if (/credit interest/.test(descriptionLower)) {
-      type = "income";
-    } else if (/tax rate|withheld tax|tax withheld/.test(descriptionLower)) {
-      type = "expense";
-    } else if (transferLike) {
-      type = "transfer";
-    }
-
-    const ambiguousTransfer = /transfer to/.test(descriptionLower) && deposit > 0 && withdrawal === 0;
-    const confidence = ambiguousTransfer ? 72 : 95;
-
-    const row: ParsedImportRow = {
-      date: date.toISOString().slice(0, 10),
-      amount: Math.abs(amountDelta).toFixed(2),
-      merchantRaw: humanizeMerchantText(description),
-      merchantClean: summarizeMerchantText(description, state.institution),
-      description,
-      categoryName: guessCimbCategoryName(description, type),
-      accountName: state.accountName,
-      institution: state.institution ?? undefined,
-      type,
-      rawPayload: {
-        bank: "CIMB",
-        accountName: state.accountName,
-        statementStartDate: state.statementStartDate,
-        statementEndDate: state.statementEndDate,
-        amountDelta: amountDelta.toFixed(2),
-        depositText: deposit.toFixed(2),
-        withdrawalText: withdrawal.toFixed(2),
-        balanceText: balance.toFixed(2),
-        balance: balance.toFixed(2),
-        line,
-      },
-      confidence,
+    activeRow = {
+      date,
+      amountDelta: deposit - withdrawal,
+      deposit,
+      withdrawal,
+      balance,
+      descriptionParts,
+      reference: null,
+      isOpeningBalance: false,
+      rawLine: line,
+      confidence: /transfer to/.test((descriptionParts.join(" ") || line).toLowerCase()) && deposit > 0 && withdrawal === 0 ? 72 : 95,
     };
-
-    rows.push(row);
-    lastRow = row;
-    pendingDescription = [];
+    pendingPrelude = [];
   }
 
+  finalizeActiveRow();
   return rows;
 };
 
@@ -1719,6 +1768,7 @@ const parseCimbImportText = (text: string) => {
       const rows: ParsedImportRow[] = [];
       const rowSegments: string[][] = [];
       let current: string[] = [];
+      let pendingPrelude: string[] = [];
       for (const line of sectionLines) {
         if (isCimbBoilerplateLine(line)) {
           continue;
@@ -1728,13 +1778,17 @@ const parseCimbImportText = (text: string) => {
           if (current.length > 0) {
             rowSegments.push(current);
           }
-          current = [line];
+          current = [...pendingPrelude, line];
+          pendingPrelude = [];
           continue;
         }
 
         if (current.length > 0) {
           current.push(line);
+          continue;
         }
+
+        pendingPrelude.push(line);
       }
 
       if (current.length > 0) {
