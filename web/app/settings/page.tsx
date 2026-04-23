@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { CloverShell } from "@/components/clover-shell";
 import { AccountActionsPanel } from "@/components/account-actions-panel";
 import { SettingsCenter, type SettingSection } from "@/components/settings-center";
 import { getSessionContext } from "@/lib/auth";
+import { getEnv } from "@/lib/env";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const metadata = {
@@ -11,126 +13,128 @@ export const metadata = {
 
 const sections: SettingSection[] = [
   {
-    group: "General",
-    title: "Profile and workspace",
-    eyebrow: "Core",
-    summary: "Keep the app identity and workspace defaults in one place.",
+    group: "Basics",
+    title: "Workspace defaults",
+    eyebrow: "Default values",
+    summary: "Set the shared values Clover uses every time you open it.",
     fields: [
-      { label: "Workspace name", kind: "text", value: "Clover Personal Finance" },
-      { label: "Display name", kind: "text", value: "Tim" },
-      { label: "Email", kind: "text", value: "tim@example.com" },
-      { label: "Timezone", kind: "select", value: "Asia/Manila", options: ["Asia/Manila", "UTC", "America/Los_Angeles", "Europe/London"] },
+      { label: "Workspace name", kind: "text", value: "Clover Personal Finance", tier: "primary" },
+      { label: "Timezone", kind: "select", value: "Asia/Manila", options: ["Asia/Manila", "UTC", "America/Los_Angeles", "Europe/London"], tier: "primary" },
+      { label: "Default currency", kind: "select", value: "PHP", options: ["PHP", "USD", "EUR", "GBP", "SGD"], tier: "primary" },
+      { label: "Date format", kind: "select", value: "D MMM YYYY", options: ["D MMM YYYY", "MM/DD/YYYY", "YYYY-MM-DD"], tier: "advanced" },
+      { label: "Number format", kind: "select", value: "1,234.56", options: ["1,234.56", "1.234,56", "1 234,56"], tier: "advanced" },
+      { label: "Locale", kind: "select", value: "en-PH", options: ["en-PH", "en-US", "en-GB"], tier: "advanced" },
     ],
   },
   {
-    group: "General",
-    title: "Currency and locale",
-    eyebrow: "Formatting",
-    summary: "Control how money, dates, and numbers appear across the app.",
+    group: "Imports",
+    title: "Import behavior",
+    eyebrow: "Import flow",
+    summary: "Make statement imports predictable and easy to review.",
     fields: [
-      { label: "Default currency", kind: "select", value: "PHP", options: ["PHP", "USD", "EUR", "GBP", "SGD"] },
-      { label: "Date format", kind: "select", value: "D MMM YYYY", options: ["D MMM YYYY", "MM/DD/YYYY", "YYYY-MM-DD"] },
-      { label: "Number format", kind: "select", value: "1,234.56", options: ["1,234.56", "1.234,56", "1 234,56"] },
-      { label: "Locale", kind: "select", value: "en-PH", options: ["en-PH", "en-US", "en-GB"] },
+      {
+        label: "Default account",
+        kind: "select",
+        value: "Use detected account",
+        options: ["Use detected account", "Most recently used", "First available account"],
+        tier: "primary",
+      },
+      {
+        label: "Duplicate handling",
+        kind: "select",
+        value: "Flag and review",
+        options: ["Flag and review", "Skip duplicates", "Import anyway"],
+        tier: "primary",
+      },
+      {
+        label: "Unknown merchants",
+        kind: "select",
+        value: "Leave unassigned",
+        options: ["Leave unassigned", "Use uncategorized", "Use last matched category"],
+        helper: "Choose the fallback when Clover cannot confidently match a merchant.",
+        tier: "primary",
+      },
+      { label: "Category suggestions", kind: "toggle", checked: true, helper: "Use past edits to suggest likely categories.", tier: "advanced" },
+      { label: "Auto-create account groups", kind: "toggle", checked: false, helper: "Helpful once you manage many accounts.", tier: "advanced" },
     ],
   },
   {
-    group: "General",
+    group: "Automation",
+    title: "Categorization rules",
+    eyebrow: "Matching",
+    summary: "Control how Clover labels merchants and recurring activity.",
+    fields: [
+      { label: "Auto-categorize", kind: "toggle", checked: true, helper: "Apply matches without blocking review.", tier: "primary" },
+      { label: "Normalize merchant names", kind: "toggle", checked: true, helper: "Keep the same merchant name consistent across imports.", tier: "primary" },
+      { label: "Recurring detection", kind: "toggle", checked: true, helper: "Mark repeating items so they’re easier to scan.", tier: "primary" },
+      {
+        label: "Category groups",
+        kind: "select",
+        value: "Income, Expenses, Transfers",
+        options: ["Income, Expenses, Transfers", "Simple", "Custom groups"],
+        tier: "advanced",
+      },
+      { label: "Merge duplicates", kind: "toggle", checked: true, tier: "advanced" },
+      {
+        label: "Merchant rules notes",
+        kind: "textarea",
+        value: "Treat Grab, GCash, and Maya merchant labels as the same source where possible.",
+        rows: 3,
+        tier: "advanced",
+      },
+    ],
+  },
+  {
+    group: "Display",
     title: "Display preferences",
     eyebrow: "Layout",
-    summary: "Tune how dense the app feels and which parts you see first.",
+    summary: "Choose the layout Clover should open with and how dense it feels.",
     fields: [
-      { label: "Table density", kind: "select", value: "Comfortable", options: ["Comfortable", "Compact", "Spacious"] },
-      { label: "Landing page", kind: "select", value: "Dashboard", options: ["Dashboard", "Transactions", "Reports"] },
-      { label: "Show balances by default", kind: "toggle", checked: true },
-      { label: "Reduce sidebar chrome", kind: "toggle", checked: false },
+      { label: "Table density", kind: "select", value: "Comfortable", options: ["Comfortable", "Compact", "Spacious"], tier: "primary" },
+      { label: "Landing page", kind: "select", value: "Dashboard", options: ["Dashboard", "Transactions", "Reports"], tier: "primary" },
+      { label: "Show balances by default", kind: "toggle", checked: true, tier: "primary" },
+      { label: "Reduce sidebar chrome", kind: "toggle", checked: false, tier: "advanced" },
     ],
   },
   {
-    group: "Automation",
-    title: "Import defaults",
-    eyebrow: "Imports",
-    summary: "Shape the behavior of new statement imports before they land.",
+    group: "Access",
+    title: "Notifications",
+    eyebrow: "Signals",
+    summary: "Pick the alerts that deserve your attention.",
     fields: [
-      { label: "Default account", kind: "select", value: "Use detected account", options: ["Use detected account", "Most recently used", "First available account"] },
-      { label: "Duplicate handling", kind: "select", value: "Flag and review", options: ["Flag and review", "Skip duplicates", "Import anyway"] },
-      { label: "Category suggestions", kind: "toggle", checked: true },
-      { label: "Unknown merchants", kind: "select", value: "Leave unassigned", options: ["Leave unassigned", "Use uncategorized", "Use last matched category"] },
-      { label: "Auto-create account groups", kind: "toggle", checked: false },
+      { label: "Import finished", kind: "toggle", checked: true, tier: "primary" },
+      { label: "Review needed", kind: "toggle", checked: true, tier: "primary" },
+      { label: "Unusual spending", kind: "toggle", checked: true, tier: "primary" },
+      { label: "Low balance", kind: "toggle", checked: false, tier: "advanced" },
+      { label: "Weekly summary", kind: "toggle", checked: false, tier: "advanced" },
     ],
   },
   {
-    group: "Automation",
-    title: "Transaction rules",
-    eyebrow: "Automation",
-    summary: "Create simple rules that keep the transaction list cleaner over time.",
-    fields: [
-      { label: "Auto-categorize", kind: "toggle", checked: true },
-      { label: "Normalize merchant names", kind: "toggle", checked: true },
-      { label: "Recurring detection", kind: "toggle", checked: true },
-      { label: "Ignored items", kind: "select", value: "Keep manual control", options: ["Keep manual control", "Hide by default", "Always show"] },
-      { label: "Merchant rules notes", kind: "textarea", value: "Treat Grab, GCash, and Maya merchant labels as the same source where possible.", rows: 3 },
-    ],
-  },
-  {
-    group: "Automation",
-    title: "Category management",
-    eyebrow: "Organization",
-    summary: "Keep categories tidy so reports and transactions stay readable.",
-    fields: [
-      { label: "Category groups", kind: "select", value: "Income, Expenses, Transfers", options: ["Income, Expenses, Transfers", "Simple", "Custom groups"] },
-      { label: "Merge duplicates", kind: "toggle", checked: true },
-      { label: "Pin top categories", kind: "toggle", checked: true },
-      { label: "Category notes", kind: "textarea", value: "Use this area to document naming conventions and keep category cleanup consistent.", rows: 3 },
-    ],
-  },
-  {
-    group: "Alerts and access",
-    title: "Notifications and alerts",
-    eyebrow: "Alerts",
-    summary: "Decide which events should interrupt your workflow.",
-    fields: [
-      { label: "Import finished", kind: "toggle", checked: true },
-      { label: "Review needed", kind: "toggle", checked: true },
-      { label: "Low balance", kind: "toggle", checked: false },
-      { label: "Unusual spending", kind: "toggle", checked: true },
-      { label: "Weekly summary", kind: "toggle", checked: false },
-    ],
-  },
-  {
-    group: "Alerts and access",
+    group: "Access",
     title: "Security",
-    eyebrow: "Access",
-    summary: "A few practical controls for session safety and account protection.",
+    eyebrow: "Safety",
+    summary: "Keep sessions and sign-ins under control.",
     fields: [
-      { label: "Session timeout", kind: "select", value: "8 hours", options: ["1 hour", "8 hours", "24 hours", "7 days"] },
-      { label: "Two-factor auth", kind: "toggle", checked: false },
-      { label: "Trusted devices", kind: "toggle", checked: true },
-      { label: "Login notes", kind: "textarea", value: "Use this area for access reminders, recovery email notes, or security preferences.", rows: 3 },
+      { label: "Session timeout", kind: "select", value: "8 hours", options: ["1 hour", "8 hours", "24 hours", "7 days"], tier: "primary" },
+      { label: "Two-factor auth", kind: "toggle", checked: false, tier: "primary" },
+      { label: "Trusted devices", kind: "toggle", checked: true, tier: "advanced" },
+      { label: "Login notes", kind: "textarea", value: "Use this area for access reminders, recovery email notes, or security preferences.", rows: 3, tier: "advanced" },
     ],
   },
   {
-    group: "Data and connections",
-    title: "Export and backup",
+    group: "Data",
+    title: "Export and connections",
     eyebrow: "Data",
-    summary: "Make it easy to get data out and keep a recovery path ready.",
+    summary: "Get data out and prepare for future integrations.",
     fields: [
-      { label: "Export format", kind: "select", value: "CSV + PDF", options: ["CSV + PDF", "CSV only", "PDF only"] },
-      { label: "Backup cadence", kind: "select", value: "Weekly reminder", options: ["Daily reminder", "Weekly reminder", "Monthly reminder", "Off"] },
-      { label: "Download archive", kind: "toggle", checked: true },
-      { label: "Restore path", kind: "text", value: "Future support" },
-    ],
-  },
-  {
-    group: "Data and connections",
-    title: "Integrations",
-    eyebrow: "Connections",
-    summary: "Track the external tools and import channels Clover should connect to next.",
-    fields: [
-      { label: "Bank connections", kind: "text", value: "Not connected yet" },
-      { label: "Spreadsheet sources", kind: "text", value: "CSV, XLSX, and bank exports" },
-      { label: "Email import", kind: "toggle", checked: false },
-      { label: "API access", kind: "toggle", checked: false },
+      { label: "Export format", kind: "select", value: "CSV + PDF", options: ["CSV + PDF", "CSV only", "PDF only"], tier: "primary" },
+      { label: "Backup cadence", kind: "select", value: "Weekly reminder", options: ["Daily reminder", "Weekly reminder", "Monthly reminder", "Off"], tier: "primary" },
+      { label: "Download archive", kind: "toggle", checked: true, tier: "primary" },
+      { label: "Restore path", kind: "text", value: "Future support", tier: "advanced" },
+      { label: "Bank connections", kind: "text", value: "Not connected yet", tier: "advanced" },
+      { label: "Spreadsheet sources", kind: "text", value: "CSV, XLSX, and bank exports", tier: "advanced" },
+      { label: "Email import", kind: "toggle", checked: false, tier: "advanced" },
+      { label: "API access", kind: "toggle", checked: false, tier: "advanced" },
     ],
   },
 ];
@@ -138,15 +142,35 @@ const sections: SettingSection[] = [
 export default async function SettingsPage() {
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
+  const env = getEnv();
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
 
   return (
-    <CloverShell active="settings" title="Settings" showTopbar={false}>
-      <div className="settings-page-heading">
-        <h2>Settings</h2>
-      </div>
+    <CloverShell
+      active="settings"
+      title="Settings"
+      kicker="Control room"
+      subtitle="Keep your workspace, formatting, and automation defaults in one place."
+    >
+      <section className="glass settings-billing-card">
+        <p className="eyebrow">Billing</p>
+        <h3 style={{ marginTop: 8 }}>Plan status</h3>
+        <p style={{ marginTop: 8 }}>
+          Current plan: <strong>{user.planTier === "pro" ? "Pro" : "Free"}</strong>.
+          {user.planTier === "pro"
+            ? " Gumroad is handling your paid access right now."
+            : " Upgrade through Gumroad when you are ready to unlock paid access."}
+        </p>
+        {user.planTier === "free" ? (
+          <p style={{ marginTop: 16 }}>
+            <Link className="button button-primary button-small" href={env.GUMROAD_UPGRADE_URL ?? "/"}>
+              Upgrade with Gumroad
+            </Link>
+          </p>
+        ) : null}
+      </section>
       <SettingsCenter sections={sections} />
       <AccountActionsPanel isGuest={session.isGuest} />
     </CloverShell>
