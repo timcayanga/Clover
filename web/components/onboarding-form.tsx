@@ -4,9 +4,10 @@ import type { ReactNode } from "react";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { analyticsOnceKey, PostHogEvent } from "@/components/posthog-analytics";
+import { getGoalMoneyLabel, getGoalMoneyPrompt, type GoalKey } from "@/lib/goals";
 
 type GoalOption = {
-  value: string;
+  value: GoalKey;
   title: string;
   icon: ReactNode;
 };
@@ -138,18 +139,27 @@ const START_OPTIONS: StartOption[] = [
 
 type OnboardingFormProps = {
   currentGoal?: string | null;
+  currentTargetAmount?: string | null;
 };
 
-export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
+export function OnboardingForm({ currentGoal = null, currentTargetAmount = null }: OnboardingFormProps) {
   const router = useRouter();
-  const [goals, setGoals] = useState<string[]>(currentGoal ? [currentGoal] : []);
+  const [goals, setGoals] = useState<GoalKey[]>(currentGoal ? [currentGoal as GoalKey] : []);
   const [step, setStep] = useState<"goals" | "start">("goals");
   const [message, setMessage] = useState("Choose one or more goals to shape your first experience.");
+  const [targetAmount, setTargetAmount] = useState(currentTargetAmount ?? "");
   const [isPending, startTransition] = useTransition();
   const skipOption = START_OPTIONS.find((option) => option.value === "skip");
+  const selectedGoalKey: GoalKey | null = goals[0] ?? null;
 
   const completeStep = (option: StartOption) => {
-    const payload = JSON.stringify({ goal: goals[0] ?? null, goals, skipped: option.value === "skip", startAction: option.value });
+    const payload = JSON.stringify({
+      goal: selectedGoalKey,
+      goals,
+      targetAmount: targetAmount.trim() || null,
+      skipped: option.value === "skip",
+      startAction: option.value,
+    });
     const isStagingHost = window.location.hostname === "staging.clover.ph";
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (isStagingHost) {
@@ -211,6 +221,33 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
               </button>
             ))}
           </div>
+
+          {selectedGoalKey ? (
+            <label className="onboarding-goal-target">
+              <div className="onboarding-goal-target__header">
+                <span className="onboarding-goal-target__label">{getGoalMoneyLabel(selectedGoalKey)}</span>
+                <span className="onboarding-goal-target__pill">Optional</span>
+              </div>
+              <span className="onboarding-goal-target__prompt">{getGoalMoneyPrompt(selectedGoalKey)}</span>
+              <div className="onboarding-goal-target__input-row">
+                <span className="onboarding-goal-target__currency" aria-hidden="true">
+                  PHP
+                </span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="100"
+                  value={targetAmount}
+                  onChange={(event) => setTargetAmount(event.target.value)}
+                  placeholder="0"
+                  aria-label={getGoalMoneyLabel(selectedGoalKey)}
+                />
+                <span className="onboarding-goal-target__suffix">/ month</span>
+              </div>
+              <small>You can leave this blank and set it later on the Goals page.</small>
+            </label>
+          ) : null}
 
           <div className="onboarding-actions">
             <button

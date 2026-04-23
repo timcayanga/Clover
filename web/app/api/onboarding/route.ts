@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -11,6 +12,7 @@ const onboardingSchema = z.object({
   goal: z.string().trim().min(1).max(80).optional().nullable(),
   goals: z.array(z.string().trim().min(1).max(80)).optional().default([]),
   startAction: z.string().trim().min(1).max(80).optional().nullable(),
+  targetAmount: z.string().trim().min(1).max(32).optional().nullable(),
   skipped: z.boolean().optional().default(false),
 });
 
@@ -26,14 +28,32 @@ export async function POST(request: Request) {
     const payload = onboardingSchema.parse(await request.json());
     const user = await getOrCreateCurrentUser(userId);
     const primaryGoal = payload.skipped ? null : payload.goal ?? payload.goals[0] ?? null;
+    const targetAmount = payload.skipped || payload.targetAmount === null || payload.targetAmount === undefined ? null : new Prisma.Decimal(payload.targetAmount);
 
-    const updated = await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        planTier: "free",
-        primaryGoal,
-        onboardingCompletedAt: new Date(),
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const userUpdate = await tx.user.update({
+        where: { id: user.id },
+        data: {
+          planTier: "free",
+          primaryGoal,
+          goalTargetAmount: targetAmount,
+          goalTargetSource: targetAmount ? "onboarding" : null,
+          onboardingCompletedAt: new Date(),
+        },
+      });
+
+      if (primaryGoal !== null || targetAmount !== null) {
+        await tx.goalSetting.create({
+          data: {
+            userId: user.id,
+            primaryGoal,
+            targetAmount,
+            source: "onboarding",
+          },
+        });
+      }
+
+      return userUpdate;
     });
 
     void capturePostHogServerEvent("onboarding_completed", userId, {
@@ -41,6 +61,7 @@ export async function POST(request: Request) {
       start_action: payload.startAction ?? null,
       skipped: payload.skipped,
       goal_count: payload.goals.length,
+      goal_target_amount: payload.targetAmount ? Number(payload.targetAmount) : null,
     });
 
     return NextResponse.json({ user: updated });

@@ -10,7 +10,15 @@ import { GoalsChecklist } from "@/components/goals-checklist";
 import { GoalGlyph, GoalIllustration } from "@/components/goals-visuals";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
-import { GOAL_OPTIONS, getGoalDefinition, getGoalPlaybook, type GoalKey } from "@/lib/goals";
+import {
+  GOAL_OPTIONS,
+  getGoalDefinition,
+  getGoalMoneyLabel,
+  getGoalProgressLabel,
+  getGoalPlaybook,
+  getSuggestedGoalAmount,
+  type GoalKey,
+} from "@/lib/goals";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -63,6 +71,23 @@ type GoalSummary = {
   expense: number;
   transfer: number;
   expenseCategories: Map<string, number>;
+};
+
+type SummaryRow = {
+  type: string;
+  total: number | string | null;
+};
+
+type MonthlySummaryRow = {
+  month: Date;
+  type: string;
+  total: number | string | null;
+};
+
+type MerchantSummaryRow = {
+  label: string | null;
+  amount: number | string | null;
+  count: number | bigint | null;
 };
 
 const formatCurrency = (value: number) => currencyFormatter.format(value);
@@ -170,10 +195,14 @@ export default async function GoalsPage() {
 
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
-  const workspaceInclude = {
-    accounts: true,
-    importFiles: {
-      orderBy: { uploadedAt: "desc" },
+  const workspaceSelect = {
+    id: true,
+    name: true,
+    _count: {
+      select: {
+        accounts: true,
+        importFiles: true,
+      },
     },
   } as const;
 
@@ -184,12 +213,12 @@ export default async function GoalsPage() {
             id: selectedWorkspaceCookieId,
             userId: user.id,
           },
-          include: workspaceInclude,
+          select: workspaceSelect,
         })
       : null) ??
     (await prisma.workspace.findFirst({
       where: { userId: user.id },
-      include: workspaceInclude,
+      select: workspaceSelect,
       orderBy: { createdAt: "asc" },
     }));
 
@@ -198,7 +227,7 @@ export default async function GoalsPage() {
       (await ensureStarterWorkspace(user).then(async (starterWorkspace) => {
       const starterWorkspaceData = await prisma.workspace.findUnique({
         where: { id: starterWorkspace.id },
-        include: workspaceInclude,
+        select: workspaceSelect,
       });
       if (!starterWorkspaceData) {
         redirect("/dashboard");
@@ -219,143 +248,127 @@ export default async function GoalsPage() {
   ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
 
-  const [currentWindowTransactionsQuery, previousWindowTransactionsQuery, ninetyDayTransactionsQuery, sixMonthTransactionsQuery] =
-    await Promise.all([
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: resolvedWorkspace.id,
-          isExcluded: false,
-          date: { gte: thirtyDaysAgo },
-        },
-        select: {
-          date: true,
-          amount: true,
-          type: true,
-          merchantRaw: true,
-          merchantClean: true,
-          account: {
-            select: {
-              name: true,
-            },
+  const [
+    currentSummaryRows,
+    previousSummaryRows,
+    ninetyDayMerchantRows,
+    sixMonthSummaryRows,
+    goalHistoryRows,
+    currentWindowTransactionsQuery,
+  ] = await Promise.all([
+    prisma.$queryRaw<SummaryRow[]>`
+      SELECT
+        "type",
+        COALESCE(SUM("amount"), 0)::float8 AS total
+      FROM "Transaction"
+      WHERE "workspaceId" = ${resolvedWorkspace.id}
+        AND "isExcluded" = false
+        AND "date" >= ${thirtyDaysAgo}
+      GROUP BY "type"
+    `,
+    prisma.$queryRaw<SummaryRow[]>`
+      SELECT
+        "type",
+        COALESCE(SUM("amount"), 0)::float8 AS total
+      FROM "Transaction"
+      WHERE "workspaceId" = ${resolvedWorkspace.id}
+        AND "isExcluded" = false
+        AND "date" >= ${sixtyDaysAgo}
+        AND "date" < ${thirtyDaysAgo}
+      GROUP BY "type"
+    `,
+    prisma.$queryRaw<MerchantSummaryRow[]>`
+      SELECT
+        COALESCE(NULLIF("merchantClean", ''), "merchantRaw") AS label,
+        COALESCE(SUM(ABS("amount")), 0)::float8 AS amount,
+        COUNT(*)::int AS count
+      FROM "Transaction"
+      WHERE "workspaceId" = ${resolvedWorkspace.id}
+        AND "isExcluded" = false
+        AND "type" = 'expense'
+        AND "date" >= ${ninetyDaysAgo}
+      GROUP BY 1
+      HAVING COUNT(*) > 1
+      ORDER BY amount DESC
+      LIMIT 4
+    `,
+    prisma.$queryRaw<MonthlySummaryRow[]>`
+      SELECT
+        date_trunc('month', "date") AS month,
+        "type",
+        COALESCE(SUM("amount"), 0)::float8 AS total
+      FROM "Transaction"
+      WHERE "workspaceId" = ${resolvedWorkspace.id}
+        AND "isExcluded" = false
+        AND "date" >= ${sixMonthsAgo}
+      GROUP BY 1, 2
+      ORDER BY 1 ASC, 2 ASC
+    `,
+    prisma.goalSetting.findMany({
+      where: {
+        userId: user.id,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      take: 5,
+      select: {
+        primaryGoal: true,
+        targetAmount: true,
+        source: true,
+        createdAt: true,
+      },
+    }),
+    prisma.transaction.findMany({
+      where: {
+        workspaceId: resolvedWorkspace.id,
+        isExcluded: false,
+        date: { gte: thirtyDaysAgo },
+      },
+      select: {
+        date: true,
+        amount: true,
+        type: true,
+        merchantRaw: true,
+        merchantClean: true,
+        account: {
+          select: {
+            name: true,
           },
-          category: {
-            select: {
-              name: true,
-            },
+        },
+        category: {
+          select: {
+            name: true,
           },
         },
-        orderBy: { date: "desc" },
-        take: 500,
-      }),
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: resolvedWorkspace.id,
-          isExcluded: false,
-          date: {
-            gte: sixtyDaysAgo,
-            lt: thirtyDaysAgo,
-          },
-        },
-        select: {
-          amount: true,
-          type: true,
-          category: {
-            select: {
-              name: true,
-            },
-          },
-        },
-      }),
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: resolvedWorkspace.id,
-          isExcluded: false,
-          date: { gte: ninetyDaysAgo },
-        },
-        select: {
-          date: true,
-          amount: true,
-          type: true,
-          merchantRaw: true,
-          merchantClean: true,
-          account: {
-            select: {
-              name: true,
-            },
-          },
-          category: {
-            select: {
-              name: true,
-            },
-          },
-        },
-        orderBy: { date: "desc" },
-        take: 500,
-      }),
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: resolvedWorkspace.id,
-          isExcluded: false,
-          date: { gte: sixMonthsAgo },
-        },
-        select: {
-          date: true,
-          amount: true,
-          type: true,
-        },
-      }),
-    ]);
+      },
+      orderBy: { date: "desc" },
+      take: 180,
+    }),
+  ]);
 
   const currentWindowTransactions = currentWindowTransactionsQuery as GoalTransaction[];
-  const previousWindowTransactions = previousWindowTransactionsQuery as Array<Pick<GoalTransaction, "amount" | "type" | "category">>;
-  const ninetyDayTransactions = ninetyDayTransactionsQuery as GoalTransaction[];
-  const sixMonthTransactions = sixMonthTransactionsQuery as Array<Pick<GoalTransaction, "date" | "amount" | "type">>;
   const selectedGoalKey = user.primaryGoal?.trim() ?? null;
   const selectedGoal = getGoalDefinition(selectedGoalKey);
   const playbook = getGoalPlaybook(selectedGoalKey);
-  const isEmptyWorkspace = resolvedWorkspace.accounts.length <= 1 && resolvedWorkspace.importFiles.length === 0 && currentWindowTransactions.length === 0;
+  const goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
+  const goalTargetSource = user.goalTargetSource ?? null;
+  const hasGoalSelection = Boolean(selectedGoalKey);
+  const hasGoalTarget = goalTargetAmount !== null && goalTargetAmount > 0;
+  const heroLead = hasGoalSelection ? playbook.heroLead : "Pick a lane, set a number, and let Clover coach the month with you.";
+  const heroSupport = hasGoalSelection
+    ? playbook.heroSupport
+    : "If onboarding skipped this step, you can define your first real monthly target right here.";
+  const isEmptyWorkspace =
+    resolvedWorkspace._count.accounts <= 1 && resolvedWorkspace._count.importFiles === 0 && currentWindowTransactions.length === 0;
 
-  const currentSummary = currentWindowTransactions.reduce<GoalSummary>(
-    (accumulator, transaction) => {
-      const amount = Number(transaction.amount);
-      if (transaction.type === "income") {
+  const currentSummary = currentSummaryRows.reduce<GoalSummary>(
+    (accumulator, row) => {
+      const amount = Number(row.total ?? 0);
+      if (row.type === "income") {
         accumulator.income += amount;
-      } else if (transaction.type === "expense") {
+      } else if (row.type === "expense") {
         accumulator.expense += amount;
-      } else {
-        accumulator.transfer += amount;
-      }
-
-      if (transaction.type === "expense") {
-        const categoryName = transaction.category?.name ?? "Uncategorized";
-        accumulator.expenseCategories.set(
-          categoryName,
-          (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)
-        );
-      }
-
-      return accumulator;
-    },
-    {
-      income: 0,
-      expense: 0,
-      transfer: 0,
-      expenseCategories: new Map<string, number>(),
-    }
-  );
-
-  const previousSummary = previousWindowTransactions.reduce<GoalSummary>(
-    (accumulator, transaction) => {
-      const amount = Number(transaction.amount);
-      if (transaction.type === "income") {
-        accumulator.income += amount;
-      } else if (transaction.type === "expense") {
-        accumulator.expense += amount;
-        const categoryName = transaction.category?.name ?? "Uncategorized";
-        accumulator.expenseCategories.set(
-          categoryName,
-          (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)
-        );
       } else {
         accumulator.transfer += amount;
       }
@@ -368,19 +381,43 @@ export default async function GoalsPage() {
       expenseCategories: new Map<string, number>(),
     }
   );
+
+  const previousSummary = previousSummaryRows.reduce<GoalSummary>(
+    (accumulator, row) => {
+      const amount = Number(row.total ?? 0);
+      if (row.type === "income") {
+        accumulator.income += amount;
+      } else if (row.type === "expense") {
+        accumulator.expense += amount;
+      } else {
+        accumulator.transfer += amount;
+      }
+      return accumulator;
+    },
+    {
+      income: 0,
+      expense: 0,
+      transfer: 0,
+      expenseCategories: new Map<string, number>(),
+    }
+  );
+  const monthlyIncome = currentSummary.income > 0 ? currentSummary.income : null;
+  const suggestedGoalTarget = getSuggestedGoalAmount(selectedGoalKey as GoalKey | null, monthlyIncome);
 
   const monthBuckets = getMonthBuckets(now);
-  sixMonthTransactions.forEach((transaction) => {
-    const bucket = monthBuckets.find((entry) => entry.key === toIsoMonth(transaction.date));
+  sixMonthSummaryRows.forEach((row) => {
+    const bucket = monthBuckets.find((entry) => entry.key === toIsoMonth(row.month));
     if (!bucket) {
       return;
     }
 
-    const amount = Number(transaction.amount);
-    if (transaction.type === "income") {
+    const amount = Number(row.total ?? 0);
+    if (row.type === "income") {
       bucket.income += amount;
-    } else if (transaction.type === "expense") {
+    } else if (row.type === "expense") {
       bucket.expense += Math.abs(amount);
+    } else if (row.type === "transfer") {
+      bucket.net += 0;
     }
     bucket.net = bucket.income - bucket.expense;
   });
@@ -425,27 +462,16 @@ export default async function GoalsPage() {
     }
   >();
 
-  ninetyDayTransactions.forEach((transaction) => {
-    if (transaction.type !== "expense") {
-      return;
-    }
-
-    const label = transaction.merchantClean ?? transaction.merchantRaw;
-    const key = normalizeMerchant(label);
-    const existing = recurringMerchantSpend.get(key) ?? {
+  ninetyDayMerchantRows.forEach((row) => {
+    const label = row.label ?? "Uncategorized";
+    recurringMerchantSpend.set(normalizeMerchant(label), {
       label,
-      amount: 0,
-      count: 0,
-    };
-    existing.amount += Math.abs(Number(transaction.amount));
-    existing.count += 1;
-    recurringMerchantSpend.set(key, existing);
+      amount: Number(row.amount ?? 0),
+      count: Number(row.count ?? 0),
+    });
   });
 
-  const recurringMerchants = Array.from(recurringMerchantSpend.values())
-    .filter((merchant) => merchant.count > 1)
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 4);
+  const recurringMerchants = Array.from(recurringMerchantSpend.values()).slice(0, 4);
 
   const recurringDrag = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0);
   const recurringShare = currentSpend > 0 ? recurringDrag / currentSpend : 0;
@@ -461,8 +487,18 @@ export default async function GoalsPage() {
   const dragPenalty = clamp(Math.round(recurringShare * 100 * 0.35 + Math.max(0, recurringMerchants.length - 1) * 4), 0, 22);
   const goalScore = clamp(Math.round(savingsScore + trendScore + consistencyScore + cleanlinessScore * 0.2 - dragPenalty), 12, 98);
   const coach = getCoachMessage(goalScore);
-  const currentMonthLabel = monthFormatter.format(now);
   const onboardingDate = user.onboardingCompletedAt ? new Date(user.onboardingCompletedAt) : null;
+  const activeGoalProgressAmount =
+    hasGoalTarget && selectedGoalKey === "track_spending"
+      ? Math.max(0, goalTargetAmount - currentSpend)
+      : Math.max(0, currentNet);
+  const activeGoalProgressPercent =
+    hasGoalTarget && goalTargetAmount > 0 ? clamp((activeGoalProgressAmount / goalTargetAmount) * 100, 0, 100) : null;
+  const activeGoalRemainingAmount =
+    hasGoalTarget && activeGoalProgressPercent !== null ? Math.max(0, goalTargetAmount - activeGoalProgressAmount) : null;
+  const goalReached = activeGoalProgressPercent !== null && activeGoalProgressPercent >= 100;
+  const goalMoneyLabel = getGoalMoneyLabel(selectedGoalKey as GoalKey | null);
+  const goalProgressLabel = getGoalProgressLabel(selectedGoalKey as GoalKey | null);
 
   const progressLabel =
     goalScore >= 85 ? "Coach mode: you are ahead of the curve" : goalScore >= 70 ? "On pace and looking sharp" : goalScore >= 50 ? "Building good momentum" : "Early, but absolutely moving";
@@ -536,14 +572,28 @@ export default async function GoalsPage() {
       note: currentNet >= previousNet ? "Up vs prior period" : "Down vs prior period",
     },
     {
-      label: "Savings rate",
-      value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
-      note: `Target ${targetRate}% for ${selectedGoal.title.toLowerCase()}`,
+      label: hasGoalTarget ? goalMoneyLabel : "Suggested target",
+      value:
+        hasGoalTarget && activeGoalProgressPercent !== null
+          ? `${formatCurrency(activeGoalProgressAmount)} / ${formatCurrency(goalTargetAmount)}`
+          : suggestedGoalTarget !== null
+            ? formatCurrency(suggestedGoalTarget)
+            : "Set it now",
+      note: hasGoalTarget
+        ? goalReached
+          ? "You crossed the line"
+          : activeGoalRemainingAmount !== null
+            ? `${formatCurrency(activeGoalRemainingAmount)} remaining`
+            : "Keep moving"
+        : "Clover can suggest a starting point",
     },
     {
-      label: "Clean data",
-      value: `${Math.round(cleanlinessScore)}%`,
-      note: `${uncategorizedTransactions.length} items still need attention`,
+      label: goalProgressLabel,
+      value:
+        hasGoalTarget && activeGoalProgressPercent !== null
+          ? `${Math.round(activeGoalProgressPercent)}%`
+          : "No target yet",
+      note: hasGoalTarget ? `Tracked from ${goalTargetSource ?? "your saved goal"}` : `${uncategorizedTransactions.length} items still need attention`,
     },
     {
       label: "Momentum",
@@ -589,25 +639,33 @@ export default async function GoalsPage() {
     },
   ];
 
-  const historyEntries = [
-    {
-      label: "Onboarding",
-      detail: onboardingDate ? `${selectedGoal.title} started on ${formatShortDate(onboardingDate)}` : `You chose ${selectedGoal.title.toLowerCase()} during onboarding.`,
-    },
-    {
-      label: currentMonthLabel,
-      detail: playbook.historyMarkers[1],
-    },
-    {
-      label: "Next checkpoint",
-      detail: playbook.historyMarkers[2],
-    },
-  ];
+  const goalTimelineEntries =
+    goalHistoryRows.length > 0
+      ? goalHistoryRows.map((row) => {
+          const rowGoal = getGoalDefinition(row.primaryGoal);
+          const rowTarget = row.targetAmount !== null && row.targetAmount !== undefined ? Number(row.targetAmount) : null;
+          return {
+            label: formatShortDate(row.createdAt),
+            detail: `${rowGoal.title}${rowTarget !== null ? ` · ${formatCurrency(rowTarget)}` : " · No amount set"} · ${row.source === "onboarding" ? "Saved during onboarding" : "Updated in Goals"}`,
+          };
+        })
+      : [
+          {
+            label: onboardingDate ? formatShortDate(onboardingDate) : "Onboarding",
+            detail: hasGoalSelection ? `You picked ${selectedGoal.title.toLowerCase()} and can set a monthly target from here.` : "You skipped goal setup, so Clover can help you define one now.",
+          },
+        ];
 
   const goalAlerts = [
     {
-      text: goalScore >= 80 ? playbook.alertTemplates[0] : playbook.alertTemplates[1],
-      icon: goalScore >= 80 ? "spark" : "chart",
+      text: hasGoalTarget
+        ? goalReached
+          ? `You reached your ${formatCurrency(goalTargetAmount)} monthly target. That is a real win.`
+          : activeGoalRemainingAmount !== null
+            ? `${formatCurrency(activeGoalRemainingAmount)} left to go this month. Keep the rhythm steady.`
+            : playbook.alertTemplates[0]
+        : "Set a monthly target to unlock live progress tracking.",
+      icon: goalReached ? "spark" : hasGoalTarget ? "chart" : "target",
     },
     uncategorizedTransactions.length > 0
       ? {
@@ -664,9 +722,7 @@ export default async function GoalsPage() {
     href: "/transactions",
     label: "Review now",
     icon: getChecklistIcon(focus),
-  }));
-
-  const targetArc = `${Math.round(goalScore)}%`;
+    }));
 
   return (
     <CloverShell
@@ -693,41 +749,81 @@ export default async function GoalsPage() {
           <div className="goals-hero__copy">
             <div className="goals-hero__header">
               <span className="pill pill-accent">Onboarding goals</span>
-              <span className="pill pill-subtle">{selectedGoal.title}</span>
+              <span className="pill pill-subtle">{hasGoalSelection ? selectedGoal.title : "No goal set yet"}</span>
             </div>
-            <h3>{playbook.heroLead}</h3>
-            <p>{playbook.heroSupport}</p>
+            <h3>{heroLead}</h3>
+            <p>{heroSupport}</p>
+            {!hasGoalTarget ? (
+              <>
+                <p className="goals-hero__setup-note">
+                  You did not set a monthly target yet. Pick a number below so Clover can track how much progress you
+                  make each month.
+                </p>
+                <Link className="pill-link pill-link--inline" href="#goal-editor">
+                  Set your target
+                </Link>
+              </>
+            ) : null}
 
             <div className="goals-hero__summary">
               <span className={`pill ${goalScore >= 70 ? "pill-good" : goalScore >= 50 ? "pill-accent" : "pill-warning"}`}>
                 {coach.badge}
               </span>
-              <span>{selectedGoal.signal}</span>
-              <span>{playbook.weeklyFocus[0]}</span>
+              <span>{hasGoalSelection ? selectedGoal.signal : "Choose a lane to shape the plan."}</span>
+              <span>{hasGoalTarget ? goalMoneyLabel : "Set a target to unlock live tracking"}</span>
             </div>
 
             <div className="goals-progress">
               <div className="goals-progress__head">
-                <strong>{progressLabel}</strong>
-                <span>{targetArc} of 100</span>
+                <strong>{hasGoalTarget ? goalProgressLabel : "Monthly goal setup"}</strong>
+                <span>
+                  {hasGoalTarget && goalTargetAmount > 0
+                    ? `${formatCurrency(activeGoalProgressAmount)} of ${formatCurrency(goalTargetAmount)}`
+                    : suggestedGoalTarget !== null
+                      ? `Suggested ${formatCurrency(suggestedGoalTarget)}`
+                      : "No target saved yet"}
+                </span>
               </div>
               <div className="goals-progress__bar" aria-hidden="true">
-                <div className="goals-progress__fill" style={{ width: `${goalScore}%` }} />
+                <div
+                  className="goals-progress__fill"
+                  style={{ width: `${hasGoalTarget && activeGoalProgressPercent !== null ? activeGoalProgressPercent : 0}%` }}
+                />
               </div>
-              <p>{coach.body}</p>
+              <p>{hasGoalTarget ? (goalReached ? "You have already cleared the line. Keep the habit going." : coach.body) : "Set the number, then Clover will track the month with you."}</p>
             </div>
+
+            {goalReached ? (
+              <div className="goals-celebration" role="status" aria-live="polite">
+                <span className="goals-celebration__icon" aria-hidden="true">
+                  ✦
+                </span>
+                <div>
+                  <strong>Goal reached</strong>
+                  <span>You hit your monthly target. That is a solid finish to the month.</span>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="goals-hero__visual">
             <GoalIllustration
               goalKey={(selectedGoalKey ?? "save_more") as GoalKey}
               title={`${selectedGoal.title} in motion`}
-              subtitle={playbook.heroSupport}
-              progress={goalScore}
+              subtitle={heroSupport}
+              progress={hasGoalTarget && activeGoalProgressPercent !== null ? activeGoalProgressPercent : goalScore}
             />
 
             <div className="goals-hero__ring-card">
-              <div className="goals-hero__ring" role="img" aria-label={`Goal progress at ${goalScore}%`}>
+              <div
+                className={`goals-hero__ring ${goalReached ? "is-complete" : ""}`}
+                role="img"
+                aria-label={
+                  hasGoalTarget && activeGoalProgressPercent !== null
+                    ? `Monthly goal progress at ${Math.round(activeGoalProgressPercent)} percent`
+                    : "Monthly goal is waiting for a target amount"
+                }
+              >
                 <svg viewBox="0 0 240 240">
                   <defs>
                     <linearGradient id="goals-ring-gradient" x1="0" x2="1" y1="0" y2="1">
@@ -743,13 +839,13 @@ export default async function GoalsPage() {
                     className="goals-ring__progress"
                     stroke="url(#goals-ring-gradient)"
                     style={{
-                      strokeDasharray: `${2 * Math.PI * 84 * (goalScore / 100)} ${2 * Math.PI * 84}`,
+                      strokeDasharray: `${2 * Math.PI * 84 * ((hasGoalTarget && activeGoalProgressPercent !== null ? activeGoalProgressPercent : 0) / 100)} ${2 * Math.PI * 84}`,
                     }}
                   />
                 </svg>
                 <div className="goals-hero__ring-copy">
-                  <strong>{goalScore}%</strong>
-                  <span>{selectedGoal.title}</span>
+                  <strong>{hasGoalTarget && activeGoalProgressPercent !== null ? `${Math.round(activeGoalProgressPercent)}%` : "Set it"}</strong>
+                  <span>{hasGoalTarget ? `${formatCurrency(activeGoalProgressAmount)} saved` : "No monthly target yet"}</span>
                 </div>
               </div>
 
@@ -969,19 +1065,20 @@ export default async function GoalsPage() {
                 <h4>Your path so far</h4>
               </div>
               <div className="goals-panel__stat">
-                <strong>{playbook.historyMarkers.length}</strong>
-                <span>Coach checkpoints</span>
+                <strong>{goalTimelineEntries.length}</strong>
+                <span>Saved goal updates</span>
               </div>
             </div>
 
             <div className="goals-history__timeline">
-              {historyEntries.map((entry) => (
-                <div key={entry.label} className="goals-history__item">
+              {goalTimelineEntries.map((entry, index) => (
+                <div key={`${entry.label}-${index}`} className="goals-history__item">
                   <span className="goals-history__label">{entry.label}</span>
                   <strong>{entry.detail}</strong>
                 </div>
               ))}
             </div>
+            <p className="goals-history__hint">{playbook.historyMarkers[0]}</p>
           </article>
 
           <article className="goals-milestones glass">
@@ -1043,23 +1140,23 @@ export default async function GoalsPage() {
 
         <GoalsChecklist items={checklistItems} />
 
-          <article className="goals-alerts glass">
-            <div className="goals-panel__head">
-              <div>
-                <p className="eyebrow">Goal alerts</p>
-                <h4>Coach notes for this moment</h4>
-              </div>
-              <div className="goals-panel__stat">
-                <strong>{goalAlerts.length}</strong>
-                <span>Active messages</span>
-              </div>
+        <article className="goals-alerts glass">
+          <div className="goals-panel__head">
+            <div>
+              <p className="eyebrow">Goal alerts</p>
+              <h4>Coach notes for this moment</h4>
             </div>
+            <div className="goals-panel__stat">
+              <strong>{goalAlerts.length}</strong>
+              <span>Active messages</span>
+            </div>
+          </div>
 
-            <div className="goals-alerts__list">
-              {goalAlerts.map((alert, index) => (
-                <div key={`${alert.text}-${index}`} className="goals-alerts__item">
-                  <span className="goals-alerts__dot" aria-hidden="true">
-                    <GoalGlyph goalKey={selectedGoal.value} />
+          <div className="goals-alerts__list">
+            {goalAlerts.map((alert, index) => (
+              <div key={`${alert.text}-${index}`} className="goals-alerts__item">
+                <span className="goals-alerts__dot" aria-hidden="true">
+                  <GoalGlyph goalKey={selectedGoal.value} />
                 </span>
                 <p>{alert.text}</p>
               </div>
@@ -1067,7 +1164,14 @@ export default async function GoalsPage() {
           </div>
         </article>
 
-        <GoalsEditor goals={GOAL_OPTIONS} currentGoal={selectedGoalKey} />
+        <div className="goals-editor-shell" id="goal-editor">
+          <GoalsEditor
+            goals={GOAL_OPTIONS}
+            currentGoal={selectedGoalKey}
+            currentTargetAmount={goalTargetAmount !== null ? String(goalTargetAmount) : null}
+            suggestedTargetAmount={suggestedGoalTarget}
+          />
+        </div>
 
         <article className="goals-actions glass">
           <div className="goals-panel__head">

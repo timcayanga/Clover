@@ -4099,6 +4099,54 @@ label {
   font-size: 14px;
 }
 
+.goals-hero__setup-note {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px dashed rgba(3, 168, 192, 0.22);
+  background: rgba(3, 168, 192, 0.06);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.goals-celebration {
+  padding: 14px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(34, 197, 94, 0.18);
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, 0.14), transparent 34%),
+    rgba(255, 255, 255, 0.86);
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  box-shadow: 0 18px 34px rgba(34, 197, 94, 0.08);
+}
+
+.goals-celebration__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: rgba(34, 197, 94, 0.14);
+  color: rgb(22, 163, 74);
+  font-size: 18px;
+  flex: none;
+}
+
+.goals-celebration strong {
+  display: block;
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.goals-celebration span {
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 13px;
+}
+
 .goals-hero__visual {
   display: grid;
   gap: 12px;
@@ -4206,6 +4254,10 @@ label {
   margin: 0 auto;
 }
 
+.goals-hero__ring.is-complete {
+  filter: drop-shadow(0 18px 30px rgba(34, 197, 94, 0.12));
+}
+
 .goals-hero__ring svg {
   display: block;
   width: 100%;
@@ -4254,6 +4306,13 @@ label {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.goals-history__hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .goals-stat {
@@ -4720,6 +4779,10 @@ label {
   gap: 14px;
 }
 
+.goals-editor-shell {
+  margin-top: 2px;
+}
+
 .goals-editor__head {
   display: flex;
   justify-content: space-between;
@@ -4811,6 +4874,47 @@ label {
   flex-wrap: wrap;
   gap: 10px;
   justify-content: flex-end;
+}
+
+.goals-editor__amount {
+  display: grid;
+  gap: 8px;
+  padding: 16px 17px;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 36%),
+    rgba(255, 255, 255, 0.76);
+}
+
+.goals-editor__amount span {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
+
+.goals-editor__amount input {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: white;
+  padding: 0 16px;
+  font-size: 16px;
+  color: var(--text);
+  outline: none;
+}
+
+.goals-editor__amount input:focus {
+  border-color: rgba(3, 168, 192, 0.32);
+  box-shadow: 0 0 0 4px rgba(3, 168, 192, 0.1);
+}
+
+.goals-editor__amount small {
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 13px;
 }
 
 @keyframes goals-float {
@@ -5199,6 +5303,86 @@ label {
   width: 100%;
   color: var(--muted);
   font-size: 15px;
+}
+
+.onboarding-goal-target {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  background: rgba(3, 168, 192, 0.06);
+}
+
+.onboarding-goal-target__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.onboarding-goal-target__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.onboarding-goal-target__pill {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.onboarding-goal-target__prompt {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.onboarding-goal-target__input-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.onboarding-goal-target__currency,
+.onboarding-goal-target__suffix {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.onboarding-goal-target input {
+  min-width: 0;
+  width: 100%;
+  min-height: 48px;
+  border-radius: 16px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.96);
+  padding: 12px 14px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.onboarding-goal-target input:focus {
+  outline: none;
+  border-color: rgba(3, 168, 192, 0.4);
+  box-shadow: 0 0 0 4px rgba(3, 168, 192, 0.12);
+}
+
+.onboarding-goal-target small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .onboarding-grid {
@@ -11159,6 +11343,16 @@ input.transaction-inline-edit--amount::placeholder {
 
   .onboarding-grid--start {
     grid-template-columns: 1fr;
+  }
+
+  .onboarding-goal-target__input-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .onboarding-goal-target__currency,
+  .onboarding-goal-target__suffix {
+    font-size: 12px;
   }
 
   .onboarding-option {

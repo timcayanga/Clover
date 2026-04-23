@@ -80,6 +80,30 @@ export const goalLabels: Record<GoalKey, string> = {
   invest_better: "Invest better",
 };
 
+export const goalMoneyPrompts: Record<GoalKey, string> = {
+  save_more: "How much do you want to save each month?",
+  pay_down_debt: "How much do you want to put toward debt each month?",
+  track_spending: "What monthly spending cap do you want to stay under?",
+  build_emergency_fund: "How much do you want to add to your emergency fund each month?",
+  invest_better: "How much do you want to invest each month?",
+};
+
+export const goalMoneyLabels: Record<GoalKey, string> = {
+  save_more: "Monthly savings target",
+  pay_down_debt: "Monthly payoff target",
+  track_spending: "Monthly spending cap",
+  build_emergency_fund: "Monthly emergency contribution",
+  invest_better: "Monthly investing target",
+};
+
+export const goalProgressLabels: Record<GoalKey, string> = {
+  save_more: "Saved so far this month",
+  pay_down_debt: "Available for debt this month",
+  track_spending: "Still available in the budget",
+  build_emergency_fund: "Set aside so far this month",
+  invest_better: "Ready to invest this month",
+};
+
 export const getGoalDefinition = (goalKey: string | null) =>
   GOAL_OPTIONS.find((definition) => definition.value === goalKey) ?? GOAL_OPTIONS[0];
 
@@ -188,3 +212,21 @@ export const GOAL_PLAYBOOKS: GoalPlaybook[] = [
 
 export const getGoalPlaybook = (goalKey: string | null) =>
   GOAL_PLAYBOOKS.find((definition) => definition.value === goalKey) ?? GOAL_PLAYBOOKS[0];
+
+export const getGoalMoneyPrompt = (goalKey: GoalKey | null) =>
+  goalKey ? goalMoneyPrompts[goalKey] : "How much do you want this goal to move each month?";
+
+export const getGoalMoneyLabel = (goalKey: GoalKey | null) =>
+  goalKey ? goalMoneyLabels[goalKey] : "Monthly goal target";
+
+export const getGoalProgressLabel = (goalKey: GoalKey | null) =>
+  goalKey ? goalProgressLabels[goalKey] : "Progress this month";
+
+export const getSuggestedGoalAmount = (goalKey: GoalKey | null, monthlyIncome: number | null) => {
+  if (!goalKey || monthlyIncome === null || Number.isNaN(monthlyIncome) || monthlyIncome <= 0) {
+    return null;
+  }
+
+  const targetRate = getGoalDefinition(goalKey).targetRate;
+  return Math.max(0, Math.round(monthlyIncome * (targetRate / 100)));
+};
