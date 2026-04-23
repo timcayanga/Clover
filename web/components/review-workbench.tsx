@@ -425,9 +425,10 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
       </div>
 
       <div className="review-workbench__grid">
-        <article className="review-workbench__card review-workbench__card--main">
+        <article className="review-workbench__card review-workbench__card--main review-workbench__card--active">
           <div className="review-workbench__transaction-head">
             <div>
+              <p className="review-workbench__active-tag">Active review item</p>
               <p className="review-workbench__title">{current.merchantClean ?? current.merchantRaw}</p>
               {current.merchantClean && current.merchantRaw !== current.merchantClean ? (
                 <p className="review-workbench__subtitle">{current.merchantRaw}</p>
