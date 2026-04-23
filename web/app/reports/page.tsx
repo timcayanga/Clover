@@ -65,6 +65,23 @@ type MonthBucket = {
   net: number;
 };
 
+type WorkspaceAccountSnapshot = {
+  id: string;
+  name: string;
+  balance: unknown;
+  currency: string;
+  type: string;
+};
+
+type RecurringMerchant = {
+  label: string;
+  amount: number;
+  dates: Date[];
+  count: number;
+  cadenceLabel: string;
+  nextDueDate: Date | null;
+};
+
 type ReportsRange = "30d" | "90d" | "ytd";
 
 const reportsRangeLabels: Record<ReportsRange, string> = {
@@ -182,13 +199,13 @@ async function ReportsPageView({
       { label: "Utilities", amount: 510, color: "#14b8a6" },
     ] as const;
 
-    const sampleRecurringPayments = [
+    const sampleRecurringPayments: Array<{ label: string; amount: number; count: number }> = [
       { label: "Cloud storage", amount: 499, count: 2 },
       { label: "Music streaming", amount: 199, count: 2 },
       { label: "Delivery pass", amount: 149, count: 2 },
     ];
 
-    const sampleTopMerchants = [
+    const sampleTopMerchants: Array<{ label: string; amount: number; count: number }> = [
       { label: "Food Mart", amount: 1240, count: 4 },
       { label: "Ride Share", amount: 980, count: 5 },
       { label: "Coffee Shop", amount: 640, count: 6 },
@@ -648,6 +665,7 @@ async function ReportsPageView({
       importedTransactionStats,
       manualTransactionStats,
       accountStats,
+      workspaceAccountSnapshots,
       latestImport,
       processingImportCount,
       doneImportCount,
@@ -770,6 +788,20 @@ async function ReportsPageView({
         _sum: { balance: true },
         _count: { id: true, balance: true },
       }),
+      prisma.account.findMany({
+        where: {
+          workspaceId: selectedWorkspaceId,
+        },
+        select: {
+          id: true,
+          name: true,
+          balance: true,
+          currency: true,
+          type: true,
+        },
+        orderBy: [{ balance: "desc" }, { updatedAt: "desc" }],
+        take: 5,
+      }) as Promise<WorkspaceAccountSnapshot[]>,
       prisma.importFile.findFirst({
         where: { workspaceId: selectedWorkspaceId },
         orderBy: { uploadedAt: "desc" },
@@ -882,6 +914,13 @@ async function ReportsPageView({
       _sum: { balance: number | null };
       _count: { id: number; balance: number };
     };
+    const workspaceAccountSummaries = (workspaceAccountSnapshots as unknown as WorkspaceAccountSnapshot[]).map((account) => ({
+      id: account.id,
+      name: account.name,
+      balance: account.balance,
+      currency: account.currency,
+      type: account.type,
+    }));
     const totalAccountBalance = Number(accountStatsSummary._sum.balance ?? 0);
     const activeAccountCount = accountStatsSummary._count.balance;
     const accountCount = accountStatsSummary._count.id;
@@ -946,8 +985,62 @@ async function ReportsPageView({
                   title: "No urgent clean-up items",
                   body: "Your current data looks tidy. You can still review spending and cash flow trends below.",
                   href: "/transactions",
-                  label: "Open transactions",
-                };
+              label: "Open transactions",
+            };
+
+    const recurringMerchantHistory = new Map<
+      string,
+      {
+        label: string;
+        amount: number;
+        dates: Date[];
+      }
+    >();
+
+    [...previousWindowTransactions, ...currentWindowTransactions].forEach((transaction) => {
+      if (transaction.type !== "expense") {
+        return;
+      }
+
+      const label = transaction.merchantClean ?? transaction.merchantRaw;
+      const key = normalizeMerchant(label);
+      const existing = recurringMerchantHistory.get(key) ?? { label, amount: 0, dates: [] };
+      existing.amount += Math.abs(Number(transaction.amount));
+      existing.dates.push(transaction.date);
+      recurringMerchantHistory.set(key, existing);
+    });
+
+    const recurringMerchants: RecurringMerchant[] = Array.from(recurringMerchantHistory.values())
+      .filter((merchant) => merchant.dates.length > 1)
+      .map((merchant) => {
+        const sortedDates = [...merchant.dates].sort((a, b) => a.getTime() - b.getTime());
+        const intervals = sortedDates
+          .slice(1)
+          .map((date, index) => (date.getTime() - sortedDates[index].getTime()) / 86400000)
+          .filter((days) => Number.isFinite(days) && days > 0);
+        const averageGapDays = intervals.length > 0 ? intervals.reduce((sum, days) => sum + days, 0) / intervals.length : null;
+        const cadenceLabel =
+          averageGapDays === null
+            ? "Repeat merchant"
+            : averageGapDays <= 10
+              ? "Weekly"
+              : averageGapDays <= 17
+                ? "Biweekly"
+                : averageGapDays <= 40
+                  ? "Monthly"
+                  : "Periodic";
+        const nextDueDate =
+          averageGapDays === null ? null : new Date(sortedDates[sortedDates.length - 1].getTime() + averageGapDays * 86400000);
+
+        return {
+          ...merchant,
+          count: merchant.dates.length,
+          cadenceLabel,
+          nextDueDate,
+        };
+      })
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 3);
 
     const topCategories = Array.from(currentSummary.expenseCategories.entries())
       .sort((a, b) => b[1] - a[1])
@@ -1000,11 +1093,6 @@ async function ReportsPageView({
       merchantSpend.set(key, existing);
     });
 
-    const recurringMerchants = Array.from(merchantSpend.values())
-      .filter((merchant) => merchant.count > 1)
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 3);
-
     const topMerchants = Array.from(merchantSpend.values()).sort((a, b) => b.amount - a.amount).slice(0, 5);
     const currentMonthBucket = monthBuckets[monthBuckets.length - 1];
     const previousMonthBucket = monthBuckets[monthBuckets.length - 2] ?? monthBuckets[monthBuckets.length - 1];
@@ -1037,6 +1125,61 @@ async function ReportsPageView({
     const currentTrackedCategorySpend = topCategories.reduce((sum, [, amount]) => sum + amount, 0);
     const currentOtherSpend = Math.max(currentSpend - currentTrackedCategorySpend, 0);
     const recurringSavingsPotential = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0) * 0.2;
+    const topRecurringMerchant = recurringMerchants[0] ?? null;
+    const averageRecurringSpend = recurringMerchants.length > 0
+      ? recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0) / recurringMerchants.length
+      : 0;
+    const topBalanceAccount = workspaceAccountSummaries.find((account) => account.balance !== null) ?? null;
+    const topBalanceAccountName = topBalanceAccount?.name ?? null;
+    const accountBalanceCoverage = accountCount > 0 ? activeAccountCount / accountCount : 0;
+    const topBalanceAccountBalance = topBalanceAccount ? Number(topBalanceAccount.balance ?? 0) : 0;
+    const accountConcentrationShare = totalAccountBalance > 0 && topBalanceAccountBalance > 0 ? topBalanceAccountBalance / totalAccountBalance : null;
+    const confidenceScore = Math.max(
+      58,
+      Math.min(
+        99,
+        60 +
+          currentWindowTransactions.length * 0.12 +
+          doneImportCount * 1.5 +
+          activeAccountCount * 1.5 -
+          failedImportCount * 8 -
+          actionableCount * 2.5 -
+          (1 - accountBalanceCoverage) * 8
+      )
+    );
+    const confidenceLabel =
+      confidenceScore >= 85 ? "High confidence" : confidenceScore >= 70 ? "Good confidence" : "Watch closely";
+    const confidenceCopy =
+      confidenceScore >= 85
+        ? "The report has enough clean signal to support confident decisions."
+        : confidenceScore >= 70
+          ? "The report is dependable, though a few review items still deserve attention."
+          : "A few missing balances or review items are reducing signal quality.";
+    const attentionItems = [
+      {
+        title: nextStep.title,
+        body: nextStep.body,
+        href: nextStep.href,
+        label: nextStep.label,
+      },
+      {
+        title: `${Math.round(confidenceScore)}% data confidence`,
+        body: confidenceCopy,
+        href: "/transactions",
+        label: "Open transactions",
+      },
+      {
+        title: topBalanceAccountName
+          ? `${topBalanceAccountName} carries ${formatCurrency(topBalanceAccountBalance)}`
+          : "No account balance trend yet",
+        body:
+          topBalanceAccountName && accountConcentrationShare !== null
+            ? `${formatPercent(accountConcentrationShare * 100)} of tracked balance sits in the strongest account`
+            : "Add or refresh account balances to surface concentration and coverage.",
+        href: topBalanceAccountName ? buildTransactionsHref({ account: topBalanceAccountName }) : "/accounts",
+        label: topBalanceAccountName ? "View account" : "Open accounts",
+      },
+    ];
     const reportReviewQueueItems: ReportsQueueItem[] = [];
     const primaryUncategorizedTransaction = uncategorizedTransactions[0];
     const primaryDuplicateGroup = possibleDuplicateGroups[0];
@@ -1052,7 +1195,7 @@ async function ReportsPageView({
         ],
         categoryOptions: topCategoryOptions.length > 0 ? topCategoryOptions : ["Food & Dining", "Transport", "Groceries", "Utilities", "Subscriptions", "Entertainment"],
         actions: [
-          { label: "Review transaction", href: buildTransactionsHref({ transaction: primaryUncategorizedTransaction.id, review: "1" }) },
+          { label: "Review transaction", href: buildTransactionsHref({ review: primaryUncategorizedTransaction.id }) },
           { label: "Open transactions", href: "/transactions", variant: "secondary" },
         ],
       });
@@ -1065,7 +1208,7 @@ async function ReportsPageView({
         description: `${primaryDuplicateGroup.length} matching rows · ${representative.account.name} · ${formatShortDate(representative.date)}`,
         tags: ["Potential duplicate", `${primaryDuplicateGroup.length} matches`, formatCurrency(duplicateTotal)],
         actions: [
-          { label: "Review duplicates", href: buildTransactionsHref({ merchant: representative.merchantClean ?? representative.merchantRaw, review: "1" }) },
+          { label: "Review duplicates", href: buildTransactionsHref({ review: representative.id }) },
           { label: "Open transactions", href: "/transactions", variant: "secondary" },
         ],
       });
@@ -1100,6 +1243,10 @@ async function ReportsPageView({
         ? `Your ${goalLabel.toLowerCase()} goal has room to move forward because the last ${rangeWindowText} ended positive.`
         : `Your ${goalLabel.toLowerCase()} goal needs a tighter spending pattern or higher income to move faster.`
       : "Set a primary goal so Clover can compare your cash flow and spending against something specific.";
+    const comparisonCopy =
+      selectedRange === "ytd"
+        ? "Compared with the same span earlier in the year"
+        : `Compared with the previous ${rangeWindowText}`;
 
     const aiHeadline = goalLabel
       ? currentNet >= 0
@@ -1344,12 +1491,25 @@ async function ReportsPageView({
           </article>
         </section>
 
+        <section className="reports-attention-strip">
+          {attentionItems.map((item) => (
+            <article key={item.title} className="reports-attention-card glass">
+              <span className="eyebrow">Attention</span>
+              <h4>{item.title}</h4>
+              <p>{item.body}</p>
+              <Link className="pill-link pill-link--inline" href={item.href}>
+                {item.label}
+              </Link>
+            </article>
+          ))}
+        </section>
+
         <section className="reports-range-switch glass">
           <div className="reports-range-switch__copy">
             <span className="eyebrow">Range</span>
             <p>{selectedRangeLabel}</p>
             <small>
-              {latestImportSummary ? `Fresh data from ${latestImportSummary.fileName}` : "No imports available yet"}
+              {comparisonCopy} · {latestImportSummary ? `Fresh data from ${latestImportSummary.fileName}` : "No imports available yet"}
             </small>
           </div>
           <div className="reports-range-switch__controls" role="tablist" aria-label="Report range">
@@ -1638,7 +1798,7 @@ async function ReportsPageView({
                 recurringMerchants.map((merchant) => (
                   <Link
                     key={merchant.label}
-                    href={buildTransactionsHref({ merchant: merchant.label, review: "1" })}
+                    href={buildTransactionsHref({ merchant: merchant.label })}
                     className="report-list__item report-list__item--link"
                   >
                     <div className="report-list__meta">
@@ -1646,15 +1806,33 @@ async function ReportsPageView({
                       <span>
                         {merchant.count} transaction{merchant.count === 1 ? "" : "s"} · {formatCurrency(merchant.amount)}
                       </span>
+                      <small>
+                        {merchant.cadenceLabel}
+                        {merchant.nextDueDate ? ` · next due ${formatShortDate(merchant.nextDueDate)}` : ""}
+                      </small>
                     </div>
                     <div className="report-tags">
-                      <span className="pill pill-subtle">Repeat merchant</span>
+                      <span className="pill pill-subtle">{merchant.cadenceLabel}</span>
+                      <span className="pill pill-subtle">{formatPercent((merchant.amount / Math.max(currentSpend, 1)) * 100)} of spend</span>
                     </div>
                   </Link>
                 ))
               ) : (
                 <div className="empty-state">No repeat merchants surfaced yet. Add more transactions to reveal fixed costs.</div>
               )}
+            </div>
+            <div className="report-subsection report-subsection--compact">
+              <p className="eyebrow">Recurring signal</p>
+              <div className="report-list">
+                <div className="report-list__item">
+                  <div className="report-list__meta">
+                    <strong>{topRecurringMerchant?.label ?? "No recurring merchant"}</strong>
+                    <span>
+                      {topRecurringMerchant ? `Average of ${formatCurrency(averageRecurringSpend)} across repeat costs` : "More activity will reveal recurring merchants"}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </article>
 
@@ -1680,11 +1858,11 @@ async function ReportsPageView({
                     className="report-list__item report-list__item--link"
                   >
                     <div className="report-list__meta">
-                      <strong>{merchant.label}</strong>
-                      <span>
-                        {merchant.count} transaction{merchant.count === 1 ? "" : "s"} · {formatCurrency(merchant.amount)}
-                      </span>
-                    </div>
+                    <strong>{merchant.label}</strong>
+                    <span>
+                      {merchant.count} transaction{merchant.count === 1 ? "" : "s"} · {formatCurrency(merchant.amount)}
+                    </span>
+                  </div>
                     <div className="report-list__track" aria-hidden="true">
                       <span className="report-list__fill" style={{ width: `${Math.max((merchant.amount / currentSpend) * 100, 10)}%` }} />
                     </div>
@@ -1728,7 +1906,7 @@ async function ReportsPageView({
               <div className="report-insight">
                 <span>Month-over-month delta</span>
                 <strong className={monthlyNetChange >= 0 ? "positive" : "negative"}>{formatSignedCurrency(monthlyNetChange)}</strong>
-                <small>{previousMonthBucket.label}</small>
+                <small>{previousMonthBucket.label} · {monthlyNetChange >= 0 ? "improving" : "softening"}</small>
               </div>
             </div>
             <div className="report-subsection report-subsection--compact">
@@ -1750,8 +1928,8 @@ async function ReportsPageView({
                 <h4>Data health</h4>
               </div>
               <div className="report-card__stat">
-                <strong>{formatCurrency(totalAccountBalance)}</strong>
-                <span>{activeAccountCount} account{activeAccountCount === 1 ? "" : "s"} with balances</span>
+                <strong>{Math.round(confidenceScore)}%</strong>
+                <span>{confidenceLabel} · {activeAccountCount} account{activeAccountCount === 1 ? "" : "s"} with balances</span>
               </div>
             </div>
 
@@ -1766,6 +1944,16 @@ async function ReportsPageView({
                 <strong>{manualTransactions}</strong>
                 <small>{formatCurrency(manualAmount)} total</small>
               </div>
+              <div className="report-insight">
+                <span>Tracked balance</span>
+                <strong>{formatCurrency(totalAccountBalance)}</strong>
+                <small>{accountConcentrationShare === null ? "Balance coverage pending" : `${formatPercent(accountConcentrationShare * 100)} in the largest account`}</small>
+              </div>
+              <div className="report-insight">
+                <span>Import quality</span>
+                <strong>{importStatusCounts.failed + importStatusCounts.processing}</strong>
+                <small>{confidenceCopy}</small>
+              </div>
             </div>
 
             <div className="report-subsection">
@@ -1777,6 +1965,26 @@ async function ReportsPageView({
                     <span>{goalSummary}</span>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <div className="report-subsection">
+              <p className="eyebrow">Account health</p>
+              <div className="report-list">
+                {workspaceAccountSummaries.length > 0 ? (
+                  workspaceAccountSummaries.map((account) => (
+                    <div key={account.id} className="report-list__item">
+                      <div className="report-list__meta">
+                        <strong>{account.name}</strong>
+                        <span>
+                          {account.balance === null ? "No balance recorded" : `${formatCurrency(Number(account.balance))} · ${account.type}`}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-state">No account balances available yet.</div>
+                )}
               </div>
             </div>
 
