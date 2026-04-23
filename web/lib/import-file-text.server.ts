@@ -1,4 +1,7 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { getEnv } from "@/lib/env";
 import { getR2Client } from "@/lib/s3";
 
@@ -129,6 +132,12 @@ const loadPdfJs = async () => {
   return resolvePDFJS();
 };
 
+const getPdfJsStandardFontDataUrl = () => {
+  const require = createRequire(`${process.cwd()}/package.json`);
+  const pdfJsPackagePath = require.resolve("pdfjs-dist/package.json");
+  return `${pathToFileURL(join(dirname(pdfJsPackagePath), "standard_fonts")).toString().replace(/\/?$/, "")}/`;
+};
+
 const decodeBody = async (body: unknown) => {
   if (!body) {
     throw new Error("Unable to read imported file.");
@@ -191,7 +200,8 @@ export const downloadImportObject = async (storageKey: string) => {
 
 const extractTextFromPdfBytes = async (data: Uint8Array, password?: string) => {
   const pdfjs = await loadPdfJs();
-  const options = password ? { data, password } : { data };
+  const standardFontDataUrl = getPdfJsStandardFontDataUrl();
+  const options = password ? { data, password, standardFontDataUrl } : { data, standardFontDataUrl };
   const loadingTask = pdfjs.getDocument(options as any);
   const pdf = await loadingTask.promise;
   const pages: string[] = [];
