@@ -36,6 +36,21 @@ type AccountRuleRow = {
   timesConfirmed: number;
 };
 
+type StatementTemplateRow = {
+  fingerprint: string;
+  fileType: string | null;
+  institution: string | null;
+  accountNumber: string | null;
+  accountName: string | null;
+  parserVersion: string;
+  parserConfig: Prisma.JsonValue | null;
+  metadata: Prisma.JsonValue | null;
+  exampleCount: number;
+  successCount: number;
+  failureCount: number;
+  lastSeenAt: Date;
+};
+
 export type EnrichedParsedImportRow = ParsedImportRow & {
   institution?: string | null;
   accountNumber?: string | null;
@@ -540,6 +555,39 @@ export const getCompatibleStatementTemplateColumns = async () => {
   const compatible = STATEMENT_TEMPLATE_COLUMNS.filter((column) => existing.has(column));
   columnCache.set(cacheKey, compatible as string[]);
   return compatible as string[];
+};
+
+export const loadStatementTemplate = async (params: {
+  workspaceId: string;
+  fingerprint: string;
+}) => {
+  const columns = await getCompatibleStatementTemplateColumns();
+  if (columns.length === 0) {
+    return null;
+  }
+
+  try {
+    const template = await prisma.statementTemplate.findUnique({
+      where: {
+        workspaceId_fingerprint: {
+          workspaceId: params.workspaceId,
+          fingerprint: params.fingerprint,
+        },
+      },
+    });
+
+    if (!template) {
+      return null;
+    }
+
+    return template as StatementTemplateRow;
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
+      return null;
+    }
+
+    throw error;
+  }
 };
 
 export const getCompatibleMerchantRuleColumns = async () => {

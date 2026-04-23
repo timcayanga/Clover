@@ -16,6 +16,7 @@ import {
   insertParsedTransactionsCompat,
   hasCompatibleTable,
   recordTrainingSignal,
+  loadStatementTemplate,
   updateImportFileCompat,
   upsertAccountRule,
   upsertStatementTemplate,
@@ -57,6 +58,14 @@ type PreparedImportTransaction = {
   };
 };
 
+type ProcessImportResult = {
+  imported: number;
+  duplicate: boolean;
+  metadata: ReturnType<typeof detectStatementMetadataFromText>;
+  insightSummary?: ImportInsightSummary;
+  accountBalance?: string | null;
+};
+
 const shouldRouteToReview = (confidence: number) => confidence < 85;
 
 const chunkArray = <T,>(items: T[], size: number) => {
@@ -71,8 +80,40 @@ const chunkArray = <T,>(items: T[], size: number) => {
   return chunks;
 };
 
+const mergeStatementMetadata = (
+  detected: ReturnType<typeof detectStatementMetadataFromText>,
+  template?: {
+    institution?: string | null;
+    accountNumber?: string | null;
+    accountName?: string | null;
+    openingBalance?: number | null;
+    endingBalance?: number | null;
+    startDate?: string | null;
+    endDate?: string | null;
+  } | null
+) => {
+  if (!template) {
+    return detected;
+  }
+
+  return {
+    institution: detected.institution ?? template.institution ?? null,
+    accountNumber: detected.accountNumber ?? template.accountNumber ?? null,
+    accountName: detected.accountName ?? template.accountName ?? null,
+    openingBalance: detected.openingBalance ?? template.openingBalance ?? null,
+    endingBalance: detected.endingBalance ?? template.endingBalance ?? null,
+    startDate: detected.startDate ?? template.startDate ?? null,
+    endDate: detected.endDate ?? template.endDate ?? null,
+    confidence: Math.max(detected.confidence, 0),
+  };
+};
+
 const resolveConfirmationAccount = async (params: {
   importFile: { workspaceId: unknown; fileName?: unknown };
+  statementMetadata?: {
+    accountName?: unknown;
+    institution?: unknown;
+  } | null;
   parsedRows: Array<{
     accountName?: unknown;
     institution?: unknown;
@@ -81,13 +122,19 @@ const resolveConfirmationAccount = async (params: {
 }) => {
   const workspaceId = String(params.importFile.workspaceId);
   const candidateRow =
+    (typeof params.statementMetadata?.accountName === "string" && params.statementMetadata.accountName.trim()
+      ? params.statementMetadata
+      : null) ??
+    (typeof params.statementMetadata?.institution === "string" && params.statementMetadata.institution.trim()
+      ? params.statementMetadata
+      : null) ??
     params.parsedRows.find((row) => typeof row.accountName === "string" && row.accountName.trim()) ??
     params.parsedRows.find((row) => typeof row.institution === "string" && row.institution.trim()) ??
     null;
 
   const inferredAccountName =
     typeof candidateRow?.accountName === "string" && candidateRow.accountName.trim()
-      ? candidateRow.accountName.trim()
+    ? String(candidateRow.accountName).trim()
       : typeof candidateRow?.institution === "string" && candidateRow.institution.trim()
         ? candidateRow.institution.trim()
         : typeof params.importFile.fileName === "string"
@@ -202,7 +249,7 @@ const buildTransactionInsertRecord = (params: {
 export const processImportFileText = async (
   importFileId: string,
   options: { text?: string; password?: string } = {}
-) => {
+): Promise<ProcessImportResult> => {
   const importFile = await fetchImportFileCompat(importFileId);
 
   if (!importFile) {
@@ -231,17 +278,44 @@ export const processImportFileText = async (
   }
 
   const metadata = detectStatementMetadataFromText(text);
+  const statementFingerprint = buildStatementFingerprint(text, metadata, importFile.fileName, importFile.fileType);
+  const existingTemplate = await loadStatementTemplate({
+    workspaceId: String(importFile.workspaceId),
+    fingerprint: statementFingerprint,
+  });
+  const templateMetadata =
+    existingTemplate?.metadata && typeof existingTemplate.metadata === "object" && !Array.isArray(existingTemplate.metadata)
+      ? (existingTemplate.metadata as Record<string, unknown>)
+      : null;
+  const mergedMetadata = mergeStatementMetadata(metadata, {
+    institution:
+      typeof templateMetadata?.institution === "string" && templateMetadata.institution.trim()
+        ? templateMetadata.institution.trim()
+        : null,
+    accountNumber:
+      typeof templateMetadata?.accountNumber === "string" && templateMetadata.accountNumber.trim()
+        ? templateMetadata.accountNumber.trim()
+        : null,
+    accountName:
+      typeof templateMetadata?.accountName === "string" && templateMetadata.accountName.trim()
+        ? templateMetadata.accountName.trim()
+        : null,
+    openingBalance: typeof templateMetadata?.openingBalance === "number" ? templateMetadata.openingBalance : null,
+    endingBalance: typeof templateMetadata?.endingBalance === "number" ? templateMetadata.endingBalance : null,
+    startDate: typeof templateMetadata?.startDate === "string" ? templateMetadata.startDate : null,
+    endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
+  });
+
   const parsedRows = parseImportText(text, importFile.fileName, importFile.fileType, {
-    institution: metadata.institution,
-    accountName: metadata.accountName,
-    accountNumber: metadata.accountNumber,
+    institution: mergedMetadata.institution,
+    accountName: mergedMetadata.accountName,
+    accountNumber: mergedMetadata.accountNumber,
   });
   const parsedEndingBalance = getTrailingBalanceFromParsedRows(parsedRows);
   const resolvedMetadata = {
-    ...metadata,
-    endingBalance: metadata.endingBalance ?? parsedEndingBalance,
+    ...mergedMetadata,
+    endingBalance: mergedMetadata.endingBalance ?? parsedEndingBalance,
   };
-  const statementFingerprint = buildStatementFingerprint(text, metadata, importFile.fileName, importFile.fileType);
   const duplicateImportFileId = await findExistingImportedStatement({
     workspaceId: importFile.workspaceId,
     statementFingerprint,
@@ -251,13 +325,29 @@ export const processImportFileText = async (
     await updateImportFileCompat(importFileId, {
       status: "done",
     });
-    return { imported: 0, duplicate: true as const };
+    return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }
   const template = await upsertStatementTemplate({
     workspaceId: importFile.workspaceId,
     fingerprint: statementFingerprint,
     metadata: resolvedMetadata,
     fileType: importFile.fileType,
+    parserConfig: {
+      accountType: inferAccountTypeFromStatement(resolvedMetadata.institution, resolvedMetadata.accountName, "bank"),
+      rowCount: parsedRows.length,
+      firstMerchant:
+        typeof parsedRows[0]?.merchantClean === "string"
+          ? parsedRows[0]?.merchantClean
+          : typeof parsedRows[0]?.merchantRaw === "string"
+            ? parsedRows[0]?.merchantRaw
+            : null,
+      lastMerchant:
+        typeof parsedRows.at(-1)?.merchantClean === "string"
+          ? parsedRows.at(-1)?.merchantClean
+          : typeof parsedRows.at(-1)?.merchantRaw === "string"
+            ? parsedRows.at(-1)?.merchantRaw
+            : null,
+    } as Prisma.InputJsonValue,
   });
 
   const rows = await enrichParsedRowsWithTraining({
@@ -321,7 +411,7 @@ export const processImportFileText = async (
     status: "done",
   });
 
-  return { imported: rows.length, duplicate: false as const };
+  return { imported: rows.length, duplicate: false, metadata: resolvedMetadata, insightSummary: undefined, accountBalance: undefined };
 };
 
 const normalizeImportMerchant = (transaction: {
@@ -461,8 +551,26 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     throw new Error("Import file not found");
   }
 
+  const statementCheckpointRecord = (await hasCompatibleTable("AccountStatementCheckpoint"))
+    ? await prisma.accountStatementCheckpoint.findUnique({
+        where: { importFileId },
+      })
+    : null;
+  const statementMetadata =
+    statementCheckpointRecord?.sourceMetadata &&
+    typeof statementCheckpointRecord.sourceMetadata === "object" &&
+    !Array.isArray(statementCheckpointRecord.sourceMetadata)
+      ? (statementCheckpointRecord.sourceMetadata as Record<string, unknown>)
+      : null;
+
   const account = await resolveConfirmationAccount({
     importFile,
+    statementMetadata: {
+      accountName:
+        typeof statementMetadata?.accountName === "string" ? statementMetadata.accountName : null,
+      institution:
+        typeof statementMetadata?.institution === "string" ? statementMetadata.institution : null,
+    },
     parsedRows,
     accountId,
   });

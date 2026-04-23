@@ -1,7 +1,8 @@
 import { requireAuth } from "@/lib/auth";
 import { buildImportKey } from "@/lib/import-keys";
+import { detectStatementMetadataFromText, fetchImportFileCompat, updateImportFileCompat } from "@/lib/data-engine";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { fetchImportFileCompat, updateImportFileCompat } from "@/lib/data-engine";
+import { readImportedFileText } from "@/lib/import-file-text.server";
 import { uploadObject } from "@/lib/s3";
 import { prisma } from "@/lib/prisma";
 import { NextResponse, after } from "next/server";
@@ -59,6 +60,21 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const file = uploadedFile as File;
       const bytes = new Uint8Array(await file.arrayBuffer());
       await uploadObject(String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)), bytes, file.type || "application/octet-stream");
+      stage = "reading statement metadata";
+      let metadata = null;
+      try {
+        const text = await readImportedFileText(
+          {
+            storageKey: String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
+            fileType: file.type || "application/octet-stream",
+            fileName: file.name || String(importFile.fileName ?? "imported-file"),
+          },
+          password
+        );
+        metadata = detectStatementMetadataFromText(text);
+      } catch (error) {
+        console.warn("Unable to pre-read statement metadata", { importId, error });
+      }
       stage = "scheduling background processing";
       after(async () => {
         try {
@@ -72,6 +88,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         }
       });
       queued = true;
+      return NextResponse.json({
+        ok: true,
+        queued,
+        processed: false,
+        importedRows: 0,
+        duplicate: false,
+        status: "queued",
+        importFileId: importId,
+        metadata,
+      });
     } else {
       stage = "loading import record";
       if (!importFile) {
@@ -105,18 +131,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         duplicate: Boolean(result.duplicate),
         status: "done",
         importFileId: importId,
+        metadata: result.metadata,
       });
     }
-
-    return NextResponse.json({
-      ok: true,
-      queued,
-      processed: false,
-      importedRows: 0,
-      duplicate: false,
-      status: "queued",
-      importFileId: importId,
-    });
   } catch (error) {
     console.error("Import processing failed", { stage, error });
     return NextResponse.json(
