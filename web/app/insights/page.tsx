@@ -71,6 +71,7 @@ const formatShortDate = (value: Date) => shortDateFormatter.format(value);
 const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
 const normalizeMerchant = (value: string) => value.trim().toLowerCase();
+const buildTransactionsHref = (params: Record<string, string>) => `/transactions?${new URLSearchParams(params).toString()}`;
 
 const getCategoryGlyph = (categoryName: string) => {
   const normalized = categoryName.trim().toLowerCase();
@@ -1079,10 +1080,10 @@ export default async function InsightsPage() {
             </svg>
             <div className="insight-chart__labels">
               {chartPoints.map((point) => (
-                <div key={point.key} className="insight-chart__label">
+                <Link key={point.key} href={buildTransactionsHref({ month: point.key })} className="insight-chart__label insight-chart__label--link">
                   <span>{point.label}</span>
                   <strong>{formatCurrency(point.net)}</strong>
-                </div>
+                </Link>
               ))}
             </div>
           </div>
@@ -1149,7 +1150,7 @@ export default async function InsightsPage() {
                 topCategories.map(([categoryName, amount]) => {
                   const share = currentSpend > 0 ? (amount / currentSpend) * 100 : 0;
                   return (
-                    <div key={categoryName} className="insight-donut__item">
+                    <Link key={categoryName} href={buildTransactionsHref({ category: categoryName })} className="insight-donut__item insight-donut__item--link">
                       <span className="insight-donut__icon" aria-hidden="true">
                         {getCategoryGlyph(categoryName)}
                       </span>
@@ -1159,7 +1160,7 @@ export default async function InsightsPage() {
                           {formatCurrency(amount)} · {formatPercent(share)}
                         </span>
                       </div>
-                    </div>
+                    </Link>
                   );
                 })
               ) : (
@@ -1229,23 +1230,23 @@ export default async function InsightsPage() {
             <div className="insight-pattern-card">
               <p className="eyebrow">Recurring costs</p>
               <div className="insight-list">
-                {recurringMerchants.length > 0 ? (
-                  recurringMerchants.map((merchant) => (
-                    <div key={merchant.label} className="insight-list__item">
-                      <strong>
-                        <span className="insight-list__icon" aria-hidden="true">
-                          {getCategoryGlyph(merchant.label)}
-                        </span>
-                        {merchant.label}
-                      </strong>
-                      <span>
-                        {merchant.count} transaction{merchant.count === 1 ? "" : "s"} over 90 days · {formatCurrency(merchant.amount)} total
+              {recurringMerchants.length > 0 ? (
+                recurringMerchants.map((merchant) => (
+                  <Link key={merchant.label} href={buildTransactionsHref({ merchant: merchant.label })} className="insight-list__item insight-list__item--link">
+                    <strong>
+                      <span className="insight-list__icon" aria-hidden="true">
+                        {getCategoryGlyph(merchant.label)}
                       </span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="empty-state">No recurring merchants surfaced yet.</div>
-                )}
+                      {merchant.label}
+                      </strong>
+                    <span>
+                      {merchant.count} transaction{merchant.count === 1 ? "" : "s"} over 90 days · {formatCurrency(merchant.amount)} total
+                    </span>
+                  </Link>
+                ))
+              ) : (
+                <div className="empty-state">No recurring merchants surfaced yet.</div>
+              )}
                 <div className="insight-list__item">
                   <strong>Potential savings</strong>
                   <span>

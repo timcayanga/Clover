@@ -176,7 +176,7 @@ const decodeBody = async (body: unknown) => {
 type ImportFileLike = {
   name?: string;
   type?: string;
-  arrayBuffer?: () => Promise<ArrayBuffer>;
+  arrayBuffer?: () => Promise<ArrayBuffer | SharedArrayBuffer>;
   text?: () => Promise<string>;
 };
 
@@ -271,4 +271,10 @@ export const readImportedFileText = async (
   }
 
   return extractTextFromPdfBytes(bytes, password);
+};
+
+export default {
+  downloadImportObject,
+  readUploadedFileText,
+  readImportedFileText,
 };

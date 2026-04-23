@@ -568,6 +568,18 @@ const createEmptyBulkEditForm = (): BulkEditForm => ({
 
 const normalizeFilterValue = (value: string) => value.trim().toLowerCase();
 
+const readSearchParamValues = (searchParams: ReturnType<typeof useSearchParams>, key: string) =>
+  searchParams
+    .getAll(key)
+    .flatMap((entry) => splitMerchantFilters(entry))
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+const findMatchingId = (value: string, items: Array<{ id: string; name: string }>) => {
+  const normalizedValue = normalizeFilterValue(value);
+  return items.find((item) => item.id === value || normalizeFilterValue(item.name) === normalizedValue)?.id ?? "";
+};
+
 const toggleFilterValue = (values: string[], value: string) =>
   values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value];
 
@@ -1041,6 +1053,7 @@ function TransactionsPageContent() {
   const transactionRowRefs = useRef(new Map<string, HTMLDivElement>());
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const reviewTransactionParamRef = useRef<string | null>(null);
+  const drilldownParamRef = useRef<string | null>(null);
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
@@ -1267,6 +1280,75 @@ function TransactionsPageContent() {
       window.history.replaceState({}, "", "/transactions");
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!isWorkspaceDataReady) {
+      return;
+    }
+
+    const drilldownSignature = [
+      searchParams.get("q") ?? "",
+      searchParams.get("month") ?? "",
+      searchParams.get("merchant") ?? "",
+      searchParams.get("category") ?? "",
+      searchParams.get("account") ?? "",
+    ].join("|");
+
+    if (drilldownParamRef.current === drilldownSignature) {
+      return;
+    }
+
+    const q = searchParams.get("q") ?? "";
+    const month = searchParams.get("month") ?? "";
+    const merchants = readSearchParamValues(searchParams, "merchant");
+    const categoriesFromUrl = readSearchParamValues(searchParams, "category");
+    const accountsFromUrl = readSearchParamValues(searchParams, "account");
+
+    const hasDrilldownParams = Boolean(q || month || merchants.length > 0 || categoriesFromUrl.length > 0 || accountsFromUrl.length > 0);
+
+    if (!hasDrilldownParams) {
+      if (drilldownParamRef.current === drilldownSignature) {
+        return;
+      }
+
+      drilldownParamRef.current = drilldownSignature;
+      setQuery("");
+      setCategoryFilters([]);
+      setAccountFilters([]);
+      setTypeFilters([]);
+      setMerchantFilters([]);
+      setMerchantFilterInput("");
+      setDateFilterMode("ltd");
+      setDateFilterAnchor(todayIso);
+      setCustomStart("");
+      setCustomEnd("");
+      setFilterOpen(false);
+      setDateFilterOpen(false);
+      return;
+    }
+
+    drilldownParamRef.current = drilldownSignature;
+
+    const nextCategoryFilters = categoriesFromUrl
+      .map((value) => findMatchingId(value, categories))
+      .filter(Boolean);
+    const nextAccountFilters = accountsFromUrl
+      .map((value) => findMatchingId(value, accounts))
+      .filter(Boolean);
+
+    setQuery(q);
+    setCategoryFilters(nextCategoryFilters);
+    setAccountFilters(nextAccountFilters);
+    setTypeFilters([]);
+    setMerchantFilters(merchants);
+    setMerchantFilterInput("");
+    setDateFilterMode(month ? "month" : "ltd");
+    setDateFilterAnchor(month ? `${month}-01` : todayIso);
+    setCustomStart("");
+    setCustomEnd("");
+    setFilterOpen(false);
+    setDateFilterOpen(false);
+  }, [accounts, categories, isWorkspaceDataReady, searchParams]);
 
   const ensureDefaultAccount = async (workspaceId: string) => {
     const preferredAccount = accounts.find((account) => account.type !== "cash" && account.type !== "other" && account.type !== "investment");
