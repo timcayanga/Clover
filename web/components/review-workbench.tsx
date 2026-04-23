@@ -605,11 +605,11 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
             >
               Open in Transactions
             </Link>
-            <p className="review-workbench__actions-copy">
-              {draftChanged
-                ? "Confirming will save your edits and help the model learn from this correction."
-                : "Accepting keeps the current values and clears the item from review."}
-            </p>
+            {draftChanged ? (
+              <p className="review-workbench__actions-copy">
+                Confirming will save your edits and help the model learn from this correction.
+              </p>
+            ) : null}
           </div>
 
           <div className="review-workbench__nav">
