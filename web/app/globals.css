@@ -9108,6 +9108,32 @@ input.transaction-inline-edit--amount::placeholder {
   .review-workbench__card--side {
     position: static;
   }
+
+  .review-workbench__list {
+    gap: 8px;
+  }
+
+  .review-workbench__reason-card {
+    grid-template-columns: auto 1fr;
+    align-items: start;
+    column-gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .review-workbench__reason-card strong {
+    grid-column: 1;
+    white-space: nowrap;
+  }
+
+  .review-workbench__reason-card span {
+    grid-column: 2;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .review-workbench__list li:not(.review-workbench__reason-card) {
+    padding: 10px 12px;
+  }
 }
 
 @media (max-width: 760px) {
