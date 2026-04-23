@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { AccountType, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { detectStatementMetadata, parseAmountValue, parseDateValue, type ParsedImportRow } from "@/lib/import-parser";
+import { summarizeMerchantText } from "@/lib/merchant-labels";
 
 export const DATA_ENGINE_VERSION = "v2";
 
@@ -1613,9 +1614,10 @@ export const enrichParsedRowsWithTraining = async (params: {
   return params.rows.map((row) => {
     const rowWithInstitution = row as ParsedImportRow & { institution?: string | null };
     const merchantText = row.merchantClean || row.merchantRaw || row.description || "";
+    const merchantClean = summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
     const accountMatch = findBestAccountRule(row.accountName ?? null, rowWithInstitution.institution ?? null, accountRules);
     const learned = classifyMerchant({
-      merchantText,
+      merchantText: merchantClean,
       type: row.type ?? "expense",
       categoryName: row.categoryName ?? null,
       merchantRules,
@@ -1631,7 +1633,7 @@ export const enrichParsedRowsWithTraining = async (params: {
     ];
     return {
       ...row,
-      merchantClean: row.merchantClean || merchantText || undefined,
+      merchantClean: merchantClean || undefined,
       accountName: accountMatch?.rule.accountName ?? accountName ?? undefined,
       institution: rowWithInstitution.institution ?? accountMatch?.rule.institution ?? undefined,
       categoryName,
@@ -1646,7 +1648,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       transferConfidence: row.type === "transfer" ? 100 : 0,
       learnedRuleIdsApplied,
       normalizedPayload: {
-        merchantClean: row.merchantClean || merchantText || null,
+        merchantClean: merchantClean || null,
         categoryName,
         type: row.type ?? "expense",
         accountName: accountMatch?.rule.accountName ?? accountName ?? null,

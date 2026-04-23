@@ -8,6 +8,44 @@ const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").rep
 
 const compactText = (value: string) => normalizeWhitespace(value).replace(/[^a-z0-9]+/gi, "").toLowerCase();
 
+const ocrCompoundReplacements: Array<[RegExp, string]> = [
+  [/\bATMWITHDRAWAL\b/gi, "ATM Withdrawal"],
+  [/\bCASHWITHDRAWAL\b/gi, "Cash Withdrawal"],
+  [/\bCASHDEPOSIT\b/gi, "Cash Deposit"],
+  [/\bFUNDTRANSFER\b/gi, "Fund Transfer"],
+  [/\bBANKTRANSFER\b/gi, "Bank Transfer"],
+  [/\bELINKTRANSFER\b/gi, "eLink Transfer"],
+  [/\bELINKPAYMENT\b/gi, "eLink Payment"],
+  [/\bINTERESTEARNED\b/gi, "Interest Earned"],
+  [/\bTAXWITHHELD\b/gi, "Tax Withheld"],
+  [/\bINSTAPAYTRANSFERFEE\b/gi, "InstaPay Transfer Fee"],
+  [/\bBILLSPAYMENT\b/gi, "Bills Payment"],
+  [/\bCASHIN\b/gi, "Cash In"],
+  [/\bCASHOUT\b/gi, "Cash Out"],
+  [/\bTRANSFERTO\b/gi, "Transfer to"],
+  [/\bTRANSFERFROM\b/gi, "Transfer from"],
+  [/\bPAYMENTTO\b/gi, "Payment to"],
+  [/\bPAYMENTFROM\b/gi, "Payment from"],
+];
+
+const decompactMerchantText = (value: string) => {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return "";
+  }
+
+  let next = normalized
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Za-z])(\d)/g, "$1 $2")
+    .replace(/(\d)([A-Za-z])/g, "$1 $2");
+
+  for (const [pattern, replacement] of ocrCompoundReplacements) {
+    next = next.replace(pattern, replacement);
+  }
+
+  return next.replace(/\s+/g, " ").trim();
+};
+
 const institutionKeyPatterns: Array<{ key: string; patterns: RegExp[] }> = [
   { key: "BDO", patterns: [/\b(BDO|BANCO DE ORO)\b/i] },
   { key: "BPI", patterns: [/\b(BANK OF THE PHILIPPINE ISLANDS|BPI)\b/i] },
@@ -28,6 +66,8 @@ const institutionKeyPatterns: Array<{ key: string; patterns: RegExp[] }> = [
   { key: "GoTyme", patterns: [/\bGOTYME\b/i] },
   { key: "Bank of Commerce", patterns: [/\bBANK\s+OF\s+COMMERCE\b/i] },
   { key: "Bank of China", patterns: [/\bBANK\s+OF\s+CHINA\b/i] },
+  { key: "AUB", patterns: [/\b(ASIA\s+UNITED\s+BANK|AUB)\b/i] },
+  { key: "PNB", patterns: [/\b(PNB|PHILIPPINE\s+NATIONAL\s+BANK)\b/i] },
   { key: "CIMB", patterns: [/\bCIMB\b/i] },
   { key: "GoTyme", patterns: [/\bGOTYME\b/i] },
 ];
@@ -157,6 +197,22 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Buy Load",
     },
     {
+      patterns: [/grabpay\s+top\s+up/i],
+      replacement: "GrabPay Top Up",
+    },
+    {
+      patterns: [/mrt\s+transport/i],
+      replacement: "MRT Transport",
+    },
+    {
+      patterns: [/alipay/i],
+      replacement: "Alipay",
+    },
+    {
+      patterns: [/bancnet\s+p2m/i],
+      replacement: "BancNet P2M",
+    },
+    {
       patterns: [/bills?\s+payment\s+to\s+davao\s+light/i],
       replacement: "Davao Light",
     },
@@ -197,8 +253,32 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Grab",
     },
     {
+      patterns: [/send\s+money/i],
+      replacement: "Send Money",
+    },
+    {
+      patterns: [/received\s+money/i],
+      replacement: "Received Money",
+    },
+    {
       patterns: [/payment\s+to\s+seamoney\s+credit/i],
       replacement: "Seamoney Credit",
+    },
+    {
+      patterns: [/cash\s+in\s+from/i],
+      replacement: "Cash In",
+    },
+    {
+      patterns: [/cash\s+out\s+to/i],
+      replacement: "Cash Out",
+    },
+    {
+      patterns: [/transfer\s+fee/i],
+      replacement: "Transfer Fee",
+    },
+    {
+      patterns: [/interest\s+boost\s+reward/i],
+      replacement: "Interest Boost Reward",
     },
     {
       patterns: [/received\s+gcash\s+from\s+bdo/i, /received\s+gcash\s+from\s+banco\s+de\s+oro/i],
@@ -374,6 +454,348 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Opening Balance",
     },
   ],
+  "Security Bank": [
+    {
+      patterns: [/dpac\s+dgbanker\s+credit/i, /dgbanker\s+credit/i],
+      replacement: "Payroll Credit",
+    },
+    {
+      patterns: [/atwd\s+atm\s+withdrawal/i, /\batwd\b.*\batm\s+withdrawal\b/i, /atm\s+withdrawal/i],
+      replacement: "ATM Withdrawal",
+    },
+    {
+      patterns: [/ibft\s+bancnet\s+tfr-?cr/i, /bancnet\s+tfr-?cr/i],
+      replacement: "BancNet Transfer In",
+    },
+    {
+      patterns: [/instapay\s+fee\s*-\s*dr/i, /instapay\s+fee/i, /instapayfee/i],
+      replacement: "InstaPay Fee",
+    },
+    {
+      patterns: [/atro\s+atm\/b2c\s+account/i, /\batro\b.*atm\/b2c\s+account/i],
+      replacement: "Account Transfer Out",
+    },
+    {
+      patterns: [/atrc\s+atm\/b2c\s+account/i, /\batrc\b.*atm\/b2c\s+account/i],
+      replacement: "Account Transfer In",
+    },
+  ],
+  Metrobank: [
+    {
+      patterns: [/interbank\s+fund\s+transfer/i],
+      replacement: "Interbank Fund Transfer",
+    },
+    {
+      patterns: [/et\s+cr\s+ibft/i],
+      replacement: "Incoming Interbank Transfer",
+    },
+    {
+      patterns: [/et\s+db\s+ibft/i],
+      replacement: "Outgoing Interbank Transfer",
+    },
+    {
+      patterns: [/fund\s+transfer\s+sent\s+to/i],
+      replacement: "Fund Transfer Sent To",
+    },
+    {
+      patterns: [/fund\s+transfer\s+received\s+from/i],
+      replacement: "Fund Transfer Received From",
+    },
+    {
+      patterns: [/wa\s+cr/i],
+      replacement: "Wallet Credit",
+    },
+    {
+      patterns: [/wa\s+db/i],
+      replacement: "Wallet Debit",
+    },
+    {
+      patterns: [/cash\/?check\s+deposit/i],
+      replacement: "Cash/Check Deposit",
+    },
+    {
+      patterns: [/st\s+dm\s+gen/i],
+      replacement: "System Debit",
+    },
+    {
+      patterns: [/st\s+cm\s+gen/i],
+      replacement: "System Credit",
+    },
+    {
+      patterns: [/mo\s+dm/i],
+      replacement: "Miscellaneous Debit",
+    },
+    {
+      patterns: [/interbank\s+service\s+charge/i, /et\s+ibft\s+svchg/i],
+      replacement: "Interbank Service Charge",
+    },
+    {
+      patterns: [/et\s+wd\s+acq\s+svchg/i],
+      replacement: "ATM Withdrawal Acquirer Fee",
+    },
+    {
+      patterns: [/et\s+wdl/i],
+      replacement: "ATM Withdrawal",
+    },
+    {
+      patterns: [/interest\s+earned/i],
+      replacement: "Interest Earned",
+    },
+    {
+      patterns: [/tax\s+withheld/i],
+      replacement: "Tax Withheld",
+    },
+    {
+      patterns: [/cash\s+payment\s*-\s*thank\s+you\s*-\s*mb\s+atm/i, /cash\s+payment\s*-\s*thank\s+you\s*-\s*mb/i],
+      replacement: "Cash Payment",
+    },
+    {
+      patterns: [/bills\s+payment\s+to\s+metrobank\s+credit\s+card/i],
+      replacement: "Bills Payment to Metrobank Credit Card",
+    },
+    {
+      patterns: [/bills\s+payment\s+to\s+bdo\s+credit\s+card/i],
+      replacement: "Bills Payment to BDO Credit Card",
+    },
+    {
+      patterns: [/bills\s+payment\s+to\s+bankard\/rcbc/i],
+      replacement: "Bills Payment to Bankard/RCBC",
+    },
+    {
+      patterns: [/investment\s+sweep/i],
+      replacement: "Investment Sweep",
+    },
+    {
+      patterns: [/salary\s+credit/i],
+      replacement: "Salary Credit",
+    },
+    {
+      patterns: [/instapay\s+fee/i],
+      replacement: "InstaPay Fee",
+    },
+    {
+      patterns: [/meralco/i],
+      replacement: "Meralco",
+    },
+    {
+      patterns: [/apple/i],
+      replacement: "Apple",
+    },
+    {
+      patterns: [/grab/i],
+      replacement: "Grab",
+    },
+    {
+      patterns: [/openai\s+\*?chatgpt\s+subscription/i],
+      replacement: "OpenAI ChatGPT Subscription",
+    },
+  ],
+  AUB: [
+    {
+      patterns: [/payment\s+-\s+thank\s+you/i],
+      replacement: "Payment - Thank You",
+    },
+    {
+      patterns: [/finance\s+charge/i],
+      replacement: "Finance Charge",
+    },
+    {
+      patterns: [/atmwd/i],
+      replacement: "ATM Withdrawal",
+    },
+    {
+      patterns: [/afcinq/i],
+      replacement: "ATM Fee Inquiry",
+    },
+    {
+      patterns: [/instapay\s+credit/i],
+      replacement: "Instapay Credit",
+    },
+    {
+      patterns: [/instapay\s+debit/i],
+      replacement: "Instapay Debit",
+    },
+    {
+      patterns: [/check\s+issued/i],
+      replacement: "Check Issued",
+    },
+    {
+      patterns: [/cash\s+deposit/i],
+      replacement: "Cash Deposit",
+    },
+    {
+      patterns: [/credit\s+movement/i],
+      replacement: "Credit Movement",
+    },
+    {
+      patterns: [/debit\s+movement/i],
+      replacement: "Debit Movement",
+    },
+    {
+      patterns: [/encashment/i],
+      replacement: "Encashment",
+    },
+    {
+      patterns: [/check\s+deposit/i],
+      replacement: "Check Deposit",
+    },
+    {
+      patterns: [/internal\s+clearing\s+on-?us/i],
+      replacement: "Internal Clearing On-Us",
+    },
+    {
+      patterns: [/internal\s+clearing/i],
+      replacement: "Internal Clearing",
+    },
+    {
+      patterns: [/on-?us\s+transaction/i],
+      replacement: "On-Us Transaction",
+    },
+    {
+      patterns: [/interest\s+earned/i, /\bint\b/i],
+      replacement: "Interest Earned",
+    },
+    {
+      patterns: [/tax/i, /service\s+fee\s*-\s*below\s+minimum/i],
+      replacement: "Tax Withheld",
+    },
+  ],
+  PNB: [
+    {
+      patterns: [/fund\s+transfer/i],
+      replacement: "Fund Transfer",
+    },
+    {
+      patterns: [/transfer\s+to\s+gcash/i],
+      replacement: "Transfer to GCash",
+    },
+    {
+      patterns: [/transfer\s+to\s+maya/i],
+      replacement: "Transfer to Maya",
+    },
+    {
+      patterns: [/transfer\s+from\s+maya/i],
+      replacement: "Transfer from Maya",
+    },
+    {
+      patterns: [/atm\s+withdrawal/i, /cash\s+withdrawal/i],
+      replacement: "ATM Withdrawal",
+    },
+    {
+      patterns: [/transfer\s+fee/i, /atm\s+fee/i],
+      replacement: "Transfer Fee",
+    },
+    {
+      patterns: [/bills?\s+payment\s+meralco/i, /meralco/i],
+      replacement: "Meralco",
+    },
+    {
+      patterns: [/month-?end\s+sweep\s+to\s+investment\s+account/i],
+      replacement: "Month-End Sweep",
+    },
+    {
+      patterns: [/adjustment\s+reversal/i],
+      replacement: "Adjustment Reversal",
+    },
+    {
+      patterns: [/withholding\s+tax/i, /tax\s+withheld/i],
+      replacement: "Tax Withheld",
+    },
+    {
+      patterns: [/interest\s+earned/i],
+      replacement: "Interest Earned",
+    },
+    {
+      patterns: [/salary\s+credit/i],
+      replacement: "Salary Credit",
+    },
+    {
+      patterns: [/cash\s+payment/i],
+      replacement: "Cash Payment",
+    },
+    {
+      patterns: [/openai\s+chatgpt\s+subscription/i],
+      replacement: "OpenAI ChatGPT Subscription",
+    },
+    {
+      patterns: [/lazada/i],
+      replacement: "Lazada",
+    },
+    {
+      patterns: [/airbnb/i],
+      replacement: "Airbnb",
+    },
+    {
+      patterns: [/cebu\s+pacific/i],
+      replacement: "Cebu Pacific",
+    },
+    {
+      patterns: [/klook/i],
+      replacement: "Klook",
+    },
+    {
+      patterns: [/qantas/i],
+      replacement: "Qantas",
+    },
+    {
+      patterns: [/din\s+tai\s+fung/i],
+      replacement: "Din Tai Fung",
+    },
+    {
+      patterns: [/apple/i],
+      replacement: "Apple",
+    },
+    {
+      patterns: [/grab/i],
+      replacement: "Grab",
+    },
+    {
+      patterns: [/petron/i],
+      replacement: "Petron",
+    },
+  ],
+  MariBank: [
+    {
+      patterns: [/internal\s+transfer/i],
+      replacement: "Internal Transfer",
+    },
+    {
+      patterns: [/fund\s+transfer/i],
+      replacement: "Fund Transfer",
+    },
+    {
+      patterns: [/instapay\s+transfer\s+to\s+gcash\s*9981/i, /transfer\s+to\s+gcash/i],
+      replacement: "Transfer to GCash",
+    },
+    {
+      patterns: [/transfer\s+fee/i],
+      replacement: "Transfer Fee",
+    },
+    {
+      patterns: [/meralco/i],
+      replacement: "Meralco",
+    },
+    {
+      patterns: [/globe\s+postpaid/i],
+      replacement: "Globe Postpaid",
+    },
+    {
+      patterns: [/promo\s+reward/i],
+      replacement: "Promo Reward",
+    },
+    {
+      patterns: [/adjustment\s+reversal/i],
+      replacement: "Adjustment Reversal",
+    },
+    {
+      patterns: [/transfer\s+to\s+pocket/i],
+      replacement: "Transfer to Pocket",
+    },
+    {
+      patterns: [/transfer\s+from\s+pocket/i],
+      replacement: "Transfer from Pocket",
+    },
+  ],
   GoTyme: [
     {
       patterns: [/card\s+payment\s+at\s+grab/i, /grab\s+payment/i],
@@ -498,7 +920,7 @@ const normalizeInstitutionKey = (institution?: string | null) => {
 };
 
 const applySimplifierRules = (value: string, institution?: string | null) => {
-  const normalized = normalizeWhitespace(value);
+  const normalized = decompactMerchantText(value);
   if (!normalized) {
     return "";
   }
@@ -519,7 +941,7 @@ const applySimplifierRules = (value: string, institution?: string | null) => {
 };
 
 export const humanizeMerchantText = (value: string) => {
-  const normalized = normalizeWhitespace(value);
+  const normalized = decompactMerchantText(value);
   if (!normalized) {
     return "";
   }
@@ -548,6 +970,76 @@ export const humanizeMerchantText = (value: string) => {
     .trim();
 
   return next;
+};
+
+const genericSimplifierRules: SimplifierRule[] = [
+  {
+    patterns: [/\batm\s+withdrawal\b/i, /\batmwithdrawal\b/i, /\bwithdrawal\b/i],
+    replacement: "ATM Withdrawal",
+  },
+  {
+    patterns: [/\bcash\s+withdrawal\b/i, /\bcashwithdrawal\b/i],
+    replacement: "Cash Withdrawal",
+  },
+  {
+    patterns: [/\bcash\s+deposit\b/i, /\bcashdeposit\b/i],
+    replacement: "Cash Deposit",
+  },
+  {
+    patterns: [/\bfund\s+transfer\b/i, /\bfundtransfer\b/i],
+    replacement: "Fund Transfer",
+  },
+  {
+    patterns: [/\bbank\s+transfer\b/i, /\bbanktransfer\b/i, /transfer\s+to\s+other\s+bank/i, /inter-?bank\s+fund\s+transfer/i],
+    replacement: "Bank Transfer",
+  },
+  {
+    patterns: [/\binterest\s+earned\b/i, /\binterestearned\b/i],
+    replacement: "Interest Earned",
+  },
+  {
+    patterns: [/\btax\s+withheld\b/i, /\btaxwithheld\b/i],
+    replacement: "Tax Withheld",
+  },
+  {
+    patterns: [/\binstapay\s+transfer\s+fee\b/i, /\binstapaytransferfee\b/i],
+    replacement: "InstaPay Transfer Fee",
+  },
+  {
+    patterns: [/bills?\s*payment/i, /\bbillspayment\b/i],
+    replacement: "Bills Payment",
+  },
+  {
+    patterns: [/\bcash\s+in\b/i],
+    replacement: "Cash In",
+  },
+  {
+    patterns: [/\bcash\s+out\b/i],
+    replacement: "Cash Out",
+  },
+];
+
+const stripLeadingStatementNoise = (value: string) => {
+  let next = normalizeWhitespace(value);
+  if (!next) {
+    return "";
+  }
+
+  next = next
+    .replace(/^(?:(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}\s+){1,2}/i, "")
+    .replace(/^(?:\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+){1,2}/i, "")
+    .replace(/^\d{3,}\s+(?=[A-Za-z])/i, "");
+
+  return next.trim();
+};
+
+const stripTrailingStatementNoise = (value: string) => {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return "";
+  }
+
+  return normalized.replace(/\s+\d[\d,]*\.\d{1,2}$/u, "").trim();
 };
 
 export const simplifyMerchantText = (value: string, institution?: string | null) => {
@@ -583,9 +1075,18 @@ export const summarizeMerchantText = (value: string, institution?: string | null
     return "Transfer to Other Bank";
   }
 
+  for (const rule of genericSimplifierRules) {
+    const anyMatch = rule.patterns?.some((pattern) => pattern.test(simplified) || pattern.test(compact)) ?? false;
+    const allMatch = rule.allPatterns?.every((pattern) => pattern.test(simplified) || pattern.test(compact)) ?? true;
+    if (anyMatch && allMatch) {
+      return rule.replacement;
+    }
+  }
+
   if (/^(cash in|cash out|payment to|received|sent|transfer to|transfer from)\b/i.test(simplified)) {
     return simplified.split(/\s+/).slice(0, 3).join(" ");
   }
 
-  return simplified;
+  const stripped = stripTrailingStatementNoise(stripLeadingStatementNoise(simplified));
+  return stripped || simplified;
 };

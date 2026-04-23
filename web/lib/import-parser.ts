@@ -1295,7 +1295,7 @@ const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null 
 };
 
 const normalizeGcashMerchant = (description: string) => {
-  const trimmed = normalizeWhitespace(description);
+  let trimmed = decompactOcrText(description);
 
   const billsPaymentMatch = trimmed.match(/^Bills Payment to\s+(.+)$/i);
   if (billsPaymentMatch?.[1]) {
@@ -1321,6 +1321,19 @@ const normalizeGcashMerchant = (description: string) => {
   if (paymentMatch?.[1]) {
     return normalizeWhitespace(paymentMatch[1]);
   }
+
+  trimmed = trimmed
+    .replace(
+      new RegExp(
+        `^(?:(?:${monthNamePattern})\\s+\\d{1,2}\\s+){1,2}`,
+        "i"
+      ),
+      ""
+    )
+    .replace(/^(?:\d{1,2}\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+){1,2}/i, "")
+    .replace(/^(?:\d{3,}\s+){1,2}/, "")
+    .replace(/\s+\d[\d,]*\.\d{1,2}$/u, "")
+    .trim();
 
   return trimmed;
 };

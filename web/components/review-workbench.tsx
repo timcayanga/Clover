@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import type { AnalyticsEventName } from "@/lib/analytics";
+import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 
 type ReviewAccount = {
   id: string;
@@ -438,9 +439,10 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
           <div className="review-workbench__transaction-head">
             <div>
               <p className="review-workbench__active-tag">Active review item</p>
-              <p className="review-workbench__title">{current.merchantClean ?? current.merchantRaw}</p>
-              {current.merchantClean && current.merchantRaw !== current.merchantClean ? (
-                <p className="review-workbench__subtitle">{current.merchantRaw}</p>
+              <p className="review-workbench__title">{summarizeMerchantText(current.merchantClean ?? current.merchantRaw)}</p>
+              {humanizeMerchantText(current.merchantRaw).toLowerCase() !==
+              summarizeMerchantText(current.merchantClean ?? current.merchantRaw).toLowerCase() ? (
+                <p className="review-workbench__subtitle">{humanizeMerchantText(current.merchantRaw)}</p>
               ) : current.description ? (
                 <p className="review-workbench__subtitle">{current.description}</p>
               ) : null}

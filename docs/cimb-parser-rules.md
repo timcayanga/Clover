@@ -38,6 +38,7 @@ This document captures the CIMB / GSave parsing rules learned from the training 
   - `Transfer to Vicky Antonio Chavez` -> `Transfer to Vicky Antonio Chavez`
   - `Transfer to Antoinette Ann Lorenzo` -> `Transfer to Antoinette Ann Lorenzo`
   - `Opening Balance` -> `Opening Balance`
+- OCR can fuse `ATM Withdrawal`, `InstaPay`, and similar phrases into one token; the shared merchant simplifier should decompact those before applying rules.
 - If wording conflicts with the deposit/withdrawal columns, keep the simplified title short but lower confidence and send it to review when needed.
 - If no rule matches, show normalized_description.
 

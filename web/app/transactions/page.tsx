@@ -12,6 +12,7 @@ import {
 } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 
@@ -706,45 +707,10 @@ const normalizeMerchantGroupKey = (value: string) =>
     .trim()
     .toLowerCase();
 
-const humanizeTransactionMerchantText = (value: string) => {
-  const normalized = value.replace(/\u00a0/g, " ").trim();
-  if (!normalized) {
-    return "";
-  }
+const humanizeTransactionMerchantText = (value: string) => humanizeMerchantText(value);
 
-  return normalized
-    .replace(/fundtransfer/gi, "Fund Transfer")
-    .replace(/interestearned/gi, "Interest Earned")
-    .replace(/taxwithheld/gi, "Tax Withheld")
-    .replace(/instapaytransferfee/gi, "InstaPay Transfer Fee")
-    .replace(/transfertootherbank/gi, "Transfer to Other Bank")
-    .replace(/transferfrom/gi, "Transfer from")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/([A-Za-z])(\d)/g, "$1 $2")
-    .replace(/(\d)([A-Za-z])/g, "$1 $2")
-    .replace(/\s*:\s*/g, ": ")
-    .replace(/\s+/g, " ")
-    .trim();
-};
-
-const summarizeTransactionMerchantText = (value: string) => {
-  const humanized = humanizeTransactionMerchantText(value);
-  const compact = humanized.replace(/[^a-z0-9]+/gi, "").toLowerCase();
-
-  if (/^billspaymentto\b/i.test(humanized) || compact.startsWith("billspaymentto")) {
-    return "Bills Payment";
-  }
-  if (compact.includes("fundtransfer")) return "Fund Transfer";
-  if (compact.includes("interestearned")) return "Interest Earned";
-  if (compact.includes("taxwithheld")) return "Tax Withheld";
-  if (compact.includes("instapaytransferfee")) return "InstaPay Transfer Fee";
-  if (compact.includes("transfertootherbank")) return "Transfer to Other Bank";
-  if (/^(cash in|cash out|payment to|received|sent|transfer to|transfer from)\b/i.test(humanized)) {
-    return humanized.split(/\s+/).slice(0, 3).join(" ");
-  }
-
-  return humanized;
-};
+const summarizeTransactionMerchantText = (value: string, institution?: string | null) =>
+  summarizeMerchantText(value, institution);
 
 const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => ({
   merchantRaw: transaction.merchantRaw,
@@ -1059,6 +1025,10 @@ function TransactionsPageContent() {
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
+  const accountInstitutionById = useMemo(
+    () => new Map(accounts.map((account) => [account.id, account.institution ?? null] as const)),
+    [accounts]
+  );
 
   const loadWorkspaces = async () => {
     try {
@@ -2598,7 +2568,10 @@ function TransactionsPageContent() {
   const downloadCsv = () => {
     const header = ["Name", "Date", "Account", "Category", "Amount", "Type", "Notes", "Warning"];
     const rows = filteredTransactions.map((transaction) => [
-      transaction.merchantClean ?? transaction.merchantRaw,
+      summarizeTransactionMerchantText(
+        transaction.merchantClean ?? transaction.merchantRaw,
+        accountInstitutionById.get(transaction.accountId) ?? null
+      ),
       formatDate(transaction.date),
       transaction.accountName,
       transaction.categoryName ?? "Other",
@@ -2644,6 +2617,12 @@ function TransactionsPageContent() {
             window.location.origin
           ).toString();
           const categoryTone = getCategoryIconTone(transaction.categoryName ?? categoryLabel);
+          const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
+          const merchantSummary = summarizeTransactionMerchantText(
+            transaction.merchantClean ?? transaction.merchantRaw,
+            accountInstitution
+          );
+          const merchantDisplay = humanizeTransactionMerchantText(transaction.merchantRaw);
 
           return `
             <tr>
@@ -2657,15 +2636,8 @@ function TransactionsPageContent() {
               </td>
               <td>
                 <div class="name-cell">
-                  <div class="name-cell__summary">${escapeHtml(
-                    summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw)
-                  )}</div>
-                  ${
-                    humanizeTransactionMerchantText(transaction.merchantRaw).toLowerCase() !==
-                    summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw).toLowerCase()
-                      ? `<div class="name-cell__subtext">${escapeHtml(humanizeTransactionMerchantText(transaction.merchantRaw))}</div>`
-                      : ""
-                  }
+                  <div class="name-cell__summary">${escapeHtml(merchantSummary)}</div>
+                  ${merchantDisplay.toLowerCase() !== merchantSummary.toLowerCase() ? `<div class="name-cell__subtext">${escapeHtml(merchantDisplay)}</div>` : ""}
                 </div>
               </td>
               <td>${escapeHtml(formatDate(transaction.date))}</td>
@@ -3239,7 +3211,11 @@ function TransactionsPageContent() {
                 const amountToneClass = isPositive ? "positive" : "negative";
                 const categoryValue = transaction.categoryId ?? otherCategoryId;
                 const categoryLabel = categories.find((category) => category.id === categoryValue)?.name ?? "Other";
-                const merchantSummary = summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
+                const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
+                const merchantSummary = summarizeTransactionMerchantText(
+                  transaction.merchantClean ?? transaction.merchantRaw,
+                  accountInstitution
+                );
                 const merchantDisplay = humanizeTransactionMerchantText(transaction.merchantRaw);
                 const showMerchantSubtext = merchantDisplay && merchantDisplay.toLowerCase() !== merchantSummary.toLowerCase();
                 return (
@@ -3411,7 +3387,11 @@ function TransactionsPageContent() {
                   const amountToneClass = isPositive ? "positive" : "negative";
                   const categoryValue = transaction.categoryId ?? otherCategoryId;
                   const categoryLabel = categories.find((category) => category.id === categoryValue)?.name ?? "Other";
-                  const merchantSummary = summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
+                  const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
+                  const merchantSummary = summarizeTransactionMerchantText(
+                    transaction.merchantClean ?? transaction.merchantRaw,
+                    accountInstitution
+                  );
                   const merchantDisplay = humanizeTransactionMerchantText(transaction.merchantRaw);
                   const showMerchantSubtext = merchantDisplay && merchantDisplay.toLowerCase() !== merchantSummary.toLowerCase();
 

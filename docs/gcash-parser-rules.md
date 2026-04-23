@@ -18,6 +18,7 @@ This document captures the GCash parsing rules learned from the training bundles
 - Keep merchant payments like `Meralco`, `Globe Telecom`, `Smart Postpaid`, `Foodpanda`, `GrabPay Top Up`, `MRT Transport`, `Alipay`, and `BancNet P2M` as category candidates based on the merchant.
 - Keep `Transfer Fee` as `Financial`.
 - Keep `Interest Boost Reward` as `Income`.
+- OCR often fuses the date fragment into the merchant text on some exports; the parser should strip leading date noise and trailing amount-looking fragments before simplifying the merchant title.
 - The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable GCash simplifications like `Buy Load`, `Food Panda`, `Grab`, `Lazada`, `GCredit`, `GGives Repayment`, `Transfer to GSave`, and the `Received/Sent GCash` transfer variants.
 
 ## Review Gating
