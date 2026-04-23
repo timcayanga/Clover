@@ -149,6 +149,55 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
     return items;
   }, [current]);
 
+  const reasonDetails = useMemo(() => {
+    if (!current) return [];
+
+    const items: Array<{ label: string; detail: string; tone: "good" | "warn" | "danger" }> = [];
+    if (current.reviewStatus === "pending_review") {
+      items.push({
+        label: "Pending review",
+        detail: "This row was flagged by the import pipeline and needs a quick decision.",
+        tone: "warn",
+      });
+    }
+    if (current.categoryId === null) {
+      items.push({
+        label: "Missing category",
+        detail: "The system could not confidently place this transaction into a category.",
+        tone: "danger",
+      });
+    } else if (current.categoryConfidence < 70) {
+      items.push({
+        label: "Low category confidence",
+        detail: "The guessed category is plausible, but not strong enough to confirm automatically.",
+        tone: confidenceTone(current.categoryConfidence),
+      });
+    }
+    if (current.accountMatchConfidence < 70) {
+      items.push({
+        label: "Low account confidence",
+        detail: "The source account match is uncertain and should be confirmed before it becomes trusted data.",
+        tone: confidenceTone(current.accountMatchConfidence),
+      });
+    }
+    if (current.duplicateConfidence >= 50) {
+      items.push({
+        label: "Possible duplicate",
+        detail: "Another transaction with the same date, amount, and merchant may already exist.",
+        tone: confidenceTone(current.duplicateConfidence),
+      });
+    }
+    if (current.transferConfidence >= 50 || current.isTransfer) {
+      items.push({
+        label: "Possible transfer",
+        detail: "This looks like a transfer, so it needs a human check before it counts as spending.",
+        tone: confidenceTone(current.transferConfidence),
+      });
+    }
+
+    return items;
+  }, [current]);
+
   const summary = useMemo(() => {
     return items.reduce(
       (accumulator, transaction) => {
@@ -483,8 +532,21 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
 
         <aside className="review-workbench__card review-workbench__card--side">
           <div className="review-workbench__panel">
-            <p className="eyebrow">Why this matters</p>
+            <p className="eyebrow">Why here</p>
             <ul className="review-workbench__list">
+              {reasonDetails.length > 0 ? (
+                reasonDetails.map((reason) => (
+                  <li key={reason.label} className={`review-workbench__reason-card review-workbench__reason-card--${reason.tone}`}>
+                    <strong>{reason.label}</strong>
+                    <span>{reason.detail}</span>
+                  </li>
+                ))
+              ) : (
+                <li className="review-workbench__reason-card review-workbench__reason-card--good">
+                  <strong>Looks good</strong>
+                  <span>No special flags are attached to this row, but it was surfaced for quick confirmation.</span>
+                </li>
+              )}
               <li>
                 <strong>{current.accountName}</strong>
                 <span>source account</span>
