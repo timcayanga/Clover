@@ -75,6 +75,10 @@ export const inferAccountTypeFromStatement = (
     return "wallet";
   }
 
+  if (/(savings|checking|deposit account|passbook|current account|cav0?1|cav0?2|cav0?3)/.test(normalized)) {
+    return "bank";
+  }
+
   if (/(rcbc|bankard|credit card|visa platinum|mastercard|amex|card ending)/.test(normalized)) {
     return "credit_card";
   }
@@ -232,10 +236,15 @@ const detectInstitutionFromText = (text: string) => {
 };
 
 const detectAccountNumberFromText = (text: string) => {
+  const cardAccountSection = text.match(/\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/)?.[0] ?? "";
+  if (cardAccountSection) {
+    return cardAccountSection.replace(/\D/g, "").slice(0, 16) || null;
+  }
+
   const labeledAccountSection =
     text.match(/\b(?:ACCOUNT\s*(?:NO|NUMBER|#)?|ACCT\s*(?:NO|NUMBER|#)?|A\/C\s*(?:NO|NUMBER|#)?|CARD\s*(?:NO|NUMBER|#)?|NO)\s*[:\-]?\s*([0-9\s-]{6,})/i)?.[1] ??
     "";
-  const fallbackAccountSection = text.match(/\b\d{4}[-\s]?\d{4}[-\s]?\d{2,4}\b/)?.[0] ?? "";
+  const fallbackAccountSection = text.match(/\b\d{1,3}[-\s]?\d{3}[-\s]?\d{4,10}\b/)?.[0] ?? "";
   const accountSection = labeledAccountSection || fallbackAccountSection;
   const accountNumber = accountSection.replace(/\D/g, "").slice(0, 16) || null;
   return accountNumber;
@@ -411,10 +420,21 @@ const parseRcbcDate = (value?: string | null) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
+const rcbcAccountNameFromText = (text: string, accountNumber: string | null) => {
+  const suffix = accountNumber?.slice(-4) ?? "";
+  const lower = text.toLowerCase();
+
+  if (/(savings|account type\s*cav0?1|deposit account|passbook|current account)/.test(lower)) {
+    return suffix ? `RCBC Savings ${suffix}` : "RCBC Savings";
+  }
+
+  return suffix ? `RCBC ${suffix}` : "RCBC";
+};
+
 const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = text.replace(/\u00a0/g, " ");
   const compact = normalizeWhitespace(normalized);
-  if (!/\bRCBC\b|\bRCBC BANKARD\b|\bBANKARD\b|\bVISA PLATINUM\b/i.test(compact)) {
+  if (!/\bRCBC\b|\bRCBC BANKARD\b|\bBANKARD\b|\bVISA PLATINUM\b|\bVISA GOLD\b|\bVISA CLASSIC\b|\bMASTERCARD\b/i.test(compact)) {
     return null;
   }
 
@@ -423,30 +443,79 @@ const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null =
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
 
-  const cardMatch =
-    lines
-      .map((line) => line.match(/\b(\d{4}[-\s]\d{4}[-\s]\d{4}[-\s]\d{4})\b/))
-      .find((match) => Boolean(match?.[1])) ??
-    compact.match(/\b(\d{4}[-\s]\d{4}[-\s]\d{4}[-\s]\d{4})\b/);
-  const accountNumber = cardMatch?.[1] ? cardMatch[1].replace(/\D/g, "") : null;
-  const accountName = accountNumber ? `RCBC ${accountNumber.slice(-4)}` : "RCBC";
+  const accountNumber = detectAccountNumberFromText(normalized);
+  const accountName = rcbcAccountNameFromText(compact, accountNumber);
 
-  const dateLine =
-    lines.find((line) => /STATEMENT\s+DATE\s+PAYMENT\s+DUE\s+DATE/i.test(line)) ??
-    compact;
-  const dateMatch =
-    dateLine.match(/([A-Z]{3}\s+\d{1,2}\s+\d{4})\s+([A-Z]{3}\s+\d{1,2}\s+\d{4})/i) ??
-    compact.match(/([A-Z]{3}\s+\d{1,2}\s+\d{4})\s+([A-Z]{3}\s+\d{1,2}\s+\d{4})/i);
-  const startDate = parseRcbcDate(dateMatch?.[1] ?? null);
-  const endDate = parseRcbcDate(dateMatch?.[2] ?? null);
+  const savingsPeriodMatch = normalized.match(
+    /STATEMENT\s+PERIOD\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+(?:TO|THRU|THROUGH)\s+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})/i
+  );
+  const isSavingsStatement = /(ACCOUNT\s+TYPE\s*CAV0?1|TOTAL\s+CREDITS|TOTAL\s+DEBITS|BALANCE\s+LAST\s+STATEMENT|BALANCE\s+THIS\s+STATEMENT)/i.test(compact);
+  const startDate = isSavingsStatement
+    ? parseRcbcSavingsDate(savingsPeriodMatch?.[1] ?? null, new Date().getUTCFullYear())
+    : (() => {
+        const statementHeadingIndex = lines.findIndex(
+          (line) => /^STATEMENT\s+DATE$/i.test(line) || /STATEMENT\s+DATE\s+PAYMENT\s+DUE\s+DATE/i.test(line)
+        );
+        const statementDateLine =
+          statementHeadingIndex >= 0
+            ? lines
+                .slice(statementHeadingIndex + 1)
+                .find((line) => /^[A-Z]{3}\s+\d{1,2}\s+\d{4}$/i.test(line) || /([A-Z]{3}\s+\d{1,2}\s+\d{4}).*([A-Z]{3}\s+\d{1,2}\s+\d{4})/i.test(line))
+            : null;
+        const dateMatch =
+          statementDateLine?.match(/([A-Z]{3}\s+\d{1,2}\s+\d{4}).*?([A-Z]{3}\s+\d{1,2}\s+\d{4})/i) ??
+          statementDateLine?.match(/(\d{1,2}\/\d{1,2}\/\d{2,4}).*?(\d{1,2}\/\d{1,2}\/\d{2,4})/i) ??
+          statementDateLine?.match(/([A-Z]{3}\s+\d{1,2}\s+\d{4})/i) ??
+          statementDateLine?.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
+        return parseDateValue(dateMatch?.[1] ?? null) ?? parseRcbcDate(dateMatch?.[1] ?? null);
+      })();
+  const endDate = isSavingsStatement
+    ? parseRcbcSavingsDate(savingsPeriodMatch?.[2] ?? null, new Date().getUTCFullYear())
+    : (() => {
+        const dueHeadingIndex =
+          lines.findIndex((line) => /CARDHOLDER\s+PAYMENT\s+DUE\s+DATE/i.test(line)) >= 0
+            ? lines.findIndex((line) => /CARDHOLDER\s+PAYMENT\s+DUE\s+DATE/i.test(line))
+            : lines.findIndex((line) => /^PAYMENT\s+DUE\s+DATE$/i.test(line));
+        const dueDateLine =
+          dueHeadingIndex >= 0
+            ? lines
+                .slice(dueHeadingIndex + 1)
+                .find((line) => /^[A-Z]{3}\s+\d{1,2}\s+\d{4}$/i.test(line) || /([A-Z]{3}\s+\d{1,2}\s+\d{4}).*([A-Z]{3}\s+\d{1,2}\s+\d{4})/i.test(line))
+            : null;
+        const dateMatch =
+          dueDateLine?.match(/([A-Z]{3}\s+\d{1,2}\s+\d{4}).*?([A-Z]{3}\s+\d{1,2}\s+\d{4})/i) ??
+          dueDateLine?.match(/(\d{1,2}\/\d{1,2}\/\d{2,4}).*?(\d{1,2}\/\d{1,2}\/\d{2,4})/i) ??
+          dueDateLine?.match(/([A-Z]{3}\s+\d{1,2}\s+\d{4})/i) ??
+          dueDateLine?.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/i);
+        return parseDateValue(dateMatch?.[1] ?? null) ?? parseRcbcDate(dateMatch?.[1] ?? null);
+      })();
 
   let openingBalance: number | null = null;
   let endingBalance: number | null = null;
-  const summaryIndex = lines.findIndex((line) => /PREVIOUS\s+BALANCE.*TOTAL\s+BALANCE\s+DUE/i.test(line));
-  if (summaryIndex >= 0 && lines[summaryIndex + 1]) {
-    const values = lines[summaryIndex + 1].match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
-    openingBalance = parseMoney(values[0] ?? null);
-    endingBalance = parseMoney(values.at(-1) ?? null);
+
+  if (isSavingsStatement) {
+    openingBalance =
+      parseMoney(compact.match(/BALANCELASTSTATEMENTPHP?([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+      parseMoney(normalized.match(/Balance\s+Last\s+Statement\s+PHP\s+([0-9,]+\.\d{2})/i)?.[1] ?? null);
+    endingBalance =
+      parseMoney(compact.match(/BALANCETHISSTATEMENTPHP?([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+      parseMoney(normalized.match(/Balance\s+This\s+Statement\s+PHP\s+([0-9,]+\.\d{2})/i)?.[1] ?? null);
+  } else {
+    const summaryIndex = lines.findIndex((line) => /PREVIOUS\s+BALANCE.*TOTAL\s+BALANCE\s+DUE/i.test(line));
+    if (summaryIndex >= 0 && lines[summaryIndex + 1]) {
+      const values = lines[summaryIndex + 1].match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
+      openingBalance = parseMoney(values[0] ?? null);
+      endingBalance = parseMoney(values.at(-1) ?? null);
+    }
+
+    openingBalance =
+      openingBalance ??
+      parseMoney(compact.match(/PREVIOUSBALANCE([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+      parseMoney(normalized.match(/PREVIOUS\s+BALANCE.*?([0-9,]+\.\d{2})/i)?.[1] ?? null);
+    endingBalance =
+      endingBalance ??
+      parseMoney(compact.match(/TOTAL(?:AMOUNT|BALANCE)DUE([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+      parseMoney(normalized.match(/TOTAL\s+(?:AMOUNT\s+)?DUE.*?([0-9,]+\.\d{2})/i)?.[1] ?? null);
   }
 
   return {
@@ -474,6 +543,154 @@ const monthIndexByAbbr: Record<string, number> = {
   OCT: 9,
   NOV: 10,
   DEC: 11,
+};
+
+const parseRcbcSavingsDate = (value?: string | null, yearHint?: number) => {
+  if (!value) {
+    return null;
+  }
+
+  const resolvedYearHint = yearHint ?? new Date().getUTCFullYear();
+  const normalized = normalizeWhitespace(value).replace(/\./g, "-");
+  const compact = normalized.replace(/\s+/g, "");
+  const match =
+    normalized.match(/^(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})$/i) ??
+    compact.match(/^(\d{1,2})[-/](?:([A-Za-z]{3}))(?:[-/](\d{2,4}))?$/i) ??
+    normalized.match(/^(\d{1,2})\s+([A-Za-z]{3})(?:\s+(\d{2,4}))?$/i);
+
+  if (!match) {
+    const parsed = new Date(normalized);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  const day = Number(match[1]);
+  const monthIndex = monthIndexByAbbr[(match[2] ?? "").slice(0, 3).toUpperCase()];
+  if (monthIndex === undefined) {
+    return null;
+  }
+
+  const year = match[3] ? Number(match[3]) : resolvedYearHint;
+  return new Date(Date.UTC(year, monthIndex, day, 12));
+};
+
+const parseRcbcSavingsTransactionLine = (
+  line: string,
+  state: {
+    accountName: string;
+    institution: string | null;
+    previousBalance: number | null;
+    yearHint: number;
+  }
+) => {
+  const normalized = normalizeWhitespace(line);
+  const match = normalized.match(
+    /^(\d{1,2}[/-][A-Za-z]{3}(?:[/-]\d{2,4})?)\s+(.+?)\s+([0-9][0-9,]*\.\d{2})\s+([0-9][0-9,]*\.\d{2})$/
+  );
+  if (!match) {
+    return null;
+  }
+
+  const date = parseRcbcSavingsDate(match[1], state.yearHint);
+  const description = normalizeWhitespace(match[2]);
+  const amountText = match[3];
+  const balanceText = match[4];
+  const amount = parseMoney(amountText);
+  const balance = parseMoney(balanceText);
+  if (!date || amount === null || balance === null) {
+    return null;
+  }
+
+  const lower = description.toLowerCase();
+  const delta = state.previousBalance === null ? null : balance - state.previousBalance;
+  const type: TransactionType =
+    /credit memo|incoming transfer|instapay.*g-xchange|salary|payroll|refund/.test(lower)
+      ? "income"
+      : /cash withdrawal|withdrawal|service charge|fund transfer-?\s*rcbc|\batm\b/.test(lower)
+        ? "transfer"
+        : delta !== null && delta >= 0
+          ? "income"
+          : "expense";
+
+  const categoryName = /transfer|withdrawal|atm|instapay|credit memo|refund|salary|payroll/.test(lower)
+    ? "Transfers"
+    : guessCategoryName(description, type);
+
+  return {
+    date: date.toISOString().slice(0, 10),
+    amount: amount.toFixed(2),
+    merchantRaw: humanizeMerchantText(description),
+    merchantClean: summarizeMerchantText(description, state.institution),
+    description,
+    categoryName,
+    accountName: state.accountName,
+    institution: state.institution ?? undefined,
+    type,
+    rawPayload: {
+      bank: "RCBC",
+      line: normalized,
+      amountText,
+      balanceText,
+      balance,
+      previousBalance: state.previousBalance,
+    },
+  } satisfies ParsedImportRow;
+};
+
+const parseRcbcSavingsImportText = (text: string) => {
+  const normalizedText = text.replace(/\u00a0/g, " ");
+  const compact = normalizeWhitespace(normalizedText);
+  if (!/(STATEMENT\s+OF\s+ACCOUNT|ACCOUNT\s+TYPE\s*CAV0?1|BALANCE\s+THIS\s+STATEMENT|TOTAL\s+CREDITS|TOTAL\s+DEBITS)/i.test(compact)) {
+    return null;
+  }
+
+  const metadata = rcbcStatementMetadata(normalizedText);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = normalizedText
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+
+  const tableIndex = lines.findIndex((line) => /TRANSACTION\s+TABLE\s+BELOW/i.test(line));
+  const transactionIndex = lines.findIndex((line) => /TRANSACTION/i.test(line));
+  const startIndex = tableIndex >= 0 ? tableIndex : transactionIndex;
+
+  const yearHint = metadata.startDate ? new Date(metadata.startDate).getUTCFullYear() : new Date().getUTCFullYear();
+  let previousBalance = metadata.openingBalance;
+  const rows: ParsedImportRow[] = [];
+
+  for (const line of lines.slice(Math.max(0, startIndex + 1))) {
+    if (
+      !line ||
+      /STATEMENT\s+OF\s+ACCOUNT/i.test(line) ||
+      /BALANCE\s+LAST\s+STATEMENT/i.test(line) ||
+      /BALANCE\s+THIS\s+STATEMENT/i.test(line) ||
+      /TOTAL\s+CREDITS/i.test(line) ||
+      /TOTAL\s+DEBITS/i.test(line) ||
+      /ACCOUNT\s+NUMBER/i.test(line) ||
+      /ACCOUNT\s+TYPE/i.test(line) ||
+      /PAGE\s+\d+/i.test(line)
+    ) {
+      continue;
+    }
+
+    const parsed = parseRcbcSavingsTransactionLine(line, {
+      accountName: metadata.accountName ?? "RCBC",
+      institution: metadata.institution ?? "RCBC",
+      previousBalance,
+      yearHint,
+    });
+
+    if (parsed) {
+      rows.push(parsed);
+      const lastBalance = parsed.rawPayload && typeof parsed.rawPayload === "object" ? (parsed.rawPayload as Record<string, unknown>).balance : null;
+      previousBalance = typeof lastBalance === "number" ? lastBalance : previousBalance;
+    }
+  }
+
+  return rows.length > 0 ? { metadata, rows } : null;
 };
 
 const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null => {
@@ -938,10 +1155,7 @@ const parseRcbcImportText = (text: string) => {
 
   const headerIndex = lines.findIndex((line) => /SALE\s+DATE\s+POST\s+DATE\s+DESCRIPTION\s+AMOUNT/i.test(line));
   if (headerIndex < 0) {
-    return {
-      metadata,
-      rows: [],
-    };
+    return null;
   }
 
   const endIndexCandidates = [
@@ -974,6 +1188,53 @@ const parseRcbcImportText = (text: string) => {
 
     if (parsed) {
       rows.push(parsed);
+    }
+  }
+
+  if (!rows.some((row) => /cash payment/i.test(String(row.description ?? row.merchantRaw ?? "")))) {
+    const cashPaymentLine = lines
+      .slice(headerIndex + 1, endIndex)
+      .find((line) => /cash\s+payment/i.test(line) && /\d{1,2}\/\d{1,2}\/\d{2,4}/.test(line));
+    if (cashPaymentLine) {
+      const cashPaymentMatch =
+        cashPaymentLine.match(/^(\d{2}\/\d{2}\/\d{2})\s+(\d{2}\/\d{2}\/\d{2})\s+CASH PAYMENT\s+([0-9][0-9,]*\.\d{2}-?)$/i) ??
+        cashPaymentLine.match(/^(\d{2}\/\d{2}\/\d{2})\s+(\d{2}\/\d{2}\/\d{2})\s+(.+?)\s+([0-9][0-9,]*\.\d{2}-?)$/i);
+      const parsed = cashPaymentMatch
+        ? (() => {
+            const saleDate = parseDateValue(cashPaymentMatch[1]);
+            const postDate = parseDateValue(cashPaymentMatch[2]);
+            const description = normalizeWhitespace(cashPaymentMatch[3]);
+            const amountText = cashPaymentMatch[4];
+            const amount = parseMoney(amountText);
+            if (!saleDate || amount === null) {
+              return null;
+            }
+
+            const type: TransactionType = "transfer";
+            return {
+              date: saleDate.toISOString().slice(0, 10),
+              amount: amount.toFixed(2),
+              merchantRaw: humanizeMerchantText(description),
+              merchantClean: summarizeMerchantText(description, metadata.institution ?? "RCBC"),
+              description,
+              categoryName: guessRcbcCategoryName(description, type),
+              accountName: metadata.accountName ?? "RCBC",
+              institution: metadata.institution ?? undefined,
+              type,
+              rawPayload: {
+                bank: "RCBC",
+                cardNumber: metadata.accountNumber,
+                saleDate: saleDate.toISOString().slice(0, 10),
+                postDate: postDate ? postDate.toISOString().slice(0, 10) : null,
+                amountText,
+                line: cashPaymentLine,
+              },
+            } satisfies ParsedImportRow;
+          })()
+        : null;
+      if (parsed) {
+        rows.push(parsed);
+      }
     }
   }
 
@@ -1756,6 +2017,11 @@ export const parseImportText = (
   const gcashParsed = parseGcashImportText(text);
   if (gcashParsed && gcashParsed.rows.length > 0) {
     return gcashParsed.rows;
+  }
+
+  const rcbcSavingsParsed = parseRcbcSavingsImportText(text);
+  if (rcbcSavingsParsed) {
+    return rcbcSavingsParsed.rows;
   }
 
   const rcbcParsed = parseRcbcImportText(text);
