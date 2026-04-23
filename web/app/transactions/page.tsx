@@ -4290,9 +4290,7 @@ function TransactionsPageContent() {
               });
             });
           }
-          window.setTimeout(() => {
-            void loadWorkspaceData(selectedWorkspaceId, { skipMetadata: true });
-          }, 10000);
+          void loadWorkspaceData(selectedWorkspaceId, { skipMetadata: true });
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />
