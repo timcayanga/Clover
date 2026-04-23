@@ -189,7 +189,7 @@ export function SettingsCenter({ sections }: SettingsCenterProps) {
         </nav>
 
         <div className="settings-jump">
-          <span className="settings-jump__label">Jump To</span>
+          <span className="settings-jump__label">Quick links</span>
           <div className="settings-jump__items">
             {jumpLinks.map((section) => {
               const id = slugify(section.title);
@@ -232,8 +232,8 @@ export function SettingsCenter({ sections }: SettingsCenterProps) {
                 {advancedFields.length ? (
                   <details className="settings-advanced">
                     <summary>
-                      <span>Advanced options</span>
-                      <small>For power users and tighter control</small>
+                      <span>More options</span>
+                      <small>Optional controls for tighter workflows</small>
                     </summary>
                     <div className="settings-advanced__grid">
                       {advancedFields.map((field) => (

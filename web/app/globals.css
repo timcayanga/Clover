@@ -282,6 +282,12 @@ label {
   color: var(--muted);
 }
 
+.clover-auth-card__trust {
+  color: var(--accent-hover);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
 .clover-auth-card__form {
   display: grid;
   gap: 14px;
@@ -8968,9 +8974,17 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-empty-state__actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: 10px;
+  width: min(100%, 420px);
+}
+
+.transactions-empty-state__actions .button {
+  width: 100%;
+}
+
+.transactions-empty-state__manual-link {
+  justify-self: start;
 }
 
 .accounts-empty-state {

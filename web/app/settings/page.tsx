@@ -11,10 +11,10 @@ export const metadata = {
 
 const sections: SettingSection[] = [
   {
-    group: "Basics",
+    group: "General",
     title: "Workspace defaults",
-    eyebrow: "Default values",
-    summary: "Set the shared values Clover uses every time you open it.",
+    eyebrow: "Defaults",
+    summary: "Set the values Clover uses most often.",
     fields: [
       { label: "Workspace name", kind: "text", value: "Clover Personal Finance", tier: "primary" },
       { label: "Timezone", kind: "select", value: "Asia/Manila", options: ["Asia/Manila", "UTC", "America/Los_Angeles", "Europe/London"], tier: "primary" },
@@ -26,9 +26,9 @@ const sections: SettingSection[] = [
   },
   {
     group: "Imports",
-    title: "Import behavior",
+    title: "Import defaults",
     eyebrow: "Import flow",
-    summary: "Make statement imports predictable and easy to review.",
+    summary: "Choose how Clover handles new statements.",
     fields: [
       {
         label: "Default account",
@@ -57,10 +57,10 @@ const sections: SettingSection[] = [
     ],
   },
   {
-    group: "Automation",
-    title: "Categorization rules",
+    group: "Categorization",
+    title: "Merchant rules",
     eyebrow: "Matching",
-    summary: "Control how Clover labels merchants and recurring activity.",
+    summary: "Keep merchants and recurring activity consistent.",
     fields: [
       { label: "Auto-categorize", kind: "toggle", checked: true, helper: "Apply matches without blocking review.", tier: "primary" },
       { label: "Normalize merchant names", kind: "toggle", checked: true, helper: "Keep the same merchant name consistent across imports.", tier: "primary" },
@@ -84,9 +84,9 @@ const sections: SettingSection[] = [
   },
   {
     group: "Display",
-    title: "Display preferences",
+    title: "View preferences",
     eyebrow: "Layout",
-    summary: "Choose the layout Clover should open with and how dense it feels.",
+    summary: "Choose how Clover looks and opens.",
     fields: [
       { label: "Table density", kind: "select", value: "Comfortable", options: ["Comfortable", "Compact", "Spacious"], tier: "primary" },
       { label: "Landing page", kind: "select", value: "Dashboard", options: ["Dashboard", "Transactions", "Reports"], tier: "primary" },
@@ -95,10 +95,10 @@ const sections: SettingSection[] = [
     ],
   },
   {
-    group: "Access",
+    group: "Alerts & Security",
     title: "Notifications",
-    eyebrow: "Signals",
-    summary: "Pick the alerts that deserve your attention.",
+    eyebrow: "Alerts",
+    summary: "Pick the alerts you want to see.",
     fields: [
       { label: "Import finished", kind: "toggle", checked: true, tier: "primary" },
       { label: "Review needed", kind: "toggle", checked: true, tier: "primary" },
@@ -108,10 +108,10 @@ const sections: SettingSection[] = [
     ],
   },
   {
-    group: "Access",
+    group: "Alerts & Security",
     title: "Security",
     eyebrow: "Safety",
-    summary: "Keep sessions and sign-ins under control.",
+    summary: "Keep sign-in access under control.",
     fields: [
       { label: "Session timeout", kind: "select", value: "8 hours", options: ["1 hour", "8 hours", "24 hours", "7 days"], tier: "primary" },
       { label: "Two-factor auth", kind: "toggle", checked: false, tier: "primary" },
@@ -120,10 +120,10 @@ const sections: SettingSection[] = [
     ],
   },
   {
-    group: "Data",
+    group: "Export & Sync",
     title: "Export and connections",
     eyebrow: "Data",
-    summary: "Get data out and prepare for future integrations.",
+    summary: "Get data out and prepare for future connections.",
     fields: [
       { label: "Export format", kind: "select", value: "CSV + PDF", options: ["CSV + PDF", "CSV only", "PDF only"], tier: "primary" },
       { label: "Backup cadence", kind: "select", value: "Weekly reminder", options: ["Daily reminder", "Weekly reminder", "Monthly reminder", "Off"], tier: "primary" },
