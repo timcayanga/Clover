@@ -1202,18 +1202,20 @@ async function ReportsPageView({
         ],
       });
     }
-    if (primaryDuplicateGroup) {
+    if (primaryDuplicateGroup && primaryDuplicateGroup.length > 0) {
       const representative = primaryDuplicateGroup[0];
-      const duplicateTotal = primaryDuplicateGroup.reduce((sum, transaction) => sum + Number(transaction.amount), 0);
-      reportReviewQueueItems.push({
-        title: `${representative.merchantClean ?? representative.merchantRaw} appears more than once`,
-        description: `${primaryDuplicateGroup.length} matching rows · ${representative.account.name} · ${formatShortDate(representative.date)}`,
-        tags: ["Potential duplicate", `${primaryDuplicateGroup.length} matches`, formatCurrency(duplicateTotal)],
-        actions: [
-          { label: "Review duplicates", href: buildTransactionsHref({ review: representative.id }) },
-          { label: "Open transactions", href: "/transactions", variant: "secondary" },
-        ],
-      });
+      if (representative) {
+        const duplicateTotal = primaryDuplicateGroup.reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+        reportReviewQueueItems.push({
+          title: `${representative.merchantClean ?? representative.merchantRaw} appears more than once`,
+          description: `${primaryDuplicateGroup.length} matching rows · ${representative.account.name} · ${formatShortDate(representative.date)}`,
+          tags: ["Potential duplicate", `${primaryDuplicateGroup.length} matches`, formatCurrency(duplicateTotal)],
+          actions: [
+            { label: "Review duplicates", href: buildTransactionsHref({ review: representative.id }) },
+            { label: "Open transactions", href: "/transactions", variant: "secondary" },
+          ],
+        });
+      }
     }
     if (importStatusCounts.failed > 0 || importStatusCounts.processing > 0) {
       reportReviewQueueItems.push({
