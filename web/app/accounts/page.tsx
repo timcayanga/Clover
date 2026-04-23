@@ -368,6 +368,7 @@ function AccountsPageContent() {
   const [statementCheckpoints, setStatementCheckpoints] = useState<StatementCheckpoint[]>(
     () => (initialCachedWorkspace?.statementCheckpoints as StatementCheckpoint[]) ?? []
   );
+  const [drawerStatementCheckpoints, setDrawerStatementCheckpoints] = useState<StatementCheckpoint[]>([]);
   const [message, setMessage] = useState("Select a workspace to review accounts.");
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [accountsLoading, setAccountsLoading] = useState(false);
@@ -407,7 +408,7 @@ function AccountsPageContent() {
     () =>
       accounts.map((account) => {
         const accountTransactions = transactions.filter((transaction) => transaction.accountId === account.id);
-        const accountCheckpoints = drawerAccountId === account.id ? statementCheckpoints : [];
+        const accountCheckpoints = drawerAccountId === account.id ? drawerStatementCheckpoints : [];
         const effectiveType = getEffectiveAccountType(account);
         const reconciledBalance = deriveReconciledBalance({
           balance: account.balance,
@@ -421,7 +422,7 @@ function AccountsPageContent() {
           balance: reconciledBalance ?? account.balance,
         };
       }),
-    [accounts, drawerAccountId, statementCheckpoints, transactions]
+    [accounts, drawerAccountId, drawerStatementCheckpoints, transactions]
   );
 
   const loadWorkspaces = async () => {
@@ -580,7 +581,7 @@ function AccountsPageContent() {
 
     const loadStatementCheckpoints = async () => {
       if (!drawerAccountId) {
-        setStatementCheckpoints([]);
+        setDrawerStatementCheckpoints([]);
         return;
       }
 
@@ -588,18 +589,18 @@ function AccountsPageContent() {
         const response = await fetch(`/api/accounts/${drawerAccountId}/statement-checkpoints`);
         if (!response.ok) {
           if (!cancelled) {
-            setStatementCheckpoints([]);
+            setDrawerStatementCheckpoints([]);
           }
           return;
         }
 
         const payload = await response.json();
         if (!cancelled) {
-          setStatementCheckpoints(Array.isArray(payload.checkpoints) ? (payload.checkpoints as StatementCheckpoint[]) : []);
+          setDrawerStatementCheckpoints(Array.isArray(payload.checkpoints) ? (payload.checkpoints as StatementCheckpoint[]) : []);
         }
       } catch {
         if (!cancelled) {
-          setStatementCheckpoints([]);
+          setDrawerStatementCheckpoints([]);
         }
       }
     };
@@ -817,7 +818,7 @@ function AccountsPageContent() {
     [selectedAccountTransactions]
   );
 
-  const latestCheckpoint = useMemo(() => statementCheckpoints[0] ?? null, [statementCheckpoints]);
+  const latestCheckpoint = useMemo(() => drawerStatementCheckpoints[0] ?? null, [drawerStatementCheckpoints]);
   const manualAccountBrand = useMemo(
     () =>
       getAccountBrand({

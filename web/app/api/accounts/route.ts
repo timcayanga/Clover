@@ -84,6 +84,8 @@ export async function POST(request: Request) {
     const body = await request.json();
     const workspaceId = String(body?.workspaceId || "");
     const name = String(body?.name || "").trim();
+    const institution = body?.institution ? String(body.institution) : null;
+    const type = body?.type || "bank";
 
     if (!workspaceId || !name) {
       return NextResponse.json({ error: "workspaceId and name are required" }, { status: 400 });
@@ -91,12 +93,31 @@ export async function POST(request: Request) {
 
     await assertWorkspaceAccess(userId, workspaceId);
 
+    const existingAccount = await prisma.account.findFirst({
+      where: {
+        workspaceId,
+        name,
+        institution,
+        type,
+      },
+    });
+    if (existingAccount) {
+      return NextResponse.json({
+        account: {
+          ...existingAccount,
+          balance: existingAccount.balance?.toString() ?? null,
+          createdAt: existingAccount.createdAt.toISOString(),
+          updatedAt: existingAccount.updatedAt.toISOString(),
+        },
+      });
+    }
+
     const account = await prisma.account.create({
       data: {
         workspaceId,
         name,
-        institution: body?.institution ? String(body.institution) : null,
-        type: body?.type || "bank",
+        institution,
+        type,
         currency: body?.currency ? String(body.currency).toUpperCase() : "PHP",
         source: body?.source ? String(body.source) : "upload",
       },
