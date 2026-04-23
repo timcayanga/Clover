@@ -378,6 +378,7 @@ function AccountsPageContent() {
   const [summaryMode, setSummaryMode] = useState<SummaryMode>("totals");
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
+  const [manualInstitution, setManualInstitution] = useState("");
   const [manualBalance, setManualBalance] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [accountEditName, setAccountEditName] = useState("");
@@ -815,6 +816,15 @@ function AccountsPageContent() {
   );
 
   const latestCheckpoint = useMemo(() => statementCheckpoints[0] ?? null, [statementCheckpoints]);
+  const manualAccountBrand = useMemo(
+    () =>
+      getAccountBrand({
+        institution: manualType === "cash" ? "Cash" : manualInstitution,
+        name: manualName,
+        type: manualType,
+      }),
+    [manualInstitution, manualName, manualType]
+  );
 
   const refreshAll = async () => {
     if (!selectedWorkspaceId) return;
@@ -953,7 +963,7 @@ function AccountsPageContent() {
         body: JSON.stringify({
           workspaceId: selectedWorkspaceId,
           name,
-          institution: null,
+          institution: manualType === "cash" ? "Cash" : manualInstitution.trim() || null,
           type: manualType,
           currency: "PHP",
           source: "manual",
@@ -970,6 +980,7 @@ function AccountsPageContent() {
         setAccounts((current) => [data.account, ...current]);
       }
       setManualName("");
+      setManualInstitution("");
       setManualBalance("");
       setManualType("bank");
       setAddOpen(false);
@@ -1630,6 +1641,14 @@ function AccountsPageContent() {
                   <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: BDO Savings" />
                 </label>
                 <label>
+                  Institution
+                  <input
+                    value={manualInstitution}
+                    onChange={(event) => setManualInstitution(event.target.value)}
+                    placeholder="Example: BDO"
+                  />
+                </label>
+                <label>
                   Type
                   <select value={manualType} onChange={(event) => setManualType(event.target.value as Account["type"])}>
                     <option value="bank">Bank</option>
@@ -1656,6 +1675,18 @@ function AccountsPageContent() {
                   <p className="modal-copy">Cash already appears automatically in this workspace.</p>
                 ) : null}
               </form>
+              <aside className="accounts-add-preview glass" aria-label="Account preview">
+                <div className="accounts-add-preview__head">
+                  <p className="eyebrow">Live preview</p>
+                  <AccountBrandMark accountBrand={manualAccountBrand} label={manualName || manualInstitution || "Account"} />
+                </div>
+                <strong>{manualName || "Account name"}</strong>
+                <p>
+                  {manualAccountBrand.label}
+                  {manualType !== "cash" && manualInstitution.trim() ? ` · ${manualInstitution.trim()}` : ""}
+                </p>
+                <span>We use the institution to match the right logo and statement rules.</span>
+              </aside>
             </div>
           </section>
         </div>
