@@ -29,6 +29,7 @@ const institutionKeyPatterns: Array<{ key: string; patterns: RegExp[] }> = [
   { key: "Bank of Commerce", patterns: [/\bBANK\s+OF\s+COMMERCE\b/i] },
   { key: "Bank of China", patterns: [/\bBANK\s+OF\s+CHINA\b/i] },
   { key: "CIMB", patterns: [/\bCIMB\b/i] },
+  { key: "GoTyme", patterns: [/\bGOTYME\b/i] },
 ];
 
 const simplifierRules: Record<string, SimplifierRule[]> = {
@@ -347,6 +348,112 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     {
       patterns: [/opening\s+balance/i],
       replacement: "Opening Balance",
+    },
+  ],
+  GoTyme: [
+    {
+      patterns: [/card\s+payment\s+at\s+grab/i, /grab\s+payment/i],
+      replacement: "Grab",
+    },
+    {
+      patterns: [/card\s+payment\s+at\s+move\s*it/i],
+      replacement: "Move It",
+    },
+    {
+      patterns: [/lazada\s+purchase/i, /refund\s+-\s+lazada/i],
+      replacement: "Lazada",
+    },
+    {
+      patterns: [/shopee\s+purchase/i, /refund\s+-\s+shopee/i],
+      replacement: "Shopee",
+    },
+    {
+      patterns: [/netflix\s+subscription/i],
+      replacement: "Netflix",
+    },
+    {
+      patterns: [/paymaya\s+load\s+purchase/i, /in-app\s+purchase\s+for\s+mobile/i],
+      replacement: "Load Purchase",
+    },
+    {
+      patterns: [/outbound\s+interbank\s+transfer/i],
+      replacement: "Outbound Transfer",
+    },
+    {
+      patterns: [/inbound\s+interbank\s+transfer/i],
+      replacement: "Inbound Transfer",
+    },
+    {
+      patterns: [/interbank\s+transfer\s+fee/i],
+      replacement: "Transfer Fee",
+    },
+    {
+      patterns: [/withdrawal\s+via\s+atm/i],
+      replacement: "ATM Withdrawal",
+    },
+    {
+      patterns: [/atm\s+withdrawal\s+fee/i],
+      replacement: "ATM Fee",
+    },
+    {
+      patterns: [/deposit\s+at\s+robinsons/i],
+      replacement: "Cash Deposit",
+    },
+    {
+      patterns: [/deposit\s+fee/i],
+      replacement: "Deposit Fee",
+    },
+    {
+      patterns: [/go\s+rewards\s+points\s+redemption/i],
+      replacement: "Go Rewards Redemption",
+    },
+    {
+      patterns: [/qr\s+payment/i],
+      replacement: "QR Payment",
+    },
+    {
+      patterns: [/electricity\s+bill\s+payment\s+to\s+meralco/i],
+      replacement: "Meralco",
+    },
+    {
+      patterns: [/telecoms\s+bill\s+payment\s+to\s+pldt/i],
+      replacement: "PLDT",
+    },
+    {
+      patterns: [/toll\s+bill\s+payment\s+to\s+autosweep\s+rfid/i],
+      replacement: "Autosweep RFID",
+    },
+    {
+      patterns: [/transfer\s+to\s+go\s*save\s+account/i],
+      replacement: "Transfer to Go Save",
+    },
+    {
+      patterns: [/transfer\s+from\s+go\s*save\s+account/i],
+      replacement: "Transfer from Go Save",
+    },
+    {
+      patterns: [/transfer\s+from\s+gotyme\s+bank\s+account/i],
+      replacement: "Transfer from GoTyme",
+    },
+    {
+      patterns: [/transfer\s+to\s+gotyme\s+bank\s+account/i],
+      replacement: "Transfer to GoTyme",
+    },
+    {
+      patterns: [/earned\s+interest/i],
+      replacement: "Interest Earned",
+    },
+    {
+      patterns: [/withholding\s+tax/i],
+      replacement: "Tax Withheld",
+    },
+    {
+      patterns: [/salary\s+credit/i],
+      replacement: "Salary Credit",
+    },
+    {
+      patterns: [/gcash\s+received/i],
+      replacement: "GCash Received",
     },
   ],
 };
