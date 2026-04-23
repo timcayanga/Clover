@@ -115,19 +115,6 @@ export default async function ReviewPage() {
           trusted in totals, insights, or exports.
         </p>
 
-        <div className="status-card status-card--review" style={{ marginTop: 16 }}>
-          <div>
-            <strong>{counts.total}</strong>
-            <div className="panel-muted">actionable items</div>
-          </div>
-          <div className="status-stack">
-            <span className="status status--processing">{counts.lowConfidence} low confidence</span>
-            <span className="status">{counts.pending} pending review</span>
-            <span className="status">{counts.lowAccount} low account confidence</span>
-            <span className="status">{counts.duplicateRisk} duplicate risk</span>
-          </div>
-        </div>
-
         <div style={{ marginTop: 20 }}>
           {reviewTransactions.length > 0 ? (
             <ReviewWorkbench

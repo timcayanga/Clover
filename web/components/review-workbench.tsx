@@ -149,6 +149,20 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
     return items;
   }, [current]);
 
+  const summary = useMemo(() => {
+    return items.reduce(
+      (accumulator, transaction) => {
+        accumulator.total += 1;
+        if (transaction.reviewStatus === "pending_review") accumulator.pending += 1;
+        if (transaction.categoryConfidence < 70 || !transaction.categoryId) accumulator.lowConfidence += 1;
+        if (transaction.accountMatchConfidence < 70) accumulator.lowAccount += 1;
+        if (transaction.duplicateConfidence >= 50) accumulator.duplicateRisk += 1;
+        return accumulator;
+      },
+      { total: 0, pending: 0, lowConfidence: 0, lowAccount: 0, duplicateRisk: 0 }
+    );
+  }, [items]);
+
   useEffect(() => {
     setItems(transactions);
     setSelectedId(transactions[0]?.id ?? null);
@@ -327,7 +341,6 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
   }
 
   const currentIndex = items.findIndex((item) => item.id === current.id);
-  const total = items.length;
 
   return (
     <section className="review-workbench glass" aria-label="Review workbench">
@@ -336,13 +349,26 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
           <p className="eyebrow">Review queue</p>
           <h3>Resolve uncertain transactions fast</h3>
           <p className="review-workbench__intro">
-            {workspaceName} has {total} actionable item{total === 1 ? "" : "s"}. Confirm what is right, correct what
-            is wrong, and let the model learn from every change.
+            {workspaceName} has {summary.total} actionable item{summary.total === 1 ? "" : "s"}. Confirm what is right,
+            correct what is wrong, and let the model learn from every change.
           </p>
         </div>
         <div className="review-workbench__badge">
           <strong>{currentIndex + 1}</strong>
-          <span>of {total}</span>
+          <span>of {summary.total}</span>
+        </div>
+      </div>
+
+      <div className="status-card status-card--review review-workbench__summary">
+        <div>
+          <strong>{summary.total}</strong>
+          <div className="panel-muted">actionable items</div>
+        </div>
+        <div className="status-stack">
+          <span className="status status--processing">{summary.lowConfidence} low confidence</span>
+          <span className="status">{summary.pending} pending review</span>
+          <span className="status">{summary.lowAccount} low account confidence</span>
+          <span className="status">{summary.duplicateRisk} duplicate risk</span>
         </div>
       </div>
 

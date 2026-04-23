@@ -1020,7 +1020,8 @@ function TransactionsPageContent() {
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
-  const hasSelectedTransactions = selectedTransactionIds.length > 0;
+  const selectedTransactionCount = selectedTransactionIds.length;
+  const hasSelectedTransactions = selectedTransactionCount > 0;
   const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
   const [transactionDeleteConfirmOpen, setTransactionDeleteConfirmOpen] = useState(false);
   const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>("ltd");
@@ -1228,6 +1229,9 @@ function TransactionsPageContent() {
 
     reviewTransactionParamRef.current = reviewTransactionId;
     openTransactionReview(reviewTransaction);
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete("review");
+    window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
   }, [isWorkspaceDataReady, searchParams, transactions]);
 
   const closeToolbarMenus = () => {
