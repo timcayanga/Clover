@@ -9057,6 +9057,13 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 10px;
 }
 
+.review-workbench__actions-copy {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .review-workbench__button-primary {
   min-height: 48px;
   font-size: 16px;

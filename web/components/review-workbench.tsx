@@ -582,7 +582,7 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
               onClick={() => void resolveCurrent("confirmed")}
               disabled={isSaving}
             >
-              {draftChanged ? "Apply & confirm" : "Accept"}
+              {draftChanged ? "Confirm and learn" : "Accept"}
             </button>
             <button
               className="button button-secondary review-workbench__button-secondary"
@@ -605,6 +605,11 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
             >
               Open in Transactions
             </Link>
+            <p className="review-workbench__actions-copy">
+              {draftChanged
+                ? "Confirming will save your edits and help the model learn from this correction."
+                : "Accepting keeps the current values and clears the item from review."}
+            </p>
           </div>
 
           <div className="review-workbench__nav">
