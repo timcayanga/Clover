@@ -1,5 +1,6 @@
 type SimplifierRule = {
-  patterns: RegExp[];
+  patterns?: RegExp[];
+  allPatterns?: RegExp[];
   replacement: string;
 };
 
@@ -246,6 +247,73 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Outgoing Transfer",
     },
   ],
+  Maya: [
+    {
+      patterns: [/interest\s+applied\s*\(at\s*3\.5%\s*p\.a\.\)/i, /interest\s+applied/i],
+      replacement: "Base Interest",
+    },
+    {
+      patterns: [/boost\s+campaign\s+interest\s+applied/i],
+      replacement: "Boost Interest",
+    },
+    {
+      patterns: [/base\s+interest\s+withholding\s+tax/i],
+      replacement: "Tax Withheld",
+    },
+    {
+      patterns: [/boost\s+campaign\s+interest\s+withholding\s+tax/i],
+      replacement: "Boost Tax Withheld",
+    },
+    {
+      patterns: [/fee\s+applied/i],
+      replacement: "Transfer Fee",
+    },
+    {
+      patterns: [/wallet\s+transfer/i],
+      allPatterns: [/my\s+wallet/i],
+      replacement: "Transfer to Maya Wallet",
+    },
+    {
+      patterns: [/wallet\s+transfer/i],
+      replacement: "Wallet Transfer",
+    },
+    {
+      patterns: [/transfer\s+is\s+successfully\s+sent\s+to\s+bancnet/i],
+      replacement: "Transfer to BancNet",
+    },
+    {
+      patterns: [/deposit/i],
+      replacement: "Deposit",
+    },
+    {
+      patterns: [/withdrawal/i],
+      replacement: "Withdrawal",
+    },
+    {
+      patterns: [/auto\s+cash-?in/i],
+      replacement: "Auto Cash-In",
+    },
+    {
+      patterns: [/repayment/i],
+      replacement: "Repayment",
+    },
+    {
+      patterns: [/transfer\s+to\s+wallet/i],
+      replacement: "Credit Drawdown",
+    },
+    {
+      patterns: [/service\s+fee/i],
+      replacement: "Service Fee",
+    },
+    {
+      patterns: [/penalty\s+fee/i],
+      replacement: "Penalty Fee",
+    },
+    {
+      patterns: [/\bdst\b/i],
+      replacement: "Documentary Stamp Tax",
+    },
+  ],
 };
 
 const normalizeInstitutionKey = (institution?: string | null) => {
@@ -274,7 +342,9 @@ const applySimplifierRules = (value: string, institution?: string | null) => {
   const compact = compactText(normalized);
 
   for (const rule of rules) {
-    if (rule.patterns.some((pattern) => pattern.test(normalized) || pattern.test(compact))) {
+    const anyMatch = rule.patterns?.some((pattern) => pattern.test(normalized) || pattern.test(compact)) ?? false;
+    const allMatch = rule.allPatterns?.every((pattern) => pattern.test(normalized) || pattern.test(compact)) ?? true;
+    if (anyMatch && allMatch) {
       return rule.replacement;
     }
   }
