@@ -228,6 +228,7 @@ const TRANSACTION_COLUMNS = [
   "description",
   "isTransfer",
   "isExcluded",
+  "deletedAt",
   "createdAt",
   "updatedAt",
 ] as const;
@@ -749,6 +750,7 @@ const buildTransactionInsertRecord = async (params: TransactionInsertParams, col
   if (columnSet.has("description")) record.description = params.description ?? null;
   if (columnSet.has("isTransfer")) record.isTransfer = params.isTransfer ?? false;
   if (columnSet.has("isExcluded")) record.isExcluded = params.isExcluded ?? false;
+  if (columnSet.has("deletedAt")) record.deletedAt = null;
   if (columnSet.has("createdAt")) record.createdAt = new Date();
   if (columnSet.has("updatedAt")) record.updatedAt = new Date();
 

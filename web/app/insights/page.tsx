@@ -452,7 +452,7 @@ export default async function InsightsPage() {
 
     const resolvedWorkspace =
       selectedWorkspace ??
-      (await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified).then(async (starterWorkspace) => {
+      (await ensureStarterWorkspace(user).then(async (starterWorkspace) => {
         const starterWorkspaceData = await prisma.workspace.findUnique({
           where: { id: starterWorkspace.id },
           include: workspaceInclude,
@@ -816,7 +816,7 @@ export default async function InsightsPage() {
   const headlineDriverShare = currentSpend > 0 ? (headlineDriverAmount / currentSpend) * 100 : null;
   const primarySnapshotItems = [
     {
-      label: "Net",
+      label: "Net position",
       value: formatSignedCurrency(currentNet),
       note: currentNet >= previousNet ? "Up vs prior period" : "Down vs prior period",
       tone: currentNet >= 0 ? "positive" : "negative",
@@ -834,7 +834,7 @@ export default async function InsightsPage() {
       tone: "neutral",
     },
     {
-      label: "Confidence",
+      label: "Signal quality",
       value: Math.round(confidenceScore).toString(),
       note: confidenceLabel,
       tone: confidenceScore >= 85 ? "positive" : confidenceScore >= 70 ? "neutral" : "negative",
@@ -906,7 +906,12 @@ export default async function InsightsPage() {
   const trackedCategoryShare = currentSpend > 0 ? trackedCategorySpend / currentSpend : 0;
 
   return (
-    <CloverShell active="insights" title="Insights" showTopbar={false}>
+    <CloverShell
+      active="insights"
+      title="A clearer view of what your money is doing."
+      subtitle="Decision-ready insight from real transactions, recurring patterns, and month-over-month comparisons."
+      showTopbar={false}
+    >
       <PostHogEvent
         event="insight_generated"
         onceKey={analyticsOnceKey("insight_generated", `workspace:${workspaceId}:${reportType}`)}
@@ -967,7 +972,7 @@ export default async function InsightsPage() {
           <EmptyDataCta
             eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
             title="Import files to wake up your insights."
-            copy="Clover needs a statement or account activity before it can spot patterns, trends, and habits. Upload one file to start filling this page in."
+            copy="Clover needs a statement or account activity before it can spot patterns, trends, and habits. Import files first for the fastest way to bring this page to life."
             importHref="/dashboard?import=1"
             accountHref="/accounts"
             transactionHref="/transactions?manual=1"
@@ -978,7 +983,7 @@ export default async function InsightsPage() {
         <article className="insights-snapshot insights-snapshot--hero glass">
           <div className="insights-snapshot__copy">
             <div className="insights-snapshot__header">
-              <span className="pill pill-accent">AI insights</span>
+              <span className="pill pill-accent">Decision brief</span>
               {stagingDemoData ? <span className="pill pill-subtle">Sample staging data</span> : null}
             </div>
             <h3>{aiHeadline}</h3>
@@ -1024,7 +1029,7 @@ export default async function InsightsPage() {
           <div className="insight-panel__head">
             <div>
               <p className="eyebrow">What happened</p>
-              <h4>Income vs expenses snapshot</h4>
+              <h4>Cash flow momentum</h4>
             </div>
             <div className="insight-panel__stat">
               <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
@@ -1088,7 +1093,7 @@ export default async function InsightsPage() {
           <div className="insight-panel__head">
             <div>
               <p className="eyebrow">Where your money went</p>
-              <h4>Category mix</h4>
+              <h4>Spending concentration</h4>
             </div>
             <div className="insight-panel__stat">
               <strong>{formatPercent(trackedCategoryShare * 100)}</strong>
@@ -1177,7 +1182,7 @@ export default async function InsightsPage() {
           <div className="insight-panel__head">
             <div>
               <p className="eyebrow">Why it happened</p>
-              <h4>Key drivers of change</h4>
+              <h4>What changed and why</h4>
             </div>
             <div className="insight-panel__stat">
               <strong>{previousTopCategories[0]?.[0] ?? "No baseline"}</strong>
@@ -1212,7 +1217,7 @@ export default async function InsightsPage() {
           <div className="insight-panel__head">
             <div>
               <p className="eyebrow">Patterns to watch</p>
-              <h4>Recurring costs and behavior</h4>
+              <h4>Recurring costs and habits</h4>
             </div>
             <div className="insight-panel__stat">
               <strong>{formatCurrency(recurringSavingsPotential)}</strong>

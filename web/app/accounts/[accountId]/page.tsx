@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { AccountBrandMark } from "@/components/account-brand-mark";
 import { deriveReconciledBalance } from "@/lib/account-balance";
+import { getAccountBrand } from "@/lib/account-brand";
 
 type Account = {
   id: string;
@@ -58,6 +60,11 @@ const formatDate = (value: string) =>
   });
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
+
+const formatAccountType = (value: string) =>
+  value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
 
 export default function AccountDetailPage() {
   useEffect(() => {
@@ -148,6 +155,55 @@ function AccountDetailPageContent() {
     [account?.balance, checkpoints, transactions]
   );
 
+  const accountBrand = useMemo(
+    () =>
+      getAccountBrand({
+        institution: account?.institution ?? null,
+        name: account?.name ?? null,
+        type: account?.type ?? null,
+      }),
+    [account?.institution, account?.name, account?.type]
+  );
+
+  const checkpointStatus = useMemo(() => {
+    if (!latestCheckpoint) {
+      return "No checkpoint yet";
+    }
+
+    if (latestCheckpoint.status === "mismatch") {
+      return latestCheckpoint.mismatchReason ?? "Mismatch";
+    }
+
+    if (latestCheckpoint.status === "reconciled") {
+      return "Reconciled";
+    }
+
+    return "Pending";
+  }, [latestCheckpoint]);
+
+  const checkpointBalance = useMemo(() => parseAmount(latestCheckpoint?.endingBalance), [latestCheckpoint?.endingBalance]);
+  const currentBalance = parseAmount(reconciledBalance ?? account?.balance);
+  const checkpointGap =
+    latestCheckpoint && Number.isFinite(checkpointBalance) && Number.isFinite(currentBalance)
+      ? checkpointBalance - currentBalance
+      : null;
+
+  const checkpointGapLabel = useMemo(() => {
+    if (checkpointGap === null || !latestCheckpoint) {
+      return "—";
+    }
+
+    if (Math.abs(checkpointGap) < 0.005) {
+      return "Matches ledger";
+    }
+
+    if (checkpointGap > 0) {
+      return `Statement higher by ${currencyFormatter.format(checkpointGap)}`;
+    }
+
+    return `Ledger higher by ${currencyFormatter.format(Math.abs(checkpointGap))}`;
+  }, [checkpointGap, latestCheckpoint]);
+
   const visibleTransactions = useMemo(
     () =>
       transactions
@@ -160,12 +216,15 @@ function AccountDetailPageContent() {
     <CloverShell active="accounts" title={account?.name ?? "Account"} kicker="Account history" subtitle="View the full statement history for a single account." showTopbar={false}>
       <section className="panel">
         <div className="accounts-detail__header">
-          <div>
-            <p className="eyebrow">Account details</p>
-            <h2>{account?.name ?? "Account"}</h2>
-            <p className="panel-muted">
-              {account ? `${account.institution ?? "No institution"} · ${account.currency} · ${account.source}` : message}
-            </p>
+          <div className="accounts-detail__headline">
+            {account ? <AccountBrandMark accountBrand={accountBrand} label={account.name} /> : null}
+            <div>
+              <p className="eyebrow">Account details</p>
+              <h2>{account?.name ?? "Account"}</h2>
+              <p className="panel-muted">
+                {account ? `${accountBrand.label} · ${account.currency} · ${account.source}` : message}
+              </p>
+            </div>
           </div>
           <div className="actions">
             <button className="button button-secondary" type="button" onClick={() => router.push("/accounts")}>
@@ -181,6 +240,10 @@ function AccountDetailPageContent() {
               <strong>{currencyFormatter.format(parseAmount(reconciledBalance ?? account.balance))}</strong>
             </div>
             <div className="status-card">
+              <div className="panel-muted">Account type</div>
+              <strong>{formatAccountType(account.type)}</strong>
+            </div>
+            <div className="status-card">
               <div className="panel-muted">Created</div>
               <strong>{formatDate(account.createdAt)}</strong>
             </div>
@@ -192,17 +255,45 @@ function AccountDetailPageContent() {
         ) : null}
 
         {latestCheckpoint ? (
-          <div className="status-card" style={{ marginTop: 20 }}>
-            <div>
-              <div className="panel-muted">Latest statement checkpoint</div>
-              <strong>
-                {latestCheckpoint.statementEndDate ? formatDate(latestCheckpoint.statementEndDate) : "Unknown date"}
-              </strong>
-              <p className="panel-muted" style={{ margin: 0 }}>
-                {latestCheckpoint.status === "mismatch" ? latestCheckpoint.mismatchReason ?? "Mismatch detected" : latestCheckpoint.status}
-              </p>
+          <div className="accounts-detail__reconciliation glass" style={{ marginTop: 20 }}>
+            <div className="accounts-detail__reconciliation-head">
+              <div>
+                <p className="eyebrow">Reconciliation</p>
+                <h3>Statement checkpoint</h3>
+              </div>
+              <span
+                className={`accounts-summary-chip ${
+                  latestCheckpoint.status === "mismatch"
+                    ? "is-danger"
+                    : latestCheckpoint.status === "reconciled"
+                      ? "is-good"
+                      : "is-neutral"
+                }`}
+              >
+                {checkpointStatus}
+              </span>
             </div>
-            <strong>{currencyFormatter.format(parseAmount(latestCheckpoint.endingBalance))}</strong>
+            <div className="accounts-detail__reconciliation-grid">
+              <div className="status-card">
+                <div className="panel-muted">Statement date</div>
+                <strong>{latestCheckpoint.statementEndDate ? formatDate(latestCheckpoint.statementEndDate) : "Unknown"}</strong>
+              </div>
+              <div className="status-card">
+                <div className="panel-muted">Statement balance</div>
+                <strong>{currencyFormatter.format(checkpointBalance)}</strong>
+              </div>
+              <div className="status-card">
+                <div className="panel-muted">Difference</div>
+                <strong>{checkpointGapLabel}</strong>
+              </div>
+            </div>
+            <p className="panel-muted" style={{ margin: "12px 0 0" }}>
+              {latestCheckpoint.status === "mismatch"
+                ? latestCheckpoint.mismatchReason ?? "The statement and account history do not match yet."
+                : latestCheckpoint.status === "reconciled"
+                  ? "The checkpoint matches the account history and anchors the current balance."
+                  : "This checkpoint is waiting for confirmation."}
+            </p>
           </div>
         ) : null}
 

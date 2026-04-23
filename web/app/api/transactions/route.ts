@@ -4,6 +4,7 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { recordTrainingSignal } from "@/lib/data-engine";
+import { capturePostHogServerEvent } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -146,6 +147,20 @@ export async function POST(request: Request) {
           notes: payload.accountId ? "Manual transaction created in the app." : null,
         });
       }
+    }
+
+    void capturePostHogServerEvent("feature_used", userId, {
+      workspace_id: payload.workspaceId,
+      feature_name: "manual_transaction_creation",
+      transaction_count: 1,
+    });
+    if (resolvedCategoryId) {
+      void capturePostHogServerEvent("transaction_categorized", userId, {
+        workspace_id: payload.workspaceId,
+        transaction_id: transaction.id,
+        category_id: resolvedCategoryId,
+        is_manual_edit: true,
+      });
     }
 
     return NextResponse.json({

@@ -4,7 +4,6 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { fetchImportFileCompat, updateImportFileCompat } from "@/lib/data-engine";
 import { uploadObject } from "@/lib/s3";
 import { prisma } from "@/lib/prisma";
-import { processImportFileText } from "@/workers/import-processor";
 import { NextResponse, after } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -63,6 +62,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       stage = "scheduling background processing";
       after(async () => {
         try {
+          const { processImportFileText } = await import("@/workers/import-processor");
           await processImportFileText(importId, { password });
         } catch (error) {
           console.error("Background import processing failed", { importId, error });
@@ -94,6 +94,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
 
       stage = "processing statement text";
+      const { processImportFileText } = await import("@/workers/import-processor");
       const result = await processImportFileText(importId, { text, password });
 
       return NextResponse.json({

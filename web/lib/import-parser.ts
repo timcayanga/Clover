@@ -72,6 +72,10 @@ export const inferAccountTypeFromStatement = (
     return "credit_card";
   }
 
+  if (/(bpi.*signature|bpi.*credit card|signature card|payment due date|total amount due|minimum amount due|credit limit)/.test(normalized)) {
+    return "credit_card";
+  }
+
   if (/(invest|investment|broker|stocks?|fund)/.test(normalized)) {
     return "investment";
   }
@@ -348,6 +352,99 @@ const parseBpiDate = (value?: string | null) => {
   return new Date(Date.UTC(year, monthIndex, Number(match[2]), 12));
 };
 
+const parseBpiMonthDay = (value: string, yearHint: number) => {
+  const normalized = normalizeWhitespace(value);
+  const compact = compactWhitespace(normalized);
+
+  const monthDayMatch =
+    compact.match(new RegExp(`^(${monthNamePattern})(\\d{1,2})(?:,?(\\d{4}))?$`, "i")) ??
+    normalized.match(new RegExp(`^(${monthNamePattern})\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?$`, "i"));
+
+  if (!monthDayMatch) {
+    return null;
+  }
+
+  const monthIndex = monthIndexByAbbr[monthDayMatch[1].slice(0, 3).toUpperCase()];
+  if (monthIndex === undefined) {
+    return null;
+  }
+
+  const year = monthDayMatch[3] ? Number(monthDayMatch[3]) : yearHint;
+  return new Date(Date.UTC(year, monthIndex, Number(monthDayMatch[2]), 12));
+};
+
+const parseBpiCardDateToken = (tokens: string[], startIndex: number, yearHint: number) => {
+  const token = tokens[startIndex];
+  const nextToken = tokens[startIndex + 1];
+  if (!token) {
+    return null;
+  }
+
+  if (/^\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?$/.test(token)) {
+    const date = parseDateValue(token);
+    return date ? { date, nextIndex: startIndex + 1 } : null;
+  }
+
+  if (/^\d{1,2}$/.test(token) && nextToken && new RegExp(`^${monthNamePattern}$`, "i").test(nextToken)) {
+    const date = parseBpiMonthDay(`${nextToken} ${token}`, yearHint);
+    return date ? { date, nextIndex: startIndex + 2 } : null;
+  }
+
+  if (new RegExp(`^${monthNamePattern}$`, "i").test(token) && /^\d{1,2}$/.test(nextToken ?? "")) {
+    const date = parseBpiMonthDay(`${token} ${nextToken}`, yearHint);
+    return date ? { date, nextIndex: startIndex + 2 } : null;
+  }
+
+  return null;
+};
+
+const isBpiCreditCardStatementText = (text: string) => {
+  const compact = compactWhitespace(text).toUpperCase();
+  return (
+    compact.includes("BPI") &&
+    /(BPISIGNATURE|SIGNATURECARD|PAYMENTDUEDATE|TOTALAMOUNTDUE|MINIMUMAMOUNTDUE|CREDITLIMIT)/i.test(compact)
+  );
+};
+
+const bpiCreditCardStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+  const normalized = normalizeBpiText(text).trim();
+  if (!isBpiCreditCardStatementText(normalized)) {
+    return null;
+  }
+
+  const lines = normalized
+    .split(/\r?\n/)
+    .map((line) => collapseBpiCreditCardOcrLine(line))
+    .filter(Boolean);
+  const compact = lines.join("").replace(/\s+/g, "");
+
+  const statementDate =
+    parseBpiDate(normalized.match(/STATEMENT\s+DATE\s+([A-Z]+\s+\d{1,2},\s*\d{4})/i)?.[1] ?? null) ??
+    parseBpiDate(compact.match(/STATEMENTDATE([A-Z]+\d{1,2},\d{4})/i)?.[1] ?? null) ??
+    parseBpiDate(compact.match(/STATEMENTDATE([A-Z]+\d{1,2},\d{4})/i)?.[1] ?? null);
+  const paymentDueDate =
+    parseBpiDate(normalized.match(/PAYMENT\s+DUE\s+DATE\s+([A-Z]+\s+\d{1,2},\s*\d{4})/i)?.[1] ?? null) ??
+    parseBpiDate(compact.match(/PAYMENTDUEDATE([A-Z]+\d{1,2},\d{4})/i)?.[1] ?? null);
+
+  const previousBalance =
+    parseMoney(compact.match(/PREVIOUSBALANCE([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(lines.find((line) => /BPISIGNATURE/i.test(line))?.match(/\b([0-9][0-9,]*\.\d{2})\b/)?.[1] ?? null);
+  const endingBalance =
+    parseMoney(compact.match(/TOTALAMOUNTDUE([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(compact.match(/ENDINGBALANCE([0-9,]+\.\d{2})/i)?.[1] ?? null);
+
+  return {
+    institution: "BPI",
+    accountNumber: "9001",
+    accountName: "BPI Signature",
+    openingBalance: previousBalance,
+    endingBalance,
+    startDate: statementDate ? statementDate.toISOString() : null,
+    endDate: paymentDueDate ? paymentDueDate.toISOString() : statementDate ? statementDate.toISOString() : null,
+    confidence: 98,
+  };
+};
+
 const parseRcbcDate = (value?: string | null) => {
   if (!value) return null;
 
@@ -441,6 +538,9 @@ const monthIndexByAbbr: Record<string, number> = {
 
 const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = normalizeBpiText(text).trim();
+  if (isBpiCreditCardStatementText(normalized)) {
+    return null;
+  }
   if (!/BANK OF THE PHILIPPINE ISLANDS|\bBPI\b|\bBE\d{8}\b|FORBES\s*PARK\s*SAVINGS\s*BET\-?PHP/i.test(normalized)) {
     return null;
   }
@@ -498,6 +598,324 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     endDate: endDate ? endDate.toISOString() : null,
     confidence: accountNumber ? 95 : 85,
   };
+};
+
+const guessBpiCreditCategoryName = (description: string, type: TransactionType) => {
+  const lower = description.toLowerCase();
+  const compact = lower.replace(/[^a-z0-9]+/g, "");
+  if (compact.includes("paymentthankyou") || compact.includes("cardpayment") || type === "transfer") return "Transfers";
+  if (/transfer|instapay|pesonet/.test(lower)) return "Transfers";
+  if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower)) return "Financial";
+  if (/instapay transfer fee|instapaytransferfee|transfer fee|transferfee/.test(lower)) return "Transfers";
+  if (/service charge|bank charge|dhl duty collection/.test(lower)) return "Financial";
+  if (/bill|meralco|bayad center|payment/.test(lower)) return "Bills & Utilities";
+  if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
+  if (/food|dining|restaurant|cafe|coffee|japanese|pho hoa|burnt bean|jung one|kiyosa/.test(lower)) return "Food & Dining";
+  if (/shop|shopping|mall|amazon|lazada|shopee|zalora|watsons|iherb|retail/.test(lower)) return "Shopping";
+  if (/health|doctor|clinic|pharmacy|medical|hospital|classpass/.test(lower)) return "Health & Wellness";
+  if (/business|invoice|client|contract|linkedin|canva/.test(lower)) return "Business";
+  if (/travel|airbnb|hotel|airline|flight|tour|holiday|paypal \*getyourguid|paypal \*trenitalias|paypal \*transfeero|paypal \*amami/.test(lower))
+    return "Travel & Lifestyle";
+  if (/fee|interest|loan|financial|bank charge/.test(lower)) return "Financial";
+  return guessCategoryName(description, type);
+};
+
+const parseBpiCreditCardTransactionLine = (
+  line: string,
+  state: {
+    year: number;
+    accountName: string;
+    statementDate: string | null;
+    paymentDueDate: string | null;
+  }
+) => {
+  const normalized = normalizeWhitespace(line);
+  const tokens = normalized.split(" ");
+  const saleDateResult = parseBpiCardDateToken(tokens, 0, state.year);
+  if (!saleDateResult) {
+    return null;
+  }
+
+  const postDateResult = parseBpiCardDateToken(tokens, saleDateResult.nextIndex, state.year);
+  if (!postDateResult) {
+    return null;
+  }
+
+  const body = tokens.slice(postDateResult.nextIndex).join(" ").trim();
+  if (!body) {
+    return null;
+  }
+
+  const moneyMatches = body.match(/-?[0-9][0-9,]*\.\d{2}/g) ?? [];
+  const amountText = moneyMatches.at(-1) ?? null;
+  const amount = parseMoney(amountText);
+  if (amount === null) {
+    return null;
+  }
+
+  const currencyMatch = body.match(/\b((?:U\s*S\.?\s*Dollar|U\.?\s*S\.?\s*Dollar|U\s*S|U\.?\s*S\.?|Baht|THB|USD|EUR|GBP|SGD|JPY|HKD|PHP|Philippine Peso))\s+(-?[0-9][0-9,]*\.\d{2})/i);
+  const foreignAmountText = currencyMatch?.[2] ?? (moneyMatches.length > 1 ? moneyMatches[moneyMatches.length - 2] : null);
+  const fxNote = currencyMatch?.[1] && foreignAmountText ? `${normalizeWhitespace(currencyMatch[1]).replace(/\s+/g, " ")} ${Math.abs(parseMoney(foreignAmountText) ?? 0).toFixed(2)}` : null;
+
+  let descriptionSource = body
+    .replace(/-?[0-9][0-9,]*\.\d{2}/g, " ")
+    .replace(/\b((?:U\s*S\.?\s*Dollar|U\.?\s*S\.?\s*Dollar|U\s*S|U\.?\s*S\.?|Baht|THB|USD|EUR|GBP|SGD|JPY|HKD|PHP|Philippine Peso))\b/gi, " ")
+    .replace(/\s*\/\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!descriptionSource) {
+    return null;
+  }
+
+  const descriptionLower = descriptionSource.toLowerCase();
+  let type: TransactionType = "expense";
+  const descriptionCompact = descriptionLower.replace(/[^a-z0-9]+/g, "");
+  if (descriptionCompact.includes("paymentthankyou") || descriptionCompact.includes("cardpayment")) {
+    type = "transfer";
+  } else if (/refund|reversal|credit memo|cashback|cash back/.test(descriptionLower)) {
+    type = "income";
+  }
+
+  const merchantRaw = humanizeMerchantText(descriptionSource);
+  const merchantClean = summarizeMerchantText(descriptionSource);
+  const categoryName = guessBpiCreditCategoryName(descriptionSource, type);
+
+  return {
+    date: postDateResult.date.toISOString().slice(0, 10),
+    amount: Math.abs(amount).toFixed(2),
+    merchantRaw,
+    merchantClean,
+    description: descriptionSource,
+    categoryName,
+    accountName: state.accountName,
+    type,
+    rawPayload: {
+      bank: "BPI",
+      accountName: state.accountName,
+      accountNumber: "9001",
+      statementDate: state.statementDate,
+      paymentDueDate: state.paymentDueDate,
+      saleDate: saleDateResult.date.toISOString().slice(0, 10),
+      postDate: postDateResult.date.toISOString().slice(0, 10),
+      amountText,
+      foreignAmountText,
+      fxNote,
+      line: normalized,
+      notes: fxNote || (/payment\s*-\s*thank you|payment\s+thank you|card payment/.test(descriptionLower) ? "Statement payment credit" : null),
+    },
+  } satisfies ParsedImportRow;
+};
+
+const parseBpiCreditCardImportText = (text: string) => {
+  const normalizedText = normalizeBpiText(text);
+  const metadata = bpiCreditCardStatementMetadata(normalizedText);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = normalizedText
+    .split(/\r?\n/)
+    .map((line) => collapseBpiCreditCardOcrLine(line))
+    .filter(Boolean);
+
+  const startYear = metadata.startDate ? new Date(metadata.startDate).getUTCFullYear() : metadata.endDate ? new Date(metadata.endDate).getUTCFullYear() : new Date().getUTCFullYear();
+  const segments: string[][] = [];
+  let current: string[] = [];
+
+  for (const line of lines) {
+    if (isBpiCreditCardBoilerplateLine(line)) {
+      if (current.length > 0) {
+        segments.push(current);
+        current = [];
+      }
+      continue;
+    }
+
+    if (isBpiCreditCardTransactionStartLine(line)) {
+      if (current.length > 0) {
+        segments.push(current);
+      }
+      current = [line];
+      continue;
+    }
+
+    if (current.length > 0) {
+      current.push(line);
+    }
+  }
+
+  if (current.length > 0) {
+    segments.push(current);
+  }
+
+  const rows = segments
+    .map((segment) =>
+      parseBpiCreditCardSegment(segment, {
+        year: startYear,
+        accountName: metadata.accountName ?? "BPI Signature",
+        statementDate: metadata.startDate,
+        paymentDueDate: metadata.endDate,
+      })
+    )
+    .filter(Boolean) as ParsedImportRow[];
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return {
+    metadata,
+    rows,
+  };
+};
+
+const collapseBpiCreditCardOcrLine = (line: string) => {
+  const normalized = normalizeWhitespace(line);
+  if (!normalized) {
+    return normalized;
+  }
+
+  const tokens = normalized.split(" ");
+  const singleCharacterTokens = tokens.filter((token) => /^[A-Za-z0-9.,()\-\/]$/.test(token)).length;
+  const looksCharacterSpaced = tokens.length >= 6 && singleCharacterTokens / tokens.length >= 0.75;
+  return looksCharacterSpaced ? tokens.join("") : normalized;
+};
+
+const isBpiCreditCardBoilerplateLine = (line: string) => {
+  const compact = collapseBpiCreditCardOcrLine(line).replace(/\s+/g, "").toUpperCase();
+  return (
+    compact === "PREPAREDFOR" ||
+    compact.startsWith("REFERENCENO") ||
+    compact.startsWith("CUSTOMERNUMBER") ||
+    compact.startsWith("STATEMENTDATE") ||
+    compact.startsWith("PAYMENTDUEDATE") ||
+    compact.startsWith("CREDITLIMIT") ||
+    compact.startsWith("TOTALAMOUNTDUE") ||
+    compact.startsWith("MINIMUMAMOUNTDUE") ||
+    compact.startsWith("STATEMENTOFACCOUNT") ||
+    compact.startsWith("TRANSACTIONPOSTDATEDESCRIPTIONAMOUNT") ||
+    compact === "DATE" ||
+    compact.startsWith("FINANCECHARGE") ||
+    compact.startsWith("PREVIOUSBALANCE") ||
+    compact.startsWith("PASTDUE") ||
+    compact.startsWith("ENDINGBALANCE") ||
+    compact.startsWith("UNBILLEDINSTALLMENTAMOUNT") ||
+    compact.startsWith("TOTALOUTSTANDINGBALANCE") ||
+    compact === "REWARDS" ||
+    compact.includes("BPIPOINTS") ||
+    compact.startsWith("BPISIGNATURECARD")
+  );
+};
+
+const isBpiCreditCardTransactionStartLine = (line: string) => {
+  const compact = collapseBpiCreditCardOcrLine(line).replace(/\s+/g, "");
+  const dateTokenPattern = `(?:${monthNamePattern}\\d{1,2}|\\d{1,2}${monthNamePattern})(?:,?\\d{4})?`;
+  return new RegExp(`^${dateTokenPattern}${dateTokenPattern}`, "i").test(compact);
+};
+
+const parseBpiCreditCardSegment = (
+  segmentLines: string[],
+  state: {
+    year: number;
+    accountName: string;
+    statementDate: string | null;
+    paymentDueDate: string | null;
+  }
+) => {
+  if (segmentLines.length === 0) {
+    return null;
+  }
+
+  const segmentText = segmentLines.map((line) => collapseBpiCreditCardOcrLine(line)).join(" ").trim();
+  const compact = segmentText.replace(/\s+/g, "");
+  const dateTokenPattern = `(?:${monthNamePattern}\\d{1,2}|\\d{1,2}${monthNamePattern})(?:,?\\d{4})?`;
+  const match = compact.match(new RegExp(`^(${dateTokenPattern})(${dateTokenPattern})(.+)$`, "i"));
+  if (!match) {
+    return null;
+  }
+
+  const saleDate = parseBpiDate(match[1]);
+  const postDate = parseBpiDate(match[2]);
+  if (!saleDate || !postDate) {
+    return null;
+  }
+
+  const body = match[3];
+  const moneyMatches = body.match(/-?[0-9][0-9,]*\.\d{2}/g) ?? [];
+  const amountText = moneyMatches.at(-1) ?? null;
+  const amount = parseMoney(amountText);
+  if (amount === null) {
+    return null;
+  }
+
+  const currencyLabelMatch = body.match(/(?:USDollar|Baht|THB|USD|EUR|GBP|SGD|JPY|HKD|Philippine\s*Peso)/i);
+  const foreignAmountText = moneyMatches.length > 1 ? moneyMatches[moneyMatches.length - 2] : null;
+  const formatCurrencyLabel = (label: string) =>
+    label
+      .replace(/USDollar/i, "U.S. Dollar")
+      .replace(/Philippine\s*Peso/i, "Philippine Peso")
+      .replace(/\s+/g, " ");
+  const fxNote = currencyLabelMatch && foreignAmountText
+    ? `${formatCurrencyLabel(currencyLabelMatch[0])} ${Math.abs(parseMoney(foreignAmountText) ?? 0).toFixed(2)}`
+    : null;
+
+  const amountIndex = amountText ? body.lastIndexOf(amountText) : -1;
+  let descriptionSource = amountIndex >= 0 ? body.slice(0, amountIndex) : body;
+  if (currencyLabelMatch && foreignAmountText) {
+    const fxPattern = new RegExp(
+      `${currencyLabelMatch[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*${foreignAmountText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+      "i"
+    );
+    descriptionSource = descriptionSource.replace(fxPattern, " ");
+  }
+  descriptionSource = descriptionSource
+    .replace(/-?[0-9][0-9,]*\.\d{2}/g, " ")
+    .replace(/\s*\/\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!descriptionSource) {
+    return null;
+  }
+
+  const descriptionLower = descriptionSource.toLowerCase();
+  let type: TransactionType = "expense";
+  const descriptionCompact = descriptionLower.replace(/[^a-z0-9]+/g, "");
+  if (descriptionCompact.includes("paymentthankyou") || descriptionCompact.includes("cardpayment")) {
+    type = "transfer";
+  } else if (/refund|reversal|credit memo|cashback|cash back/.test(descriptionLower)) {
+    type = "income";
+  }
+
+  const merchantRaw = humanizeMerchantText(descriptionSource);
+  const merchantClean = summarizeMerchantText(descriptionSource);
+  const categoryName = guessBpiCreditCategoryName(descriptionSource, type);
+
+  return {
+    date: postDate.toISOString().slice(0, 10),
+    amount: Math.abs(amount).toFixed(2),
+    merchantRaw,
+    merchantClean,
+    description: descriptionSource,
+    categoryName,
+    accountName: state.accountName,
+    type,
+    rawPayload: {
+      bank: "BPI",
+      accountName: state.accountName,
+      accountNumber: "9001",
+      statementDate: state.statementDate,
+      paymentDueDate: state.paymentDueDate,
+      saleDate: saleDate.toISOString().slice(0, 10),
+      postDate: postDate.toISOString().slice(0, 10),
+      amountText,
+      foreignAmountText,
+      fxNote,
+      line: segmentText,
+      notes: fxNote || (descriptionCompact.includes("paymentthankyou") || descriptionCompact.includes("cardpayment") ? "Statement payment credit" : null),
+    },
+  } satisfies ParsedImportRow;
 };
 
 const guessRcbcCategoryName = (description: string, type: TransactionType) => {
@@ -1242,6 +1660,11 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     return unionbankMetadata;
   }
 
+  const bpiCreditMetadata = bpiCreditCardStatementMetadata(text);
+  if (bpiCreditMetadata) {
+    return bpiCreditMetadata;
+  }
+
   const bpiMetadata = bpiStatementMetadata(text);
   if (bpiMetadata) {
     return bpiMetadata;
@@ -1374,6 +1797,11 @@ export const parseImportText = (text: string, fileName: string, fileType: string
   const unionbankParsed = parseUnionBankImportText(text);
   if (unionbankParsed) {
     return unionbankParsed.rows;
+  }
+
+  const bpiCreditParsed = parseBpiCreditCardImportText(text);
+  if (bpiCreditParsed) {
+    return bpiCreditParsed.rows;
   }
 
   const bpiParsed = parseBpiImportText(text);

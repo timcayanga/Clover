@@ -83,7 +83,7 @@ const START_OPTIONS: StartOption[] = [
   {
     value: "statement",
     title: "Import files",
-    description: "Upload a bank statement to auto-populate your dashboard, transactions, and review queue.",
+    description: "Upload a statement to unlock your dashboard, transactions, and review queue in one step.",
     href: "/dashboard?import=1",
     featured: true,
     icon: (
@@ -97,7 +97,7 @@ const START_OPTIONS: StartOption[] = [
   {
     value: "accounts",
     title: "Add an account",
-    description: "Connect an account for ongoing tracking and a fuller picture of your money.",
+    description: "Connect an account if you want ongoing tracking right away.",
     href: "/accounts",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -111,8 +111,8 @@ const START_OPTIONS: StartOption[] = [
   },
   {
     value: "manual",
-    title: "Enter manually",
-    description: "Start with a few transactions if you want to add details yourself.",
+    title: "Enter transactions manually",
+    description: "Add a few transactions yourself if you want to start small.",
     href: "/transactions",
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -231,10 +231,10 @@ export function OnboardingForm({ currentGoal = null }: OnboardingFormProps) {
         </>
       ) : (
         <>
-          <h3>How would you like to get started?</h3>
+          <h3>Choose your first move</h3>
           <p className="onboarding-card__copy">
-            Importing a statement is the fastest way to auto-populate your dashboard. You can still add an account or
-            enter manually if that fits your setup better.
+            Import files is the fastest way to wake up Clover. You can also add an account or enter transactions
+            manually if that fits your setup better.
           </p>
 
           <div className="onboarding-grid onboarding-grid--start" role="list" aria-label="Getting started options">

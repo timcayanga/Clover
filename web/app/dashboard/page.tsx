@@ -282,7 +282,7 @@ export default async function DashboardPage({
     redirect("/onboarding");
   }
 
-  const starterWorkspacePromise = ensureStarterWorkspace(user);
+  const starterWorkspacePromise = ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
   const selectedWorkspacePromise = prisma.workspace.findFirst({
     where: { userId: user.id },
     orderBy: { createdAt: "asc" },

@@ -58,6 +58,13 @@ type MonthBucket = {
   net: number;
 };
 
+type GoalSummary = {
+  income: number;
+  expense: number;
+  transfer: number;
+  expenseCategories: Map<string, number>;
+};
+
 const formatCurrency = (value: number) => currencyFormatter.format(value);
 const formatSignedCurrency = (value: number) => `${value < 0 ? "-" : ""}${currencyFormatter.format(Math.abs(value))}`;
 const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
@@ -188,7 +195,7 @@ export default async function GoalsPage() {
 
   const resolvedWorkspace =
     selectedWorkspace ??
-    (await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified).then(async (starterWorkspace) => {
+      (await ensureStarterWorkspace(user).then(async (starterWorkspace) => {
       const starterWorkspaceData = await prisma.workspace.findUnique({
         where: { id: starterWorkspace.id },
         include: workspaceInclude,
@@ -308,7 +315,7 @@ export default async function GoalsPage() {
   const playbook = getGoalPlaybook(selectedGoalKey);
   const isEmptyWorkspace = resolvedWorkspace.accounts.length <= 1 && resolvedWorkspace.importFiles.length === 0 && currentWindowTransactions.length === 0;
 
-  const currentSummary = currentWindowTransactions.reduce(
+  const currentSummary = currentWindowTransactions.reduce<GoalSummary>(
     (accumulator, transaction) => {
       const amount = Number(transaction.amount);
       if (transaction.type === "income") {
@@ -337,7 +344,7 @@ export default async function GoalsPage() {
     }
   );
 
-  const previousSummary = previousWindowTransactions.reduce(
+  const previousSummary = previousWindowTransactions.reduce<GoalSummary>(
     (accumulator, transaction) => {
       const amount = Number(transaction.amount);
       if (transaction.type === "income") {
@@ -674,7 +681,7 @@ export default async function GoalsPage() {
           <EmptyDataCta
             eyebrow={user.dataWipedAt ? "Fresh start" : "No data yet"}
             title="Set a new goal once your data comes back."
-            copy="Your goals page will become more useful again after you import a statement or add accounts and transactions. Clover is ready for a clean import-first setup."
+            copy="Import a statement first so Clover can rebuild your goal view with real activity, progress, and next steps."
             importHref="/dashboard?import=1"
             accountHref="/accounts"
             transactionHref="/transactions?manual=1"

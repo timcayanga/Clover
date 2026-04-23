@@ -33,6 +33,13 @@ const shortDateFormatter = new Intl.DateTimeFormat("en-PH", {
   day: "2-digit",
 });
 
+type WindowSummary = {
+  income: number;
+  expense: number;
+  transfer: number;
+  expenseCategories: Map<string, number>;
+};
+
 type ReportTransaction = {
   id: string;
   date: Date;
@@ -605,7 +612,7 @@ async function ReportsPageView({
     )?.id ?? "";
 
   if (!selectedWorkspaceId) {
-    const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
+    const starterWorkspace = await ensureStarterWorkspace(user);
     const starterWorkspaceId = starterWorkspace?.id;
     if (!starterWorkspaceId) {
       console.error("Reports starter workspace could not be resolved", {
@@ -636,7 +643,7 @@ async function ReportsPageView({
 
     const [
       currentWindowTransactions,
-      previousWindowSummaryRows,
+      previousWindowTransactions,
       sixMonthTransactions,
       importedTransactionStats,
       manualTransactionStats,
@@ -660,6 +667,7 @@ async function ReportsPageView({
           type: true,
           merchantRaw: true,
           merchantClean: true,
+          importFileId: true,
           account: {
             select: {
               name: true,
@@ -674,7 +682,7 @@ async function ReportsPageView({
         orderBy: { date: "desc" },
         take: 500,
       }),
-      prisma.transaction.groupBy({
+      prisma.transaction.findMany({
         where: {
           workspaceId: selectedWorkspaceId,
           isExcluded: false,
@@ -683,9 +691,24 @@ async function ReportsPageView({
             lt: currentWindowStart,
           },
         },
-        by: ["type"],
-        _sum: {
+        select: {
+          id: true,
+          date: true,
           amount: true,
+          type: true,
+          merchantRaw: true,
+          merchantClean: true,
+          importFileId: true,
+          account: {
+            select: {
+              name: true,
+            },
+          },
+          category: {
+            select: {
+              name: true,
+            },
+          },
         },
       }),
       prisma.transaction.findMany({
@@ -782,7 +805,7 @@ async function ReportsPageView({
       currentWindowTransactions.length === 0 &&
       Object.values(importStatusCounts).every((count) => count === 0);
 
-    const currentSummary = currentWindowTransactions.reduce(
+    const currentSummary: WindowSummary = currentWindowTransactions.reduce(
       (accumulator, transaction) => {
         const amount = Number(transaction.amount);
         if (transaction.type === "income") {
@@ -808,12 +831,12 @@ async function ReportsPageView({
         expense: 0,
         transfer: 0,
         expenseCategories: new Map<string, number>(),
-      }
+      } as WindowSummary
     );
 
-    const previousSummary = previousWindowSummaryRows.reduce(
+    const previousSummary: WindowSummary = previousWindowTransactions.reduce(
       (accumulator, row) => {
-        const amount = Number(row._sum.amount ?? 0);
+        const amount = Number(row.amount ?? 0);
         if (row.type === "income") {
           accumulator.income += amount;
         } else if (row.type === "expense") {
@@ -821,13 +844,22 @@ async function ReportsPageView({
         } else {
           accumulator.transfer += amount;
         }
+
+        if (row.type === "expense") {
+          const categoryName = row.category?.name ?? "Uncategorized";
+          accumulator.expenseCategories.set(
+            categoryName,
+            (accumulator.expenseCategories.get(categoryName) ?? 0) + Math.abs(amount)
+          );
+        }
         return accumulator;
       },
       {
         income: 0,
         expense: 0,
         transfer: 0,
-      }
+        expenseCategories: new Map<string, number>(),
+      } as WindowSummary
     );
 
     const monthBuckets = getMonthBuckets(now);
@@ -922,7 +954,6 @@ async function ReportsPageView({
       .slice(0, 5);
 
     const maxCategorySpend = topCategories[0]?.[1] ?? 0;
-    const maxMonthlyNet = Math.max(...monthBuckets.map((bucket) => Math.abs(bucket.net)), 1);
 
     const currentNet = currentSummary.income - currentSummary.expense;
     const previousNet = previousSummary.income - previousSummary.expense;
@@ -978,6 +1009,88 @@ async function ReportsPageView({
     const currentMonthBucket = monthBuckets[monthBuckets.length - 1];
     const previousMonthBucket = monthBuckets[monthBuckets.length - 2] ?? monthBuckets[monthBuckets.length - 1];
     const monthlyNetChange = currentMonthBucket.net - previousMonthBucket.net;
+    const reportChartWidth = 560;
+    const reportChartHeight = 220;
+    const reportChartPadding = 24;
+    const reportChartXSpan = reportChartWidth - reportChartPadding * 2;
+    const reportChartYSpan = reportChartHeight - reportChartPadding * 2;
+    const reportCashFlowValues = monthBuckets.map((bucket) => bucket.net);
+    const reportCashFlowMax = Math.max(...reportCashFlowValues);
+    const reportCashFlowMin = Math.min(...reportCashFlowValues);
+    const reportCashFlowRange = Math.max(reportCashFlowMax - reportCashFlowMin, 1);
+    const reportCashFlowPoints = monthBuckets.map((bucket, index) => {
+      const x = reportChartPadding + (index / Math.max(monthBuckets.length - 1, 1)) * reportChartXSpan;
+      const normalized = (bucket.net - reportCashFlowMin) / reportCashFlowRange;
+      const y = reportChartPadding + (1 - normalized) * reportChartYSpan;
+      return { ...bucket, x, y };
+    });
+    const reportCashFlowPath = reportCashFlowPoints
+      .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`)
+      .join(" ");
+    const reportCategoryPalette = ["#0ea5c8", "#36b6e0", "#7dd3fc", "#14b8a6", "#f59e0b", "#8b5cf6"];
+    const reportCategorySegments = topCategories.map(([categoryName, amount], index) => ({
+      categoryName,
+      amount,
+      share: currentSpend > 0 ? amount / currentSpend : 0,
+      color: reportCategoryPalette[index % reportCategoryPalette.length],
+    }));
+    const currentTrackedCategorySpend = topCategories.reduce((sum, [, amount]) => sum + amount, 0);
+    const currentOtherSpend = Math.max(currentSpend - currentTrackedCategorySpend, 0);
+    const recurringSavingsPotential = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0) * 0.2;
+    const reportReviewQueueItems: ReportsQueueItem[] = [];
+    const primaryUncategorizedTransaction = uncategorizedTransactions[0];
+    const primaryDuplicateGroup = possibleDuplicateGroups[0];
+    const topCategoryOptions = topCategories.map(([categoryName]) => categoryName);
+    if (primaryUncategorizedTransaction) {
+      reportReviewQueueItems.push({
+        title: `${primaryUncategorizedTransaction.merchantClean ?? primaryUncategorizedTransaction.merchantRaw} needs a category`,
+        description: `${primaryUncategorizedTransaction.account.name} · ${formatShortDate(primaryUncategorizedTransaction.date)} · ${formatCurrency(Number(primaryUncategorizedTransaction.amount))}`,
+        tags: [
+          "No category",
+          primaryUncategorizedTransaction.importFileId ? "Imported transaction" : "Manual entry",
+          formatCurrency(Number(primaryUncategorizedTransaction.amount)),
+        ],
+        categoryOptions: topCategoryOptions.length > 0 ? topCategoryOptions : ["Food & Dining", "Transport", "Groceries", "Utilities", "Subscriptions", "Entertainment"],
+        actions: [
+          { label: "Review transaction", href: buildTransactionsHref({ transaction: primaryUncategorizedTransaction.id, review: "1" }) },
+          { label: "Open transactions", href: "/transactions", variant: "secondary" },
+        ],
+      });
+    }
+    if (primaryDuplicateGroup) {
+      const representative = primaryDuplicateGroup[0];
+      const duplicateTotal = primaryDuplicateGroup.reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+      reportReviewQueueItems.push({
+        title: `${representative.merchantClean ?? representative.merchantRaw} appears more than once`,
+        description: `${primaryDuplicateGroup.length} matching rows · ${representative.account.name} · ${formatShortDate(representative.date)}`,
+        tags: ["Potential duplicate", `${primaryDuplicateGroup.length} matches`, formatCurrency(duplicateTotal)],
+        actions: [
+          { label: "Review duplicates", href: buildTransactionsHref({ merchant: representative.merchantClean ?? representative.merchantRaw, review: "1" }) },
+          { label: "Open transactions", href: "/transactions", variant: "secondary" },
+        ],
+      });
+    }
+    if (importStatusCounts.failed > 0 || importStatusCounts.processing > 0) {
+      reportReviewQueueItems.push({
+        title:
+          importStatusCounts.failed > 0
+            ? `${importStatusCounts.failed} import${importStatusCounts.failed === 1 ? "" : "s"} failed`
+            : `${importStatusCounts.processing} import${importStatusCounts.processing === 1 ? "" : "s"} still processing`,
+        description:
+          importStatusCounts.failed > 0
+            ? "Open the import pipeline to resolve the file that did not finish cleanly."
+            : "Wait for the pipeline to finish so the newest rows can roll into the reports.",
+        tags: [
+          importStatusCounts.failed > 0 ? "Failed import" : "Processing import",
+          `${importStatusCounts.done} done`,
+          `${importStatusCounts.processing} processing`,
+        ],
+        actions: [
+          { label: "Open imports", href: "/imports" },
+          { label: "Open transactions", href: "/transactions", variant: "secondary" },
+        ],
+      });
+    }
 
     const trendDirection = currentNet >= previousNet ? "improving" : "softening";
     const spendDirection = spendDelta === null ? null : spendDelta > 0 ? "up" : spendDelta < 0 ? "down" : "flat";
@@ -1076,9 +1189,9 @@ async function ReportsPageView({
     return (
       <CloverShell
         active={active}
-        kicker="Insights"
-        title="Turn your statements into clear next steps."
-        subtitle="These insights are generated from imported statements, parsed transactions, and manual entries so you can see what changed, why it changed, and what to do next."
+        kicker="Reports"
+        title="A clearer report on where your money stands."
+        subtitle="Cash flow, spending concentration, recurring costs, and review items are pulled directly from your uploaded transactions and accounts."
         actions={
           <>
             <Link className="pill-link" href="/transactions">
@@ -1180,23 +1293,23 @@ async function ReportsPageView({
         />
         {isEmptyWorkspace ? (
           <div style={{ marginBottom: 20 }}>
-            <EmptyDataCta
-              eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
-              title="Your reports are ready for a new import."
-              copy="Import a statement to populate cash flow, spending, review items, and goal-aware summaries. Clover will fill the rest in as soon as the first file lands."
-              importHref="/dashboard?import=1"
-              accountHref="/accounts"
-              transactionHref="/transactions?manual=1"
-            />
+          <EmptyDataCta
+            eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
+            title="Your reports are ready for a new import."
+            copy="Import a statement first, and Clover will populate cash flow, spending, review items, and goal-aware summaries for you."
+            importHref="/dashboard?import=1"
+            accountHref="/accounts"
+            transactionHref="/transactions?manual=1"
+          />
           </div>
         ) : null}
         <section className="reports-hero">
           <div className="reports-hero__copy glass">
-            <span className="pill pill-accent">Goal-aware insights</span>
-            <h3>A calm view of your money that explains what changed and what it means.</h3>
+            <span className="pill pill-accent">Decision-ready reports</span>
+            <h3>A clearer view of your money, with the numbers that matter most.</h3>
             <p>
-              The page focuses on the minimum useful set: cash flow, spending patterns, review work, and goal
-              alignment. That keeps the experience readable while still giving you the full picture.
+              Every report is grounded in the transactions you uploaded, then sharpened with comparisons, labels, and
+              actions that point to the next useful step.
             </p>
             <div className="hero-actions">
               <Link className="button button-primary" href={nextStep.href}>
@@ -1353,14 +1466,14 @@ async function ReportsPageView({
 
             <div className="report-insight-grid">
               <div className="report-insight">
-                <span>Current {selectedRangeLabel}</span>
+                <span>Current period</span>
                 <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
                 <small>
                   {incomeDelta === null ? "No previous baseline" : `${formatPercent(incomeDelta)} vs the prior ${rangeWindowText}`}
                 </small>
               </div>
               <div className="report-insight">
-                <span>Previous {selectedRangeLabel}</span>
+                <span>Previous period</span>
                 <strong className={previousNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(previousNet)}</strong>
                 <small>
                   {previousNet === 0 ? "No prior benchmark" : `${previousNet >= 0 ? "Positive" : "Negative"} cash flow`}
@@ -1386,24 +1499,32 @@ async function ReportsPageView({
               </div>
             </div>
 
-            <div className="report-timeline">
-              {monthBuckets.map((bucket) => {
-                const width = Math.max((Math.abs(bucket.net) / maxMonthlyNet) * 100, bucket.net === 0 ? 6 : 18);
-                return (
-                  <Link key={bucket.key} href={buildTransactionsHref({ month: bucket.key })} className="report-timeline__row report-list__item--link">
-                    <div className="report-timeline__label">{bucket.label}</div>
-                    <div className="report-timeline__track" aria-hidden="true">
-                      <span
-                        className={`report-timeline__fill ${bucket.net >= 0 ? "report-timeline__fill--positive" : "report-timeline__fill--negative"}`}
-                        style={{ width: `${Math.min(width, 100)}%` }}
-                      />
-                    </div>
-                    <div className={`report-timeline__value ${bucket.net >= 0 ? "positive" : "negative"}`}>
-                      {formatCurrency(bucket.net)}
-                    </div>
+            <div className="report-chart">
+              <svg viewBox={`0 0 ${reportChartWidth} ${reportChartHeight}`} className="report-chart__svg" role="img" aria-label="Cash flow line chart">
+                <defs>
+                  <linearGradient id="report-cash-flow-gradient" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="rgba(14,165,233,0.26)" />
+                    <stop offset="100%" stopColor="rgba(14,165,233,0.03)" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d={`${reportCashFlowPath} L ${reportCashFlowPoints[reportCashFlowPoints.length - 1].x.toFixed(1)} ${reportChartHeight - reportChartPadding} L ${reportCashFlowPoints[0].x.toFixed(1)} ${reportChartHeight - reportChartPadding} Z`}
+                  fill="url(#report-cash-flow-gradient)"
+                />
+                <path d={reportCashFlowPath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                {reportCashFlowPoints.map((point) => (
+                  <circle key={point.key} cx={point.x} cy={point.y} r="5.5" fill="white" stroke="var(--accent)" strokeWidth="3" />
+                ))}
+              </svg>
+
+              <div className="report-chart__labels">
+                {reportCashFlowPoints.map((point) => (
+                  <Link key={point.key} href={buildTransactionsHref({ month: point.key })} className="report-chart__label report-list__item--link">
+                    <span>{point.label}</span>
+                    <strong>{formatCurrency(point.net)}</strong>
                   </Link>
-                );
-              })}
+                ))}
+              </div>
             </div>
           </article>
 
@@ -1415,34 +1536,84 @@ async function ReportsPageView({
               <div className="report-card__stat">
                 <strong>{formatCurrency(currentSpend)}</strong>
                 <span>
-                  {topCategories.length > 0 ? `${topCategories.length} leading categories` : "No spending yet"}
+                  {topCategories.length > 0 ? `${topCategories.length} leading categories · ${formatPercent(topCategoryShare ? topCategoryShare * 100 : 0)} top share` : "No spending yet"}
                 </span>
               </div>
             </div>
 
-            <div className="report-list">
-              {topCategories.length > 0 ? (
-                topCategories.map(([categoryName, amount]) => {
-                  const share = maxCategorySpend > 0 ? (amount / maxCategorySpend) * 100 : 0;
-                  return (
-                    <Link
-                      key={categoryName}
-                      href={buildTransactionsHref({ category: categoryName })}
-                      className="report-list__item report-list__item--link"
-                    >
-                      <div className="report-list__meta">
-                        <strong>{categoryName}</strong>
-                        <span>{formatCurrency(amount)}</span>
-                      </div>
-                      <div className="report-list__track" aria-hidden="true">
-                        <span className="report-list__fill" style={{ width: `${Math.max(share, 8)}%` }} />
-                      </div>
-                    </Link>
-                  );
-                })
-              ) : (
-                <div className="empty-state">No categorized expenses yet. Add transactions to surface the main spending groups.</div>
-              )}
+            <div className="report-donut">
+              <div className="report-donut__chart" role="img" aria-label="Spending breakdown donut chart">
+                <svg viewBox="0 0 240 240">
+                  <circle cx="120" cy="120" r="82" className="report-donut__track" />
+                  {reportCategorySegments.length > 0
+                    ? (() => {
+                        const circumference = 2 * Math.PI * 82;
+                        let offset = 0;
+                        return reportCategorySegments.map((segment) => {
+                          const dashLength = segment.share * circumference;
+                          const circle = (
+                            <circle
+                              key={segment.categoryName}
+                              cx="120"
+                              cy="120"
+                              r="82"
+                              className="report-donut__segment"
+                              style={{
+                                stroke: segment.color,
+                                strokeDasharray: `${dashLength} ${circumference}`,
+                                strokeDashoffset: -offset,
+                              }}
+                            />
+                          );
+                          offset += dashLength;
+                          return circle;
+                        });
+                      })()
+                    : null}
+                </svg>
+                <div className="report-donut__center">
+                  <strong>{formatCurrency(currentSpend)}</strong>
+                  <span>spent</span>
+                </div>
+              </div>
+
+              <div className="report-donut__legend">
+                {reportCategorySegments.length > 0 ? (
+                  reportCategorySegments.map((segment) => {
+                    const previousAmount = previousSummary.expenseCategories.get(segment.categoryName) ?? 0;
+                    const delta = segment.amount - previousAmount;
+                    return (
+                      <Link
+                        key={segment.categoryName}
+                        href={buildTransactionsHref({ category: segment.categoryName })}
+                        className="report-donut__legend-item report-list__item--link"
+                      >
+                        <span className="report-donut__swatch" style={{ background: segment.color }} />
+                        <div className="report-donut__meta">
+                          <strong>{segment.categoryName}</strong>
+                          <span>
+                            {formatCurrency(segment.amount)} · {formatPercent(segment.share * 100)}
+                          </span>
+                          <small className={delta >= 0 ? "negative" : "positive"}>
+                            {delta === 0 ? "Flat vs prior period" : `${delta >= 0 ? "+" : "-"}${formatCurrency(Math.abs(delta))} vs prior period`}
+                          </small>
+                        </div>
+                      </Link>
+                    );
+                  })
+                ) : (
+                  <div className="empty-state">No categorized expenses yet. Add transactions to surface the main spending groups.</div>
+                )}
+                {currentOtherSpend > 0 ? (
+                  <div className="report-donut__legend-item">
+                    <span className="report-donut__swatch" style={{ background: "var(--border-subtle)" }} />
+                    <div className="report-donut__meta">
+                      <strong>Other spend</strong>
+                      <span>{formatCurrency(currentOtherSpend)}</span>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
             </div>
 
           </article>
@@ -1456,7 +1627,9 @@ async function ReportsPageView({
               </div>
               <div className="report-card__stat">
                 <strong>{recurringMerchants.length}</strong>
-                <span>fixed costs surfaced</span>
+                <span>
+                  fixed costs surfaced · {formatCurrency(recurringSavingsPotential)} monthly savings potential
+                </span>
               </div>
             </div>
 
@@ -1492,7 +1665,9 @@ async function ReportsPageView({
               </div>
               <div className="report-card__stat">
                 <strong>{topMerchants.length}</strong>
-                <span>where spending concentrates</span>
+                <span>
+                  where spending concentrates · {topMerchants[0] ? formatPercent((topMerchants[0].amount / Math.max(currentSpend, 1)) * 100) : "0%"} top share
+                </span>
               </div>
             </div>
 
@@ -1536,22 +1711,22 @@ async function ReportsPageView({
 
             <div className="report-insight-grid">
               <div className="report-insight">
-                <span>Total income</span>
+                <span>Gross inflow</span>
                 <strong>{formatCurrency(currentMonthBucket.income)}</strong>
                 <small>{currentMonthBucket.label}</small>
               </div>
               <div className="report-insight">
-                <span>Total spending</span>
+                <span>Gross outflow</span>
                 <strong>{formatCurrency(currentMonthBucket.expense)}</strong>
                 <small>All tracked expenses</small>
               </div>
               <div className="report-insight">
-                <span>Net result</span>
+                <span>Net position</span>
                 <strong className={currentMonthBucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentMonthBucket.net)}</strong>
                 <small>Income minus spending</small>
               </div>
               <div className="report-insight">
-                <span>Change vs last month</span>
+                <span>Month-over-month delta</span>
                 <strong className={monthlyNetChange >= 0 ? "positive" : "negative"}>{formatSignedCurrency(monthlyNetChange)}</strong>
                 <small>{previousMonthBucket.label}</small>
               </div>
@@ -1565,70 +1740,11 @@ async function ReportsPageView({
         </section>
 
         <section className="reports-grid reports-grid--secondary">
-          <article className="report-card glass">
-            <div className="report-card__head">
-              <div>
-                <h4>Review queue</h4>
-              </div>
-              <div className="report-card__stat">
-                <strong>{uncategorizedTransactions.length + possibleDuplicateGroups.length}</strong>
-                <span>actionable items</span>
-              </div>
-            </div>
-
-            <div className="report-subsection">
-              <p className="eyebrow">Uncategorized</p>
-              <div className="report-list">
-                {uncategorizedTransactions.length > 0 ? (
-                  uncategorizedTransactions.slice(0, 4).map((transaction) => (
-                    <div key={transaction.id} className="report-list__item">
-                      <div className="report-list__meta">
-                        <strong>{transaction.merchantClean ?? transaction.merchantRaw}</strong>
-                        <span>
-                          {transaction.account.name} · {formatShortDate(transaction.date)} · {formatCurrency(Number(transaction.amount))}
-                        </span>
-                      </div>
-                      <div className="report-tags">
-                        {!transaction.category?.name ? <span className="pill pill-subtle">No category</span> : null}
-                        {!transaction.merchantClean ? <span className="pill pill-subtle">Merchant name missing</span> : null}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="empty-state">No uncategorized transactions right now.</div>
-                )}
-              </div>
-            </div>
-
-            <div className="report-subsection">
-              <p className="eyebrow">Possible duplicates</p>
-              <div className="report-list">
-                {possibleDuplicateGroups.length > 0 ? (
-                  possibleDuplicateGroups.map((group) => {
-                    const representative = group[0];
-                    const total = group.reduce((sum, transaction) => sum + Number(transaction.amount), 0);
-                    return (
-                      <div key={`${representative.id}-${group.length}`} className="report-list__item">
-                        <div className="report-list__meta">
-                          <strong>{representative.merchantClean ?? representative.merchantRaw}</strong>
-                          <span>
-                            {group.length} matches · {representative.account.name} · {formatShortDate(representative.date)}
-                          </span>
-                        </div>
-                        <div className="report-tags">
-                          <span className="pill pill-subtle">{formatCurrency(total)}</span>
-                        </div>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="empty-state">No likely duplicates surfaced in the current data set.</div>
-                )}
-              </div>
-            </div>
+          <article className="report-card glass report-card--balanced">
+            <ReportsReviewQueue items={reportReviewQueueItems} />
           </article>
 
-          <article className="report-card glass">
+          <article className="report-card glass report-card--balanced">
             <div className="report-card__head">
               <div>
                 <h4>Data health</h4>
@@ -1653,7 +1769,7 @@ async function ReportsPageView({
             </div>
 
             <div className="report-subsection">
-              <p className="eyebrow">Goal lens</p>
+              <p className="eyebrow">Decision lens</p>
               <div className="report-list">
                 <div className="report-list__item">
                   <div className="report-list__meta">

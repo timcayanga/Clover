@@ -9,6 +9,10 @@ const envSchema = z.object({
   R2_BUCKET_NAME: z.string().min(1).optional(),
   DATABASE_URL: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1).optional(),
+  GUMROAD_WEBHOOK_SECRET: z.string().min(1).optional(),
+  GUMROAD_PRO_PRODUCT_ID: z.string().min(1).optional(),
+  GUMROAD_PRO_PRODUCT_PERMALINK: z.string().min(1).optional(),
+  GUMROAD_UPGRADE_URL: z.string().url().optional(),
   STAGING_BASIC_AUTH_USERNAME: z.string().min(1).optional(),
   STAGING_BASIC_AUTH_PASSWORD: z.string().min(1).optional(),
 });

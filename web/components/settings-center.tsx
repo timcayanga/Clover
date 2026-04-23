@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
 type FieldKind = "text" | "select" | "textarea" | "toggle";
 
@@ -8,6 +9,7 @@ export type SettingField = {
   label: string;
   helper?: string;
   kind: FieldKind;
+  tier?: "primary" | "advanced";
   value?: string;
   options?: string[];
   checked?: boolean;
@@ -30,7 +32,17 @@ function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
 
-function renderField(field: SettingField) {
+function renderField(field: SettingField, section: SettingSection) {
+  const trackSettingsUpdated = (detail: Record<string, string | number | boolean | null>) => {
+    capturePostHogClientEvent("settings_updated", {
+      setting_group: section.group,
+      setting_title: section.title,
+      setting_label: field.label,
+      setting_kind: field.kind,
+      ...detail,
+    });
+  };
+
   if (field.kind === "toggle") {
     return (
       <label className="settings-toggle">
@@ -39,7 +51,15 @@ function renderField(field: SettingField) {
           {field.helper ? <span>{field.helper}</span> : null}
         </span>
         <span className="settings-switch">
-          <input type="checkbox" defaultChecked={field.checked ?? false} />
+          <input
+            type="checkbox"
+            defaultChecked={field.checked ?? false}
+            onChange={(event) => {
+              trackSettingsUpdated({
+                checked: event.target.checked,
+              });
+            }}
+          />
           <span aria-hidden="true" />
         </span>
       </label>
@@ -50,7 +70,14 @@ function renderField(field: SettingField) {
     <label className="settings-field">
       <span>{field.label}</span>
       {field.kind === "select" ? (
-        <select defaultValue={field.value}>
+        <select
+          defaultValue={field.value}
+          onChange={(event) => {
+            trackSettingsUpdated({
+              value: event.target.value,
+            });
+          }}
+        >
           {(field.options ?? []).map((option) => (
             <option key={option} value={option}>
               {option}
@@ -58,9 +85,24 @@ function renderField(field: SettingField) {
           ))}
         </select>
       ) : field.kind === "textarea" ? (
-        <textarea defaultValue={field.value} rows={field.rows ?? 3} />
+        <textarea
+          defaultValue={field.value}
+          rows={field.rows ?? 3}
+          onBlur={(event) => {
+            trackSettingsUpdated({
+              value: event.target.value,
+            });
+          }}
+        />
       ) : (
-        <input defaultValue={field.value} />
+        <input
+          defaultValue={field.value}
+          onBlur={(event) => {
+            trackSettingsUpdated({
+              value: event.target.value,
+            });
+          }}
+        />
       )}
       {field.helper ? <small>{field.helper}</small> : null}
     </label>
@@ -166,6 +208,8 @@ export function SettingsCenter({ sections }: SettingsCenterProps) {
         {visibleSections.length ? (
           visibleSections.map((section) => {
             const id = slugify(section.title);
+            const primaryFields = section.fields.filter((field) => field.tier !== "advanced");
+            const advancedFields = section.fields.filter((field) => field.tier === "advanced");
 
             return (
               <article key={section.title} id={id} className="settings-card glass">
@@ -178,20 +222,56 @@ export function SettingsCenter({ sections }: SettingsCenterProps) {
                 </div>
 
                 <div className="settings-section-grid">
-                  {section.fields.map((field) => (
+                  {primaryFields.map((field) => (
                     <div key={field.label} className="settings-section-grid__item">
-                      {renderField(field)}
+                      {renderField(field, section)}
                     </div>
                   ))}
                 </div>
 
+                {advancedFields.length ? (
+                  <details className="settings-advanced">
+                    <summary>
+                      <span>Advanced options</span>
+                      <small>For power users and tighter control</small>
+                    </summary>
+                    <div className="settings-advanced__grid">
+                      {advancedFields.map((field) => (
+                        <div key={field.label} className="settings-section-grid__item">
+                          {renderField(field, section)}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
+
                 <div className="settings-card__footer">
                   <span>Changes are surfaced here first, then wired to persistence next.</span>
                   <div className="settings-card__actions">
-                    <button className="button button-secondary button-small" type="button">
+                    <button
+                      className="button button-secondary button-small"
+                      type="button"
+                      onClick={() => {
+                        capturePostHogClientEvent("settings_updated", {
+                          setting_group: section.group,
+                          setting_title: section.title,
+                          setting_action: "reset",
+                        });
+                      }}
+                    >
                       Reset section
                     </button>
-                    <button className="button button-primary button-small" type="button">
+                    <button
+                      className="button button-primary button-small"
+                      type="button"
+                      onClick={() => {
+                        capturePostHogClientEvent("settings_updated", {
+                          setting_group: section.group,
+                          setting_title: section.title,
+                          setting_action: "save",
+                        });
+                      }}
+                    >
                       Save section
                     </button>
                   </div>

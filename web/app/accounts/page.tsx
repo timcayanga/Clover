@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { AccountBrandMark } from "@/components/account-brand-mark";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
@@ -13,6 +14,7 @@ import {
   getCachedAccountsWorkspace,
   persistAccountsWorkspaceCache,
 } from "@/lib/workspace-cache";
+import { getAccountBrand } from "@/lib/account-brand";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 
@@ -1079,67 +1081,98 @@ function AccountsPageContent() {
                       <span className={`accounts-group__tone accounts-group__tone--${group.tone}`}>{group.title}</span>
                     </div>
 
-                      <div className="accounts-table" role="table" aria-label={`${group.title} accounts`}>
-                      <div className="accounts-table__header" role="row">
-                        <span role="columnheader">Name</span>
-                        <span role="columnheader">Type</span>
-                        <span role="columnheader">Amount</span>
-                        <span role="columnheader">Last updated</span>
-                        <span role="columnheader">Status</span>
-                      </div>
-                      {group.rows.map((account) => {
-                        const value = parseAmount(account.balance);
-                        const isLiability = getEffectiveAccountType(account) === "credit_card";
-                        const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
-                        const warning = getAccountWarning(account, duplicateCounts.get(duplicateKey) ?? 0);
-                        return (
-                          <div key={account.id} className="accounts-table__row" role="row">
-                            <div className="accounts-table__cell accounts-table__cell--name" role="cell">
-                              <strong>{account.name}</strong>
-                              <span>
-                                {account.institution ?? "No institution"} ·{" "}
-                                <span className="accounts-source">{account.source === "manual" ? "Manual" : "Imported"}</span>
-                              </span>
-                            </div>
-                            <div className="accounts-table__cell" role="cell">
-                              <span className={`accounts-type-tag ${getAccountTone(account) === "liability" ? "is-liability" : ""}`}>
-                                {getAccountDisplayType(account)}
-                              </span>
-                            </div>
-                            <div className={`accounts-table__cell accounts-table__cell--amount ${isLiability ? "is-liability" : "is-asset"}`} role="cell">
-                              {currencyFormatter.format(isLiability ? -Math.abs(value) : value)}
-                            </div>
-                            <div className="accounts-table__cell" role="cell">
-                              {formatDate(account.updatedAt)}
-                            </div>
-                            <div className="accounts-table__cell accounts-table__cell--status" role="cell">
-                              {warning ? (
-                                <span className="accounts-warning-wrap">
+                      <div className="accounts-card-grid" aria-label={`${group.title} accounts`}>
+                        {group.rows.map((account) => {
+                          const value = parseAmount(account.balance);
+                          const isLiability = getEffectiveAccountType(account) === "credit_card";
+                          const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
+                          const warning = getAccountWarning(account, duplicateCounts.get(duplicateKey) ?? 0);
+                          const accountBrand = getAccountBrand({
+                            institution: account.institution,
+                            name: account.name,
+                            type: getEffectiveAccountType(account),
+                          });
+                          const balanceValue = isLiability ? -Math.abs(value) : value;
+                          const sourceLabel = account.source === "manual" ? "Manual" : "Imported";
+                          return (
+                            <article
+                              key={account.id}
+                              className="accounts-account-card glass"
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`Open ${account.name} account`}
+                              onClick={() => openAccountDrawer(account)}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  openAccountDrawer(account);
+                                }
+                              }}
+                            >
+                              <div className="accounts-account-card__head">
+                                <div className="accounts-account-card__brand">
+                                  <AccountBrandMark accountBrand={accountBrand} label={account.name} />
+                                  <div>
+                                    <strong>{account.name}</strong>
+                                    <span>
+                                      {accountBrand.label}
+                                      {account.institution && account.institution !== accountBrand.label ? ` · ${account.institution}` : ""}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="accounts-account-card__actions">
+                                  {warning ? (
+                                    <span className="accounts-warning-wrap">
+                                      <button
+                                        className="accounts-warning-icon"
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          openDrawerForWarning(account, warning);
+                                        }}
+                                        title={warning}
+                                        aria-label={warning}
+                                      >
+                                        <span aria-hidden="true">⚠</span>
+                                      </button>
+                                      <span className="accounts-warning-tooltip" role="tooltip">
+                                        {warning}
+                                      </span>
+                                    </span>
+                                  ) : (
+                                    <span className="accounts-view-pill">Ready</span>
+                                  )}
                                   <button
-                                    className="accounts-warning-icon"
+                                    className="button button-secondary button-small accounts-row-button"
                                     type="button"
-                                    onClick={() => openDrawerForWarning(account, warning)}
-                                    title={warning}
-                                    aria-label={warning}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openAccountDrawer(account);
+                                    }}
+                                    aria-label={`Open ${account.name} drawer`}
                                   >
-                                    <span aria-hidden="true">⚠</span>
+                                    <span aria-hidden="true">&gt;</span>
                                   </button>
-                                  <span className="accounts-warning-tooltip" role="tooltip">
-                                    {warning}
+                                </div>
+                              </div>
+
+                              <div className="accounts-account-card__body">
+                                <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
+                                  {currencyFormatter.format(balanceValue)}
+                                </div>
+                                <div className="accounts-account-card__copy">
+                                  <span className={`accounts-type-tag ${getAccountTone(account) === "liability" ? "is-liability" : ""}`}>
+                                    {getAccountDisplayType(account)}
                                   </span>
-                                </span>
-                              ) : (
-                                <span className="accounts-view-pill">Ready</span>
-                              )}
-                              <button className="button button-secondary button-small accounts-row-button" type="button" onClick={() => openAccountDrawer(account)} aria-label={`Open ${account.name} drawer`}>
-                                <span aria-hidden="true">&gt;</span>
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </article>
+                                  <span>{sourceLabel}</span>
+                                  <span>{formatDate(account.updatedAt)}</span>
+                                </div>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    </article>
                 ))
               ) : (
                 <div className="empty-state">

@@ -23,7 +23,7 @@ export default async function ProfilePage() {
       kicker="Account hub"
       subtitle="Your identity and account shortcuts live here, while settings stay one click away."
     >
-      <ProfileCenter />
+      <ProfileCenter canSignOut={!session.isGuest} />
     </CloverShell>
   );
 }

@@ -419,11 +419,11 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
     }
   };
 
-  const title = mode === "sign-in" ? "Welcome back" : "Sign Up";
+  const title = mode === "sign-in" ? "Welcome back" : "Create your Clover account";
   const subtitle =
     mode === "sign-in"
-      ? "Sign in to pick up where you left off."
-      : "";
+      ? "Sign in to pick up where you left off and keep moving."
+      : "Create your account once, then import a statement, connect an account, or start manually.";
   const footerText =
     mode === "sign-in" ? (
       <>

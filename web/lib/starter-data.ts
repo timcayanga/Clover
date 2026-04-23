@@ -1,7 +1,10 @@
+import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { isStagingHost } from "@/lib/auth";
+
+type StarterWorkspaceUser = Pick<User, "id" | "clerkUserId" | "email" | "verified" | "dataWipedAt">;
 
 const stagingSampleTransactions = [
   {
@@ -149,8 +152,15 @@ const normalizeStarterCashAccount = async (workspaceId: string) => {
   });
 };
 
-export const ensureStarterWorkspace = async (userId: string, email: string, verified: boolean) => {
-  const user = await getOrCreateCurrentUser(userId);
+export const ensureStarterWorkspace = async (
+  userOrClerkUserId: StarterWorkspaceUser | string,
+  email?: string,
+  verified?: boolean
+) => {
+  const user =
+    typeof userOrClerkUserId === "string"
+      ? await getOrCreateCurrentUser(userOrClerkUserId)
+      : userOrClerkUserId;
   const stagingHost = await isStagingHost();
   const useFreshStartWorkspace = user.dataWipedAt !== null;
 

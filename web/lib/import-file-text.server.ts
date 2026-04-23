@@ -1,5 +1,4 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { getEnv } from "@/lib/env";
@@ -133,8 +132,7 @@ const loadPdfJs = async () => {
 };
 
 const getPdfJsStandardFontDataUrl = () => {
-  const require = createRequire(`${process.cwd()}/package.json`);
-  const pdfJsPackagePath = require.resolve("pdfjs-dist/package.json");
+  const pdfJsPackagePath = join(process.cwd(), "node_modules", "pdfjs-dist", "package.json");
   return `${pathToFileURL(join(dirname(pdfJsPackagePath), "standard_fonts")).toString().replace(/\/?$/, "")}/`;
 };
 

@@ -3,6 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { GoalDefinition } from "@/lib/goals";
+import { GoalGlyph } from "@/components/goals-visuals";
 
 type GoalsEditorProps = {
   goals: GoalDefinition[];
@@ -64,7 +65,10 @@ export function GoalsEditor({ goals, currentGoal }: GoalsEditorProps) {
               aria-pressed={isSelected}
               role="listitem"
             >
-              <span className="goals-editor__card-pill">{isSelected ? "Selected" : "Tap to focus"}</span>
+              <span className="goals-editor__card-pill">
+                <GoalGlyph goalKey={goal.value} />
+                {isSelected ? "Selected" : "Tap to focus"}
+              </span>
               <strong>{goal.title}</strong>
               <span>{goal.description}</span>
             </button>

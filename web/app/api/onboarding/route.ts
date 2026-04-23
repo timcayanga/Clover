@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireAuth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
+import { capturePostHogServerEvent } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,13 @@ export async function POST(request: Request) {
         primaryGoal,
         onboardingCompletedAt: new Date(),
       },
+    });
+
+    void capturePostHogServerEvent("onboarding_completed", userId, {
+      primary_goal: primaryGoal ?? null,
+      start_action: payload.startAction ?? null,
+      skipped: payload.skipped,
+      goal_count: payload.goals.length,
     });
 
     return NextResponse.json({ user: updated });
