@@ -6265,6 +6265,142 @@ label {
   scrollbar-gutter: stable;
 }
 
+.transactions-mobile-view {
+  display: none;
+}
+
+.transactions-mobile-list {
+  display: grid;
+  gap: 12px;
+}
+
+.transactions-mobile-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 22px;
+  border: 1px solid var(--stroke);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 252, 253, 0.92)),
+    rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-soft);
+}
+
+.transactions-mobile-card.is-muted {
+  opacity: 0.7;
+}
+
+.transactions-mobile-card.is-selected {
+  border-color: rgba(3, 168, 192, 0.22);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
+}
+
+.transactions-mobile-card__top {
+  display: grid;
+  grid-template-columns: 24px 34px minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.transactions-mobile-card__select {
+  align-self: center;
+}
+
+.transactions-mobile-card__select input {
+  width: 18px;
+  height: 18px;
+  min-height: 18px;
+}
+
+.transactions-mobile-card__icon {
+  align-self: center;
+}
+
+.transactions-mobile-card__name {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.transactions-mobile-card__name-edit {
+  width: 100%;
+}
+
+.transactions-mobile-card__amount {
+  align-self: start;
+  justify-self: end;
+}
+
+.transactions-mobile-card__amount-edit {
+  width: auto;
+  min-width: 0;
+}
+
+.transactions-mobile-card__warning {
+  align-self: start;
+  width: 32px;
+  height: 32px;
+}
+
+.transactions-mobile-card__meta {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.transactions-mobile-card__field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.transactions-mobile-card__field > span {
+  color: var(--muted-2);
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.transactions-mobile-card__field-edit {
+  width: 100%;
+  min-width: 0;
+}
+
+.transactions-mobile-card__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.transactions-mobile-card__detail-button {
+  min-width: 96px;
+}
+
+.transactions-mobile-card__warning-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--warn);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.transactions-mobile-loading {
+  display: grid;
+  gap: 12px;
+}
+
+.transactions-mobile-card--loading {
+  min-height: 160px;
+}
+
+.transactions-mobile-card__loading-name {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
 .line-item {
   display: grid;
   grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
@@ -9614,6 +9750,29 @@ input.transaction-inline-edit--amount::placeholder {
   .transactions-table-wrap {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .transactions-mobile-view {
+    display: grid;
+    gap: 12px;
+  }
+
+  .line-item-header,
+  .transactions-table-wrap {
+    display: none;
+  }
+
+  .transactions-mobile-card__meta {
+    grid-template-columns: 1fr;
+  }
+
+  .transactions-mobile-card__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .transactions-mobile-card__detail-button {
+    width: 100%;
   }
 
   .line-item-header,

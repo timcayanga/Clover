@@ -1050,7 +1050,7 @@ function TransactionsPageContent() {
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
-  const transactionRowRefs = useRef(new Map<string, HTMLDivElement>());
+  const transactionRowRefs = useRef(new Map<string, HTMLElement>());
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const reviewTransactionParamRef = useRef<string | null>(null);
   const drilldownParamRef = useRef<string | null>(null);
@@ -3353,6 +3353,193 @@ function TransactionsPageContent() {
                   </div>
                 );
               })
+            ) : !hasVisibleTransactions ? (
+              <div className="transactions-empty-state">
+                <p className="transactions-empty-state__eyebrow">It is quiet in here</p>
+                <h3>No transactions yet</h3>
+                <p className="transactions-empty-state__copy">
+                  Add your first transaction to get the dashboard moving and start building your categories.
+                </p>
+                <div className="transactions-empty-state__actions">
+                  <button className="button button-primary" type="button" onClick={() => void openManualAdd()}>
+                    Add transaction
+                  </button>
+                  <button className="button button-secondary" type="button" onClick={() => openImportFiles()}>
+                    Import files
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="empty-state">No transactions match the current filters.</div>
+            )}
+          </div>
+
+          <div className="transactions-mobile-view">
+            {isTableLoading ? (
+              <div className="transactions-mobile-loading" role="status" aria-live="polite" aria-label="Loading transactions">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={index} className="transactions-mobile-card glass transactions-mobile-card--loading">
+                    <div className="transactions-mobile-card__top">
+                      <span className="skeleton-block skeleton-block--checkbox" />
+                      <span className="skeleton-block skeleton-block--icon" />
+                      <span className="transactions-mobile-card__loading-name">
+                        <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+                        <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+                      </span>
+                      <span className="skeleton-block skeleton-block--amount" />
+                      <span className="skeleton-block skeleton-block--warning" />
+                    </div>
+                    <div className="transactions-mobile-card__meta">
+                      <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+                      <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+                      <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+                    </div>
+                    <div className="transactions-mobile-card__actions">
+                      <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredTransactions.length > 0 ? (
+              <div className="transactions-mobile-list">
+                {filteredTransactions.map((transaction) => {
+                  const warningReason = warningReasonFor(transaction);
+                  const amount = Number(transaction.amount);
+                  const isPositive = transaction.type === "income";
+                  const amountToneClass = isPositive ? "positive" : "negative";
+                  const categoryValue = transaction.categoryId ?? otherCategoryId;
+                  const categoryLabel = categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+                  const merchantSummary = summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
+                  const merchantDisplay = humanizeTransactionMerchantText(transaction.merchantRaw);
+                  const showMerchantSubtext = merchantDisplay && merchantDisplay.toLowerCase() !== merchantSummary.toLowerCase();
+
+                  return (
+                    <article
+                      key={transaction.id}
+                      ref={(node) => {
+                        if (node) {
+                          transactionRowRefs.current.set(transaction.id, node);
+                          return;
+                        }
+
+                        transactionRowRefs.current.delete(transaction.id);
+                      }}
+                      className={`transactions-mobile-card glass ${transaction.isExcluded ? "is-muted" : ""} ${
+                        selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
+                      }`}
+                    >
+                      <div className="transactions-mobile-card__top">
+                        <label className="transaction-select-cell transactions-mobile-card__select">
+                          <input
+                            type="checkbox"
+                            checked={selectedTransactionIds.includes(transaction.id)}
+                            onChange={(event) => toggleSelectedTransaction(transaction.id, event.target.checked)}
+                            aria-label={`Select ${transaction.merchantRaw}`}
+                          />
+                        </label>
+                        <span className="transaction-category-icon-cell transactions-mobile-card__icon" aria-hidden="true">
+                          <span className="transaction-category-icon" style={getCategoryIconTone(transaction.categoryName ?? categoryLabel)}>
+                            <img src={getCategoryIconSrc(transaction.categoryName ?? categoryLabel)} alt="" aria-hidden="true" />
+                          </span>
+                        </span>
+                        <div className="transactions-mobile-card__name">
+                          <InlineEditableCell
+                            value={transaction.merchantClean ?? transaction.merchantRaw}
+                            displayValue={merchantSummary}
+                            ariaLabel={`Edit name for ${transaction.merchantRaw}`}
+                            kind="text"
+                            className="transaction-inline-edit transaction-inline-edit--name transactions-mobile-card__name-edit"
+                            onCommit={(value) => commitInlineEdit(transaction, "name", value)}
+                          />
+                          {showMerchantSubtext ? <small className="transaction-subtext">{merchantDisplay}</small> : null}
+                        </div>
+                        <div className={`transaction-amount-cell ${amountToneClass} transactions-mobile-card__amount`}>
+                          <InlineEditableCell
+                            value={transaction.amount}
+                            displayValue={currencyFormatter.format(amount)}
+                            ariaLabel={`Edit amount for ${transaction.merchantRaw}`}
+                            kind="number"
+                            className={`transaction-inline-edit transaction-inline-edit--amount ${amountToneClass} transactions-mobile-card__amount-edit`}
+                            onCommit={(value) => commitInlineEdit(transaction, "amount", value)}
+                          />
+                        </div>
+                        {warningReason ? (
+                          <button
+                            type="button"
+                            className="warning-chip transactions-mobile-card__warning"
+                            title={warningReason}
+                            aria-label={warningReason}
+                            onClick={() => openTransactionDetail(transaction)}
+                          >
+                            <span className="warning-mark warning-mark--small" aria-hidden="true" />
+                          </button>
+                        ) : null}
+                      </div>
+
+                      <div className="transactions-mobile-card__meta">
+                        <div className="transactions-mobile-card__field">
+                          <span>Date</span>
+                          <InlineEditableCell
+                            value={transaction.date.slice(0, 10)}
+                            displayValue={formatDate(transaction.date)}
+                            ariaLabel={`Edit date for ${transaction.merchantRaw}`}
+                            kind="date"
+                            className="transaction-inline-edit transaction-inline-edit--date transactions-mobile-card__field-edit"
+                            onCommit={(value) => commitInlineEdit(transaction, "date", value)}
+                          />
+                        </div>
+                        <div className="transactions-mobile-card__field">
+                          <span>Account</span>
+                          <InlineEditableCell
+                            value={transaction.accountId}
+                            displayValue={transaction.accountName}
+                            ariaLabel={`Edit account for ${transaction.merchantRaw}`}
+                            kind="select"
+                            className="transaction-inline-edit transaction-inline-edit--select transactions-mobile-card__field-edit"
+                            options={accounts.map((account) => ({
+                              value: account.id,
+                              label: account.name,
+                            }))}
+                            onCommit={(value) => commitInlineEdit(transaction, "accountId", value)}
+                          />
+                        </div>
+                        <div className="transactions-mobile-card__field">
+                          <span>Category</span>
+                          <InlineEditableCell
+                            value={categoryValue}
+                            displayValue={categoryLabel}
+                            ariaLabel={`Edit category for ${transaction.merchantRaw}`}
+                            kind="select"
+                            className="transaction-inline-edit transaction-inline-edit--select transactions-mobile-card__field-edit"
+                            options={categories.map((category) => ({
+                              value: category.id,
+                              label: category.name,
+                            }))}
+                            onCommit={(value) => commitInlineEdit(transaction, "categoryId", value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="transactions-mobile-card__actions">
+                        <button
+                          type="button"
+                          className="button button-secondary button-small transactions-mobile-card__detail-button"
+                          onClick={() => openTransactionDetail(transaction)}
+                          aria-label={`Open details for ${transaction.merchantRaw}`}
+                        >
+                          Details
+                        </button>
+                        {warningReason ? (
+                          <span className="transactions-mobile-card__warning-copy">
+                            <span className="warning-mark warning-mark--small" aria-hidden="true" />
+                            Needs review
+                          </span>
+                        ) : null}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
             ) : !hasVisibleTransactions ? (
               <div className="transactions-empty-state">
                 <p className="transactions-empty-state__eyebrow">It is quiet in here</p>
