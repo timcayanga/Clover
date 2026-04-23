@@ -32,7 +32,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
     const payload = patchSchema.parse(await request.json());
 
     const transaction = await prisma.transaction.findFirst({
-      where: { id: transactionId, deletedAt: null },
+      where: { id: transactionId },
     });
 
     if (!transaction) {
@@ -252,7 +252,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const { userId } = await requireAuth();
 
     const transaction = await prisma.transaction.findFirst({
-      where: { id: transactionId, deletedAt: null },
+      where: { id: transactionId },
     });
 
     if (!transaction) {
@@ -261,11 +261,8 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
     await assertWorkspaceAccess(userId, transaction.workspaceId);
 
-    await prisma.transaction.update({
+    await prisma.transaction.delete({
       where: { id: transactionId },
-      data: {
-        deletedAt: new Date(),
-      },
     });
 
     await prisma.auditLog.create({

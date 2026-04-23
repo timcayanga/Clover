@@ -157,7 +157,6 @@ model Transaction {
   description    String?
   isTransfer     Boolean          @default(false)
   isExcluded     Boolean          @default(false)
-  deletedAt      DateTime?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -172,7 +171,6 @@ model Transaction {
   @@index([categoryId])
   @@index([reviewStatus])
   @@index([date])
-  @@index([deletedAt])
 }
 
 model ImportFile {
@@ -187,7 +185,6 @@ model ImportFile {
   confirmedTransactionsCount Int @default(0)
   confirmedAt   DateTime?
   uploadedAt    DateTime         @default(now())
-  deletedAt     DateTime?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
