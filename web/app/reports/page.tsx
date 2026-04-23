@@ -138,6 +138,8 @@ const normalizeMerchant = (value: string) => value.trim().toLowerCase();
 
 const buildTransactionsHref = (params: Record<string, string>) => `/transactions?${new URLSearchParams(params).toString()}`;
 
+const isDefined = <T,>(value: T | null | undefined): value is T => value !== null && value !== undefined;
+
 const goalLabels: Record<string, string> = {
   save_more: "Save more",
   pay_down_debt: "Pay down debt",
@@ -823,6 +825,13 @@ async function ReportsPageView({
       failed: Number(failedImportCount ?? 0),
       deleted: Number(deletedImportCount ?? 0),
     };
+    const reportCurrentWindowTransactions = Array.isArray(currentWindowTransactions)
+      ? currentWindowTransactions.filter(isDefined)
+      : [];
+    const reportPreviousWindowTransactions = Array.isArray(previousWindowTransactions)
+      ? previousWindowTransactions.filter(isDefined)
+      : [];
+    const reportSixMonthTransactions = Array.isArray(sixMonthTransactions) ? sixMonthTransactions.filter(isDefined) : [];
     const isFreshResetWorkspace =
       user.dataWipedAt !== null && Number(accountStats._count.id ?? 0) <= 1 && Object.values(importStatusCounts).every((count) => count === 0);
     const latestImportSummary = latestImport as unknown as
@@ -834,10 +843,10 @@ async function ReportsPageView({
       | null;
     const isEmptyWorkspace =
       Number(accountStats._count.id ?? 0) <= 1 &&
-      currentWindowTransactions.length === 0 &&
+      reportCurrentWindowTransactions.length === 0 &&
       Object.values(importStatusCounts).every((count) => count === 0);
 
-    const currentSummary: WindowSummary = currentWindowTransactions.reduce(
+    const currentSummary: WindowSummary = reportCurrentWindowTransactions.reduce(
       (accumulator, transaction) => {
         const amount = Number(transaction.amount);
         if (transaction.type === "income") {
@@ -866,7 +875,7 @@ async function ReportsPageView({
       } as WindowSummary
     );
 
-    const previousSummary: WindowSummary = previousWindowTransactions.reduce(
+    const previousSummary: WindowSummary = reportPreviousWindowTransactions.reduce(
       (accumulator, row) => {
         const amount = Number(row.amount ?? 0);
         if (row.type === "income") {
@@ -895,7 +904,7 @@ async function ReportsPageView({
     );
 
     const monthBuckets = getMonthBuckets(now);
-    sixMonthTransactions.forEach((transaction) => {
+    reportSixMonthTransactions.forEach((transaction) => {
       const bucket = bucketMonth(transaction.date, monthBuckets);
       if (!bucket) {
         return;
@@ -915,23 +924,31 @@ async function ReportsPageView({
       _count: { id: number; balance: number };
     };
     const workspaceAccountSummaries = Array.isArray(workspaceAccountSnapshots)
-      ? (workspaceAccountSnapshots as WorkspaceAccountSnapshot[]).map((account) => ({
-          id: account.id,
-          name: account.name,
-          balance: account.balance,
-          currency: account.currency,
-          type: account.type,
-        }))
+      ? (workspaceAccountSnapshots as Array<WorkspaceAccountSnapshot | null | undefined>).flatMap((account) => {
+          if (!account || typeof account.id !== "string") {
+            return [];
+          }
+
+          return [
+            {
+              id: account.id,
+              name: typeof account.name === "string" && account.name.trim().length > 0 ? account.name : "Account",
+              balance: account.balance,
+              currency: typeof account.currency === "string" && account.currency.trim().length > 0 ? account.currency : "PHP",
+              type: typeof account.type === "string" && account.type.trim().length > 0 ? account.type : "account",
+            },
+          ];
+        })
       : [];
     const totalAccountBalance = Number(accountStatsSummary._sum.balance ?? 0);
     const activeAccountCount = accountStatsSummary._count.balance;
     const accountCount = accountStatsSummary._count.id;
-    const uncategorizedTransactions = currentWindowTransactions.filter(
+    const uncategorizedTransactions = reportCurrentWindowTransactions.filter(
       (transaction) => !transaction.category?.name || !transaction.merchantClean
     );
 
-    const duplicateGroups = new Map<string, (typeof currentWindowTransactions)[number][]>();
-    currentWindowTransactions.forEach((transaction) => {
+    const duplicateGroups = new Map<string, (typeof reportCurrentWindowTransactions)[number][]>();
+    reportCurrentWindowTransactions.forEach((transaction) => {
       const merchant = normalizeMerchant(transaction.merchantClean ?? transaction.merchantRaw);
       const key = [
         transaction.date.toISOString().slice(0, 10),
@@ -999,7 +1016,7 @@ async function ReportsPageView({
       }
     >();
 
-    [...previousWindowTransactions, ...currentWindowTransactions].forEach((transaction) => {
+    [...reportPreviousWindowTransactions, ...reportCurrentWindowTransactions].forEach((transaction) => {
       if (transaction.type !== "expense") {
         return;
       }
@@ -1082,7 +1099,7 @@ async function ReportsPageView({
       }
     >();
 
-    currentWindowTransactions.forEach((transaction) => {
+    reportCurrentWindowTransactions.forEach((transaction) => {
       if (transaction.type !== "expense") {
         return;
       }
@@ -1141,7 +1158,7 @@ async function ReportsPageView({
       Math.min(
         99,
         60 +
-          currentWindowTransactions.length * 0.12 +
+          reportCurrentWindowTransactions.length * 0.12 +
           doneImportCount * 1.5 +
           activeAccountCount * 1.5 -
           failedImportCount * 8 -
@@ -1360,7 +1377,7 @@ async function ReportsPageView({
           properties={{
             report_type: selectedRange,
             workspace_id: selectedWorkspaceId,
-            transaction_count: currentWindowTransactions.length,
+            transaction_count: reportCurrentWindowTransactions.length,
             import_count:
               Number(doneImportCount ?? 0) +
               Number(processingImportCount ?? 0) +
