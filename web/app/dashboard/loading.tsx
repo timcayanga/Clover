@@ -1,6 +1,18 @@
 export default function Loading() {
   return (
     <div className="dashboard-loading" aria-label="Loading dashboard">
+      <section className="dashboard-home__priority-strip glass" aria-hidden="true">
+        <div className="dashboard-home__priority-copy dashboard-loading__priority">
+          <span className="skeleton-block skeleton-block--line dashboard-loading__eyebrow" />
+          <span className="skeleton-block skeleton-block--line dashboard-loading__priority-title" />
+          <span className="skeleton-block skeleton-block--line dashboard-loading__priority-copy" />
+        </div>
+        <div className="dashboard-home__priority-actions">
+          <span className="skeleton-block dashboard-loading__button" />
+          <span className="skeleton-block dashboard-loading__button" />
+        </div>
+      </section>
+
       <section className="hero">
         <div className="hero-copy dashboard-loading__hero">
           <span className="skeleton-block skeleton-block--line dashboard-loading__eyebrow" />
@@ -23,6 +35,16 @@ export default function Loading() {
             </article>
           ))}
         </div>
+      </section>
+
+      <section className="dashboard-home__position-strip" aria-hidden="true">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <article key={index} className="dashboard-home__position-card dashboard-loading__position-card">
+            <span className="skeleton-block skeleton-block--line dashboard-loading__eyebrow" />
+            <strong className="skeleton-block skeleton-block--line dashboard-loading__value" />
+            <small className="skeleton-block skeleton-block--line dashboard-loading__copy" />
+          </article>
+        ))}
       </section>
 
       <section className="dashboard-visual-grid" aria-hidden="true">

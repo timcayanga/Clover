@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
+import { EmptyDataCta } from "@/components/empty-data-cta";
 import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
 import { DashboardVisualsIsland } from "@/components/dashboard-visuals-island";
 import { getSessionContext } from "@/lib/auth";
@@ -89,6 +90,7 @@ type WorkspaceSummary = {
     institution: string | null;
     type: string;
     currency: string;
+    balance: string | null;
   }>;
   importFiles: Array<{
     id: string;
@@ -126,8 +128,6 @@ const formatRelativeDate = (value: Date, now = new Date()) => {
 
   return relativeTimeFormatter.format(diffDays, "day");
 };
-
-const formatRate = (value: number) => `${value.toFixed(0)}%`;
 
 const getMonthBuckets = (anchor: Date) => {
   const buckets: MonthBucket[] = [];
@@ -296,6 +296,7 @@ export default async function DashboardPage({
           institution: true,
           type: true,
           currency: true,
+          balance: true,
         },
       },
       importFiles: {
@@ -329,6 +330,7 @@ export default async function DashboardPage({
         institution: account.institution,
         type: account.type,
         currency: account.currency,
+        balance: account.balance?.toString() ?? null,
       })),
       importFiles: [],
       _count: {
@@ -339,6 +341,10 @@ export default async function DashboardPage({
     } satisfies WorkspaceSummary);
 
   const selectedImportFiles = workspaceSummary.importFiles;
+  const accountsWithBalance = workspaceSummary.accounts.filter((account) => account.balance !== null);
+  const linkedBalanceTotal = accountsWithBalance.reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
+  const isEmptyWorkspace =
+    workspaceSummary._count.transactions === 0 && workspaceSummary._count.importFiles === 0 && workspaceSummary._count.accounts <= 1;
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const sixtyDaysAgo = new Date();
@@ -372,75 +378,9 @@ export default async function DashboardPage({
   const selectedGoal = getGoalDefinition(user.primaryGoal?.trim() ?? null);
   const hasPrimaryGoal = Boolean(user.primaryGoal?.trim());
   const currentNet = currentSummary.net;
-  const currentSavingsRate = currentSummary.current.income > 0 ? currentNet / currentSummary.current.income : null;
-  const previousSavingsRate = currentSummary.previous.income > 0 ? currentSummary.previousNet / currentSummary.previous.income : null;
   const uncategorizedTransactions = currentThirtyDayTransactions.filter(
     (transaction) => !transaction.category?.name || !transaction.merchantClean
   );
-  const uncategorizedShare =
-    currentSummary.current.expense > 0
-      ? uncategorizedTransactions.reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0) /
-        currentSummary.current.expense
-      : 0;
-  const duplicateGroups = new Map<string, DashboardTransaction[]>();
-  currentThirtyDayTransactions.forEach((transaction) => {
-    const merchant = (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase();
-    const key = [
-      transaction.date.toISOString().slice(0, 10),
-      transaction.account.name.toLowerCase(),
-      transaction.type,
-      Number(transaction.amount).toFixed(2),
-      merchant,
-    ].join("|");
-
-    const existing = duplicateGroups.get(key) ?? [];
-    existing.push(transaction);
-    duplicateGroups.set(key, existing);
-  });
-  const possibleDuplicateGroups = Array.from(duplicateGroups.values()).filter((group) => group.length > 1);
-  const recurringMerchantSpend = new Map<
-    string,
-    {
-      label: string;
-      amount: number;
-      count: number;
-    }
-  >();
-
-  currentThirtyDayTransactions.forEach((transaction) => {
-    if (transaction.type !== "expense") {
-      return;
-    }
-
-    const label = transaction.merchantClean ?? transaction.merchantRaw;
-    const key = label.trim().toLowerCase();
-    const existing = recurringMerchantSpend.get(key) ?? {
-      label,
-      amount: 0,
-      count: 0,
-    };
-    existing.amount += Math.abs(toAmount(transaction.amount));
-    existing.count += 1;
-    recurringMerchantSpend.set(key, existing);
-  });
-
-  const recurringMerchants = Array.from(recurringMerchantSpend.values())
-    .filter((merchant) => merchant.count > 1)
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 4);
-
-  const recurringDrag = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0);
-  const recurringShare = currentSummary.current.expense > 0 ? recurringDrag / currentSummary.current.expense : 0;
-  const cleanlinessScore = clamp(Math.round(100 - uncategorizedShare * 120 - possibleDuplicateGroups.length * 7), 20, 100);
-  const trendScore = currentSummary.net >= currentSummary.previousNet ? 18 : 8;
-  const consistencyScore =
-    previousSavingsRate !== null && currentSavingsRate !== null && currentSavingsRate >= previousSavingsRate ? 14 : 7;
-  const savingsScore =
-    currentSavingsRate === null ? 16 : clamp(Math.round((currentSavingsRate * 100 / selectedGoal.targetRate) * 55), 12, 65);
-  const dragPenalty = clamp(Math.round(recurringShare * 100 * 0.35 + Math.max(0, recurringMerchants.length - 1) * 4), 0, 22);
-  const goalScore = clamp(Math.round(savingsScore + trendScore + consistencyScore + cleanlinessScore * 0.2 - dragPenalty), 12, 98);
-  const goalProgressLabel =
-    goalScore >= 85 ? "Ahead of pace" : goalScore >= 70 ? "On pace" : goalScore >= 50 ? "Building momentum" : "Early in the climb";
   const reviewAttentionTransactions = currentThirtyDayTransactions.filter(
     (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || transaction.categoryConfidence < 70
   );
@@ -449,12 +389,12 @@ export default async function DashboardPage({
     .slice()
     .sort((a, b) => a.categoryConfidence - b.categoryConfidence || b.date.getTime() - a.date.getTime())
     .slice(0, 3);
-  const recentConfirmedShare = currentThirtyDayTransactions.length
+  const recentConfirmedRatio = currentThirtyDayTransactions.length
     ? Math.round((currentSummary.current.confirmed / currentThirtyDayTransactions.length) * 100)
     : 0;
   const reviewCoverageText =
     currentThirtyDayTransactions.length > 0
-      ? `${recentConfirmedShare}% of the last 30 days is confirmed or edited`
+      ? `${recentConfirmedRatio}% of the last 30 days is confirmed or edited`
       : "No recent transactions to score yet";
   const currentNetLabel = currentNet >= 0 ? "Positive net cash flow" : "Negative net cash flow";
   const currentPositionCopy =
@@ -481,11 +421,69 @@ export default async function DashboardPage({
     recentImports.length > 0
       ? recentImports.map((file) => `${file.fileName} (${file.status})`).join(" · ")
       : "Import a statement to start filling this workspace.";
-  const goalMiniCopy = hasPrimaryGoal
-    ? `${selectedGoal.title} · ${goalProgressLabel} · ${goalScore}% readiness`
-    : "Set a goal to add pace context to the dashboard.";
-  const goalMiniNote = hasPrimaryGoal ? selectedGoal.signal : "Goals help Clover explain whether you are on track.";
-  const goalRingValue = clamp(goalScore, 0, 100);
+  const primaryAction = reviewAttentionCount > 0 ? "Review queue" : "Import statement";
+  const primaryActionHref = reviewAttentionCount > 0 ? "/review" : "/dashboard?import=1";
+  const actionStripTitle =
+    reviewAttentionCount > 0
+      ? `${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} need review`
+      : latestImport
+        ? latestImport.status === "processing"
+          ? "Latest import is still processing"
+          : latestImport.status === "failed"
+            ? "Latest import needs another try"
+            : "Your dashboard is up to date"
+        : "Import your first statement";
+  const actionStripCopy =
+    reviewAttentionCount > 0
+      ? "Clear the review queue first so Clover can trust the numbers it shows you."
+      : latestImport
+        ? `Last import: ${latestImport.fileName} · ${formatRelativeDate(latestImport.uploadedAt)}`
+        : "Bring in a statement to unlock balances, trends, and the review workflow.";
+  const actionStripPill = reviewAttentionCount > 0 ? "Action needed" : latestImport?.status === "processing" ? "Processing" : "Ready";
+  const positionStrip = [
+    {
+      label: "Linked balance",
+      value: accountsWithBalance.length > 0 ? formatSignedCurrency(linkedBalanceTotal) : "Add account balances",
+      note: accountsWithBalance.length > 0 ? `${accountsWithBalance.length} account${accountsWithBalance.length === 1 ? "" : "s"} with balance data` : "Balances make the home screen feel current.",
+    },
+    {
+      label: "Connected accounts",
+      value: String(workspaceSummary._count.accounts),
+      note: `${workspaceSummary._count.importFiles} import${workspaceSummary._count.importFiles === 1 ? "" : "s"} on file`,
+    },
+    {
+      label: "Freshness",
+      value: latestImport ? formatRelativeDate(latestImport.uploadedAt) : "Waiting on import",
+      note: latestImport ? latestImport.status : "No statements uploaded yet",
+    },
+  ];
+  const primaryInsight =
+    currentSummary.biggestMover !== undefined && currentSummary.biggestMover !== null
+      ? {
+          eyebrow: "Biggest shift",
+          title: currentSummary.biggestMover.name,
+          value: `${formatSignedCurrency(currentSummary.biggestMover.delta)} vs the previous 30 days`,
+          copy:
+            currentSummary.biggestMover.previousAmount > 0
+              ? `${formatCompactPercentage(currentSummary.biggestMover.percentage)} above the last period.`
+              : "This category is newly active in the latest window.",
+          cta: "Review category",
+        }
+      : currentSummary.topCategory
+        ? {
+            eyebrow: "Top spend driver",
+            title: currentSummary.topCategory[0],
+            value: currencyFormatter.format(currentSummary.topCategory[1]),
+            copy: "This category took the biggest share of spending in the last 30 days.",
+            cta: "See spending",
+          }
+        : {
+            eyebrow: "Top spend driver",
+            title: "No spending yet",
+            value: "Import a statement",
+            copy: "Once Clover sees transactions, it will surface the strongest patterns here.",
+            cta: "Import now",
+          };
   const monthBuckets = getMonthBuckets(new Date());
   sixMonthTransactionWindow.forEach((transaction) => {
     const bucket = getMonthBucket(transaction.date, monthBuckets);
@@ -545,7 +543,40 @@ export default async function DashboardPage({
           import_count: workspaceSummary._count.importFiles,
         }}
       />
+      {isEmptyWorkspace ? (
+        <div style={{ marginBottom: 20 }}>
+          <EmptyDataCta
+            eyebrow="Get started"
+            title="Import files to wake up your dashboard."
+            copy="Import a statement first for the fastest way to populate your dashboard, reports, insights, and goals. Add an account if you prefer live tracking, or enter transactions manually to begin small."
+            importHref="/dashboard?import=1"
+            accountHref="/accounts"
+            transactionHref="/transactions?manual=1"
+          />
+        </div>
+      ) : null}
       <section className="dashboard-home">
+        <article className="dashboard-home__priority-strip glass">
+          <div className="dashboard-home__priority-copy">
+            <span className={`dashboard-visual-pill ${reviewAttentionCount > 0 ? "negative" : latestImport?.status === "processing" ? "positive" : ""}`}>
+              {actionStripPill}
+            </span>
+            <div>
+              <p className="eyebrow">Next best action</p>
+              <h4>{actionStripTitle}</h4>
+            </div>
+            <p>{actionStripCopy}</p>
+          </div>
+          <div className="dashboard-home__priority-actions">
+            <Link className="button button-primary button-small" href={primaryActionHref}>
+              {primaryAction}
+            </Link>
+            <Link className="pill-link pill-link--inline" href="/transactions">
+              Open transactions
+            </Link>
+          </div>
+        </article>
+
         <article className="dashboard-home__hero glass">
           <div className="dashboard-home__copy">
             <div className="dashboard-home__kicker-row">
@@ -584,6 +615,16 @@ export default async function DashboardPage({
               </article>
             </div>
 
+            <div className="dashboard-home__position-strip" aria-label="Account position summary">
+              {positionStrip.map((item) => (
+                <article key={item.label} className="dashboard-home__position-card">
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                  <small>{item.note}</small>
+                </article>
+              ))}
+            </div>
+
             <div className="hero-actions">
               <Link className="button button-primary" href={reviewAttentionCount > 0 ? "/review" : "/dashboard?import=1"}>
                 {reviewAttentionCount > 0 ? "Review queue" : "Import statement"}
@@ -612,14 +653,14 @@ export default async function DashboardPage({
               <div className="dashboard-home__list">
                 {reviewPreviewTransactions.length > 0 ? (
                   reviewPreviewTransactions.map((transaction) => (
-                    <div key={transaction.id} className="dashboard-home__item">
+                    <Link key={transaction.id} className="dashboard-home__item dashboard-home__item-link" href={`/transactions?review=${transaction.id}`}>
                       <strong>{transaction.merchantClean || transaction.merchantRaw}</strong>
                       <span>
                         {transaction.account.name}
                         {transaction.category?.name ? ` · ${transaction.category.name}` : ""} ·{" "}
                         {currencyFormatter.format(Math.abs(toAmount(transaction.amount)))} · {transaction.categoryConfidence}%
                       </span>
-                    </div>
+                    </Link>
                   ))
                 ) : (
                   <div className="dashboard-home__item dashboard-home__item--empty">
@@ -642,12 +683,12 @@ export default async function DashboardPage({
               </div>
               <p>{importStatusCopy}</p>
               <div className="dashboard-home__list">
-                <div className="dashboard-home__item">
+                <Link className="dashboard-home__item dashboard-home__item-link" href="/imports">
                   <strong>Recent uploads</strong>
                   <span>{importActivityCopy}</span>
-                </div>
+                </Link>
               </div>
-              <Link className="pill-link pill-link--inline" href="/dashboard?import=1">
+              <Link className="pill-link pill-link--inline" href="/imports">
                 Import now
               </Link>
             </article>
@@ -655,14 +696,14 @@ export default async function DashboardPage({
             <article className="dashboard-home__rail-card">
               <div className="dashboard-home__rail-head">
                 <div>
-                  <p className="eyebrow">Goal context</p>
-                  <h4>{goalMiniCopy}</h4>
+                  <p className="eyebrow">{primaryInsight.eyebrow}</p>
+                  <h4>{primaryInsight.title}</h4>
                 </div>
               </div>
-              <p>{goalMiniNote}</p>
-              <div className="dashboard-home__mini-metric">
-                <strong>{goalRingValue}%</strong>
-                <span>{goalProgressLabel} readiness</span>
+              <p>{primaryInsight.copy}</p>
+              <div className="dashboard-home__mini-metric dashboard-home__mini-metric--insight">
+                <strong>{primaryInsight.value}</strong>
+                <span>{primaryInsight.cta}</span>
               </div>
               <Link className="pill-link pill-link--inline" href="/goals">
                 View goals
@@ -700,12 +741,12 @@ export default async function DashboardPage({
                     <div className="dashboard-home__activity-section">
                       <strong className="dashboard-home__section-label">Recent imports</strong>
                       {recentImports.map((file) => (
-                        <div key={file.id} className="dashboard-home__item">
+                        <Link key={file.id} className="dashboard-home__item dashboard-home__item-link" href="/imports">
                           <strong>{file.fileName}</strong>
                           <span>
                             <span className={`status status--${file.status}`}>{file.status}</span> · {formatRelativeDate(file.uploadedAt)}
                           </span>
-                        </div>
+                        </Link>
                       ))}
                     </div>
                   ) : (
@@ -719,14 +760,14 @@ export default async function DashboardPage({
                     <div className="dashboard-home__activity-section">
                       <strong className="dashboard-home__section-label">Recent transactions</strong>
                       {recentActivityTransactions.map((transaction) => (
-                        <div key={transaction.id} className="dashboard-home__item">
+                        <Link key={transaction.id} className="dashboard-home__item dashboard-home__item-link" href={`/transactions?review=${transaction.id}`}>
                           <strong>{transaction.merchantClean || transaction.merchantRaw}</strong>
                           <span>
                             {transaction.account.name}
                             {transaction.category?.name ? ` · ${transaction.category.name}` : ""} ·{" "}
                             {currencyFormatter.format(Math.abs(toAmount(transaction.amount)))}
                           </span>
-                        </div>
+                        </Link>
                       ))}
                     </div>
                   ) : (
