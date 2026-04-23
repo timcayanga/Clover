@@ -727,7 +727,8 @@ export function ImportFilesModal({
             balance: toBalanceString(statementCheckpoint?.endingBalance),
           };
 
-          if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
+          const shouldUseFallbackIdentity = !resolvedIdentity.accountName && !resolvedIdentity.institution && attempt >= 4;
+          if (!resolvedIdentity.accountName && !resolvedIdentity.institution && !shouldUseFallbackIdentity) {
             const previewResponse = await fetch(`/api/imports/${importFileId}/preview`);
             if (previewResponse.ok) {
               const payload = await previewResponse.json();
@@ -755,6 +756,10 @@ export function ImportFilesModal({
                 resolvedIdentity.balance = previewBalance;
               }
             }
+          }
+
+          if (!resolvedIdentity.accountName && !resolvedIdentity.institution && shouldUseFallbackIdentity) {
+            resolvedIdentity.accountName = summaryContext.fallbackAccountName;
           }
 
           if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
