@@ -13,9 +13,6 @@ import {
   fetchParsedTransactionRows,
   enrichParsedRowsWithTraining,
   defaultCategoryForType,
-  deleteTransactionsByImportFileCompat,
-  insertTransactionCompat,
-  insertTransactionManyCompat,
   insertParsedTransactionsCompat,
   hasCompatibleTable,
   recordTrainingSignal,
@@ -59,6 +56,8 @@ type PreparedImportTransaction = {
     notes: string | null;
   };
 };
+
+const shouldRouteToReview = (confidence: number) => confidence < 85;
 
 const chunkArray = <T,>(items: T[], size: number) => {
   if (size <= 0) {
@@ -446,7 +445,7 @@ const extractHumanReadableDescription = (rawPayload: Prisma.InputJsonValue | nul
 };
 
 export const confirmImportFile = async (importFileId: string, accountId: string) => {
-  const parsedRows = await fetchParsedTransactionRows(importFileId);
+  const parsedRows: Array<Record<string, unknown>> = await fetchParsedTransactionRows(importFileId);
 
   if (parsedRows.length === 0) {
     throw new Error("No parsed rows available");
@@ -468,22 +467,51 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
   }
   const resolvedAccountId = account.id;
 
-  await deleteTransactionsByImportFileCompat(importFileId);
+  let statementRow: Record<string, unknown> | null = null;
+  let statementConfidence = 0;
+  let reconciledAccountBalance: string | null = null;
+  const transactions: ImportInsightSourceRow[] = [];
+  const trainingSignalJobs: Promise<unknown>[] = [];
+  const preparedTransactions: PreparedImportTransaction[] = [];
+  const coerceAmountToString = (value: unknown) => {
+    if (value === null || value === undefined) {
+      return null;
+    }
 
-  await prisma.trainingSignal.deleteMany({
-    where: {
-      importFileId,
-      source: "import_confirmation",
-    },
-  });
+    if (typeof value === "number" || typeof value === "string") {
+      return String(value);
+    }
 
-  await updateImportFileCompat(importFileId, {
-    accountId: resolvedAccountId,
-    confirmedAt: new Date(),
-  });
+    if (typeof value === "object" && "toString" in value && typeof (value as { toString?: unknown }).toString === "function") {
+      return String(value);
+    }
+
+    return null;
+  };
+
+  await prisma.$transaction(async (tx) => {
+    await tx.transaction.deleteMany({
+      where: { importFileId },
+    });
+
+    await tx.trainingSignal.deleteMany({
+      where: {
+        importFileId,
+        source: "import_confirmation",
+      },
+    });
+
+    await tx.importFile.update({
+      where: { id: importFileId },
+      data: {
+        accountId: resolvedAccountId,
+        confirmedAt: new Date(),
+        status: "done",
+      },
+    });
 
   const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
-    ? await prisma.accountStatementCheckpoint.findUnique({
+    ? await tx.accountStatementCheckpoint.findUnique({
         where: { importFileId },
       })
     : null;
@@ -493,7 +521,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     const statementStartDate = statementCheckpoint.statementStartDate ?? null;
     const statementEndDate = statementCheckpoint.statementEndDate ?? null;
     const previousCheckpoint = statementStartDate
-      ? await prisma.accountStatementCheckpoint.findFirst({
+      ? await tx.accountStatementCheckpoint.findFirst({
           where: {
             accountId: resolvedAccountId,
             statementEndDate: {
@@ -524,7 +552,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       mismatchReason = "Opening balance does not match the previous statement ending balance.";
     }
 
-    await prisma.accountStatementCheckpoint.update({
+    await tx.accountStatementCheckpoint.update({
       where: { id: statementCheckpoint.id },
       data: {
         accountId: resolvedAccountId,
@@ -535,14 +563,14 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
 
     if (
       statementCheckpoint.openingBalance !== null &&
-      !(await prisma.transaction.findFirst({
+      !(await tx.transaction.findFirst({
         where: {
           accountId: resolvedAccountId,
           merchantRaw: "Beginning balance",
         },
       }))
     ) {
-      const openingBalanceCategory = await prisma.category.findFirst({
+      const openingBalanceCategory = await tx.category.findFirst({
         where: {
           workspaceId: importFile.workspaceId,
           name: "Opening Balance",
@@ -551,7 +579,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
 
       const category =
         openingBalanceCategory ??
-        (await prisma.category.create({
+        (await tx.category.create({
           data: {
             workspaceId: importFile.workspaceId,
             name: "Opening Balance",
@@ -559,63 +587,53 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
           },
         }));
 
-      await insertTransactionCompat({
-        workspaceId: String(importFile.workspaceId),
-        accountId: resolvedAccountId,
-        importFileId,
-        categoryId: category.id,
-        reviewStatus: "confirmed",
-        parserConfidence: 100,
-        categoryConfidence: 100,
-        accountMatchConfidence: 100,
-        duplicateConfidence: 0,
-        transferConfidence: 100,
-        rawPayload: {
-          bank: statementCheckpoint.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object"
-            ? (statementCheckpoint.sourceMetadata as Record<string, unknown>).institution ?? "Statement"
-            : "Statement",
-          kind: "opening_balance",
-          statementStartDate: statementStartDate?.toISOString() ?? null,
-          statementEndDate: statementEndDate?.toISOString() ?? null,
-          openingBalance: statementCheckpoint.openingBalance?.toString() ?? null,
-        } as Prisma.InputJsonValue,
-        normalizedPayload: {
-          kind: "opening_balance",
-          openingBalance: statementCheckpoint.openingBalance?.toString() ?? null,
-          statementStartDate: statementStartDate?.toISOString() ?? null,
-        } as Prisma.InputJsonValue,
-        learnedRuleIdsApplied: [] as Prisma.InputJsonValue,
-        date: statementStartDate ?? new Date(),
-        amount: parseAmountValue(statementCheckpoint.openingBalance?.toString() ?? null) ?? 0,
-        currency: "PHP",
-        type: "transfer" as TransactionType,
-        merchantRaw: "Beginning balance",
-        merchantClean: "Beginning balance",
-        description: statementCheckpoint.openingBalance !== null ? `Opening balance for statement ending ${statementEndDate?.toISOString().slice(0, 10) ?? "unknown"}` : "Opening balance",
-        isTransfer: false,
-        isExcluded: true,
+      await tx.transaction.create({
+        data: buildTransactionInsertRecord({
+          workspaceId: String(importFile.workspaceId),
+          accountId: resolvedAccountId,
+          importFileId,
+          categoryId: category.id,
+          reviewStatus: "confirmed",
+          parserConfidence: 100,
+          categoryConfidence: 100,
+          accountMatchConfidence: 100,
+          duplicateConfidence: 0,
+          transferConfidence: 100,
+          rawPayload: {
+            bank: statementCheckpoint.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object"
+              ? (statementCheckpoint.sourceMetadata as Record<string, unknown>).institution ?? "Statement"
+              : "Statement",
+            kind: "opening_balance",
+            statementStartDate: statementStartDate?.toISOString() ?? null,
+            statementEndDate: statementEndDate?.toISOString() ?? null,
+            openingBalance: statementCheckpoint.openingBalance?.toString() ?? null,
+          } as Prisma.InputJsonValue,
+          normalizedPayload: {
+            kind: "opening_balance",
+            openingBalance: statementCheckpoint.openingBalance?.toString() ?? null,
+            statementStartDate: statementStartDate?.toISOString() ?? null,
+          } as Prisma.InputJsonValue,
+          learnedRuleIdsApplied: [] as Prisma.InputJsonValue,
+          date: statementStartDate ?? new Date(),
+          amount: parseAmountValue(statementCheckpoint.openingBalance?.toString() ?? null) ?? 0,
+          currency: "PHP",
+          type: "transfer" as TransactionType,
+          merchantRaw: "Beginning balance",
+          merchantClean: "Beginning balance",
+          description: statementCheckpoint.openingBalance !== null ? `Opening balance for statement ending ${statementEndDate?.toISOString().slice(0, 10) ?? "unknown"}` : "Opening balance",
+          isTransfer: false,
+          isExcluded: true,
+        }) as Prisma.TransactionCreateInput,
       });
       openingBalanceInserted = true;
     }
   }
 
-  const statementRow = parsedRows.find((row) => typeof row.accountName === "string" && row.accountName.trim()) ?? parsedRows[0] ?? null;
-  const statementConfidence =
+  statementRow = parsedRows.find((row) => typeof row.accountName === "string" && row.accountName.trim()) ?? parsedRows[0] ?? null;
+  statementConfidence =
     typeof statementCheckpoint?.sourceMetadata === "object" && statementCheckpoint?.sourceMetadata !== null
       ? Number((statementCheckpoint.sourceMetadata as Record<string, unknown>).confidence ?? 0)
       : 0;
-
-  if (statementRow && typeof statementRow.accountName === "string" && statementRow.accountName.trim() && statementConfidence >= 70) {
-    void upsertAccountRule({
-      workspaceId: importFile.workspaceId,
-      accountId: resolvedAccountId,
-      accountName: statementRow.accountName.trim(),
-      institution: typeof statementRow.institution === "string" && statementRow.institution.trim() ? statementRow.institution.trim() : null,
-      accountType: account.type,
-      source: "import_confirmation",
-      confidence: 100,
-    }).catch(() => null);
-  }
 
   const latestExplicitBalance = [...parsedRows]
     .reverse()
@@ -627,66 +645,54 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       return snapshotBalanceToString((row.rawPayload as Record<string, unknown>).balance) !== null;
     });
 
-  const reconciledBalance =
-    snapshotBalanceToString(statementCheckpoint?.endingBalance) ??
-    snapshotBalanceToString(
-      latestExplicitBalance && typeof latestExplicitBalance.rawPayload === "object" && !Array.isArray(latestExplicitBalance.rawPayload)
-        ? (latestExplicitBalance.rawPayload as Record<string, unknown>).balance
-        : null
-    ) ??
-    deriveReconciledBalance({
-    transactions: parsedRows.map((row) => ({
-      amount: row.amount,
-      type: row.type ?? null,
-      merchantRaw: row.merchantRaw ?? null,
-      merchantClean: row.merchantClean ?? null,
-      description: row.description ?? null,
-      date: row.date ?? null,
-      rawPayload: row.rawPayload && typeof row.rawPayload === "object" ? (row.rawPayload as { balance?: unknown; amountDelta?: unknown; openingBalance?: unknown; kind?: string }) : null,
-    } as BalanceLikeTransaction)),
-    checkpoints: statementCheckpoint && statementCheckpoint.endingBalance !== null
-      ? [
-          {
-            endingBalance: statementCheckpoint.endingBalance.toString(),
-            statementEndDate: statementCheckpoint.statementEndDate?.toISOString() ?? null,
-            createdAt: statementCheckpoint.createdAt.toISOString(),
-          },
-        ]
-      : [],
+  const statementEndingBalance = snapshotBalanceToString(statementCheckpoint?.endingBalance);
+  const latestExplicitStatementBalance = snapshotBalanceToString(
+    latestExplicitBalance && typeof latestExplicitBalance.rawPayload === "object" && !Array.isArray(latestExplicitBalance.rawPayload)
+      ? (latestExplicitBalance.rawPayload as Record<string, unknown>).balance
+      : null
+  );
+  const fallbackReconciledBalance = deriveReconciledBalance({
+    transactions: parsedRows.map(
+      (row) =>
+        ({
+          amount: row.amount,
+          type: row.type ?? null,
+          merchantRaw: row.merchantRaw ?? null,
+          merchantClean: row.merchantClean ?? null,
+          description: row.description ?? null,
+          date: row.date ?? null,
+          rawPayload:
+            row.rawPayload && typeof row.rawPayload === "object"
+              ? (row.rawPayload as { balance?: unknown; amountDelta?: unknown; openingBalance?: unknown; kind?: string })
+              : null,
+        }) as BalanceLikeTransaction
+    ),
+    checkpoints:
+      statementCheckpoint && statementCheckpoint.endingBalance !== null
+        ? [
+            {
+              endingBalance: statementCheckpoint.endingBalance.toString(),
+              statementEndDate: statementCheckpoint.statementEndDate?.toISOString() ?? null,
+              createdAt: statementCheckpoint.createdAt.toISOString(),
+            },
+          ]
+        : [],
   });
+  reconciledAccountBalance = statementEndingBalance ?? latestExplicitStatementBalance ?? fallbackReconciledBalance;
 
-  if (reconciledBalance !== null) {
-    await prisma.account.update({
+  if (reconciledAccountBalance !== null) {
+    await tx.account.update({
       where: { id: resolvedAccountId },
       data: {
-        balance: reconciledBalance,
+        balance: reconciledAccountBalance,
       },
     });
   }
 
-  const existingCategories = await prisma.category.findMany({
+  const existingCategories = await tx.category.findMany({
     where: { workspaceId: importFile.workspaceId },
   });
   const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
-
-  const transactions: ImportInsightSourceRow[] = [];
-  const trainingSignalJobs: Promise<unknown>[] = [];
-  const preparedTransactions: PreparedImportTransaction[] = [];
-  const coerceAmountToString = (value: unknown) => {
-    if (value === null || value === undefined) {
-      return null;
-    }
-
-    if (typeof value === "number" || typeof value === "string") {
-      return String(value);
-    }
-
-    if (typeof value === "object" && "toString" in value && typeof (value as { toString?: unknown }).toString === "function") {
-      return String(value);
-    }
-
-    return null;
-  };
 
   for (const row of parsedRows) {
     const rowType =
@@ -701,7 +707,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     let categoryId = categoryByName.get(categoryName.toLowerCase());
 
     if (!categoryId) {
-      const created = await prisma.category.create({
+      const created = await tx.category.create({
         data: {
           workspaceId: importFile.workspaceId,
           name: categoryName,
@@ -722,7 +728,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       accountId: resolvedAccountId,
       importFileId,
       categoryId,
-      reviewStatus: rowConfidence < 80 ? "pending_review" : "confirmed",
+      reviewStatus: shouldRouteToReview(rowConfidence) ? "pending_review" : "confirmed",
       parserConfidence: rowParserConfidence,
       categoryConfidence: rowCategoryConfidence,
       accountMatchConfidence: rowAccountMatchConfidence,
@@ -767,10 +773,20 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
   }
 
   for (const batch of chunkArray(preparedTransactions, 25)) {
-    await insertTransactionManyCompat({
-      records: batch.map((entry) => entry.insertRow as any),
+    await tx.transaction.createMany({
+      data: batch.map((entry) => entry.insertRow as any),
     });
   }
+
+  await tx.importFile.update({
+    where: { id: importFileId },
+    data: {
+      accountId: resolvedAccountId,
+      confirmedAt: new Date(),
+      status: "done",
+      confirmedTransactionsCount: preparedTransactions.length + (openingBalanceInserted ? 1 : 0),
+    },
+  });
 
   for (const entry of preparedTransactions) {
     transactions.push(entry.insightRow);
@@ -790,15 +806,31 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     );
   }
 
-  await updateImportFileCompat(importFileId, {
-    status: "done",
-    accountId: resolvedAccountId,
-    confirmedTransactionsCount: preparedTransactions.length + (openingBalanceInserted ? 1 : 0),
-  });
+  const confirmedStatementRow = statementRow as unknown as { accountName?: unknown; institution?: unknown } | null;
+  if (
+    confirmedStatementRow &&
+    typeof confirmedStatementRow.accountName === "string" &&
+    confirmedStatementRow.accountName.trim() &&
+    statementConfidence >= 70
+  ) {
+    void upsertAccountRule({
+      workspaceId: importFile.workspaceId,
+      accountId: resolvedAccountId,
+      accountName: confirmedStatementRow.accountName.trim(),
+      institution:
+        typeof confirmedStatementRow.institution === "string" && confirmedStatementRow.institution.trim()
+          ? confirmedStatementRow.institution.trim()
+          : null,
+      accountType: account.type,
+      source: "import_confirmation",
+      confidence: 100,
+    }).catch(() => null);
+  }
 
   void Promise.allSettled(trainingSignalJobs);
 
   const insightSummary = buildImportInsightSummary(transactions);
 
-  return { imported: transactions.length, insightSummary, accountBalance: reconciledBalance };
+  return { imported: transactions.length, insightSummary, accountBalance: reconciledAccountBalance };
+});
 };
