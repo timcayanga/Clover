@@ -195,6 +195,7 @@ const TRAINING_SIGNAL_COLUMNS = [
   "transactionId",
   "source",
   "merchantKey",
+  "dedupeKey",
   "merchantTokens",
   "categoryId",
   "categoryName",
@@ -285,6 +286,23 @@ export const tokenizeMerchant = (value?: string | null) =>
     .split(" ")
     .map((token) => token.trim())
     .filter((token) => token.length > 1 && !COMMON_STOP_WORDS.has(token));
+
+export const buildTrainingSignalDedupeKey = (params: {
+  source: "import_confirmation" | "manual_recategorization" | "training_upload" | "manual_transaction_creation";
+  transactionId?: string | null;
+  importFileId?: string | null;
+  merchantKey: string;
+  categoryId: string;
+  type: TransactionType;
+}) =>
+  [
+    params.source,
+    params.transactionId ?? "",
+    params.importFileId ?? "",
+    params.merchantKey,
+    params.categoryId,
+    params.type,
+  ].join("|");
 
 export const guessCategoryFallback = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
@@ -1408,27 +1426,60 @@ export const recordTrainingSignal = async (params: {
 }) => {
   const merchantKey = normalizeMerchantText(params.merchantText);
   const merchantTokens = tokenizeMerchant(params.merchantText);
+  const dedupeKey = buildTrainingSignalDedupeKey({
+    source: params.source,
+    transactionId: params.transactionId ?? null,
+    importFileId: params.importFileId ?? null,
+    merchantKey,
+    categoryId: params.categoryId,
+    type: params.type,
+  });
 
   const columns = await getCompatibleTrainingSignalColumns();
   if (columns.length === 0) {
     return null;
   }
 
-  const signal = await prisma.trainingSignal.create({
-    data: {
-      workspaceId: params.workspaceId,
-      importFileId: params.importFileId ?? null,
-      transactionId: params.transactionId ?? null,
-      source: params.source,
-      merchantKey,
-      merchantTokens: merchantTokens as Prisma.InputJsonValue,
-      categoryId: params.categoryId,
-      categoryName: params.categoryName ?? null,
-      type: params.type,
-      confidence: params.confidence ?? 100,
-      notes: params.notes ?? null,
-    },
-  });
+  const signalData = {
+    workspaceId: params.workspaceId,
+    importFileId: params.importFileId ?? null,
+    transactionId: params.transactionId ?? null,
+    source: params.source,
+    merchantKey,
+    dedupeKey,
+    merchantTokens: merchantTokens as Prisma.InputJsonValue,
+    categoryId: params.categoryId,
+    categoryName: params.categoryName ?? null,
+    type: params.type,
+    confidence: params.confidence ?? 100,
+    notes: params.notes ?? null,
+  };
+
+  const signal = columns.includes("dedupeKey")
+    ? await prisma.trainingSignal.upsert({
+        where: {
+          workspaceId_dedupeKey: {
+            workspaceId: params.workspaceId,
+            dedupeKey,
+          },
+        },
+        create: signalData,
+        update: {
+          importFileId: params.importFileId ?? null,
+          transactionId: params.transactionId ?? null,
+          source: params.source,
+          merchantKey,
+          merchantTokens: merchantTokens as Prisma.InputJsonValue,
+          categoryId: params.categoryId,
+          categoryName: params.categoryName ?? null,
+          type: params.type,
+          confidence: params.confidence ?? 100,
+          notes: params.notes ?? null,
+        },
+      })
+    : await prisma.trainingSignal.create({
+        data: signalData,
+      });
 
   const category = await prisma.category.findUnique({
     where: { id: params.categoryId },

@@ -11,7 +11,7 @@ declare global {
     posthog?: {
       init: (key: string, config: { api_host: string; capture_pageview?: boolean; capture_pageleave?: boolean }) => void;
       capture: (event: string, properties?: Record<string, unknown>) => void;
-      identify: (distinctId: string) => void;
+      identify: (distinctId: string, properties?: Record<string, unknown>) => void;
       reset: () => void;
     };
     __posthogReady?: boolean;
@@ -25,6 +25,23 @@ type PostHogScriptProps = {
 };
 
 const normalizeHost = (host: string) => host.replace(/\/$/, "");
+
+const getPostHogPersonProperties = (user: {
+  firstName?: string | null;
+  lastName?: string | null;
+  username?: string | null;
+  primaryEmailAddress?: { emailAddress?: string | null } | null;
+}) => {
+  const email = user.primaryEmailAddress?.emailAddress ?? undefined;
+  const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || email?.split("@")[0];
+  const username = user.username ?? undefined;
+
+  return {
+    ...(email ? { email } : {}),
+    ...(name ? { name } : {}),
+    ...(username ? { username } : {}),
+  };
+};
 
 const flushPostHogQueue = () => {
   if (typeof window === "undefined") {
@@ -110,7 +127,7 @@ function PostHogIdentity() {
 
     runWhenPostHogReady(() => {
       if (user) {
-        window.posthog?.identify(user.id);
+        window.posthog?.identify(user.id, getPostHogPersonProperties(user));
         return;
       }
 

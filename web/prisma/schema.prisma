@@ -330,6 +330,7 @@ model TrainingSignal {
   importFileId  String?
   source        TrainingSignalSource
   merchantKey   String
+  dedupeKey     String
   merchantTokens Json?
   categoryId    String
   categoryName  String?
@@ -347,6 +348,7 @@ model TrainingSignal {
   @@index([transactionId])
   @@index([importFileId])
   @@index([merchantKey])
+  @@unique([workspaceId, dedupeKey])
 }
 
 model AuditLog {

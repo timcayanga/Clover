@@ -5816,7 +5816,7 @@ label {
   border-radius: 26px;
   padding: 22px;
   display: grid;
-  gap: 16px;
+  gap: 18px;
   align-content: start;
 }
 
@@ -8665,7 +8665,10 @@ input.transaction-inline-edit--amount::placeholder {
   background: rgba(255, 255, 255, 0.88);
   border: 1px solid var(--stroke);
   box-shadow: var(--shadow);
-  padding: 22px;
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
 }
 
 .empty-state {
@@ -9133,6 +9136,27 @@ input.transaction-inline-edit--amount::placeholder {
 
   .review-workbench__list li:not(.review-workbench__reason-card) {
     padding: 10px 12px;
+  }
+
+  .review-workbench__actions {
+    gap: 8px;
+  }
+
+  .review-workbench__button-primary {
+    min-height: 44px;
+    font-size: 15px;
+  }
+
+  .review-workbench__button-secondary {
+    min-height: 40px;
+  }
+
+  .review-workbench__actions-copy {
+    margin-top: 0;
+  }
+
+  .review-workbench__nav {
+    gap: 8px;
   }
 }
 

@@ -35,7 +35,7 @@ export function EmptyDataCta({
         <Link className="button button-secondary button-small" href={accountHref}>
           {accountLabel}
         </Link>
-        <Link className="button button-secondary button-small" href={transactionHref}>
+        <Link className="pill-link pill-link--inline transactions-empty-state__manual-link" href={transactionHref}>
           {transactionLabel}
         </Link>
       </div>
