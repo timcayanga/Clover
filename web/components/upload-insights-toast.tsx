@@ -11,6 +11,25 @@ export type UploadInsightsSummary = {
   balance: string | null;
   optimistic?: boolean;
   optimisticAccountId?: string | null;
+  previewTransactions?: Array<{
+    id: string;
+    importFileId: string;
+    accountId: string;
+    accountName: string;
+    categoryId: string | null;
+    categoryName: string | null;
+    reviewStatus: "pending_review";
+    date: string;
+    amount: string;
+    currency: string;
+    type: "income" | "expense" | "transfer";
+    merchantRaw: string;
+    merchantClean: string | null;
+    description: string | null;
+    isTransfer: boolean;
+    isExcluded: boolean;
+    source: "upload";
+  }>;
   incomeTotal: number;
   expenseTotal: number;
   netTotal: number;

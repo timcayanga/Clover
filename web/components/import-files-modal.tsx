@@ -10,7 +10,7 @@ import { formatDuplicateImportMessage } from "@/lib/import-duplicate-message";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
-import { syncImportedWorkspaceAccountCaches } from "@/lib/workspace-cache";
+import { syncImportedWorkspaceAccountCaches, syncImportedWorkspaceTransactionCaches } from "@/lib/workspace-cache";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 
 type AccountOption = {
@@ -118,7 +118,8 @@ const buildOptimisticUploadSummary = (
   accountName: string | null,
   institution: string | null,
   optimisticAccountId: string | null,
-  balance: string | null = null
+  balance: string | null = null,
+  previewTransactions: UploadInsightsSummary["previewTransactions"] = []
 ): UploadInsightsSummary => ({
   fileName,
   rowsImported: importedRows,
@@ -136,6 +137,7 @@ const buildOptimisticUploadSummary = (
   topCategoryShare: null,
   topMerchantName: null,
   topMerchantCount: null,
+  previewTransactions,
 });
 
 const buildOptimisticUploadSummaryFromAccount = (
@@ -149,7 +151,8 @@ const buildOptimisticUploadSummaryFromAccount = (
     account.name,
     account.institution,
     account.id,
-    account.balance ?? null
+    account.balance ?? null,
+    []
   );
 
 const toBalanceString = (value: unknown): string | null => {
@@ -203,6 +206,97 @@ const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsight
   }
 
   syncImportedWorkspaceAccountCaches(workspaceId, importedAccount);
+  if (Array.isArray(summary.previewTransactions) && summary.previewTransactions.length > 0) {
+    syncImportedWorkspaceTransactionCaches(workspaceId, summary.previewTransactions);
+  }
+};
+
+const buildOptimisticPreviewTransactions = (
+  rows: Array<Record<string, unknown>>,
+  params: {
+    importFileId: string;
+    accountId: string;
+    accountName: string;
+    institution: string | null;
+  }
+): NonNullable<UploadInsightsSummary["previewTransactions"]> => {
+  const previewTransactions = rows
+    .map((row, index) => {
+      const date = typeof row.date === "string" ? row.date : "";
+      const amount = typeof row.amount === "string" || typeof row.amount === "number" ? String(row.amount) : "";
+      const merchantRaw =
+        typeof row.merchantRaw === "string" && row.merchantRaw.trim()
+          ? row.merchantRaw.trim()
+          : typeof row.description === "string" && row.description.trim()
+            ? row.description.trim()
+            : "Imported transaction";
+      const merchantClean =
+        typeof row.merchantClean === "string" && row.merchantClean.trim()
+          ? row.merchantClean.trim()
+          : merchantRaw;
+      const type = row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : "expense";
+      const categoryName = typeof row.categoryName === "string" && row.categoryName.trim() ? row.categoryName.trim() : null;
+      const description = typeof row.description === "string" && row.description.trim() ? row.description.trim() : null;
+      const isTransfer = type === "transfer";
+
+      if (!date || !amount) {
+        return null;
+      }
+
+      return {
+        id: `optimistic-${params.importFileId}-${index}`,
+        importFileId: params.importFileId,
+        accountId: params.accountId,
+        accountName: params.accountName,
+        categoryId: null,
+        categoryName,
+        reviewStatus: "pending_review" as const,
+        date,
+        amount,
+        currency: "PHP",
+        type,
+        merchantRaw,
+        merchantClean,
+        description,
+        isTransfer,
+        isExcluded: false,
+        source: "upload" as const,
+      };
+    })
+    .filter((row) => row !== null) as NonNullable<UploadInsightsSummary["previewTransactions"]>;
+
+  return previewTransactions;
+};
+
+const loadOptimisticPreviewTransactions = async (
+  importFileId: string,
+  accountId: string,
+  accountName: string,
+  institution: string | null
+) => {
+  const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const response = await fetch(`/api/imports/${importFileId}/preview`);
+    if (response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      const parsedRows = Array.isArray(payload.parsedRows) ? payload.parsedRows : [];
+      if (parsedRows.length > 0) {
+        return buildOptimisticPreviewTransactions(parsedRows, {
+          importFileId,
+          accountId,
+          accountName,
+          institution,
+        });
+      }
+    }
+
+    if (attempt < 5) {
+      await sleep(250 + attempt * 100);
+    }
+  }
+
+  return [];
 };
 
 const isQuickPasswordProtectedPdf = async (file: File) => {
@@ -287,6 +381,7 @@ const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): Upl
   const topMerchant = [...summaries]
     .filter((summary) => summary.topMerchantName && summary.topMerchantCount !== null)
     .sort((left, right) => (right.topMerchantCount ?? 0) - (left.topMerchantCount ?? 0))[0];
+  const previewTransactions = summaries.flatMap((summary) => summary.previewTransactions ?? []);
 
   return {
     fileName: summaries.length === 1 ? firstSummary.fileName : `${summaries.length} files`,
@@ -311,6 +406,7 @@ const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): Upl
     optimisticAccountId: summaries.every((summary) => summary.optimisticAccountId === firstSummary.optimisticAccountId)
       ? firstSummary.optimisticAccountId ?? null
       : null,
+    previewTransactions,
   };
 };
 
@@ -1023,6 +1119,15 @@ export function ImportFilesModal({
 
       if (processPayload?.queued) {
         const optimisticAccountId = canUseOptimisticGuess ? item.optimisticAccountId ?? null : null;
+        const previewTransactions =
+          optimisticAccountId && guessedIdentity?.accountName
+            ? await loadOptimisticPreviewTransactions(
+                importFileId,
+                optimisticAccountId,
+                guessedIdentity.accountName,
+                guessedIdentity?.institution ?? null
+              )
+            : [];
         const optimisticSummary = canUseOptimisticGuess
           ? buildOptimisticUploadSummary(
               item.file.name,
@@ -1030,7 +1135,9 @@ export function ImportFilesModal({
               optimisticAccountId,
               guessedIdentity?.accountName ?? null,
               guessedIdentity?.institution ?? null,
-              item.optimisticAccountId
+              item.optimisticAccountId,
+              null,
+              previewTransactions
             )
           : null;
         updateItem(itemId, {
@@ -1065,6 +1172,16 @@ export function ImportFilesModal({
       const targetAccountId: string | null = guessedIdentity && canUseOptimisticGuess
         ? await ensureTargetAccountId(guessedIdentity.accountName ?? null, guessedIdentity.institution ?? null)
         : null;
+
+      const previewTransactions =
+        canUseOptimisticGuess && targetAccountId && guessedIdentity?.accountName
+          ? await loadOptimisticPreviewTransactions(
+              importFileId,
+              targetAccountId,
+              guessedIdentity.accountName,
+              guessedIdentity?.institution ?? null
+            )
+          : [];
 
       updateItem(itemId, {
         importFileId,
@@ -1107,7 +1224,9 @@ export function ImportFilesModal({
               targetAccountId,
               guessedIdentity?.accountName ?? null,
               guessedIdentity?.institution ?? null,
-              item.optimisticAccountId
+              item.optimisticAccountId,
+              null,
+              previewTransactions
             )
           : null,
       };

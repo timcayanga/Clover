@@ -94,6 +94,8 @@ type Transaction = {
   description?: string | null;
   isTransfer: boolean;
   isExcluded: boolean;
+  source?: string | null;
+  importFileId?: string | null;
 };
 
 type ImportFile = {
@@ -4436,33 +4438,52 @@ function TransactionsPageContent() {
         accounts={accounts}
         defaultAccountId={accounts[0]?.id ?? null}
         onClose={() => setImportOpen(false)}
-        onImported={async (summary) => {
-          if (summary.optimistic) {
-            const optimisticAccount = buildOptimisticImportedAccount(summary);
-            if (optimisticAccount) {
-              flushSync(() => {
-                setIsWorkspaceDataReady(true);
-                setAccounts((current) => {
-                  const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
-                  if (existingIndex >= 0) {
-                    return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
-                  }
-                  return [optimisticAccount, ...current];
-                });
+      onImported={async (summary) => {
+        if (summary.optimistic) {
+          const optimisticAccount = buildOptimisticImportedAccount(summary);
+          const previewTransactions = summary.previewTransactions ?? [];
+          if (optimisticAccount) {
+            flushSync(() => {
+              setIsWorkspaceDataReady(true);
+              setAccounts((current) => {
+                const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
+                if (existingIndex >= 0) {
+                  return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
+                }
+                return [optimisticAccount, ...current];
               });
-            }
-            return;
+            });
           }
-
-          setPendingImportSummary(summary);
-
-          if (summary.optimisticAccountId) {
-            setAccounts((current) => current.filter((account) => account.id !== summary.optimisticAccountId));
+          if (previewTransactions.length > 0) {
+            flushSync(() => {
+              setTransactions((current) => {
+                const previewIds = new Set(previewTransactions.map((transaction) => transaction.id));
+                const filtered = current.filter((transaction) => {
+                  if (previewIds.has(transaction.id)) {
+                    return false;
+                  }
+                  return !(transaction.source === "upload" && transaction.accountId === summary.accountId);
+                });
+                return [...previewTransactions, ...filtered];
+              });
+            });
           }
+          return;
+        }
 
-          if (!selectedWorkspaceId) {
-            return;
-          }
+        setPendingImportSummary(summary);
+
+        if (summary.optimisticAccountId) {
+          setAccounts((current) => current.filter((account) => account.id !== summary.optimisticAccountId));
+        }
+        const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+        if (importedAccountId) {
+          setTransactions((current) => current.filter((transaction) => !(transaction.source === "upload" && transaction.accountId === importedAccountId)));
+        }
+
+        if (!selectedWorkspaceId) {
+          return;
+        }
 
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           if (optimisticAccount) {
