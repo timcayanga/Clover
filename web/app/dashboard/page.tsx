@@ -5,7 +5,6 @@ import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
 import { DashboardVisualsIsland } from "@/components/dashboard-visuals-island";
-import { EmptyDataCta } from "@/components/empty-data-cta";
 import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
@@ -102,13 +101,6 @@ type WorkspaceSummary = {
     importFiles: number;
     transactions: number;
   };
-};
-
-type GoalNextStep = {
-  title: string;
-  body: string;
-  href: string;
-  label: string;
 };
 
 const toAmount = (value: unknown) => Number(value ?? 0);
@@ -290,42 +282,45 @@ export default async function DashboardPage({
     redirect("/onboarding");
   }
 
-  const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
-  const selectedWorkspace =
-    (await prisma.workspace.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
-      select: {
-        id: true,
-        name: true,
-        accounts: {
-          select: {
-            id: true,
-            name: true,
-            institution: true,
-            type: true,
-            currency: true,
-          },
-        },
-        importFiles: {
-          orderBy: { uploadedAt: "desc" },
-          take: 5,
-          select: {
-            id: true,
-            fileName: true,
-            status: true,
-            uploadedAt: true,
-          },
-        },
-        _count: {
-          select: {
-            accounts: true,
-            importFiles: true,
-            transactions: true,
-          },
+  const starterWorkspacePromise = ensureStarterWorkspace(user);
+  const selectedWorkspacePromise = prisma.workspace.findFirst({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      name: true,
+      accounts: {
+        select: {
+          id: true,
+          name: true,
+          institution: true,
+          type: true,
+          currency: true,
         },
       },
-    })) ?? ({
+      importFiles: {
+        orderBy: { uploadedAt: "desc" },
+        take: 5,
+        select: {
+          id: true,
+          fileName: true,
+          status: true,
+          uploadedAt: true,
+        },
+      },
+      _count: {
+        select: {
+          accounts: true,
+          importFiles: true,
+          transactions: true,
+        },
+      },
+    },
+  });
+  const [starterWorkspace, selectedWorkspaceData] = await Promise.all([starterWorkspacePromise, selectedWorkspacePromise]);
+  const workspaceSummary =
+    selectedWorkspaceData ??
+    ({
       id: starterWorkspace.id,
       name: starterWorkspace.name,
       accounts: starterWorkspace.accounts.map((account) => ({
@@ -343,9 +338,7 @@ export default async function DashboardPage({
       },
     } satisfies WorkspaceSummary);
 
-  const selectedImportFiles = selectedWorkspace.importFiles;
-  const isEmptyWorkspace = selectedWorkspace._count.accounts <= 1 && selectedWorkspace._count.transactions === 0 && selectedWorkspace._count.importFiles === 0;
-
+  const selectedImportFiles = workspaceSummary.importFiles;
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const sixtyDaysAgo = new Date();
@@ -355,7 +348,7 @@ export default async function DashboardPage({
 
   const recentTransactions = await prisma.transaction.findMany({
     where: {
-      workspaceId: selectedWorkspace.id,
+      workspaceId: workspaceSummary.id,
       isExcluded: false,
       date: {
         gte: oneHundredEightyDaysAgo,
@@ -376,9 +369,8 @@ export default async function DashboardPage({
   );
   const sixMonthTransactionWindow = currentTransactions;
   const currentSummary = comparePeriods(currentThirtyDayTransactions, previousTransactionsWindow);
-  const selectedGoalKey = user.primaryGoal?.trim() ?? null;
-  const selectedGoal = getGoalDefinition(selectedGoalKey);
-  const hasPrimaryGoal = Boolean(selectedGoalKey);
+  const selectedGoal = getGoalDefinition(user.primaryGoal?.trim() ?? null);
+  const hasPrimaryGoal = Boolean(user.primaryGoal?.trim());
   const currentNet = currentSummary.net;
   const currentSavingsRate = currentSummary.current.income > 0 ? currentNet / currentSummary.current.income : null;
   const previousSavingsRate = currentSummary.previous.income > 0 ? currentSummary.previousNet / currentSummary.previous.income : null;
@@ -449,104 +441,14 @@ export default async function DashboardPage({
   const goalScore = clamp(Math.round(savingsScore + trendScore + consistencyScore + cleanlinessScore * 0.2 - dragPenalty), 12, 98);
   const goalProgressLabel =
     goalScore >= 85 ? "Ahead of pace" : goalScore >= 70 ? "On pace" : goalScore >= 50 ? "Building momentum" : "Early in the climb";
-  const currentSavingsRatePercent = currentSavingsRate === null ? null : currentSavingsRate * 100;
-  const goalRateGap =
-    currentSavingsRate === null ? null : Math.round(selectedGoal.targetRate - currentSavingsRate * 100);
   const reviewAttentionTransactions = currentThirtyDayTransactions.filter(
     (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || transaction.categoryConfidence < 70
   );
   const reviewAttentionCount = reviewAttentionTransactions.length;
-  const goalProgressCopy =
-    !hasPrimaryGoal
-      ? "Pick a goal so Clover can show you how close you are and what to focus on next."
-      : currentSavingsRate === null
-        ? "Import enough income and spending to calculate a real pace against your goal."
-        : selectedGoalKey === "track_spending"
-          ? `${uncategorizedTransactions.length} item${uncategorizedTransactions.length === 1 ? "" : "s"} still need categorization, and ${reviewAttentionCount} row${
-              reviewAttentionCount === 1 ? "" : "s"
-            } need a quick review.`
-          : goalRateGap !== null && goalRateGap <= 0
-            ? `You are ${Math.abs(goalRateGap)} percentage point${Math.abs(goalRateGap) === 1 ? "" : "s"} ahead of the target pace.`
-            : `You need about ${Math.max(goalRateGap ?? 0, 0)} more percentage point${Math.max(goalRateGap ?? 0, 0) === 1 ? "" : "s"} of savings pace to hit the goal.`;
-  const goalStatusPill =
-    !hasPrimaryGoal
-      ? "No goal set"
-      : `${selectedGoal.title} · ${selectedGoal.targetRate}% target`;
-  const goalNextSteps: GoalNextStep[] = [
-    {
-      title: hasPrimaryGoal ? `Review ${selectedGoal.title.toLowerCase()}` : "Set your goal",
-      body: hasPrimaryGoal
-        ? "Use the Goal page to see the full lane, then come back here for the at-a-glance pace check."
-        : "Pick a focus so Clover can compare your spending pace against a real target.",
-      href: "/goals",
-      label: hasPrimaryGoal ? "Open goals" : "Choose goal",
-    },
-    {
-      title: "Clear the blockers",
-      body:
-        reviewAttentionCount > 0
-          ? `${reviewAttentionCount} transaction${reviewAttentionCount === 1 ? "" : "s"} still need review or categorization.`
-          : "Nothing is waiting in review right now.",
-      href: "/review",
-      label: reviewAttentionCount > 0 ? "Open review" : "View queue",
-    },
-    {
-      title: recurringMerchants[0] ? `Trim ${recurringMerchants[0].label}` : "Watch recurring drag",
-      body: recurringMerchants[0]
-        ? `That recurring spend is carrying ${formatSignedCurrency(recurringMerchants[0].amount)} of pressure.`
-        : "Recurring spend is light right now, so the goal is mostly about consistency.",
-      href: "/reports",
-      label: "Open reports",
-    },
-  ];
-  const goalPaceLabel =
-    currentSavingsRatePercent === null ? "No pace yet" : `${formatRate(currentSavingsRatePercent)} current pace`;
-  const goalTargetLabel = `${selectedGoal.targetRate}% target pace`;
-  const goalGapLabel =
-    currentSavingsRatePercent === null
-      ? "Import enough income to calculate pace"
-      : goalRateGap !== null && goalRateGap > 0
-        ? `${goalRateGap} pts to target`
-        : goalRateGap !== null
-          ? `${Math.abs(goalRateGap)} pts ahead`
-          : "Pace unavailable";
-  const goalScoreCopy =
-    !hasPrimaryGoal
-      ? "Choose a goal to make the dashboard measurable."
-      : currentSavingsRatePercent === null
-        ? "Import enough income and spending to calculate your pace."
-        : `You are ${Math.abs(goalRateGap ?? 0)} percentage point${Math.abs(goalRateGap ?? 0) === 1 ? "" : "s"} ${
-            goalRateGap !== null && goalRateGap <= 0 ? "ahead of" : "away from"
-          } the target pace.`;
-  const goalSnapshot = [
-    {
-      label: "Current pace",
-      value: goalPaceLabel,
-      note: hasPrimaryGoal ? selectedGoal.signal : "Choose a goal to compare pace.",
-    },
-    {
-      label: "Target pace",
-      value: goalTargetLabel,
-      note: goalGapLabel,
-    },
-    {
-      label: "Data health",
-      value: `${cleanlinessScore}% clean`,
-      note:
-        uncategorizedTransactions.length > 0
-          ? `${uncategorizedTransactions.length} uncategorized transaction${uncategorizedTransactions.length === 1 ? "" : "s"}`
-          : "No uncategorized transactions in the last 30 days",
-    },
-    {
-      label: "Recurring drag",
-      value: recurringMerchants.length > 0 ? formatSignedCurrency(recurringDrag) : "Low",
-      note:
-        recurringMerchants.length > 0
-          ? `${recurringMerchants.length} repeated merchant${recurringMerchants.length === 1 ? "" : "s"}`
-          : "Nothing recurring is pulling hard right now",
-    },
-  ];
-
+  const reviewPreviewTransactions = reviewAttentionTransactions
+    .slice()
+    .sort((a, b) => a.categoryConfidence - b.categoryConfidence || b.date.getTime() - a.date.getTime())
+    .slice(0, 3);
   const recentConfirmedShare = currentThirtyDayTransactions.length
     ? Math.round((currentSummary.current.confirmed / currentThirtyDayTransactions.length) * 100)
     : 0;
@@ -554,11 +456,35 @@ export default async function DashboardPage({
     currentThirtyDayTransactions.length > 0
       ? `${recentConfirmedShare}% of the last 30 days is confirmed or edited`
       : "No recent transactions to score yet";
-
+  const currentNetLabel = currentNet >= 0 ? "Positive net cash flow" : "Negative net cash flow";
+  const currentPositionCopy =
+    currentSummary.current.income > 0
+      ? `Income ${currencyFormatter.format(currentSummary.current.income)} and spending ${currencyFormatter.format(
+          currentSummary.current.expense
+        )} in the last 30 days. ${reviewAttentionCount > 0 ? `${reviewAttentionCount} items need review.` : "Review is clear."}`
+      : "Import a statement to unlock a live view of your cash flow, review queue, and recent activity.";
+  const currentTrendCopy =
+    currentSummary.netDelta >= 0
+      ? `${formatSignedCurrency(currentSummary.netDelta)} better than the previous 30 days`
+      : `${formatSignedCurrency(Math.abs(currentSummary.netDelta))} worse than the previous 30 days`;
+  const reviewQueueCopy =
+    reviewAttentionCount > 0
+      ? `${reviewAttentionCount} transaction${reviewAttentionCount === 1 ? "" : "s"} still need review or categorization.`
+      : "Everything from the last 30 days is caught up.";
   const latestImport = selectedImportFiles[0] ?? null;
   const recentImports = selectedImportFiles.slice(0, 3);
-
   const recentActivityTransactions = currentTransactions.slice(0, 4);
+  const importStatusCopy = latestImport
+    ? `${latestImport.fileName} · ${latestImport.status} · ${formatDate(latestImport.uploadedAt)}`
+    : "No statement has been imported yet";
+  const importActivityCopy =
+    recentImports.length > 0
+      ? recentImports.map((file) => `${file.fileName} (${file.status})`).join(" · ")
+      : "Import a statement to start filling this workspace.";
+  const goalMiniCopy = hasPrimaryGoal
+    ? `${selectedGoal.title} · ${goalProgressLabel} · ${goalScore}% readiness`
+    : "Set a goal to add pace context to the dashboard.";
+  const goalMiniNote = hasPrimaryGoal ? selectedGoal.signal : "Goals help Clover explain whether you are on track.";
   const goalRingValue = clamp(goalScore, 0, 100);
   const monthBuckets = getMonthBuckets(new Date());
   sixMonthTransactionWindow.forEach((transaction) => {
@@ -591,24 +517,20 @@ export default async function DashboardPage({
   return (
     <CloverShell
       active="dashboard"
-      kicker="Goals first"
-      title={hasPrimaryGoal ? selectedGoal.title : "Set your first goal"}
-      subtitle={
-        hasPrimaryGoal
-          ? `Dashboard progress starts with how close you are to ${selectedGoal.title.toLowerCase()}, then shows the blockers still in the way.`
-          : "Set a goal so the dashboard can show your pace, your blockers, and the next move."
-      }
+      kicker="Home"
+      title="Your finances at a glance"
+      subtitle="See your current position, review queue, recent activity, and import status without digging."
       showTopbar={false}
       actions={
         <>
+          <Link className="pill-link" href={reviewAttentionCount > 0 ? "/review" : "/dashboard?import=1"}>
+            {reviewAttentionCount > 0 ? "Review queue" : "Import statement"}
+          </Link>
+          <Link className="pill-link" href="/transactions">
+            Transactions
+          </Link>
           <Link className="pill-link" href="/goals">
             Goals
-          </Link>
-          <Link className="pill-link" href="/review">
-            Review queue
-          </Link>
-          <Link className="pill-link" href="/reports">
-            Reports
           </Link>
         </>
       }
@@ -617,245 +539,242 @@ export default async function DashboardPage({
         event="dashboard_viewed"
         onceKey={analyticsOnceKey("dashboard_viewed", "session")}
         properties={{
-          workspace_name: selectedWorkspace.name,
-          account_count: selectedWorkspace._count.accounts,
-          transaction_count: selectedWorkspace._count.transactions,
-          import_count: selectedWorkspace._count.importFiles,
+          workspace_name: workspaceSummary.name,
+          account_count: workspaceSummary._count.accounts,
+          transaction_count: workspaceSummary._count.transactions,
+          import_count: workspaceSummary._count.importFiles,
         }}
       />
-      {isEmptyWorkspace ? (
-        <EmptyDataCta
-          eyebrow={user.dataWipedAt ? "Fresh start" : "No data yet"}
-          title={user.dataWipedAt ? "Your Clover workspace is clean again." : "Import a statement to unlock the dashboard."}
-          copy={
-            user.dataWipedAt
-              ? "Bring Clover back to life by importing a statement, adding an account, or entering a transaction manually."
-              : "Importing a statement is the fastest way to populate the dashboard. You can also add an account or enter a transaction manually."
-          }
-          importHref="/dashboard?import=1"
-          accountHref="/accounts"
-          transactionHref="/transactions?manual=1"
-        />
-      ) : null}
-      <section className="goals-story">
-        <article className="goals-hero glass">
-          <div className="goals-hero__copy">
-            <div className="goals-hero__header">
-              <span className="pill pill-accent">Goal progress</span>
-              <span className="pill pill-subtle">{goalStatusPill}</span>
+      <section className="dashboard-home">
+        <article className="dashboard-home__hero glass">
+          <div className="dashboard-home__copy">
+            <div className="dashboard-home__kicker-row">
+              <span className="pill pill-accent">Current financial position</span>
+              <span className="pill pill-subtle">{workspaceSummary.name}</span>
+              <span className="pill pill-subtle">{hasPrimaryGoal ? selectedGoal.title : "No goal set"}</span>
             </div>
+
             <h3>
-              {hasPrimaryGoal
-                ? `You are ${goalProgressLabel.toLowerCase()} toward ${selectedGoal.title.toLowerCase()}.`
-                : "Choose a goal so Clover can show how close you are and what to do next."}
+              {currentNet >= 0
+                ? `You are ${formatSignedCurrency(currentNet)} ahead in the last 30 days.`
+                : `You are ${formatSignedCurrency(currentNet)} behind in the last 30 days.`}
             </h3>
-            <p>{goalProgressCopy}</p>
+            <p>{currentPositionCopy}</p>
 
-            <div className="goals-hero__summary">
-              <span className={`pill ${goalScore >= 70 ? "pill-good" : goalScore >= 50 ? "pill-accent" : "pill-warning"}`}>
-                {goalProgressLabel}
-              </span>
-              <span>{hasPrimaryGoal ? selectedGoal.signal : "Set a goal to unlock the pace comparison."}</span>
-              <span>{hasPrimaryGoal ? selectedGoal.coachNote : "The dashboard will show your target, blockers, and momentum."}</span>
-            </div>
-
-            <div className="goals-progress">
-              <div className="goals-progress__head">
-                <strong>{hasPrimaryGoal ? `${selectedGoal.title} pace` : "Goal readiness"}</strong>
-                <span>{goalRingValue} of 100</span>
-              </div>
-              <div className="goals-progress__bar" aria-hidden="true">
-                <div className="goals-progress__fill" style={{ width: `${goalRingValue}%` }} />
-              </div>
-              <p>{goalScoreCopy}</p>
+            <div className="dashboard-home__kpis">
+              <article className="dashboard-home__kpi">
+                <span>Net position</span>
+                <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
+                <small>{currentNetLabel} · {currentTrendCopy}</small>
+              </article>
+              <article className="dashboard-home__kpi">
+                <span>Income</span>
+                <strong>{currencyFormatter.format(currentSummary.current.income)}</strong>
+                <small>Last 30 days</small>
+              </article>
+              <article className="dashboard-home__kpi">
+                <span>Spending</span>
+                <strong>{currencyFormatter.format(currentSummary.current.expense)}</strong>
+                <small>Last 30 days</small>
+              </article>
+              <article className="dashboard-home__kpi">
+                <span>Review items</span>
+                <strong>{reviewAttentionCount}</strong>
+                <small>{reviewCoverageText}</small>
+              </article>
             </div>
 
             <div className="hero-actions">
-              <Link className="button button-primary" href="/goals">
-                {hasPrimaryGoal ? "Open goals" : "Choose a goal"}
+              <Link className="button button-primary" href={reviewAttentionCount > 0 ? "/review" : "/dashboard?import=1"}>
+                {reviewAttentionCount > 0 ? "Review queue" : "Import statement"}
               </Link>
-              <Link className="button button-secondary" href={reviewAttentionCount > 0 ? "/review" : "/transactions"}>
-                {reviewAttentionCount > 0 ? "Clear blockers" : "Import more data"}
+              <Link className="button button-secondary" href="/dashboard?import=1">
+                Import files
               </Link>
-              <Link className="button button-secondary" href="/reports">
-                Weekly summary
+              <Link className="button button-secondary" href="/transactions">
+                Transactions
               </Link>
             </div>
           </div>
 
-          <div className="goals-hero__visual">
-            <div className="goals-hero__ring-card">
-              <div className="goals-hero__ring" role="img" aria-label={`Goal readiness at ${goalRingValue}%`}>
-                <svg viewBox="0 0 240 240">
-                  <defs>
-                    <linearGradient id="dashboard-goals-ring-gradient" x1="0" x2="1" y1="0" y2="1">
-                      <stop offset="0%" stopColor="rgba(34, 197, 94, 0.25)" />
-                      <stop offset="100%" stopColor="rgba(3, 168, 192, 0.92)" />
-                    </linearGradient>
-                  </defs>
-                  <circle cx="120" cy="120" r="84" className="goals-ring__track" />
-                  <circle
-                    cx="120"
-                    cy="120"
-                    r="84"
-                    className="goals-ring__progress"
-                    stroke="url(#dashboard-goals-ring-gradient)"
-                    style={{
-                      strokeDasharray: `${2 * Math.PI * 84 * (goalRingValue / 100)} ${2 * Math.PI * 84}`,
-                    }}
-                  />
-                </svg>
-                <div className="goals-hero__ring-copy">
-                  <strong>{goalRingValue}%</strong>
-                  <span>{hasPrimaryGoal ? selectedGoal.title : "Goal readiness"}</span>
+          <div className="dashboard-home__rail">
+            <article className="dashboard-home__rail-card">
+              <div className="dashboard-home__rail-head">
+                <div>
+                  <p className="eyebrow">Review queue</p>
+                  <h4>{reviewAttentionCount > 0 ? `${reviewAttentionCount} items need attention` : "No items need review"}</h4>
                 </div>
+                <span className={`dashboard-visual-pill ${reviewAttentionCount > 0 ? "negative" : "positive"}`}>
+                  {reviewAttentionCount > 0 ? "Action needed" : "Caught up"}
+                </span>
               </div>
-
-              <div className="goals-hero__stats">
-                {goalSnapshot.map((item) => (
-                  <div key={item.label} className="goals-stat">
-                    <span>{item.label}</span>
-                    <strong>{item.value}</strong>
-                    <small>{item.note}</small>
+              <p>{reviewQueueCopy}</p>
+              <div className="dashboard-home__list">
+                {reviewPreviewTransactions.length > 0 ? (
+                  reviewPreviewTransactions.map((transaction) => (
+                    <div key={transaction.id} className="dashboard-home__item">
+                      <strong>{transaction.merchantClean || transaction.merchantRaw}</strong>
+                      <span>
+                        {transaction.account.name}
+                        {transaction.category?.name ? ` · ${transaction.category.name}` : ""} ·{" "}
+                        {currencyFormatter.format(Math.abs(toAmount(transaction.amount)))} · {transaction.categoryConfidence}%
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="dashboard-home__item dashboard-home__item--empty">
+                    <strong>Everything is reviewed</strong>
+                    <span>New rows will show up here as soon as they need attention.</span>
                   </div>
-                ))}
+                )}
               </div>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      {/* Keep the dashboard visuals as a separate client island so the shell can stream cleanly. */}
-      <DashboardVisualsIsland
-        currentNetDelta={currentSummary.netDelta}
-        currentExpense={currentSummary.current.expense}
-        monthPoints={monthPoints}
-        linePath={linePath}
-        chartWidth={chartWidth}
-        chartHeight={chartHeight}
-        chartPadding={chartPadding}
-        topCategoryRows={topCategoryRows}
-      />
-
-      <DashboardImportLauncher workspaceId={selectedWorkspace.id} accounts={selectedWorkspace.accounts} initialOpen={resolvedSearchParams?.import === "1"} />
-
-      <article className="goals-actions glass">
-        <div className="goals-panel__head">
-          <div>
-            <p className="eyebrow">What to do next</p>
-            <h4>The three moves that will improve your goal fastest</h4>
-          </div>
-          <div className="goals-panel__stat">
-            <strong>{goalProgressLabel}</strong>
-            <span>{hasPrimaryGoal ? selectedGoal.title : "Set a goal first"}</span>
-          </div>
-        </div>
-
-        <div className="goals-action-grid">
-          {goalNextSteps.map((step, index) => (
-            <article key={step.title} className="goals-action">
-              <div className="goals-lane__top">
-                <div className="goals-lane__icon" aria-hidden="true">
-                  <span>{String(index + 1)}</span>
-                </div>
-                <span className="pill pill-subtle">{step.label}</span>
-              </div>
-              <div>
-                <strong>{step.title}</strong>
-                <span>{step.body}</span>
-              </div>
-              <Link className="pill-link pill-link--inline" href={step.href}>
-                {step.label}
+              <Link className="pill-link pill-link--inline" href="/review">
+                Open review
               </Link>
             </article>
-          ))}
-        </div>
-      </article>
 
-      <section className="overview-insight-grid" id="insights">
-        <article className="glass insight-card overview-panel overview-panel--large">
-          <p className="eyebrow">Goal health</p>
-          <h4>What is helping or slowing the goal</h4>
-          <div className="overview-panel__list overview-panel__list--wide">
-            <div className="overview-panel__item">
-              <strong>Current pace</strong>
-              <span>{goalPaceLabel}</span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>Target pace</strong>
-              <span>{goalTargetLabel}</span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>Gap</strong>
-              <span>{goalGapLabel}</span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>Data health</strong>
-              <span>
-                {reviewCoverageText}
-                {uncategorizedTransactions.length > 0 ? ` · ${uncategorizedTransactions.length} need categorization` : ""}
-              </span>
-            </div>
+            <article className="dashboard-home__rail-card">
+              <div className="dashboard-home__rail-head">
+                <div>
+                  <p className="eyebrow">Latest import</p>
+                  <h4>{latestImport ? latestImport.fileName : "Ready for your next statement"}</h4>
+                </div>
+              </div>
+              <p>{importStatusCopy}</p>
+              <div className="dashboard-home__list">
+                <div className="dashboard-home__item">
+                  <strong>Recent uploads</strong>
+                  <span>{importActivityCopy}</span>
+                </div>
+              </div>
+              <Link className="pill-link pill-link--inline" href="/dashboard?import=1">
+                Import now
+              </Link>
+            </article>
+
+            <article className="dashboard-home__rail-card">
+              <div className="dashboard-home__rail-head">
+                <div>
+                  <p className="eyebrow">Goal context</p>
+                  <h4>{goalMiniCopy}</h4>
+                </div>
+              </div>
+              <p>{goalMiniNote}</p>
+              <div className="dashboard-home__mini-metric">
+                <strong>{goalRingValue}%</strong>
+                <span>{goalProgressLabel} readiness</span>
+              </div>
+              <Link className="pill-link pill-link--inline" href="/goals">
+                View goals
+              </Link>
+            </article>
           </div>
         </article>
 
-        <article className="glass insight-card overview-panel">
-          <p className="eyebrow">Latest import</p>
-          <h4>Keep the trail visible</h4>
-          <div className="overview-panel__list">
-            <div className="overview-panel__item">
-              <strong>{latestImport ? latestImport.fileName : "No import yet"}</strong>
-              <span>
-                {latestImport ? `${latestImport.status} · ${formatDate(latestImport.uploadedAt)}` : "Upload a statement to unlock the dashboard"}
-              </span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>Recent uploads</strong>
-              <span>
-                {recentImports.length > 0
-                  ? recentImports.map((file) => `${file.fileName} (${file.status})`).join(" · ")
-                  : "No uploads in this workspace yet"}
-              </span>
-            </div>
-          </div>
-        </article>
-      </section>
+        {/* Keep the dashboard visuals as a separate client island so the shell can stream cleanly. */}
+        <DashboardVisualsIsland
+          currentNetDelta={currentSummary.netDelta}
+          currentExpense={currentSummary.current.expense}
+          monthPoints={monthPoints}
+          linePath={linePath}
+          chartWidth={chartWidth}
+          chartHeight={chartHeight}
+          chartPadding={chartPadding}
+          topCategoryRows={topCategoryRows}
+        />
 
-      <section className="overview-activity-grid">
-        <article className="glass insight-card overview-panel overview-panel--full">
-          <div className="overview-panel__head">
-            <div>
-              <p className="eyebrow">Activity</p>
-              <h4>Recent imports and transactions</h4>
+        <DashboardImportLauncher workspaceId={workspaceSummary.id} accounts={workspaceSummary.accounts} initialOpen={resolvedSearchParams?.import === "1"} />
+
+        <section className="dashboard-home__support-grid">
+          <article className="dashboard-home__panel glass">
+            <div className="dashboard-home__panel-head">
+              <div>
+                <p className="eyebrow">Recent activity</p>
+                <h4>Imports and transactions from the latest session</h4>
+              </div>
             </div>
-          </div>
-          <div className="overview-activity-list">
-            {recentImports.map((file) => (
-              <div key={file.id} className="overview-panel__item">
-                <strong>{file.fileName}</strong>
+            <div className="dashboard-home__activity">
+              {recentImports.length > 0 || recentActivityTransactions.length > 0 ? (
+                <>
+                  {recentImports.length > 0 ? (
+                    <div className="dashboard-home__activity-section">
+                      <strong className="dashboard-home__section-label">Recent imports</strong>
+                      {recentImports.map((file) => (
+                        <div key={file.id} className="dashboard-home__item">
+                          <strong>{file.fileName}</strong>
+                          <span>
+                            <span className={`status status--${file.status}`}>{file.status}</span> · {formatRelativeDate(file.uploadedAt)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="dashboard-home__item dashboard-home__item--empty">
+                      <strong>No imports yet</strong>
+                      <span>Start with a statement to populate your activity feed.</span>
+                    </div>
+                  )}
+
+                  {recentActivityTransactions.length > 0 ? (
+                    <div className="dashboard-home__activity-section">
+                      <strong className="dashboard-home__section-label">Recent transactions</strong>
+                      {recentActivityTransactions.map((transaction) => (
+                        <div key={transaction.id} className="dashboard-home__item">
+                          <strong>{transaction.merchantClean || transaction.merchantRaw}</strong>
+                          <span>
+                            {transaction.account.name}
+                            {transaction.category?.name ? ` · ${transaction.category.name}` : ""} ·{" "}
+                            {currencyFormatter.format(Math.abs(toAmount(transaction.amount)))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="dashboard-home__item dashboard-home__item--empty">
+                      <strong>No transactions yet</strong>
+                      <span>Import a statement or add a manual transaction to start the feed.</span>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="dashboard-home__item dashboard-home__item--empty">
+                  <strong>No recent activity</strong>
+                  <span>Import your next statement to make the dashboard feel alive.</span>
+                </div>
+              )}
+            </div>
+          </article>
+
+          <article className="dashboard-home__panel glass">
+            <div className="dashboard-home__panel-head">
+              <div>
+                <p className="eyebrow">Movement and trust</p>
+                <h4>What changed and how much Clover can trust</h4>
+              </div>
+            </div>
+            <div className="dashboard-home__summary-grid">
+              <div className="dashboard-home__item">
+                <strong>Income</strong>
+                <span>{formatSignedCurrency(currentSummary.incomeDelta)} vs the previous 30 days</span>
+              </div>
+              <div className="dashboard-home__item">
+                <strong>Spending</strong>
+                <span>{formatSignedCurrency(currentSummary.expenseDelta)} vs the previous 30 days</span>
+              </div>
+              <div className="dashboard-home__item">
+                <strong>Net</strong>
+                <span>{formatSignedCurrency(currentSummary.netDelta)} versus the previous 30 days</span>
+              </div>
+              <div className="dashboard-home__item">
+                <strong>Trust</strong>
                 <span>
-                  <span className={`status status--${file.status}`}>{file.status}</span> · {formatRelativeDate(file.uploadedAt)}
+                  {reviewCoverageText}
+                  {uncategorizedTransactions.length > 0 ? ` · ${uncategorizedTransactions.length} need categorization` : ""}
                 </span>
               </div>
-            ))}
-            {recentActivityTransactions.map((transaction) => (
-              <div key={transaction.id} className="overview-panel__item">
-                <strong>{transaction.merchantClean || transaction.merchantRaw}</strong>
-                <span>
-                  {transaction.account.name}
-                  {transaction.category?.name ? ` · ${transaction.category.name}` : ""} ·{" "}
-                  {currencyFormatter.format(Math.abs(toAmount(transaction.amount)))}
-                </span>
-              </div>
-            ))}
-            {recentImports.length === 0 && recentActivityTransactions.length === 0 ? (
-              <div className="overview-panel__item">
-                <strong>No recent activity</strong>
-                <span>Import a statement or add a transaction to start populating this workspace.</span>
-              </div>
-            ) : null}
-          </div>
-        </article>
+            </div>
+          </article>
+        </section>
       </section>
     </CloverShell>
   );
