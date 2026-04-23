@@ -24,10 +24,11 @@ Clover is a personal finance app focused on statement import, transaction parsin
 18. `docs/gotyme-parser-rules.md` when working on GoTyme imports
 19. `docs/bank-of-commerce-parser-rules.md` when working on Bank of Commerce imports
 20. `docs/bank-of-china-parser-rules.md` when working on Bank of China imports
-21. `web/prisma/schema.prisma`
-22. `web/lib/import-parser.ts`
-23. `web/lib/data-engine.ts`
-24. `web/workers/import-processor.ts`
+21. `docs/cimb-parser-rules.md` when working on CIMB imports
+22. `web/prisma/schema.prisma`
+23. `web/lib/import-parser.ts`
+24. `web/lib/data-engine.ts`
+25. `web/workers/import-processor.ts`
 
 If `docs/product-spec.md` is added later, it should become the primary product spec and supersede `docs/user-management-spec.md` for implementation guidance.
 

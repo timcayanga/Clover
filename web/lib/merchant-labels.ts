@@ -28,6 +28,7 @@ const institutionKeyPatterns: Array<{ key: string; patterns: RegExp[] }> = [
   { key: "GoTyme", patterns: [/\bGOTYME\b/i] },
   { key: "Bank of Commerce", patterns: [/\bBANK\s+OF\s+COMMERCE\b/i] },
   { key: "Bank of China", patterns: [/\bBANK\s+OF\s+CHINA\b/i] },
+  { key: "CIMB", patterns: [/\bCIMB\b/i] },
 ];
 
 const simplifierRules: Record<string, SimplifierRule[]> = {
@@ -312,6 +313,40 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     {
       patterns: [/\bdst\b/i],
       replacement: "Documentary Stamp Tax",
+    },
+  ],
+  CIMB: [
+    {
+      patterns: [/credit\s+interest\s+account/i],
+      replacement: "Credit Interest",
+    },
+    {
+      patterns: [/tax\s+rate/i],
+      replacement: "Tax Withheld",
+    },
+    {
+      patterns: [/back\s+office\s+cash\s+in\s*\(?icms\)?/i, /back\s+office\s+cash\s+in/i],
+      replacement: "Cash In Adjustment",
+    },
+    {
+      patterns: [/instapay\s+inward\s+transfer\s+to/i, /insta\s*pay\s+inward\s+transfer\s+to/i],
+      replacement: "InstaPay Inward",
+    },
+    {
+      patterns: [/instapay\s+transfer\s+to/i, /insta\s*pay\s+transfer\s+to/i],
+      replacement: "InstaPay Transfer Out",
+    },
+    {
+      patterns: [/transfer\s+to\s+vicky\s+antonio\s+chavez/i],
+      replacement: "Transfer to Vicky Antonio Chavez",
+    },
+    {
+      patterns: [/transfer\s+to\s+antoinette\s+ann\s+lorenzo/i],
+      replacement: "Transfer to Antoinette Ann Lorenzo",
+    },
+    {
+      patterns: [/opening\s+balance/i],
+      replacement: "Opening Balance",
     },
   ],
 };
