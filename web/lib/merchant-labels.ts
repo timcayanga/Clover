@@ -124,6 +124,128 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Interest Earned",
     },
   ],
+  GCash: [
+    {
+      patterns: [/buy\s+load\s+transaction/i, /buyloadtransaction/i],
+      replacement: "Buy Load",
+    },
+    {
+      patterns: [/bills?\s+payment\s+to\s+davao\s+light/i],
+      replacement: "Davao Light",
+    },
+    {
+      patterns: [/bills?\s+payment\s+to\s+pldt/i],
+      replacement: "PLDT",
+    },
+    {
+      patterns: [/bills?\s+payment\s+to\s+tagum\s+coop/i],
+      replacement: "Tagum Coop",
+    },
+    {
+      patterns: [/bills?\s+payment\s+to\s+bankard/i],
+      replacement: "Bankard",
+    },
+    {
+      patterns: [/bills?\s+payment\s+to\s+home\s+credit/i],
+      replacement: "Home Credit",
+    },
+    {
+      patterns: [/bills?\s+payment\s+to\s+eastwest\s+bank/i],
+      replacement: "EastWest Bank",
+    },
+    {
+      patterns: [/payment\s+to\s+food\s*panda/i, /payment\s+to\s+foodpanda/i],
+      replacement: "Food Panda",
+    },
+    {
+      patterns: [/payment\s+to\s+apple\s+services/i],
+      replacement: "Apple",
+    },
+    {
+      patterns: [/payment\s+to\s+lazada/i],
+      replacement: "Lazada",
+    },
+    {
+      patterns: [/payment\s+to\s+grab\s+philippines/i],
+      replacement: "Grab",
+    },
+    {
+      patterns: [/payment\s+to\s+seamoney\s+credit/i],
+      replacement: "Seamoney Credit",
+    },
+    {
+      patterns: [/received\s+gcash\s+from\s+bdo/i, /received\s+gcash\s+from\s+banco\s+de\s+oro/i],
+      replacement: "Transfer from BDO",
+    },
+    {
+      patterns: [/sent\s+gcash\s+to\s+bdo/i],
+      replacement: "Transfer to BDO",
+    },
+    {
+      patterns: [/received\s+gcash\s+from\s+gotyme/i],
+      replacement: "Transfer from GoTyme",
+    },
+    {
+      patterns: [/sent\s+gcash\s+to\s+gotyme/i],
+      replacement: "Transfer to GoTyme",
+    },
+    {
+      patterns: [/received\s+gcash\s+from\s+metropolitan\s+bank/i],
+      replacement: "Transfer from Metrobank",
+    },
+    {
+      patterns: [/received\s+gcash\s+from\s+asia\s+united\s+bank/i],
+      replacement: "Transfer from AUB",
+    },
+    {
+      patterns: [/received\s+gcash\s+from\s+shopeepay/i],
+      replacement: "Transfer from ShopeePay",
+    },
+    {
+      patterns: [/received\s+gcash\s+from\s+bti\s+payments/i],
+      replacement: "Transfer from BTI Payments",
+    },
+    {
+      patterns: [/received\s+gcash\s+from\s+pj\s+lhuillier/i],
+      replacement: "Transfer from PJ Lhuillier",
+    },
+    {
+      patterns: [/deposit\s+to\s+gsave\s+account/i],
+      replacement: "Transfer to GSave",
+    },
+    {
+      patterns: [/withdraw\s+from\s+gsave\s+account/i],
+      replacement: "Transfer from GSave",
+    },
+    {
+      patterns: [/gcredit/i],
+      replacement: "GCredit",
+    },
+    {
+      patterns: [/ggives\s+repayment/i],
+      replacement: "GGives Repayment",
+    },
+    {
+      patterns: [/gcash\s+invest\s+subscription/i],
+      replacement: "GCash Invest",
+    },
+    {
+      patterns: [/refund\s+from/i],
+      replacement: "Refund",
+    },
+    {
+      patterns: [/rebate\s+from\s+purchasing/i],
+      replacement: "Load Rebate",
+    },
+    {
+      patterns: [/transfer\s+from\s+\d{10,11}/i],
+      replacement: "Incoming Transfer",
+    },
+    {
+      patterns: [/transfer\s+to\s+\d{10,11}/i],
+      replacement: "Outgoing Transfer",
+    },
+  ],
 };
 
 const normalizeInstitutionKey = (institution?: string | null) => {

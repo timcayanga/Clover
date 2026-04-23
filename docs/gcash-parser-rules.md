@@ -1,0 +1,32 @@
+# GCash Parser Rules
+
+This document captures the GCash parsing rules learned from the training bundles and should be used as a reference for future GCash import work.
+
+## Scope
+
+- Applies to GCash wallet history statements.
+- Preserve raw and normalized data separately.
+- Keep datetime information when the statement includes it.
+
+## Wallet History Rules
+
+- Treat GCash as a wallet account, not a bank account.
+- Use `period_start` and `period_end` when the statement does not provide a single statement date.
+- Preserve transaction time in the normalized date field when available.
+- Keep `Cash In from BPI`, `Cash In from UnionBank`, and other wallet top-ups as `Transfers`.
+- Keep `Send Money`, `Received Money`, `Transfer to Maya`, `Transfer to PDAX`, and similar wallet-to-wallet movement as `Transfers`.
+- Keep merchant payments like `Meralco`, `Globe Telecom`, `Smart Postpaid`, `Foodpanda`, `GrabPay Top Up`, `MRT Transport`, `Alipay`, and `BancNet P2M` as category candidates based on the merchant.
+- Keep `Transfer Fee` as `Financial`.
+- Keep `Interest Boost Reward` as `Income`.
+- The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable GCash simplifications like `Buy Load`, `Food Panda`, `Grab`, `Lazada`, `GCredit`, `GGives Repayment`, `Transfer to GSave`, and the `Received/Sent GCash` transfer variants.
+
+## Review Gating
+
+- Review adjustment entries and month-end adjustments.
+- If a transaction description is too vague but still looks like a real wallet movement, keep it reviewable instead of inventing a category.
+- Do not let statement boilerplate or support text become transactions.
+
+## Expected Outcome
+
+- GCash imports should preserve wallet movement, merchant payments, and transfer direction cleanly.
+- Time-stamped wallet activity should remain distinct from bank-style statement ledgers.

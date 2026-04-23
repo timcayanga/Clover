@@ -571,6 +571,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
         where: {
           accountId: resolvedAccountId,
           merchantRaw: "Beginning balance",
+          deletedAt: null,
         },
       }))
     ) {
