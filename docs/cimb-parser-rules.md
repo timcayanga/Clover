@@ -6,6 +6,7 @@ This document captures the CIMB / GSave parsing rules learned from the training 
 
 - Applies to CIMB / GSave statement PDFs.
 - Treat CIMB as a structured savings ledger.
+- Name accounts as `CIMB <last4>` from the visible savings-account number.
 - Use the Deposit and Withdrawal columns as the primary source of truth for direction.
 - Preserve raw and normalized data separately.
 - Never silently merge multiple customers from one PDF.
@@ -20,6 +21,7 @@ This document captures the CIMB / GSave parsing rules learned from the training 
 
 - Treat deposit and withdrawal columns as stronger evidence than narrative wording when they conflict.
 - Keep opening balances separate from activity rows.
+- CIMB rows often split across lines: keep the narrative description from the lines before the dated amount row, then attach the date row's deposit, withdrawal, and balance values.
 - Keep mixed-page statements split by account/customer when the PDF combines multiple profiles.
 
 ## Simplification Layer

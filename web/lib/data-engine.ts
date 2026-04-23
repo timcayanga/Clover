@@ -89,6 +89,7 @@ const KNOWN_INSTITUTIONS: Array<{ name: string; match: RegExp }> = [
   { name: "Metrobank", match: /\b(METROBANK|METROPOLITAN BANK)\b/i },
   { name: "Security Bank", match: /\bSECURITY BANK\b/i },
   { name: "EastWest", match: /\b(EASTWEST|EAST WEST)\b/i },
+  { name: "CIMB", match: /\b(CIMB|GSAVE)\b/i },
   { name: "RCBC", match: /\bRCBC\b/i },
   { name: "UnionBank", match: /\bUNIONBANK\b/i },
   { name: "Landbank", match: /\bLANDBANK\b/i },
