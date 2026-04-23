@@ -1435,10 +1435,12 @@ export const recordTrainingSignal = async (params: {
 export const enrichParsedRowsWithTraining = async (params: {
   workspaceId: string;
   rows: ParsedImportRow[];
+  statementConfidence?: number;
 }) => {
   const merchantRules = await loadMerchantRules(params.workspaceId);
   const accountRules = await loadAccountRules(params.workspaceId);
   const trainingSignals = await loadTrainingSignals(params.workspaceId);
+  const statementConfidence = typeof params.statementConfidence === "number" ? params.statementConfidence : 100;
 
   return params.rows.map((row) => {
     const rowWithInstitution = row as ParsedImportRow & { institution?: string | null };
@@ -1480,6 +1482,7 @@ export const enrichParsedRowsWithTraining = async (params: {
         type: row.type ?? "expense",
         accountName: accountMatch?.rule.accountName ?? accountName ?? null,
         institution: row.institution ?? accountMatch?.rule.institution ?? null,
+        statementConfidence,
       } as Prisma.InputJsonValue,
       rawPayload: {
         ...(row.rawPayload ?? {}),
@@ -1489,6 +1492,7 @@ export const enrichParsedRowsWithTraining = async (params: {
           merchantTokens: learned.merchantTokens,
           categoryReason: learned.categoryReason,
           confidence: learned.confidence,
+          statementConfidence,
           accountRuleKey: accountMatch?.rule.ruleKey ?? null,
           accountRuleConfidence: accountMatch ? Math.round(accountMatch.score) : null,
         },
