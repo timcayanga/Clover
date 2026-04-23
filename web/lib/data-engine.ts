@@ -1,4 +1,5 @@
-import type { AccountType, JsonValue, TransactionType } from "@/lib/domain-types";
+import { Prisma } from "@prisma/client";
+import type { AccountType, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { detectStatementMetadata, parseAmountValue, parseDateValue, type ParsedImportRow } from "@/lib/import-parser";
 
@@ -48,9 +49,9 @@ export type EnrichedParsedImportRow = ParsedImportRow & {
   accountMatchConfidence?: number;
   duplicateConfidence?: number;
   transferConfidence?: number;
-  rawPayload?: JsonValue | null;
-  normalizedPayload?: JsonValue | null;
-  learnedRuleIdsApplied?: JsonValue | null;
+  rawPayload?: Prisma.InputJsonValue | null;
+  normalizedPayload?: Prisma.InputJsonValue | null;
+  learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
 };
 
 const COMMON_STOP_WORDS = new Set([
@@ -194,6 +195,7 @@ const TRAINING_SIGNAL_COLUMNS = [
   "transactionId",
   "source",
   "merchantKey",
+  "dedupeKey",
   "merchantTokens",
   "categoryId",
   "categoryName",
@@ -227,6 +229,7 @@ const TRANSACTION_COLUMNS = [
   "description",
   "isTransfer",
   "isExcluded",
+  "deletedAt",
   "createdAt",
   "updatedAt",
 ] as const;
@@ -281,8 +284,25 @@ export const normalizeMerchantText = (value?: string | null) =>
 export const tokenizeMerchant = (value?: string | null) =>
   normalizeMerchantText(value)
     .split(" ")
-    .map((token: string) => token.trim())
-    .filter((token: string) => token.length > 1 && !COMMON_STOP_WORDS.has(token));
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1 && !COMMON_STOP_WORDS.has(token));
+
+export const buildTrainingSignalDedupeKey = (params: {
+  source: "import_confirmation" | "manual_recategorization" | "training_upload" | "manual_transaction_creation";
+  transactionId?: string | null;
+  importFileId?: string | null;
+  merchantKey: string;
+  categoryId: string;
+  type: TransactionType;
+}) =>
+  [
+    params.source,
+    params.transactionId ?? "",
+    params.importFileId ?? "",
+    params.merchantKey,
+    params.categoryId,
+    params.type,
+  ].join("|");
 
 export const guessCategoryFallback = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
@@ -337,6 +357,20 @@ export const detectStatementMetadataFromText = (text: string) => {
   const accountName =
     metadata?.accountName ??
     (institution && accountNumber ? `${institution} ${accountNumber.slice(-4)}` : institution ?? null);
+  const confidence =
+    metadata?.confidence ??
+    Math.min(
+      100,
+      [
+        institution ? 35 : 0,
+        accountNumber ? 35 : 0,
+        accountName ? 10 : 0,
+        metadata?.startDate ? 5 : 0,
+        metadata?.endDate ? 5 : 0,
+        metadata?.openingBalance !== null ? 5 : 0,
+        metadata?.endingBalance !== null ? 5 : 0,
+      ].reduce((total, part) => total + part, 0)
+    );
 
   return {
     institution,
@@ -346,7 +380,7 @@ export const detectStatementMetadataFromText = (text: string) => {
     endingBalance: metadata?.endingBalance ?? null,
     startDate: metadata?.startDate ?? null,
     endDate: metadata?.endDate ?? null,
-    confidence: metadata?.confidence ?? 0,
+    confidence,
   };
 };
 
@@ -425,8 +459,8 @@ export const getCompatibleParsedTransactionColumns = async () => {
     WHERE table_schema = 'public' AND table_name = 'ParsedTransaction'
   `;
 
-  const existing = new Set(columns.map((column: { column_name: string }) => column.column_name));
-  const compatible = PARSED_TRANSACTION_COLUMNS.filter((column: string) => existing.has(column));
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = PARSED_TRANSACTION_COLUMNS.filter((column) => existing.has(column));
   columnCache.set(cacheKey, compatible as string[]);
   return compatible as string[];
 };
@@ -444,8 +478,8 @@ export const getCompatibleImportFileColumns = async () => {
     WHERE table_schema = 'public' AND table_name = 'ImportFile'
   `;
 
-  const existing = new Set(columns.map((column: { column_name: string }) => column.column_name));
-  const compatible = IMPORT_FILE_COLUMNS.filter((column: string) => existing.has(column));
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = IMPORT_FILE_COLUMNS.filter((column) => existing.has(column));
   columnCache.set(cacheKey, compatible as string[]);
   return compatible as string[];
 };
@@ -463,8 +497,8 @@ export const getCompatibleTrainingSignalColumns = async () => {
     WHERE table_schema = 'public' AND table_name = 'TrainingSignal'
   `;
 
-  const existing = new Set(columns.map((column: { column_name: string }) => column.column_name));
-  const compatible = TRAINING_SIGNAL_COLUMNS.filter((column: string) => existing.has(column));
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = TRAINING_SIGNAL_COLUMNS.filter((column) => existing.has(column));
   columnCache.set(cacheKey, compatible as string[]);
   return compatible as string[];
 };
@@ -482,8 +516,8 @@ export const getCompatibleTransactionColumns = async () => {
     WHERE table_schema = 'public' AND table_name = 'Transaction'
   `;
 
-  const existing = new Set(columns.map((column: { column_name: string }) => column.column_name));
-  const compatible = TRANSACTION_COLUMNS.filter((column: string) => existing.has(column));
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = TRANSACTION_COLUMNS.filter((column) => existing.has(column));
   columnCache.set(cacheKey, compatible as string[]);
   return compatible as string[];
 };
@@ -501,8 +535,8 @@ export const getCompatibleStatementTemplateColumns = async () => {
     WHERE table_schema = 'public' AND table_name = 'StatementTemplate'
   `;
 
-  const existing = new Set(columns.map((column: { column_name: string }) => column.column_name));
-  const compatible = STATEMENT_TEMPLATE_COLUMNS.filter((column: string) => existing.has(column));
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = STATEMENT_TEMPLATE_COLUMNS.filter((column) => existing.has(column));
   columnCache.set(cacheKey, compatible as string[]);
   return compatible as string[];
 };
@@ -520,8 +554,8 @@ export const getCompatibleMerchantRuleColumns = async () => {
     WHERE table_schema = 'public' AND table_name = 'MerchantRule'
   `;
 
-  const existing = new Set(columns.map((column: { column_name: string }) => column.column_name));
-  const compatible = MERCHANT_RULE_COLUMNS.filter((column: string) => existing.has(column));
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = MERCHANT_RULE_COLUMNS.filter((column) => existing.has(column));
   columnCache.set(cacheKey, compatible as string[]);
   return compatible as string[];
 };
@@ -539,8 +573,8 @@ export const getCompatibleAccountRuleColumns = async () => {
     WHERE table_schema = 'public' AND table_name = 'AccountRule'
   `;
 
-  const existing = new Set(columns.map((column: { column_name: string }) => column.column_name));
-  const compatible = ACCOUNT_RULE_COLUMNS.filter((column: string) => existing.has(column));
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = ACCOUNT_RULE_COLUMNS.filter((column) => existing.has(column));
   columnCache.set(cacheKey, compatible as string[]);
   return compatible as string[];
 };
@@ -588,10 +622,10 @@ export const insertImportFileCompat = async (params: {
     return null;
   }
 
-  const values = columns.map((column: string) => record[column] ?? null);
-  const placeholders = values.map((_: unknown, index: number) => `$${index + 1}`).join(", ");
+  const values = columns.map((column) => record[column] ?? null);
+  const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
   await prisma.$executeRawUnsafe(
-    `INSERT INTO "ImportFile" (${columns.map((column: string) => `"${column}"`).join(", ")}) VALUES (${placeholders})`,
+    `INSERT INTO "ImportFile" (${columns.map((column) => `"${column}"`).join(", ")}) VALUES (${placeholders})`,
     ...values
   );
 
@@ -604,7 +638,7 @@ export const fetchImportFileCompat = async (importFileId: string): Promise<any |
     return null;
   }
 
-  const selectColumns = columns.map((column: string) => `"${column}"`).join(", ");
+  const selectColumns = columns.map((column) => `"${column}"`).join(", ");
   const rows = await prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
     `SELECT ${selectColumns} FROM "ImportFile" WHERE "id" = $1 LIMIT 1`,
     importFileId
@@ -619,7 +653,7 @@ export const listImportFilesCompat = async (workspaceId: string): Promise<any[]>
     return [];
   }
 
-  const selectColumns = columns.map((column: string) => `"${column}"`).join(", ");
+  const selectColumns = columns.map((column) => `"${column}"`).join(", ");
   const orderBy = columns.includes("uploadedAt")
     ? ' ORDER BY "uploadedAt" DESC'
     : columns.includes("createdAt")
@@ -637,14 +671,14 @@ export const updateImportFileCompat = async (
   data: Partial<Record<string, unknown>>
 ): Promise<any | null> => {
   const columns = new Set(await getCompatibleImportFileColumns());
-  const entries = Object.entries(data).filter(([key, value]: [string, unknown]) => columns.has(key) && value !== undefined);
+  const entries = Object.entries(data).filter(([key, value]) => columns.has(key) && value !== undefined);
   if (columns.has("updatedAt")) {
     entries.push(["updatedAt", new Date()]);
   }
 
   if (entries.length > 0) {
-    const setClause = entries.map(([key]: [string, unknown], index: number) => `"${key}" = $${index + 1}`).join(", ");
-    const values = entries.map(([, value]: [string, unknown]) => value);
+    const setClause = entries.map(([key], index) => `"${key}" = $${index + 1}`).join(", ");
+    const values = entries.map(([, value]) => value);
     await prisma.$executeRawUnsafe(
       `UPDATE "ImportFile" SET ${setClause} WHERE "id" = $${entries.length + 1}`,
       ...values,
@@ -688,9 +722,9 @@ type TransactionInsertParams = {
   accountMatchConfidence?: number;
   duplicateConfidence?: number;
   transferConfidence?: number;
-  rawPayload?: JsonValue | null;
-  normalizedPayload?: JsonValue | null;
-  learnedRuleIdsApplied?: JsonValue | null;
+  rawPayload?: Prisma.InputJsonValue | null;
+  normalizedPayload?: Prisma.InputJsonValue | null;
+  learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
   date: Date;
   amount: string | number;
   currency: string;
@@ -734,6 +768,7 @@ const buildTransactionInsertRecord = async (params: TransactionInsertParams, col
   if (columnSet.has("description")) record.description = params.description ?? null;
   if (columnSet.has("isTransfer")) record.isTransfer = params.isTransfer ?? false;
   if (columnSet.has("isExcluded")) record.isExcluded = params.isExcluded ?? false;
+  if (columnSet.has("deletedAt")) record.deletedAt = null;
   if (columnSet.has("createdAt")) record.createdAt = new Date();
   if (columnSet.has("updatedAt")) record.updatedAt = new Date();
 
@@ -751,10 +786,10 @@ export const insertTransactionCompat = async (params: TransactionInsertParams) =
     return null;
   }
 
-  const values = keys.map((key: string) => record[key] ?? null);
-  const placeholders = values.map((_: unknown, index: number) => `$${index + 1}`).join(", ");
+  const values = keys.map((key) => record[key] ?? null);
+  const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
   await prisma.$executeRawUnsafe(
-    `INSERT INTO "Transaction" (${keys.map((key: string) => `"${key}"`).join(", ")}) VALUES (${placeholders})`,
+    `INSERT INTO "Transaction" (${keys.map((key) => `"${key}"`).join(", ")}) VALUES (${placeholders})`,
     ...values
   );
 
@@ -769,7 +804,7 @@ export const insertTransactionManyCompat = async (params: {
   }
 
   await prisma.transaction.createMany({
-    data: params.records as any,
+    data: params.records as Prisma.TransactionCreateManyInput[],
   });
 
   return params.records;
@@ -807,15 +842,15 @@ export const buildParsedTransactionInsertData = async (params: {
     if (columns.has("categoryReason")) record.categoryReason = row.categoryReason ?? null;
     if (columns.has("parserVersion")) record.parserVersion = row.parserVersion ?? DATA_ENGINE_VERSION;
     if (columns.has("statementFingerprint")) record.statementFingerprint = params.statementFingerprint;
-    if (columns.has("rawPayload")) record.rawPayload = (row.rawPayload ?? {}) as JsonValue;
+    if (columns.has("rawPayload")) record.rawPayload = (row.rawPayload ?? {}) as Prisma.InputJsonValue;
     if (columns.has("reviewStatus")) record.reviewStatus = row.reviewStatus ?? "suggested";
     if (columns.has("parserConfidence")) record.parserConfidence = row.parserConfidence ?? row.confidence ?? 0;
     if (columns.has("categoryConfidence")) record.categoryConfidence = row.categoryConfidence ?? row.confidence ?? 0;
     if (columns.has("accountMatchConfidence")) record.accountMatchConfidence = row.accountMatchConfidence ?? 0;
     if (columns.has("duplicateConfidence")) record.duplicateConfidence = row.duplicateConfidence ?? 0;
     if (columns.has("transferConfidence")) record.transferConfidence = row.transferConfidence ?? 0;
-    if (columns.has("normalizedPayload")) record.normalizedPayload = (row.normalizedPayload ?? null) as JsonValue | null;
-    if (columns.has("learnedRuleIdsApplied")) record.learnedRuleIdsApplied = (row.learnedRuleIdsApplied ?? null) as JsonValue | null;
+    if (columns.has("normalizedPayload")) record.normalizedPayload = (row.normalizedPayload ?? null) as Prisma.InputJsonValue | null;
+    if (columns.has("learnedRuleIdsApplied")) record.learnedRuleIdsApplied = (row.learnedRuleIdsApplied ?? null) as Prisma.InputJsonValue | null;
     if (columns.has("createdAt")) record.createdAt = new Date();
     return [record];
   });
@@ -835,8 +870,8 @@ export const insertParsedTransactionsCompat = async (params: {
   }
 
   const values: unknown[] = [];
-  const tuples = params.rows.map((row: any) => {
-    const placeholders = columns.map((column: string) => {
+  const tuples = params.rows.map((row) => {
+    const placeholders = columns.map((column) => {
       values.push(row[column] ?? null);
       return `$${values.length}`;
     });
@@ -844,7 +879,7 @@ export const insertParsedTransactionsCompat = async (params: {
   });
 
   await prisma.$executeRawUnsafe(
-    `INSERT INTO "ParsedTransaction" (${columns.map((column: string) => `"${column}"`).join(", ")}) VALUES ${tuples.join(", ")}`,
+    `INSERT INTO "ParsedTransaction" (${columns.map((column) => `"${column}"`).join(", ")}) VALUES ${tuples.join(", ")}`,
     ...values
   );
 };
@@ -855,7 +890,7 @@ export const fetchParsedTransactionRows = async (importFileId: string) => {
     return [];
   }
 
-  const selectColumns = columns.map((column: string) => `"${column}"`).join(", ");
+  const selectColumns = columns.map((column) => `"${column}"`).join(", ");
   const orderBy = columns.includes("createdAt") ? ' ORDER BY "createdAt" ASC' : "";
   return prisma.$queryRawUnsafe<Array<Record<string, unknown>>>(
     `SELECT ${selectColumns} FROM "ParsedTransaction" WHERE "importFileId" = $1${orderBy}`,
@@ -899,7 +934,7 @@ export const loadMerchantRules = async (workspaceId: string) => {
     }
   }
 
-  return rules.map((rule: any) => ({
+  return rules.map((rule) => ({
     merchantKey: rule.merchantKey,
     merchantPattern: rule.merchantPattern,
     normalizedName: rule.normalizedName,
@@ -935,7 +970,7 @@ export const loadAccountRules = async (workspaceId: string) => {
     }
   }
 
-  return rules.map((rule: any) => ({
+  return rules.map((rule) => ({
     ruleKey: rule.ruleKey,
     accountId: rule.accountId,
     accountName: rule.accountName,
@@ -1113,14 +1148,14 @@ export const buildStatementFingerprint = (
 ) => {
   const normalizedLines = text
     .split(/\r?\n/)
-    .map((line: string) =>
+    .map((line) =>
       normalizeWhitespace(line)
         .replace(/\b\d{1,2}[/-][A-Za-z0-9]{1,4}[/-]\d{2,4}\b/g, "<date>")
         .replace(/\b[A-Z]{3}\s+\d{1,2},\s+\d{4}\b/g, "<date>")
         .replace(/[0-9][0-9,]*\.\d{2}/g, "<amount>")
         .replace(/\b\d{4,}\b/g, "<number>")
     )
-    .filter((line: string | null | undefined): line is string => Boolean(line))
+    .filter(Boolean)
     .slice(0, 32);
 
   const fingerprintSource = [
@@ -1299,7 +1334,7 @@ export const loadTrainingSignals = async (workspaceId: string) => {
     categoryId: string;
     categoryName: string | null;
     merchantKey: string;
-    merchantTokens: JsonValue | null;
+    merchantTokens: Prisma.JsonValue | null;
     source: string;
     confidence: number;
     category: { name: string };
@@ -1320,13 +1355,11 @@ export const loadTrainingSignals = async (workspaceId: string) => {
     }
   }
 
-  return signals.map((signal: any) => ({
+  return signals.map((signal) => ({
     categoryId: signal.categoryId,
     categoryName: signal.category.name,
     merchantKey: signal.merchantKey,
-    merchantTokens: Array.isArray(signal.merchantTokens)
-      ? signal.merchantTokens.filter((token: any): token is string => typeof token === "string")
-      : [],
+    merchantTokens: Array.isArray(signal.merchantTokens) ? signal.merchantTokens.filter((token): token is string => typeof token === "string") : [],
     source: signal.source,
     confidence: signal.confidence,
   }));
@@ -1337,7 +1370,7 @@ export const upsertStatementTemplate = async (params: {
   fingerprint: string;
   metadata: ReturnType<typeof detectStatementMetadataFromText>;
   fileType?: string | null;
-  parserConfig?: JsonValue | null;
+  parserConfig?: Prisma.InputJsonValue | null;
 }) => {
   try {
     return await prisma.statementTemplate.upsert({
@@ -1352,8 +1385,8 @@ export const upsertStatementTemplate = async (params: {
         institution: params.metadata.institution,
         accountNumber: params.metadata.accountNumber,
         accountName: params.metadata.accountName,
-        parserConfig: params.parserConfig as any,
-        metadata: params.metadata as any,
+        parserConfig: params.parserConfig ?? Prisma.DbNull,
+        metadata: params.metadata as Prisma.InputJsonValue,
         exampleCount: { increment: 1 },
         successCount: { increment: 1 },
         lastSeenAt: new Date(),
@@ -1365,8 +1398,8 @@ export const upsertStatementTemplate = async (params: {
         institution: params.metadata.institution,
         accountNumber: params.metadata.accountNumber,
         accountName: params.metadata.accountName,
-        parserConfig: params.parserConfig as any,
-        metadata: params.metadata as any,
+        parserConfig: params.parserConfig ?? Prisma.DbNull,
+        metadata: params.metadata as Prisma.InputJsonValue,
         parserVersion: DATA_ENGINE_VERSION,
       },
     });
@@ -1393,27 +1426,60 @@ export const recordTrainingSignal = async (params: {
 }) => {
   const merchantKey = normalizeMerchantText(params.merchantText);
   const merchantTokens = tokenizeMerchant(params.merchantText);
+  const dedupeKey = buildTrainingSignalDedupeKey({
+    source: params.source,
+    transactionId: params.transactionId ?? null,
+    importFileId: params.importFileId ?? null,
+    merchantKey,
+    categoryId: params.categoryId,
+    type: params.type,
+  });
 
   const columns = await getCompatibleTrainingSignalColumns();
   if (columns.length === 0) {
     return null;
   }
 
-  const signal = await prisma.trainingSignal.create({
-    data: {
-      workspaceId: params.workspaceId,
-      importFileId: params.importFileId ?? null,
-      transactionId: params.transactionId ?? null,
-      source: params.source,
-      merchantKey,
-      merchantTokens: merchantTokens as any,
-      categoryId: params.categoryId,
-      categoryName: params.categoryName ?? null,
-      type: params.type,
-      confidence: params.confidence ?? 100,
-      notes: params.notes ?? null,
-    },
-  });
+  const signalData = {
+    workspaceId: params.workspaceId,
+    importFileId: params.importFileId ?? null,
+    transactionId: params.transactionId ?? null,
+    source: params.source,
+    merchantKey,
+    dedupeKey,
+    merchantTokens: merchantTokens as Prisma.InputJsonValue,
+    categoryId: params.categoryId,
+    categoryName: params.categoryName ?? null,
+    type: params.type,
+    confidence: params.confidence ?? 100,
+    notes: params.notes ?? null,
+  };
+
+  const signal = columns.includes("dedupeKey")
+    ? await prisma.trainingSignal.upsert({
+        where: {
+          workspaceId_dedupeKey: {
+            workspaceId: params.workspaceId,
+            dedupeKey,
+          },
+        },
+        create: signalData,
+        update: {
+          importFileId: params.importFileId ?? null,
+          transactionId: params.transactionId ?? null,
+          source: params.source,
+          merchantKey,
+          merchantTokens: merchantTokens as Prisma.InputJsonValue,
+          categoryId: params.categoryId,
+          categoryName: params.categoryName ?? null,
+          type: params.type,
+          confidence: params.confidence ?? 100,
+          notes: params.notes ?? null,
+        },
+      })
+    : await prisma.trainingSignal.create({
+        data: signalData,
+      });
 
   const category = await prisma.category.findUnique({
     where: { id: params.categoryId },
@@ -1444,7 +1510,7 @@ export const enrichParsedRowsWithTraining = async (params: {
   const trainingSignals = await loadTrainingSignals(params.workspaceId);
   const statementConfidence = typeof params.statementConfidence === "number" ? params.statementConfidence : 100;
 
-  return params.rows.map((row: any) => {
+  return params.rows.map((row) => {
     const rowWithInstitution = row as ParsedImportRow & { institution?: string | null };
     const merchantText = row.merchantClean || row.merchantRaw || row.description || "";
     const accountMatch = findBestAccountRule(row.accountName ?? null, rowWithInstitution.institution ?? null, accountRules);
@@ -1458,6 +1524,7 @@ export const enrichParsedRowsWithTraining = async (params: {
 
     const categoryName = learned.categoryName || row.categoryName || defaultCategoryForType(row.type ?? "expense");
     const accountName = row.accountName ?? null;
+    const effectiveConfidence = Math.max(0, Math.min(100, Math.min(learned.confidence, statementConfidence)));
     const learnedRuleIdsApplied = [
       ...(Array.isArray(row.learnedRuleIdsApplied) ? (row.learnedRuleIdsApplied as string[]) : []),
       ...(accountMatch ? [`account-rule:${accountMatch.rule.ruleKey}`] : []),
@@ -1468,13 +1535,13 @@ export const enrichParsedRowsWithTraining = async (params: {
       accountName: accountMatch?.rule.accountName ?? accountName ?? undefined,
       institution: rowWithInstitution.institution ?? accountMatch?.rule.institution ?? undefined,
       categoryName,
-      confidence: learned.confidence,
+      confidence: effectiveConfidence,
       categoryReason: learned.categoryReason,
       parserVersion: DATA_ENGINE_VERSION,
-      reviewStatus: learned.confidence >= 80 ? "suggested" : "pending_review",
-      parserConfidence: 100,
-      categoryConfidence: learned.confidence,
-      accountMatchConfidence: accountMatch ? Math.min(99, Math.round(Math.max(70, accountMatch.score))) : 0,
+      reviewStatus: effectiveConfidence >= 80 ? "suggested" : "pending_review",
+      parserConfidence: statementConfidence,
+      categoryConfidence: effectiveConfidence,
+      accountMatchConfidence: accountMatch ? Math.min(99, Math.round(Math.min(Math.max(70, accountMatch.score), statementConfidence))) : 0,
       duplicateConfidence: 0,
       transferConfidence: row.type === "transfer" ? 100 : 0,
       learnedRuleIdsApplied,
@@ -1484,8 +1551,7 @@ export const enrichParsedRowsWithTraining = async (params: {
         type: row.type ?? "expense",
         accountName: accountMatch?.rule.accountName ?? accountName ?? null,
         institution: row.institution ?? accountMatch?.rule.institution ?? null,
-        statementConfidence,
-      } as JsonValue,
+      } as Prisma.InputJsonValue,
       rawPayload: {
         ...(row.rawPayload ?? {}),
         classification: {
@@ -1493,10 +1559,10 @@ export const enrichParsedRowsWithTraining = async (params: {
           merchantKey: learned.merchantKey,
           merchantTokens: learned.merchantTokens,
           categoryReason: learned.categoryReason,
-          confidence: learned.confidence,
-          statementConfidence,
+          confidence: effectiveConfidence,
           accountRuleKey: accountMatch?.rule.ruleKey ?? null,
           accountRuleConfidence: accountMatch ? Math.round(accountMatch.score) : null,
+          statementConfidence,
         },
       },
     } satisfies EnrichedParsedImportRow;

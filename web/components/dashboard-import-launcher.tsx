@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
+import { UploadInsightsToast } from "@/components/upload-insights-toast";
 
 type DashboardImportLauncherProps = {
   workspaceId: string;
@@ -25,10 +26,25 @@ const ImportFilesModal = dynamic(
 export function DashboardImportLauncher({ workspaceId, accounts, initialOpen }: DashboardImportLauncherProps) {
   const router = useRouter();
   const [open, setOpen] = useState(initialOpen);
+  const [toastSummary, setToastSummary] = useState<UploadInsightsSummary | null>(null);
 
   useEffect(() => {
     setOpen(initialOpen);
   }, [initialOpen]);
+
+  useEffect(() => {
+    if (!toastSummary) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setToastSummary(null);
+    }, 7000);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [toastSummary]);
 
   if (!workspaceId) {
     return null;
@@ -40,18 +56,26 @@ export function DashboardImportLauncher({ workspaceId, accounts, initialOpen }: 
   };
 
   const handleImported = async (_summary: UploadInsightsSummary) => {
+    if (_summary.optimistic) {
+      return;
+    }
+
+    setToastSummary(_summary);
     router.refresh();
     handleClose();
   };
 
   return (
-    <ImportFilesModal
-      open={open}
-      workspaceId={workspaceId}
-      accounts={accounts}
-      defaultAccountId={accounts.find((account) => account.type !== "cash" && account.type !== "other" && account.type !== "investment")?.id ?? accounts[0]?.id ?? null}
-      onClose={handleClose}
-      onImported={handleImported}
-    />
+    <>
+      <ImportFilesModal
+        open={open}
+        workspaceId={workspaceId}
+        accounts={accounts}
+        defaultAccountId={accounts.find((account) => account.type !== "cash" && account.type !== "other" && account.type !== "investment")?.id ?? accounts[0]?.id ?? null}
+        onClose={handleClose}
+        onImported={handleImported}
+      />
+      {toastSummary ? <UploadInsightsToast summary={toastSummary} onClose={() => setToastSummary(null)} /> : null}
+    </>
   );
 }
