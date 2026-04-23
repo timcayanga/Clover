@@ -198,6 +198,8 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
     return items;
   }, [current]);
 
+  const primaryReason = reasonDetails[0] ?? null;
+
   const summary = useMemo(() => {
     return items.reduce(
       (accumulator, transaction) => {
@@ -402,9 +404,10 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
             correct what is wrong, and let the model learn from every change.
           </p>
         </div>
-        <div className="review-workbench__badge">
+        <div className="review-workbench__badge" title={primaryReason?.detail ?? undefined}>
           <strong>{currentIndex + 1}</strong>
           <span>of {summary.total}</span>
+          {primaryReason ? <small className="review-workbench__badge-reason">{primaryReason.label}</small> : null}
         </div>
       </div>
 

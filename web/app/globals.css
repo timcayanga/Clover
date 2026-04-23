@@ -2654,6 +2654,35 @@ label {
   font-size: 13px;
 }
 
+.reports-attention-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.reports-attention-card {
+  padding: 18px;
+  border: 1px solid var(--stroke);
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 30%),
+    rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow);
+  display: grid;
+  gap: 10px;
+}
+
+.reports-attention-card h4 {
+  font-size: 18px;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+
+.reports-attention-card p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .reports-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -7464,6 +7493,12 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--muted);
 }
 
+.accounts-list-controls .button.button-secondary.is-active {
+  border-color: rgba(3, 168, 192, 0.22);
+  background: rgba(3, 168, 192, 0.08);
+  color: var(--accent);
+}
+
 .accounts-toolbar-filters {
   position: relative;
 }
@@ -7709,6 +7744,11 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 0.74rem;
 }
 
+.accounts-account-card__trust {
+  display: flex;
+  align-items: flex-start;
+}
+
 .accounts-brand-mark {
   width: 44px;
   height: 44px;
@@ -7729,9 +7769,10 @@ input.transaction-inline-edit--amount::placeholder {
   display: block;
 }
 
-.accounts-brand-mark strong {
-  font-size: 0.82rem;
-  letter-spacing: 0.08em;
+.accounts-brand-mark svg {
+  width: 64%;
+  height: 64%;
+  display: block;
 }
 
 .accounts-detail__headline {
@@ -7773,6 +7814,11 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+}
+
+.accounts-drawer__checkpoint {
+  display: grid;
+  gap: 12px;
 }
 
 .accounts-summary-chip {
@@ -8670,6 +8716,22 @@ input.transaction-inline-edit--amount::placeholder {
 .review-workbench__badge span {
   font-size: 12px;
   color: var(--muted);
+}
+
+.review-workbench__badge-reason {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.1;
+  text-align: center;
+  border: 1px solid rgba(3, 168, 192, 0.18);
+  white-space: nowrap;
 }
 
 .review-workbench__grid {
