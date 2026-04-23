@@ -914,13 +914,15 @@ async function ReportsPageView({
       _sum: { balance: number | null };
       _count: { id: number; balance: number };
     };
-    const workspaceAccountSummaries = (workspaceAccountSnapshots as unknown as WorkspaceAccountSnapshot[]).map((account) => ({
-      id: account.id,
-      name: account.name,
-      balance: account.balance,
-      currency: account.currency,
-      type: account.type,
-    }));
+    const workspaceAccountSummaries = Array.isArray(workspaceAccountSnapshots)
+      ? (workspaceAccountSnapshots as WorkspaceAccountSnapshot[]).map((account) => ({
+          id: account.id,
+          name: account.name,
+          balance: account.balance,
+          currency: account.currency,
+          type: account.type,
+        }))
+      : [];
     const totalAccountBalance = Number(accountStatsSummary._sum.balance ?? 0);
     const activeAccountCount = accountStatsSummary._count.balance;
     const accountCount = accountStatsSummary._count.id;
