@@ -5600,30 +5600,31 @@ label {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 10px 0 26px;
+  gap: 10px;
+  padding: 6px 0 12px;
 }
 
 .landing-brand {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   font-weight: 700;
   letter-spacing: -0.03em;
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .landing-brand__logo {
-  width: min(184px, 100%);
+  width: min(138px, 100%);
   height: auto;
-  border-radius: 14px;
-  box-shadow: var(--shadow-soft);
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
 }
 
 .landing-nav__links {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -5639,7 +5640,8 @@ label {
 }
 
 .landing-nav__button {
-  min-height: 44px;
+  min-height: 40px;
+  padding-inline: 14px;
 }
 
 .landing-hero {
@@ -10519,8 +10521,8 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 16px 0;
+  gap: 10px;
+  padding: 6px 0 12px;
 }
 
 .landing-nav--sticky {
@@ -10531,29 +10533,30 @@ input.transaction-inline-edit--amount::placeholder {
   -webkit-backdrop-filter: blur(18px);
   background: rgba(245, 247, 249, 0.72);
   border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
 
 .landing-brand {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   font-weight: 700;
-  font-size: 18px;
+  font-size: 16px;
   letter-spacing: -0.03em;
 }
 
 .landing-brand__logo {
-  width: min(184px, 100%);
+  width: min(138px, 100%);
   height: auto;
-  border-radius: 14px;
-  box-shadow: var(--shadow-soft);
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
 }
 
 .landing-nav__links {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .landing-nav__link {
@@ -10568,7 +10571,8 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .landing-nav__button {
-  min-height: 44px;
+  min-height: 40px;
+  padding-inline: 14px;
 }
 
 .landing-hero {
@@ -11191,32 +11195,33 @@ input.transaction-inline-edit--amount::placeholder {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
-    padding-bottom: 14px;
+    gap: 8px;
+    padding: 4px 0 10px;
   }
 
   .landing-brand {
-    gap: 8px;
-    font-size: 15px;
+    gap: 6px;
+    font-size: 14px;
   }
 
   .landing-brand__logo {
-    width: min(144px, 100%);
-    border-radius: 12px;
+    width: min(120px, 100%);
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .landing-nav__links {
-    gap: 8px;
+    gap: 6px;
     margin-left: auto;
   }
 
   .landing-nav__link {
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .landing-nav__button {
-    min-height: 40px;
-    padding-inline: 14px;
+    min-height: 36px;
+    padding-inline: 12px;
   }
 
   .landing-hero {
