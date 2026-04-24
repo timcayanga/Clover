@@ -290,7 +290,7 @@ export function OnboardingForm({
             <label className="onboarding-goal-target">
               <div className="onboarding-goal-target__header">
                 <span className="onboarding-goal-target__label">{getGoalMoneyLabel(selectedGoalKey)}</span>
-                <span className="onboarding-goal-target__pill">Optional</span>
+                <span className="onboarding-goal-target__pill">Primary target</span>
               </div>
               <span className="onboarding-goal-target__prompt">{getGoalMoneyPrompt(selectedGoalKey)}</span>
               <div className="onboarding-goal-target__input-row">
