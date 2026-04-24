@@ -218,6 +218,7 @@ const institutionPatterns: Array<{ name: string; pattern: RegExp }> = [
   { name: "EastWest", pattern: /\b(EASTWEST|EAST WEST)\b/i },
   { name: "CIMB", pattern: /\b(CIMB|GSAVE)\b/i },
   { name: "RCBC", pattern: /\bRCBC\b/i },
+  { name: "AUB", pattern: /\b(ASIA\s+UNITED\s+BANK|AUB)\b/i },
   { name: "UnionBank", pattern: /\bUNIONBANK\b/i },
   { name: "Landbank", pattern: /\bLANDBANK\b/i },
   { name: "Chinabank", pattern: /\bCHINABANK\b/i },
@@ -693,6 +694,299 @@ const parseRcbcSavingsImportText = (text: string) => {
   }
 
   return rows.length > 0 ? { metadata, rows } : null;
+};
+
+const aubAccountNameFromText = (accountNumber: string | null, isCreditCard: boolean) => {
+  const suffix = accountNumber?.slice(-4) ?? "";
+  if (isCreditCard) {
+    return suffix ? `AUB Mastercard ${suffix}` : "AUB Mastercard";
+  }
+
+  return suffix ? `AUB ${suffix}` : "AUB";
+};
+
+const isAubCardStatementText = (text: string) => {
+  const compact = normalizeWhitespace(text).replace(/\s+/g, " ");
+  return (
+    /\b(ASIA\s+UNITED\s+BANK|AUB)\b/i.test(compact) &&
+    /(CARD\s+NUMBER|TOTAL\s+AMOUNT\s+DUE|MINIMUM\s+AMOUNT\s+DUE|TRANSACTION\s+DETAILS|PAYMENT\s*-\s*THANK\s+YOU|FINANCE\s+CHARGE|MASTERCARD)/i.test(compact)
+  );
+};
+
+const isAubSavingsStatementText = (text: string) => {
+  const compact = normalizeWhitespace(text).replace(/\s+/g, " ");
+  return (
+    /\b(ASIA\s+UNITED\s+BANK|AUB)\b/i.test(compact) &&
+    /(STATEMENT\s+OF\s+ACCOUNT|ACCOUNT\s+NUMBER|TRANSACTION\s+CODE|ENDING\s+BALANCE|PERIOD\s+COVERED|AUB\s+TELLER\s+360)/i.test(compact)
+  );
+};
+
+const parseAubDate = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = normalizeWhitespace(value);
+  const iso = normalized.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (iso) {
+    return new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]), 12));
+  }
+
+  const slash = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slash) {
+    const month = Number(slash[1]) - 1;
+    const day = Number(slash[2]);
+    const year = Number(slash[3].length === 2 ? `20${slash[3]}` : slash[3]);
+    return new Date(Date.UTC(year, month, day, 12));
+  }
+
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const guessAubSavingsCategoryName = (description: string, type: TransactionType) => {
+  const lower = description.toLowerCase();
+  const compact = compactWhitespace(description).toLowerCase();
+  if (/^beginning balance$/i.test(description)) return "Opening Balance";
+  if (/atmwd|atmwithdrawal/.test(compact)) return "Transfers";
+  if (/afcinq|atm fee inquiry/.test(lower)) return "Financial";
+  if (/instapay credit|credit movement|cash deposit|interest earned|\bint\b/.test(lower)) return "Income";
+  if (/instapay debit|debit movement|check issued|check deposit|cash withdrawal|encashment|internal clearing|internal clearing on-us|on-us transaction/.test(lower)) {
+    return "Transfers";
+  }
+  if (/tax|service fee - below minimum|finance charge/.test(lower)) return "Financial";
+  return guessCategoryName(description, type);
+};
+
+const parseAubSavingsTransactionLine = (
+  line: string,
+  state: {
+    accountName: string;
+    accountNumber: string | null;
+    institution: string | null;
+  }
+) => {
+  const normalized = normalizeWhitespace(line);
+  const match = normalized.match(
+    /^(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})\s+([A-Z0-9-]+)\s+([A-Z0-9-]+)\s+([0-9][0-9,]*\.\d{2})\s+([0-9][0-9,]*\.\d{2})\s+([0-9][0-9,]*\.\d{2})$/i
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const date = parseAubDate(match[1]);
+  const checkNo = normalizeWhitespace(match[2]);
+  const transactionCode = normalizeWhitespace(match[3]);
+  const debit = parseMoney(match[4]);
+  const credit = parseMoney(match[5]);
+  const balance = parseMoney(match[6]);
+  if (!date || debit === null || credit === null || balance === null) {
+    return null;
+  }
+
+  const amountDelta = credit - debit;
+  let type: TransactionType = amountDelta >= 0 ? "income" : "expense";
+  const codeLower = transactionCode.toLowerCase();
+  if (/atmwd|a f c i n q|afcinq|check issued|instapay debit|debit movement|encashment|internal clearing|internal clearing on-us|on-us transaction/.test(codeLower)) {
+    type = "transfer";
+  } else if (/cash deposit|instapay credit|credit movement|interest|^int$/.test(codeLower)) {
+    type = "income";
+  } else if (/tax|service fee - below minimum|finance charge/.test(codeLower)) {
+    type = "expense";
+  }
+
+  const categoryName = guessAubSavingsCategoryName(transactionCode, type);
+  const merchantSource = humanizeMerchantText(transactionCode);
+
+  return {
+    date: date.toISOString().slice(0, 10),
+    amount: Math.abs(amountDelta).toFixed(2),
+    merchantRaw: merchantSource,
+    merchantClean: summarizeMerchantText(transactionCode, state.institution),
+    description: transactionCode,
+    categoryName,
+    accountName: state.accountName,
+    institution: state.institution ?? undefined,
+    type,
+    rawPayload: {
+      bank: "AUB",
+      kind: "savings_transaction",
+      accountName: state.accountName,
+      accountNumber: state.accountNumber,
+      checkNo,
+      transactionCode,
+      debitText: debit.toFixed(2),
+      creditText: credit.toFixed(2),
+      balanceText: balance.toFixed(2),
+      amountDelta: amountDelta.toFixed(2),
+      line: normalized,
+    },
+  } satisfies ParsedImportRow;
+};
+
+const aubCardTransactionPattern = /(\d{2}\/\d{2}\/\d{2})\s*(?:\|\s*)?(\d{2}\/\d{2}\/\d{2})\s*(?:\|\s*)?(.+?)\s*(?:\|\s*)?(-?[0-9][0-9,]*\.\d{2})/g;
+
+const guessAubCardCategoryName = (description: string, type: TransactionType) => {
+  const lower = description.toLowerCase();
+  if (/payment\s*-\s*thank\s+you|card\s+payment/.test(lower)) return "Transfers";
+  if (/finance\s+charge|late\s+payment\s+fee|annual\s+fee|service\s+fee|foreign\s+currency|interest/.test(lower)) return "Financial";
+  if (/refund|reversal|credit memo|cashback|cash back/.test(lower) && type !== "expense") return "Income";
+  return guessCategoryName(description, type);
+};
+
+const parseAubCardImportText = (text: string) => {
+  const normalizedText = text.replace(/\u00a0/g, " ");
+  if (!isAubCardStatementText(normalizedText)) {
+    return null;
+  }
+
+  const accountNumber = detectAccountNumberFromText(normalizedText);
+  const accountName = aubAccountNameFromText(accountNumber, true);
+  const statementDateMatch =
+    normalizedText.match(/STATEMENT\s+DATE\s*[:\-]?\s*([A-Za-z]+\s+\d{1,2},\s*\d{4})/i) ??
+    normalizedText.match(/RUNDATE\s*[:\-]?\s*(\d{4}-\d{2}-\d{2})/i);
+  const paymentDueMatch = normalizedText.match(/PAYMENT\s+DUE\s+DATE\s*[:\-]?\s*([A-Za-z]+\s+\d{1,2},\s*\d{4})/i);
+  const previousBalance =
+    parseMoney(normalizedText.match(/PREVIOUS\s+STATEMENT\s+BALANCE.*?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(normalizedText.match(/PREVIOUS\s+BALANCE.*?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+  const totalAmountDue =
+    parseMoney(normalizedText.match(/TOTAL\s+AMOUNT\s+DUE.*?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(normalizedText.match(/ENDING\s+BALANCE.*?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+
+  const rows: ParsedImportRow[] = [];
+  aubCardTransactionPattern.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = aubCardTransactionPattern.exec(normalizedText)) !== null) {
+    const saleDate = parseAubDate(match[1]);
+    const postDate = parseAubDate(match[2]);
+    const description = normalizeWhitespace(match[3]);
+    const amount = parseMoney(match[4]);
+    if (!saleDate || !postDate || amount === null || !description) {
+      continue;
+    }
+
+    const descriptionLower = description.toLowerCase();
+    let type: TransactionType = "expense";
+    if (/payment\s*-\s*thank\s+you|card\s+payment/.test(descriptionLower)) {
+      type = "transfer";
+    } else if (/refund|reversal|credit memo|cashback|cash back/.test(descriptionLower)) {
+      type = "income";
+    } else if (/finance\s+charge|late\s+payment\s+fee|annual\s+fee|service\s+fee|interest/.test(descriptionLower)) {
+      type = "expense";
+    }
+
+    rows.push({
+      date: postDate.toISOString().slice(0, 10),
+      amount: amount.toFixed(2),
+      merchantRaw: humanizeMerchantText(description),
+      merchantClean: summarizeMerchantText(description, "AUB"),
+      description,
+      categoryName: guessAubCardCategoryName(description, type),
+      accountName,
+      institution: "AUB",
+      type,
+      rawPayload: {
+        bank: "AUB",
+        kind: "credit_card_transaction",
+        accountName,
+        accountNumber,
+        statementDate: statementDateMatch?.[1] ?? null,
+        paymentDueDate: paymentDueMatch?.[1] ?? null,
+        saleDate: saleDate.toISOString().slice(0, 10),
+        postDate: postDate.toISOString().slice(0, 10),
+        amountText: match[4],
+        line: match[0],
+      },
+    });
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const endingBalance = totalAmountDue ?? getTrailingBalanceFromParsedRows(rows);
+
+  return {
+    metadata: {
+      institution: "AUB",
+      accountNumber,
+      accountName,
+      openingBalance: previousBalance,
+      endingBalance,
+      startDate: statementDateMatch?.[1] ? parseAubDate(statementDateMatch[1])?.toISOString() ?? null : null,
+      endDate: paymentDueMatch?.[1] ? parseAubDate(paymentDueMatch[1])?.toISOString() ?? null : null,
+      confidence: accountNumber ? 94 : 84,
+    } satisfies DetectedStatementMetadata,
+    rows,
+  };
+};
+
+const parseAubSavingsImportText = (text: string) => {
+  const normalizedText = text.replace(/\u00a0/g, " ");
+  if (!isAubSavingsStatementText(normalizedText)) {
+    return null;
+  }
+
+  const accountNumber = detectAccountNumberFromText(normalizedText);
+  const accountName = aubAccountNameFromText(accountNumber, false);
+  const periodMatch =
+    normalizedText.match(/PERIOD\s+COVERED\s*:\s*FROM\s*(\d{4}-\d{2}-\d{2})\s+TO\s*(\d{4}-\d{2}-\d{2})/i) ??
+    normalizedText.match(/PERIOD\s+COVERED\s*[:\-]?\s*From\s+(.+?)\s+To\s+(.+?)(?:\s{2,}|$)/i);
+  const startDate = parseAubDate(periodMatch?.[1] ?? null);
+  const endDate = parseAubDate(periodMatch?.[2] ?? null);
+
+  const rows: ParsedImportRow[] = [];
+  const parseText = normalizeWhitespace(normalizedText);
+  const rowPattern =
+    /(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})\s+([A-Z0-9-]+)\s+([A-Z0-9-]+)\s+([0-9][0-9,]*\.\d{2})\s+([0-9][0-9,]*\.\d{2})\s+([0-9][0-9,]*\.\d{2})/g;
+
+  for (const match of parseText.matchAll(rowPattern)) {
+    const parsed = parseAubSavingsTransactionLine(
+      `${match[1]} ${match[2]} ${match[3]} ${match[4]} ${match[5]} ${match[6]}`,
+      {
+        accountName,
+        accountNumber,
+        institution: "AUB",
+      }
+    );
+
+    if (parsed) {
+      rows.push(parsed);
+    }
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const firstRow = rows[0];
+  const firstRowPayload = firstRow?.rawPayload && typeof firstRow.rawPayload === "object" ? (firstRow.rawPayload as Record<string, unknown>) : null;
+  const firstAmountDelta =
+    firstRowPayload && typeof firstRowPayload.amountDelta === "string" ? parseMoney(firstRowPayload.amountDelta) : null;
+  const firstBalance = firstRowPayload && typeof firstRowPayload.balanceText === "string" ? parseMoney(firstRowPayload.balanceText) : null;
+  const openingBalance =
+    parseMoney(normalizedText.match(/BEGINNING\s+BALANCE.*?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    (firstBalance !== null && firstAmountDelta !== null ? firstBalance - firstAmountDelta : null);
+
+  const lastRow = rows.at(-1);
+  const lastRowPayload = lastRow?.rawPayload && typeof lastRow.rawPayload === "object" ? (lastRow.rawPayload as Record<string, unknown>) : null;
+  const lastRowBalance = lastRowPayload && typeof lastRowPayload.balanceText === "string" ? parseMoney(lastRowPayload.balanceText) : null;
+  const endingBalance = getTrailingBalanceFromParsedRows(rows) ?? lastRowBalance;
+
+  return {
+    metadata: {
+      institution: "AUB",
+      accountNumber,
+      accountName,
+      openingBalance,
+      endingBalance,
+      startDate: startDate ? startDate.toISOString() : null,
+      endDate: endDate ? endDate.toISOString() : null,
+      confidence: accountNumber ? 93 : 82,
+    } satisfies DetectedStatementMetadata,
+    rows,
+  };
 };
 
 const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null => {
@@ -2289,6 +2583,16 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     return gcashMetadata;
   }
 
+  const aubCardMetadata = parseAubCardImportText(text);
+  if (aubCardMetadata) {
+    return aubCardMetadata.metadata;
+  }
+
+  const aubSavingsMetadata = parseAubSavingsImportText(text);
+  if (aubSavingsMetadata) {
+    return aubSavingsMetadata.metadata;
+  }
+
   const rcbcMetadata = rcbcStatementMetadata(text);
   if (rcbcMetadata) {
     return rcbcMetadata;
@@ -2438,6 +2742,16 @@ export const parseImportText = (
   const gcashParsed = parseGcashImportText(text);
   if (gcashParsed && gcashParsed.rows.length > 0) {
     return gcashParsed.rows;
+  }
+
+  const aubCardParsed = parseAubCardImportText(text);
+  if (aubCardParsed) {
+    return aubCardParsed.rows;
+  }
+
+  const aubSavingsParsed = parseAubSavingsImportText(text);
+  if (aubSavingsParsed) {
+    return aubSavingsParsed.rows;
   }
 
   const rcbcSavingsParsed = parseRcbcSavingsImportText(text);

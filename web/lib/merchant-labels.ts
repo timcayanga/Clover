@@ -68,6 +68,8 @@ const institutionKeyPatterns: Array<{ key: string; patterns: RegExp[] }> = [
   { key: "Bank of China", patterns: [/\bBANK\s+OF\s+CHINA\b/i] },
   { key: "AUB", patterns: [/\b(ASIA\s+UNITED\s+BANK|AUB)\b/i] },
   { key: "PNB", patterns: [/\b(PNB|PHILIPPINE\s+NATIONAL\s+BANK)\b/i] },
+  { key: "LandBank", patterns: [/\b(LANDBANK|LAND\s+BANK)\b/i] },
+  { key: "UCPB", patterns: [/\b(UCPB|UNITED\s+COCONUT\s+PLANTERS\s+BANK)\b/i] },
   { key: "CIMB", patterns: [/\bCIMB\b/i] },
   { key: "GoTyme", patterns: [/\bGOTYME\b/i] },
 ];
@@ -592,6 +594,10 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
   ],
   AUB: [
     {
+      patterns: [/\bICC\b/i, /\bILNSDM1?\b/i],
+      replacement: "Internal Clearing",
+    },
+    {
       patterns: [/payment\s+-\s+thank\s+you/i],
       replacement: "Payment - Thank You",
     },
@@ -624,7 +630,15 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Cash Deposit",
     },
     {
+      patterns: [/\bCD\b/i],
+      replacement: "Cash Deposit",
+    },
+    {
       patterns: [/credit\s+movement/i],
+      replacement: "Credit Movement",
+    },
+    {
+      patterns: [/\bNFTC\b/i, /\bWFTC\b/i],
       replacement: "Credit Movement",
     },
     {
@@ -632,12 +646,28 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Debit Movement",
     },
     {
+      patterns: [/\bDRT\b/i],
+      replacement: "Debit Movement",
+    },
+    {
       patterns: [/encashment/i],
+      replacement: "Encashment",
+    },
+    {
+      patterns: [/\bENC\b/i],
       replacement: "Encashment",
     },
     {
       patterns: [/check\s+deposit/i],
       replacement: "Check Deposit",
+    },
+    {
+      patterns: [/\bPDCK3\b/i],
+      replacement: "Check Deposit",
+    },
+    {
+      patterns: [/\bCK1\b/i],
+      replacement: "Check Issued",
     },
     {
       patterns: [/internal\s+clearing\s+on-?us/i],
@@ -649,6 +679,10 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     },
     {
       patterns: [/on-?us\s+transaction/i],
+      replacement: "On-Us Transaction",
+    },
+    {
+      patterns: [/\bONUS\b/i],
       replacement: "On-Us Transaction",
     },
     {
@@ -752,6 +786,216 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     {
       patterns: [/petron/i],
       replacement: "Petron",
+    },
+  ],
+  EastWest: [
+    {
+      patterns: [/salary\s+credit/i],
+      replacement: "Salary Credit",
+    },
+    {
+      patterns: [/fund\s+transfer/i],
+      replacement: "Fund Transfer",
+    },
+    {
+      patterns: [/transfer\s+fee/i],
+      replacement: "Transfer Fee",
+    },
+    {
+      patterns: [/meralco/i],
+      replacement: "Meralco",
+    },
+    {
+      patterns: [/debit\s+card\s+purchase/i],
+      replacement: "Debit Card Purchase",
+    },
+    {
+      patterns: [/atm\s+withdrawal/i, /cash\s+withdrawal/i],
+      replacement: "ATM Withdrawal",
+    },
+    {
+      patterns: [/atm\s+fee/i],
+      replacement: "ATM Fee",
+    },
+    {
+      patterns: [/interest\s+earned/i],
+      replacement: "Interest Earned",
+    },
+    {
+      patterns: [/tax\s+withheld/i],
+      replacement: "Tax Withheld",
+    },
+    {
+      patterns: [/adjustment\s+reversal/i],
+      replacement: "Adjustment Reversal",
+    },
+    {
+      patterns: [/cash\s+payment/i],
+      replacement: "Cash Payment",
+    },
+    {
+      patterns: [/grab/i],
+      replacement: "Grab",
+    },
+    {
+      patterns: [/openai\s+chatgpt\s+subscription/i],
+      replacement: "OpenAI ChatGPT Subscription",
+    },
+    {
+      patterns: [/lazada/i],
+      replacement: "Lazada",
+    },
+    {
+      patterns: [/cebu\s+pacific/i],
+      replacement: "Cebu Pacific",
+    },
+    {
+      patterns: [/klook/i],
+      replacement: "Klook",
+    },
+    {
+      patterns: [/airbnb/i],
+      replacement: "Airbnb",
+    },
+    {
+      patterns: [/din\s+tai\s+fung/i],
+      replacement: "Din Tai Fung",
+    },
+    {
+      patterns: [/petron/i],
+      replacement: "Petron",
+    },
+    {
+      patterns: [/apple/i],
+      replacement: "Apple",
+    },
+  ],
+  LandBank: [
+    {
+      patterns: [/salary\s+credit/i],
+      replacement: "Salary Credit",
+    },
+    {
+      patterns: [/pesonet\s+transfer\s+to/i],
+      replacement: "PESONet Transfer",
+    },
+    {
+      patterns: [/interbank\s+transfer\s+fee/i],
+      replacement: "Interbank Transfer Fee",
+    },
+    {
+      patterns: [/transfer\s+to\s+gcash/i],
+      replacement: "Transfer to GCash",
+    },
+    {
+      patterns: [/transfer\s+to\s+maya/i],
+      replacement: "Transfer to Maya",
+    },
+    {
+      patterns: [/transfer\s+from\s+gcash/i],
+      replacement: "Transfer from GCash",
+    },
+    {
+      patterns: [/transfer\s+from\s+maya/i],
+      replacement: "Transfer from Maya",
+    },
+    {
+      patterns: [/fund\s+transfer/i],
+      replacement: "Fund Transfer",
+    },
+    {
+      patterns: [/bills?\s+payment\s*-\s*meralco/i, /meralco/i],
+      replacement: "Meralco",
+    },
+    {
+      patterns: [/atm\s+withdrawal/i, /\batmw/i, /cash\s+withdrawal/i],
+      replacement: "ATM Withdrawal",
+    },
+    {
+      patterns: [/atm\s+fee/i],
+      replacement: "ATM Fee",
+    },
+    {
+      patterns: [/interest\s+earned/i],
+      replacement: "Interest Earned",
+    },
+    {
+      patterns: [/tax\s+withheld/i],
+      replacement: "Tax Withheld",
+    },
+    {
+      patterns: [/adjustment/i],
+      replacement: "Adjustment",
+    },
+    {
+      patterns: [/cash\s+payment/i],
+      replacement: "Cash Payment",
+    },
+    {
+      patterns: [/openai\s+chatgpt\s+subscription/i],
+      replacement: "OpenAI ChatGPT Subscription",
+    },
+  ],
+  UCPB: [
+    {
+      patterns: [/csd/i],
+      replacement: "Cash Deposit",
+    },
+    {
+      patterns: [/icc/i],
+      replacement: "Internal Clearing Check",
+    },
+    {
+      patterns: [/dm/i],
+      replacement: "Debit Memo",
+    },
+    {
+      patterns: [/cav/i],
+      replacement: "Cash Advance Voucher",
+    },
+    {
+      patterns: [/sc/i],
+      replacement: "Service Charge",
+    },
+    {
+      patterns: [/salary/i],
+      replacement: "Salary Credit",
+    },
+    {
+      patterns: [/interest/i],
+      replacement: "Interest Earned",
+    },
+    {
+      patterns: [/cash\s+deposit/i],
+      replacement: "Cash Deposit",
+    },
+    {
+      patterns: [/cash\s+out\s+order/i],
+      replacement: "Cash Out Order",
+    },
+    {
+      patterns: [/account\s+replenishment/i, /internet\s+banking\s+replenishment/i],
+      replacement: "Account Replenishment",
+    },
+    {
+      patterns: [/transfer\s+to\s+gcash/i],
+      replacement: "Transfer to GCash",
+    },
+    {
+      patterns: [/transfer\s+to\s+maya/i],
+      replacement: "Transfer to Maya",
+    },
+    {
+      patterns: [/transfer\s+from\s+maya/i],
+      replacement: "Transfer from Maya",
+    },
+    {
+      patterns: [/bill\s+payment/i, /bills\s+payment/i],
+      replacement: "Bill Payment",
+    },
+    {
+      patterns: [/meralco/i],
+      replacement: "Meralco",
     },
   ],
   MariBank: [
