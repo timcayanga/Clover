@@ -411,6 +411,55 @@ const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): Upl
   };
 };
 
+const friendlyImportProgressLabel = (label: string, fileName?: string | null) => {
+  const fileSuffix = fileName ? ` ${fileName}` : "";
+
+  switch (label) {
+    case "Starting upload":
+      return "Clover is getting your file ready";
+    case "Uploading the file":
+      return `Clover is bringing in${fileSuffix}`;
+    case "Password needed":
+      return "This file needs a password";
+    case "Waiting for account details":
+      return "Clover is matching the account";
+    case "Waiting for statement identity":
+      return "Clover is reading the statement";
+    case "Queued for background processing":
+      return "Clover is lining up the rest";
+    case "Finalizing in background":
+    case "Finalizing import":
+      return "Clover is wrapping things up";
+    case "Parsing in background":
+      return "Clover is reading the statement";
+    case "Import failed":
+      return "That file needs another try";
+    case "Done":
+      return "All set";
+    case "Queued":
+      return "Waiting in line";
+    default:
+      return label;
+  }
+};
+
+const friendlyImportStatusLabel = (statusLabel: string) => {
+  switch (statusLabel) {
+    case "Uploading":
+      return "Bringing it in";
+    case "Parsing":
+      return "Reading it";
+    case "Working":
+      return "Clover is on it";
+    case "Queued":
+      return "Waiting";
+    case "Already imported":
+      return "Already in Clover";
+    default:
+      return statusLabel;
+  }
+};
+
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
 export function ImportFilesModal({
@@ -1355,7 +1404,7 @@ export function ImportFilesModal({
     if (busy) return;
 
     setBusy(true);
-    setMessage("Working through selected files...");
+    setMessage("Clover is lining up your statements...");
     capturePostHogClientEventOnce(
       "first_import_started",
       {
@@ -1375,7 +1424,7 @@ export function ImportFilesModal({
     if (!pendingPasswordFiles) {
       const foundPasswordProtected = await preflightPasswordProtectedFiles();
       if (foundPasswordProtected) {
-        setMessage("Enter passwords for the locked files to continue importing.");
+        setMessage("A few files need passwords before Clover can continue.");
         setBusy(false);
         return;
       }
@@ -1413,12 +1462,12 @@ export function ImportFilesModal({
     }
 
     if (blockedCount > 0) {
-      setMessage("Enter passwords for the locked files to finish the remaining imports.");
+      setMessage("Passwords saved. Clover will continue with the remaining files.");
     } else if (stagedCount > 0) {
       setMessage(
         importedCount > 0
-          ? `Imported ${importedCount} file${importedCount === 1 ? "" : "s"}; confirmation continues in the background.`
-          : `Parsed ${stagedCount} file${stagedCount === 1 ? "" : "s"}; confirmation continues in the background.`
+          ? `Imported ${importedCount} file${importedCount === 1 ? "" : "s"}; Clover is wrapping things up.`
+          : `Parsed ${stagedCount} file${stagedCount === 1 ? "" : "s"}; Clover is wrapping things up.`
       );
     } else if (importedCount > 0) {
       setMessage(`Imported ${importedCount} file${importedCount === 1 ? "" : "s"}.`);
@@ -1468,7 +1517,7 @@ export function ImportFilesModal({
       return;
     }
 
-    setMessage("All passwords saved. Starting import...");
+    setMessage("All passwords saved. Clover is starting the rest.");
     autoStartRef.current = true;
   };
 
@@ -1579,22 +1628,27 @@ export function ImportFilesModal({
         completedFiles={completedFileCount}
         progress={overallProgress}
         detail={
-          activeProgressItem
-            ? activeProgressItem.progressLabel
-            : completedFileCount > 0
-              ? "Upload complete"
-              : "Preparing upload"
+          friendlyImportProgressLabel(
+            activeProgressItem
+              ? activeProgressItem.progressLabel
+              : completedFileCount > 0
+                ? "Done"
+                : "Queued",
+            activeProgressItem?.file.name ?? null
+          )
         }
         statusLabel={
-          activeProgressItem
-            ? activeProgressItem.status === "importing"
-              ? "Uploading"
-              : busy
+          friendlyImportStatusLabel(
+            activeProgressItem
+              ? activeProgressItem.status === "importing"
                 ? "Uploading"
-                : "Parsing"
-            : busy
-              ? "Working"
-              : "Queued"
+                : busy
+                  ? "Uploading"
+                  : "Parsing"
+              : busy
+                ? "Working"
+                : "Queued"
+          )
         }
         onClose={onClose}
         />
@@ -1615,7 +1669,7 @@ export function ImportFilesModal({
             <p className="eyebrow">Import files</p>
             <h4 id="import-files-title">Import files</h4>
           </div>
-          <button className="icon-button" type="button" onClick={onClose} aria-label="Close import files">
+          <button className="accounts-import-close" type="button" onClick={onClose} aria-label="Close import files">
             ×
           </button>
         </div>

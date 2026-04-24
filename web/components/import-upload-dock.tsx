@@ -38,7 +38,7 @@ export function ImportUploadDock({
       ? fileName
         ? `File ${fileIndex} of ${fileTotal}`
         : `Uploaded ${completedFiles} of ${fileTotal}`
-      : "Preparing upload";
+      : "Clover is getting things ready";
 
   return (
     <div className="import-upload-dock" role="status" aria-live="polite">
