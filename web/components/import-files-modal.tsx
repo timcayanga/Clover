@@ -42,6 +42,8 @@ type ImportStatus = "pending" | "needs_password" | "parsing" | "importing" | "do
 
 type ConfirmationState = "none" | "staged" | "confirmed";
 
+type UploadAccountType = "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other" | null;
+
 type QueuedFile = {
   id: string;
   file: File;
@@ -127,7 +129,7 @@ const buildOptimisticUploadSummary = (
   accountId: string | null,
   accountName: string | null,
   institution: string | null,
-  accountType: UploadInsightsSummary["accountType"] = null,
+  accountType: UploadAccountType = null,
   optimisticAccountId: string | null,
   balance: string | null = null,
   previewTransactions: UploadInsightsSummary["previewTransactions"] = []
@@ -162,7 +164,7 @@ const buildOptimisticUploadSummaryFromAccount = (
     account.id,
     account.name,
     account.institution,
-    account.type as UploadInsightsSummary["accountType"],
+    account.type as UploadAccountType,
     account.id,
     account.balance ?? null,
     []
