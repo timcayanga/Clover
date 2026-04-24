@@ -267,7 +267,7 @@ export function OnboardingForm({
               <button
                 key={option.value}
                 type="button"
-                className={`onboarding-option ${goals.includes(option.value) ? "is-selected" : ""}`}
+                className={`onboarding-option onboarding-option--goal ${goals.includes(option.value) ? "is-selected" : ""}`}
                 onClick={() => {
                   setGoals((current) =>
                     current.includes(option.value)

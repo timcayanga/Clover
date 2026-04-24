@@ -5609,6 +5609,11 @@ label {
   height: 72%;
 }
 
+.onboarding-option--goal .onboarding-option__icon img {
+  width: 70%;
+  height: 70%;
+}
+
 .onboarding-option.is-selected .onboarding-option__icon {
   background: var(--accent);
   border-color: rgba(3, 168, 192, 0.28);
