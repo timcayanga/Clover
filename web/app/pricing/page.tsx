@@ -64,8 +64,8 @@ export default function PricingPage() {
           <h1>Pricing</h1>
           <p>Choose a plan that fits the way you want to understand your money.</p>
           <p>
-            Start free if you want to explore Clover first. Upgrade when you need higher limits, more reporting room, and more AI insights each
-            month.
+            Start free if you want to explore Clover first. Upgrade to Pro when you need higher limits, more reporting room, and more AI insights
+            each month.
           </p>
         </header>
 
@@ -77,28 +77,36 @@ export default function PricingPage() {
               </span>
               <div>
                 <p className="pricing-card__eyebrow">Free</p>
-                <h2>Try Clover and build a clearer overview.</h2>
+                <h2>Try Clover and build a lighter overview.</h2>
               </div>
             </div>
             <p className="pricing-card__summary">
-              Great for getting started, importing a smaller set of statements, and seeing the value of Clover before you pay.
+              Great for getting started, importing a smaller set of statements, and seeing the value of Clover before you upgrade.
             </p>
             <ul className="pricing-card__list">
               <li>
                 <CheckIcon />
-                <span>Limited number of accounts so you can test Clover with your most important sources first.</span>
+                <span>Manual transaction tracking.</span>
               </li>
               <li>
                 <CheckIcon />
-                <span>Limited transaction rows for a lightweight, easy-to-review view.</span>
+                <span>Receipt scanning.</span>
               </li>
               <li>
                 <CheckIcon />
-                <span>Limited reports each month to help you understand patterns without overwhelm.</span>
+                <span>2 accounts in addition to Cash.</span>
               </li>
               <li>
                 <CheckIcon />
-                <span>Limited AI insights each month to show how Clover turns data into guidance.</span>
+                <span>10 monthly uploads total, including statements and receipts.</span>
+              </li>
+              <li>
+                <CheckIcon />
+                <span>1,500 transaction rows total.</span>
+              </li>
+              <li>
+                <CheckIcon />
+                <span>Basic reports.</span>
               </li>
             </ul>
           </article>
@@ -109,30 +117,40 @@ export default function PricingPage() {
                 <PlanIcon name="growth" />
               </span>
               <div>
-                <p className="pricing-card__eyebrow">Paid</p>
+                <p className="pricing-card__eyebrow">Pro</p>
                 <h2>Unlock the full value of Clover.</h2>
               </div>
             </div>
             <p className="pricing-card__summary">
-              Best for people who want to track more accounts, analyze more data, and get a more complete monthly picture without hitting limits as
-              quickly.
+              Built for people who want to track more, upload more, and get deeper insights without running into monthly limits.
+            </p>
+            <p className="pricing-card__summary pricing-card__summary--strong">
+              PHP 149 monthly or PHP 1,299 annually.
             </p>
             <ul className="pricing-card__list">
               <li>
                 <CheckIcon />
-                <span>Higher account limits so more of your finances can live in one place.</span>
+                <span>Manual transaction tracking.</span>
               </li>
               <li>
                 <CheckIcon />
-                <span>Higher transaction row limits for fuller statement history and better pattern detection.</span>
+                <span>Receipt scanning.</span>
               </li>
               <li>
                 <CheckIcon />
-                <span>More reports each month to help you track trends and make smarter decisions.</span>
+                <span>Unlimited accounts.</span>
               </li>
               <li>
                 <CheckIcon />
-                <span>More AI insights each month so Clover can explain what is happening in your money with more depth.</span>
+                <span>Unlimited monthly uploads, including statements and receipts.</span>
+              </li>
+              <li>
+                <CheckIcon />
+                <span>Unlimited transaction rows.</span>
+              </li>
+              <li>
+                <CheckIcon />
+                <span>Advanced reports.</span>
               </li>
             </ul>
           </article>
@@ -140,12 +158,12 @@ export default function PricingPage() {
 
         <section className="pricing-page__value">
           <div>
-            <p className="eyebrow">Why paid matters</p>
+            <p className="eyebrow">Why Pro matters</p>
             <h2>More room means more clarity.</h2>
           </div>
           <p>
-            Clover is most useful when it can see a fuller picture of your money. The paid plan is designed for people who want to import more
-            statements, review more data, and get more reports and AI guidance over time.
+            Clover is most useful when it can see a fuller picture of your money. Pro gives you the headroom to bring in more statements, track more
+            of your finances, and get better reports and AI guidance over time.
           </p>
         </section>
 
