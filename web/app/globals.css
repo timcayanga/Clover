@@ -5611,6 +5611,10 @@ label {
   animation: onboarding-icon-pop 260ms ease;
 }
 
+.onboarding-option.is-selected .onboarding-option__icon img {
+  filter: brightness(0) invert(1);
+}
+
 .onboarding-option__title {
   font-size: 16px;
   font-weight: 600;
