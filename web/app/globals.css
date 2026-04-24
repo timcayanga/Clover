@@ -6338,8 +6338,8 @@ label {
 
 .transactions-topbar {
   display: grid;
-  gap: 14px;
-  padding-bottom: 10px;
+  gap: 10px;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--stroke);
   position: sticky;
   top: 0;
@@ -6351,7 +6351,7 @@ label {
 
 .transactions-toolbar-row {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .transactions-toolbar-row--top {
@@ -6367,7 +6367,7 @@ label {
 .transactions-toolbar-group {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -6377,9 +6377,9 @@ label {
 }
 
 .transactions-action-button {
-  min-height: 38px;
+  min-height: 34px;
   border-radius: 999px;
-  padding-inline: 14px;
+  padding-inline: 12px;
   flex: 0 0 auto;
 }
 
@@ -6518,13 +6518,13 @@ label {
 .line-item-header {
   display: grid;
   grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  padding: 10px 4px 8px;
+  padding: 7px 4px 6px;
   color: var(--muted-2);
   border-bottom: 1px solid var(--stroke);
-  font-size: 0.72rem;
-  letter-spacing: 0.12em;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   position: sticky;
   top: 0;
@@ -6972,7 +6972,8 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding-top: 14px;
+  padding-top: 10px;
+  padding-bottom: 2px;
   margin-top: 2px;
   border-top: 1px solid var(--stroke);
   position: sticky;
@@ -6992,29 +6993,29 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-footer-snapshot {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   justify-items: end;
   min-width: min(100%, 340px);
 }
 
 .transactions-footer-snapshot__label {
   color: var(--muted-2);
-  font-size: 0.72rem;
-  letter-spacing: 0.16em;
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .transactions-footer-snapshot__metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
   width: 100%;
 }
 
 .transactions-footer-snapshot__metric {
   display: grid;
   gap: 3px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid var(--stroke);
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.94);
