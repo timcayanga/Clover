@@ -230,9 +230,9 @@ export function CloverShell({
   const handleSignOut = () => {
     persistSelectedWorkspaceId("");
     void signOut({
-      redirectUrl: "/sign-in",
+      redirectUrl: "/",
     }).catch(() => {
-      window.location.assign("/sign-in");
+      window.location.assign("/");
     });
   };
 

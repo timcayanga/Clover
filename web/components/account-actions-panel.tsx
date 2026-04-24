@@ -83,9 +83,9 @@ export function AccountActionsPanel({ isGuest = false }: AccountActionsPanelProp
     clearWorkspaceSelection();
 
     void signOut({
-      redirectUrl: "/sign-in",
+      redirectUrl: "/",
     }).catch(() => {
-      window.location.assign("/sign-in");
+      window.location.assign("/");
     });
   };
 
