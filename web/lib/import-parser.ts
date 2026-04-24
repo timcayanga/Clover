@@ -697,9 +697,13 @@ const isAubCardStatementText = (text: string) => {
 
 const isAubSavingsStatementText = (text: string) => {
   const compact = normalizeWhitespace(text).replace(/\s+/g, " ");
+  const hasStatementShell =
+    /(STATEMENT\s+OF\s+ACCOUNT|PERIOD\s+COVERED|RUNDATE|ACCOUNT\s+NUMBER)/i.test(compact) &&
+    /(DATE\s+CHECK\s+NO\.?\s+TRANSACTION\s+CODE\s+DEBIT\s+CREDIT\s+ENDING\s+BALANCE|CURRENT\s+BALANCE|AVAILABLE\s+BALANCE)/i.test(compact);
+  const hasAubBrand = /\b(ASIA\s+UNITED\s+BANK|AUB)\b/i.test(compact);
   return (
-    /\b(ASIA\s+UNITED\s+BANK|AUB)\b/i.test(compact) &&
-    /(STATEMENT\s+OF\s+ACCOUNT|ACCOUNT\s+NUMBER|TRANSACTION\s+CODE|ENDING\s+BALANCE|PERIOD\s+COVERED|AUB\s+TELLER\s+360)/i.test(compact)
+    (hasAubBrand && hasStatementShell) ||
+    (!hasAubBrand && hasStatementShell && /ACCOUNT\s+NUMBER/i.test(compact))
   );
 };
 
@@ -904,6 +908,21 @@ const parseAubCardImportText = (text: string) => {
   };
 };
 
+const aubSavingsStatementIgnorePatterns = [
+  /STATEMENT\s+OF\s+ACCOUNT/i,
+  /BALANCE\s+LAST\s+STATEMENT/i,
+  /BALANCE\s+THIS\s+STATEMENT/i,
+  /TOTAL\s+CREDITS/i,
+  /TOTAL\s+DEBITS/i,
+  /ACCOUNT\s+NUMBER/i,
+  /ACCOUNT\s+TYPE/i,
+  /PAGE\s+\d+/i,
+  /CURRENT\s+BALANCE/i,
+  /AVAILABLE\s+BALANCE/i,
+  /FLOAT\s+AMOUNT/i,
+  /OUT\s+OF\s+TOWN/i,
+];
+
 const parseAubSavingsImportText = (text: string) => {
   const normalizedText = text.replace(/\u00a0/g, " ");
   if (!isAubSavingsStatementText(normalizedText)) {
@@ -919,22 +938,34 @@ const parseAubSavingsImportText = (text: string) => {
   const endDate = parseAubDate(periodMatch?.[2] ?? null);
 
   const rows: ParsedImportRow[] = [];
-  const parseText = normalizeWhitespace(normalizedText);
-  const rowPattern =
-    /(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})\s+([A-Z0-9-]+)\s+([A-Z0-9-]+)\s+([0-9][0-9,]*\.\d{2})\s+([0-9][0-9,]*\.\d{2})\s+([0-9][0-9,]*\.\d{2})/g;
+  const lines = normalizedText.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const rowStartPattern = /^(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})\s+[A-Z0-9-]+\s+[A-Z0-9-]+\s+[0-9][0-9,]*\.\d{2}/i;
 
-  for (const match of parseText.matchAll(rowPattern)) {
-    const parsed = parseAubSavingsTransactionLine(
-      `${match[1]} ${match[2]} ${match[3]} ${match[4]} ${match[5]} ${match[6]}`,
-      {
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+
+    if (aubSavingsStatementIgnorePatterns.some((pattern) => pattern.test(line))) {
+      continue;
+    }
+
+    if (!rowStartPattern.test(line)) {
+      continue;
+    }
+
+    const maxSpan = Math.min(4, lines.length - index);
+    for (let span = 1; span <= maxSpan; span += 1) {
+      const candidate = lines.slice(index, index + span).join(" ");
+      const parsed = parseAubSavingsTransactionLine(candidate, {
         accountName,
         accountNumber,
         institution: "AUB",
-      }
-    );
+      });
 
-    if (parsed) {
-      rows.push(parsed);
+      if (parsed) {
+        rows.push(parsed);
+        index += span - 1;
+        break;
+      }
     }
   }
 

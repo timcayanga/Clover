@@ -12,6 +12,8 @@ This document captures the AUB parsing rules learned from the synthetic training
 ## Savings Statement Rules
 
 - Treat `ASIA UNITED BANK` and `AUB Teller 360` statements as a ledger-style savings import.
+- Some OCR exports omit the visible `AUB` brand on the transaction pages; if the statement still has `Statement of Account`, `Account Number`, and the savings table headers, treat it as AUB savings anyway.
+- Savings rows may split across lines in OCR text. Reassemble date/check/code + debit/credit/balance fragments before deciding the row is invalid.
 - Name the account as `AUB <last4>` when the statement exposes a savings account number.
 - Use running balance as a first-class field.
 - Row shape: `Date / Check No. / Transaction Code / Debit / Credit / Ending Balance`.
