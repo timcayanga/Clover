@@ -176,8 +176,7 @@ export default function HomePage() {
     <main className="landing-page">
       <ScrollReveal as="header" className="landing-nav landing-nav--sticky">
         <Link className="landing-brand" href="/" aria-label="Clover home">
-          <img className="landing-brand__mark" src="/favicon.svg" alt="" aria-hidden="true" />
-          <span>Clover</span>
+          <img className="landing-brand__logo" src="/clover-logo-full.svg" alt="Clover" />
         </Link>
 
         <nav className="landing-nav__links" aria-label="Primary">

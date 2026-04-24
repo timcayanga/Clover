@@ -6,8 +6,7 @@ export default function TermsOfServicePage() {
       <div className="legal-page__inner">
         <nav className="legal-page__nav" aria-label="Legal page navigation">
           <Link className="landing-brand" href="/" aria-label="Clover home">
-            <img className="landing-brand__mark" src="/favicon.svg" alt="" aria-hidden="true" />
-            <span>Clover</span>
+            <img className="landing-brand__logo" src="/clover-logo-full.svg" alt="Clover" />
           </Link>
           <div className="legal-page__nav-links">
             <Link href="/">Home</Link>

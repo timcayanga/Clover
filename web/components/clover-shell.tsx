@@ -247,7 +247,7 @@ export function CloverShell({
       <aside className="sidebar" aria-label="Primary">
         <div className="sidebar-brand">
           <Link className="sidebar-brand-link" href="/dashboard" aria-label="Go to dashboard" prefetch={false}>
-            <img className="brand-mark brand-mark--sidebar" src="/favicon.svg" alt="" aria-hidden="true" />
+            <img className="brand-mark brand-mark--sidebar" src="/clover-mark.svg" alt="" aria-hidden="true" />
             <img className="brand-wordmark brand-wordmark--sidebar" src="/clover-name-teal.svg" alt="Clover" />
           </Link>
         </div>

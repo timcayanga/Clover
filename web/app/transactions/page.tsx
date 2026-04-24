@@ -728,15 +728,15 @@ const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => 
 const detailDraftTypeToTransactionType = (type: TransactionDetailDraft["type"]) => (type === "credit" ? "income" : "expense");
 
 const toolbarChipStyle = {
-  backgroundColor: "#f2f5f7",
-  borderColor: "#b8c0c5",
-  color: "#111111",
+  backgroundColor: "var(--surface-2)",
+  borderColor: "var(--stroke-strong)",
+  color: "var(--text)",
   boxShadow: "none",
 } as const;
 
 const toolbarAddStyle = {
-  backgroundColor: "#03a8c0",
-  borderColor: "#03a8c0",
+  backgroundColor: "var(--accent)",
+  borderColor: "var(--accent)",
   color: "#ffffff",
   boxShadow: "none",
 } as const;
@@ -2689,7 +2689,7 @@ function TransactionsPageContent() {
                 text-align: left;
                 vertical-align: top;
                 padding: 9px 8px;
-                border-bottom: 1px solid #e5e7eb;
+                border-bottom: 1px solid var(--stroke);
                 font-size: 11px;
                 word-break: break-word;
               }
