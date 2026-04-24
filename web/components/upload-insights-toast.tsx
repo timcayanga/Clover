@@ -8,6 +8,7 @@ export type UploadInsightsSummary = {
   accountId: string | null;
   accountName: string | null;
   institution: string | null;
+  accountType?: "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other" | null;
   balance: string | null;
   optimistic?: boolean;
   optimisticAccountId?: string | null;
