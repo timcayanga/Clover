@@ -10521,8 +10521,8 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 6px 0 12px;
+  gap: 8px;
+  padding: 4px 0 8px;
 }
 
 .landing-nav--sticky {
@@ -10533,20 +10533,28 @@ input.transaction-inline-edit--amount::placeholder {
   -webkit-backdrop-filter: blur(18px);
   background: rgba(245, 247, 249, 0.72);
   border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .landing-brand {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-weight: 700;
-  font-size: 16px;
+  font-size: 14px;
   letter-spacing: -0.03em;
 }
 
-.landing-brand__logo {
-  width: min(138px, 100%);
+.landing-brand__mark {
+  width: 34px;
+  height: auto;
+  border-radius: 0;
+  box-shadow: none;
+  background: transparent;
+}
+
+.landing-brand__wordmark {
+  width: min(98px, 100%);
   height: auto;
   border-radius: 0;
   box-shadow: none;
@@ -10571,8 +10579,8 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .landing-nav__button {
-  min-height: 40px;
-  padding-inline: 14px;
+  min-height: 36px;
+  padding-inline: 12px;
 }
 
 .landing-hero {
@@ -11195,33 +11203,35 @@ input.transaction-inline-edit--amount::placeholder {
     flex-direction: row;
     align-items: center;
     justify-content: space-between;
-    gap: 8px;
-    padding: 4px 0 10px;
+    gap: 6px;
+    padding: 2px 0 6px;
   }
 
   .landing-brand {
-    gap: 6px;
-    font-size: 14px;
+    gap: 5px;
+    font-size: 13px;
   }
 
-  .landing-brand__logo {
-    width: min(120px, 100%);
-    border-radius: 0;
-    box-shadow: none;
+  .landing-brand__mark {
+    width: 28px;
+  }
+
+  .landing-brand__wordmark {
+    width: min(78px, 100%);
   }
 
   .landing-nav__links {
-    gap: 6px;
+    gap: 5px;
     margin-left: auto;
   }
 
   .landing-nav__link {
-    font-size: 13px;
+    font-size: 12px;
   }
 
   .landing-nav__button {
-    min-height: 36px;
-    padding-inline: 12px;
+    min-height: 32px;
+    padding-inline: 10px;
   }
 
   .landing-hero {
