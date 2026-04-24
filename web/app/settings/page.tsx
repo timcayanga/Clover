@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { AccountActionsPanel } from "@/components/account-actions-panel";
+import { BillingCard } from "@/components/billing-card";
 import { SettingsCenter, type SettingSection } from "@/components/settings-center";
 import { getSessionContext } from "@/lib/auth";
+import { getEnv } from "@/lib/env";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const metadata = {
@@ -140,6 +142,7 @@ const sections: SettingSection[] = [
 export default async function SettingsPage() {
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
+  const env = getEnv();
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
@@ -151,6 +154,14 @@ export default async function SettingsPage() {
       kicker="Control room"
       subtitle="Keep your workspace, formatting, and automation defaults in one place."
     >
+      <BillingCard
+        planTier={user.planTier}
+        paypalClientId={env.PAYPAL_CLIENT_ID ?? null}
+        paypalPlanId={env.PAYPAL_PRO_PLAN_ID ?? null}
+        userId={user.id}
+        clerkUserId={user.clerkUserId}
+        email={user.email}
+      />
       <SettingsCenter sections={sections} />
       <AccountActionsPanel isGuest={session.isGuest} />
     </CloverShell>

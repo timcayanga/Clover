@@ -903,8 +903,88 @@ label {
 
 .settings-billing-card {
   display: grid;
-  gap: 8px;
+  gap: 18px;
   padding: 24px;
+}
+
+.billing-card__body {
+  display: grid;
+  gap: 16px;
+}
+
+.billing-card__plan {
+  display: grid;
+  gap: 8px;
+}
+
+.billing-card__eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.billing-card__plan strong {
+  font-size: 1.1rem;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+
+.billing-card__plan p,
+.billing-card__cta-copy,
+.billing-helper {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.billing-card__cta {
+  display: grid;
+  gap: 12px;
+  align-items: start;
+}
+
+.billing-card__paypal {
+  display: grid;
+  gap: 10px;
+  max-width: 360px;
+}
+
+.import-limit-cta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+  border: 1px solid rgba(3, 168, 192, 0.18);
+  margin-top: 14px;
+}
+
+.import-limit-cta__copy {
+  display: grid;
+  gap: 8px;
+  max-width: 720px;
+}
+
+.import-limit-cta__copy strong {
+  color: var(--text);
+  font-size: 1.02rem;
+  letter-spacing: -0.03em;
+}
+
+.import-limit-cta__copy p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.import-limit-cta__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .sidebar-plan-card__meta {

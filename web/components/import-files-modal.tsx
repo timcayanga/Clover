@@ -2,6 +2,7 @@
 
 import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ImportPasswordModal } from "@/components/import-password-modal";
 import { ImportUploadDock } from "@/components/import-upload-dock";
@@ -431,6 +432,9 @@ export function ImportFilesModal({
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("Upload CSV or PDF files to import transactions and balances.");
   const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
+  const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
+  const [limitReached, setLimitReached] = useState(false);
+  const upgradePromptTrackedRef = useRef(false);
 
   useEffect(() => {
     if (!open) {
@@ -439,6 +443,9 @@ export function ImportFilesModal({
       setBusy(false);
       setSelectedAccountId("");
       setSelectedPasswordItemId(null);
+      setPlanTier("unknown");
+      setLimitReached(false);
+      upgradePromptTrackedRef.current = false;
       accountIdByKeyRef.current.clear();
       setMessage("Upload CSV or PDF files to import transactions and balances.");
       return;
@@ -468,6 +475,39 @@ export function ImportFilesModal({
     });
     setMessage("Upload CSV or PDF files to import transactions and balances.");
   }, [accounts, defaultAccountId, open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadPlanTier = async () => {
+      try {
+        const response = await fetch("/api/me");
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = await response.json();
+        const nextPlanTier = payload?.user?.planTier === "pro" ? "pro" : "free";
+        if (!cancelled) {
+          setPlanTier(nextPlanTier);
+        }
+      } catch {
+        if (!cancelled) {
+          setPlanTier("unknown");
+        }
+      }
+    };
+
+    void loadPlanTier();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const createStatementAccount = async (name: string, institution: string | null) => {
     const inferredType = inferAccountTypeFromStatement(institution, name, "bank");
@@ -616,6 +656,7 @@ export function ImportFilesModal({
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooLarge} file${skippedTooLarge === 1 ? "" : "s"} over 2 MB.`;
       } else if (skippedTooMany > 0) {
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the 10-file limit.`;
+        setLimitReached(true);
         capturePostHogClientEvent("plan_limit_reached", {
           limit_type: "upload_file_count",
           current_usage: current.length + additionsCount,
@@ -1271,6 +1312,19 @@ export function ImportFilesModal({
   const overallProgress = items.length > 0
     ? ((completedFileCount + (activeProgressItem ? activeProgressItem.progress / 100 : 0)) / items.length) * 100
     : 0;
+  const shouldShowUpgradePrompt = planTier === "free" && limitReached;
+
+  useEffect(() => {
+    if (!shouldShowUpgradePrompt || upgradePromptTrackedRef.current) {
+      return;
+    }
+
+    upgradePromptTrackedRef.current = true;
+    capturePostHogClientEvent("upgrade_prompt_viewed", {
+      prompt_source: "import_limit",
+      workspace_id: workspaceId || null,
+    });
+  }, [shouldShowUpgradePrompt, workspaceId]);
 
   useEffect(() => {
     if (!open || busy || !activeProgressItem || activeProgressItem.progressLabel !== "Finalizing import") {
@@ -1614,6 +1668,26 @@ export function ImportFilesModal({
           <p>Accepted files: CSV and PDF. Password-protected files are supported.</p>
           <p>We upload the file first, then parse it on the server so the workflow stays responsive.</p>
         </div>
+
+        {shouldShowUpgradePrompt ? (
+          <aside className="import-limit-cta glass">
+            <div className="import-limit-cta__copy">
+              <p className="eyebrow">Free limit reached</p>
+              <strong>Upgrade to Pro for more import room.</strong>
+              <p>
+                Free users can queue up to 10 statement files at a time. Pro is the path for heavier importing and later premium limits.
+              </p>
+            </div>
+            <div className="import-limit-cta__actions">
+              <Link className="button button-primary button-small" href="/settings#billing">
+                Upgrade to Pro
+              </Link>
+              <button className="button button-secondary button-small" type="button" onClick={() => setLimitReached(false)}>
+                Dismiss
+              </button>
+            </div>
+          </aside>
+        ) : null}
 
         <div className="accounts-import-files">
           {items.length > 0 ? (
