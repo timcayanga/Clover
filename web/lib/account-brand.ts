@@ -129,8 +129,8 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       label: "AUB",
       logoSrcs: philippinesLogoWithVariants("aub"),
       fallbackIconSrc: bankIcon,
-      accent: "#00529B",
-      background: "linear-gradient(135deg, rgba(0, 82, 155, 0.16), rgba(0, 82, 155, 0.06))",
+      accent: "#D61F26",
+      background: "linear-gradient(135deg, rgba(214, 31, 38, 0.16), rgba(214, 31, 38, 0.06))",
     }),
   },
   {

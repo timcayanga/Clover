@@ -8332,17 +8332,30 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-brand-mark img {
-  width: 66%;
-  height: 66%;
-  object-fit: contain;
-  object-position: center;
   display: block;
+  object-position: center;
   margin: auto;
 }
 
-.accounts-brand-mark svg {
+.accounts-brand-mark__logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.accounts-brand-mark__fallback {
   width: 64%;
   height: 64%;
+  display: block;
+  margin: auto;
+  object-fit: contain;
+  object-position: center;
+}
+
+.accounts-brand-mark__logo-fallback {
+  width: 68%;
+  height: 68%;
   display: block;
   margin: auto;
 }

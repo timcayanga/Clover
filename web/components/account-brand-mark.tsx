@@ -8,6 +8,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
   const [logoIndex, setLogoIndex] = useState(0);
   const logoCandidates = accountBrand.logoSrcs.length ? accountBrand.logoSrcs : accountBrand.logoSrc ? [accountBrand.logoSrc] : [];
   const currentLogoSrc = logoCandidates[logoIndex] ?? null;
+  const hasBrandLogo = Boolean(accountBrand.logoSrcs.length || accountBrand.logoSrc);
   const logoResetKey = `${accountBrand.logoSrc ?? ""}::${accountBrand.logoSrcs.join("|")}::${accountBrand.fallbackIconSrc}::${label}`;
 
   useEffect(() => {
@@ -27,6 +28,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
     >
       {currentLogoSrc && !failed ? (
         <img
+          className="accounts-brand-mark__logo"
           src={currentLogoSrc}
           alt={label}
           loading="lazy"
@@ -41,6 +43,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
         />
       ) : accountBrand.fallbackIconSrc ? (
         <img
+          className="accounts-brand-mark__fallback"
           src={accountBrand.fallbackIconSrc}
           alt=""
           aria-hidden="true"
@@ -48,7 +51,16 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
           onError={() => setFailed(true)}
         />
       ) : (
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          className={hasBrandLogo ? "accounts-brand-mark__logo-fallback" : "accounts-brand-mark__fallback"}
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M3 10.5 12 4l9 6.5" />
           <path d="M5 20h14" />
           <path d="M6.5 10.5V17" />
