@@ -119,18 +119,6 @@ const START_OPTIONS: StartOption[] = [
       </svg>
     ),
   },
-  {
-    value: "skip",
-    title: "Skip for now",
-    description: "Jump into the dashboard and explore first.",
-    href: "/dashboard",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M5 12h14" />
-        <path d="M13 6l6 6-6 6" />
-      </svg>
-    ),
-  },
 ];
 
 type OnboardingFormProps = {
@@ -153,7 +141,6 @@ export function OnboardingForm({
   const [message, setMessage] = useState("How comfortable are you with financial management?");
   const [targetAmount, setTargetAmount] = useState(currentTargetAmount ?? "");
   const [isPending, startTransition] = useTransition();
-  const skipOption = START_OPTIONS.find((option) => option.value === "skip");
   const selectedGoalKey: GoalKey | null = goals[0] ?? null;
   const selectedExperienceProfile = getFinancialExperienceProfile(experience);
   const selectedExperienceDefinition = getFinancialExperienceDefinition(experience);
@@ -186,6 +173,20 @@ export function OnboardingForm({
       router.replace(option.href);
     });
   };
+
+  const skipForNow = () =>
+    completeStep({
+      value: "skip",
+      title: "Skip for now",
+      description: "Jump into the dashboard and explore first.",
+      href: "/dashboard",
+      icon: (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 12h14" />
+          <path d="M13 6l6 6-6 6" />
+        </svg>
+      ),
+    });
 
   return (
     <section className="glass onboarding-card">
@@ -321,7 +322,7 @@ export function OnboardingForm({
             >
               Continue
             </button>
-            <button className="button button-secondary" type="button" disabled={isPending} onClick={() => skipOption && completeStep(skipOption)}>
+            <button className="button button-secondary" type="button" disabled={isPending} onClick={skipForNow}>
               Skip for now
             </button>
             <button
@@ -377,6 +378,9 @@ export function OnboardingForm({
               }}
             >
               Back
+            </button>
+            <button className="button button-secondary" type="button" disabled={isPending} onClick={skipForNow}>
+              Skip for now
             </button>
           </div>
         </>
