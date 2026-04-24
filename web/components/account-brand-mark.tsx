@@ -16,13 +16,20 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
       }}
       title={accountBrand.label}
     >
-      {accountBrand.logoUrl && !failed ? (
+      {accountBrand.logoSrc && !failed ? (
         <img
-          src={accountBrand.logoUrl}
+          src={accountBrand.logoSrc}
           alt={label}
           loading="lazy"
           referrerPolicy="no-referrer"
           onError={() => setFailed(true)}
+        />
+      ) : accountBrand.fallbackIconSrc ? (
+        <img
+          src={accountBrand.fallbackIconSrc}
+          alt=""
+          aria-hidden="true"
+          loading="lazy"
         />
       ) : (
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
