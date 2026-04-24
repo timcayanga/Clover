@@ -16,14 +16,14 @@ import {
 type GoalOption = {
   value: GoalKey;
   title: string;
-  icon: ReactNode;
+  icon: string;
 };
 
 type ExperienceOption = {
   value: FinancialExperienceLevel;
   title: string;
   description: string;
-  icon: ReactNode;
+  icon: string;
 };
 
 type StartOption = {
@@ -39,58 +39,27 @@ const GOALS: GoalOption[] = [
   {
     value: "save_more",
     title: "Save more",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 4v16" />
-        <path d="M17 9.5c0-2.2-2.2-4-5-4s-5 1.5-5 3.5 1.9 3.1 5 3.6 5 1.5 5 3.6S14.2 20 12 20s-5-1.8-5-4" />
-      </svg>
-    ),
+    icon: "/onboarding-icons/save.png",
   },
   {
     value: "pay_down_debt",
     title: "Pay down debt",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7 7h10" />
-        <path d="M7 17h10" />
-        <path d="M9 7l6 10" />
-        <path d="M15 7l-6 10" />
-      </svg>
-    ),
+    icon: "/onboarding-icons/debt.png",
   },
   {
     value: "track_spending",
     title: "Track spending",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M5 12h14" />
-        <path d="M12 5v14" />
-        <path d="M7.5 7.5 16.5 16.5" />
-      </svg>
-    ),
+    icon: "/onboarding-icons/track spending.png",
   },
   {
     value: "build_emergency_fund",
     title: "Build an emergency fund",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M12 3.5v17" />
-        <path d="M8.5 7.5h7" />
-        <path d="M8 15.5h8" />
-        <path d="M7 10.5c0-2.2 2.2-4 5-4s5 1.8 5 4-2.2 4-5 4-5 1.8-5 4" />
-      </svg>
-    ),
+    icon: "/onboarding-icons/emergency fund.png",
   },
   {
     value: "invest_better",
     title: "Invest better",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M6 18h12" />
-        <path d="M8 14l3-3 2 2 5-6" />
-        <path d="M17 7h1.5V8.5" />
-      </svg>
-    ),
+    icon: "/onboarding-icons/invest.png",
   },
 ];
 
@@ -99,38 +68,19 @@ const EXPERIENCE_OPTIONS: ExperienceOption[] = [
     value: "beginner",
     title: "Still learning",
     description: "Keep the language simple and show me what matters first.",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M7 8h10" />
-        <path d="M7 12h10" />
-        <path d="M7 16h6" />
-        <path d="M10 5v14" />
-      </svg>
-    ),
+    icon: "/onboarding-icons/beginner.png",
   },
   {
     value: "comfortable",
     title: "Comfortable",
     description: "I understand budgets, statements, and goal tracking.",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 12h16" />
-        <path d="M12 4v16" />
-        <path d="M7.5 7.5 16.5 16.5" />
-      </svg>
-    ),
+    icon: "/onboarding-icons/intermediate.png",
   },
   {
     value: "advanced",
     title: "Very comfortable",
     description: "Give me the numbers, trends, and short explanations.",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M5 18h14" />
-        <path d="M6 14l3-4 4 2 5-7" />
-        <path d="M17 5h1.5V6.5" />
-      </svg>
-    ),
+    icon: "/onboarding-icons/advanced.png",
   },
 ];
 
@@ -280,7 +230,7 @@ export function OnboardingForm({
                 aria-pressed={experience === option.value}
               >
                 <span className="onboarding-option__icon" aria-hidden="true">
-                  {option.icon}
+                  <img src={encodeURI(option.icon)} alt="" />
                 </span>
                 <span className="onboarding-option__content">
                   <span className="onboarding-option__title-row">
@@ -329,7 +279,7 @@ export function OnboardingForm({
                 aria-pressed={goals.includes(option.value)}
               >
                 <span className="onboarding-option__icon" aria-hidden="true">
-                  {option.icon}
+                  <img src={encodeURI(option.icon)} alt="" />
                 </span>
                 <span className="onboarding-option__title">{option.title}</span>
               </button>

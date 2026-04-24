@@ -5597,6 +5597,13 @@ label {
   stroke-linejoin: round;
 }
 
+.onboarding-option__icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
 .onboarding-option.is-selected .onboarding-option__icon {
   background: var(--accent);
   border-color: rgba(3, 168, 192, 0.28);
