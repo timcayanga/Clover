@@ -1,10 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AccountBrand } from "@/lib/account-brand";
 
 export function AccountBrandMark({ accountBrand, label }: { accountBrand: AccountBrand; label: string }) {
   const [failed, setFailed] = useState(false);
+  const [logoIndex, setLogoIndex] = useState(0);
+  const logoCandidates = accountBrand.logoSrcs.length ? accountBrand.logoSrcs : accountBrand.logoSrc ? [accountBrand.logoSrc] : [];
+  const currentLogoSrc = logoCandidates[logoIndex] ?? null;
+  const logoResetKey = `${accountBrand.logoSrc ?? ""}::${accountBrand.logoSrcs.join("|")}::${accountBrand.fallbackIconSrc}::${label}`;
+
+  useEffect(() => {
+    setFailed(false);
+    setLogoIndex(0);
+  }, [logoResetKey]);
 
   return (
     <span
@@ -16,13 +25,19 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
       }}
       title={accountBrand.label}
     >
-      {accountBrand.logoSrc && !failed ? (
+      {currentLogoSrc && !failed ? (
         <img
-          src={accountBrand.logoSrc}
+          src={currentLogoSrc}
           alt={label}
           loading="lazy"
           referrerPolicy="no-referrer"
-          onError={() => setFailed(true)}
+          onError={() => {
+            if (logoIndex < logoCandidates.length - 1) {
+              setLogoIndex((current) => Math.min(current + 1, logoCandidates.length - 1));
+            } else {
+              setFailed(true);
+            }
+          }}
         />
       ) : accountBrand.fallbackIconSrc ? (
         <img
@@ -30,6 +45,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
           alt=""
           aria-hidden="true"
           loading="lazy"
+          onError={() => setFailed(true)}
         />
       ) : (
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

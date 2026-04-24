@@ -1191,6 +1191,10 @@ function AccountsPageContent() {
                             <article
                               key={account.id}
                               className="accounts-account-card glass"
+                              style={{
+                                ["--brand-accent" as string]: accountBrand.accent,
+                                ["--brand-soft" as string]: accountBrand.background,
+                              }}
                               role="button"
                               tabIndex={0}
                               aria-label={`Open ${account.name} account`}
