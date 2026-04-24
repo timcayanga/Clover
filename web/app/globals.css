@@ -9991,6 +9991,11 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--text);
 }
 
+.landing-nav__link[aria-current="page"] {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .landing-nav__button {
   min-height: 44px;
 }
@@ -10565,6 +10570,163 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--text);
 }
 
+.pricing-page .legal-page__inner {
+  width: min(100%, 1120px);
+}
+
+.pricing-page__header {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 4px;
+}
+
+.pricing-page__header h1 {
+  font-size: clamp(2.6rem, 5vw, 4rem);
+  line-height: 1;
+  max-width: 10ch;
+}
+
+.pricing-page__header p {
+  max-width: 60ch;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.pricing-page__comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.pricing-card {
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+  border-radius: 28px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.95), transparent 42%),
+    rgba(255, 255, 255, 0.82);
+  box-shadow: var(--shadow);
+}
+
+.pricing-card--featured {
+  border-color: rgba(3, 168, 192, 0.22);
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.14), transparent 34%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 251, 252, 0.9));
+  box-shadow:
+    0 24px 60px rgba(3, 168, 192, 0.14),
+    var(--shadow);
+}
+
+.pricing-card__top {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.pricing-card__icon {
+  width: 52px;
+  height: 52px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  background: rgba(3, 168, 192, 0.08);
+  color: var(--accent);
+}
+
+.pricing-card__icon--featured {
+  background: linear-gradient(135deg, rgba(3, 168, 192, 0.14), rgba(110, 231, 183, 0.12));
+  border-color: rgba(3, 168, 192, 0.22);
+}
+
+.pricing-card__eyebrow {
+  margin: 0 0 4px;
+  color: var(--muted-2);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.pricing-card h2 {
+  font-size: clamp(1.55rem, 2.8vw, 2.2rem);
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+
+.pricing-card__summary {
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.pricing-card__list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+}
+
+.pricing-card__list li {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  color: var(--text);
+  line-height: 1.65;
+}
+
+.pricing-card__list svg {
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.pricing-page__value,
+.pricing-page__refunds,
+.pricing-page__cta {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.pricing-page__value h2,
+.pricing-page__refunds h2,
+.pricing-page__cta h2 {
+  font-size: clamp(2rem, 3.5vw, 3rem);
+  line-height: 1.05;
+  letter-spacing: -0.05em;
+}
+
+.pricing-page__value p,
+.pricing-page__refunds p {
+  max-width: 62ch;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.pricing-page__cta {
+  padding-bottom: 4px;
+  align-items: start;
+}
+
+.pricing-page__cta-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pricing-page__header,
+.pricing-page__comparison,
+.pricing-page__value,
+.pricing-page__refunds,
+.pricing-page__cta {
+  animation: fade-up 280ms ease;
+}
+
 @media (max-width: 980px) {
   .landing-hero,
   .landing-gallery__layout {
@@ -10644,6 +10806,11 @@ input.transaction-inline-edit--amount::placeholder {
     padding-inline: 14px;
   }
 
+  .landing-nav__links {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
   .landing-hero {
     gap: 14px;
     padding: 16px 0 10px;
@@ -10705,18 +10872,6 @@ input.transaction-inline-edit--amount::placeholder {
     height: 42px;
   }
 
-  .landing-plans__grid {
-    grid-template-columns: 1fr;
-  }
-
-  .landing-plan-card {
-    padding: 18px;
-  }
-
-  .landing-plan-card h3 {
-    font-size: 20px;
-  }
-
   .landing-cta {
     padding: 24px 0 6px;
   }
@@ -10735,6 +10890,10 @@ input.transaction-inline-edit--amount::placeholder {
     gap: 20px;
   }
 
+  .pricing-page .legal-page__inner {
+    width: min(100%, calc(100% - 24px));
+  }
+
   .legal-page__nav {
     gap: 12px;
   }
@@ -10746,6 +10905,27 @@ input.transaction-inline-edit--amount::placeholder {
 
   .legal-page__quick-links {
     gap: 12px;
+  }
+
+  .pricing-page__comparison {
+    grid-template-columns: 1fr;
+  }
+
+  .pricing-card {
+    padding: 20px;
+  }
+
+  .pricing-card__top {
+    gap: 12px;
+  }
+
+  .pricing-card__icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .pricing-page__cta-actions {
+    width: 100%;
   }
 
   .legal-page__section ul {
