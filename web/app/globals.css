@@ -5604,6 +5604,11 @@ label {
   display: block;
 }
 
+.onboarding-option--experience-beginner .onboarding-option__icon img {
+  width: 72%;
+  height: 72%;
+}
+
 .onboarding-option.is-selected .onboarding-option__icon {
   background: var(--accent);
   border-color: rgba(3, 168, 192, 0.28);

@@ -221,7 +221,7 @@ export function OnboardingForm({
               <button
                 key={option.value}
                 type="button"
-                className={`onboarding-option onboarding-option--experience ${experience === option.value ? "is-selected" : ""}`}
+                className={`onboarding-option onboarding-option--experience onboarding-option--experience-${option.value} ${experience === option.value ? "is-selected" : ""}`}
                 onClick={() => {
                   setExperience(option.value);
                   setMessage(option.description);
