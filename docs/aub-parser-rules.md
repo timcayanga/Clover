@@ -25,7 +25,7 @@ This document captures the AUB parsing rules learned from the synthetic training
 ## Credit Card Rules
 
 - Treat `CARD NUMBER`, `TOTAL AMOUNT DUE`, `MINIMUM AMOUNT DUE`, and `TRANSACTION DETAILS` as the credit-card statement shape.
-- Name the account as `AUB Mastercard <last4>` when the statement exposes a card number.
+- Name the account as `AUB <last4>` when the statement exposes a card number.
 - Row shape: `Transaction Date / Post Date / Description / Amount`.
 - Keep `PAYMENT - THANK YOU` as a card-payment credit, not income.
 - Keep finance charges as `Financial`.

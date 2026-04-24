@@ -6,7 +6,7 @@ This document captures the RCBC credit-card parsing rules learned from the April
 
 - Applies to RCBC credit-card statement PDFs, especially `eStatement_VISA PLATINUM_*.pdf`.
 - Also applies to RCBC savings / deposit statements that use `STATEMENT OF ACCOUNT` and `Account Type CAV01`.
-- Treat the relevant account as `RCBC Visa Platinum ••••1014` unless a newer statement explicitly proves otherwise.
+- Treat the relevant account as `RCBC 1014` unless a newer statement explicitly proves otherwise.
 - Preserve both raw and normalized data when importing.
 
 ## Accept Rules
@@ -19,7 +19,7 @@ This document captures the RCBC credit-card parsing rules learned from the April
 - Preserve both sale date and post date when present.
 - Preserve foreign-currency metadata when the statement includes it.
 - Keep cash payments as card-payment credits, not income.
-- For RCBC savings statements, keep the last 4 digits in the account name so multiple RCBC accounts do not merge, for example `RCBC Savings 5080`.
+- For RCBC savings statements, keep the last 4 digits in the account name so multiple RCBC accounts do not merge, for example `RCBC 5080`.
 - For RCBC cards, keep the last 4 digits in the account name, for example `RCBC 1014` or `RCBC 2006`.
 - Keep travel, shopping, food, transport, business, and bill merchants as learned category candidates instead of collapsing them to `Other`.
 
@@ -56,5 +56,5 @@ This document captures the RCBC credit-card parsing rules learned from the April
 ## Expected Outcome
 
 - The transactions page should only show real line items.
-- The account should normalize to the correct RCBC credit-card identity with last 4 digits `1014`.
+- The account should normalize to the correct RCBC identity with last 4 digits `1014`.
 - No statement boilerplate should survive into the transaction list.

@@ -11,8 +11,8 @@ Use these rules for BPI savings and related statement imports.
 - `InstaPay Transfer` and `Fund Transfer` map to `Transfers`.
 - `Interest Earned` maps to `Income`.
 - `Bills Payment` maps to `Bills & Utilities`.
-- BPI credit card statements should preserve the card account suffix when present, and `BE########`-style identifiers should still resolve to BPI rather than falling back to a generic account.
-- `BPI Signature` statement files should be treated as `credit_card`, not bank savings, even when the OCR text is compacted.
+- BPI credit card statements should preserve the card account suffix when present, and `BE########`-style identifiers should still resolve to `BPI <last4>` rather than falling back to a generic account.
+- `BPI Signature` statement files should be treated as `credit_card`, not bank savings, even when the OCR text is compacted, but the visible account name should stay bank-simple as `BPI <last4>`.
 - For the BPI Signature sample statement, the normalized account suffix is `9001`.
 
 ## Parsing Guidance

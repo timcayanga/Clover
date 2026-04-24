@@ -143,9 +143,9 @@ const scoreMetadataConfidence = (metadata: Omit<DetectedStatementMetadata, "conf
   return Math.min(100, score);
 };
 
-const formatUnionBankAccountName = (accountNumber?: string | null) => {
+const formatSimpleBankAccountName = (institution: string, accountNumber?: string | null) => {
   const suffix = accountNumber?.slice(-4) ?? "";
-  return suffix ? `UnionBank ${suffix}` : "UnionBank";
+  return suffix ? `${institution} ${suffix}` : institution;
 };
 
 const monthNamePattern = "(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)";
@@ -388,7 +388,7 @@ const bpiCreditCardStatementMetadata = (text: string): DetectedStatementMetadata
   return {
     institution: "BPI",
     accountNumber: "9001",
-    accountName: "BPI Signature",
+    accountName: formatSimpleBankAccountName("BPI", "9001"),
     openingBalance: previousBalance,
     endingBalance,
     startDate: statementDate ? statementDate.toISOString() : null,
@@ -423,17 +423,6 @@ const parseRcbcDate = (value?: string | null) => {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-const rcbcAccountNameFromText = (text: string, accountNumber: string | null) => {
-  const suffix = accountNumber?.slice(-4) ?? "";
-  const lower = text.toLowerCase();
-
-  if (/(savings|account type\s*cav0?1|deposit account|passbook|current account)/.test(lower)) {
-    return suffix ? `RCBC Savings ${suffix}` : "RCBC Savings";
-  }
-
-  return suffix ? `RCBC ${suffix}` : "RCBC";
-};
-
 const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = text.replace(/\u00a0/g, " ");
   const compact = normalizeWhitespace(normalized);
@@ -447,7 +436,7 @@ const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null =
     .filter(Boolean);
 
   const accountNumber = detectAccountNumberFromText(normalized);
-  const accountName = rcbcAccountNameFromText(compact, accountNumber);
+  const accountName = formatSimpleBankAccountName("RCBC", accountNumber);
 
   const savingsPeriodMatch = normalized.match(
     /STATEMENT\s+PERIOD\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+(?:TO|THRU|THROUGH)\s+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})/i
@@ -696,14 +685,7 @@ const parseRcbcSavingsImportText = (text: string) => {
   return rows.length > 0 ? { metadata, rows } : null;
 };
 
-const aubAccountNameFromText = (accountNumber: string | null, isCreditCard: boolean) => {
-  const suffix = accountNumber?.slice(-4) ?? "";
-  if (isCreditCard) {
-    return suffix ? `AUB Mastercard ${suffix}` : "AUB Mastercard";
-  }
-
-  return suffix ? `AUB ${suffix}` : "AUB";
-};
+const aubAccountNameFromText = (accountNumber: string | null) => formatSimpleBankAccountName("AUB", accountNumber);
 
 const isAubCardStatementText = (text: string) => {
   const compact = normalizeWhitespace(text).replace(/\s+/g, " ");
@@ -842,7 +824,7 @@ const parseAubCardImportText = (text: string) => {
   }
 
   const accountNumber = detectAccountNumberFromText(normalizedText);
-  const accountName = aubAccountNameFromText(accountNumber, true);
+  const accountName = aubAccountNameFromText(accountNumber);
   const statementDateMatch =
     normalizedText.match(/STATEMENT\s+DATE\s*[:\-]?\s*([A-Za-z]+\s+\d{1,2},\s*\d{4})/i) ??
     normalizedText.match(/RUNDATE\s*[:\-]?\s*(\d{4}-\d{2}-\d{2})/i);
@@ -929,7 +911,7 @@ const parseAubSavingsImportText = (text: string) => {
   }
 
   const accountNumber = detectAccountNumberFromText(normalizedText);
-  const accountName = aubAccountNameFromText(accountNumber, false);
+  const accountName = aubAccountNameFromText(accountNumber);
   const periodMatch =
     normalizedText.match(/PERIOD\s+COVERED\s*:\s*FROM\s*(\d{4}-\d{2}-\d{2})\s+TO\s*(\d{4}-\d{2}-\d{2})/i) ??
     normalizedText.match(/PERIOD\s+COVERED\s*[:\-]?\s*From\s+(.+?)\s+To\s+(.+?)(?:\s{2,}|$)/i);
@@ -1208,7 +1190,7 @@ const parseBpiCreditCardImportText = (text: string) => {
     .map((segment) =>
       parseBpiCreditCardSegment(segment, {
         year: startYear,
-        accountName: metadata.accountName ?? "BPI Signature",
+        accountName: metadata.accountName ?? formatSimpleBankAccountName("BPI", "9001"),
         institution: metadata.institution ?? "BPI",
         statementDate: metadata.startDate,
         paymentDueDate: metadata.endDate,
@@ -2405,7 +2387,7 @@ const unionbankStatementMetadata = (text: string): DetectedStatementMetadata | n
   const accountLineIndex = lines.findIndex((line) => /^ACCOUNT NUMBER\b/i.test(line));
   const accountLine = accountLineIndex >= 0 ? lines[accountLineIndex] : normalized;
   const accountNumber = accountLine.match(/\b(?:ACCOUNT NUMBER|ACCOUNT NO\.?|ACCOUNT #)\b.*?(\d[\d\s-]{6,}\d)\b/i)?.[1]?.replace(/\D/g, "").slice(0, 16) || detectAccountNumberFromText(normalized);
-  const accountName = formatUnionBankAccountName(accountNumber);
+  const accountName = formatSimpleBankAccountName("UnionBank", accountNumber);
 
   const statementDateLine = lines.find((line) => /TRANSACTION HISTORY AS OF/i.test(line)) ?? "";
   const statementDateMatch = statementDateLine.match(/TRANSACTION HISTORY AS OF\s+(.+)$/i);

@@ -85,16 +85,25 @@ const fileTypeLabel = (file: File) => {
 
 const normalizeStatementAccountName = (name: string, institution?: string | null) => {
   const trimmed = name.trim();
-  if ((institution ?? "").trim().toLowerCase() !== "unionbank") {
+  const normalizedInstitution = (institution ?? "").trim();
+  if (!normalizedInstitution) {
     return trimmed;
   }
 
-  const normalized = trimmed.replace(/^UnionBank\s+Savings\s+/i, "UnionBank ");
-  if (/^UnionBank\s+Savings$/i.test(normalized)) {
-    return "UnionBank";
+  const suffix = trimmed.replace(/\D/g, "").slice(-4);
+  const hasStatementWords =
+    new RegExp(`^${normalizedInstitution}\\b`, "i").test(trimmed) ||
+    /\b(savings|mastercard|signature|visa|credit\s*card|debit\s*card|passbook|current\s*account|checking|card)\b/i.test(trimmed);
+
+  if (!hasStatementWords) {
+    return trimmed;
   }
 
-  return normalized;
+  if (suffix) {
+    return `${normalizedInstitution} ${suffix}`;
+  }
+
+  return normalizedInstitution;
 };
 
 const accountKey = (name: string, institution: string | null) =>
