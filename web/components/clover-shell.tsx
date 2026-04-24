@@ -131,10 +131,10 @@ function MenuIcon({ name }: { name: IconName }) {
       return (
         <svg {...common}>
           <path d="M4 19h16" />
-          <path d="M6 15.5V9.5" />
-          <path d="M12 15.5V6.5" />
-          <path d="M18 15.5v-5" />
-          <path d="M6 15.5h12" />
+          <path d="M6 16V10.5" />
+          <path d="M11 16V7.5" />
+          <path d="M16 16V12" />
+          <path d="M6 16h12" />
         </svg>
       );
     case "insights":
@@ -147,12 +147,7 @@ function MenuIcon({ name }: { name: IconName }) {
     case "goals":
       return (
         <svg {...common}>
-          <circle cx="12" cy="12" r="7.5" />
-          <circle cx="12" cy="12" r="3.2" />
-          <path d="M12 4.5v2.2" />
-          <path d="M19.5 12h-2.2" />
-          <path d="M12 17.3v2.2" />
-          <path d="M4.5 12h2.2" />
+          <path d="m12 3.5 2.71 5.49 6.06.88-4.39 4.28 1.04 6.03L12 17.98l-5.42 2.85 1.04-6.03-4.39-4.28 6.06-.88L12 3.5Z" />
         </svg>
       );
   }
