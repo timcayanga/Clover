@@ -9,6 +9,7 @@ import { capturePostHogServerEvent } from "@/lib/analytics";
 export const dynamic = "force-dynamic";
 
 const onboardingSchema = z.object({
+  experience: z.enum(["beginner", "comfortable", "advanced"]).optional().nullable(),
   goal: z.string().trim().min(1).max(80).optional().nullable(),
   goals: z.array(z.string().trim().min(1).max(80)).optional().default([]),
   startAction: z.string().trim().min(1).max(80).optional().nullable(),
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
         where: { id: user.id },
         data: {
           planTier: "free",
+          financialExperience: payload.experience ?? user.financialExperience,
           primaryGoal,
           goalTargetAmount: targetAmount,
           goalTargetSource: targetAmount ? "onboarding" : null,
@@ -56,13 +58,22 @@ export async function POST(request: Request) {
       return userUpdate;
     });
 
-    void capturePostHogServerEvent("onboarding_completed", userId, {
+      void capturePostHogServerEvent("onboarding_completed", userId, {
+      experience: payload.experience ?? user.financialExperience ?? null,
       primary_goal: primaryGoal ?? null,
       start_action: payload.startAction ?? null,
       skipped: payload.skipped,
       goal_count: payload.goals.length,
       goal_target_amount: payload.targetAmount ? Number(payload.targetAmount) : null,
     });
+
+    if (targetAmount !== null) {
+      void capturePostHogServerEvent("goal_target_saved", userId, {
+        primary_goal: primaryGoal ?? null,
+        target_amount: Number(targetAmount.toString()),
+        source: "onboarding",
+      });
+    }
 
     return NextResponse.json({ user: updated });
   } catch (error) {

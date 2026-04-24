@@ -10,6 +10,7 @@ import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getGoalDefinition } from "@/lib/goals";
+import { getFinancialExperienceProfile } from "@/lib/goals";
 import { PostHogEvent } from "@/components/posthog-analytics";
 
 export const dynamic = "force-dynamic";
@@ -397,12 +398,21 @@ export default async function DashboardPage({
       ? `${recentConfirmedRatio}% of the last 30 days is confirmed or edited`
       : "No recent transactions to score yet";
   const currentNetLabel = currentNet >= 0 ? "Positive net cash flow" : "Negative net cash flow";
+  const experienceProfile = getFinancialExperienceProfile(user.financialExperience);
   const currentPositionCopy =
     currentSummary.current.income > 0
-      ? `Income ${currencyFormatter.format(currentSummary.current.income)} and spending ${currencyFormatter.format(
-          currentSummary.current.expense
-        )} in the last 30 days. ${reviewAttentionCount > 0 ? `${reviewAttentionCount} items need review.` : "Review is clear."}`
-      : "Import a statement to unlock a live view of your cash flow, review queue, and recent activity.";
+      ? user.financialExperience === "beginner"
+        ? `In the last 30 days, Clover found ${currencyFormatter.format(currentSummary.current.income)} in income and ${currencyFormatter.format(
+            currentSummary.current.expense
+          )} in spending. ${reviewAttentionCount > 0 ? `${reviewAttentionCount} items still need review.` : "The review queue is clear."}`
+        : user.financialExperience === "advanced"
+          ? `Income ${currencyFormatter.format(currentSummary.current.income)} and spending ${currencyFormatter.format(
+              currentSummary.current.expense
+            )} in the last 30 days. ${reviewAttentionCount > 0 ? `${reviewAttentionCount} items still need review.` : "Review is clear."}`
+          : `Income ${currencyFormatter.format(currentSummary.current.income)} and spending ${currencyFormatter.format(
+              currentSummary.current.expense
+            )} in the last 30 days. ${reviewAttentionCount > 0 ? `${reviewAttentionCount} items need review.` : "Review is clear."}`
+      : experienceProfile.currentPositionCopy;
   const currentTrendCopy =
     currentSummary.netDelta >= 0
       ? `${formatSignedCurrency(currentSummary.netDelta)} better than the previous 30 days`
@@ -438,7 +448,7 @@ export default async function DashboardPage({
       ? "Clear the review queue first so Clover can trust the numbers it shows you."
       : latestImport
         ? `Last import: ${latestImport.fileName} · ${formatRelativeDate(latestImport.uploadedAt)}`
-        : "Bring in a statement to unlock balances, trends, and the review workflow.";
+        : experienceProfile.actionStripCopy;
   const actionStripPill = reviewAttentionCount > 0 ? "Action needed" : latestImport?.status === "processing" ? "Processing" : "Ready";
   const positionStrip = [
     {
@@ -517,7 +527,7 @@ export default async function DashboardPage({
       active="dashboard"
       kicker="Home"
       title="Your finances at a glance"
-      subtitle="See your current position, review queue, recent activity, and import status without digging."
+      subtitle={experienceProfile.dashboardSubtitle}
       showTopbar={false}
       actions={
         <>
@@ -547,8 +557,8 @@ export default async function DashboardPage({
         <div style={{ marginBottom: 20 }}>
           <EmptyDataCta
             eyebrow="Get started"
-            title="Import files to wake up your dashboard."
-            copy="Import a statement first for the fastest way to populate your dashboard, reports, insights, and goals. Add an account if you prefer live tracking, or enter transactions manually to begin small."
+            title={experienceProfile.emptyStateTitle}
+            copy={experienceProfile.emptyStateCopy}
             importHref="/dashboard?import=1"
             accountHref="/accounts"
             transactionHref="/transactions?manual=1"

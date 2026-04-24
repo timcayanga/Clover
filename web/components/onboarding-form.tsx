@@ -4,11 +4,25 @@ import type { ReactNode } from "react";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { analyticsOnceKey, PostHogEvent } from "@/components/posthog-analytics";
-import { getGoalMoneyLabel, getGoalMoneyPrompt, type GoalKey } from "@/lib/goals";
+import {
+  getFinancialExperienceDefinition,
+  getFinancialExperienceProfile,
+  getGoalMoneyLabel,
+  getGoalMoneyPrompt,
+  type FinancialExperienceLevel,
+  type GoalKey,
+} from "@/lib/goals";
 
 type GoalOption = {
   value: GoalKey;
   title: string;
+  icon: ReactNode;
+};
+
+type ExperienceOption = {
+  value: FinancialExperienceLevel;
+  title: string;
+  description: string;
   icon: ReactNode;
 };
 
@@ -80,6 +94,46 @@ const GOALS: GoalOption[] = [
   },
 ];
 
+const EXPERIENCE_OPTIONS: ExperienceOption[] = [
+  {
+    value: "beginner",
+    title: "Still learning",
+    description: "Keep the language simple and show me what matters first.",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 8h10" />
+        <path d="M7 12h10" />
+        <path d="M7 16h6" />
+        <path d="M10 5v14" />
+      </svg>
+    ),
+  },
+  {
+    value: "comfortable",
+    title: "Comfortable",
+    description: "I understand budgets, statements, and goal tracking.",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 12h16" />
+        <path d="M12 4v16" />
+        <path d="M7.5 7.5 16.5 16.5" />
+      </svg>
+    ),
+  },
+  {
+    value: "advanced",
+    title: "Very comfortable",
+    description: "Give me the numbers, trends, and short explanations.",
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M5 18h14" />
+        <path d="M6 14l3-4 4 2 5-7" />
+        <path d="M17 5h1.5V6.5" />
+      </svg>
+    ),
+  },
+];
+
 const START_OPTIONS: StartOption[] = [
   {
     value: "statement",
@@ -138,22 +192,33 @@ const START_OPTIONS: StartOption[] = [
 ];
 
 type OnboardingFormProps = {
+  currentExperience?: string | null;
   currentGoal?: string | null;
   currentTargetAmount?: string | null;
 };
 
-export function OnboardingForm({ currentGoal = null, currentTargetAmount = null }: OnboardingFormProps) {
+export function OnboardingForm({
+  currentExperience = null,
+  currentGoal = null,
+  currentTargetAmount = null,
+}: OnboardingFormProps) {
   const router = useRouter();
+  const [experience, setExperience] = useState<FinancialExperienceLevel | null>(
+    (currentExperience as FinancialExperienceLevel | null) ?? null,
+  );
   const [goals, setGoals] = useState<GoalKey[]>(currentGoal ? [currentGoal as GoalKey] : []);
-  const [step, setStep] = useState<"goals" | "start">("goals");
-  const [message, setMessage] = useState("Choose one or more goals to shape your first experience.");
+  const [step, setStep] = useState<"experience" | "goals" | "start">("experience");
+  const [message, setMessage] = useState("How comfortable are you with financial management?");
   const [targetAmount, setTargetAmount] = useState(currentTargetAmount ?? "");
   const [isPending, startTransition] = useTransition();
   const skipOption = START_OPTIONS.find((option) => option.value === "skip");
   const selectedGoalKey: GoalKey | null = goals[0] ?? null;
+  const selectedExperienceProfile = getFinancialExperienceProfile(experience);
+  const selectedExperienceDefinition = getFinancialExperienceDefinition(experience);
 
   const completeStep = (option: StartOption) => {
     const payload = JSON.stringify({
+      experience,
       goal: selectedGoalKey,
       goals,
       targetAmount: targetAmount.trim() || null,
@@ -187,16 +252,65 @@ export function OnboardingForm({ currentGoal = null, currentTargetAmount = null 
         onceKey={analyticsOnceKey("onboarding_started", "session")}
         properties={{
           current_goal: currentGoal ?? null,
+          current_experience: currentExperience ?? null,
         }}
       />
       <div className="onboarding-card__brand" aria-label="Clover">
         <img className="onboarding-card__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
       </div>
 
-      {step === "goals" ? (
+      {step === "experience" ? (
+        <>
+          <h3>How comfortable are you with financial management?</h3>
+          <p className="onboarding-card__copy">
+            {getFinancialExperienceProfile(experience).onboardingLead}
+          </p>
+
+          <div className="onboarding-grid onboarding-grid--experience" role="list" aria-label="Financial experience">
+            {EXPERIENCE_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={`onboarding-option onboarding-option--experience ${experience === option.value ? "is-selected" : ""}`}
+                onClick={() => {
+                  setExperience(option.value);
+                  setMessage(option.description);
+                }}
+                role="listitem"
+                aria-pressed={experience === option.value}
+              >
+                <span className="onboarding-option__icon" aria-hidden="true">
+                  {option.icon}
+                </span>
+                <span className="onboarding-option__content">
+                  <span className="onboarding-option__title-row">
+                    <span className="onboarding-option__title">{option.title}</span>
+                    {experience === option.value ? <span className="onboarding-option__badge">Selected</span> : null}
+                  </span>
+                  <span className="onboarding-option__copy">{option.description}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="onboarding-actions">
+            <button
+              className="button button-primary"
+              type="button"
+              disabled={isPending || experience === null}
+              onClick={() => {
+                setStep("goals");
+                setMessage(selectedExperienceProfile.goalsSupport);
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </>
+      ) : step === "goals" ? (
         <>
           <h3>Welcome to Clover</h3>
-          <p className="onboarding-card__copy">Pick one or more goals and we’ll tune the first experience around them.</p>
+          <p className="onboarding-card__copy">{selectedExperienceProfile.goalsLead}</p>
 
           <div className="onboarding-grid" role="list" aria-label="Financial goals">
             {GOALS.map((option) => (
@@ -256,7 +370,7 @@ export function OnboardingForm({ currentGoal = null, currentTargetAmount = null 
               disabled={isPending || goals.length === 0}
               onClick={() => {
                 setStep("start");
-                setMessage("");
+                setMessage(selectedExperienceProfile.actionStripCopy);
               }}
             >
               Continue
@@ -264,15 +378,23 @@ export function OnboardingForm({ currentGoal = null, currentTargetAmount = null 
             <button className="button button-secondary" type="button" disabled={isPending} onClick={() => skipOption && completeStep(skipOption)}>
               Skip for now
             </button>
+            <button
+              className="button button-secondary"
+              type="button"
+              disabled={isPending}
+              onClick={() => {
+                setStep("experience");
+                setMessage(selectedExperienceDefinition.description);
+              }}
+            >
+              Back
+            </button>
           </div>
         </>
       ) : (
         <>
           <h3>Choose your first move</h3>
-          <p className="onboarding-card__copy">
-            Import files is the fastest way to wake up Clover. You can also add an account or enter transactions
-            manually if that fits your setup better.
-          </p>
+          <p className="onboarding-card__copy">{selectedExperienceProfile.actionStripCopy}</p>
 
           <div className="onboarding-grid onboarding-grid--start" role="list" aria-label="Getting started options">
             {START_OPTIONS.map((option) => (
@@ -305,7 +427,7 @@ export function OnboardingForm({ currentGoal = null, currentTargetAmount = null 
               disabled={isPending}
               onClick={() => {
                 setStep("goals");
-                setMessage("Choose one or more goals to shape your first experience.");
+                setMessage(selectedExperienceProfile.goalsSupport);
               }}
             >
               Back
@@ -313,6 +435,8 @@ export function OnboardingForm({ currentGoal = null, currentTargetAmount = null 
           </div>
         </>
       )}
+
+      {message ? <p className="onboarding-card__message">{message}</p> : null}
 
     </section>
   );

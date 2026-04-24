@@ -5305,6 +5305,13 @@ label {
   font-size: 15px;
 }
 
+.onboarding-card__message {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .onboarding-goal-target {
   display: grid;
   gap: 10px;
@@ -5389,6 +5396,10 @@ label {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.onboarding-grid--experience {
+  grid-template-columns: 1fr;
 }
 
 .onboarding-grid--start {
@@ -11341,6 +11352,7 @@ input.transaction-inline-edit--amount::placeholder {
     grid-template-columns: 1fr;
   }
 
+  .onboarding-grid--experience,
   .onboarding-grid--start {
     grid-template-columns: 1fr;
   }

@@ -5,6 +5,8 @@ export type GoalKey =
   | "build_emergency_fund"
   | "invest_better";
 
+export type FinancialExperienceLevel = "beginner" | "comfortable" | "advanced";
+
 export type GoalDefinition = {
   value: GoalKey;
   title: string;
@@ -28,6 +30,109 @@ export type GoalPlaybook = GoalDefinition & {
   alertTemplates: string[];
   historyMarkers: string[];
 };
+
+export type FinancialExperienceProfile = {
+  title: string;
+  onboardingLead: string;
+  onboardingSupport: string;
+  goalsLead: string;
+  goalsSupport: string;
+  goalsShellSubtitle: string;
+  dashboardSubtitle: string;
+  emptyStateTitle: string;
+  emptyStateCopy: string;
+  currentPositionCopy: string;
+  actionStripCopy: string;
+};
+
+export const FINANCIAL_EXPERIENCE_OPTIONS: Array<{
+  value: FinancialExperienceLevel;
+  title: string;
+  description: string;
+  icon: string;
+}> = [
+  {
+    value: "beginner",
+    title: "Still learning",
+    description: "Keep the language simple and show me what matters first.",
+    icon: "spark",
+  },
+  {
+    value: "comfortable",
+    title: "Comfortable",
+    description: "I understand budgets, statements, and basic goal tracking.",
+    icon: "path",
+  },
+  {
+    value: "advanced",
+    title: "Very comfortable",
+    description: "Give me the numbers, trends, and short explanations.",
+    icon: "chart",
+  },
+];
+
+const FINANCIAL_EXPERIENCE_PROFILES: Record<FinancialExperienceLevel, FinancialExperienceProfile> = {
+  beginner: {
+    title: "Start simple",
+    onboardingLead: "We’ll keep the setup light and explain the first useful step clearly.",
+    onboardingSupport: "Choose the level that feels closest. Clover will keep the next screens beginner-friendly.",
+    goalsLead: "Pick a lane, set a number, and let Clover explain the next step in plain language.",
+    goalsSupport: "We’ll keep the coaching simple, with one clear move at a time and less jargon.",
+    goalsShellSubtitle: "A calm, step-by-step view of your goal with simple guidance and a place to set the number.",
+    dashboardSubtitle: "See your current position, review queue, recent activity, and import status without the jargon.",
+    emptyStateTitle: "Import files to see Clover turn statements into a clear picture.",
+    emptyStateCopy:
+      "Start with a statement and Clover will build the dashboard, explain the review queue, and help you understand the month one step at a time. You can add an account or enter transactions manually if that suits you better.",
+    currentPositionCopy:
+      "Import a statement to unlock a simple view of your cash flow, review queue, and recent activity.",
+    actionStripCopy: "Bring in a statement first so Clover can show the numbers in a friendly, guided way.",
+  },
+  comfortable: {
+    title: "Balanced detail",
+    onboardingLead: "Tell Clover your comfort level, and it will keep the next screens useful without being noisy.",
+    onboardingSupport: "You can still move quickly, but the app will lean into clearer progress tracking and summaries.",
+    goalsLead: "Set the lane and the number, then let Clover keep the month honest.",
+    goalsSupport: "You’ll get a clearer mix of coaching, progress, and pattern tracking.",
+    goalsShellSubtitle: "A visual goal view with the target, progress, and next step kept easy to scan.",
+    dashboardSubtitle: "See your current position, review queue, recent activity, and import status without digging.",
+    emptyStateTitle: "Import files to wake up the dashboard.",
+    emptyStateCopy:
+      "Upload a statement to populate balances, review items, trends, and goal progress. You can also connect an account or enter transactions manually if that is your preferred starting point.",
+    currentPositionCopy:
+      "Import a statement to unlock live cash flow, review items, and recent activity.",
+    actionStripCopy: "Bring in a statement to populate the dashboard and reveal the next useful action.",
+  },
+  advanced: {
+    title: "Advanced mode",
+    onboardingLead: "Clover will keep things concise and focus on the numbers, not the hand-holding.",
+    onboardingSupport: "Choose the level closest to you; the app will trim the explanations and get to the signal faster.",
+    goalsLead: "Set the target and let the numbers do the talking.",
+    goalsSupport: "You’ll see tighter summaries, quicker scans, and less explanatory copy.",
+    goalsShellSubtitle: "A concise goal view with the target, pace, and trend signals front and center.",
+    dashboardSubtitle: "See the core numbers, review queue, and import status at a glance.",
+    emptyStateTitle: "Import files to load the numbers fast.",
+    emptyStateCopy:
+      "Start with a statement if you want Clover to populate the dashboard, review queue, and goal signals immediately. You can still add an account or enter transactions manually if needed.",
+    currentPositionCopy:
+      "Import a statement to populate cash flow, review queue, and trend signals quickly.",
+    actionStripCopy: "Statement import is the fastest path to a full dashboard and stronger goal signals.",
+  },
+};
+
+export const getFinancialExperienceProfile = (experience: string | null): FinancialExperienceProfile => {
+  if (experience === "comfortable") {
+    return FINANCIAL_EXPERIENCE_PROFILES.comfortable;
+  }
+
+  if (experience === "advanced") {
+    return FINANCIAL_EXPERIENCE_PROFILES.advanced;
+  }
+
+  return FINANCIAL_EXPERIENCE_PROFILES.beginner;
+};
+
+export const getFinancialExperienceDefinition = (experience: string | null) =>
+  FINANCIAL_EXPERIENCE_OPTIONS.find((option) => option.value === experience) ?? FINANCIAL_EXPERIENCE_OPTIONS[0];
 
 export const GOAL_OPTIONS: GoalDefinition[] = [
   {

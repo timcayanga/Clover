@@ -12,6 +12,7 @@ import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import {
   GOAL_OPTIONS,
+  getFinancialExperienceProfile,
   getGoalDefinition,
   getGoalMoneyLabel,
   getGoalProgressLabel,
@@ -351,14 +352,22 @@ export default async function GoalsPage() {
   const selectedGoalKey = user.primaryGoal?.trim() ?? null;
   const selectedGoal = getGoalDefinition(selectedGoalKey);
   const playbook = getGoalPlaybook(selectedGoalKey);
+  const experienceProfile = getFinancialExperienceProfile(user.financialExperience);
   const goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
   const goalTargetSource = user.goalTargetSource ?? null;
   const hasGoalSelection = Boolean(selectedGoalKey);
   const hasGoalTarget = goalTargetAmount !== null && goalTargetAmount > 0;
-  const heroLead = hasGoalSelection ? playbook.heroLead : "Pick a lane, set a number, and let Clover coach the month with you.";
+  const heroLead = hasGoalSelection
+    ? playbook.heroLead
+    : experienceProfile.goalsLead ?? "Pick a lane, set a number, and let Clover coach the month with you.";
   const heroSupport = hasGoalSelection
     ? playbook.heroSupport
-    : "If onboarding skipped this step, you can define your first real monthly target right here.";
+    : experienceProfile.goalsSupport ?? "If onboarding skipped this step, you can define your first real monthly target right here.";
+  const shellSubtitle = hasGoalTarget
+    ? experienceProfile.goalsShellSubtitle
+    : hasGoalSelection
+      ? experienceProfile.goalsShellSubtitle
+      : "A visual, encouraging space to set a monthly goal and watch the numbers move.";
   const isEmptyWorkspace =
     resolvedWorkspace._count.accounts <= 1 && resolvedWorkspace._count.importFiles === 0 && currentWindowTransactions.length === 0;
 
@@ -729,15 +738,15 @@ export default async function GoalsPage() {
       active="goals"
       title="Goals"
       kicker="Goal coaching"
-      subtitle="A visual, encouraging view of the goal you set in onboarding, with the next best move front and center."
+      subtitle={shellSubtitle}
       showTopbar={false}
     >
       {isEmptyWorkspace ? (
         <div style={{ marginBottom: 20 }}>
           <EmptyDataCta
             eyebrow={user.dataWipedAt ? "Fresh start" : "No data yet"}
-            title="Set a new goal once your data comes back."
-            copy="Import a statement first so Clover can rebuild your goal view with real activity, progress, and next steps."
+            title={experienceProfile.emptyStateTitle}
+            copy={experienceProfile.emptyStateCopy}
             importHref="/dashboard?import=1"
             accountHref="/accounts"
             transactionHref="/transactions?manual=1"
@@ -770,7 +779,13 @@ export default async function GoalsPage() {
                 {coach.badge}
               </span>
               <span>{hasGoalSelection ? selectedGoal.signal : "Choose a lane to shape the plan."}</span>
-              <span>{hasGoalTarget ? goalMoneyLabel : "Set a target to unlock live tracking"}</span>
+              <span>
+                {hasGoalSelection
+                  ? hasGoalTarget
+                    ? goalMoneyLabel
+                    : "Set a target to unlock live tracking"
+                  : "Pick a goal to unlock tracking"}
+              </span>
             </div>
 
             <div className="goals-progress">
