@@ -126,7 +126,7 @@ export default function HomePage() {
       <ScrollReveal as="section" className="landing-flow">
         <div className="landing-flow__copy">
           <p className="eyebrow">How it works</p>
-          <h2>From statements to useful insights.</h2>
+          <h2>Three simple steps.</h2>
         </div>
 
         <div className="landing-flow__steps" aria-label="How Clover works">
@@ -135,24 +135,24 @@ export default function HomePage() {
               <StepIcon name="upload" />
             </span>
             <span className="landing-flow__number">01</span>
-            <h3>See everything together</h3>
-            <p>Bring in statement files so Clover can build a single financial overview.</p>
+            <h3>Upload</h3>
+            <p>Add your statements and receipts so Clover can start organizing them for you.</p>
           </div>
           <div className="landing-flow__step">
             <span className="landing-flow__icon">
               <StepIcon name="insights" />
             </span>
             <span className="landing-flow__number">02</span>
-            <h3>Spot patterns faster</h3>
-            <p>Clover surfaces reports and trends so spending changes are easier to notice.</p>
+            <h3>Analyze</h3>
+            <p>Clover spots patterns in your money and shows what changed in a simple way.</p>
           </div>
           <div className="landing-flow__step">
             <span className="landing-flow__icon">
               <StepIcon name="decision" />
             </span>
             <span className="landing-flow__number">03</span>
-            <h3>Plan your next move</h3>
-            <p>Use the clearer view and AI-guided insights to make better decisions.</p>
+            <h3>Plan</h3>
+            <p>Use reports and insights to make smarter money decisions going forward.</p>
           </div>
         </div>
       </ScrollReveal>
