@@ -104,15 +104,7 @@ const START_OPTIONS: StartOption[] = [
     title: "Add an account",
     description: "Connect an account if you want ongoing tracking right away.",
     href: "/accounts",
-    icon: (
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M4 8h16" />
-        <path d="M6 5v14" />
-        <path d="M6 17h12" />
-        <path d="M12 11v6" />
-        <path d="M9 14h6" />
-      </svg>
-    ),
+    icon: <img src="/onboarding-icons/account.png" alt="" />,
   },
   {
     value: "manual",
@@ -355,7 +347,7 @@ export function OnboardingForm({
               <button
                 key={option.value}
                 type="button"
-                className={`onboarding-option onboarding-option--start ${option.featured ? "onboarding-option--featured" : ""}`}
+                className={`onboarding-option onboarding-option--start ${option.value === "accounts" ? "onboarding-option--start-account" : ""} ${option.featured ? "onboarding-option--featured" : ""}`}
                 onClick={() => completeStep(option)}
                 role="listitem"
                 aria-label={option.title}

@@ -5614,6 +5614,11 @@ label {
   height: 70%;
 }
 
+.onboarding-option--start-account .onboarding-option__icon img {
+  width: 74%;
+  height: 74%;
+}
+
 .onboarding-option.is-selected .onboarding-option__icon {
   background: var(--accent);
   border-color: rgba(3, 168, 192, 0.28);
