@@ -1,4 +1,5 @@
 import { ScrollReveal } from "../components/scroll-reveal";
+import { LandingNav } from "../components/landing-nav";
 import Link from "next/link";
 
 function StepIcon({ name }: { name: "upload" | "insights" | "decision" }) {
@@ -84,24 +85,7 @@ function VisualGallery() {
 export default function HomePage() {
   return (
     <main className="landing-page">
-      <ScrollReveal as="header" className="landing-nav landing-nav--sticky">
-        <Link className="landing-brand" href="/" aria-label="Clover home">
-          <img className="landing-brand__mark" src="/favicon.svg" alt="" aria-hidden="true" />
-          <span>Clover</span>
-        </Link>
-
-        <nav className="landing-nav__links" aria-label="Primary">
-          <Link className="landing-nav__link" href="/pricing">
-            Pricing
-          </Link>
-          <Link className="landing-nav__link" href="/sign-in">
-            Log in
-          </Link>
-          <Link className="button button-primary landing-nav__button" href="/sign-up">
-            Sign up
-          </Link>
-        </nav>
-      </ScrollReveal>
+      <LandingNav />
 
       <ScrollReveal as="section" className="landing-hero">
         <div className="landing-hero__copy">
