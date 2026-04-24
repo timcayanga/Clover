@@ -7454,35 +7454,35 @@ input.transaction-inline-edit--amount::placeholder {
 
 .import-upload-dock {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  right: 14px;
+  bottom: 14px;
   z-index: 76;
-  width: min(320px, calc(100vw - 20px));
+  width: min(280px, calc(100vw - 16px));
   pointer-events: none;
 }
 
 .import-upload-dock__inner {
   pointer-events: auto;
-  border-radius: 18px;
+  border-radius: 16px;
   border: 1px solid rgba(215, 228, 233, 0.92);
   box-shadow: var(--shadow);
-  padding: 12px;
+  padding: 10px;
   background: rgba(255, 255, 255, 0.98);
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .import-upload-dock__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
 }
 
 .import-upload-dock__header strong {
   display: block;
   margin-top: 4px;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.25;
   letter-spacing: -0.03em;
 }
@@ -7491,38 +7491,57 @@ input.transaction-inline-edit--amount::placeholder {
   margin-top: 6px;
   color: var(--muted);
   line-height: 1.45;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .import-upload-dock__status {
   flex: none;
-  padding: 6px 10px;
+  padding: 5px 9px;
   border-radius: 999px;
   border: 1px solid rgba(3, 168, 192, 0.22);
   background: rgba(3, 168, 192, 0.08);
   color: #0a84a0;
-  font-size: 11px;
+  font-size: 10px;
   white-space: nowrap;
+}
+
+.import-upload-dock__header-actions {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  align-self: start;
+}
+
+.import-upload-dock__close {
+  border: 0;
+  background: transparent;
+  color: var(--muted-2);
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+  margin: -2px -1px 0 0;
+  width: auto;
+  height: auto;
 }
 
 .import-upload-dock__body {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
+  gap: 8px;
   align-items: center;
 }
 
 .import-upload-dock__donut {
-  width: 100px;
-  height: 100px;
+  width: 88px;
+  height: 88px;
 }
 
 .import-upload-dock__donut::after {
-  inset: 10px;
+  inset: 9px;
 }
 
 .import-upload-dock__donut .import-progress-donut__inner strong {
-  font-size: 1.4rem;
+  font-size: 1.22rem;
 }
 
 .import-upload-dock__meta {
@@ -7531,14 +7550,14 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .import-upload-dock__meta strong {
-  font-size: 0.92rem;
+  font-size: 0.86rem;
   line-height: 1.2;
   letter-spacing: -0.02em;
 }
 
 .import-upload-dock__meta span {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .accounts-import-close {
