@@ -10603,18 +10603,31 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 4px 0 8px;
-}
-
-.landing-nav--sticky {
   position: sticky;
   top: 0;
   z-index: 30;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  padding: 8px clamp(12px, 2.5vw, 20px);
+  transition:
+    background-color 180ms ease,
+    backdrop-filter 180ms ease,
+    -webkit-backdrop-filter 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.landing-nav--sticky {
+  background: transparent;
+  border-bottom: 1px solid transparent;
+}
+
+.landing-nav--scrolled {
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   background: rgba(245, 247, 249, 0.72);
   border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-  margin-bottom: 4px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
 
 .landing-brand {
@@ -11443,11 +11456,10 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .landing-nav {
-    flex-direction: row;
     align-items: center;
     justify-content: space-between;
     gap: 6px;
-    padding: 2px 0 6px;
+    padding: 8px 12px;
   }
 
   .landing-brand {
@@ -11465,7 +11477,6 @@ input.transaction-inline-edit--amount::placeholder {
 
   .landing-nav__links {
     gap: 5px;
-    margin-left: auto;
   }
 
   .landing-nav__link {
