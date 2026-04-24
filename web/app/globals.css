@@ -253,7 +253,7 @@ label {
 .clover-auth-card {
   width: min(100%, 520px);
   margin: 0 auto;
-  padding: 22px 24px 0;
+  padding: 18px 22px 0;
   border: 1px solid var(--stroke);
   border-radius: 28px;
   background: rgba(255, 255, 255, 0.98);
@@ -266,10 +266,11 @@ label {
 .clover-auth-card__brand {
   display: flex;
   justify-content: center;
+  margin-bottom: -2px;
 }
 
 .clover-auth-card__logo {
-  width: 72px;
+  width: 56px;
   height: auto;
   display: block;
 }
