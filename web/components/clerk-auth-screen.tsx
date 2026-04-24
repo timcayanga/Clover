@@ -443,7 +443,6 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
 
       <header className="clover-auth-card__header">
         <h1>{title}</h1>
-        {subtitle ? <p>{subtitle}</p> : null}
         {mode === "sign-up" ? <p className="clover-auth-card__trust">No credit card. Start in under a minute.</p> : null}
       </header>
 
