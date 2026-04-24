@@ -309,7 +309,11 @@ export function OnboardingForm({
                 />
                 <span className="onboarding-goal-target__suffix">/ month</span>
               </div>
-              <small>You can leave this blank and set it later on the Goals page.</small>
+              <small>
+                {goals.length > 1
+                  ? "We’ll use your first selected goal as the main target for now. You can add the others on the Goals page."
+                  : "You can leave this blank and set it later on the Goals page."}
+              </small>
             </label>
           ) : null}
 
