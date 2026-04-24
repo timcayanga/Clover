@@ -9,6 +9,10 @@ const envSchema = z.object({
   R2_BUCKET_NAME: z.string().min(1).optional(),
   DATABASE_URL: z.string().min(1).optional(),
   REDIS_URL: z.string().min(1).optional(),
+  PAYPAL_ENV: z.enum(["sandbox", "live"]).optional(),
+  PAYPAL_CLIENT_ID: z.string().min(1).optional(),
+  PAYPAL_CLIENT_SECRET: z.string().min(1).optional(),
+  PAYPAL_WEBHOOK_ID: z.string().min(1).optional(),
   STAGING_BASIC_AUTH_USERNAME: z.string().min(1).optional(),
   STAGING_BASIC_AUTH_PASSWORD: z.string().min(1).optional(),
 });
