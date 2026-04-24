@@ -127,6 +127,7 @@ const buildOptimisticUploadSummary = (
   accountId: string | null,
   accountName: string | null,
   institution: string | null,
+  accountType: UploadInsightsSummary["accountType"] = null,
   optimisticAccountId: string | null,
   balance: string | null = null,
   previewTransactions: UploadInsightsSummary["previewTransactions"] = []
@@ -136,6 +137,7 @@ const buildOptimisticUploadSummary = (
   accountId,
   accountName,
   institution,
+  accountType,
   balance,
   optimistic: true,
   optimisticAccountId,
@@ -160,6 +162,7 @@ const buildOptimisticUploadSummaryFromAccount = (
     account.id,
     account.name,
     account.institution,
+    account.type as UploadInsightsSummary["accountType"],
     account.id,
     account.balance ?? null,
     []
@@ -194,13 +197,16 @@ const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
   }
 
   const normalizedAccountName = normalizeStatementAccountName(summary.accountName, summary.institution);
+  const accountType =
+    summary.accountType ??
+    inferAccountTypeFromStatement(summary.institution, normalizedAccountName, "bank");
 
   return {
     id: accountId,
     optimisticAccountId: summary.optimisticAccountId ?? null,
     name: normalizedAccountName,
     institution: summary.institution,
-    type: inferAccountTypeFromStatement(summary.institution, normalizedAccountName, "bank"),
+    type: accountType,
     currency: "PHP",
     source: "upload",
     balance: summary.balance,
@@ -392,6 +398,9 @@ const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): Upl
     .filter((summary) => summary.topMerchantName && summary.topMerchantCount !== null)
     .sort((left, right) => (right.topMerchantCount ?? 0) - (left.topMerchantCount ?? 0))[0];
   const previewTransactions = summaries.flatMap((summary) => summary.previewTransactions ?? []);
+  const sharedAccountType = summaries.every((summary) => summary.accountType === firstSummary.accountType)
+    ? firstSummary.accountType ?? null
+    : null;
 
   return {
     fileName: summaries.length === 1 ? firstSummary.fileName : `${summaries.length} files`,
@@ -401,6 +410,7 @@ const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): Upl
       : null,
     accountName: sharedAccountName,
     institution: sharedInstitution,
+    accountType: sharedAccountType,
     balance: summaries.every((summary) => summary.balance === firstSummary.balance)
       ? firstSummary.balance
       : null,
@@ -567,8 +577,12 @@ export function ImportFilesModal({
     };
   }, [open]);
 
-  const createStatementAccount = async (name: string, institution: string | null) => {
-    const inferredType = inferAccountTypeFromStatement(institution, name, "bank");
+  const createStatementAccount = async (
+    name: string,
+    institution: string | null,
+    accountType?: UploadInsightsSummary["accountType"]
+  ) => {
+    const inferredType = accountType ?? inferAccountTypeFromStatement(institution, name, "bank");
     const response = await fetch("/api/accounts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -596,9 +610,14 @@ export function ImportFilesModal({
     return accountId;
   };
 
-  const syncStatementAccountIdentity = async (accountId: string, name: string, institution: string | null) => {
+  const syncStatementAccountIdentity = async (
+    accountId: string,
+    name: string,
+    institution: string | null,
+    accountType?: UploadInsightsSummary["accountType"]
+  ) => {
     const normalizedName = normalizeStatementAccountName(name, institution);
-    const expectedType = inferAccountTypeFromStatement(institution, normalizedName, "bank");
+    const expectedType = accountType ?? inferAccountTypeFromStatement(institution, normalizedName, "bank");
     const current = accounts.find((account) => account.id === accountId);
     if (!current) {
       return;
@@ -674,6 +693,7 @@ export function ImportFilesModal({
             accountId: optimisticAccountId,
             accountName: guessedIdentity.accountName,
             institution: guessedIdentity.institution,
+            accountType: inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank"),
             balance: null,
             incomeTotal: 0,
             expenseTotal: 0,
@@ -751,6 +771,7 @@ export function ImportFilesModal({
       fileName: string;
       accountName: string | null;
       institution: string | null;
+      accountType: UploadInsightsSummary["accountType"];
       optimisticAccountId: string | null;
     }
   ): Promise<ImportProcessResult> => {
@@ -807,6 +828,11 @@ export function ImportFilesModal({
       const importedRows = Number(confirmed.result?.imported ?? 0);
       const accountBalance = typeof confirmed.result?.accountBalance === "string" ? confirmed.result.accountBalance : null;
       const insightSummary = confirmed.result?.insightSummary ?? null;
+      const resolvedAccountType = (
+        summaryContext.accountType ??
+        accounts.find((account) => account.id === resolvedAccountId)?.type ??
+        inferAccountTypeFromStatement(summaryContext.institution, summaryContext.accountName, "bank")
+      ) as UploadInsightsSummary["accountType"];
       const summary = insightSummary
         ? {
             fileName: summaryContext.fileName,
@@ -814,6 +840,7 @@ export function ImportFilesModal({
             accountId: resolvedAccountId,
             accountName: summaryContext.accountName,
             institution: summaryContext.institution ?? null,
+            accountType: resolvedAccountType,
             balance: accountBalance,
             optimisticAccountId: summaryContext.optimisticAccountId ?? null,
             incomeTotal: Number(insightSummary.incomeTotal ?? 0),
@@ -861,6 +888,7 @@ export function ImportFilesModal({
       fallbackAccountName: string;
       accountName: string | null;
       institution: string | null;
+      accountType: UploadInsightsSummary["accountType"];
       optimisticAccountId: string | null;
       password?: string;
     }
@@ -919,8 +947,18 @@ export function ImportFilesModal({
               typeof statementMetadata?.institution === "string" && statementMetadata.institution.trim()
                 ? statementMetadata.institution.trim()
                 : summaryContext.institution,
+            accountType:
+              trustStatementIdentity &&
+              typeof statementMetadata?.accountType === "string" &&
+              ["bank", "wallet", "credit_card", "cash", "investment", "other"].includes(statementMetadata.accountType)
+                ? (statementMetadata.accountType as UploadInsightsSummary["accountType"])
+                : summaryContext.accountType,
             balance: toBalanceString(statementCheckpoint?.endingBalance),
           };
+          const resolvedAccountType = (resolvedIdentity.accountType ??
+            accounts.find((account) => account.id === resolvedAccountId)?.type ??
+            summaryContext.accountType ??
+            null) as UploadInsightsSummary["accountType"];
 
           const shouldUseFallbackIdentity = !resolvedIdentity.accountName && !resolvedIdentity.institution && attempt >= 4;
           if (!resolvedIdentity.accountName && !resolvedIdentity.institution && !shouldUseFallbackIdentity) {
@@ -981,14 +1019,15 @@ export function ImportFilesModal({
             void syncStatementAccountIdentity(
               currentAccountId,
               syncAccountName,
-              syncInstitution
+              syncInstitution,
+              resolvedAccountType
             ).catch(() => null);
           }
 
           if (!resolvedAccountId || resolvedAccountId.startsWith("optimistic-")) {
             const accountName = resolvedIdentity.accountName ?? summaryContext.accountName ?? null;
             const institution = resolvedIdentity.institution ?? summaryContext.institution ?? null;
-            resolvedAccountId = await ensureTargetAccountId(accountName, institution);
+            resolvedAccountId = await ensureTargetAccountId(accountName, institution, resolvedAccountType);
           }
           if (!resolvedAccountId) {
             throw new Error("Unable to determine the destination account for this statement.");
@@ -1000,6 +1039,8 @@ export function ImportFilesModal({
             resolvedAccountId,
             resolvedIdentity.accountName ?? null,
             resolvedIdentity.institution ?? null,
+            resolvedAccountType ??
+              inferAccountTypeFromStatement(resolvedIdentity.institution, resolvedIdentity.accountName, "bank"),
             summaryContext.optimisticAccountId,
             resolvedIdentity.balance
           );
@@ -1015,6 +1056,7 @@ export function ImportFilesModal({
             ...summaryContext,
             accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
             institution: resolvedIdentity.institution ?? summaryContext.institution,
+            accountType: resolvedAccountType,
           });
           if (result.summary) {
             seedImportedWorkspaceCaches(workspaceId, result.summary);
@@ -1073,14 +1115,18 @@ export function ImportFilesModal({
     return foundPasswordProtected;
   };
 
-  const ensureTargetAccountId = async (statementAccountName?: string | null, institution?: string | null) => {
+  const ensureTargetAccountId = async (
+    statementAccountName?: string | null,
+    institution?: string | null,
+    accountType?: UploadInsightsSummary["accountType"]
+  ) => {
     if (statementAccountName) {
       const normalizedStatementAccountName = normalizeStatementAccountName(statementAccountName, institution ?? null);
       const key = accountKey(normalizedStatementAccountName, institution ?? null);
       const existing = accountIdByKeyRef.current.get(key) ?? accounts.find((account) => accountKey(account.name, account.institution) === key)?.id;
       if (existing) {
         accountIdByKeyRef.current.set(key, existing);
-        await syncStatementAccountIdentity(existing, normalizedStatementAccountName, institution ?? null);
+        await syncStatementAccountIdentity(existing, normalizedStatementAccountName, institution ?? null, accountType);
         return existing;
       }
 
@@ -1090,7 +1136,7 @@ export function ImportFilesModal({
           : null;
       if (genericMatch) {
         accountIdByKeyRef.current.set(accountKey(genericMatch.name, genericMatch.institution), genericMatch.id);
-        await syncStatementAccountIdentity(genericMatch.id, normalizedStatementAccountName, institution ?? null);
+        await syncStatementAccountIdentity(genericMatch.id, normalizedStatementAccountName, institution ?? null, accountType);
         return genericMatch.id;
       }
 
@@ -1101,12 +1147,12 @@ export function ImportFilesModal({
         const matchedAccount = accounts.find((account) => account.id === rule.accountId);
         if (matchedAccount) {
           accountIdByKeyRef.current.set(accountKey(matchedAccount.name, matchedAccount.institution), matchedAccount.id);
-          await syncStatementAccountIdentity(matchedAccount.id, normalizedStatementAccountName, institution ?? null);
+          await syncStatementAccountIdentity(matchedAccount.id, normalizedStatementAccountName, institution ?? null, accountType);
           return matchedAccount.id;
         }
       }
 
-      return createStatementAccount(normalizedStatementAccountName, institution ?? null);
+      return createStatementAccount(normalizedStatementAccountName, institution ?? null, accountType);
     }
 
     if (selectedAccountId) {
@@ -1119,7 +1165,7 @@ export function ImportFilesModal({
       return fallback;
     }
 
-    return createStatementAccount("Cash", "Cash");
+    return createStatementAccount("Cash", "Cash", "cash");
   };
 
   const removeItem = (id: string) => {
@@ -1234,6 +1280,7 @@ export function ImportFilesModal({
               optimisticAccountId,
               guessedIdentity?.accountName ?? null,
               guessedIdentity?.institution ?? null,
+              inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank"),
               item.optimisticAccountId,
               null,
               previewTransactions
@@ -1257,6 +1304,9 @@ export function ImportFilesModal({
           fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
           accountName: canUseOptimisticGuess ? guessedIdentity?.accountName ?? null : null,
           institution: canUseOptimisticGuess ? guessedIdentity?.institution ?? null : null,
+          accountType: canUseOptimisticGuess
+            ? inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank")
+            : null,
           optimisticAccountId: canUseOptimisticGuess ? item.optimisticAccountId : null,
           password: item.password.trim() || undefined,
         });
@@ -1269,7 +1319,11 @@ export function ImportFilesModal({
       }
 
       const targetAccountId: string | null = guessedIdentity && canUseOptimisticGuess
-        ? await ensureTargetAccountId(guessedIdentity.accountName ?? null, guessedIdentity.institution ?? null)
+        ? await ensureTargetAccountId(
+            guessedIdentity.accountName ?? null,
+            guessedIdentity.institution ?? null,
+            inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank")
+          )
         : null;
 
       const previewTransactions =
@@ -1295,6 +1349,7 @@ export function ImportFilesModal({
           fileName: item.file.name,
           accountName: guessedIdentity?.accountName ?? null,
           institution: guessedIdentity?.institution ?? null,
+          accountType: inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank"),
           optimisticAccountId: item.optimisticAccountId,
         }).then((result) => {
           if (result.summary) {
@@ -1308,6 +1363,7 @@ export function ImportFilesModal({
           fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
           accountName: null,
           institution: null,
+          accountType: null,
           optimisticAccountId: null,
           password: item.password.trim() || undefined,
         });
@@ -1317,16 +1373,17 @@ export function ImportFilesModal({
         status: "staged",
         importedRows: Number(processPayload?.imported ?? 0) || null,
         summary: canUseOptimisticGuess
-          ? buildOptimisticUploadSummary(
-              item.file.name,
-              Number(processPayload?.imported ?? 0) || 0,
-              targetAccountId,
-              guessedIdentity?.accountName ?? null,
-              guessedIdentity?.institution ?? null,
-              item.optimisticAccountId,
-              null,
-              previewTransactions
-            )
+        ? buildOptimisticUploadSummary(
+            item.file.name,
+            Number(processPayload?.imported ?? 0) || 0,
+            targetAccountId,
+            guessedIdentity?.accountName ?? null,
+            guessedIdentity?.institution ?? null,
+            inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank"),
+            item.optimisticAccountId,
+            null,
+            previewTransactions
+          )
           : null,
       };
     } catch (error) {
@@ -1545,6 +1602,7 @@ export function ImportFilesModal({
         fileName: item.file.name,
         accountName: null,
         institution: null,
+        accountType: null,
         optimisticAccountId: item.targetAccountId,
       });
       if (typeof result.importedRows === "number") {
