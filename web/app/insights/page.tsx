@@ -277,6 +277,7 @@ export default async function InsightsPage() {
   isFreshResetWorkspace = user.dataWipedAt !== null && resolvedWorkspace.accounts.length <= 1 && resolvedWorkspace.importFiles.length === 0;
 
   const reportType = "insights";
+  const workspaceId = resolvedWorkspace.id;
   const currentWindowTransactions = currentWindowTransactionsRaw;
   const previousWindowTransactions = previousWindowTransactionsRaw;
   const ninetyDayInsightTransactions = ninetyDayTransactions;
