@@ -698,46 +698,34 @@ function AccountDetailPageContent() {
           </div>
         ) : null}
 
-        <div className="accounts-detail__delete-zone glass" style={{ marginTop: 20 }}>
-          <div className="accounts-detail__reconciliation-head">
-            <div>
-              <p className="eyebrow">Danger zone</p>
-              <h3>Delete account</h3>
+        {deleteConfirmOpen ? (
+          <div className="detail-warning-box accounts-detail__delete-confirm" style={{ marginTop: 20 }}>
+            <div className="detail-warning-actions">
+              <button
+                className="button button-secondary button-small"
+                type="button"
+                onClick={() => setDeleteConfirmOpen(false)}
+                disabled={deleteBusy}
+              >
+                Cancel
+              </button>
+              <button className="button button-danger button-small" type="button" onClick={() => void deleteAccount()} disabled={deleteBusy}>
+                {deleteBusy ? "Deleting..." : "Delete"}
+              </button>
             </div>
           </div>
-          <p className="panel-muted">
-            Removing this account deletes its linked transactions and sends you back to Accounts.
-          </p>
-          {deleteConfirmOpen ? (
-            <div className="detail-warning-box accounts-drawer__delete-confirm">
-              <p>
-                <strong>Delete account:</strong> This cannot be undone. Linked transactions will also be removed.
-              </p>
-              <div className="detail-warning-actions">
-                <button
-                  className="button button-secondary button-small"
-                  type="button"
-                  onClick={() => setDeleteConfirmOpen(false)}
-                  disabled={deleteBusy}
-                >
-                  Cancel
-                </button>
-                <button className="button button-danger button-small" type="button" onClick={() => void deleteAccount()} disabled={deleteBusy}>
-                  {deleteBusy ? "Deleting..." : "Delete account"}
-                </button>
-              </div>
-            </div>
-          ) : (
+        ) : (
+          <div style={{ marginTop: 20 }}>
             <button
               className="button button-secondary button-small accounts-drawer__delete"
               type="button"
               onClick={() => setDeleteConfirmOpen(true)}
               disabled={deleteBusy}
             >
-              Delete account
+              Delete
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </section>
     </CloverShell>
   );
