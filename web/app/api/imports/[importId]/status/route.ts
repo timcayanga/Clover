@@ -18,8 +18,26 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     }
 
     await assertWorkspaceAccess(userId, importFile.workspaceId as string);
-    const parsedRowsCount = Number(importFile.parsedRowsCount ?? 0);
+    let parsedRowsCount = Number(importFile.parsedRowsCount ?? 0);
     const confirmedTransactionsCount = Number(importFile.confirmedTransactionsCount ?? 0);
+    const importAgeMs = Date.now() - importFile.updatedAt.getTime();
+    const shouldRecoverStalledImport =
+      parsedRowsCount === 0 &&
+      confirmedTransactionsCount === 0 &&
+      (importFile.status === "queued" || importFile.status === "processing") &&
+      importAgeMs > 15_000;
+
+    if (shouldRecoverStalledImport) {
+      try {
+        const { processImportFileText } = await import("@/workers/import-processor");
+        await processImportFileText(importId, { actorUserId: null });
+        const recoveredImportFile = await fetchImportFileCompat(importId);
+        parsedRowsCount = Number(recoveredImportFile?.parsedRowsCount ?? parsedRowsCount);
+      } catch {
+        // Let the existing status response continue; the UI can retry.
+      }
+    }
+
     const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
       ? await prisma.accountStatementCheckpoint.findUnique({
           where: { importFileId: importId },
