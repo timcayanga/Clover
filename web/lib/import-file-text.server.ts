@@ -1,5 +1,4 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { createCanvas } from "@napi-rs/canvas";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { getEnv } from "@/lib/env";
@@ -232,8 +231,18 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string) => {
   return pages.join("\n");
 };
 
+const loadCreateCanvas = async () => {
+  const requireFn = eval("require") as NodeRequire;
+  const canvasModule = requireFn("@napi-rs/canvas") as { createCanvas: (width: number, height: number) => {
+    getContext: (type: "2d") => CanvasRenderingContext2D;
+    toBuffer: (mimeType: string, quality?: number) => Buffer;
+  } };
+  return canvasModule.createCanvas;
+};
+
 const renderPdfPageImagesFromBytes = async (data: Uint8Array, password?: string, maxPages = 2, scale = 0.7) => {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const createCanvas = await loadCreateCanvas();
   const standardFontDataUrl = getPdfJsStandardFontDataUrl();
   const options = password ? { data, password, standardFontDataUrl } : { data, standardFontDataUrl };
   const loadingTask = pdfjs.getDocument(options as any);
