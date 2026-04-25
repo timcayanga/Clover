@@ -88,7 +88,8 @@ const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined
     };
   }
 
-  const endingDate = checkpoint.statementEndDate ? formatDate(checkpoint.statementEndDate) : "No date";
+  const checkpointDate = checkpoint.statementEndDate ?? checkpoint.createdAt ?? null;
+  const endingDate = checkpointDate ? formatDate(checkpointDate) : "No date";
   if (checkpoint.status === "mismatch") {
     return {
       label: "Needs review",
@@ -199,7 +200,9 @@ function AccountDetailPageContent() {
 
         setAccount(nextAccount);
 
-        const transactionsResponse = await fetch(`/api/transactions?workspaceId=${encodeURIComponent(nextAccount.workspaceId)}`);
+        const transactionsResponse = await fetch(
+          `/api/transactions?workspaceId=${encodeURIComponent(nextAccount.workspaceId)}&accountId=${encodeURIComponent(nextAccount.id)}`
+        );
         if (!transactionsResponse.ok) {
           throw new Error("Unable to load account transactions.");
         }
@@ -390,7 +393,7 @@ function AccountDetailPageContent() {
               <div className="accounts-detail__reconciliation-grid">
                 <div className="status-card">
                   <div className="panel-muted">Statement date</div>
-                  <strong>{latestCheckpoint.statementEndDate ? formatDate(latestCheckpoint.statementEndDate) : "Unknown"}</strong>
+                  <strong>{formatDate(latestCheckpoint.statementEndDate ?? latestCheckpoint.createdAt)}</strong>
                 </div>
                 <div className="status-card">
                   <div className="panel-muted">Statement balance</div>

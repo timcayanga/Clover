@@ -17,6 +17,7 @@ import {
 import { getAccountBrand } from "@/lib/account-brand";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
+import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
@@ -57,6 +58,17 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
   };
+};
+
+const mergeImportedPreviewTransactions = (
+  currentTransactions: Transaction[],
+  previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]>
+) => {
+  if (previewTransactions.length === 0) {
+    return currentTransactions;
+  }
+
+  return mergeImportedWorkspaceTransactions(currentTransactions, previewTransactions);
 };
 
 const mergeAccountsWithOptimisticImports = (
@@ -196,7 +208,8 @@ const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined
     };
   }
 
-  const endingDate = checkpoint.statementEndDate ? formatDate(checkpoint.statementEndDate) : "No date";
+  const checkpointDate = checkpoint.statementEndDate ?? checkpoint.createdAt ?? null;
+  const endingDate = checkpointDate ? formatDate(checkpointDate) : "No date";
   if (checkpoint.status === "mismatch") {
     return {
       label: "Needs review",
@@ -275,16 +288,43 @@ const getCheckpointTrustLabel = (checkpoint: StatementCheckpoint | null | undefi
     return "No statement checkpoint yet";
   }
 
-  const endingDate = checkpoint.statementEndDate ? formatDate(checkpoint.statementEndDate) : null;
+  const endingDate = checkpoint.statementEndDate ?? checkpoint.createdAt ?? null;
+  const formattedDate = endingDate ? formatDate(endingDate) : null;
   if (checkpoint.status === "mismatch") {
-    return `Needs review${endingDate ? ` · ${endingDate}` : ""}`;
+    return `Needs review${formattedDate ? ` · ${formattedDate}` : ""}`;
   }
 
   if (checkpoint.status === "reconciled") {
-    return `Reconciled${endingDate ? ` · ${endingDate}` : ""}`;
+    return `Reconciled${formattedDate ? ` · ${formattedDate}` : ""}`;
   }
 
-  return `Checkpoint pending${endingDate ? ` · ${endingDate}` : ""}`;
+  return `Checkpoint pending${formattedDate ? ` · ${formattedDate}` : ""}`;
+};
+
+const mergeStatementCheckpoints = (current: StatementCheckpoint[], next: StatementCheckpoint[]) => {
+  if (next.length === 0) {
+    return current;
+  }
+
+  const checkpointsById = new Map<string, StatementCheckpoint>();
+  for (const checkpoint of current) {
+    checkpointsById.set(checkpoint.id, checkpoint);
+  }
+  for (const checkpoint of next) {
+    const existing = checkpointsById.get(checkpoint.id);
+    if (!existing) {
+      checkpointsById.set(checkpoint.id, checkpoint);
+      continue;
+    }
+
+    const existingScore = [existing.statementEndDate, existing.updatedAt].filter(Boolean).join("|");
+    const nextScore = [checkpoint.statementEndDate, checkpoint.updatedAt].filter(Boolean).join("|");
+    if (nextScore >= existingScore) {
+      checkpointsById.set(checkpoint.id, checkpoint);
+    }
+  }
+
+  return Array.from(checkpointsById.values());
 };
 
 function ActionIcon({
@@ -478,6 +518,7 @@ function AccountsPageContent() {
   const [statementCheckpoints, setStatementCheckpoints] = useState<StatementCheckpoint[]>(
     () => (initialCachedWorkspace?.statementCheckpoints as StatementCheckpoint[]) ?? []
   );
+  const [drawerTransactions, setDrawerTransactions] = useState<Transaction[]>([]);
   const [drawerStatementCheckpoints, setDrawerStatementCheckpoints] = useState<StatementCheckpoint[]>([]);
   const [message, setMessage] = useState("Select a workspace to review accounts.");
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
@@ -517,7 +558,7 @@ function AccountsPageContent() {
   const reconciledAccounts = useMemo(
     () =>
       accounts.map((account) => {
-        const accountTransactions = transactions.filter((transaction) => transaction.accountId === account.id);
+        const accountTransactions = drawerAccountId === account.id ? drawerTransactions : transactions.filter((transaction) => transaction.accountId === account.id);
         const accountCheckpoints = drawerAccountId === account.id ? drawerStatementCheckpoints : [];
         const effectiveType = getEffectiveAccountType(account);
         const reconciledBalance = deriveReconciledBalance({
@@ -532,7 +573,7 @@ function AccountsPageContent() {
           balance: reconciledBalance ?? account.balance,
         };
       }),
-    [accounts, drawerAccountId, drawerStatementCheckpoints, transactions]
+    [accounts, drawerAccountId, drawerStatementCheckpoints, drawerTransactions, transactions]
   );
 
   const loadWorkspaces = async () => {
@@ -568,10 +609,7 @@ function AccountsPageContent() {
     }
 
     try {
-      const accountsRequest = fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
-      const transactionsRequest = fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`);
-
-      const accountsResponse = await accountsRequest;
+      const accountsResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
       if (workspaceLoadSeqRef.current !== loadSeq) {
         return;
       }
@@ -584,15 +622,25 @@ function AccountsPageContent() {
         setStatementCheckpoints(Array.isArray(payload.statementCheckpoints) ? (payload.statementCheckpoints as StatementCheckpoint[]) : []);
       }
 
-      const transactionsResponse = await transactionsRequest;
-      if (workspaceLoadSeqRef.current !== loadSeq) {
-        return;
+      if (!options?.silent) {
+        setAccountsLoading(false);
       }
 
-      if (transactionsResponse.ok) {
-        const payload = await transactionsResponse.json();
-        setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
-      }
+      void (async () => {
+        try {
+          const transactionsResponse = await fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`);
+          if (workspaceLoadSeqRef.current !== loadSeq) {
+            return;
+          }
+
+          if (transactionsResponse.ok) {
+            const payload = await transactionsResponse.json();
+            setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
+          }
+        } catch {
+          // Background transaction hydration is best-effort.
+        }
+      })();
     } finally {
       if (!options?.silent) {
         setAccountsLoading(false);
@@ -706,7 +754,9 @@ function AccountsPageContent() {
 
         const payload = await response.json();
         if (!cancelled) {
-          setDrawerStatementCheckpoints(Array.isArray(payload.checkpoints) ? (payload.checkpoints as StatementCheckpoint[]) : []);
+          const nextCheckpoints = Array.isArray(payload.checkpoints) ? (payload.checkpoints as StatementCheckpoint[]) : [];
+          setDrawerStatementCheckpoints(nextCheckpoints);
+          setStatementCheckpoints((current) => mergeStatementCheckpoints(current, nextCheckpoints));
         }
       } catch {
         if (!cancelled) {
@@ -721,6 +771,52 @@ function AccountsPageContent() {
       cancelled = true;
     };
   }, [drawerAccountId]);
+
+  useEffect(() => {
+    if (!drawerAccountId) {
+      return;
+    }
+
+    setDrawerTransactions(transactions.filter((transaction) => transaction.accountId === drawerAccountId));
+  }, [drawerAccountId, transactions]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDrawerTransactions = async () => {
+      if (!drawerAccountId || !selectedWorkspaceId) {
+        setDrawerTransactions([]);
+        return;
+      }
+
+      try {
+        const response = await fetch(
+          `/api/transactions?workspaceId=${encodeURIComponent(selectedWorkspaceId)}&accountId=${encodeURIComponent(drawerAccountId)}`
+        );
+        if (!response.ok) {
+          if (!cancelled) {
+            setDrawerTransactions([]);
+          }
+          return;
+        }
+
+        const payload = await response.json();
+        if (!cancelled) {
+          setDrawerTransactions(Array.isArray(payload.transactions) ? (payload.transactions as Transaction[]) : []);
+        }
+      } catch {
+        if (!cancelled) {
+          setDrawerTransactions([]);
+        }
+      }
+    };
+
+    void loadDrawerTransactions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [drawerAccountId, selectedWorkspaceId]);
 
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
@@ -903,13 +999,9 @@ function AccountsPageContent() {
   const selectedAccountTransactions = useMemo(
     () =>
       selectedAccount
-        ? transactions.filter(
-            (transaction) =>
-              transaction.accountId === selectedAccount.id &&
-              (!transaction.isExcluded || transaction.merchantRaw === "Beginning balance")
-          )
+        ? drawerTransactions.filter((transaction) => !transaction.isExcluded || transaction.merchantRaw === "Beginning balance")
         : [],
-    [selectedAccount, transactions]
+    [selectedAccount, drawerTransactions]
   );
 
   const needsReviewCount = useMemo(() => {
@@ -926,7 +1018,7 @@ function AccountsPageContent() {
     if (!selectedAccount) return [];
     return selectedAccountTransactions.slice(0, 5).map((transaction) => ({
       id: transaction.id,
-      title: transaction.merchantRaw,
+      title: transaction.merchantClean ?? transaction.merchantRaw,
       subtitle: transaction.categoryName ?? "Uncategorized",
       value: transaction.amount,
       date: transaction.date,
@@ -970,6 +1062,7 @@ function AccountsPageContent() {
 
   const openAccountDrawer = (account: Account) => {
     setDrawerAccountId(account.id);
+    setDrawerTransactions(transactions.filter((transaction) => transaction.accountId === account.id));
     setAccountDeleteConfirmOpen(false);
     setDrawerNotice(null);
     setAccountEditName(account.name);
@@ -1693,7 +1786,7 @@ function AccountsPageContent() {
                     <div className="accounts-drawer__checkpoint-grid">
                       <div>
                         <span>Statement date</span>
-                        <strong>{latestCheckpoint.statementEndDate ? formatDate(latestCheckpoint.statementEndDate) : "Unknown date"}</strong>
+                        <strong>{formatDate(latestCheckpoint.statementEndDate ?? latestCheckpoint.createdAt)}</strong>
                       </div>
                       <div>
                         <span>Statement balance</span>
@@ -1807,8 +1900,13 @@ function AccountsPageContent() {
                   selectedAccountTransactions.slice(0, 5).map((transaction) => (
                     <div key={transaction.id} className="accounts-drawer__transaction">
                       <div>
-                        <strong>{transaction.merchantRaw}</strong>
-                        <span>{formatDate(transaction.date)} · {transaction.type}</span>
+                        <strong>{transaction.merchantClean ?? transaction.merchantRaw}</strong>
+                        <span>
+                          {formatDate(transaction.date)} · {transaction.type}
+                          {transaction.merchantClean && transaction.merchantClean !== transaction.merchantRaw
+                            ? ` · ${transaction.merchantRaw}`
+                            : ""}
+                        </span>
                       </div>
                       <strong>{currencyFormatter.format(parseAmount(transaction.amount))}</strong>
                     </div>
@@ -1909,51 +2007,29 @@ function AccountsPageContent() {
         defaultAccountId={selectedAccount?.id ?? accounts[0]?.id ?? null}
         onClose={() => setImportOpen(false)}
         onImported={async (summary) => {
-          if (summary.optimistic) {
-            const optimisticAccount = buildOptimisticImportedAccount(summary);
-            const previewTransactions = summary.previewTransactions ?? [];
-            if (optimisticAccount) {
-              flushSync(() => {
-                setAccountsLoading(false);
-                setAccounts((current) => {
-                  const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
-                  if (existingIndex >= 0) {
-                    return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
-                  }
-                  return [optimisticAccount, ...current];
-                });
-              });
-            }
-            if (previewTransactions.length > 0) {
-              flushSync(() => {
-                setTransactions((current) => {
-                  const previewIds = new Set(previewTransactions.map((transaction) => transaction.id));
-                  const filtered = current.filter((transaction) => {
-                    if (previewIds.has(transaction.id)) {
-                      return false;
-                    }
-                    return !(transaction.source === "upload" && transaction.accountId === summary.accountId);
-                  });
-                  return [...previewTransactions, ...filtered];
-                });
-              });
-            }
-            return;
-          }
-
           setPendingImportSummary(summary);
-
-          if (summary.optimisticAccountId) {
-            setAccounts((current) => current.filter((account) => account.id !== summary.optimisticAccountId));
-          }
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
-          if (importedAccountId) {
-            setTransactions((current) => current.filter((transaction) => !(transaction.source === "upload" && transaction.accountId === importedAccountId)));
-          }
+          const previewTransactions = summary.previewTransactions ?? [];
           const optimisticAccount = buildOptimisticImportedAccount(summary);
-          if (optimisticAccount) {
-            flushSync(() => {
-              setAccountsLoading(false);
+
+          flushSync(() => {
+            setAccountsLoading(false);
+            if (summary.optimisticAccountId) {
+              setAccounts((current) => current.filter((account) => account.id !== summary.optimisticAccountId));
+            }
+
+            if (importedAccountId) {
+              setTransactions((current) => {
+                const withoutImportedPlaceholders = current.filter(
+                  (transaction) => !(transaction.source === "upload" && transaction.accountId === importedAccountId)
+                );
+                return mergeImportedPreviewTransactions(withoutImportedPlaceholders, previewTransactions);
+              });
+            } else if (previewTransactions.length > 0) {
+              setTransactions((current) => mergeImportedPreviewTransactions(current, previewTransactions));
+            }
+
+            if (optimisticAccount) {
               setAccounts((current) => {
                 const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
                 if (existingIndex >= 0) {
@@ -1961,8 +2037,17 @@ function AccountsPageContent() {
                 }
                 return [optimisticAccount, ...current];
               });
-            });
-          }
+            }
+
+            if (
+              drawerAccountId &&
+              previewTransactions.length > 0 &&
+              (drawerAccountId === importedAccountId || drawerAccountId === summary.optimisticAccountId)
+            ) {
+              setDrawerTransactions((current) => mergeImportedPreviewTransactions(current, previewTransactions));
+            }
+          });
+
           void refreshAll();
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
