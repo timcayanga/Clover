@@ -151,7 +151,7 @@ const planCards = [
     title: "Free",
     price: "PHP 0",
     icon: "free" as const,
-    badge: "Beta",
+    badge: "",
     helper: "Start here during beta and keep the core Clover workflow open.",
     description: "Best for getting a small workspace organized without commitment.",
     features: [
