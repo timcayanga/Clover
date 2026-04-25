@@ -708,6 +708,7 @@ export default async function InsightsPage() {
   const currentSpend = currentSummary.expense;
   const previousSpend = previousSummary.expense;
   const currentSavingsRate = currentSummary.income > 0 ? currentNet / currentSummary.income : null;
+  const previousSavingsRate = previousSummary.income > 0 ? (previousSummary.income - previousSummary.expense) / previousSummary.income : null;
   const spendDelta = previousSpend > 0 ? ((currentSpend - previousSpend) / previousSpend) * 100 : null;
   const incomeDelta =
     previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
@@ -806,7 +807,7 @@ export default async function InsightsPage() {
     currentSpend,
     monthlyIncome: currentSummary.income > 0 ? currentSummary.income : null,
     currentSavingsRate,
-    previousSavingsRate: previousSummary.income > 0 ? (previousSummary.income - previousSummary.expense) / previousSummary.income : null,
+    previousSavingsRate,
     spendDelta,
     recurringShare: recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0) / Math.max(currentSpend, 1),
   });

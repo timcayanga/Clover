@@ -37,6 +37,10 @@ export type GoalProgressContext = {
   currentNet: number;
   currentSpend: number;
   monthlyIncome: number | null;
+  currentSavingsRate: number | null;
+  previousSavingsRate: number | null;
+  spendDelta: number | null;
+  recurringShare: number;
 };
 
 export type GoalProgressSnapshot = {
@@ -47,7 +51,10 @@ export type GoalProgressSnapshot = {
   progressPercent: number | null;
   remainingAmount: number | null;
   achieved: boolean;
+  bandLabel: string;
+  bandTone: "positive" | "warning" | "negative" | "neutral";
   coachCopy: string;
+  nextAction: string;
 };
 
 export type FinancialExperienceProfile = {
@@ -352,10 +359,17 @@ export const getGoalProgressSnapshot = ({
   currentNet,
   currentSpend,
   monthlyIncome,
+  currentSavingsRate,
+  previousSavingsRate,
+  spendDelta,
+  recurringShare,
 }: GoalProgressContext): GoalProgressSnapshot => {
   const baseTarget = targetAmount !== null && Number.isFinite(targetAmount) ? Math.max(0, targetAmount) : null;
   const netSurplus = Math.max(0, currentNet);
   const savingsBase = netSurplus;
+  const behaviorIsImproving = currentSavingsRate !== null && previousSavingsRate !== null ? currentSavingsRate > previousSavingsRate : false;
+  const spendingIsRising = spendDelta !== null ? spendDelta > 0 : false;
+  const recurringPressure = recurringShare > 0.25;
 
   if (!goalKey || baseTarget === null) {
     return {
@@ -366,10 +380,13 @@ export const getGoalProgressSnapshot = ({
       progressPercent: null,
       remainingAmount: null,
       achieved: false,
+      bandLabel: "Set a target",
+      bandTone: "neutral",
       coachCopy:
         monthlyIncome !== null
           ? "You have enough recent activity to estimate a strong target. Set one to unlock live progress tracking."
           : "Set a monthly target to unlock live progress tracking.",
+      nextAction: "Set a monthly amount so Clover can measure real progress.",
     };
   }
 
@@ -377,6 +394,7 @@ export const getGoalProgressSnapshot = ({
     const remaining = Math.max(0, baseTarget - currentSpend);
     const overBudget = currentSpend - baseTarget;
     const progressPercent = baseTarget > 0 ? clamp((remaining / baseTarget) * 100, 0, 100) : null;
+    const achieved = currentSpend <= baseTarget;
 
     return {
       label: "Budget left",
@@ -385,11 +403,19 @@ export const getGoalProgressSnapshot = ({
       targetAmount: baseTarget,
       progressPercent,
       remainingAmount: remaining,
-      achieved: currentSpend <= baseTarget,
-      coachCopy:
-        currentSpend <= baseTarget
-          ? "You are under the cap, which means you kept the month in shape."
-          : `You are over the cap by ${formatCompactCurrency(overBudget)}. Trim one leak and you can close the gap.`,
+      achieved,
+      bandLabel: achieved ? "Under budget" : "Over budget",
+      bandTone: achieved ? "positive" : "negative",
+      coachCopy: achieved
+        ? behaviorIsImproving
+          ? "You are under the cap and your spending trend is improving. That is the kind of month that builds confidence."
+          : "You are under the cap. Protect the progress by keeping one more flexible category in check."
+        : `You are over the cap by ${formatCompactCurrency(overBudget)}. Trim one leak and you can close the gap.`,
+      nextAction: achieved
+        ? "Keep the biggest categories under review so the cap holds through month-end."
+        : spendingIsRising
+          ? "Pause the biggest flexible category and close the gap before the month drifts further."
+          : "Trim one category today, then recheck the remaining budget tomorrow.",
     };
   }
 
@@ -397,6 +423,28 @@ export const getGoalProgressSnapshot = ({
   const progressPercent = baseTarget > 0 ? clamp((currentAmount / baseTarget) * 100, 0, 100) : null;
   const remainingAmount = Math.max(0, baseTarget - currentAmount);
   const achieved = currentAmount >= baseTarget;
+  const bandLabel =
+    progressPercent !== null
+      ? progressPercent >= 100
+        ? "Goal reached"
+        : progressPercent >= 75
+          ? "Ahead of pace"
+          : progressPercent >= 50
+            ? "On pace"
+            : progressPercent >= 25
+              ? "Building momentum"
+              : "Early"
+      : "Set a target";
+  const bandTone =
+    progressPercent !== null
+      ? progressPercent >= 75
+        ? "positive"
+        : progressPercent >= 50
+          ? "neutral"
+          : progressPercent >= 25
+            ? "warning"
+            : "negative"
+      : "neutral";
 
   return {
     label:
@@ -420,22 +468,60 @@ export const getGoalProgressSnapshot = ({
     progressPercent,
     remainingAmount,
     achieved,
+    bandLabel,
+    bandTone,
     coachCopy:
       goalKey === "save_more"
         ? achieved
-          ? "You reached your savings target. That is a strong month."
-          : "Every extra peso saved now makes the next month easier."
+          ? behaviorIsImproving
+            ? "You reached your savings target and your savings rhythm is improving. That is a strong month."
+            : "You reached your savings target. Keep the transfer automatic so it stays easy."
+          : recurringPressure
+            ? "Recurring spending is eating into your savings runway. Trim one automatic cost and keep the transfer intact."
+            : "Every extra peso saved now makes the next month easier."
         : goalKey === "pay_down_debt"
           ? achieved
             ? "You created enough room to hit the debt target. Nice work."
-            : "This is the money you can point at principal before it gets absorbed elsewhere."
+            : spendingIsRising
+              ? "Spending is crowding the payoff plan. Pull one flexible category back and send the difference to debt."
+              : "This is the money you can point at principal before it gets absorbed elsewhere."
           : goalKey === "build_emergency_fund"
             ? achieved
-              ? "Your emergency fund target is covered for this month."
-              : "You are building resilience one consistent transfer at a time."
+              ? behaviorIsImproving
+                ? "Your emergency fund target is covered and your saving rhythm is holding steady."
+                : "Your emergency fund target is covered for this month."
+              : recurringPressure
+                ? "Recurring spending is squeezing the reserve transfer. Protect the transfer first, then reset one subscription."
+                : "You are building resilience one consistent transfer at a time."
             : achieved
               ? "You have a clean surplus to invest. Keep the habit steady."
-              : "You are protecting the investing runway by keeping the month tidy.",
+              : spendingIsRising
+                ? "Spending pressure is reducing the investing runway. Cut one flexible category before month-end."
+                : "You are protecting the investing runway by keeping the month tidy.",
+    nextAction:
+      goalKey === "save_more"
+        ? achieved
+          ? "Protect the savings transfer and keep one small leak closed."
+          : recurringPressure
+            ? "Trim one recurring cost and move that amount into savings immediately."
+            : "Move money earlier in the month so savings gets first claim."
+        : goalKey === "pay_down_debt"
+          ? achieved
+            ? "Keep sending every extra peso to principal before it disappears."
+            : spendingIsRising
+              ? "Pause one discretionary category and redirect the savings to debt."
+              : "Keep one extra payment ready so you can close the gap faster."
+        : goalKey === "build_emergency_fund"
+          ? achieved
+            ? "Leave the transfer alone and let the buffer compound."
+            : recurringPressure
+              ? "Trim one fixed cost first, then refill the buffer automatically."
+              : "Automate the reserve transfer so the goal stays boring and steady."
+        : achieved
+          ? "Keep the surplus clean and move the investable amount on schedule."
+          : spendingIsRising
+            ? "Reduce one flexible spend category and protect the investing window."
+            : "Keep cash flow calm so the next investable dollar survives the month.",
   };
 };
 
