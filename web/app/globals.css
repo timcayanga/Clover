@@ -713,8 +713,8 @@ label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 46px;
+  height: 46px;
   aspect-ratio: 1 / 1;
   border-radius: 50%;
   border: 1px solid rgba(15, 23, 42, 0.1);
@@ -750,9 +750,9 @@ label {
   height: 100%;
   display: block;
   object-fit: cover;
-  object-position: center;
+  object-position: 50% 30%;
   border-radius: inherit;
-  transform: scale(1.12);
+  transform: scale(1.42);
 }
 
 .sidebar-popover {
