@@ -1,6 +1,6 @@
 import { clerkClient } from "@clerk/nextjs/server";
 
-type SyncedClerkUser = {
+export type SyncedClerkUser = {
   clerkUserId: string;
   email: string;
   firstName: string | null;

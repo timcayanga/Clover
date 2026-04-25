@@ -1,11 +1,11 @@
 import { Prisma, type User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { syncClerkUser } from "@/lib/clerk";
+import { syncClerkUser, type SyncedClerkUser } from "@/lib/clerk";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { reconcileBillingPlanTier } from "@/lib/paypal-billing";
 
 export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User> => {
-  const clerkUser = await syncClerkUser(clerkUserId);
+  const clerkUser: SyncedClerkUser = await syncClerkUser(clerkUserId);
   const existing = await prisma.user.findUnique({
     where: { clerkUserId: clerkUser.clerkUserId },
   });
