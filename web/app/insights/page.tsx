@@ -1164,7 +1164,7 @@ export default async function InsightsPage() {
                   );
                 })
               ) : (
-                <div className="empty-state">No categorized expenses yet.</div>
+                <div className="empty-state">No categorized expenses yet. Import more activity or resolve uncategorized rows to reveal the spending mix.</div>
               )}
               <div className="insight-donut__item">
                 <span className="insight-donut__icon" aria-hidden="true">
@@ -1209,7 +1209,7 @@ export default async function InsightsPage() {
                 </div>
               ))
             ) : (
-              <div className="empty-state">No category changes surfaced yet.</div>
+              <div className="empty-state">No category changes surfaced yet. Clover will highlight shifts once it has enough recent activity to compare.</div>
             )}
           </div>
         </article>
@@ -1245,7 +1245,7 @@ export default async function InsightsPage() {
                   </Link>
                 ))
               ) : (
-                <div className="empty-state">No recurring merchants surfaced yet.</div>
+                <div className="empty-state">No recurring merchants surfaced yet. Add more transactions and Clover will call out the fixed costs.</div>
               )}
                 <div className="insight-list__item">
                   <strong>Potential savings</strong>

@@ -244,7 +244,7 @@ async function ReportsPageView({
         categoryOptions: ["Transport", "Food & Dining", "Groceries", "Utilities", "Subscriptions", "Entertainment"],
         actions: [
           { label: "Review transaction", href: "/transactions" },
-          { label: "Open imports", href: "/imports", variant: "secondary" },
+          { label: "Review settings", href: "/settings", variant: "secondary" },
         ],
       },
       {
@@ -312,8 +312,8 @@ async function ReportsPageView({
             <Link className="pill-link" href="/transactions">
               Transactions
             </Link>
-            <Link className="pill-link" href="/imports">
-              Imports
+            <Link className="pill-link" href="/settings">
+              Settings
             </Link>
           </>
         }
@@ -1006,17 +1006,17 @@ async function ReportsPageView({
             }
           : importStatusCounts.failed > 0
               ? {
-                  title: `${importStatusCounts.failed} import${importStatusCounts.failed === 1 ? "" : "s"} failed`,
-                  body: "Inspect the failed file(s) before importing more data.",
-                  href: "/imports",
-                  label: "Fix imports",
+                  title: `${importStatusCounts.failed} import${importStatusCounts.failed === 1 ? "" : "s"} need attention`,
+                  body: "Review settings if a connected source stopped sending clean data.",
+                  href: "/settings",
+                  label: "Review settings",
                 }
               : importStatusCounts.processing > 0
                 ? {
-                  title: `${importStatusCounts.processing} import${importStatusCounts.processing === 1 ? "" : "s"} are still processing`,
-                  body: "Wait for the upload pipeline to finish, then review the parsed rows.",
-                  href: "/imports",
-                  label: "Open imports",
+                  title: `${importStatusCounts.processing} import${importStatusCounts.processing === 1 ? "" : "s"} still syncing`,
+                  body: "Wait for the sync to finish, then review the newest transactions.",
+                  href: "/transactions",
+                  label: "Open transactions",
                 }
               : {
                   title: "No urgent clean-up items",
@@ -1142,7 +1142,53 @@ async function ReportsPageView({
       merchantSpend.set(key, existing);
     });
 
+    const previousMerchantSpend = new Map<
+      string,
+      {
+        label: string;
+        amount: number;
+        count: number;
+      }
+    >();
+
+    reportPreviousWindowTransactions.forEach((transaction) => {
+      if (transaction.type !== "expense") {
+        return;
+      }
+
+      const label = transaction.merchantClean ?? transaction.merchantRaw;
+      const key = normalizeMerchant(label);
+      const existing = previousMerchantSpend.get(key) ?? { label, amount: 0, count: 0 };
+      existing.amount += Math.abs(Number(transaction.amount));
+      existing.count += 1;
+      previousMerchantSpend.set(key, existing);
+    });
+
     const topMerchants = Array.from(merchantSpend.values()).sort((a, b) => b.amount - a.amount).slice(0, 5);
+    const merchantMovements = Array.from(merchantSpend.values())
+      .map((merchant) => {
+        const previousMerchant = previousMerchantSpend.get(normalizeMerchant(merchant.label));
+        const previousAmount = previousMerchant?.amount ?? 0;
+        const delta = merchant.amount - previousAmount;
+        const deltaPercent = previousAmount > 0 ? (delta / previousAmount) * 100 : null;
+
+        return {
+          ...merchant,
+          previousAmount,
+          delta,
+          deltaPercent,
+        };
+      })
+      .filter((merchant) => merchant.delta > 0 || merchant.previousAmount === 0)
+      .sort((a, b) => {
+        const deltaGap = b.delta - a.delta;
+        if (deltaGap !== 0) {
+          return deltaGap;
+        }
+
+        return b.count - a.count;
+      })
+      .slice(0, 3);
     const currentMonthBucket = monthBuckets[monthBuckets.length - 1];
     const previousMonthBucket = monthBuckets[monthBuckets.length - 2] ?? monthBuckets[monthBuckets.length - 1];
     const monthlyNetChange = currentMonthBucket.net - previousMonthBucket.net;
@@ -1178,6 +1224,11 @@ async function ReportsPageView({
     const averageRecurringSpend = recurringMerchants.length > 0
       ? recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0) / recurringMerchants.length
       : 0;
+    const topCategoryName = topCategories[0]?.[0] ?? null;
+    const topCategoryAmount = topCategories[0]?.[1] ?? 0;
+    const previousTopCategoryAmount = topCategoryName ? previousSummary.expenseCategories.get(topCategoryName) ?? 0 : 0;
+    const topCategoryDelta = topCategoryAmount - previousTopCategoryAmount;
+    const topCategoryDeltaPercent = previousTopCategoryAmount > 0 ? (topCategoryDelta / previousTopCategoryAmount) * 100 : null;
     const topBalanceAccount = workspaceAccountSummaries.find((account) => account.balance !== null) ?? null;
     const topBalanceAccountName = topBalanceAccount?.name ?? null;
     const accountBalanceCoverage = accountCount > 0 ? activeAccountCount / accountCount : 0;
@@ -1204,29 +1255,42 @@ async function ReportsPageView({
         : confidenceScore >= 70
           ? "The report is dependable, though a few review items still deserve attention."
           : "A few missing balances or review items are reducing signal quality.";
+    const currentReviewCount = uncategorizedTransactions.length + possibleDuplicateGroups.length;
+    const leadingMerchantMovement = merchantMovements[0] ?? null;
+    const reviewSummary =
+      currentReviewCount > 0
+        ? `${uncategorizedTransactions.length} uncategorized and ${possibleDuplicateGroups.length} duplicate set${possibleDuplicateGroups.length === 1 ? "" : "s"} are still open.`
+        : "No unresolved review items remain in the queue.";
     const attentionItems = [
       {
-        title: nextStep.title,
-        body: nextStep.body,
-        href: nextStep.href,
-        label: nextStep.label,
+        title: topCategoryName
+          ? `${topCategoryName} changed by ${formatSignedCurrency(topCategoryDelta)}`
+          : "No category shift yet",
+        body: topCategoryName
+          ? previousTopCategoryAmount > 0
+            ? `${formatPercent(topCategoryDeltaPercent ?? 0)} vs the prior ${rangeWindowText} · ${formatCurrency(topCategoryAmount)} this period`
+            : `${formatCurrency(topCategoryAmount)} this period, with no prior baseline`
+          : "Add more spending data to reveal the dominant category change.",
+        href: topCategoryName ? buildTransactionsHref({ category: topCategoryName }) : "/transactions",
+        label: topCategoryName ? "Open category" : "Open transactions",
       },
       {
-        title: `${Math.round(confidenceScore)}% data confidence`,
-        body: confidenceCopy,
+        title: leadingMerchantMovement
+          ? `${leadingMerchantMovement.label} is spending more`
+          : "No unusual merchant spike",
+        body: leadingMerchantMovement
+          ? leadingMerchantMovement.previousAmount === 0
+            ? `${formatCurrency(leadingMerchantMovement.amount)} total · new merchant this period`
+            : `${formatCurrency(leadingMerchantMovement.amount)} total · ${formatSignedCurrency(leadingMerchantMovement.delta)} vs the prior ${rangeWindowText}`
+          : "The largest merchants are staying stable relative to the prior period.",
         href: "/transactions",
-        label: "Open transactions",
+        label: "Inspect merchants",
       },
       {
-        title: topBalanceAccountName
-          ? `${topBalanceAccountName} carries ${formatCurrency(topBalanceAccountBalance)}`
-          : "No account balance trend yet",
-        body:
-          topBalanceAccountName && accountConcentrationShare !== null
-            ? `${formatPercent(accountConcentrationShare * 100)} of tracked balance sits in the strongest account`
-            : "Add or refresh account balances to surface concentration and coverage.",
-        href: topBalanceAccountName ? buildTransactionsHref({ account: topBalanceAccountName }) : "/accounts",
-        label: topBalanceAccountName ? "View account" : "Open accounts",
+        title: `${currentReviewCount} item${currentReviewCount === 1 ? "" : "s"} need review`,
+        body: reviewSummary,
+        href: "/review",
+        label: "Open review",
       },
     ];
     const reportReviewQueueItems: ReportsQueueItem[] = [];
@@ -1272,16 +1336,16 @@ async function ReportsPageView({
             : `${importStatusCounts.processing} import${importStatusCounts.processing === 1 ? "" : "s"} still processing`,
         description:
           importStatusCounts.failed > 0
-            ? "Open the import pipeline to resolve the file that did not finish cleanly."
-            : "Wait for the pipeline to finish so the newest rows can roll into the reports.",
+            ? "Review settings if a connected source stopped sending clean data."
+            : "Wait for the sync to finish so the newest rows can roll into the reports.",
         tags: [
           importStatusCounts.failed > 0 ? "Failed import" : "Processing import",
           `${importStatusCounts.done} done`,
           `${importStatusCounts.processing} processing`,
         ],
         actions: [
-          { label: "Open imports", href: "/imports" },
-          { label: "Open transactions", href: "/transactions", variant: "secondary" },
+          { label: "Open transactions", href: "/transactions" },
+          { label: "Review settings", href: "/settings", variant: "secondary" },
         ],
       });
     }
@@ -1299,74 +1363,74 @@ async function ReportsPageView({
         ? "Compared with the same span earlier in the year"
         : `Compared with the previous ${rangeWindowText}`;
 
-    const aiHeadline = goalLabel
-      ? currentNet >= 0
-        ? `You are currently ${trendDirection}, and the numbers are supportive of ${goalLabel.toLowerCase()}.`
-        : `You are currently ${trendDirection}, but spending is still limiting ${goalLabel.toLowerCase()}.`
-      : currentNet >= 0
-        ? "Your cash flow is trending positively, and the next step is making that progress more intentional."
-        : "Your cash flow is under pressure, so the highest-impact move is to slow spending and clear the review queue.";
+    const aiHeadline =
+      currentNet >= 0
+        ? `Cash flow finished positive at ${formatSignedCurrency(currentNet)}.`
+        : `Cash flow softened to ${formatSignedCurrency(currentNet)}.`;
 
     const aiSummary =
-      spendDirection === null
-        ? "There is enough fresh activity to identify direction, but a prior comparison period is missing in one or more areas."
-        : currentNet >= 0
-          ? `Spending is ${spendDirection} while net cash flow remains positive, which points to a stable month with room for optimization.`
-          : `Spending is ${spendDirection} and cash flow is negative, which suggests the fastest win is a tighter expense pattern.`;
+      topCategoryName
+        ? `${topCategoryName} is the biggest spending driver${leadingMerchantMovement ? `, and ${leadingMerchantMovement.label} is the most unusual merchant.` : "."}`
+        : "More spending data is needed before the page can isolate the biggest drivers.";
 
     const aiSignals = [
       {
-        label: "Cash flow",
-        value: formatSignedCurrency(currentNet),
+        label: "Top category shift",
+        value: topCategoryName ?? "N/A",
         detail:
-          previousNet === 0
-            ? "No prior baseline to compare"
-            : `${currentNet >= previousNet ? "Ahead of" : "Behind"} the prior ${rangeWindowText}`,
-        tone: currentNet >= 0 ? "good" : "danger",
+          topCategoryName === null
+            ? "No category leader yet"
+            : previousTopCategoryAmount > 0
+              ? `${formatPercent(topCategoryDeltaPercent ?? 0)} vs prior ${rangeWindowText}`
+              : "No prior baseline",
+        tone: topCategoryDelta >= 0 ? ("subtle" as const) : ("good" as const),
       },
       {
-        label: "Savings rate",
-        value: savingsRate === null ? "N/A" : formatPercent(savingsRate * 100),
-        detail: goalLabel ? `Evaluated against ${goalLabel.toLowerCase()}` : "Add a goal for a clearer target",
-        tone: savingsRate !== null && savingsRate >= 0.2 ? "good" : "subtle",
+        label: "Unusual merchant",
+        value: leadingMerchantMovement?.label ?? "Stable",
+        detail: leadingMerchantMovement
+          ? leadingMerchantMovement.previousAmount === 0
+            ? "New merchant this period"
+            : `${formatSignedCurrency(leadingMerchantMovement.delta)} vs prior ${rangeWindowText}`
+          : "No merchant spikes detected",
+        tone: leadingMerchantMovement ? ("danger" as const) : ("good" as const),
       },
       {
-        label: "Top spend share",
-        value: topCategoryShare === null ? "N/A" : formatPercent(topCategoryShare * 100),
-        detail: topCategories[0]?.[0] ?? "No top category yet",
-        tone: topCategoryShare !== null && topCategoryShare < 0.45 ? "good" : "subtle",
+        label: "Recurring costs",
+        value: formatCurrency(recurringSavingsPotential),
+        detail: `${recurringMerchants.length} repeat merchant${recurringMerchants.length === 1 ? "" : "s"} surfaced`,
+        tone: recurringMerchants.length > 0 ? ("subtle" as const) : ("good" as const),
       },
       {
         label: "Review load",
-        value: `${uncategorizedTransactions.length + possibleDuplicateGroups.length}`,
-        detail: `${uncategorizedTransactions.length} uncategorized, ${possibleDuplicateGroups.length} duplicate set${possibleDuplicateGroups.length === 1 ? "" : "s"}`,
-        tone:
-          uncategorizedTransactions.length + possibleDuplicateGroups.length > 0
-            ? "danger"
-            : "good",
+        value: `${currentReviewCount}`,
+        detail: reviewSummary,
+        tone: currentReviewCount > 0 ? ("danger" as const) : ("good" as const),
       },
     ] as const;
 
     const aiActions = [
       {
-        title: goalLabel ? `Tighten the path toward ${goalLabel.toLowerCase()}` : "Set a goal to give this page a target",
-        body: goalLabel
-          ? "Use the goal as the benchmark when you judge spend, savings, and monthly momentum."
-          : "A target gives the page a clear direction, so insights can explain progress instead of only trends.",
-        href: "/goals",
-        label: goalLabel ? "Review goal" : "Set goal",
+        title: topCategoryName ? `Open ${topCategoryName.toLowerCase()}` : "Open spending trends",
+        body: topCategoryName
+          ? `${topCategoryName} is where the page sees the biggest concentration of spend.`
+          : "A category leader will appear once there is enough spending data to compare.",
+        href: topCategoryName ? buildTransactionsHref({ category: topCategoryName }) : "/transactions",
+        label: topCategoryName ? "Open category" : "Open transactions",
       },
       {
-        title: "Clean the review queue",
-        body: "Fix uncategorized transactions and duplicate rows so the next round of insights stays sharper.",
-        href: "/transactions",
-        label: "Open transactions",
+        title: currentReviewCount > 0 ? "Open the review queue" : "Review the transaction list",
+        body: currentReviewCount > 0
+          ? reviewSummary
+          : "The queue is clean, so the next best step is checking transactions directly.",
+        href: currentReviewCount > 0 ? "/review" : "/transactions",
+        label: currentReviewCount > 0 ? "Open review" : "Open transactions",
       },
       {
-        title: "Check the highest-spend category",
-        body: "If one category dominates, that is usually the easiest place to find a real improvement.",
-        href: "/transactions",
-        label: "Inspect spending",
+        title: "Review settings",
+        body: confidenceCopy,
+        href: "/settings",
+        label: "Open settings",
       },
     ];
 
@@ -1395,8 +1459,8 @@ async function ReportsPageView({
             <Link className="pill-link" href="/transactions">
               Transactions
             </Link>
-            <Link className="pill-link" href="/imports">
-              Imports
+            <Link className="pill-link" href="/settings">
+              Settings
             </Link>
           </>
         }
@@ -1493,9 +1557,8 @@ async function ReportsPageView({
           <div style={{ marginBottom: 20 }}>
           <EmptyDataCta
             eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
-            title="Your reports are ready for a new import."
-            copy="Import a statement first, and Clover will populate cash flow, spending, review items, and goal-aware summaries for you."
-            importHref="/dashboard?import=1"
+            title="Your reports are ready for new data."
+            copy="Add transactions and accounts, and Clover will populate cash flow, spending, review items, and goal-aware summaries for you."
             accountHref="/accounts"
             transactionHref="/transactions?manual=1"
           />
@@ -1560,7 +1623,7 @@ async function ReportsPageView({
             <span className="eyebrow">Range</span>
             <p>{selectedRangeLabel}</p>
             <small>
-              {comparisonCopy} · {latestImportSummary ? `Fresh data from ${latestImportSummary.fileName}` : "No imports available yet"}
+              {comparisonCopy} · {latestImportSummary ? "Fresh data available" : "No recent refresh yet"}
             </small>
           </div>
           <div className="reports-range-switch__controls" role="tablist" aria-label="Report range">
@@ -1574,12 +1637,12 @@ async function ReportsPageView({
 
         <section className="reports-ai-grid">
           <article className="report-ai-card report-ai-card--featured glass">
-            <p className="eyebrow">AI brief</p>
+            <p className="eyebrow">What changed</p>
             <h3>{aiHeadline}</h3>
             <p>{aiSummary}</p>
             <div className="report-ai-card__actions">
-              <Link className="button button-primary button-pill" href={aiActions[0].href}>
-                {aiActions[0].label}
+              <Link className="button button-primary button-pill" href={buildTransactionsHref({ month: currentMonthBucket.key })}>
+                Open cash flow
               </Link>
               <Link className="button button-secondary button-pill" href="/transactions">
                 Open transactions
@@ -1590,7 +1653,7 @@ async function ReportsPageView({
           <article className="report-ai-card glass">
             <div className="report-card__head">
               <div>
-                <h4>Signals</h4>
+                <h4>Why it changed</h4>
               </div>
             </div>
             <div className="report-ai-signal-grid">
@@ -1607,7 +1670,7 @@ async function ReportsPageView({
           <article className="report-ai-card glass">
             <div className="report-card__head">
               <div>
-                <h4>Next moves</h4>
+                <h4>What to do next</h4>
               </div>
             </div>
             <div className="report-list">
@@ -1813,7 +1876,7 @@ async function ReportsPageView({
                     );
                   })
                 ) : (
-                  <div className="empty-state">No categorized expenses yet. Add transactions to surface the main spending groups.</div>
+                  <div className="empty-state">No categorized expenses yet. Review uncategorized rows or import a fuller statement to surface the main spending groups.</div>
                 )}
                 {currentOtherSpend > 0 ? (
                   <div className="report-donut__legend-item">
@@ -1869,7 +1932,7 @@ async function ReportsPageView({
                   </Link>
                 ))
               ) : (
-                <div className="empty-state">No repeat merchants surfaced yet. Add more transactions to reveal fixed costs.</div>
+                <div className="empty-state">No repeat merchants surfaced yet. Add more transactions or imports to reveal the fixed costs Clover can track.</div>
               )}
             </div>
             <div className="report-subsection report-subsection--compact">
@@ -1920,7 +1983,7 @@ async function ReportsPageView({
                   </Link>
                 ))
               ) : (
-                <div className="empty-state">No merchants surfaced yet. More transactions will reveal the concentration points.</div>
+                <div className="empty-state">No merchants surfaced yet. Import more activity and Clover will surface the concentration points for you.</div>
               )}
             </div>
           </article>
@@ -1984,14 +2047,30 @@ async function ReportsPageView({
               </div>
             </div>
 
+            <div className="report-subsection">
+              <p className="eyebrow">Trust panel</p>
+              <div className="report-list">
+                <div className="report-list__item">
+                  <div className="report-list__meta">
+                    <strong>{confidenceLabel}</strong>
+                    <span>{confidenceCopy}</span>
+                  </div>
+                  <div className="report-tags">
+                    <span className="pill pill-subtle">{Math.round(confidenceScore)}%</span>
+                    <span className="pill pill-subtle">{importStatusCounts.failed + importStatusCounts.processing} flags</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="report-insight-grid">
               <div className="report-insight">
-                <span>Imported transactions</span>
+                <span>Imported rows</span>
                 <strong>{importedTransactions}</strong>
                 <small>{formatCurrency(importedAmount)} total</small>
               </div>
               <div className="report-insight">
-                <span>Manual transactions</span>
+                <span>Manual rows</span>
                 <strong>{manualTransactions}</strong>
                 <small>{formatCurrency(manualAmount)} total</small>
               </div>
@@ -2001,9 +2080,9 @@ async function ReportsPageView({
                 <small>{accountConcentrationShare === null ? "Balance coverage pending" : `${formatPercent(accountConcentrationShare * 100)} in the largest account`}</small>
               </div>
               <div className="report-insight">
-                <span>Import quality</span>
-                <strong>{importStatusCounts.failed + importStatusCounts.processing}</strong>
-                <small>{confidenceCopy}</small>
+                <span>Review load</span>
+                <strong>{currentReviewCount}</strong>
+                <small>{currentReviewCount} unresolved item{currentReviewCount === 1 ? "" : "s"}</small>
               </div>
             </div>
 
@@ -2034,51 +2113,9 @@ async function ReportsPageView({
                     </div>
                   ))
                 ) : (
-                  <div className="empty-state">No account balances available yet.</div>
+                  <div className="empty-state">No account balances available yet. Add account snapshots so Clover can show the live balance picture.</div>
                 )}
               </div>
-            </div>
-
-            <div className="report-status-list">
-              <div className="report-status-list__item">
-                <span>Done</span>
-                <strong>{importStatusCounts.done}</strong>
-              </div>
-              <div className="report-status-list__item">
-                <span>Processing</span>
-                <strong>{importStatusCounts.processing}</strong>
-              </div>
-              <div className="report-status-list__item">
-                <span>Failed</span>
-                <strong>{importStatusCounts.failed}</strong>
-              </div>
-              <div className="report-status-list__item">
-                <span>Deleted</span>
-                <strong>{importStatusCounts.deleted}</strong>
-              </div>
-            </div>
-
-            <div className="report-subsection">
-              <p className="eyebrow">Latest import</p>
-              {latestImportSummary ? (
-                <div className="report-list">
-                  <div className="report-list__item">
-                    <div className="report-list__meta">
-                      <strong>{latestImportSummary.fileName}</strong>
-                      <span>
-        {formatShortDate(latestImportSummary.uploadedAt)} · {latestImportSummary.status}
-                      </span>
-                    </div>
-                    <div className="report-tags">
-                      <span className={`pill pill-${latestImportSummary.status === "done" ? "good" : latestImportSummary.status === "failed" ? "danger" : "subtle"}`}>
-                        {latestImportSummary.status}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="empty-state">No import files available yet.</div>
-              )}
             </div>
           </article>
         </section>
@@ -2103,8 +2140,8 @@ async function ReportsPageView({
             <Link className="pill-link" href="/transactions">
               Transactions
             </Link>
-            <Link className="pill-link" href="/imports">
-              Imports
+            <Link className="pill-link" href="/settings">
+              Settings
             </Link>
           </>
         }
@@ -2113,7 +2150,7 @@ async function ReportsPageView({
           <p className="eyebrow">Reports unavailable</p>
           <h4>We hit a temporary server issue while building this page.</h4>
           <p className="panel-muted">
-            Try again in a moment. If the problem keeps happening, the imports or database connection may need a quick check.
+            Try again in a moment. If the problem keeps happening, the data feed or database connection may need a quick check.
           </p>
           <details className="report-error-details">
             <summary>Technical details</summary>

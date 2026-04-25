@@ -16,6 +16,7 @@ import {
   getGoalDefinition,
   getGoalMoneyLabel,
   getGoalProgressLabel,
+  getGoalProgressSnapshot,
   getGoalPlaybook,
   getSuggestedGoalAmount,
   type GoalKey,
@@ -434,6 +435,13 @@ export default async function GoalsPage() {
   const currentNet = currentSummary.income - currentSummary.expense;
   const previousNet = previousSummary.income - previousSummary.expense;
   const currentSpend = currentSummary.expense;
+  const goalProgress = getGoalProgressSnapshot({
+    goalKey: selectedGoalKey as GoalKey | null,
+    targetAmount: goalTargetAmount,
+    currentNet,
+    currentSpend,
+    monthlyIncome,
+  });
   const currentSavingsRate = currentSummary.income > 0 ? currentNet / currentSummary.income : null;
   const previousSavingsRate = previousSummary.income > 0 ? (previousSummary.income - previousSummary.expense) / previousSummary.income : null;
   const spendDelta = previousSummary.expense > 0 ? ((currentSummary.expense - previousSummary.expense) / previousSummary.expense) * 100 : null;
@@ -497,15 +505,6 @@ export default async function GoalsPage() {
   const goalScore = clamp(Math.round(savingsScore + trendScore + consistencyScore + cleanlinessScore * 0.2 - dragPenalty), 12, 98);
   const coach = getCoachMessage(goalScore);
   const onboardingDate = user.onboardingCompletedAt ? new Date(user.onboardingCompletedAt) : null;
-  const activeGoalProgressAmount =
-    hasGoalTarget && selectedGoalKey === "track_spending"
-      ? Math.max(0, goalTargetAmount - currentSpend)
-      : Math.max(0, currentNet);
-  const activeGoalProgressPercent =
-    hasGoalTarget && goalTargetAmount > 0 ? clamp((activeGoalProgressAmount / goalTargetAmount) * 100, 0, 100) : null;
-  const activeGoalRemainingAmount =
-    hasGoalTarget && activeGoalProgressPercent !== null ? Math.max(0, goalTargetAmount - activeGoalProgressAmount) : null;
-  const goalReached = activeGoalProgressPercent !== null && activeGoalProgressPercent >= 100;
   const goalMoneyLabel = getGoalMoneyLabel(selectedGoalKey as GoalKey | null);
   const goalProgressLabel = getGoalProgressLabel(selectedGoalKey as GoalKey | null);
 
@@ -583,24 +582,24 @@ export default async function GoalsPage() {
     {
       label: hasGoalTarget ? goalMoneyLabel : "Suggested target",
       value:
-        hasGoalTarget && activeGoalProgressPercent !== null
-          ? `${formatCurrency(activeGoalProgressAmount)} / ${formatCurrency(goalTargetAmount)}`
+        hasGoalTarget && goalProgress.targetAmount !== null
+          ? `${formatCurrency(goalProgress.currentAmount)} / ${formatCurrency(goalProgress.targetAmount)}`
           : suggestedGoalTarget !== null
             ? formatCurrency(suggestedGoalTarget)
             : "Set it now",
       note: hasGoalTarget
-        ? goalReached
+        ? goalProgress.achieved
           ? "You crossed the line"
-          : activeGoalRemainingAmount !== null
-            ? `${formatCurrency(activeGoalRemainingAmount)} remaining`
+          : goalProgress.remainingAmount !== null
+            ? `${formatCurrency(goalProgress.remainingAmount)} remaining`
             : "Keep moving"
         : "Clover can suggest a starting point",
     },
     {
       label: goalProgressLabel,
       value:
-        hasGoalTarget && activeGoalProgressPercent !== null
-          ? `${Math.round(activeGoalProgressPercent)}%`
+        hasGoalTarget && goalProgress.progressPercent !== null
+          ? `${Math.round(goalProgress.progressPercent)}%`
           : "No target yet",
       note: hasGoalTarget ? `Tracked from ${goalTargetSource ?? "your saved goal"}` : `${uncategorizedTransactions.length} items still need attention`,
     },
@@ -668,13 +667,13 @@ export default async function GoalsPage() {
   const goalAlerts = [
     {
       text: hasGoalTarget
-        ? goalReached
+        ? goalProgress.achieved
           ? `You reached your ${formatCurrency(goalTargetAmount)} monthly target. That is a real win.`
-          : activeGoalRemainingAmount !== null
-            ? `${formatCurrency(activeGoalRemainingAmount)} left to go this month. Keep the rhythm steady.`
+          : goalProgress.remainingAmount !== null
+            ? `${formatCurrency(goalProgress.remainingAmount)} left to go this month. Keep the rhythm steady.`
             : playbook.alertTemplates[0]
         : "Set a monthly target to unlock live progress tracking.",
-      icon: goalReached ? "spark" : hasGoalTarget ? "chart" : "target",
+      icon: goalProgress.achieved ? "spark" : hasGoalTarget ? "chart" : "target",
     },
     uncategorizedTransactions.length > 0
       ? {
@@ -790,10 +789,10 @@ export default async function GoalsPage() {
 
             <div className="goals-progress">
               <div className="goals-progress__head">
-                <strong>{hasGoalTarget ? goalProgressLabel : "Monthly goal setup"}</strong>
+                <strong>{hasGoalTarget ? goalProgress.label : "Monthly goal setup"}</strong>
                 <span>
-                  {hasGoalTarget && goalTargetAmount > 0
-                    ? `${formatCurrency(activeGoalProgressAmount)} of ${formatCurrency(goalTargetAmount)}`
+                  {hasGoalTarget && goalProgress.targetAmount !== null
+                    ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalProgress.targetAmount)}`
                     : suggestedGoalTarget !== null
                       ? `Suggested ${formatCurrency(suggestedGoalTarget)}`
                       : "No target saved yet"}
@@ -802,13 +801,13 @@ export default async function GoalsPage() {
               <div className="goals-progress__bar" aria-hidden="true">
                 <div
                   className="goals-progress__fill"
-                  style={{ width: `${hasGoalTarget && activeGoalProgressPercent !== null ? activeGoalProgressPercent : 0}%` }}
+                  style={{ width: `${goalProgress.progressPercent ?? 0}%` }}
                 />
               </div>
-              <p>{hasGoalTarget ? (goalReached ? "You have already cleared the line. Keep the habit going." : coach.body) : "Set the number, then Clover will track the month with you."}</p>
+              <p>{hasGoalTarget ? goalProgress.coachCopy : "Set the number, then Clover will track the month with you."}</p>
             </div>
 
-            {goalReached ? (
+            {goalProgress.achieved ? (
               <div className="goals-celebration" role="status" aria-live="polite">
                 <span className="goals-celebration__icon" aria-hidden="true">
                   ✦
@@ -826,16 +825,16 @@ export default async function GoalsPage() {
               goalKey={(selectedGoalKey ?? "save_more") as GoalKey}
               title={`${selectedGoal.title} in motion`}
               subtitle={heroSupport}
-              progress={hasGoalTarget && activeGoalProgressPercent !== null ? activeGoalProgressPercent : goalScore}
+              progress={goalProgress.progressPercent ?? goalScore}
             />
 
             <div className="goals-hero__ring-card">
               <div
-                className={`goals-hero__ring ${goalReached ? "is-complete" : ""}`}
+                className={`goals-hero__ring ${goalProgress.achieved ? "is-complete" : ""}`}
                 role="img"
                 aria-label={
-                  hasGoalTarget && activeGoalProgressPercent !== null
-                    ? `Monthly goal progress at ${Math.round(activeGoalProgressPercent)} percent`
+                  hasGoalTarget && goalProgress.progressPercent !== null
+                    ? `Monthly goal progress at ${Math.round(goalProgress.progressPercent)} percent`
                     : "Monthly goal is waiting for a target amount"
                 }
               >
@@ -854,13 +853,13 @@ export default async function GoalsPage() {
                     className="goals-ring__progress"
                     stroke="url(#goals-ring-gradient)"
                     style={{
-                      strokeDasharray: `${2 * Math.PI * 84 * ((hasGoalTarget && activeGoalProgressPercent !== null ? activeGoalProgressPercent : 0) / 100)} ${2 * Math.PI * 84}`,
+                      strokeDasharray: `${2 * Math.PI * 84 * ((goalProgress.progressPercent ?? 0) / 100)} ${2 * Math.PI * 84}`,
                     }}
                   />
                 </svg>
                 <div className="goals-hero__ring-copy">
-                  <strong>{hasGoalTarget && activeGoalProgressPercent !== null ? `${Math.round(activeGoalProgressPercent)}%` : "Set it"}</strong>
-                  <span>{hasGoalTarget ? `${formatCurrency(activeGoalProgressAmount)} saved` : "No monthly target yet"}</span>
+                  <strong>{hasGoalTarget && goalProgress.progressPercent !== null ? `${Math.round(goalProgress.progressPercent)}%` : "Set it"}</strong>
+                  <span>{hasGoalTarget ? `${formatCurrency(goalProgress.currentAmount)} ${goalProgress.currentLabel.toLowerCase()}` : "No monthly target yet"}</span>
                 </div>
               </div>
 
@@ -1024,10 +1023,10 @@ export default async function GoalsPage() {
                     </div>
                     <div>
                       <strong>No recurring drag yet</strong>
-                      <span>Nothing is repeating enough to crowd the plan.</span>
+                      <span>Clover has not seen a repeating merchant large enough to crowd this plan.</span>
                     </div>
                   </div>
-                  <small>That makes the lane easier to steer.</small>
+                  <small>Add a few more transactions and Clover will surface the first fixed cost worth watching.</small>
                 </div>
               )}
             </div>

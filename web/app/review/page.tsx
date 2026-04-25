@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
+import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { ReviewWorkbench } from "@/components/review-workbench";
 import { analyticsOnceKey } from "@/lib/analytics";
@@ -146,16 +146,17 @@ export default async function ReviewPage() {
               }))}
             />
           ) : (
-            <div className="empty-state empty-state--review">
-              <h3>No transactions need review right now</h3>
-              <p>
-                That means the current import set looks clear. When uncertain rows appear, this page will collect them
-                here so you can resolve them quickly.
-              </p>
-              <Link className="button button-primary" href="/transactions">
-                Open transactions
-              </Link>
-            </div>
+            <EmptyDataCta
+              eyebrow="Review inbox"
+              title="No rows need review right now"
+              copy="The current import set looks clean. When Clover spots uncertain or low-confidence rows, this page will collect them here so you can resolve them quickly."
+              importHref="/dashboard?import=1"
+              accountHref="/transactions"
+              transactionHref="/transactions?manual=1"
+              importLabel="Import statements"
+              accountLabel="Open transactions"
+              transactionLabel="Add a transaction"
+            />
           )}
         </div>
       </section>

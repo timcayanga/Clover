@@ -72,7 +72,23 @@ export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
   };
 
   if (!hasItems || !current) {
-    return <div className="empty-state">No actionable items right now.</div>;
+    return (
+      <div className="empty-state reports-review-queue__empty">
+        <strong>Review queue is clear</strong>
+        <p>
+          Clover did not find any low-confidence items in this report set. If you want to keep pressure on the numbers,
+          check transactions for new imports or unresolved rows.
+        </p>
+        <div className="reports-review-queue__empty-actions">
+          <Link className="pill-link pill-link--inline" href="/review">
+            Open review
+          </Link>
+          <Link className="pill-link pill-link--inline" href="/transactions">
+            View transactions
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (

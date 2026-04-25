@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { flushSync } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
@@ -41,7 +41,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     id: summary.accountId,
     name: summary.accountName,
     institution: summary.institution,
-    type: inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
+    type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
     currency: "PHP",
     balance: summary.balance,
   };
@@ -169,6 +169,12 @@ type InlineEditableCellProps = {
 type TransactionHistoryEntry = {
   before: Transaction;
   after: Transaction;
+};
+
+type TransactionConfidenceSignal = {
+  label: string;
+  value: number;
+  note: string;
 };
 
 type MerchantRenameSuggestion = {
@@ -712,6 +718,104 @@ const humanizeTransactionMerchantText = (value: string) => humanizeMerchantText(
 const summarizeTransactionMerchantText = (value: string, institution?: string | null) =>
   summarizeMerchantText(value, institution);
 
+const getConfidenceLabel = (value: number) => {
+  if (value >= 85) {
+    return "High";
+  }
+
+  if (value >= 65) {
+    return "Medium";
+  }
+
+  return "Needs review";
+};
+
+const inferTransactionConfidenceSignals = (transaction: Transaction, warningReason: string | null): TransactionConfidenceSignal[] => {
+  const source = transaction.source ?? "upload";
+  const hasWarning = Boolean(warningReason);
+  const sourceBoost = source === "manual" ? 6 : source === "upload" ? 0 : -4;
+
+  const nameValue = Math.max(
+    40,
+    Math.min(98, (transaction.merchantClean?.trim() ? 88 : 74) + sourceBoost + (transaction.merchantRaw.trim() ? 4 : -10))
+  );
+  const accountValue = Math.max(40, Math.min(98, (transaction.accountId ? 92 : 58) + sourceBoost + (transaction.accountName ? 2 : -6)));
+  const categoryValue = Math.max(
+    20,
+    Math.min(
+      98,
+      (!transaction.categoryId ? 28 : 86) +
+        sourceBoost +
+        (warningReason === "Possible duplicate" ? -8 : 0) +
+        (warningReason === "Needs category review" ? -20 : 0) +
+        (hasWarning && warningReason !== "Possible duplicate" ? -4 : 0)
+    )
+  );
+
+  return [
+    {
+      label: "Name",
+      value: nameValue,
+      note: transaction.merchantClean?.trim() ? "Cleaned merchant name present" : "Using the raw statement label",
+    },
+    {
+      label: "Account",
+      value: accountValue,
+      note: transaction.accountName ? "Account match is present" : "Account needs a closer look",
+    },
+    {
+      label: "Category",
+      value: categoryValue,
+      note: !transaction.categoryId
+        ? "No category assigned yet"
+        : warningReason === "Needs category review"
+          ? "Category still needs review"
+          : "Category has a strong match",
+    },
+  ];
+};
+
+const summarizeTransactionChange = (before: Transaction, after: Transaction, accountNames: Map<string, string>, categoryNames: Map<string, string>) => {
+  const changes: string[] = [];
+  const beforeName = before.merchantClean ?? before.merchantRaw;
+  const afterName = after.merchantClean ?? after.merchantRaw;
+  if (beforeName !== afterName) {
+    changes.push(`Name: ${beforeName} → ${afterName}`);
+  }
+
+  const beforeDate = before.date.slice(0, 10);
+  const afterDate = after.date.slice(0, 10);
+  if (beforeDate !== afterDate) {
+    changes.push(`Date: ${formatDate(beforeDate)} → ${formatDate(afterDate)}`);
+  }
+
+  if (before.accountId !== after.accountId) {
+    changes.push(`Account: ${accountNames.get(before.accountId) ?? before.accountName} → ${accountNames.get(after.accountId) ?? after.accountName}`);
+  }
+
+  if ((before.categoryId ?? "") !== (after.categoryId ?? "")) {
+    changes.push(
+      `Category: ${categoryNames.get(before.categoryId ?? "") ?? before.categoryName ?? "Other"} → ${
+        categoryNames.get(after.categoryId ?? "") ?? after.categoryName ?? "Other"
+      }`
+    );
+  }
+
+  if (before.amount !== after.amount) {
+    changes.push(`Amount: ${currencyFormatter.format(Number(before.amount))} → ${currencyFormatter.format(Number(after.amount))}`);
+  }
+
+  if (before.isExcluded !== after.isExcluded) {
+    changes.push(after.isExcluded ? "Excluded from totals" : "Included in totals");
+  }
+
+  if (before.isTransfer !== after.isTransfer) {
+    changes.push(after.isTransfer ? "Marked as transfer" : "Marked as non-transfer");
+  }
+
+  return changes;
+};
+
 const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => ({
   merchantRaw: transaction.merchantRaw,
   merchantClean: transaction.merchantClean ?? "",
@@ -996,6 +1100,7 @@ function TransactionsPageContent() {
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  const [manualAdvancedOpen, setManualAdvancedOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
@@ -1029,6 +1134,11 @@ function TransactionsPageContent() {
   const accountInstitutionById = useMemo(
     () => new Map(accounts.map((account) => [account.id, account.institution ?? null] as const)),
     [accounts]
+  );
+  const accountNameById = useMemo(() => new Map(accounts.map((account) => [account.id, account.name] as const)), [accounts]);
+  const categoryNameById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category.name] as const)),
+    [categories]
   );
 
   const loadWorkspaces = async () => {
@@ -1170,7 +1280,7 @@ function TransactionsPageContent() {
       setDownloadMenuOpen(false);
     };
 
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         setAddMenuOpen(false);
         setDownloadMenuOpen(false);
@@ -1195,6 +1305,7 @@ function TransactionsPageContent() {
   useEffect(() => {
     if (manualOpen) {
       manualNameInputRef.current?.focus();
+      setManualAdvancedOpen(false);
     }
   }, [manualOpen]);
 
@@ -1410,6 +1521,74 @@ function TransactionsPageContent() {
   const allVisibleSelected = filteredTransactionIds.length > 0 && filteredTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
   const someVisibleSelected = filteredTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
 
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+
+    if (query.trim()) {
+      count += 1;
+    }
+
+    if (dateFilterMode !== "ltd") {
+      count += 1;
+    }
+
+    count += categoryFilters.length;
+    count += accountFilters.length;
+    count += typeFilters.length;
+    count += merchantFilters.length;
+
+    return count;
+  }, [accountFilters.length, categoryFilters.length, dateFilterMode, merchantFilters.length, query, typeFilters.length]);
+
+  const activeFilterChips = useMemo(
+    () => [
+      ...(query.trim()
+        ? [
+            {
+              key: "query",
+              label: `Search: ${query.trim()}`,
+              onClear: () => setQuery(""),
+            },
+          ]
+        : []),
+      ...(dateFilterMode !== "ltd"
+        ? [
+            {
+              key: "date",
+              label: `Date: ${getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd)}`,
+              onClear: () => {
+                setDateFilterMode("ltd");
+                setDateFilterAnchor(todayIso);
+                setCustomStart("");
+                setCustomEnd("");
+              },
+            },
+          ]
+        : []),
+      ...categoryFilters.map((categoryId) => ({
+        key: `category:${categoryId}`,
+        label: `Category: ${categoryNameById.get(categoryId) ?? "Unknown"}`,
+        onClear: () => setCategoryFilters((current) => current.filter((entry) => entry !== categoryId)),
+      })),
+      ...accountFilters.map((accountId) => ({
+        key: `account:${accountId}`,
+        label: `Account: ${accountNameById.get(accountId) ?? "Unknown"}`,
+        onClear: () => setAccountFilters((current) => current.filter((entry) => entry !== accountId)),
+      })),
+      ...typeFilters.map((type) => ({
+        key: `type:${type}`,
+        label: `Type: ${type === "credit" ? "Credit" : "Debit"}`,
+        onClear: () => setTypeFilters((current) => current.filter((entry) => entry !== type)),
+      })),
+      ...merchantFilters.map((merchant) => ({
+        key: `merchant:${merchant}`,
+        label: `Merchant: ${merchant}`,
+        onClear: () => setMerchantFilters((current) => current.filter((entry) => entry !== merchant)),
+      })),
+    ],
+    [accountFilters, accountNameById, categoryFilters, categoryNameById, customStart, dateFilterAnchor, dateFilterMode, merchantFilters, query, typeFilters]
+  );
+
   useEffect(() => {
     if (!selectAllRef.current) {
       return;
@@ -1591,11 +1770,59 @@ function TransactionsPageContent() {
     [filteredTransactions, duplicateLookup]
   );
 
+  const selectedTransactionWarningReason = selectedTransaction ? warningReasonFor(selectedTransaction) : null;
+  const selectedTransactionConfidenceSignals = selectedTransaction
+    ? inferTransactionConfidenceSignals(selectedTransaction, selectedTransactionWarningReason)
+    : [];
+  const selectedTransactionHistory = selectedTransaction
+    ? undoStack
+        .filter((entry) => entry.before.id === selectedTransaction.id || entry.after.id === selectedTransaction.id)
+        .slice(0, 3)
+    : [];
+
   const nextReviewTransactionAfter = (transactionId: string) => {
     const startIndex = filteredTransactions.findIndex((transaction) => transaction.id === transactionId);
     const start = startIndex >= 0 ? startIndex + 1 : 0;
     const ordered = [...filteredTransactions.slice(start), ...filteredTransactions.slice(0, start)];
     return ordered.find((transaction) => isReviewableTransaction(transaction)) ?? null;
+  };
+
+  const focusTransactionRow = (transactionId: string | null | undefined) => {
+    if (!transactionId) {
+      return;
+    }
+
+    const row = transactionRowRefs.current.get(transactionId);
+    row?.focus();
+  };
+
+  const handleTransactionRowKeyDown = (event: ReactKeyboardEvent<HTMLElement>, transaction: Transaction, index: number) => {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      focusTransactionRow(filteredTransactions[index + 1]?.id);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      focusTransactionRow(filteredTransactions[index - 1]?.id);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      openTransactionDetail(transaction);
+      return;
+    }
+
+    if (event.key === " ") {
+      event.preventDefault();
+      toggleSelectedTransaction(transaction.id, !selectedTransactionIds.includes(transaction.id));
+    }
   };
 
   const openTransactionDetail = (transaction: Transaction) => {
@@ -1738,6 +1965,19 @@ function TransactionsPageContent() {
     setFilterOpen(true);
   };
 
+  const clearAllTransactionFilters = () => {
+    setQuery("");
+    setCategoryFilters([]);
+    setAccountFilters([]);
+    setTypeFilters([]);
+    setMerchantFilters([]);
+    setMerchantFilterInput("");
+    setDateFilterMode("ltd");
+    setDateFilterAnchor(todayIso);
+    setCustomStart("");
+    setCustomEnd("");
+  };
+
   const openManualAdd = async () => {
     setAddMenuOpen(false);
 
@@ -1749,6 +1989,7 @@ function TransactionsPageContent() {
     try {
       const accountId = await ensureDefaultAccount(selectedWorkspaceId);
       setManualForm(createEmptyManualForm(accountId, getOtherCategoryId(categories)));
+      setManualAdvancedOpen(false);
       setManualOpen(true);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to prepare transaction form.");
@@ -1756,7 +1997,7 @@ function TransactionsPageContent() {
   };
 
   useEffect(() => {
-    const handleKeyboardShortcuts = (event: KeyboardEvent) => {
+    const handleKeyboardShortcuts = (event: globalThis.KeyboardEvent) => {
       const target = event.target;
       const isEditableTarget =
         target instanceof HTMLInputElement ||
@@ -2072,6 +2313,19 @@ function TransactionsPageContent() {
 
       return {
         ...current,
+        merchantRaw: patch.merchantRaw ?? current.merchantRaw,
+        merchantClean: patch.merchantClean ?? current.merchantClean,
+        date: patch.date ? patch.date.slice(0, 10) : current.date,
+        accountId: patch.accountId ?? current.accountId,
+        categoryId: patch.categoryId ?? current.categoryId,
+        amount: patch.amount ?? current.amount,
+        type:
+          patch.type === "income"
+            ? "credit"
+            : patch.type === "expense"
+              ? "debit"
+              : current.type,
+        description: patch.description !== undefined ? patch.description ?? "" : current.description,
         isExcluded: patch.isExcluded ?? current.isExcluded,
         isTransfer: patch.isTransfer ?? current.isTransfer,
       };
@@ -2113,6 +2367,19 @@ function TransactionsPageContent() {
 
       return {
         ...current,
+        merchantRaw: patch.merchantRaw ?? current.merchantRaw,
+        merchantClean: patch.merchantClean ?? current.merchantClean,
+        date: patch.date ? patch.date.slice(0, 10) : current.date,
+        accountId: patch.accountId ?? current.accountId,
+        categoryId: patch.categoryId ?? current.categoryId,
+        amount: patch.amount ?? current.amount,
+        type:
+          patch.type === "income"
+            ? "credit"
+            : patch.type === "expense"
+              ? "debit"
+              : current.type,
+        description: patch.description !== undefined ? patch.description ?? "" : current.description,
         isExcluded: patch.isExcluded ?? current.isExcluded,
         isTransfer: patch.isTransfer ?? current.isTransfer,
       };
@@ -2295,8 +2562,6 @@ function TransactionsPageContent() {
       payload: {
         accountId: bulkEditForm.accountId || undefined,
         categoryId: bulkEditForm.categoryId || undefined,
-        type: bulkEditForm.type || undefined,
-        description: bulkEditForm.description ? bulkEditForm.description : undefined,
         isExcluded:
           bulkEditForm.isExcluded === ""
             ? undefined
@@ -2324,8 +2589,6 @@ function TransactionsPageContent() {
                 categoryName: categoryNames.get(payload.categoryId) ?? transaction.categoryName,
               }
             : {}),
-          ...(payload.type ? { type: payload.type as Transaction["type"] } : {}),
-          ...(payload.description !== undefined ? { description: payload.description ?? null } : {}),
           ...(payload.isExcluded !== undefined ? { isExcluded: payload.isExcluded } : {}),
           ...(payload.isTransfer !== undefined ? { isTransfer: payload.isTransfer } : {}),
         },
@@ -2874,15 +3137,16 @@ function TransactionsPageContent() {
                   className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
                   style={toolbarChipStyle}
                   type="button"
-                  title="Filters (F)"
+                  title={activeFilterCount > 0 ? `Filters (F) · ${activeFilterCount} active` : "Filters (F)"}
                   onClick={openSearchFilters}
-                  aria-label="Open filters"
+                  aria-label={activeFilterCount > 0 ? `Open filters, ${activeFilterCount} active` : "Open filters"}
                   aria-keyshortcuts="f"
                 >
                   <span className="button-icon" aria-hidden="true">
                     <ActionIcon name="filters" />
                   </span>
                   <span>Filters</span>
+                  {activeFilterCount > 0 ? <span className="transactions-filter-count-badge">{activeFilterCount}</span> : null}
                 </button>
                 <button
                   className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-summary-toggle-button"
@@ -3038,6 +3302,44 @@ function TransactionsPageContent() {
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <div className="transactions-context-strip" aria-label="Transaction helpers">
+            <div className="transactions-context-strip__filters">
+              {activeFilterChips.length ? (
+                <>
+                  <span className="transactions-context-strip__label">Active filters</span>
+                  <div className="transactions-context-strip__chips">
+                    {activeFilterChips.map((chip) => (
+                      <button
+                        key={chip.key}
+                        className="pill pill-interactive transactions-filter-pill transactions-context-strip__chip"
+                        type="button"
+                        onClick={chip.onClear}
+                        title={`Clear ${chip.label}`}
+                        aria-label={`Clear ${chip.label}`}
+                      >
+                        <span>{chip.label}</span>
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    ))}
+                    <button className="transactions-context-strip__clear" type="button" onClick={clearAllTransactionFilters}>
+                      Clear all
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <span className="transactions-context-strip__label">No active filters</span>
+              )}
+            </div>
+            <div className="transactions-context-strip__keys" aria-label="Keyboard shortcuts">
+              <span className="transactions-context-strip__key">↑/↓ rows</span>
+              <span className="transactions-context-strip__key">Enter details</span>
+              <span className="transactions-context-strip__key">Space select</span>
+              <span className="transactions-context-strip__key">A add</span>
+              <span className="transactions-context-strip__key">F filters</span>
+              <span className="transactions-context-strip__key">/ search</span>
             </div>
           </div>
 
@@ -3217,7 +3519,7 @@ function TransactionsPageContent() {
                 ))}
               </div>
             ) : filteredTransactions.length > 0 ? (
-              filteredTransactions.map((transaction) => {
+              filteredTransactions.map((transaction, index) => {
                 const warningReason = warningReasonFor(transaction);
                 const amount = Number(transaction.amount);
                 const isPositive = transaction.type === "income";
@@ -3231,6 +3533,13 @@ function TransactionsPageContent() {
                 );
                 const merchantDisplay = humanizeTransactionMerchantText(transaction.merchantRaw);
                 const showMerchantSubtext = merchantDisplay && merchantDisplay.toLowerCase() !== merchantSummary.toLowerCase();
+                const sourceClass =
+                  transaction.source === "manual"
+                    ? "line-item--manual"
+                    : transaction.source === "upload"
+                      ? "line-item--imported"
+                      : "line-item--other";
+                const rowStateClass = warningReason ? "line-item--warning" : "line-item--clear";
                 return (
                   <div
                     key={transaction.id}
@@ -3242,9 +3551,12 @@ function TransactionsPageContent() {
 
                       transactionRowRefs.current.delete(transaction.id);
                     }}
-                    className={`line-item ${transaction.isExcluded ? "is-muted" : ""} ${
+                    className={`line-item ${sourceClass} ${rowStateClass} ${transaction.isExcluded ? "is-muted" : ""} ${
                       selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
                     }`}
+                    tabIndex={0}
+                    aria-label={`${merchantSummary}, ${formatDate(transaction.date)}, ${categoryLabel}, ${currencyFormatter.format(amount)}`}
+                    onKeyDown={(event) => handleTransactionRowKeyDown(event, transaction, index)}
                   >
                     <label className="transaction-select-cell">
                       <input
@@ -3361,7 +3673,7 @@ function TransactionsPageContent() {
                 </div>
               </div>
             ) : (
-              <div className="empty-state">No transactions match the current filters.</div>
+              <div className="empty-state">No transactions match the current filters. Clear one filter or widen the date range to bring rows back.</div>
             )}
           </div>
 
@@ -3393,7 +3705,7 @@ function TransactionsPageContent() {
               </div>
             ) : filteredTransactions.length > 0 ? (
               <div className="transactions-mobile-list">
-                {filteredTransactions.map((transaction) => {
+                {filteredTransactions.map((transaction, index) => {
                   const warningReason = warningReasonFor(transaction);
                   const amount = Number(transaction.amount);
                   const isPositive = transaction.type === "income";
@@ -3407,6 +3719,13 @@ function TransactionsPageContent() {
                   );
                   const merchantDisplay = humanizeTransactionMerchantText(transaction.merchantRaw);
                   const showMerchantSubtext = merchantDisplay && merchantDisplay.toLowerCase() !== merchantSummary.toLowerCase();
+                  const sourceClass =
+                    transaction.source === "manual"
+                      ? "transactions-mobile-card--manual"
+                      : transaction.source === "upload"
+                        ? "transactions-mobile-card--imported"
+                        : "transactions-mobile-card--other";
+                  const rowStateClass = warningReason ? "transactions-mobile-card--warning" : "transactions-mobile-card--clear";
 
                   return (
                     <article
@@ -3419,9 +3738,12 @@ function TransactionsPageContent() {
 
                         transactionRowRefs.current.delete(transaction.id);
                       }}
-                      className={`transactions-mobile-card glass ${transaction.isExcluded ? "is-muted" : ""} ${
+                      className={`transactions-mobile-card glass ${sourceClass} ${rowStateClass} ${transaction.isExcluded ? "is-muted" : ""} ${
                         selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
                       }`}
+                      tabIndex={0}
+                      aria-label={`${merchantSummary}, ${formatDate(transaction.date)}, ${categoryLabel}, ${currencyFormatter.format(amount)}`}
+                      onKeyDown={(event) => handleTransactionRowKeyDown(event, transaction, index)}
                     >
                       <div className="transactions-mobile-card__top">
                         <label className="transaction-select-cell transactions-mobile-card__select">
@@ -3552,7 +3874,7 @@ function TransactionsPageContent() {
                 </div>
               </div>
             ) : (
-              <div className="empty-state">No transactions match the current filters.</div>
+              <div className="empty-state">No transactions match the current filters. Clear one filter or widen the date range to bring rows back.</div>
             )}
           </div>
 
@@ -3889,12 +4211,7 @@ function TransactionsPageContent() {
                 className="button button-secondary"
                 type="button"
                 onClick={() => {
-                  setQuery("");
-                  setCategoryFilters([]);
-                  setAccountFilters([]);
-                  setTypeFilters([]);
-                  setMerchantFilters([]);
-                  setMerchantFilterInput("");
+                  clearAllTransactionFilters();
                   capturePostHogClientEvent("report_filtered", {
                     workspace_id: selectedWorkspaceId || null,
                     view: "transactions",
@@ -3949,18 +4266,7 @@ function TransactionsPageContent() {
             </div>
 
             <form className="manual-form" onSubmit={applyBulkEdit}>
-              <div className="form-grid">
-                <label>
-                  Account
-                  <select value={bulkEditForm.accountId} onChange={(event) => setBulkEditForm((current) => ({ ...current, accountId: event.target.value }))}>
-                    <option value="">Leave unchanged</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <div className="form-grid transactions-bulk-grid">
                 <label>
                   Category
                   <select value={bulkEditForm.categoryId} onChange={(event) => setBulkEditForm((current) => ({ ...current, categoryId: event.target.value }))}>
@@ -3973,51 +4279,72 @@ function TransactionsPageContent() {
                   </select>
                 </label>
                 <label>
-                  Type
-                  <select
-                    value={bulkEditForm.type}
-                    onChange={(event) => setBulkEditForm((current) => ({ ...current, type: event.target.value as BulkEditForm["type"] }))}
-                  >
+                  Account
+                  <select value={bulkEditForm.accountId} onChange={(event) => setBulkEditForm((current) => ({ ...current, accountId: event.target.value }))}>
                     <option value="">Leave unchanged</option>
-                    <option value="expense">Expense</option>
-                    <option value="income">Income</option>
-                    <option value="transfer">Transfer</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
                   </select>
                 </label>
-                <label>
-                  Review state
-                  <select
-                    value={bulkEditForm.isExcluded}
-                    onChange={(event) =>
-                      setBulkEditForm((current) => ({ ...current, isExcluded: event.target.value as BulkEditForm["isExcluded"] }))
-                    }
-                  >
-                    <option value="">Leave unchanged</option>
-                    <option value="include">Include in totals</option>
-                    <option value="exclude">Ignore in totals</option>
-                  </select>
-                </label>
-                <label>
-                  Transfer state
-                  <select
-                    value={bulkEditForm.isTransfer}
-                    onChange={(event) =>
-                      setBulkEditForm((current) => ({ ...current, isTransfer: event.target.value as BulkEditForm["isTransfer"] }))
-                    }
-                  >
-                    <option value="">Leave unchanged</option>
-                    <option value="true">Mark as transfer</option>
-                    <option value="false">Clear transfer</option>
-                  </select>
-                </label>
-                <label className="span-2">
-                  Notes
-                  <textarea
-                    value={bulkEditForm.description}
-                    onChange={(event) => setBulkEditForm((current) => ({ ...current, description: event.target.value }))}
-                    placeholder="Leave blank to keep existing notes"
-                  />
-                </label>
+                <div className="transactions-bulk-toggle-group">
+                  <span className="transactions-bulk-toggle-group__label">Review state</span>
+                  <div className="transactions-bulk-toggle-group__buttons">
+                    <button
+                      type="button"
+                      className={`pill pill-interactive transactions-filter-pill ${bulkEditForm.isExcluded === "include" ? "pill-is-selected" : ""}`}
+                      onClick={() => setBulkEditForm((current) => ({ ...current, isExcluded: "include" }))}
+                      aria-pressed={bulkEditForm.isExcluded === "include"}
+                    >
+                      Include
+                    </button>
+                    <button
+                      type="button"
+                      className={`pill pill-interactive transactions-filter-pill ${bulkEditForm.isExcluded === "exclude" ? "pill-is-selected" : ""}`}
+                      onClick={() => setBulkEditForm((current) => ({ ...current, isExcluded: "exclude" }))}
+                      aria-pressed={bulkEditForm.isExcluded === "exclude"}
+                    >
+                      Exclude
+                    </button>
+                    <button
+                      type="button"
+                      className="transactions-bulk-toggle-group__clear"
+                      onClick={() => setBulkEditForm((current) => ({ ...current, isExcluded: "" }))}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <div className="transactions-bulk-toggle-group">
+                  <span className="transactions-bulk-toggle-group__label">Transfer</span>
+                  <div className="transactions-bulk-toggle-group__buttons">
+                    <button
+                      type="button"
+                      className={`pill pill-interactive transactions-filter-pill ${bulkEditForm.isTransfer === "false" ? "pill-is-selected" : ""}`}
+                      onClick={() => setBulkEditForm((current) => ({ ...current, isTransfer: "false" }))}
+                      aria-pressed={bulkEditForm.isTransfer === "false"}
+                    >
+                      Not transfer
+                    </button>
+                    <button
+                      type="button"
+                      className={`pill pill-interactive transactions-filter-pill ${bulkEditForm.isTransfer === "true" ? "pill-is-selected" : ""}`}
+                      onClick={() => setBulkEditForm((current) => ({ ...current, isTransfer: "true" }))}
+                      aria-pressed={bulkEditForm.isTransfer === "true"}
+                    >
+                      Transfer
+                    </button>
+                    <button
+                      type="button"
+                      className="transactions-bulk-toggle-group__clear"
+                      onClick={() => setBulkEditForm((current) => ({ ...current, isTransfer: "" }))}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="form-actions">
@@ -4054,7 +4381,7 @@ function TransactionsPageContent() {
             </div>
 
             <form onSubmit={saveManualTransaction}>
-              <div className="form-grid">
+              <div className="form-grid transactions-manual-grid">
                 <label>
                   Name
                   <input
@@ -4065,76 +4392,95 @@ function TransactionsPageContent() {
                     required
                   />
                 </label>
-                <label>
-                  Date
-                  <input
-                    type="date"
-                    value={manualForm.date}
-                    onChange={(event) => setManualForm((current) => ({ ...current, date: event.target.value }))}
-                    required
-                  />
-                </label>
-                <label>
-                  Account
-                  <select
-                    value={manualForm.accountId}
-                    onChange={(event) => setManualForm((current) => ({ ...current, accountId: event.target.value }))}
+                <div className="transactions-manual-fast-row">
+                  <label>
+                    Date
+                    <input
+                      type="date"
+                      value={manualForm.date}
+                      onChange={(event) => setManualForm((current) => ({ ...current, date: event.target.value }))}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Amount
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={manualForm.amount}
+                      onChange={(event) => setManualForm((current) => ({ ...current, amount: event.target.value }))}
+                      placeholder="0.00"
+                      required
+                    />
+                  </label>
+                  <label>
+                    Type
+                    <select
+                      value={manualForm.type}
+                      onChange={(event) =>
+                        setManualForm((current) => ({
+                          ...current,
+                          type: event.target.value as ManualTransactionForm["type"],
+                        }))
+                      }
+                    >
+                      <option value="debit">Debit</option>
+                      <option value="credit">Credit</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="transactions-manual-advanced-toggle">
+                  <button
+                    className="transactions-manual-advanced-toggle__button"
+                    type="button"
+                    onClick={() => setManualAdvancedOpen((current) => !current)}
+                    aria-expanded={manualAdvancedOpen}
                   >
-                    <option value="">Choose account</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Category
-                  <select
-                    value={manualForm.categoryId}
-                    onChange={(event) => setManualForm((current) => ({ ...current, categoryId: event.target.value }))}
-                  >
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Amount
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={manualForm.amount}
-                    onChange={(event) => setManualForm((current) => ({ ...current, amount: event.target.value }))}
-                    placeholder="0.00"
-                    required
-                  />
-                </label>
-                <label>
-                  Type
-                  <select
-                    value={manualForm.type}
-                    onChange={(event) =>
-                      setManualForm((current) => ({
-                        ...current,
-                        type: event.target.value as ManualTransactionForm["type"],
-                      }))
-                    }
-                  >
-                    <option value="debit">Debit</option>
-                    <option value="credit">Credit</option>
-                  </select>
-                </label>
-                <label className="span-2">
-                  Notes
-                  <textarea
-                    value={manualForm.description}
-                    onChange={(event) => setManualForm((current) => ({ ...current, description: event.target.value }))}
-                    placeholder="Optional note or review context"
-                  />
-                </label>
+                    {manualAdvancedOpen ? "Hide more details" : "More details"}
+                    <span aria-hidden="true">{manualAdvancedOpen ? "−" : "+"}</span>
+                  </button>
+                </div>
+
+                {manualAdvancedOpen ? (
+                  <div className="form-grid transactions-manual-advanced">
+                    <label>
+                      Account
+                      <select
+                        value={manualForm.accountId}
+                        onChange={(event) => setManualForm((current) => ({ ...current, accountId: event.target.value }))}
+                      >
+                        <option value="">Choose account</option>
+                        {accounts.map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {account.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Category
+                      <select
+                        value={manualForm.categoryId}
+                        onChange={(event) => setManualForm((current) => ({ ...current, categoryId: event.target.value }))}
+                      >
+                        {categories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="span-2">
+                      Notes
+                      <textarea
+                        value={manualForm.description}
+                        onChange={(event) => setManualForm((current) => ({ ...current, description: event.target.value }))}
+                        placeholder="Optional note or review context"
+                      />
+                    </label>
+                  </div>
+                ) : null}
               </div>
 
               <div className="form-actions">
@@ -4168,6 +4514,64 @@ function TransactionsPageContent() {
               <button className="icon-button" type="button" onClick={closeTransactionDetail} aria-label="Close notes dialog">
                 ×
               </button>
+            </div>
+
+            <div className="transaction-drawer-summary">
+              <div className="transaction-drawer-summary__row">
+                <span className="transaction-drawer-summary__label">Source</span>
+                <span className={`pill pill-neutral transaction-drawer-summary__pill transaction-drawer-summary__pill--${selectedTransaction.source ?? "unknown"}`}>
+                  {selectedTransaction.source === "manual" ? "Manual" : selectedTransaction.source === "upload" ? "Imported" : "Unknown"}
+                </span>
+                <span className="transaction-drawer-summary__label">Review</span>
+                <span
+                  className={`pill transaction-drawer-summary__pill ${
+                    selectedTransactionWarningReason
+                      ? "transaction-drawer-summary__pill--warn"
+                      : "transaction-drawer-summary__pill--clear"
+                  }`}
+                >
+                  {selectedTransactionWarningReason ?? "Clear"}
+                </span>
+              </div>
+
+              <div className="review-workbench__confidence-grid transaction-drawer-confidence-grid">
+                {selectedTransactionConfidenceSignals.map((signal) => (
+                  <div key={signal.label} className="review-workbench__confidence transaction-drawer-confidence-card">
+                    <div className="review-workbench__confidence-head">
+                      <strong>{signal.label}</strong>
+                      <span>
+                        {getConfidenceLabel(signal.value)} · {signal.value}%
+                      </span>
+                    </div>
+                    <div className="review-workbench__meter" aria-hidden="true">
+                      <span style={{ width: `${signal.value}%` }} />
+                    </div>
+                    <span className="transaction-drawer-confidence-note">{signal.note}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="transaction-drawer-summary__history">
+                <div className="transaction-drawer-summary__history-head">
+                  <span className="transactions-context-strip__label">Change history</span>
+                  <span className="transaction-drawer-summary__history-note">Only saved edits show here.</span>
+                </div>
+                {selectedTransactionHistory.length ? (
+                  <div className="transaction-drawer-summary__history-list">
+                    {selectedTransactionHistory.map((entry, index) => {
+                      const changes = summarizeTransactionChange(entry.before, entry.after, accountNameById, categoryNameById);
+                      return (
+                        <div key={`${entry.before.id}-${index}`} className="transaction-drawer-summary__history-item">
+                          <strong>{changes.length ? changes[0] : "Transaction updated"}</strong>
+                          {changes.length > 1 ? <span>{changes.slice(1).join(" · ")}</span> : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="transaction-drawer-summary__empty">No saved changes yet.</div>
+                )}
+              </div>
             </div>
 
             <div className="form-grid transaction-drawer-grid">
@@ -4243,7 +4647,7 @@ function TransactionsPageContent() {
               </label>
             </div>
 
-            {warningReasonFor(selectedTransaction) ? (
+            {selectedTransactionWarningReason ? (
               <div className="detail-warning-box">
                 <div className="detail-warning-box__header">
                   <span className="detail-warning-box__icon" aria-hidden="true">
@@ -4252,7 +4656,7 @@ function TransactionsPageContent() {
                   <strong>Review warning</strong>
                 </div>
                 <p>
-                  <strong>Warning:</strong> {warningReasonFor(selectedTransaction)}
+                  <strong>Warning:</strong> {selectedTransactionWarningReason}
                 </p>
                 <div className="detail-warning-actions">
                   <button

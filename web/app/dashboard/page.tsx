@@ -10,7 +10,7 @@ import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getFinancialExperienceProfile } from "@/lib/goals";
-import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
+import { PostHogEvent } from "@/components/posthog-analytics";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -622,23 +622,6 @@ export default async function DashboardPage({
           account_count: workspaceSummary._count.accounts,
           transaction_count: workspaceSummary._count.transactions,
           import_count: workspaceSummary._count.importFiles,
-        }}
-      />
-      <PostHogPersonProperties
-        distinctId={user.clerkUserId}
-        properties={{
-          workspace_name: workspaceSummary.name,
-          account_count: workspaceSummary._count.accounts,
-          cash_account_count: cashAccountCount,
-          tracked_balance_total: linkedBalanceTotal,
-          tracked_balance_currency: trackedBalanceCurrency,
-          transaction_count: workspaceSummary._count.transactions,
-          import_count: workspaceSummary._count.importFiles,
-          review_attention_count: reviewAttentionCount,
-          goal: user.primaryGoal?.trim() || null,
-          financial_experience: user.financialExperience || null,
-          last_import_at: latestImport?.uploadedAt.toISOString() ?? null,
-          days_since_last_import: daysSinceLastImport,
         }}
       />
       {isEmptyWorkspace ? (
