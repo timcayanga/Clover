@@ -1,29 +1,8 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 export function LandingNav() {
-  const [isScrolled, setIsScrolled] = useState(false);
-
-  useEffect(() => {
-    const updateScrollState = () => {
-      setIsScrolled(window.scrollY > 0);
-    };
-
-    updateScrollState();
-    window.addEventListener("scroll", updateScrollState, { passive: true });
-
-    return () => {
-      window.removeEventListener("scroll", updateScrollState);
-    };
-  }, []);
-
   return (
-    <header
-      className={`landing-nav landing-nav--sticky ${isScrolled ? "landing-nav--scrolled" : ""}`.trim()}
-      data-scrolled={isScrolled ? "true" : "false"}
-    >
+    <header className="landing-nav landing-nav--sticky">
       <Link className="landing-brand" href="/" aria-label="Clover home" prefetch={false}>
         <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
         <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" />
