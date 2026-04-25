@@ -1664,53 +1664,7 @@ async function ReportsStream({
               ))}
             </section>
           </>
-        ) : (
-          <section className="reports-plan-split glass">
-            <div className="reports-plan-split__intro">
-              <p className="eyebrow">Plan split</p>
-              <h3>Keep the essentials on Free. Add the explanation layer on Pro.</h3>
-              <p>
-                Free stays focused on the reports that help users scan, review, and clean up. Pro adds the analytical layer that
-                turns the same data into clear next steps.
-              </p>
-            </div>
-            <div className="reports-plan-split__grid">
-              <article className="reports-plan-card reports-plan-card--active">
-                <div className="reports-plan-card__head">
-                  <p className="eyebrow">Free plan</p>
-                  <h4>Reports users can scan at a glance.</h4>
-                  <p>Operational reporting for cash flow, spending, cleanup, and recurring costs.</p>
-                </div>
-                <ul className="reports-plan-card__list">
-                  {freePlanReports.map((report) => (
-                    <li key={report}>{report}</li>
-                  ))}
-                </ul>
-              </article>
-
-              <article className="reports-plan-card reports-plan-card--pro">
-                <div className="reports-plan-card__head">
-                  <p className="eyebrow">Pro plan</p>
-                  <h4>Reports that explain what changed and what to do next.</h4>
-                  <p>Decision support for goal progress, account health, and the context behind spending shifts.</p>
-                </div>
-                <ul className="reports-plan-card__list">
-                  {proPlanReports.map((report) => (
-                    <li key={report}>{report}</li>
-                  ))}
-                </ul>
-              </article>
-            </div>
-            <div className="reports-plan-split__actions">
-              <Link className="button button-primary button-pill" href="/pricing">
-                Upgrade to Pro
-              </Link>
-              <Link className="button button-secondary button-pill" href="/settings">
-                Review billing
-              </Link>
-            </div>
-          </section>
-        )}
+        ) : null}
 
         <section className="reports-range-switch glass">
           <div className="reports-range-switch__copy">
@@ -2239,6 +2193,54 @@ async function ReportsStream({
             )}
           </article>
         </section>
+
+        {!isPro ? (
+          <section className="reports-plan-split glass">
+            <div className="reports-plan-split__intro">
+              <p className="eyebrow">Plan split</p>
+              <h3>Keep the essentials on Free. Add the explanation layer on Pro.</h3>
+              <p>
+                Free stays focused on the reports that help users scan, review, and clean up. Pro adds the analytical layer that
+                turns the same data into clear next steps.
+              </p>
+            </div>
+            <div className="reports-plan-split__grid">
+              <article className="reports-plan-card reports-plan-card--active">
+                <div className="reports-plan-card__head">
+                  <p className="eyebrow">Free plan</p>
+                  <h4>Reports users can scan at a glance.</h4>
+                  <p>Operational reporting for cash flow, spending, cleanup, and recurring costs.</p>
+                </div>
+                <ul className="reports-plan-card__list">
+                  {freePlanReports.map((report) => (
+                    <li key={report}>{report}</li>
+                  ))}
+                </ul>
+              </article>
+
+              <article className="reports-plan-card reports-plan-card--pro">
+                <div className="reports-plan-card__head">
+                  <p className="eyebrow">Pro plan</p>
+                  <h4>Reports that explain what changed and what to do next.</h4>
+                  <p>Decision support for goal progress, account health, and the context behind spending shifts.</p>
+                </div>
+                <ul className="reports-plan-card__list">
+                  {proPlanReports.map((report) => (
+                    <li key={report}>{report}</li>
+                  ))}
+                </ul>
+              </article>
+            </div>
+            <div className="reports-plan-split__actions">
+              <Link className="button button-primary button-pill" href="/pricing">
+                Upgrade to Pro
+              </Link>
+              <Link className="button button-secondary button-pill" href="/settings">
+                Review billing
+              </Link>
+            </div>
+          </section>
+        ) : null}
       </>
     );
   } catch (error) {
@@ -2284,6 +2286,7 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
       kicker="Insights"
       title="A clearer report on where your money stands."
       subtitle="Cash flow, spending concentration, recurring costs, and review items are pulled directly from your uploaded transactions and accounts."
+      showTopbar={false}
       actions={
         <>
           <Link className="pill-link" href="/transactions">
