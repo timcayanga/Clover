@@ -2083,7 +2083,9 @@ function AccountsPageContent() {
             }
           });
 
-          void refreshAll();
+          if (!summary.optimistic) {
+            void refreshAll();
+          }
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />

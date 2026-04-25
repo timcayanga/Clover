@@ -5160,8 +5160,10 @@ function TransactionsPageContent() {
             return;
           }
 
-          void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
-          void loadTransactionsPage(selectedWorkspaceId, { background: true });
+          if (!summary.optimistic) {
+            void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
+            void loadTransactionsPage(selectedWorkspaceId, { background: true });
+          }
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />

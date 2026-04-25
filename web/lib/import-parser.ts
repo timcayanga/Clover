@@ -258,6 +258,7 @@ const detectAccountNumberFromText = (text: string) => {
 const detectStatementDatesFromText = (text: string) => {
   const rangeMatch =
     text.match(/(?:STATEMENT\s*PERIOD|PERIOD\s*COVERED|FROM)\s*[:\-]?\s*(.+?)\s*(?:TO|THRU|THROUGH|[-–—])\s*(.+?)(?:\s{2,}|$)/i) ??
+    text.match(/(?:STATEMENT\s*PERIOD|PERIOD\s*COVERED|FROM)\s*[:\-]?\s*([A-Z]{3,9}\s*\d{1,2}\s*,?\s*\d{4})\s*[–—-]\s*([A-Z]{3,9}\s*\d{1,2}\s*,?\s*\d{4})(?:\s{2,}|$)/i) ??
     text.match(/(?:START\s*DATE|BEGINNING\s*DATE)\s*[:\-]?\s*(.+?)\s*(?:END\s*DATE|ENDING\s*DATE)\s*[:\-]?\s*(.+?)(?:\s{2,}|$)/i);
 
   const parseLooseDate = (value?: string | null) => {
@@ -1098,8 +1099,10 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
   const accountName = accountNumber ? `BPI ${accountNumber.slice(-4)}` : "BPI";
 
   const periodMatch =
-    headerCompact.match(/PERIODCOVERED(?:.*?)([A-Z]{3}\d{1,2},\d{4})-([A-Z]{3}\d{1,2},\d{4})/i) ??
-    normalized.match(/PERIOD\s*COVERED\s+([A-Z]{3}\s+\d{1,2},\s+\d{4})\s*-\s*([A-Z]{3}\s+\d{1,2},\s+\d{4})/i);
+    compactWhitespace(normalized).match(/(?:ACCOUNTSUMMARYFORTHEPERIOD|PERIODCOVERED|FORTHEPERIOD)(?:.*?)([A-Z]{3}\d{1,2},?\d{4})[-–—]([A-Z]{3}\d{1,2},?\d{4})/i) ??
+    normalized.match(/PERIOD\s*COVERED\s*[:\-]?\s*([A-Z]{3}\s*\d{1,2}\s*,\s*\d{4})\s*[–—-]\s*([A-Z]{3}\s*\d{1,2}\s*,\s*\d{4})/i) ??
+    headerCompact.match(/PERIODCOVERED(?:.*?)([A-Z]{3}\d{1,2},\d{4})[-–—]([A-Z]{3}\d{1,2},\d{4})/i) ??
+    normalized.match(/PERIOD\s*COVERED\s+([A-Z]{3}\s+\d{1,2}\s*,?\s*\d{4})\s*(?:TO|THRU|THROUGH|[-–—])\s*([A-Z]{3}\s+\d{1,2}\s*,?\s*\d{4})/i);
   const startDate = parseBpiDate(periodMatch?.[1] ?? null);
   const endDate = parseBpiDate(periodMatch?.[2] ?? null);
 
@@ -2959,6 +2962,16 @@ const parseBpiImportText = (text: string) => {
     .split(/\r?\n/)
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
+  const compactLines = lines.map((line) => compactWhitespace(line).toUpperCase());
+  const transactionHeaderIndex = compactLines.findIndex(
+    (line) =>
+      /DATE.*DESCRIPTION.*REF.*DETAILS/.test(line) ||
+      /DATE.*DESCRIPTION.*REFERENCE.*DETAILS/.test(line) ||
+      /DATE.*DESCRIPTION.*DEBIT.*CREDIT.*BALANCE/.test(line) ||
+      /DATE.*DESCRIPTION.*DEB.*AMT.*CREDIT.*AMT.*BALANCE/.test(line) ||
+      /TRANSACTION.*DETAILS/.test(line)
+  );
+  const transactionLines = transactionHeaderIndex >= 0 ? lines.slice(transactionHeaderIndex + 1) : lines;
 
   const startDate = metadata.startDate ? new Date(metadata.startDate) : null;
   const endDate = metadata.endDate ? new Date(metadata.endDate) : null;
@@ -3003,7 +3016,7 @@ const parseBpiImportText = (text: string) => {
     });
   }
 
-  for (const line of lines) {
+  for (const line of transactionLines) {
     const parsed = parseBpiTransactionLine(line, state);
     year = state.year;
     previousMonthIndex = state.previousMonthIndex;
@@ -3013,8 +3026,16 @@ const parseBpiImportText = (text: string) => {
     }
   }
 
+  const hasStatementTotals = transactionLines.some((line) => /BALANCE\s+THIS\s+STATEMENT|TOTAL\s+DEBIT|TOTAL\s+CREDIT/i.test(line));
+  const hasTransactionTable = transactionHeaderIndex >= 0 || hasStatementTotals;
+  const adjustedConfidence =
+    rows.length > 0 && rows.length <= 2 && hasTransactionTable ? Math.min(metadata.confidence, 60) : metadata.confidence;
+
   return {
-    metadata,
+    metadata: {
+      ...metadata,
+      confidence: adjustedConfidence,
+    },
     rows,
   };
 };

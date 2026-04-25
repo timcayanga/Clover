@@ -587,6 +587,10 @@ const responseLooksUseful = (metadata: DetectedStatementMetadata | null, rows: P
     return confidence < 90 || !hasStrongIdentity;
   }
 
+  if (rows.length <= 2 && confidence < 80) {
+    return true;
+  }
+
   return confidence < 75 && (!hasStrongIdentity || fileNameLike);
 };
 
