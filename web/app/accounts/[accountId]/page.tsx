@@ -601,28 +601,6 @@ function AccountDetailPageContent() {
           </div>
         ) : null}
 
-        {importSummaries.length > 0 ? (
-          <div className="accounts-detail__imports glass" style={{ marginTop: 20 }}>
-            <div className="accounts-detail__reconciliation-head">
-              <div>
-                <p className="eyebrow">Imports</p>
-                <h3>Recent import batches</h3>
-              </div>
-            </div>
-            <div className="accounts-detail__imports-list">
-              {importSummaries.slice(0, 3).map((summary) => (
-                <div key={summary.key} className="accounts-detail__import-row">
-                  <div>
-                    <strong>{summary.label}</strong>
-                    <span>{summary.count} rows · {formatDate(summary.latestDate)}</span>
-                  </div>
-                  <strong>{currencyFormatter.format(summary.total)}</strong>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
         <div className="accounts-detail__transactions glass" style={{ marginTop: 24 }}>
           <div className="accounts-detail__reconciliation-head">
             <div>
@@ -757,6 +735,28 @@ function AccountDetailPageContent() {
                   ? "The checkpoint matches the account history and anchors the current balance."
                   : "This checkpoint is waiting for confirmation."}
             </p>
+          </div>
+        ) : null}
+
+        {importSummaries.length > 0 ? (
+          <div className="accounts-detail__imports glass" style={{ marginTop: 20 }}>
+            <div className="accounts-detail__reconciliation-head">
+              <div>
+                <p className="eyebrow">Imports</p>
+                <h3>Recent import batches</h3>
+              </div>
+            </div>
+            <div className="accounts-detail__imports-list">
+              {importSummaries.slice(0, 3).map((summary) => (
+                <div key={summary.key} className="accounts-detail__import-row">
+                  <div>
+                    <strong>{summary.label}</strong>
+                    <span>{summary.count} rows · {formatDate(summary.latestDate)}</span>
+                  </div>
+                  <strong>{currencyFormatter.format(summary.total)}</strong>
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
 
