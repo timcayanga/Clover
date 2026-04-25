@@ -1401,7 +1401,6 @@ function AccountsPageContent() {
                           {currencyFormatter.format(group.total)}
                         </p>
                       </div>
-                      <span className={`accounts-group__tone accounts-group__tone--${group.tone}`}>{group.title}</span>
                     </div>
 
                     <div className="accounts-card-grid" aria-label={`${group.title} accounts`}>
