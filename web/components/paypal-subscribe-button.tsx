@@ -28,6 +28,7 @@ type PayPalSubscribeButtonProps = {
   clientId: string;
   planId: string;
   customId: string;
+  buyerCountry?: string | null;
   className?: string;
   disabled?: boolean;
   onApproved?: () => void;
@@ -38,6 +39,7 @@ export function PayPalSubscribeButton({
   clientId,
   planId,
   customId,
+  buyerCountry,
   className,
   disabled = false,
   onApproved,
@@ -55,8 +57,12 @@ export function PayPalSubscribeButton({
       intent: "subscription",
     });
 
+    if (buyerCountry) {
+      params.set("buyer-country", buyerCountry);
+    }
+
     return `https://www.paypal.com/sdk/js?${params.toString()}`;
-  }, [clientId]);
+  }, [buyerCountry, clientId]);
 
   useEffect(() => {
     if (!scriptReady || disabled || !containerRef.current || !window.paypal) {
@@ -140,7 +146,7 @@ export function PayPalSubscribeButton({
         containerRef.current.innerHTML = "";
       }
     };
-  }, [customId, disabled, onApproved, onCancelled, planId, scriptReady]);
+  }, [buyerCountry, customId, disabled, onApproved, onCancelled, planId, scriptReady]);
 
   return (
     <div className={className}>

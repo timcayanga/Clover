@@ -5,6 +5,7 @@ type BillingCardProps = {
   planTier: "free" | "pro";
   paypalClientId?: string | null;
   paypalPlanId?: string | null;
+  paypalBuyerCountry?: string | null;
   userId: string;
   clerkUserId: string;
   email: string;
@@ -23,7 +24,15 @@ const tierMeta = {
   },
 } as const;
 
-export function BillingCard({ planTier, paypalClientId, paypalPlanId, userId, clerkUserId, email }: BillingCardProps) {
+export function BillingCard({
+  planTier,
+  paypalClientId,
+  paypalPlanId,
+  paypalBuyerCountry,
+  userId,
+  clerkUserId,
+  email,
+}: BillingCardProps) {
   const meta = tierMeta[planTier];
   const canCheckout = Boolean(paypalClientId && paypalPlanId);
   const customId = userId || clerkUserId || email;
@@ -56,6 +65,7 @@ export function BillingCard({ planTier, paypalClientId, paypalPlanId, userId, cl
                 clientId={paypalClientId as string}
                 planId={paypalPlanId as string}
                 customId={customId}
+                buyerCountry={paypalBuyerCountry}
                 className="billing-card__paypal"
               />
             ) : (

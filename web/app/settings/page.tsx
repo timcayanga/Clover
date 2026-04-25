@@ -7,6 +7,9 @@ import { getSessionContext } from "@/lib/auth";
 import { getEnv } from "@/lib/env";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export const metadata = {
   title: "Settings",
 };
@@ -158,6 +161,7 @@ export default async function SettingsPage() {
         planTier={user.planTier}
         paypalClientId={env.PAYPAL_CLIENT_ID ?? null}
         paypalPlanId={env.PAYPAL_PRO_PLAN_ID ?? null}
+        paypalBuyerCountry={env.PAYPAL_BUYER_COUNTRY ?? null}
         userId={user.id}
         clerkUserId={user.clerkUserId}
         email={user.email}
