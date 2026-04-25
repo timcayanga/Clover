@@ -525,6 +525,7 @@ function AccountsPageContent() {
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [importSessionId, setImportSessionId] = useState(0);
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<AccountSort>("updated_desc");
@@ -1057,6 +1058,7 @@ function AccountsPageContent() {
   const openImportFiles = () => {
     setPendingImportSummary(null);
     setAddOpen(false);
+    setImportSessionId((current) => current + 1);
     setImportOpen(true);
   };
 
@@ -2000,6 +2002,7 @@ function AccountsPageContent() {
       ) : null}
 
       <ImportFilesModal
+        key={importSessionId}
         open={importOpen}
         workspaceId={selectedWorkspaceId}
         accounts={accounts}

@@ -1140,6 +1140,7 @@ function TransactionsPageContent() {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [importSessionId, setImportSessionId] = useState(0);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualAdvancedOpen, setManualAdvancedOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
@@ -1540,6 +1541,7 @@ function TransactionsPageContent() {
   const openImportFiles = () => {
     setPendingImportSummary(null);
     closeToolbarMenus();
+    setImportSessionId((current) => current + 1);
     setImportOpen(true);
   };
 
@@ -5043,6 +5045,7 @@ function TransactionsPageContent() {
       ) : null}
 
       <ImportFilesModal
+        key={importSessionId}
         open={importOpen}
         workspaceId={selectedWorkspaceId}
         accounts={accounts}
