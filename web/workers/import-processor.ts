@@ -416,34 +416,21 @@ export const processImportFileText = async (
     });
     return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }
-  const template = await upsertStatementTemplate({
-    workspaceId: importFile.workspaceId,
-    fingerprint: statementFingerprint,
-    metadata: resolvedMetadata,
-    fileType: importFile.fileType,
-    parserConfig: {
-      accountType: resolvedMetadata.accountType ?? inferAccountTypeFromStatement(resolvedMetadata.institution, resolvedMetadata.accountName, "bank"),
-      rowCount: effectiveRows.length,
-      firstMerchant:
-        typeof effectiveRows[0]?.merchantClean === "string"
-          ? effectiveRows[0]?.merchantClean
-          : typeof effectiveRows[0]?.merchantRaw === "string"
-            ? effectiveRows[0]?.merchantRaw
-            : null,
-      lastMerchant:
-        typeof effectiveRows.at(-1)?.merchantClean === "string"
-          ? effectiveRows.at(-1)?.merchantClean
-          : typeof effectiveRows.at(-1)?.merchantRaw === "string"
-            ? effectiveRows.at(-1)?.merchantRaw
-            : null,
-    } as Prisma.InputJsonValue,
-  });
-
-  const rows = await enrichParsedRowsWithTraining({
-    workspaceId: importFile.workspaceId,
-    rows: effectiveRows,
-    statementConfidence: resolvedMetadata.confidence ?? 0,
-  });
+  let rows: Awaited<ReturnType<typeof enrichParsedRowsWithTraining>> = effectiveRows as Awaited<
+    ReturnType<typeof enrichParsedRowsWithTraining>
+  >;
+  try {
+    rows = await enrichParsedRowsWithTraining({
+      workspaceId: importFile.workspaceId,
+      rows: effectiveRows,
+      statementConfidence: resolvedMetadata.confidence ?? 0,
+    });
+  } catch (error) {
+    console.warn("Import training enrichment failed; continuing with parsed rows", {
+      importFileId,
+      error,
+    });
+  }
 
   if (await hasCompatibleTable("ParsedTransaction")) {
     await prisma.parsedTransaction.deleteMany({
@@ -456,7 +443,7 @@ export const processImportFileText = async (
     workspaceId: importFile.workspaceId,
     rows,
     metadata: resolvedMetadata,
-    statementFingerprint: template?.fingerprint ?? statementFingerprint,
+    statementFingerprint,
   });
   await insertParsedTransactionsCompat({
     importFileId,
@@ -466,34 +453,72 @@ export const processImportFileText = async (
     parsedRowsCount: rows.length,
   });
 
-  if (await hasCompatibleTable("AccountStatementCheckpoint")) {
-    const metadataStartDate = metadata.startDate ? new Date(metadata.startDate) : null;
-    const metadataEndDate = resolvedMetadata.endDate ? new Date(resolvedMetadata.endDate) : null;
-    await prisma.accountStatementCheckpoint.upsert({
-      where: { importFileId },
-      update: {
-        workspaceId: importFile.workspaceId,
-        statementStartDate: metadataStartDate,
-        statementEndDate: metadataEndDate,
-        openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
-        endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
-        status: "pending",
-        mismatchReason: null,
-        sourceMetadata: resolvedMetadata as Prisma.InputJsonValue,
+  let template: Awaited<ReturnType<typeof upsertStatementTemplate>> | null = null;
+  try {
+    template = await upsertStatementTemplate({
+      workspaceId: importFile.workspaceId,
+      fingerprint: statementFingerprint,
+      metadata: resolvedMetadata,
+      fileType: importFile.fileType,
+      parserConfig: {
+        accountType: resolvedMetadata.accountType ?? inferAccountTypeFromStatement(resolvedMetadata.institution, resolvedMetadata.accountName, "bank"),
         rowCount: rows.length,
-      },
-      create: {
-        workspaceId: importFile.workspaceId,
-        importFileId,
-        statementStartDate: metadataStartDate,
-        statementEndDate: metadataEndDate,
-        openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
-        endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
-        status: "pending",
-        sourceMetadata: resolvedMetadata as Prisma.InputJsonValue,
-        rowCount: rows.length,
-      },
+        firstMerchant:
+          typeof rows[0]?.merchantClean === "string"
+            ? rows[0]?.merchantClean
+            : typeof rows[0]?.merchantRaw === "string"
+              ? rows[0]?.merchantRaw
+              : null,
+        lastMerchant:
+          typeof rows.at(-1)?.merchantClean === "string"
+            ? rows.at(-1)?.merchantClean
+            : typeof rows.at(-1)?.merchantRaw === "string"
+              ? rows.at(-1)?.merchantRaw
+              : null,
+      } as Prisma.InputJsonValue,
     });
+  } catch (error) {
+    console.warn("Statement template upsert failed; continuing import", {
+      importFileId,
+      error,
+    });
+  }
+
+  if (await hasCompatibleTable("AccountStatementCheckpoint")) {
+    try {
+      const metadataStartDate = metadata.startDate ? new Date(metadata.startDate) : null;
+      const metadataEndDate = resolvedMetadata.endDate ? new Date(resolvedMetadata.endDate) : null;
+      await prisma.accountStatementCheckpoint.upsert({
+        where: { importFileId },
+        update: {
+          workspaceId: importFile.workspaceId,
+          statementStartDate: metadataStartDate,
+          statementEndDate: metadataEndDate,
+          openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
+          endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
+          status: "pending",
+          mismatchReason: null,
+          sourceMetadata: resolvedMetadata as Prisma.InputJsonValue,
+          rowCount: rows.length,
+        },
+        create: {
+          workspaceId: importFile.workspaceId,
+          importFileId,
+          statementStartDate: metadataStartDate,
+          statementEndDate: metadataEndDate,
+          openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
+          endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
+          status: "pending",
+          sourceMetadata: resolvedMetadata as Prisma.InputJsonValue,
+          rowCount: rows.length,
+        },
+      });
+    } catch (error) {
+      console.warn("Statement checkpoint upsert failed; continuing import", {
+        importFileId,
+        error,
+      });
+    }
   }
 
   await updateImportFileCompat(importFileId, {
@@ -628,16 +653,27 @@ const extractHumanReadableDescription = (rawPayload: Prisma.InputJsonValue | nul
 };
 
 export const confirmImportFile = async (importFileId: string, accountId: string) => {
-  const parsedRows: Array<Record<string, unknown>> = await fetchParsedTransactionRows(importFileId);
-
-  if (parsedRows.length === 0) {
-    throw new Error("No parsed rows available");
-  }
-
   const importFile = await fetchImportFileCompat(importFileId);
 
   if (!importFile) {
     throw new Error("Import file not found");
+  }
+
+  let parsedRows: Array<Record<string, unknown>> = await fetchParsedTransactionRows(importFileId);
+  if (parsedRows.length === 0) {
+    try {
+      await processImportFileText(importFileId, { actorUserId: null });
+      parsedRows = await fetchParsedTransactionRows(importFileId);
+    } catch (error) {
+      console.warn("Unable to recover parsed rows before confirmation", {
+        importFileId,
+        error,
+      });
+    }
+  }
+
+  if (parsedRows.length === 0) {
+    throw new Error("No parsed rows available");
   }
 
   const statementCheckpointRecord = (await hasCompatibleTable("AccountStatementCheckpoint"))
