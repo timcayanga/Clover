@@ -2084,6 +2084,28 @@ label {
   font-size: 20px;
 }
 
+.metric--highlight {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px 17px;
+}
+
+.metric--highlight span {
+  margin-bottom: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.metric--highlight strong {
+  font-size: 30px;
+  line-height: 1.08;
+}
+
+.metric--highlight small {
+  display: none;
+}
+
 .feature-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3075,6 +3097,12 @@ label {
   margin-top: 12px;
 }
 
+.reports-brief-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .reports-hero__copy,
 .reports-next,
 .report-card,
@@ -3115,6 +3143,11 @@ label {
   gap: 14px;
 }
 
+.report-ai-card--compact {
+  padding: 16px;
+  gap: 12px;
+}
+
 .report-ai-card--featured {
   padding: 24px;
   background:
@@ -3142,10 +3175,27 @@ label {
   flex-wrap: wrap;
 }
 
+.report-ai-card--compact h3 {
+  margin: 8px 0 8px;
+  font-size: 22px;
+  line-height: 1.18;
+  letter-spacing: -0.035em;
+}
+
+.report-ai-card--compact p {
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.5;
+}
+
 .report-ai-signal-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
+}
+
+.report-ai-signal-grid--compact {
+  grid-template-columns: 1fr;
 }
 
 .report-ai-signal {
@@ -3232,6 +3282,37 @@ label {
 .reports-attention-card p {
   color: var(--muted);
   line-height: 1.5;
+}
+
+.reports-decision-lens {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 30%),
+    rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow);
+}
+
+.reports-decision-lens h4 {
+  margin: 8px 0 10px;
+  font-size: 22px;
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+}
+
+.reports-decision-lens p {
+  margin: 0;
+  max-width: 58ch;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.reports-decision-lens .button {
+  flex: none;
 }
 
 .reports-pro-preview {
@@ -3542,6 +3623,94 @@ label {
 }
 
 .report-chart__label strong {
+  font-size: 14px;
+  letter-spacing: -0.02em;
+}
+
+.report-flow-map {
+  display: grid;
+  gap: 14px;
+}
+
+.report-flow-map__source {
+  display: grid;
+  gap: 4px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.report-flow-map__source span {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+}
+
+.report-flow-map__source strong {
+  font-size: 24px;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+}
+
+.report-flow-map__source small {
+  color: var(--muted);
+}
+
+.report-flow-map__rows {
+  display: grid;
+  gap: 10px;
+}
+
+.report-flow-map__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 2.2fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.58);
+  text-decoration: none;
+  color: inherit;
+}
+
+.report-flow-map__row--other {
+  background: rgba(245, 249, 251, 0.75);
+}
+
+.report-flow-map__meta {
+  display: grid;
+  gap: 4px;
+}
+
+.report-flow-map__meta strong {
+  font-size: 14px;
+  letter-spacing: -0.02em;
+}
+
+.report-flow-map__meta span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.report-flow-map__bar {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.report-flow-map__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.report-flow-map__share {
+  justify-self: end;
   font-size: 14px;
   letter-spacing: -0.02em;
 }
@@ -12286,6 +12455,7 @@ input.transaction-inline-edit--amount::placeholder {
   .feature-grid,
   .reports-hero,
   .reports-ai-grid,
+  .reports-brief-grid,
   .insights-snapshot,
   .insights-hero,
   .insights-grid,
@@ -12309,7 +12479,8 @@ input.transaction-inline-edit--amount::placeholder {
   .insight-chart__labels,
   .report-status-list,
   .report-chart__labels,
-  .report-donut {
+  .report-donut,
+  .report-flow-map__row {
     grid-template-columns: 1fr;
   }
 
@@ -12327,16 +12498,13 @@ input.transaction-inline-edit--amount::placeholder {
     align-items: flex-start;
   }
 
-  .reports-plan-split__grid {
-    grid-template-columns: 1fr;
-  }
-
-  .reports-plan-split__actions {
-    justify-content: flex-start;
-  }
-
   .reports-pro-preview__actions {
     justify-content: flex-start;
+  }
+
+  .reports-decision-lens {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .accounts-main-grid {
@@ -12553,15 +12721,6 @@ input.transaction-inline-edit--amount::placeholder {
 
   .dashboard-line-chart__labels {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .reports-hero__copy {
-    padding: 18px 16px 16px;
-  }
-
-  .reports-hero__copy h3 {
-    max-width: none;
-    font-size: clamp(2.15rem, 10vw, 2.95rem);
   }
 
   .insights-hero__summary h3 {
