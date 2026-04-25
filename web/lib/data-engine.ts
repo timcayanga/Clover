@@ -428,7 +428,9 @@ export const mergeStatementMetadataWithTemplate = (
     return detected;
   }
 
-  const preferTemplateIdentity = (detected.confidence ?? 0) < 80;
+  const detectedHasStrongIdentity = Boolean(detected.institution || detected.accountNumber || detected.accountName);
+  const detectedHasAccountNumber = Boolean(detected.accountNumber);
+  const preferTemplateIdentity = (detected.confidence ?? 0) < 80 && !detectedHasAccountNumber && !detectedHasStrongIdentity;
   const templateIdentityConfidence = Math.min(
     100,
     [
