@@ -2020,6 +2020,21 @@ const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null 
     return null;
   }
 
+  const gcashHeaderSignals = [
+    /^GCash Transaction History$/im,
+    /^Date and Time$/im,
+    /^Description$/im,
+    /^Reference No\.?$/im,
+    /^Debit$/im,
+    /^Credit$/im,
+    /^Balance$/im,
+    /^STARTING BALANCE$/im,
+  ].filter((pattern) => pattern.test(compact)).length;
+
+  if (gcashHeaderSignals < 3) {
+    return null;
+  }
+
   const phoneMatches = Array.from(compact.matchAll(/\b09\d{9}\b/g), (match) => match[0]);
   const phoneCounts = new Map<string, number>();
   for (const phone of phoneMatches) {
