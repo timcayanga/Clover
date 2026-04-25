@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { parseAmountValue, parseImportText } from "@/lib/import-parser";
-import { readImportedFileText } from "@/lib/import-file-text.server";
+import { readImportedFileText, readImportedPdfPageImages } from "@/lib/import-file-text.server";
 import {
   DATA_ENGINE_VERSION,
   buildParsedTransactionInsertData,
@@ -266,6 +266,18 @@ export const processImportFileText = async (
     );
   }
 
+  const pageImages = !text.trim() && importFile.fileType === "application/pdf"
+    ? await readImportedPdfPageImages(
+        {
+          storageKey: String(importFile.storageKey ?? ""),
+          fileType: String(importFile.fileType ?? ""),
+          fileName: String(importFile.fileName ?? ""),
+        },
+        options.password,
+        2
+      )
+    : null;
+
   const metadata = detectStatementMetadataFromText(text);
   const statementFingerprint = buildStatementFingerprint(text, metadata, importFile.fileName, importFile.fileType);
   const existingTemplate = await loadStatementTemplate({
@@ -307,7 +319,8 @@ export const processImportFileText = async (
     fileType: String(importFile.fileType ?? ""),
     detectedMetadata: mergedMetadata,
     parsedRows,
-    preferPrimary: openAiPrimaryMode,
+    pageImages,
+    preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
   });
 
   const openAiMetadata = openAiParsed

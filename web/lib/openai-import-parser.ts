@@ -63,7 +63,7 @@ type OpenAIExtractedTransaction = {
 
 type OpenAIParsedAccount = {
   display_name: string | null;
-  institution_name: string;
+  institution_name: string | null;
   account_last4: string | null;
   account_type: string | null;
   currency: string | null;
@@ -82,7 +82,7 @@ const importedStatementSchema = z.object({
   statement_type: z.string().min(1).optional().default("unknown"),
   account: z.object({
     display_name: z.string().nullable().optional().default(null),
-    institution_name: z.string().min(1),
+    institution_name: z.string().nullable().optional().default(null),
     account_last4: z.string().nullable().optional().default(null),
     account_type: z.string().nullable().optional().default(null),
     currency: z.string().nullable().optional().default(null),
@@ -160,7 +160,7 @@ const openAIJsonSchema = {
       additionalProperties: false,
       properties: {
         display_name: { type: ["string", "null"] },
-        institution_name: { type: "string" },
+        institution_name: { type: ["string", "null"] },
         account_last4: { type: ["string", "null"] },
         account_type: { type: ["string", "null"] },
         currency: { type: ["string", "null"] },
@@ -622,7 +622,7 @@ const buildOpenAIInputPayload = (params: {
     "Extracted text:",
     params.text,
     "",
-    `Images/pages: ${JSON.stringify(params.pageImages ?? [])}`,
+    `Image pages: ${(params.pageImages ?? []).map((page) => page.page).join(", ") || "none"}`,
     "",
     "Return only valid JSON matching the schema.",
   ].join("\n");
@@ -678,7 +678,6 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     return null;
   }
 
-  const model = (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL?.trim() || "gpt-4.1";
   const inputText = buildModelInputText(params.text);
   const systemPrompt = [
     "You are Clover’s financial statement extraction engine.",
@@ -705,50 +704,117 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     pageImages: params.pageImages ?? null,
   });
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
+  const pageImagesToSend = (params.pageImages ?? []).slice(0, 2);
+  const textModel = (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL?.trim() || "gpt-4.1";
+  const imageModel =
+    (env as { OPENAI_IMPORT_PARSER_IMAGE_MODEL?: string }).OPENAI_IMPORT_PARSER_IMAGE_MODEL?.trim() || "gpt-4.1-mini";
+  const model = pageImagesToSend.length > 0 ? imageModel : textModel;
+  const buildUserContent = (pageImages: Array<{ page: number; dataUrl: string }>) => {
+    const userContent: Array<Record<string, unknown>> = [{ type: "input_text", text: userPrompt }];
+    for (const pageImage of pageImages) {
+      userContent.push({
+        type: "input_image",
+        image_url: pageImage.dataUrl,
+      });
+    }
+    return userContent;
+  };
+
+  const callOpenAI = async (selectedModel: string, pageImages: Array<{ page: number; dataUrl: string }>, timeoutMs: number) => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch("https://api.openai.com/v1/responses", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: selectedModel,
+          temperature: 0,
+          max_output_tokens: 4_000,
+          input: [
+            {
+              role: "system",
+              content: [{ type: "input_text", text: systemPrompt }],
+            },
+            {
+              role: "user",
+              content: buildUserContent(pageImages),
+            },
+          ],
+          text: {
+            format: {
+              type: "json_schema",
+              name: "bank_statement_import",
+              strict: true,
+              schema: openAIJsonSchema,
+            },
+          },
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return null;
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
+
+  const shouldRetryWithFewerImages = (status: number, errorText: string, imageCount: number) => {
+    if (imageCount <= 1) {
+      return false;
+    }
+    if (status === 429) {
+      return true;
+    }
+    return /token|context|too large|payload/i.test(errorText);
+  };
 
   try {
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0,
-        max_output_tokens: 4_000,
-        input: [
-          {
-            role: "system",
-            content: [{ type: "input_text", text: systemPrompt }],
-          },
-          {
-            role: "user",
-            content: [{ type: "input_text", text: userPrompt }],
-          },
-        ],
-        text: {
-          format: {
-            type: "json_schema",
-            name: "bank_statement_import",
-            strict: true,
-            schema: openAIJsonSchema,
-          },
-        },
-      }),
-      signal: controller.signal,
-    });
+    const primaryTimeoutMs = model === imageModel ? 15_000 : 30_000;
+    let response = await callOpenAI(model, pageImagesToSend, primaryTimeoutMs);
 
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => "");
-      console.warn("OpenAI import fallback request failed", {
-        status: response.status,
-        statusText: response.statusText,
-        errorText: errorText.slice(0, 2_000) || null,
-      });
-      return null;
+    if (!response || !response.ok) {
+      const errorText = response ? await response.text().catch(() => "") : "timeout";
+      if (response && shouldRetryWithFewerImages(response.status, errorText, pageImagesToSend.length)) {
+        console.warn("OpenAI import fallback request retried with fewer page images", {
+          status: response.status,
+          statusText: response.statusText,
+          imageCount: pageImagesToSend.length,
+        });
+        response = await callOpenAI(model, pageImagesToSend.slice(0, 1), primaryTimeoutMs);
+      }
+
+      if ((!response || !response.ok) && pageImagesToSend.length > 0 && model === imageModel && imageModel !== textModel) {
+        if (response && !response.ok) {
+          const retryErrorText = await response.text().catch(() => "");
+          console.warn("OpenAI image fallback request failed, retrying with text model", {
+            status: response.status,
+            statusText: response.statusText,
+            errorText: retryErrorText.slice(0, 2_000) || null,
+          });
+        } else {
+          console.warn("OpenAI image fallback timed out, retrying with text model", {
+            imageCount: pageImagesToSend.length,
+          });
+        }
+        response = await callOpenAI(textModel, pageImagesToSend.slice(0, 1), 30_000);
+      }
+
+      if (!response || !response.ok) {
+        const finalErrorText = response ? await response.text().catch(() => "") : errorText;
+        console.warn("OpenAI import fallback request failed", {
+          status: response?.status ?? null,
+          statusText: response?.statusText ?? null,
+          errorText: finalErrorText.slice(0, 2_000) || null,
+        });
+        return null;
+      }
     }
 
     const payload = (await response.json()) as Record<string, unknown>;
@@ -910,14 +976,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       },
     };
   } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      console.warn("OpenAI import fallback timed out", { model });
-      return null;
-    }
-
     console.warn("OpenAI import fallback failed", error);
     return null;
-  } finally {
-    clearTimeout(timeout);
   }
 };
