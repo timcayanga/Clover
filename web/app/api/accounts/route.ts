@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
-import { hasCompatibleTable, loadAccountRules, upsertAccountRule } from "@/lib/data-engine";
+import { hasCompatibleTable, loadAccountRules, normalizeAccountRuleKey, upsertAccountRule } from "@/lib/data-engine";
 
 export const dynamic = "force-dynamic";
 
@@ -93,14 +93,14 @@ export async function POST(request: Request) {
 
     await assertWorkspaceAccess(userId, workspaceId);
 
-    const existingAccount = await prisma.account.findFirst({
-      where: {
-        workspaceId,
-        name,
-        institution,
-        type,
-      },
+    const existingAccounts = await prisma.account.findMany({
+      where: { workspaceId },
     });
+    const candidateKey = normalizeAccountRuleKey(name, institution);
+    const existingAccount =
+      existingAccounts.find((account) => account.type === type && normalizeAccountRuleKey(account.name, account.institution) === candidateKey) ??
+      existingAccounts.find((account) => account.type === type && account.name === name && account.institution === institution) ??
+      null;
     if (existingAccount) {
       return NextResponse.json({
         account: {

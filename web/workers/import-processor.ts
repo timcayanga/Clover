@@ -19,6 +19,7 @@ import {
   recordTrainingSignal,
   loadStatementTemplate,
   mergeStatementMetadataWithTemplate,
+  normalizeAccountRuleKey,
   updateImportFileCompat,
   upsertAccountRule,
   upsertStatementTemplate,
@@ -69,7 +70,21 @@ type ProcessImportResult = {
   accountBalance?: string | null;
 };
 
-const shouldRouteToReview = (confidence: number) => confidence < 85;
+const shouldRouteToReview = (params: { confidence: number; categoryName?: string | null; type?: string | null }) => {
+  if (params.confidence < 90) {
+    return true;
+  }
+
+  if ((params.categoryName ?? "").trim() === "Other") {
+    return true;
+  }
+
+  if (!params.type) {
+    return true;
+  }
+
+  return false;
+};
 
 const isTruthyEnvValue = (value?: string | null) => {
   if (!value) {
@@ -97,6 +112,7 @@ const resolveConfirmationAccount = async (params: {
     accountName?: unknown;
     institution?: unknown;
     accountType?: unknown;
+    accountNumber?: unknown;
   } | null;
   parsedRows: Array<{
     accountName?: unknown;
@@ -129,6 +145,10 @@ const resolveConfirmationAccount = async (params: {
     typeof candidateRow?.institution === "string" && candidateRow.institution.trim()
       ? candidateRow.institution.trim()
       : null;
+  const inferredAccountNumber =
+    typeof params.statementMetadata?.accountNumber === "string" && params.statementMetadata.accountNumber.trim()
+      ? params.statementMetadata.accountNumber.trim()
+      : null;
   const inferredAccountType =
     typeof params.statementMetadata?.accountType === "string" &&
     ["bank", "wallet", "credit_card", "cash", "investment", "other"].includes(params.statementMetadata.accountType)
@@ -145,24 +165,30 @@ const resolveConfirmationAccount = async (params: {
     return directAccount;
   }
 
-  if (inferredAccountName) {
-    const existing = await prisma.account.findFirst({
-      where: {
-        workspaceId,
-        name: inferredAccountName,
-        ...(inferredInstitution ? { institution: inferredInstitution } : {}),
-      },
-    });
-    if (existing) {
-      return existing;
-    }
+  const candidateKey = normalizeAccountRuleKey(
+    inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
+    inferredInstitution
+  );
 
+  const workspaceAccounts = await prisma.account.findMany({
+    where: { workspaceId },
+  });
+  const existingByKey = workspaceAccounts.find(
+    (account) => normalizeAccountRuleKey(account.name, account.institution) === candidateKey
+  );
+  if (existingByKey) {
+    return existingByKey;
+  }
+
+  if (inferredAccountName || inferredAccountNumber) {
     return prisma.account.create({
       data: {
         workspaceId,
-        name: inferredAccountName,
+        name:
+          inferredAccountName ??
+          (inferredInstitution && inferredAccountNumber ? `${inferredInstitution} ${inferredAccountNumber.slice(-4)}` : String(params.importFile.fileName ?? "Imported account").replace(/\.[^.]+$/, "").trim()),
         institution: inferredInstitution,
-        type: inferredAccountType ?? inferAccountTypeFromStatement(inferredInstitution, inferredAccountName, "bank"),
+        type: inferredAccountType ?? inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank"),
         currency: "PHP",
         source: "upload",
       },
@@ -633,6 +659,8 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
         typeof statementMetadata?.accountName === "string" ? statementMetadata.accountName : null,
       institution:
         typeof statementMetadata?.institution === "string" ? statementMetadata.institution : null,
+      accountNumber:
+        typeof statementMetadata?.accountNumber === "string" ? statementMetadata.accountNumber : null,
       accountType:
         typeof statementMetadata?.accountType === "string" ? statementMetadata.accountType : null,
     },
@@ -905,7 +933,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       accountId: resolvedAccountId,
       importFileId,
       categoryId,
-      reviewStatus: shouldRouteToReview(rowConfidence) ? "pending_review" : "confirmed",
+      reviewStatus: shouldRouteToReview({ confidence: rowConfidence, categoryName, type: rowType }) ? "pending_review" : "confirmed",
       parserConfidence: rowParserConfidence,
       categoryConfidence: rowCategoryConfidence,
       accountMatchConfidence: rowAccountMatchConfidence,

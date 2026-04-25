@@ -1556,6 +1556,7 @@ export const recordTrainingSignal = async (params: {
 }) => {
   const merchantKey = normalizeMerchantText(params.merchantText);
   const merchantTokens = tokenizeMerchant(params.merchantText);
+  const normalizedMerchantLabel = summarizeMerchantText(params.merchantText);
   const dedupeKey = buildTrainingSignalDedupeKey({
     source: params.source,
     transactionId: params.transactionId ?? null,
@@ -1619,7 +1620,7 @@ export const recordTrainingSignal = async (params: {
     await upsertMerchantRule({
       workspaceId: params.workspaceId,
       merchantText: params.merchantText,
-      normalizedName: params.merchantText,
+      normalizedName: normalizedMerchantLabel || params.merchantText,
       categoryId: params.categoryId,
       categoryName: params.categoryName ?? category.name,
       source: params.source,
@@ -1639,6 +1640,26 @@ export const enrichParsedRowsWithTraining = async (params: {
   const accountRules = await loadAccountRules(params.workspaceId);
   const trainingSignals = await loadTrainingSignals(params.workspaceId);
   const statementConfidence = typeof params.statementConfidence === "number" ? params.statementConfidence : 100;
+
+  const isRowLowConfidence = (details: { effectiveConfidence: number; categoryName: string; categoryReason?: string | null; rowType?: ParsedImportRow["type"] }) => {
+    if (details.effectiveConfidence < 90) {
+      return true;
+    }
+
+    if (details.categoryName === "Other") {
+      return true;
+    }
+
+    if (details.categoryReason === "heuristic-other") {
+      return true;
+    }
+
+    if (!details.rowType) {
+      return true;
+    }
+
+    return false;
+  };
 
   return params.rows.map((row) => {
     const rowWithInstitution = row as ParsedImportRow & { institution?: string | null };
@@ -1669,7 +1690,14 @@ export const enrichParsedRowsWithTraining = async (params: {
       confidence: effectiveConfidence,
       categoryReason: learned.categoryReason,
       parserVersion: DATA_ENGINE_VERSION,
-      reviewStatus: effectiveConfidence >= 80 ? "suggested" : "pending_review",
+      reviewStatus: isRowLowConfidence({
+        effectiveConfidence,
+        categoryName,
+        categoryReason: learned.categoryReason,
+        rowType: row.type,
+      })
+        ? "pending_review"
+        : "suggested",
       parserConfidence: statementConfidence,
       categoryConfidence: effectiveConfidence,
       accountMatchConfidence: accountMatch ? Math.min(99, Math.round(Math.min(Math.max(70, accountMatch.score), statementConfidence))) : 0,
