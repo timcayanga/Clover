@@ -1,9 +1,19 @@
 import { clerkClient } from "@clerk/nextjs/server";
 
-export const syncClerkUser = async (clerkUserId: string) => {
-  const fallback = {
+type SyncedClerkUser = {
+  clerkUserId: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  verified: boolean;
+};
+
+export const syncClerkUser = async (clerkUserId: string): Promise<SyncedClerkUser> => {
+  const fallback: SyncedClerkUser = {
     clerkUserId,
     email: `${clerkUserId}@placeholder.local`,
+    firstName: null as string | null,
+    lastName: null as string | null,
     verified: false,
   };
 
@@ -19,6 +29,8 @@ export const syncClerkUser = async (clerkUserId: string) => {
     return {
       clerkUserId,
       email,
+      firstName: clerkUser.firstName ?? null,
+      lastName: clerkUser.lastName ?? null,
       verified: clerkUser.emailAddresses.some((entry) => entry.verification?.status === "verified"),
     };
   } catch (error) {
