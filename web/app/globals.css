@@ -713,17 +713,16 @@ label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   aspect-ratio: 1 / 1;
   border-radius: 50%;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.7);
   overflow: hidden;
   flex: none;
   cursor: pointer;
   transition: background 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-  clip-path: circle(50% at 50% 50%);
 }
 
 .sidebar-profile:hover,
@@ -744,7 +743,6 @@ label {
   border-radius: 50%;
   overflow: hidden;
   line-height: 0;
-  clip-path: circle(50% at 50% 50%);
 }
 
 .sidebar-profile__avatar img {
@@ -754,8 +752,7 @@ label {
   object-fit: cover;
   object-position: center;
   border-radius: inherit;
-  transform: scale(1.04);
-  clip-path: inherit;
+  transform: scale(1.12);
 }
 
 .sidebar-popover {
