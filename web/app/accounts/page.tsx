@@ -1509,7 +1509,6 @@ function AccountsPageContent() {
                                   {currencyFormatter.format(balanceValue)}
                                 </div>
                                 <div className="accounts-account-card__balance-meta">
-                                  <span>{balanceContext.label}</span>
                                   <span className={`accounts-account-card__balance-pill is-${balanceContext.tone}`}>
                                     {balanceContext.tone === "good"
                                       ? "Spendable"
