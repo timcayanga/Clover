@@ -49,3 +49,18 @@ This document captures the PNB parsing rules learned from the synthetic training
 
 - PNB savings should import as a clean running-balance ledger with transfers, fees, and taxes preserved.
 - PNB Mastercard should import as a merchant stream with payment handling and learned category mappings preserved.
+
+## Parsing Guidance
+
+- Prefer deterministic parsing from the statement text before any AI fallback.
+- Keep raw statement data, parsed rows, and normalized transactions separate.
+- Preserve bank-specific transfer, fee, sweep, and adjustment wording instead of collapsing it into generic spend.
+
+## Notes Handling
+
+- Keep transaction notes human-readable and concise.
+- If there is no useful note, leave notes empty instead of writing raw import payloads.
+
+## Review
+
+- Unexpected `Other` categories or statement-housekeeping rows should be treated as parser review candidates.

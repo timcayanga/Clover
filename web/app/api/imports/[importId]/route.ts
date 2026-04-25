@@ -13,7 +13,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ im
 
     const importFile = await updateImportFileCompat(importId, {
       status: body?.status || undefined,
-      deletedAt: body?.deletedAt ? new Date(body.deletedAt) : undefined,
     });
 
     return NextResponse.json({ importFile });
@@ -39,7 +38,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
     const deleted = await updateImportFileCompat(importId, {
       status: "deleted",
-      deletedAt: new Date(),
     });
 
     return NextResponse.json({ importFile: deleted });

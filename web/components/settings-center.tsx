@@ -1,17 +1,25 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
 type FieldKind = "text" | "select" | "textarea" | "toggle";
+
+export type SettingOption = {
+  label: string;
+  helper?: string;
+};
 
 export type SettingField = {
   label: string;
   helper?: string;
   kind: FieldKind;
+  tier?: "primary" | "advanced";
   value?: string;
-  options?: string[];
+  options?: SettingOption[];
   checked?: boolean;
   rows?: number;
+  showAsCards?: boolean;
 };
 
 export type SettingSection = {
@@ -30,7 +38,25 @@ function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
 
-function renderField(field: SettingField) {
+function getFieldValue(field: SettingField) {
+  if (field.kind !== "select") {
+    return "";
+  }
+
+  return field.value ?? field.options?.[0]?.label ?? "";
+}
+
+function renderField(field: SettingField, section: SettingSection) {
+  const trackSettingsUpdated = (detail: Record<string, string | number | boolean | null>) => {
+    capturePostHogClientEvent("settings_updated", {
+      setting_group: section.group,
+      setting_title: section.title,
+      setting_label: field.label,
+      setting_kind: field.kind,
+      ...detail,
+    });
+  };
+
   if (field.kind === "toggle") {
     return (
       <label className="settings-toggle">
@@ -39,10 +65,54 @@ function renderField(field: SettingField) {
           {field.helper ? <span>{field.helper}</span> : null}
         </span>
         <span className="settings-switch">
-          <input type="checkbox" defaultChecked={field.checked ?? false} />
+          <input
+            type="checkbox"
+            defaultChecked={field.checked ?? false}
+            onChange={(event) => {
+              trackSettingsUpdated({
+                checked: event.target.checked,
+              });
+            }}
+          />
           <span aria-hidden="true" />
         </span>
       </label>
+    );
+  }
+
+  if (field.kind === "select" && field.showAsCards) {
+    const name = `${slugify(section.group)}-${slugify(section.title)}-${slugify(field.label)}`;
+    const selectedValue = getFieldValue(field);
+
+    return (
+      <fieldset className="settings-choice">
+        <legend>
+          <span>{field.label}</span>
+          {field.helper ? <small>{field.helper}</small> : null}
+        </legend>
+        <div className="settings-choice__options">
+          {(field.options ?? []).map((option) => (
+            <label
+              key={option.label}
+              className={`settings-choice__option${selectedValue === option.label ? " is-selected" : ""}`}
+            >
+              <input
+                type="radio"
+                name={name}
+                value={option.label}
+                defaultChecked={selectedValue === option.label}
+                onChange={(event) => {
+                  trackSettingsUpdated({
+                    value: event.target.value,
+                  });
+                }}
+              />
+              <span className="settings-choice__label">{option.label}</span>
+              {option.helper ? <span className="settings-choice__helper">{option.helper}</span> : null}
+            </label>
+          ))}
+        </div>
+      </fieldset>
     );
   }
 
@@ -50,17 +120,39 @@ function renderField(field: SettingField) {
     <label className="settings-field">
       <span>{field.label}</span>
       {field.kind === "select" ? (
-        <select defaultValue={field.value}>
+        <select
+          defaultValue={getFieldValue(field)}
+          onChange={(event) => {
+            trackSettingsUpdated({
+              value: event.target.value,
+            });
+          }}
+        >
           {(field.options ?? []).map((option) => (
-            <option key={option} value={option}>
-              {option}
+            <option key={option.label} value={option.label}>
+              {option.label}
             </option>
           ))}
         </select>
       ) : field.kind === "textarea" ? (
-        <textarea defaultValue={field.value} rows={field.rows ?? 3} />
+        <textarea
+          defaultValue={field.value}
+          rows={field.rows ?? 3}
+          onBlur={(event) => {
+            trackSettingsUpdated({
+              value: event.target.value,
+            });
+          }}
+        />
       ) : (
-        <input defaultValue={field.value} />
+        <input
+          defaultValue={field.value}
+          onBlur={(event) => {
+            trackSettingsUpdated({
+              value: event.target.value,
+            });
+          }}
+        />
       )}
       {field.helper ? <small>{field.helper}</small> : null}
     </label>
@@ -87,31 +179,13 @@ export function SettingsCenter({ sections }: SettingsCenterProps) {
           field.label,
           field.helper ?? "",
           field.value ?? "",
-          ...(field.options ?? []),
+          ...(field.options ?? []).map((option) => option.label),
         ]),
       ];
 
       return haystacks.some((value) => value.toLowerCase().includes(normalizedQuery));
     });
   }, [query, sections]);
-
-  const groups = useMemo(() => {
-    const map = new Map<string, SettingSection[]>();
-
-    sections.forEach((section) => {
-      const bucket = map.get(section.group) ?? [];
-      bucket.push(section);
-      map.set(section.group, bucket);
-    });
-
-    return Array.from(map.entries()).map(([group, items]) => ({
-      group,
-      items,
-      visibleItems: items.filter((section) => visibleSections.includes(section)),
-    }));
-  }, [sections, visibleSections]);
-
-  const jumpLinks = visibleSections;
 
   return (
     <section className="settings-layout">
@@ -127,45 +201,26 @@ export function SettingsCenter({ sections }: SettingsCenterProps) {
           />
         </label>
 
-        <nav className="settings-submenu" aria-label="Settings submenus">
-          {groups.map((group) => (
-            <div key={group.group} className="settings-submenu__group">
-              <span className="settings-submenu__title">{group.group}</span>
-              <div className="settings-submenu__links">
-                {group.visibleItems.map((section) => {
-                  const id = slugify(section.title);
+        <nav className="settings-submenu" aria-label="Settings sections">
+          {visibleSections.map((section) => {
+            const id = slugify(section.title);
 
-                  return (
-                    <a key={id} className="settings-submenu__link" href={`#${id}`}>
-                      {section.title}
-                    </a>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+            return (
+              <a key={id} className="settings-submenu__link" href={`#${id}`}>
+                <span className="settings-submenu__link-title">{section.title}</span>
+                <span className="settings-submenu__link-summary">{section.summary}</span>
+              </a>
+            );
+          })}
         </nav>
-
-        <div className="settings-jump">
-          <span className="settings-jump__label">Jump To</span>
-          <div className="settings-jump__items">
-            {jumpLinks.map((section) => {
-              const id = slugify(section.title);
-
-              return (
-                <a key={id} className="settings-jump__item" href={`#${id}`}>
-                  {section.title}
-                </a>
-              );
-            })}
-          </div>
-        </div>
       </aside>
 
       <div className="settings-main">
         {visibleSections.length ? (
           visibleSections.map((section) => {
             const id = slugify(section.title);
+            const primaryFields = section.fields.filter((field) => field.tier !== "advanced");
+            const advancedFields = section.fields.filter((field) => field.tier === "advanced");
 
             return (
               <article key={section.title} id={id} className="settings-card glass">
@@ -178,24 +233,28 @@ export function SettingsCenter({ sections }: SettingsCenterProps) {
                 </div>
 
                 <div className="settings-section-grid">
-                  {section.fields.map((field) => (
+                  {primaryFields.map((field) => (
                     <div key={field.label} className="settings-section-grid__item">
-                      {renderField(field)}
+                      {renderField(field, section)}
                     </div>
                   ))}
                 </div>
 
-                <div className="settings-card__footer">
-                  <span>Changes are surfaced here first, then wired to persistence next.</span>
-                  <div className="settings-card__actions">
-                    <button className="button button-secondary button-small" type="button">
-                      Reset section
-                    </button>
-                    <button className="button button-primary button-small" type="button">
-                      Save section
-                    </button>
-                  </div>
-                </div>
+                {advancedFields.length ? (
+                  <details className="settings-advanced">
+                    <summary>
+                      <span>More options</span>
+                      <small>For power users who want finer control</small>
+                    </summary>
+                    <div className="settings-advanced__grid">
+                      {advancedFields.map((field) => (
+                        <div key={field.label} className="settings-section-grid__item">
+                          {renderField(field, section)}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                ) : null}
               </article>
             );
           })

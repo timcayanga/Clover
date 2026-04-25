@@ -219,13 +219,13 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
   }, [mode]);
 
   if (!isReady) {
-    return (
-      <section className="clover-auth-card glass">
-        <div className="clover-auth-card__brand">
-          <img className="clover-auth-card__logo" src="/clover-mark.svg" alt="Clover" />
-        </div>
-        <p className="clover-auth-card__loading">Loading secure sign-in...</p>
-      </section>
+      return (
+        <section className="clover-auth-card glass">
+          <div className="clover-auth-card__brand">
+            <img className="clover-auth-card__logo" src="/clover-mark.svg" alt="Clover" />
+          </div>
+          <p className="clover-auth-card__loading">Loading secure sign-in...</p>
+        </section>
     );
   }
 
@@ -419,11 +419,11 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
     }
   };
 
-  const title = mode === "sign-in" ? "Welcome back" : "Sign Up";
+  const title = mode === "sign-in" ? "Welcome back" : "Create your Clover account";
   const subtitle =
     mode === "sign-in"
-      ? "Sign in to pick up where you left off."
-      : "";
+      ? "Sign in to pick up where you left off and keep moving."
+      : "Create your account once, then import a statement, connect an account, or start manually.";
   const footerText =
     mode === "sign-in" ? (
       <>
@@ -443,7 +443,6 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
 
       <header className="clover-auth-card__header">
         <h1>{title}</h1>
-        {subtitle ? <p>{subtitle}</p> : null}
         {mode === "sign-up" ? <p className="clover-auth-card__trust">No credit card. Start in under a minute.</p> : null}
       </header>
 

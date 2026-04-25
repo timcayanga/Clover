@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
 export type ReportsQueueAction = {
   label: string;
@@ -36,22 +37,70 @@ export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
     setIsCategoryPickerOpen(false);
   }, [currentIndex, items.length]);
 
-  const goPrevious = () => setIndex((value) => (value - 1 + items.length) % items.length);
-  const goNext = () => setIndex((value) => (value + 1) % items.length);
+  useEffect(() => {
+    if (!current) {
+      return;
+    }
+
+    capturePostHogClientEvent("review_item_opened", {
+      review_title: current.title,
+      review_tag_count: current.tags.length,
+      has_category_picker: canPickCategory,
+    });
+  }, [canPickCategory, current, currentIndex]);
+
+  const goPrevious = () => {
+    capturePostHogClientEvent("feature_used", {
+      feature_name: "review_queue_previous",
+    });
+    setIndex((value) => (value - 1 + items.length) % items.length);
+  };
+
+  const goNext = () => {
+    capturePostHogClientEvent("feature_used", {
+      feature_name: "review_queue_next",
+    });
+    setIndex((value) => (value + 1) % items.length);
+  };
   const setCategory = (category: string) => {
     setSelectedCategories((value) => ({ ...value, [currentIndex]: category }));
+    capturePostHogClientEvent("review_item_accepted", {
+      review_title: current?.title ?? "Unknown",
+      selected_category: category,
+    });
     setIsCategoryPickerOpen(false);
   };
 
   if (!hasItems || !current) {
-    return <div className="empty-state">No actionable items right now.</div>;
+    return (
+      <div className="empty-state reports-review-queue__empty">
+        <strong>Review queue is clear</strong>
+        <p>
+          Clover did not find any low-confidence items in this report set. If you want to keep pressure on the numbers,
+          check transactions for new imports or unresolved rows.
+        </p>
+        <div className="reports-review-queue__empty-actions">
+          <Link className="pill-link pill-link--inline" href="/review">
+            Open review
+          </Link>
+          <Link className="pill-link pill-link--inline" href="/transactions">
+            View transactions
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="reports-review-queue">
       <div className="report-card__head">
         <div>
+          <p className="eyebrow">Action queue</p>
           <h4>Review queue</h4>
+        </div>
+        <div className="report-card__stat">
+          <strong>{items.length}</strong>
+          <span>actionable items</span>
         </div>
       </div>
 
@@ -72,7 +121,12 @@ export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
                       className={`pill pill-subtle pill-interactive reports-review-queue__chip reports-review-queue__chip--button ${
                         currentCategory ? "pill-is-selected" : ""
                       }`}
-                      onClick={() => setIsCategoryPickerOpen((value) => !value)}
+                      onClick={() => {
+                        capturePostHogClientEvent("feature_used", {
+                          feature_name: "review_queue_category_picker",
+                        });
+                        setIsCategoryPickerOpen((value) => !value);
+                      }}
                       aria-expanded={isCategoryPickerOpen}
                       aria-haspopup="menu"
                     >
@@ -113,6 +167,16 @@ export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
                 key={action.label}
                 href={action.href}
                 className={`button ${action.variant === "secondary" ? "button-secondary" : "button-primary"} button-pill`}
+                onClick={() => {
+                  capturePostHogClientEvent("insight_action_taken", {
+                    insight_type: "review_queue",
+                    action_label: action.label,
+                    action_href: action.href,
+                  });
+                  capturePostHogClientEvent("feature_used", {
+                    feature_name: action.label,
+                  });
+                }}
               >
                 {action.label}
               </Link>

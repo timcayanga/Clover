@@ -33,6 +33,7 @@ export type AnalyticsEventName =
   | "transaction_undone"
   | "review_item_opened"
   | "review_item_accepted"
+  | "review_item_edited"
   | "review_item_rejected"
   | "merchant_rule_created"
   | "merchant_rule_updated"
@@ -55,6 +56,8 @@ export type AnalyticsEventName =
   | "session_returned"
   | "feature_used"
   | "settings_updated"
+  | "goal_target_saved"
+  | "goal_target_reached"
   | "plan_limit_reached"
   | "upgrade_prompt_viewed"
   | "support_contacted"
@@ -74,12 +77,23 @@ export const getPostHogConfig = () => {
 
 export const shouldTrackAnalytics = () => Boolean(getPostHogConfig().key);
 
+export const getPostHogClientHost = () => {
+  if (process.env.NODE_ENV === "production") {
+    return "/ph";
+  }
+
+  return getPostHogConfig().host;
+};
+
+export const getPostHogServerHost = () => getPostHogConfig().host;
+
 export const capturePostHogServerEvent = async (
   event: AnalyticsEventName,
   distinctId: string,
   properties: AnalyticsProperties = {}
 ) => {
-  const { key, host } = getPostHogConfig();
+  const { key } = getPostHogConfig();
+  const host = getPostHogServerHost();
 
   if (!key) {
     return;

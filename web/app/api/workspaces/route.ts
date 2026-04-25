@@ -25,7 +25,7 @@ export async function GET() {
       });
     }
 
-    const starterWorkspace = await ensureStarterWorkspace(clerkUser.clerkUserId, clerkUser.email, clerkUser.verified);
+    const starterWorkspace = await ensureStarterWorkspace(user ?? clerkUser.clerkUserId, clerkUser.email, clerkUser.verified);
 
     return NextResponse.json({
       workspaces: user?.workspaces ?? [starterWorkspace],

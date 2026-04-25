@@ -1,11 +1,13 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
+import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PostHogEvent } from "@/components/posthog-analytics";
+import { ReviewWorkbench } from "@/components/review-workbench";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
+import { buildReviewQueueWhere } from "@/lib/review-queue";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +40,7 @@ export default async function ReviewPage() {
     redirect("/onboarding");
   }
 
-  const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
+  const starterWorkspace = await ensureStarterWorkspace(user);
   await seedWorkspaceDefaults(starterWorkspace.id);
 
   const workspaces = await prisma.workspace.findMany({
@@ -48,40 +50,52 @@ export default async function ReviewPage() {
 
   const selectedWorkspace = workspaces[0] ?? starterWorkspace;
 
-  const reviewTransactions = await prisma.transaction.findMany({
-    where: {
-      workspaceId: selectedWorkspace.id,
-      OR: [
-        { reviewStatus: { not: "confirmed" } },
-        { categoryId: null },
-        { categoryConfidence: { lt: 70 } },
-      ],
-    },
-    include: {
-      account: true,
-      category: true,
-    },
-    orderBy: [{ categoryConfidence: "asc" }, { date: "desc" }],
-    take: 100,
-  });
+  const [accounts, categories, reviewTransactions] = await Promise.all([
+    prisma.account.findMany({
+      where: { workspaceId: selectedWorkspace.id },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+      },
+    }),
+    prisma.category.findMany({
+      where: { workspaceId: selectedWorkspace.id },
+      orderBy: [{ type: "asc" }, { name: "asc" }],
+      select: {
+        id: true,
+        name: true,
+        type: true,
+      },
+    }),
+    prisma.transaction.findMany({
+      where: buildReviewQueueWhere(selectedWorkspace.id),
+      include: {
+        account: true,
+        category: true,
+      },
+      orderBy: [{ categoryConfidence: "asc" }, { date: "desc" }],
+    }),
+  ]);
 
   const counts = reviewTransactions.reduce(
     (accumulator: any, transaction: any) => {
       accumulator.total += 1;
       if (transaction.reviewStatus === "pending_review") accumulator.pending += 1;
-      if (transaction.reviewStatus === "edited") accumulator.edited += 1;
       if (transaction.categoryConfidence < 70 || !transaction.categoryId) accumulator.lowConfidence += 1;
+      if (transaction.accountMatchConfidence < 70) accumulator.lowAccount += 1;
+      if (transaction.duplicateConfidence >= 50) accumulator.duplicateRisk += 1;
       return accumulator;
     },
-    { total: 0, pending: 0, edited: 0, lowConfidence: 0 }
+    { total: 0, pending: 0, lowConfidence: 0, lowAccount: 0, duplicateRisk: 0 }
   );
 
   return (
     <CloverShell
       active="transactions"
       title="Review queue"
-      kicker="Learning loop"
-      subtitle="Transactions with low confidence, missing categories, or manual edits show up here so you can confirm the model’s guesses."
+      kicker="Learning backbone"
+      subtitle="Fast triage for uncertain transactions. Confirm, fix, or exclude rows so Clover learns what to trust next time."
       showTopbar={false}
     >
       <PostHogEvent
@@ -97,63 +111,54 @@ export default async function ReviewPage() {
       <section className="panel">
         <h2>Review queue</h2>
         <p className="panel-muted">
-          Workspace: {selectedWorkspace.name}. {counts.total} transaction{counts.total === 1 ? "" : "s"} need review attention.
+          Workspace: {selectedWorkspace.name}. These rows need a human decision before Clover trusts them in totals,
+          insights, exports, and merchant rules.
         </p>
 
-        <div className="status-card" style={{ marginTop: 16 }}>
-          <div>
-            <strong>{counts.total}</strong>
-            <div className="panel-muted">items in the queue</div>
-          </div>
-          <div className="status-stack">
-            <span className="status status--processing">{counts.lowConfidence} low confidence</span>
-            <span className="status">{counts.pending} pending review</span>
-            <span className="status">{counts.edited} edited</span>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 20, overflowX: "auto" }}>
+        <div style={{ marginTop: 20 }}>
           {reviewTransactions.length > 0 ? (
-            <table className="preview-table">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Merchant</th>
-                  <th>Account</th>
-                  <th>Category</th>
-                  <th>Status</th>
-                  <th>Confidence</th>
-                  <th>Amount</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {reviewTransactions.map((transaction: any) => (
-                  <tr key={transaction.id}>
-                    <td>{formatDate(transaction.date)}</td>
-                    <td>{transaction.merchantClean ?? transaction.merchantRaw}</td>
-                    <td>{transaction.account.name}</td>
-                    <td>{transaction.category?.name ?? "Uncategorized"}</td>
-                    <td>{transaction.reviewStatus.replaceAll("_", " ")}</td>
-                    <td>{transaction.categoryConfidence}%</td>
-                    <td>{formatCurrency(transaction.amount)}</td>
-                    <td>
-                      <Link className="button button-secondary button-small" href="/transactions">
-                        Open transactions
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <ReviewWorkbench
+              workspaceId={selectedWorkspace.id}
+              workspaceName={selectedWorkspace.name}
+              accounts={accounts}
+              categories={categories}
+              transactions={reviewTransactions.map((transaction) => ({
+                id: transaction.id,
+                accountId: transaction.accountId,
+                accountName: transaction.account.name,
+                categoryId: transaction.categoryId,
+                categoryName: transaction.category?.name ?? null,
+                reviewStatus: transaction.reviewStatus,
+                parserConfidence: transaction.parserConfidence,
+                categoryConfidence: transaction.categoryConfidence,
+                accountMatchConfidence: transaction.accountMatchConfidence,
+                duplicateConfidence: transaction.duplicateConfidence,
+                transferConfidence: transaction.transferConfidence,
+                date: transaction.date.toISOString(),
+                amount: transaction.amount.toString(),
+                currency: transaction.currency,
+                type: transaction.type,
+                merchantRaw: transaction.merchantRaw,
+                merchantClean: transaction.merchantClean,
+                description: transaction.description,
+                isTransfer: transaction.isTransfer,
+                isExcluded: transaction.isExcluded,
+              }))}
+            />
           ) : (
-            <div className="empty-state">No transactions need review right now.</div>
+            <EmptyDataCta
+              eyebrow="Review inbox"
+              title="No rows need review right now"
+              copy="The current import set looks clean. When Clover spots uncertain or low-confidence rows, this page will collect them here so you can resolve them quickly."
+              importHref="/dashboard?import=1"
+              accountHref="/transactions"
+              transactionHref="/transactions?manual=1"
+              importLabel="Import statements"
+              accountLabel="Open transactions"
+              transactionLabel="Add a transaction"
+            />
           )}
         </div>
-
-        <p className="panel-muted" style={{ marginTop: 16 }}>
-          Need to correct merchant names or categories? Open the transaction editor and the model will learn from your changes automatically.
-        </p>
       </section>
     </CloverShell>
   );

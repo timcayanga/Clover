@@ -1,7 +1,10 @@
+import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { isStagingHost } from "@/lib/auth";
+
+type StarterWorkspaceUser = Pick<User, "id" | "clerkUserId" | "email" | "verified" | "dataWipedAt">;
 
 const stagingSampleTransactions = [
   {
@@ -50,6 +53,15 @@ const stagingSampleTransactions = [
     daysAgo: 8,
   },
   {
+    merchantRaw: "FiberNet Internet",
+    merchantClean: "Internet bill",
+    description: "Broadband subscription",
+    categoryName: "Bills & Utilities",
+    type: "expense",
+    amount: "1799.00",
+    daysAgo: 38,
+  },
+  {
     merchantRaw: "CineMax Downtown",
     merchantClean: "Movie night",
     description: "Cinema tickets and snacks",
@@ -85,6 +97,15 @@ const stagingSampleTransactions = [
     amount: "5000.00",
     daysAgo: 13,
   },
+  {
+    merchantRaw: "Manila Home Rentals",
+    merchantClean: "Rent",
+    description: "Monthly apartment rent",
+    categoryName: "Housing",
+    type: "expense",
+    amount: "12000.00",
+    daysAgo: 36,
+  },
 ] as const;
 
 const sampleTransactionDate = (daysAgo: number) => {
@@ -112,6 +133,21 @@ const seedStagingSampleTransactions = async (workspaceId: string) => {
     return;
   }
 
+  const sampleImportFile = await prisma.importFile.create({
+    data: {
+      workspaceId,
+      accountId: primaryAccount.id,
+      fileName: "Staging sample statement.pdf",
+      fileType: "application/pdf",
+      storageKey: `staging/sample-import-${workspaceId}.pdf`,
+      status: "done",
+      parsedRowsCount: stagingSampleTransactions.length,
+      confirmedTransactionsCount: stagingSampleTransactions.length,
+      confirmedAt: sampleTransactionDate(1),
+      uploadedAt: sampleTransactionDate(2),
+    },
+  });
+
   const rows = stagingSampleTransactions.map((transaction) => {
     const category = categoryByName.get(transaction.categoryName.toLowerCase()) ?? categoryByName.get("other") ?? null;
     const accountId = transaction.categoryName === "Transfers" ? fallbackAccount.id : primaryAccount.id;
@@ -129,6 +165,7 @@ const seedStagingSampleTransactions = async (workspaceId: string) => {
       description: transaction.description,
       isTransfer: transaction.type === "transfer",
       isExcluded: false,
+      importFileId: sampleImportFile.id,
     };
   });
 
@@ -149,8 +186,15 @@ const normalizeStarterCashAccount = async (workspaceId: string) => {
   });
 };
 
-export const ensureStarterWorkspace = async (userId: string, email: string, verified: boolean) => {
-  const user = await getOrCreateCurrentUser(userId);
+export const ensureStarterWorkspace = async (
+  userOrClerkUserId: StarterWorkspaceUser | string,
+  email?: string,
+  verified?: boolean
+) => {
+  const user =
+    typeof userOrClerkUserId === "string"
+      ? await getOrCreateCurrentUser(userOrClerkUserId)
+      : userOrClerkUserId;
   const stagingHost = await isStagingHost();
   const useFreshStartWorkspace = user.dataWipedAt !== null;
 

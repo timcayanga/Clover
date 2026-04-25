@@ -33,19 +33,60 @@ export type ImportedWorkspaceAccount = CachedRecord & {
   optimisticAccountId?: string | null;
 };
 
+export type ImportedWorkspaceTransaction = CachedRecord & {
+  id: string;
+  importFileId?: string | null;
+  accountId: string;
+  source?: string | null;
+};
+
 export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v1";
 export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v1";
 
 const isCachedRecordArray = (value: unknown): value is CachedRecord[] =>
   Array.isArray(value) && value.every((entry) => entry && typeof entry === "object");
 
-const readJsonCache = <T>(key: string): T | null => {
+const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+
+const normalizeMerchantText = (value?: string | null) =>
+  normalizeWhitespace(String(value ?? ""))
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const extractLastFourDigits = (value?: string | null) => {
+  if (!value) return null;
+  const digits = String(value).replace(/\D/g, "");
+  if (digits.length < 4) return null;
+  return digits.slice(-4);
+};
+
+export const normalizeImportedAccountKey = (accountName?: string | null, institution?: string | null) =>
+  normalizeMerchantText(
+    `${institution ?? ""} ${extractLastFourDigits(accountName) ?? normalizeWhitespace(String(accountName ?? ""))}`
+  );
+
+const getSessionStorage = () => {
   if (typeof window === "undefined") {
     return null;
   }
 
   try {
-    const raw = window.localStorage.getItem(key);
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+};
+
+const readJsonCache = <T>(key: string): T | null => {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return null;
+  }
+
+  try {
+    const raw = storage.getItem(key);
     if (!raw) {
       return null;
     }
@@ -57,11 +98,22 @@ const readJsonCache = <T>(key: string): T | null => {
 };
 
 const writeJsonCache = (key: string, value: unknown) => {
-  if (typeof window === "undefined") {
+  const storage = getSessionStorage();
+  if (!storage) {
     return;
   }
 
-  window.localStorage.setItem(key, JSON.stringify(value));
+  storage.setItem(key, JSON.stringify(value));
+};
+
+const clearStorageKeys = (storage: Storage | null, keys: string[]) => {
+  if (!storage) {
+    return;
+  }
+
+  for (const key of keys) {
+    storage.removeItem(key);
+  }
 };
 
 const createImportedAccountCandidates = (account: ImportedWorkspaceAccount) => {
@@ -74,13 +126,41 @@ const createImportedAccountCandidates = (account: ImportedWorkspaceAccount) => {
 
 const mergeImportedAccount = <T extends CachedRecord>(items: T[], account: ImportedWorkspaceAccount) => {
   const idsToReplace = createImportedAccountCandidates(account);
+  const accountKey = normalizeImportedAccountKey(
+    typeof account.name === "string" ? account.name : null,
+    typeof account.institution === "string" ? account.institution : null
+  );
   const filtered = items.filter((entry) => {
     const id = typeof entry.id === "string" ? entry.id : "";
-    return !idsToReplace.has(id);
+    const entryKey = normalizeImportedAccountKey(
+      typeof entry.name === "string" ? entry.name : null,
+      typeof entry.institution === "string" ? entry.institution : null
+    );
+    return !idsToReplace.has(id) && entryKey !== accountKey;
   });
 
   return [account as T, ...filtered];
 };
+
+const mergeImportedTransactions = <T extends CachedRecord>(items: T[], transactions: ImportedWorkspaceTransaction[]) => {
+  const idsToReplace = new Set(transactions.map((transaction) => transaction.id));
+  const importFileIdsToReplace = new Set(
+    transactions.map((transaction) => (typeof transaction.importFileId === "string" ? transaction.importFileId : "")).filter(Boolean)
+  );
+
+  const filtered = items.filter((entry) => {
+    const id = typeof entry.id === "string" ? entry.id : "";
+    const importFileId = typeof entry.importFileId === "string" ? entry.importFileId : "";
+    return !idsToReplace.has(id) && !importFileIdsToReplace.has(importFileId);
+  });
+
+  return [...(transactions as T[]), ...filtered];
+};
+
+export const mergeImportedWorkspaceTransactions = <T extends CachedRecord>(
+  items: T[],
+  transactions: ImportedWorkspaceTransaction[]
+) => mergeImportedTransactions(items, transactions);
 
 export const readAccountsWorkspaceCache = (): AccountsWorkspaceCacheState | null => {
   const cache = readJsonCache<AccountsWorkspaceCacheState>(accountsWorkspaceCacheKey);
@@ -244,6 +324,51 @@ export const syncImportedWorkspaceAccountCaches = (workspaceId: string, account:
   } satisfies TransactionsWorkspaceCacheState);
 };
 
+export const syncImportedWorkspaceTransactionCaches = (
+  workspaceId: string,
+  transactions: ImportedWorkspaceTransaction[]
+) => {
+  if (!workspaceId || transactions.length === 0) {
+    return;
+  }
+
+  const accountsCache = readAccountsWorkspaceCache();
+  const transactionsCache = readTransactionsWorkspaceCache();
+  const nextAccountsSnapshot: AccountsWorkspaceCacheSnapshot = {
+    workspaceId,
+    updatedAt: Date.now(),
+    accounts: accountsCache?.snapshots[workspaceId]?.accounts ?? [],
+    accountRules: accountsCache?.snapshots[workspaceId]?.accountRules ?? [],
+    transactions: mergeImportedTransactions(accountsCache?.snapshots[workspaceId]?.transactions ?? [], transactions),
+    statementCheckpoints: accountsCache?.snapshots[workspaceId]?.statementCheckpoints ?? [],
+  };
+
+  const nextTransactionsSnapshot: TransactionsWorkspaceCacheSnapshot = {
+    workspaceId,
+    updatedAt: Date.now(),
+    accounts: transactionsCache?.snapshots[workspaceId]?.accounts ?? [],
+    categories: transactionsCache?.snapshots[workspaceId]?.categories ?? [],
+    transactions: mergeImportedTransactions(transactionsCache?.snapshots[workspaceId]?.transactions ?? [], transactions),
+    imports: transactionsCache?.snapshots[workspaceId]?.imports ?? [],
+  };
+
+  writeJsonCache(accountsWorkspaceCacheKey, {
+    selectedWorkspaceId: workspaceId,
+    snapshots: {
+      ...(accountsCache?.snapshots ?? {}),
+      [workspaceId]: nextAccountsSnapshot,
+    },
+  } satisfies AccountsWorkspaceCacheState);
+
+  writeJsonCache(transactionsWorkspaceCacheKey, {
+    selectedWorkspaceId: workspaceId,
+    snapshots: {
+      ...(transactionsCache?.snapshots ?? {}),
+      [workspaceId]: nextTransactionsSnapshot,
+    },
+  } satisfies TransactionsWorkspaceCacheState);
+};
+
 export const clearWorkspaceCache = (workspaceId: string) => {
   if (!workspaceId) {
     return;
@@ -268,4 +393,21 @@ export const clearWorkspaceCache = (workspaceId: string) => {
       snapshots: nextTransactionsSnapshots,
     } satisfies TransactionsWorkspaceCacheState);
   }
+};
+
+export const clearAllWorkspaceCaches = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  clearStorageKeys(window.sessionStorage, [accountsWorkspaceCacheKey, transactionsWorkspaceCacheKey]);
+  clearStorageKeys(window.localStorage, [accountsWorkspaceCacheKey, transactionsWorkspaceCacheKey]);
+};
+
+export const clearLegacyWorkspaceCaches = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  clearStorageKeys(window.localStorage, [accountsWorkspaceCacheKey, transactionsWorkspaceCacheKey]);
 };

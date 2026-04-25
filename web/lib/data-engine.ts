@@ -1,7 +1,15 @@
 import { Prisma } from "@prisma/client";
 import type { AccountType, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { detectStatementMetadata, parseAmountValue, parseDateValue, type ParsedImportRow } from "@/lib/import-parser";
+import {
+  detectStatementMetadata,
+  type ImportedAccountType,
+  inferAccountTypeFromStatement,
+  parseAmountValue,
+  parseDateValue,
+  type ParsedImportRow,
+} from "@/lib/import-parser";
+import { summarizeMerchantText } from "@/lib/merchant-labels";
 
 export const DATA_ENGINE_VERSION = "v2";
 
@@ -34,6 +42,21 @@ type AccountRuleRow = {
   source: string;
   confidence: number;
   timesConfirmed: number;
+};
+
+type StatementTemplateRow = {
+  fingerprint: string;
+  fileType: string | null;
+  institution: string | null;
+  accountNumber: string | null;
+  accountName: string | null;
+  parserVersion: string;
+  parserConfig: Prisma.JsonValue | null;
+  metadata: Prisma.JsonValue | null;
+  exampleCount: number;
+  successCount: number;
+  failureCount: number;
+  lastSeenAt: Date;
 };
 
 export type EnrichedParsedImportRow = ParsedImportRow & {
@@ -89,6 +112,7 @@ const KNOWN_INSTITUTIONS: Array<{ name: string; match: RegExp }> = [
   { name: "Metrobank", match: /\b(METROBANK|METROPOLITAN BANK)\b/i },
   { name: "Security Bank", match: /\bSECURITY BANK\b/i },
   { name: "EastWest", match: /\b(EASTWEST|EAST WEST)\b/i },
+  { name: "CIMB", match: /\b(CIMB|GSAVE)\b/i },
   { name: "RCBC", match: /\bRCBC\b/i },
   { name: "UnionBank", match: /\bUNIONBANK\b/i },
   { name: "Landbank", match: /\bLANDBANK\b/i },
@@ -350,13 +374,14 @@ export const detectAccountNumber = (text: string | null | undefined) => {
   return accountNumber;
 };
 
-export const detectStatementMetadataFromText = (text: string) => {
+export const detectStatementMetadataFromText = (text: string): StatementMetadataSnapshot => {
   const metadata = detectStatementMetadata(text);
   const institution = metadata?.institution ?? detectInstitutionFromText(text);
   const accountNumber = metadata?.accountNumber ?? detectAccountNumber(text);
   const accountName =
     metadata?.accountName ??
     (institution && accountNumber ? `${institution} ${accountNumber.slice(-4)}` : institution ?? null);
+  const accountType = metadata?.accountType ?? inferAccountTypeFromStatement(institution, accountName, "bank");
   const confidence =
     metadata?.confidence ??
     Math.min(
@@ -365,6 +390,7 @@ export const detectStatementMetadataFromText = (text: string) => {
         institution ? 35 : 0,
         accountNumber ? 35 : 0,
         accountName ? 10 : 0,
+        accountType ? 5 : 0,
         metadata?.startDate ? 5 : 0,
         metadata?.endDate ? 5 : 0,
         metadata?.openingBalance !== null ? 5 : 0,
@@ -376,11 +402,69 @@ export const detectStatementMetadataFromText = (text: string) => {
     institution,
     accountNumber,
     accountName,
+    accountType,
     openingBalance: metadata?.openingBalance ?? null,
     endingBalance: metadata?.endingBalance ?? null,
     startDate: metadata?.startDate ?? null,
     endDate: metadata?.endDate ?? null,
     confidence,
+  };
+};
+
+export const mergeStatementMetadataWithTemplate = (
+  detected: StatementMetadataSnapshot,
+  template?: {
+    institution?: string | null;
+    accountNumber?: string | null;
+    accountName?: string | null;
+    accountType?: ImportedAccountType | null;
+    openingBalance?: number | null;
+    endingBalance?: number | null;
+    startDate?: string | null;
+    endDate?: string | null;
+  } | null
+) : StatementMetadataSnapshot => {
+  if (!template) {
+    return detected;
+  }
+
+  const preferTemplateIdentity = (detected.confidence ?? 0) < 80;
+  const templateIdentityConfidence = Math.min(
+    100,
+    [
+      template.institution ? 35 : 0,
+      template.accountNumber ? 35 : 0,
+      template.accountName ? 10 : 0,
+      template.accountType ? 5 : 0,
+      template.startDate ? 5 : 0,
+      template.endDate ? 5 : 0,
+      template.openingBalance !== null ? 5 : 0,
+      template.endingBalance !== null ? 5 : 0,
+    ].reduce((total, part) => total + part, 0)
+  );
+
+  return {
+    institution:
+      preferTemplateIdentity && template.institution
+        ? template.institution
+        : detected.institution ?? template.institution ?? null,
+    accountNumber:
+      preferTemplateIdentity && template.accountNumber
+        ? template.accountNumber
+        : detected.accountNumber ?? template.accountNumber ?? null,
+    accountName:
+      preferTemplateIdentity && template.accountName
+        ? template.accountName
+        : detected.accountName ?? template.accountName ?? null,
+    accountType:
+      preferTemplateIdentity && template.accountType
+        ? template.accountType
+        : detected.accountType ?? template.accountType ?? null,
+    openingBalance: detected.openingBalance ?? template.openingBalance ?? null,
+    endingBalance: detected.endingBalance ?? template.endingBalance ?? null,
+    startDate: detected.startDate ?? template.startDate ?? null,
+    endDate: detected.endDate ?? template.endDate ?? null,
+    confidence: Math.max(detected.confidence ?? 0, templateIdentityConfidence),
   };
 };
 
@@ -426,6 +510,18 @@ export const extractMissingDatabaseColumn = (error: unknown) => {
 
 const columnCache = new Map<string, string[]>();
 const tableExistsCache = new Map<string, boolean>();
+
+type StatementMetadataSnapshot = {
+  institution: string | null;
+  accountNumber: string | null;
+  accountName: string | null;
+  accountType: ImportedAccountType | null;
+  openingBalance: number | null;
+  endingBalance: number | null;
+  startDate: string | null;
+  endDate: string | null;
+  confidence: number;
+};
 
 export const hasCompatibleTable = async (tableName: string) => {
   const cached = tableExistsCache.get(tableName);
@@ -539,6 +635,39 @@ export const getCompatibleStatementTemplateColumns = async () => {
   const compatible = STATEMENT_TEMPLATE_COLUMNS.filter((column) => existing.has(column));
   columnCache.set(cacheKey, compatible as string[]);
   return compatible as string[];
+};
+
+export const loadStatementTemplate = async (params: {
+  workspaceId: string;
+  fingerprint: string;
+}) => {
+  const columns = await getCompatibleStatementTemplateColumns();
+  if (columns.length === 0) {
+    return null;
+  }
+
+  try {
+    const template = await prisma.statementTemplate.findUnique({
+      where: {
+        workspaceId_fingerprint: {
+          workspaceId: params.workspaceId,
+          fingerprint: params.fingerprint,
+        },
+      },
+    });
+
+    if (!template) {
+      return null;
+    }
+
+    return template as StatementTemplateRow;
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "StatementTemplate")) {
+      return null;
+    }
+
+    throw error;
+  }
 };
 
 export const getCompatibleMerchantRuleColumns = async () => {
@@ -1161,6 +1290,7 @@ export const buildStatementFingerprint = (
   const fingerprintSource = [
     metadata.institution ?? "",
     metadata.accountNumber ?? "",
+    metadata.accountType ?? "",
     metadata.startDate ?? "",
     metadata.endDate ?? "",
     (fileName ?? "").toLowerCase(),
@@ -1426,6 +1556,7 @@ export const recordTrainingSignal = async (params: {
 }) => {
   const merchantKey = normalizeMerchantText(params.merchantText);
   const merchantTokens = tokenizeMerchant(params.merchantText);
+  const normalizedMerchantLabel = summarizeMerchantText(params.merchantText);
   const dedupeKey = buildTrainingSignalDedupeKey({
     source: params.source,
     transactionId: params.transactionId ?? null,
@@ -1489,7 +1620,7 @@ export const recordTrainingSignal = async (params: {
     await upsertMerchantRule({
       workspaceId: params.workspaceId,
       merchantText: params.merchantText,
-      normalizedName: params.merchantText,
+      normalizedName: normalizedMerchantLabel || params.merchantText,
       categoryId: params.categoryId,
       categoryName: params.categoryName ?? category.name,
       source: params.source,
@@ -1510,12 +1641,33 @@ export const enrichParsedRowsWithTraining = async (params: {
   const trainingSignals = await loadTrainingSignals(params.workspaceId);
   const statementConfidence = typeof params.statementConfidence === "number" ? params.statementConfidence : 100;
 
+  const isRowLowConfidence = (details: { effectiveConfidence: number; categoryName: string; categoryReason?: string | null; rowType?: ParsedImportRow["type"] }) => {
+    if (details.effectiveConfidence < 90) {
+      return true;
+    }
+
+    if (details.categoryName === "Other") {
+      return true;
+    }
+
+    if (details.categoryReason === "heuristic-other") {
+      return true;
+    }
+
+    if (!details.rowType) {
+      return true;
+    }
+
+    return false;
+  };
+
   return params.rows.map((row) => {
     const rowWithInstitution = row as ParsedImportRow & { institution?: string | null };
     const merchantText = row.merchantClean || row.merchantRaw || row.description || "";
+    const merchantClean = summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
     const accountMatch = findBestAccountRule(row.accountName ?? null, rowWithInstitution.institution ?? null, accountRules);
     const learned = classifyMerchant({
-      merchantText,
+      merchantText: merchantClean,
       type: row.type ?? "expense",
       categoryName: row.categoryName ?? null,
       merchantRules,
@@ -1531,14 +1683,21 @@ export const enrichParsedRowsWithTraining = async (params: {
     ];
     return {
       ...row,
-      merchantClean: row.merchantClean || merchantText || undefined,
+      merchantClean: merchantClean || undefined,
       accountName: accountMatch?.rule.accountName ?? accountName ?? undefined,
       institution: rowWithInstitution.institution ?? accountMatch?.rule.institution ?? undefined,
       categoryName,
       confidence: effectiveConfidence,
       categoryReason: learned.categoryReason,
       parserVersion: DATA_ENGINE_VERSION,
-      reviewStatus: effectiveConfidence >= 80 ? "suggested" : "pending_review",
+      reviewStatus: isRowLowConfidence({
+        effectiveConfidence,
+        categoryName,
+        categoryReason: learned.categoryReason,
+        rowType: row.type,
+      })
+        ? "pending_review"
+        : "suggested",
       parserConfidence: statementConfidence,
       categoryConfidence: effectiveConfidence,
       accountMatchConfidence: accountMatch ? Math.min(99, Math.round(Math.min(Math.max(70, accountMatch.score), statementConfidence))) : 0,
@@ -1546,7 +1705,7 @@ export const enrichParsedRowsWithTraining = async (params: {
       transferConfidence: row.type === "transfer" ? 100 : 0,
       learnedRuleIdsApplied,
       normalizedPayload: {
-        merchantClean: row.merchantClean || merchantText || null,
+        merchantClean: merchantClean || null,
         categoryName,
         type: row.type ?? "expense",
         accountName: accountMatch?.rule.accountName ?? accountName ?? null,

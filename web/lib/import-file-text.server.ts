@@ -1,5 +1,4 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { getEnv } from "@/lib/env";
@@ -133,8 +132,7 @@ const loadPdfJs = async () => {
 };
 
 const getPdfJsStandardFontDataUrl = () => {
-  const require = createRequire(`${process.cwd()}/package.json`);
-  const pdfJsPackagePath = require.resolve("pdfjs-dist/package.json");
+  const pdfJsPackagePath = join(process.cwd(), "node_modules", "pdfjs-dist", "package.json");
   return `${pathToFileURL(join(dirname(pdfJsPackagePath), "standard_fonts")).toString().replace(/\/?$/, "")}/`;
 };
 
@@ -178,7 +176,7 @@ const decodeBody = async (body: unknown) => {
 type ImportFileLike = {
   name?: string;
   type?: string;
-  arrayBuffer?: () => Promise<ArrayBuffer>;
+  arrayBuffer?: () => Promise<ArrayBuffer | SharedArrayBuffer>;
   text?: () => Promise<string>;
 };
 
@@ -233,6 +231,41 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string) => {
   return pages.join("\n");
 };
 
+const loadCreateCanvas = async () => {
+  const requireFn = eval("require") as NodeRequire;
+  const canvasModule = requireFn("@napi-rs/canvas") as { createCanvas: (width: number, height: number) => {
+    getContext: (type: "2d") => CanvasRenderingContext2D;
+    toBuffer: (mimeType: string, quality?: number) => Buffer;
+  } };
+  return canvasModule.createCanvas;
+};
+
+const renderPdfPageImagesFromBytes = async (data: Uint8Array, password?: string, maxPages = 2, scale = 0.7) => {
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const createCanvas = await loadCreateCanvas();
+  const standardFontDataUrl = getPdfJsStandardFontDataUrl();
+  const options = password ? { data, password, standardFontDataUrl } : { data, standardFontDataUrl };
+  const loadingTask = pdfjs.getDocument(options as any);
+  const pdf = await loadingTask.promise;
+  const pageImages: Array<{ page: number; dataUrl: string }> = [];
+  const pageCount = Math.max(0, Math.min(pdf.numPages, maxPages));
+
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    const page = await pdf.getPage(pageNumber);
+    const viewport = page.getViewport({ scale });
+    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+    const context = canvas.getContext("2d");
+    await page.render({ canvas: canvas as any, canvasContext: context as any, viewport }).promise;
+    const buffer = canvas.toBuffer("image/jpeg", 65);
+    pageImages.push({
+      page: pageNumber,
+      dataUrl: `data:image/jpeg;base64,${buffer.toString("base64")}`,
+    });
+  }
+
+  return pageImages;
+};
+
 export const readUploadedFileText = async (file: File | ImportFileLike, password?: string) => {
   const lowerName = String(file.name ?? "").toLowerCase();
   const lowerType = String(file.type ?? "").toLowerCase();
@@ -273,4 +306,42 @@ export const readImportedFileText = async (
   }
 
   return extractTextFromPdfBytes(bytes, password);
+};
+
+export const readUploadedFilePdfPageImages = async (file: File | ImportFileLike, password?: string, maxPages = 2) => {
+  const lowerName = String(file.name ?? "").toLowerCase();
+  const lowerType = String(file.type ?? "").toLowerCase();
+
+  if (!lowerName.endsWith(".pdf") && lowerType !== "application/pdf") {
+    return [];
+  }
+
+  if (typeof file.arrayBuffer !== "function") {
+    throw new Error("Unable to read imported file.");
+  }
+
+  const data = new Uint8Array(await file.arrayBuffer());
+  return renderPdfPageImagesFromBytes(data, password, maxPages);
+};
+
+export const readImportedPdfPageImages = async (
+  params: { storageKey: string; fileType: string; fileName: string },
+  password?: string,
+  maxPages = 2
+) => {
+  const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
+  if (!lowerName.endsWith(".pdf") && !/pdf/.test(lowerName)) {
+    return [];
+  }
+
+  const bytes = await downloadImportObject(params.storageKey);
+  return renderPdfPageImagesFromBytes(bytes, password, maxPages);
+};
+
+export default {
+  downloadImportObject,
+  readUploadedFileText,
+  readImportedFileText,
+  readUploadedFilePdfPageImages,
+  readImportedPdfPageImages,
 };

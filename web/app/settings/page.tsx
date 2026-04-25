@@ -1,9 +1,14 @@
 import { redirect } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { AccountActionsPanel } from "@/components/account-actions-panel";
+import { BillingCard } from "@/components/billing-card";
 import { SettingsCenter, type SettingSection } from "@/components/settings-center";
 import { getSessionContext } from "@/lib/auth";
+import { getEnv } from "@/lib/env";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export const metadata = {
   title: "Settings",
@@ -11,126 +16,111 @@ export const metadata = {
 
 const sections: SettingSection[] = [
   {
-    group: "General",
-    title: "Profile and workspace",
-    eyebrow: "Core",
-    summary: "Keep the app identity and workspace defaults in one place.",
-    fields: [
-      { label: "Workspace name", kind: "text", value: "Clover Personal Finance" },
-      { label: "Display name", kind: "text", value: "Tim" },
-      { label: "Email", kind: "text", value: "tim@example.com" },
-      { label: "Timezone", kind: "select", value: "Asia/Manila", options: ["Asia/Manila", "UTC", "America/Los_Angeles", "Europe/London"] },
-    ],
-  },
-  {
-    group: "General",
-    title: "Currency and locale",
-    eyebrow: "Formatting",
-    summary: "Control how money, dates, and numbers appear across the app.",
-    fields: [
-      { label: "Default currency", kind: "select", value: "PHP", options: ["PHP", "USD", "EUR", "GBP", "SGD"] },
-      { label: "Date format", kind: "select", value: "D MMM YYYY", options: ["D MMM YYYY", "MM/DD/YYYY", "YYYY-MM-DD"] },
-      { label: "Number format", kind: "select", value: "1,234.56", options: ["1,234.56", "1.234,56", "1 234,56"] },
-      { label: "Locale", kind: "select", value: "en-PH", options: ["en-PH", "en-US", "en-GB"] },
-    ],
-  },
-  {
-    group: "General",
-    title: "Display preferences",
-    eyebrow: "Layout",
-    summary: "Tune how dense the app feels and which parts you see first.",
-    fields: [
-      { label: "Table density", kind: "select", value: "Comfortable", options: ["Comfortable", "Compact", "Spacious"] },
-      { label: "Landing page", kind: "select", value: "Dashboard", options: ["Dashboard", "Transactions", "Reports"] },
-      { label: "Show balances by default", kind: "toggle", checked: true },
-      { label: "Reduce sidebar chrome", kind: "toggle", checked: false },
-    ],
-  },
-  {
-    group: "Automation",
+    group: "Import",
     title: "Import defaults",
-    eyebrow: "Imports",
-    summary: "Shape the behavior of new statement imports before they land.",
+    eyebrow: "Faster imports",
+    summary: "Tell Clover how to start when a new statement lands.",
     fields: [
-      { label: "Default account", kind: "select", value: "Use detected account", options: ["Use detected account", "Most recently used", "First available account"] },
-      { label: "Duplicate handling", kind: "select", value: "Flag and review", options: ["Flag and review", "Skip duplicates", "Import anyway"] },
-      { label: "Category suggestions", kind: "toggle", checked: true },
-      { label: "Unknown merchants", kind: "select", value: "Leave unassigned", options: ["Leave unassigned", "Use uncategorized", "Use last matched category"] },
-      { label: "Auto-create account groups", kind: "toggle", checked: false },
+      {
+        label: "Default account",
+        kind: "select",
+        value: "Use detected account",
+        options: [
+          { label: "Use detected account", helper: "Best when Clover can read the account from the statement itself." },
+          { label: "Most recently used", helper: "Good for one-account workflows and repeat uploads." },
+          { label: "First available account", helper: "Keeps imports moving when account labels are inconsistent." },
+        ],
+        helper: "This is the account Clover starts with if a statement does not clearly identify one.",
+        tier: "primary",
+        showAsCards: true,
+      },
+      {
+        label: "Duplicate handling",
+        kind: "select",
+        value: "Flag and review",
+        options: [
+          { label: "Flag and review", helper: "Safer for repeat imports; Clover highlights possible duplicates first." },
+          { label: "Skip duplicates", helper: "Best when you want the cleanest result and trust the file source." },
+          { label: "Import anyway", helper: "Use when you want every row preserved, even if it looks familiar." },
+        ],
+        helper: "Choose what Clover should do when it sees rows that may already exist.",
+        tier: "primary",
+        showAsCards: true,
+      },
+      {
+        label: "Unknown merchants",
+        kind: "select",
+        value: "Leave unassigned",
+        options: [
+          { label: "Leave unassigned", helper: "Keeps unmatched merchants visible so you can review them later." },
+          { label: "Use uncategorized", helper: "Places unknown merchants into a single catch-all bucket." },
+          { label: "Use last matched category", helper: "Faster for repeat merchants that tend to map the same way." },
+        ],
+        helper: "This only matters when Clover cannot confidently match a merchant.",
+        tier: "primary",
+        showAsCards: true,
+      },
     ],
   },
   {
-    group: "Automation",
-    title: "Transaction rules",
-    eyebrow: "Automation",
-    summary: "Create simple rules that keep the transaction list cleaner over time.",
+    group: "Categorization",
+    title: "Merchant behavior",
+    eyebrow: "Keep things consistent",
+    summary: "Help Clover recognize the same merchant and recurring items every time.",
     fields: [
-      { label: "Auto-categorize", kind: "toggle", checked: true },
-      { label: "Normalize merchant names", kind: "toggle", checked: true },
-      { label: "Recurring detection", kind: "toggle", checked: true },
-      { label: "Ignored items", kind: "select", value: "Keep manual control", options: ["Keep manual control", "Hide by default", "Always show"] },
-      { label: "Merchant rules notes", kind: "textarea", value: "Treat Grab, GCash, and Maya merchant labels as the same source where possible.", rows: 3 },
+      {
+        label: "Auto-categorize",
+        kind: "toggle",
+        checked: true,
+        helper: "Let Clover apply known matches automatically so the review queue stays shorter.",
+        tier: "primary",
+      },
+      {
+        label: "Normalize merchant names",
+        kind: "toggle",
+        checked: true,
+        helper: "Show the same merchant name even when statements spell it differently.",
+        tier: "primary",
+      },
+      {
+        label: "Recurring detection",
+        kind: "toggle",
+        checked: true,
+        helper: "Surface repeating payments so subscriptions and bills are easier to spot.",
+        tier: "advanced",
+      },
     ],
   },
   {
-    group: "Automation",
-    title: "Category management",
-    eyebrow: "Organization",
-    summary: "Keep categories tidy so reports and transactions stay readable.",
+    group: "Display",
+    title: "Workspace view",
+    eyebrow: "How Clover opens",
+    summary: "Choose the default look and landing page for your workspace.",
     fields: [
-      { label: "Category groups", kind: "select", value: "Income, Expenses, Transfers", options: ["Income, Expenses, Transfers", "Simple", "Custom groups"] },
-      { label: "Merge duplicates", kind: "toggle", checked: true },
-      { label: "Pin top categories", kind: "toggle", checked: true },
-      { label: "Category notes", kind: "textarea", value: "Use this area to document naming conventions and keep category cleanup consistent.", rows: 3 },
-    ],
-  },
-  {
-    group: "Alerts and access",
-    title: "Notifications and alerts",
-    eyebrow: "Alerts",
-    summary: "Decide which events should interrupt your workflow.",
-    fields: [
-      { label: "Import finished", kind: "toggle", checked: true },
-      { label: "Review needed", kind: "toggle", checked: true },
-      { label: "Low balance", kind: "toggle", checked: false },
-      { label: "Unusual spending", kind: "toggle", checked: true },
-      { label: "Weekly summary", kind: "toggle", checked: false },
-    ],
-  },
-  {
-    group: "Alerts and access",
-    title: "Security",
-    eyebrow: "Access",
-    summary: "A few practical controls for session safety and account protection.",
-    fields: [
-      { label: "Session timeout", kind: "select", value: "8 hours", options: ["1 hour", "8 hours", "24 hours", "7 days"] },
-      { label: "Two-factor auth", kind: "toggle", checked: false },
-      { label: "Trusted devices", kind: "toggle", checked: true },
-      { label: "Login notes", kind: "textarea", value: "Use this area for access reminders, recovery email notes, or security preferences.", rows: 3 },
-    ],
-  },
-  {
-    group: "Data and connections",
-    title: "Export and backup",
-    eyebrow: "Data",
-    summary: "Make it easy to get data out and keep a recovery path ready.",
-    fields: [
-      { label: "Export format", kind: "select", value: "CSV + PDF", options: ["CSV + PDF", "CSV only", "PDF only"] },
-      { label: "Backup cadence", kind: "select", value: "Weekly reminder", options: ["Daily reminder", "Weekly reminder", "Monthly reminder", "Off"] },
-      { label: "Download archive", kind: "toggle", checked: true },
-      { label: "Restore path", kind: "text", value: "Future support" },
-    ],
-  },
-  {
-    group: "Data and connections",
-    title: "Integrations",
-    eyebrow: "Connections",
-    summary: "Track the external tools and import channels Clover should connect to next.",
-    fields: [
-      { label: "Bank connections", kind: "text", value: "Not connected yet" },
-      { label: "Spreadsheet sources", kind: "text", value: "CSV, XLSX, and bank exports" },
-      { label: "Email import", kind: "toggle", checked: false },
-      { label: "API access", kind: "toggle", checked: false },
+      {
+        label: "Table density",
+        kind: "select",
+        value: "Comfortable",
+        options: [
+          { label: "Comfortable" },
+          { label: "Compact" },
+          { label: "Spacious" },
+        ],
+        helper: "Controls how much information Clover shows at a glance in tables and lists.",
+        tier: "primary",
+      },
+      {
+        label: "Landing page",
+        kind: "select",
+        value: "Dashboard",
+        options: [
+          { label: "Dashboard" },
+          { label: "Transactions" },
+          { label: "Reports" },
+        ],
+        helper: "Choose the screen Clover opens to after sign in.",
+        tier: "primary",
+      },
     ],
   },
 ];
@@ -138,15 +128,26 @@ const sections: SettingSection[] = [
 export default async function SettingsPage() {
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
+  const env = getEnv();
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
 
   return (
-    <CloverShell active="settings" title="Settings" showTopbar={false}>
-      <div className="settings-page-heading">
-        <h2>Settings</h2>
-      </div>
+    <CloverShell
+      active="settings"
+      title="Settings"
+      kicker="Control room"
+      subtitle="Keep the controls that shape imports, categorization, and display in one place."
+    >
+      <BillingCard
+        planTier={user.planTier}
+        paypalClientId={env.PAYPAL_CLIENT_ID ?? null}
+        paypalPlanId={env.PAYPAL_PRO_PLAN_ID ?? null}
+        userId={user.id}
+        clerkUserId={user.clerkUserId}
+        email={user.email}
+      />
       <SettingsCenter sections={sections} />
       <AccountActionsPanel isGuest={session.isGuest} />
     </CloverShell>

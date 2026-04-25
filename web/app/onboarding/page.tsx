@@ -18,7 +18,11 @@ export default async function OnboardingPage() {
   return (
     <main className="onboarding-page">
       <section className="onboarding-page__shell">
-        <OnboardingForm currentGoal={user.primaryGoal} />
+        <OnboardingForm
+          currentExperience={user.financialExperience}
+          currentGoal={user.primaryGoal}
+          currentTargetAmount={user.goalTargetAmount?.toString() ?? null}
+        />
       </section>
     </main>
   );

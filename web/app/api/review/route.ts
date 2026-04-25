@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { prisma } from "@/lib/prisma";
+import { buildReviewQueueWhere } from "@/lib/review-queue";
 
 export const dynamic = "force-dynamic";
 
@@ -18,20 +19,12 @@ export async function GET(request: Request) {
     await assertWorkspaceAccess(userId, workspaceId);
 
     const transactions = await prisma.transaction.findMany({
-      where: {
-        workspaceId,
-        OR: [
-          { reviewStatus: { not: "confirmed" } },
-          { categoryId: null },
-          { categoryConfidence: { lt: 70 } },
-        ],
-      },
+      where: buildReviewQueueWhere(workspaceId),
       include: {
         account: true,
         category: true,
       },
       orderBy: [{ categoryConfidence: "asc" }, { date: "desc" }],
-      take: 100,
     });
 
     return NextResponse.json({

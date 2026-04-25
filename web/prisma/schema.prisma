@@ -61,18 +61,28 @@ enum PlanTier {
   pro
 }
 
+enum FinancialExperienceLevel {
+  beginner
+  comfortable
+  advanced
+}
+
 model User {
   id                    String      @id @default(cuid())
   clerkUserId           String      @unique
   email                 String      @unique
   verified              Boolean     @default(false)
   planTier              PlanTier    @default(free)
+  financialExperience   FinancialExperienceLevel? @default(beginner)
   primaryGoal           String?
+  goalTargetAmount      Decimal?    @db.Decimal(18, 2)
+  goalTargetSource      String?
   onboardingCompletedAt DateTime?
   dataWipedAt           DateTime?
   createdAt             DateTime    @default(now())
   updatedAt             DateTime    @updatedAt
   workspaces            Workspace[]
+  goalSettings          GoalSetting[]
 }
 
 model Workspace {
@@ -186,7 +196,6 @@ model ImportFile {
   confirmedTransactionsCount Int @default(0)
   confirmedAt   DateTime?
   uploadedAt    DateTime         @default(now())
-  deletedAt     DateTime?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   workspace     Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -275,6 +284,19 @@ model StatementTemplate {
 
   @@unique([workspaceId, fingerprint])
   @@index([workspaceId])
+}
+
+model GoalSetting {
+  id             String   @id @default(cuid())
+  userId         String
+  primaryGoal    String?
+  targetAmount   Decimal? @db.Decimal(18, 2)
+  source         String?
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
 }
 
 model MerchantRule {

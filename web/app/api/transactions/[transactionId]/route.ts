@@ -32,7 +32,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
     const payload = patchSchema.parse(await request.json());
 
     const transaction = await prisma.transaction.findFirst({
-      where: { id: transactionId, deletedAt: null },
+      where: { id: transactionId },
     });
 
     if (!transaction) {
@@ -41,10 +41,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
 
     await assertWorkspaceAccess(userId, transaction.workspaceId);
 
-    const categoryChanged =
-      payload.categoryId !== undefined &&
-      payload.categoryId !== transaction.categoryId &&
-      Boolean(payload.categoryId);
     const editedFields =
       payload.categoryId !== undefined ||
       payload.accountId !== undefined ||
@@ -105,33 +101,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       where: { id: updated.accountId },
     });
 
-    if (categoryChanged && payload.categoryId) {
-      const category = await prisma.category.findUnique({
-        where: { id: payload.categoryId },
-      });
-
-      if (category) {
-        await recordTrainingSignal({
-          workspaceId: transaction.workspaceId,
-          transactionId: transaction.id,
-          merchantText: payload.merchantClean || payload.merchantRaw || transaction.merchantClean || transaction.merchantRaw,
-          categoryId: category.id,
-          categoryName: category.name,
-          type: payload.type ?? transaction.type,
-          source: "manual_recategorization",
-          confidence: 100,
-          notes: "Manual category change from the transaction editor.",
-        });
-      }
-    }
+    const categoryForRule = updated.categoryId
+      ? await prisma.category.findUnique({
+          where: { id: updated.categoryId },
+        })
+      : null;
 
     if (payload.merchantRaw || payload.merchantClean || payload.categoryId !== undefined) {
       const merchantText = payload.merchantClean || payload.merchantRaw || updated.merchantClean || updated.merchantRaw;
-      const categoryForRule = updated.categoryId
-        ? await prisma.category.findUnique({
-            where: { id: updated.categoryId },
-          })
-        : null;
 
       if (merchantText && categoryForRule) {
         void upsertMerchantRule({
@@ -142,6 +119,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
           categoryName: categoryForRule.name,
           source: "manual_recategorization",
           confidence: 100,
+        }).catch(() => null);
+
+        void recordTrainingSignal({
+          workspaceId: transaction.workspaceId,
+          transactionId: transaction.id,
+          merchantText,
+          categoryId: categoryForRule.id,
+          categoryName: categoryForRule.name,
+          type: payload.type ?? transaction.type,
+          source: "manual_recategorization",
+          confidence: 100,
+          notes: payload.categoryId ? "Manual transaction edit from the transaction editor." : "Manual merchant label edit from the transaction editor.",
         }).catch(() => null);
       }
     }
@@ -190,7 +179,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       transaction_type: updated.type,
       is_manual_edit: true,
     });
-    if (categoryChanged && category) {
+    if (payload.categoryId !== undefined && category) {
       void capturePostHogServerEvent("transaction_recategorized", userId, {
         workspace_id: transaction.workspaceId,
         transaction_id: updated.id,
@@ -252,7 +241,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     const { userId } = await requireAuth();
 
     const transaction = await prisma.transaction.findFirst({
-      where: { id: transactionId, deletedAt: null },
+      where: { id: transactionId },
     });
 
     if (!transaction) {
@@ -266,6 +255,30 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       data: {
         deletedAt: new Date(),
       },
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        workspaceId: transaction.workspaceId,
+        actorUserId: userId,
+        action: "transaction_deleted",
+        entity: "Transaction",
+        entityId: transaction.id,
+        metadata: {
+          amount: transaction.amount.toString(),
+          currency: transaction.currency,
+          transactionType: transaction.type,
+          reviewStatus: transaction.reviewStatus,
+        },
+      },
+    });
+
+    void capturePostHogServerEvent("transaction_deleted", userId, {
+      workspace_id: transaction.workspaceId,
+      transaction_id: transaction.id,
+      amount: Number(transaction.amount),
+      currency: transaction.currency,
+      transaction_type: transaction.type,
     });
 
     await prisma.auditLog.create({

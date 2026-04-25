@@ -1,5 +1,4 @@
 import { requireAuth } from "@/lib/auth";
-import { confirmImportFile } from "@/workers/import-processor";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { fetchImportFileCompat } from "@/lib/data-engine";
 import { NextResponse } from "next/server";
@@ -24,6 +23,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ imp
 
     await assertWorkspaceAccess(userId, importFile.workspaceId as string);
 
+    const { confirmImportFile } = await import("@/workers/import-processor");
     const result = await confirmImportFile(importId, payload.accountId);
     return NextResponse.json({ ok: true, result });
   } catch (error) {

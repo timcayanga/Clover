@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import dynamic from "next/dynamic";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { flushSync } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
-import { ImportFilesModal } from "@/components/import-files-modal";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import {
   analyticsOnceKey,
   capturePostHogClientEvent,
@@ -12,8 +20,17 @@ import {
 } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
+import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
+import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
+import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
+
+const ImportFilesModal = dynamic(
+  () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
+  { ssr: false }
+);
 
 type Workspace = {
   id: string;
@@ -40,16 +57,37 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     id: summary.accountId,
     name: summary.accountName,
     institution: summary.institution,
-    type: inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
+    type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
     currency: "PHP",
     balance: summary.balance,
   };
 };
 
+const mergeImportedPreviewTransactions = (
+  currentTransactions: Transaction[],
+  previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]>
+) => {
+  if (previewTransactions.length === 0) {
+    return currentTransactions;
+  }
+
+  return mergeImportedWorkspaceTransactions(currentTransactions, previewTransactions);
+};
+
 const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentAccounts: Account[]) => {
   const fetchedById = new Map(fetchedAccounts.map((account) => [account.id, account] as const));
+  const fetchedByKey = new Map(
+    fetchedAccounts.map((account) => [normalizeImportedAccountKey(account.name, account.institution), account] as const)
+  );
   const mergedFetchedAccounts = fetchedAccounts.map((account) => {
-    const optimistic = currentAccounts.find((currentAccount) => currentAccount.id === account.id && currentAccount.source === "upload");
+    const accountKey = normalizeImportedAccountKey(account.name, account.institution);
+    const optimistic = currentAccounts.find((currentAccount) => {
+      if (currentAccount.source !== "upload") {
+        return false;
+      }
+
+      return normalizeImportedAccountKey(currentAccount.name, currentAccount.institution) === accountKey;
+    });
     if (!optimistic) {
       return account;
     }
@@ -66,7 +104,8 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
       return false;
     }
 
-    return !fetchedById.has(account.id);
+    const accountKey = normalizeImportedAccountKey(account.name, account.institution);
+    return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
   });
 
   return [...optimisticAccounts, ...mergedFetchedAccounts];
@@ -94,6 +133,23 @@ type Transaction = {
   description?: string | null;
   isTransfer: boolean;
   isExcluded: boolean;
+  source?: string | null;
+  importFileId?: string | null;
+  warningReason?: string | null;
+};
+
+type TransactionPageMeta = {
+  totalCount: number;
+  income: number;
+  spending: number;
+  transfers: number;
+  review: number;
+  topCategory: [string, number] | null;
+  topAccount: [string, number] | null;
+  firstTransactionDate: string | null;
+  lastTransactionDate: string | null;
+  firstReviewTransaction: Transaction | null;
+  firstReviewTransactionIndex: number | null;
 };
 
 type ImportFile = {
@@ -109,6 +165,10 @@ type TransactionsWorkspaceCacheSnapshot = {
   categories: Category[];
   transactions: Transaction[];
   imports: ImportFile[];
+  page?: number;
+  pageSize?: number;
+  totalCount?: number;
+  summary?: TransactionPageMeta;
   updatedAt: number;
 };
 
@@ -166,6 +226,12 @@ type InlineEditableCellProps = {
 type TransactionHistoryEntry = {
   before: Transaction;
   after: Transaction;
+};
+
+type TransactionConfidenceSignal = {
+  label: string;
+  value: number;
+  note: string;
 };
 
 type MerchantRenameSuggestion = {
@@ -522,41 +588,6 @@ const getDateFilterLabel = (mode: DateFilterMode, anchor: string, customStart: s
   }
 };
 
-const dateMatchesFilter = (dateValue: string, mode: DateFilterMode, anchor: string, customStart: string, customEnd: string) => {
-  const date = dateValue.slice(0, 10);
-  if (mode === "ltd") {
-    return true;
-  }
-  if (mode === "day") {
-    return date === anchor.slice(0, 10);
-  }
-  if (mode === "week") {
-    return date >= startOfWeekIso(anchor) && date <= endOfWeekIso(anchor);
-  }
-  if (mode === "month") {
-    return date >= startOfMonthIso(anchor) && date <= endOfMonthIso(anchor);
-  }
-  if (mode === "quarter") {
-    return date >= startOfQuarterIso(anchor) && date <= endOfQuarterIso(anchor);
-  }
-  if (mode === "year") {
-    return date >= startOfYearIso(anchor) && date <= endOfYearIso(anchor);
-  }
-  if (mode === "custom") {
-    if (!customStart && !customEnd) {
-      return true;
-    }
-    if (customStart && date < customStart) {
-      return false;
-    }
-    if (customEnd && date > customEnd) {
-      return false;
-    }
-    return true;
-  }
-  return true;
-};
-
 const createEmptyBulkEditForm = (): BulkEditForm => ({
   accountId: "",
   categoryId: "",
@@ -567,6 +598,18 @@ const createEmptyBulkEditForm = (): BulkEditForm => ({
 });
 
 const normalizeFilterValue = (value: string) => value.trim().toLowerCase();
+
+const readSearchParamValues = (searchParams: ReturnType<typeof useSearchParams>, key: string) =>
+  searchParams
+    .getAll(key)
+    .flatMap((entry) => splitMerchantFilters(entry))
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+
+const findMatchingId = (value: string, items: Array<{ id: string; name: string }>) => {
+  const normalizedValue = normalizeFilterValue(value);
+  return items.find((item) => item.id === value || normalizeFilterValue(item.name) === normalizedValue)?.id ?? "";
+};
 
 const toggleFilterValue = (values: string[], value: string) =>
   values.includes(value) ? values.filter((entry) => entry !== value) : [...values, value];
@@ -580,12 +623,25 @@ const splitMerchantFilters = (value: string) =>
     .map((entry) => entry.trim())
     .filter(Boolean);
 
-const readTransactionsWorkspaceCache = (): TransactionsWorkspaceCacheState | null => {
+const getSessionStorage = () => {
   if (typeof window === "undefined") {
     return null;
   }
 
-  const stored = window.localStorage.getItem(transactionsWorkspaceCacheKey);
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+};
+
+const readTransactionsWorkspaceCache = (): TransactionsWorkspaceCacheState | null => {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return null;
+  }
+
+  const stored = storage.getItem(transactionsWorkspaceCacheKey);
   if (!stored) {
     return null;
   }
@@ -632,7 +688,8 @@ const persistTransactionsWorkspaceCache = (
   workspaceId: string,
   snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
 ) => {
-  if (typeof window === "undefined" || !workspaceId) {
+  const storage = getSessionStorage();
+  if (!storage || !workspaceId) {
     return;
   }
 
@@ -651,7 +708,7 @@ const persistTransactionsWorkspaceCache = (
     },
   };
 
-  window.localStorage.setItem(transactionsWorkspaceCacheKey, JSON.stringify(nextState));
+  storage.setItem(transactionsWorkspaceCacheKey, JSON.stringify(nextState));
 };
 
 const looksLikeJsonBlob = (value: string) => {
@@ -692,44 +749,107 @@ const normalizeMerchantGroupKey = (value: string) =>
     .trim()
     .toLowerCase();
 
-const humanizeTransactionMerchantText = (value: string) => {
-  const normalized = value.replace(/\u00a0/g, " ").trim();
-  if (!normalized) {
-    return "";
+const humanizeTransactionMerchantText = (value: string) => humanizeMerchantText(value);
+
+const summarizeTransactionMerchantText = (value: string, institution?: string | null) =>
+  summarizeMerchantText(value, institution);
+
+const getConfidenceLabel = (value: number) => {
+  if (value >= 85) {
+    return "High";
   }
 
-  return normalized
-    .replace(/fundtransfer/gi, "Fund Transfer")
-    .replace(/interestearned/gi, "Interest Earned")
-    .replace(/taxwithheld/gi, "Tax Withheld")
-    .replace(/instapaytransferfee/gi, "InstaPay Transfer Fee")
-    .replace(/transfertootherbank/gi, "Transfer to Other Bank")
-    .replace(/transferfrom/gi, "Transfer from")
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/([A-Za-z])(\d)/g, "$1 $2")
-    .replace(/(\d)([A-Za-z])/g, "$1 $2")
-    .replace(/\s*:\s*/g, ": ")
-    .replace(/\s+/g, " ")
-    .trim();
+  if (value >= 65) {
+    return "Medium";
+  }
+
+  return "Needs review";
 };
 
-const summarizeTransactionMerchantText = (value: string) => {
-  const humanized = humanizeTransactionMerchantText(value);
-  const compact = humanized.replace(/[^a-z0-9]+/gi, "").toLowerCase();
+const inferTransactionConfidenceSignals = (transaction: Transaction, warningReason: string | null): TransactionConfidenceSignal[] => {
+  const source = transaction.source ?? "upload";
+  const hasWarning = Boolean(warningReason);
+  const sourceBoost = source === "manual" ? 6 : source === "upload" ? 0 : -4;
 
-  if (/^billspaymentto\b/i.test(humanized) || compact.startsWith("billspaymentto")) {
-    return "Bills Payment";
-  }
-  if (compact.includes("fundtransfer")) return "Fund Transfer";
-  if (compact.includes("interestearned")) return "Interest Earned";
-  if (compact.includes("taxwithheld")) return "Tax Withheld";
-  if (compact.includes("instapaytransferfee")) return "InstaPay Transfer Fee";
-  if (compact.includes("transfertootherbank")) return "Transfer to Other Bank";
-  if (/^(cash in|cash out|payment to|received|sent|transfer to|transfer from)\b/i.test(humanized)) {
-    return humanized.split(/\s+/).slice(0, 3).join(" ");
+  const nameValue = Math.max(
+    40,
+    Math.min(98, (transaction.merchantClean?.trim() ? 88 : 74) + sourceBoost + (transaction.merchantRaw.trim() ? 4 : -10))
+  );
+  const accountValue = Math.max(40, Math.min(98, (transaction.accountId ? 92 : 58) + sourceBoost + (transaction.accountName ? 2 : -6)));
+  const categoryValue = Math.max(
+    20,
+    Math.min(
+      98,
+      (!transaction.categoryId ? 28 : 86) +
+        sourceBoost +
+        (warningReason === "Possible duplicate" ? -8 : 0) +
+        (warningReason === "Needs category review" ? -20 : 0) +
+        (hasWarning && warningReason !== "Possible duplicate" ? -4 : 0)
+    )
+  );
+
+  return [
+    {
+      label: "Name",
+      value: nameValue,
+      note: transaction.merchantClean?.trim() ? "Cleaned merchant name present" : "Using the raw statement label",
+    },
+    {
+      label: "Account",
+      value: accountValue,
+      note: transaction.accountName ? "Account match is present" : "Account needs a closer look",
+    },
+    {
+      label: "Category",
+      value: categoryValue,
+      note: !transaction.categoryId
+        ? "No category assigned yet"
+        : warningReason === "Needs category review"
+          ? "Category still needs review"
+          : "Category has a strong match",
+    },
+  ];
+};
+
+const summarizeTransactionChange = (before: Transaction, after: Transaction, accountNames: Map<string, string>, categoryNames: Map<string, string>) => {
+  const changes: string[] = [];
+  const beforeName = before.merchantClean ?? before.merchantRaw;
+  const afterName = after.merchantClean ?? after.merchantRaw;
+  if (beforeName !== afterName) {
+    changes.push(`Name: ${beforeName} → ${afterName}`);
   }
 
-  return humanized;
+  const beforeDate = before.date.slice(0, 10);
+  const afterDate = after.date.slice(0, 10);
+  if (beforeDate !== afterDate) {
+    changes.push(`Date: ${formatDate(beforeDate)} → ${formatDate(afterDate)}`);
+  }
+
+  if (before.accountId !== after.accountId) {
+    changes.push(`Account: ${accountNames.get(before.accountId) ?? before.accountName} → ${accountNames.get(after.accountId) ?? after.accountName}`);
+  }
+
+  if ((before.categoryId ?? "") !== (after.categoryId ?? "")) {
+    changes.push(
+      `Category: ${categoryNames.get(before.categoryId ?? "") ?? before.categoryName ?? "Other"} → ${
+        categoryNames.get(after.categoryId ?? "") ?? after.categoryName ?? "Other"
+      }`
+    );
+  }
+
+  if (before.amount !== after.amount) {
+    changes.push(`Amount: ${currencyFormatter.format(Number(before.amount))} → ${currencyFormatter.format(Number(after.amount))}`);
+  }
+
+  if (before.isExcluded !== after.isExcluded) {
+    changes.push(after.isExcluded ? "Excluded from totals" : "Included in totals");
+  }
+
+  if (before.isTransfer !== after.isTransfer) {
+    changes.push(after.isTransfer ? "Marked as transfer" : "Marked as non-transfer");
+  }
+
+  return changes;
 };
 
 const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => ({
@@ -748,15 +868,15 @@ const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => 
 const detailDraftTypeToTransactionType = (type: TransactionDetailDraft["type"]) => (type === "credit" ? "income" : "expense");
 
 const toolbarChipStyle = {
-  backgroundColor: "#f2f5f7",
-  borderColor: "#b8c0c5",
-  color: "#111111",
+  backgroundColor: "var(--surface-2)",
+  borderColor: "var(--stroke-strong)",
+  color: "var(--text)",
   boxShadow: "none",
 } as const;
 
 const toolbarAddStyle = {
-  backgroundColor: "#03a8c0",
-  borderColor: "#03a8c0",
+  backgroundColor: "var(--accent)",
+  borderColor: "var(--accent)",
   color: "#ffffff",
   boxShadow: "none",
 } as const;
@@ -981,6 +1101,7 @@ export default function TransactionsPage() {
 function TransactionsPageContent() {
   const searchParams = useSearchParams();
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const manualNameInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -1001,6 +1122,24 @@ function TransactionsPageContent() {
   const [imports, setImports] = useState<ImportFile[]>(
     () => (initialCachedWorkspace?.imports as ImportFile[]) ?? []
   );
+  const [transactionsSummary, setTransactionsSummary] = useState<TransactionPageMeta>(
+    () =>
+      initialCachedWorkspace?.summary ?? {
+        totalCount: initialCachedWorkspace?.transactions?.length ?? 0,
+        income: 0,
+        spending: 0,
+        transfers: 0,
+        review: 0,
+        topCategory: null,
+        topAccount: null,
+        firstTransactionDate: null,
+        lastTransactionDate: null,
+        firstReviewTransaction: null,
+        firstReviewTransactionIndex: null,
+      }
+  );
+  const [transactionsPageSize, setTransactionsPageSize] = useState(25);
+  const [transactionsPage, setTransactionsPage] = useState(1);
   const [query, setQuery] = useState("");
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
   const [accountFilters, setAccountFilters] = useState<string[]>([]);
@@ -1015,10 +1154,13 @@ function TransactionsPageContent() {
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
+  const [manualAdvancedOpen, setManualAdvancedOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const selectedTransactionCount = selectedTransactionIds.length;
+  const hasSelectedTransactions = selectedTransactionCount > 0;
   const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
   const [transactionDeleteConfirmOpen, setTransactionDeleteConfirmOpen] = useState(false);
   const [dateFilterMode, setDateFilterMode] = useState<DateFilterMode>("ltd");
@@ -1030,16 +1172,30 @@ function TransactionsPageContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [isWorkspacesLoaded, setIsWorkspacesLoaded] = useState(false);
   const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(true);
+  const [hasInitialTransactionsLoaded, setHasInitialTransactionsLoaded] = useState(Boolean(initialCachedWorkspace));
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
-  const transactionRowRefs = useRef(new Map<string, HTMLDivElement>());
+  const transactionRowRefs = useRef(new Map<string, HTMLElement>());
+  const transactionsLoadRequestRef = useRef(0);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
+  const reviewTransactionParamRef = useRef<string | null>(null);
+  const drilldownParamRef = useRef<string | null>(null);
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
+  const accountInstitutionById = useMemo(
+    () => new Map(accounts.map((account) => [account.id, account.institution ?? null] as const)),
+    [accounts]
+  );
+  const accountNameById = useMemo(() => new Map(accounts.map((account) => [account.id, account.name] as const)), [accounts]);
+  const categoryNameById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category.name] as const)),
+    [categories]
+  );
 
   const loadWorkspaces = async () => {
     try {
@@ -1056,44 +1212,19 @@ function TransactionsPageContent() {
     }
   };
 
-  const loadWorkspaceData = async (workspaceId: string, options?: { skipMetadata?: boolean; background?: boolean }) => {
+  const loadWorkspaceMetadata = async (workspaceId: string, options?: { skipImports?: boolean; background?: boolean }) => {
     if (!workspaceId) {
       setAccounts([]);
       setCategories([]);
-      setTransactions([]);
       setImports([]);
-      setIsWorkspaceDataReady(true);
       return;
     }
 
-    if (!options?.background) {
-      setIsWorkspaceDataReady(false);
-    }
-
     try {
-      const transactionsResponse = await fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`);
-
-      if (transactionsResponse.ok) {
-        const payload = await transactionsResponse.json();
-        setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
-      }
-
-      if (options?.skipMetadata) {
-        const accountsResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
-
-        if (accountsResponse.ok) {
-          const payload = await accountsResponse.json();
-          const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
-          setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
-        }
-
-        return;
-      }
-
       const [accountsResponse, categoriesResponse, importResponse] = await Promise.all([
         fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
         fetch(`/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`),
-        fetch(`/api/imports?workspaceId=${encodeURIComponent(workspaceId)}`),
+        options?.skipImports ? Promise.resolve(null) : fetch(`/api/imports?workspaceId=${encodeURIComponent(workspaceId)}`),
       ]);
 
       if (accountsResponse.ok) {
@@ -1107,13 +1238,141 @@ function TransactionsPageContent() {
         setCategories(Array.isArray(payload.categories) ? payload.categories : []);
       }
 
-      if (importResponse.ok) {
+      if (importResponse && importResponse.ok) {
         const payload = await importResponse.json();
         setImports(Array.isArray(payload.importFiles) ? payload.importFiles : []);
       }
-    } finally {
+    } catch {
+      if (!options?.background) {
+        setMessage("Unable to load workspace metadata.");
+      }
+    }
+  };
+
+  const loadTransactionsPage = async (
+    workspaceId: string,
+    options?: { background?: boolean; includeAll?: boolean; pageOverride?: number; pageSizeOverride?: number }
+  ) => {
+    const requestId = ++transactionsLoadRequestRef.current;
+
+    if (!workspaceId) {
+      setTransactions([]);
+      setTransactionsSummary({
+        totalCount: 0,
+        income: 0,
+        spending: 0,
+        transfers: 0,
+        review: 0,
+        topCategory: null,
+        topAccount: null,
+        firstTransactionDate: null,
+        lastTransactionDate: null,
+        firstReviewTransaction: null,
+        firstReviewTransactionIndex: null,
+      });
+      setIsWorkspaceDataReady(true);
+      setHasInitialTransactionsLoaded(true);
+      return;
+    }
+
+    if (!options?.background) {
+      setIsWorkspaceDataReady(false);
+    }
+
+    const searchParams = buildTransactionQuerySearchParams(
+      workspaceId,
+      {
+        query,
+        categoryIds: categoryFilters,
+        accountIds: accountFilters,
+        typeFilters,
+        merchantFilters,
+        dateFilterMode,
+        dateFilterAnchor,
+        customStart,
+        customEnd,
+      },
+      {
+        page: options?.pageOverride ?? transactionsPage,
+        pageSize: options?.includeAll ? "all" : options?.pageSizeOverride ?? transactionsPageSize,
+      }
+    );
+
+    try {
+      const response = await fetch(`/api/transactions?${searchParams.toString()}`);
+      if (!response.ok) {
+        throw new Error("Unable to load transactions.");
+      }
+
+      if (requestId !== transactionsLoadRequestRef.current) {
+        return;
+      }
+
+      const payload = await response.json();
+      setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
+      setTransactionsSummary(
+        payload.summary && typeof payload.summary === "object"
+          ? {
+              totalCount:
+                typeof payload.totalCount === "number"
+                  ? payload.totalCount
+                  : typeof payload.summary.totalCount === "number"
+                    ? payload.summary.totalCount
+                    : Array.isArray(payload.transactions)
+                      ? payload.transactions.length
+                      : 0,
+              income: typeof payload.summary.income === "number" ? payload.summary.income : 0,
+              spending: typeof payload.summary.spending === "number" ? payload.summary.spending : 0,
+              transfers: typeof payload.summary.transfers === "number" ? payload.summary.transfers : 0,
+              review: typeof payload.summary.review === "number" ? payload.summary.review : 0,
+              topCategory: Array.isArray(payload.summary.topCategory) ? payload.summary.topCategory : null,
+              topAccount: Array.isArray(payload.summary.topAccount) ? payload.summary.topAccount : null,
+              firstTransactionDate:
+                typeof payload.summary.firstTransactionDate === "string" ? payload.summary.firstTransactionDate : null,
+              lastTransactionDate:
+                typeof payload.summary.lastTransactionDate === "string" ? payload.summary.lastTransactionDate : null,
+              firstReviewTransaction:
+                payload.summary.firstReviewTransaction && typeof payload.summary.firstReviewTransaction === "object"
+                  ? (payload.summary.firstReviewTransaction as Transaction)
+                  : null,
+              firstReviewTransactionIndex:
+                typeof payload.summary.firstReviewTransactionIndex === "number"
+                  ? payload.summary.firstReviewTransactionIndex
+                  : null,
+            }
+          : {
+              totalCount:
+                typeof payload.totalCount === "number"
+                  ? payload.totalCount
+                  : Array.isArray(payload.transactions)
+                    ? payload.transactions.length
+                    : 0,
+              income: 0,
+              spending: 0,
+              transfers: 0,
+              review: 0,
+              topCategory: null,
+              topAccount: null,
+              firstTransactionDate: null,
+              lastTransactionDate: null,
+              firstReviewTransaction: null,
+              firstReviewTransactionIndex: null,
+            }
+      );
+
       if (!options?.background) {
         setIsWorkspaceDataReady(true);
+        setHasInitialTransactionsLoaded(true);
+      }
+    } catch {
+      if (requestId !== transactionsLoadRequestRef.current) {
+        return;
+      }
+
+      if (!options?.background) {
+        setMessage("Unable to load transactions.");
+        setIsWorkspaceDataReady(true);
+        setHasInitialTransactionsLoaded(true);
       }
     }
   };
@@ -1138,7 +1397,21 @@ function TransactionsPageContent() {
       setCategories([]);
       setTransactions([]);
       setImports([]);
+      setTransactionsSummary({
+        totalCount: 0,
+        income: 0,
+        spending: 0,
+        transfers: 0,
+        review: 0,
+        topCategory: null,
+        topAccount: null,
+        firstTransactionDate: null,
+        lastTransactionDate: null,
+        firstReviewTransaction: null,
+        firstReviewTransactionIndex: null,
+      });
       setIsWorkspaceDataReady(true);
+      setHasInitialTransactionsLoaded(true);
       return;
     }
 
@@ -1148,8 +1421,24 @@ function TransactionsPageContent() {
       setCategories(cachedSnapshot.categories);
       setTransactions(cachedSnapshot.transactions);
       setImports(cachedSnapshot.imports);
+      setTransactionsSummary(
+        cachedSnapshot.summary ?? {
+          totalCount: cachedSnapshot.totalCount ?? cachedSnapshot.transactions.length,
+          income: 0,
+          spending: 0,
+          transfers: 0,
+          review: 0,
+          topCategory: null,
+          topAccount: null,
+          firstTransactionDate: null,
+          lastTransactionDate: null,
+          firstReviewTransaction: null,
+          firstReviewTransactionIndex: null,
+        }
+      );
       setIsWorkspaceDataReady(true);
-      void loadWorkspaceData(selectedWorkspaceId, { skipMetadata: true, background: true });
+      setHasInitialTransactionsLoaded(true);
+      void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
       return;
     }
 
@@ -1158,8 +1447,30 @@ function TransactionsPageContent() {
     setTransactions([]);
     setImports([]);
     setIsWorkspaceDataReady(false);
-    void loadWorkspaceData(selectedWorkspaceId);
+    setHasInitialTransactionsLoaded(false);
+    void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true });
   }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    void loadTransactionsPage(selectedWorkspaceId);
+  }, [
+    selectedWorkspaceId,
+    query,
+    categoryFilters,
+    accountFilters,
+    typeFilters,
+    merchantFilters,
+    dateFilterMode,
+    dateFilterAnchor,
+    customStart,
+    customEnd,
+    transactionsPage,
+    transactionsPageSize,
+  ]);
 
   useEffect(() => {
     if (!addMenuOpen && !downloadMenuOpen) {
@@ -1180,7 +1491,7 @@ function TransactionsPageContent() {
       setDownloadMenuOpen(false);
     };
 
-    const handleKeyDown = (event: KeyboardEvent) => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         setAddMenuOpen(false);
         setDownloadMenuOpen(false);
@@ -1195,6 +1506,41 @@ function TransactionsPageContent() {
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [addMenuOpen, downloadMenuOpen]);
+
+  useEffect(() => {
+    if (filterOpen) {
+      searchInputRef.current?.focus();
+    }
+  }, [filterOpen]);
+
+  useEffect(() => {
+    if (manualOpen) {
+      manualNameInputRef.current?.focus();
+      setManualAdvancedOpen(false);
+    }
+  }, [manualOpen]);
+
+  useEffect(() => {
+    const reviewTransactionId = searchParams.get("review");
+    if (!reviewTransactionId || !isWorkspaceDataReady || !transactions.length) {
+      return;
+    }
+
+    if (reviewTransactionParamRef.current === reviewTransactionId) {
+      return;
+    }
+
+    const reviewTransaction = transactions.find((transaction) => transaction.id === reviewTransactionId);
+    if (!reviewTransaction) {
+      return;
+    }
+
+    reviewTransactionParamRef.current = reviewTransactionId;
+    openTransactionReview(reviewTransaction);
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete("review");
+    window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
+  }, [isWorkspaceDataReady, searchParams, transactions]);
 
   const closeToolbarMenus = () => {
     setAddMenuOpen(false);
@@ -1212,6 +1558,7 @@ function TransactionsPageContent() {
   };
 
   const openImportFiles = () => {
+    setPendingImportSummary(null);
     closeToolbarMenus();
     setImportOpen(true);
   };
@@ -1229,6 +1576,75 @@ function TransactionsPageContent() {
       window.history.replaceState({}, "", "/transactions");
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!isWorkspaceDataReady) {
+      return;
+    }
+
+    const drilldownSignature = [
+      searchParams.get("q") ?? "",
+      searchParams.get("month") ?? "",
+      searchParams.get("merchant") ?? "",
+      searchParams.get("category") ?? "",
+      searchParams.get("account") ?? "",
+    ].join("|");
+
+    if (drilldownParamRef.current === drilldownSignature) {
+      return;
+    }
+
+    const q = searchParams.get("q") ?? "";
+    const month = searchParams.get("month") ?? "";
+    const merchants = readSearchParamValues(searchParams, "merchant");
+    const categoriesFromUrl = readSearchParamValues(searchParams, "category");
+    const accountsFromUrl = readSearchParamValues(searchParams, "account");
+
+    const hasDrilldownParams = Boolean(q || month || merchants.length > 0 || categoriesFromUrl.length > 0 || accountsFromUrl.length > 0);
+
+    if (!hasDrilldownParams) {
+      if (drilldownParamRef.current === drilldownSignature) {
+        return;
+      }
+
+      drilldownParamRef.current = drilldownSignature;
+      setQuery("");
+      setCategoryFilters([]);
+      setAccountFilters([]);
+      setTypeFilters([]);
+      setMerchantFilters([]);
+      setMerchantFilterInput("");
+      setDateFilterMode("ltd");
+      setDateFilterAnchor(todayIso);
+      setCustomStart("");
+      setCustomEnd("");
+      setFilterOpen(false);
+      setDateFilterOpen(false);
+      return;
+    }
+
+    drilldownParamRef.current = drilldownSignature;
+
+    const nextCategoryFilters = categoriesFromUrl
+      .map((value) => findMatchingId(value, categories))
+      .filter(Boolean);
+    const nextAccountFilters = accountsFromUrl
+      .map((value) => findMatchingId(value, accounts))
+      .filter(Boolean);
+
+    setQuery(q);
+    setCategoryFilters(nextCategoryFilters);
+    setAccountFilters(nextAccountFilters);
+    setTypeFilters([]);
+    setMerchantFilters(merchants);
+    setMerchantFilterInput("");
+    setDateFilterMode(month ? "month" : "ltd");
+    setDateFilterAnchor(month ? `${month}-01` : todayIso);
+    setCustomStart("");
+    setCustomEnd("");
+    setFilterOpen(false);
+    setDateFilterOpen(false);
+  }, [accounts, categories, isWorkspaceDataReady, searchParams]);
 
   const ensureDefaultAccount = async (workspaceId: string) => {
     const preferredAccount = accounts.find((account) => account.type !== "cash" && account.type !== "other" && account.type !== "investment");
@@ -1267,55 +1683,119 @@ function TransactionsPageContent() {
     setAccounts([data.account]);
     return accountId;
   };
+  const totalTransactionPages = Math.max(1, Math.ceil(transactionsSummary.totalCount / Math.max(transactionsPageSize, 1)));
+  const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);
+  const pageStartIndex = (currentTransactionPage - 1) * transactionsPageSize;
+  const pageEndIndex = pageStartIndex + transactionsPageSize;
+  const visibleTransactions = transactions;
+  const hasVisibleTransactions = transactionsSummary.totalCount > 0;
+  const visibleTransactionIds = useMemo(() => visibleTransactions.map((transaction) => transaction.id), [visibleTransactions]);
+  const allVisibleSelected =
+    visibleTransactionIds.length > 0 && visibleTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
+  const someVisibleSelected = visibleTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
 
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter((transaction) => {
-      if (transaction.merchantRaw === "Beginning balance" || transaction.description === "Beginning balance") {
-        return false;
+  const currentPageLabel = useMemo(() => {
+    if (transactionsSummary.totalCount === 0) {
+      return "0 of 0";
+    }
+
+    return `${pageStartIndex + 1}-${Math.min(pageEndIndex, transactionsSummary.totalCount)} of ${transactionsSummary.totalCount}`;
+  }, [pageEndIndex, pageStartIndex, transactionsSummary.totalCount]);
+
+  const paginationPages = useMemo(() => {
+    if (totalTransactionPages <= 1) {
+      return [1];
+    }
+
+    const candidatePages = new Set<number>([
+      1,
+      totalTransactionPages,
+      Math.max(1, currentTransactionPage - 1),
+      currentTransactionPage,
+      Math.min(totalTransactionPages, currentTransactionPage + 1),
+    ]);
+
+    const sortedPages = Array.from(candidatePages)
+      .filter((page) => page >= 1 && page <= totalTransactionPages)
+      .sort((a, b) => a - b);
+
+    return sortedPages.reduce<Array<number | "ellipsis">>((pages, page) => {
+      const previous = pages[pages.length - 1];
+      if (typeof previous === "number" && page - previous > 1) {
+        pages.push("ellipsis");
       }
+      pages.push(page);
+      return pages;
+    }, []);
+  }, [currentTransactionPage, totalTransactionPages]);
 
-      const term = query.trim().toLowerCase();
-      const matchesQuery =
-        !term ||
-        transaction.merchantRaw.toLowerCase().includes(term) ||
-        (transaction.merchantClean ?? "").toLowerCase().includes(term) ||
-        (transaction.description ?? "").toLowerCase().includes(term);
-      const matchesCategory =
-        categoryFilters.length === 0 ||
-        (transaction.categoryId ? categoryFilters.includes(transaction.categoryId) : false);
-      const matchesAccount = accountFilters.length === 0 || accountFilters.includes(transaction.accountId);
-      const transactionFilterType = transaction.type === "income" ? "credit" : "debit";
-      const matchesType = typeFilters.length === 0 || typeFilters.includes(transactionFilterType);
-      const merchantValue = normalizeFilterValue(`${transaction.merchantClean ?? transaction.merchantRaw} ${transaction.description ?? ""}`);
-      const matchesMerchant =
-        merchantFilters.length === 0 ||
-        merchantFilters.some((merchantFilter) => merchantValue.includes(normalizeFilterValue(merchantFilter)));
-      const matchesDate = dateMatchesFilter(transaction.date, dateFilterMode, dateFilterAnchor, customStart, customEnd);
-      return matchesQuery && matchesCategory && matchesAccount && matchesType && matchesMerchant && matchesDate;
-    });
-  }, [
-    transactions,
-    query,
-    categoryFilters,
-    accountFilters,
-    typeFilters,
-    merchantFilters,
-    dateFilterMode,
-    dateFilterAnchor,
-    customStart,
-    customEnd,
-  ]);
-  const hasVisibleTransactions = useMemo(
-    () =>
-      transactions.some(
-        (transaction) => transaction.merchantRaw !== "Beginning balance" && transaction.description !== "Beginning balance"
-      ),
-    [transactions]
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+
+    if (query.trim()) {
+      count += 1;
+    }
+
+    if (dateFilterMode !== "ltd") {
+      count += 1;
+    }
+
+    count += categoryFilters.length;
+    count += accountFilters.length;
+    count += typeFilters.length;
+    count += merchantFilters.length;
+
+    return count;
+  }, [accountFilters.length, categoryFilters.length, dateFilterMode, merchantFilters.length, query, typeFilters.length]);
+
+  const activeFilterChips = useMemo(
+    () => [
+      ...(query.trim()
+        ? [
+            {
+              key: "query",
+              label: `Search: ${query.trim()}`,
+              onClear: () => setQuery(""),
+            },
+          ]
+        : []),
+      ...(dateFilterMode !== "ltd"
+        ? [
+            {
+              key: "date",
+              label: `Date: ${getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd)}`,
+              onClear: () => {
+                setDateFilterMode("ltd");
+                setDateFilterAnchor(todayIso);
+                setCustomStart("");
+                setCustomEnd("");
+              },
+            },
+          ]
+        : []),
+      ...categoryFilters.map((categoryId) => ({
+        key: `category:${categoryId}`,
+        label: `Category: ${categoryNameById.get(categoryId) ?? "Unknown"}`,
+        onClear: () => setCategoryFilters((current) => current.filter((entry) => entry !== categoryId)),
+      })),
+      ...accountFilters.map((accountId) => ({
+        key: `account:${accountId}`,
+        label: `Account: ${accountNameById.get(accountId) ?? "Unknown"}`,
+        onClear: () => setAccountFilters((current) => current.filter((entry) => entry !== accountId)),
+      })),
+      ...typeFilters.map((type) => ({
+        key: `type:${type}`,
+        label: `Type: ${type === "credit" ? "Credit" : "Debit"}`,
+        onClear: () => setTypeFilters((current) => current.filter((entry) => entry !== type)),
+      })),
+      ...merchantFilters.map((merchant) => ({
+        key: `merchant:${merchant}`,
+        label: `Merchant: ${merchant}`,
+        onClear: () => setMerchantFilters((current) => current.filter((entry) => entry !== merchant)),
+      })),
+    ],
+    [accountFilters, accountNameById, categoryFilters, categoryNameById, customStart, dateFilterAnchor, dateFilterMode, merchantFilters, query, typeFilters]
   );
-
-  const filteredTransactionIds = useMemo(() => filteredTransactions.map((transaction) => transaction.id), [filteredTransactions]);
-  const allVisibleSelected = filteredTransactionIds.length > 0 && filteredTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
-  const someVisibleSelected = filteredTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
 
   useEffect(() => {
     if (!selectAllRef.current) {
@@ -1325,61 +1805,25 @@ function TransactionsPageContent() {
     selectAllRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
   }, [allVisibleSelected, someVisibleSelected]);
 
-  const duplicateLookup = useMemo(() => {
-    const counts = new Map<string, number>();
+  useEffect(() => {
+    setTransactionsPage(1);
+  }, [
+    selectedWorkspaceId,
+    query,
+    categoryFilters,
+    accountFilters,
+    typeFilters,
+    merchantFilters,
+    dateFilterMode,
+    dateFilterAnchor,
+    customStart,
+    customEnd,
+    transactionsPageSize,
+  ]);
 
-    for (const transaction of filteredTransactions) {
-      const signature = [
-        transaction.date.slice(0, 10),
-        Number(transaction.amount).toFixed(2),
-        (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase(),
-      ].join("|");
-
-      counts.set(signature, (counts.get(signature) ?? 0) + 1);
-    }
-
-    return counts;
-  }, [filteredTransactions]);
-
-  const totals = useMemo(() => {
-    return filteredTransactions.reduce(
-      (accumulator, transaction) => {
-        const amount = Math.abs(Number(transaction.amount));
-        const signature = [
-          transaction.date.slice(0, 10),
-          Number(transaction.amount).toFixed(2),
-          (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase(),
-        ].join("|");
-        const hasReviewIssue =
-          transaction.isExcluded ||
-          transaction.isTransfer ||
-          !transaction.categoryId ||
-          (duplicateLookup.get(signature) ?? 0) > 1;
-
-        if (transaction.isExcluded) {
-          if (hasReviewIssue) {
-            accumulator.review += 1;
-          }
-          return accumulator;
-        }
-
-        if (transaction.type === "income") {
-          accumulator.income += amount;
-        } else if (transaction.type === "transfer") {
-          accumulator.transfers += amount;
-        } else {
-          accumulator.spending += amount;
-        }
-
-        if (hasReviewIssue) {
-          accumulator.review += 1;
-        }
-
-        return accumulator;
-      },
-      { income: 0, spending: 0, transfers: 0, review: 0 }
-    );
-  }, [filteredTransactions, duplicateLookup]);
+  useEffect(() => {
+    setTransactionsPage((current) => Math.min(Math.max(current, 1), totalTransactionPages));
+  }, [totalTransactionPages]);
 
   const importSummary = useMemo(() => {
     return imports.reduce(
@@ -1397,59 +1841,14 @@ function TransactionsPageContent() {
     );
   }, [imports]);
 
-  const summaryData = useMemo(() => {
-    const topCategories = new Map<string, number>();
-    const topAccounts = new Map<string, number>();
-
-    for (const transaction of filteredTransactions) {
-      const amount = Math.abs(Number(transaction.amount));
-      const categoryName = transaction.categoryName ?? "Other";
-      topCategories.set(categoryName, (topCategories.get(categoryName) ?? 0) + amount);
-      topAccounts.set(transaction.accountName, (topAccounts.get(transaction.accountName) ?? 0) + amount);
+  const warningReasonFor = (transaction: Transaction) => {
+    if (transaction.warningReason) {
+      return transaction.warningReason;
     }
 
-    const topCategory = Array.from(topCategories.entries()).sort((a, b) => b[1] - a[1])[0];
-    const topAccount = Array.from(topAccounts.entries()).sort((a, b) => b[1] - a[1])[0];
-    const sortedDates = [...filteredTransactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const firstTransaction = sortedDates[0];
-    const lastTransaction = sortedDates[sortedDates.length - 1];
-
-    return {
-      topCategory,
-      topAccount,
-      firstTransaction,
-      lastTransaction,
-    };
-  }, [filteredTransactions]);
-
-  const reviewTransactionCount = useMemo(
-    () =>
-      filteredTransactions.reduce((count, transaction) => {
-        if (isResolvedReviewStatus(transaction.reviewStatus) || transaction.isExcluded || !transaction.categoryId) {
-          return count;
-        }
-
-        const signature = [
-          transaction.date.slice(0, 10),
-          Number(transaction.amount).toFixed(2),
-          (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase(),
-        ].join("|");
-
-        return (duplicateLookup.get(signature) ?? 0) > 1 ? count + 1 : count;
-      }, 0),
-    [filteredTransactions, duplicateLookup]
-  );
-
-  const warningReasonFor = (transaction: Transaction) => {
     if (isResolvedReviewStatus(transaction.reviewStatus)) {
       return null;
     }
-
-    const signature = [
-      transaction.date.slice(0, 10),
-      Number(transaction.amount).toFixed(2),
-      (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase(),
-    ].join("|");
 
     if (transaction.isExcluded) {
       return "Ignored from totals";
@@ -1459,50 +1858,93 @@ function TransactionsPageContent() {
       return "Needs category review";
     }
 
-    if ((duplicateLookup.get(signature) ?? 0) > 1) {
-      return "Possible duplicate";
-    }
-
     return null;
   };
 
   const isReviewableTransaction = (transaction: Transaction) => {
-    if (isResolvedReviewStatus(transaction.reviewStatus)) {
-      return false;
-    }
-
-    if (transaction.isExcluded) {
-      return false;
-    }
-
-    if (!transaction.categoryId) {
-      return true;
-    }
-
-    const signature = [
-      transaction.date.slice(0, 10),
-      Number(transaction.amount).toFixed(2),
-      (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase(),
-    ].join("|");
-
-    return (duplicateLookup.get(signature) ?? 0) > 1;
+    return Boolean(warningReasonFor(transaction));
   };
 
   const firstReviewTransaction = useMemo(
-    () => filteredTransactions.find((transaction) => isReviewableTransaction(transaction)) ?? null,
-    [filteredTransactions, duplicateLookup]
+    () => transactionsSummary.firstReviewTransaction ?? transactions.find((transaction) => isReviewableTransaction(transaction)) ?? null,
+    [transactions, transactionsSummary.firstReviewTransaction]
   );
 
-  const warningTransactionCount = useMemo(
-    () => filteredTransactions.filter((transaction) => warningReasonFor(transaction) !== null).length,
-    [filteredTransactions, duplicateLookup]
-  );
+  const selectedTransactionWarningReason = selectedTransaction ? warningReasonFor(selectedTransaction) : null;
+  const selectedTransactionConfidenceSignals = selectedTransaction
+    ? inferTransactionConfidenceSignals(selectedTransaction, selectedTransactionWarningReason)
+    : [];
+  const selectedTransactionHistory = selectedTransaction
+    ? undoStack
+        .filter((entry) => entry.before.id === selectedTransaction.id || entry.after.id === selectedTransaction.id)
+        .slice(0, 3)
+    : [];
 
   const nextReviewTransactionAfter = (transactionId: string) => {
-    const startIndex = filteredTransactions.findIndex((transaction) => transaction.id === transactionId);
+    const startIndex = visibleTransactions.findIndex((transaction) => transaction.id === transactionId);
     const start = startIndex >= 0 ? startIndex + 1 : 0;
-    const ordered = [...filteredTransactions.slice(start), ...filteredTransactions.slice(0, start)];
+    const ordered = [...visibleTransactions.slice(start), ...visibleTransactions.slice(0, start)];
     return ordered.find((transaction) => isReviewableTransaction(transaction)) ?? null;
+  };
+
+  const focusTransactionRow = (transactionId: string | null | undefined) => {
+    if (!transactionId) {
+      return;
+    }
+
+    const row = transactionRowRefs.current.get(transactionId);
+    row?.focus();
+  };
+
+  const focusTransactionById = (transactionId: string) => {
+    const transactionIndex = visibleTransactions.findIndex((transaction) => transaction.id === transactionId);
+    if (transactionIndex < 0) {
+      return;
+    }
+
+    const targetPage = Math.floor(transactionIndex / Math.max(transactionsPageSize, 1)) + 1;
+    setTransactionsPage(targetPage);
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const row = transactionRowRefs.current.get(transactionId);
+        if (!row) {
+          return;
+        }
+
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        row.focus();
+      });
+    });
+  };
+
+  const handleTransactionRowKeyDown = (event: ReactKeyboardEvent<HTMLElement>, transaction: Transaction, index: number) => {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      focusTransactionRow(visibleTransactions[index + 1]?.id);
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      focusTransactionRow(visibleTransactions[index - 1]?.id);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      openTransactionDetail(transaction);
+      return;
+    }
+
+    if (event.key === " ") {
+      event.preventDefault();
+      toggleSelectedTransaction(transaction.id, !selectedTransactionIds.includes(transaction.id));
+    }
   };
 
   const openTransactionDetail = (transaction: Transaction) => {
@@ -1514,7 +1956,12 @@ function TransactionsPageContent() {
     });
   };
 
-  const openTransactionReview = (transaction: Transaction) => {
+  const openTransactionReview = (transaction: Transaction, transactionIndex?: number | null) => {
+    if (typeof transactionIndex === "number" && transactionIndex > 0) {
+      setTransactionsPage(Math.max(1, Math.ceil(transactionIndex / Math.max(transactionsPageSize, 1))));
+    } else {
+      focusTransactionById(transaction.id);
+    }
     openTransactionDetail(transaction);
     const warningReason = warningReasonFor(transaction);
     if (warningReason) {
@@ -1528,12 +1975,6 @@ function TransactionsPageContent() {
         },
         analyticsOnceKey("review_item_opened", `transaction:${transaction.id}`)
       );
-    }
-    const row = transactionRowRefs.current.get(transaction.id);
-    if (row) {
-      window.requestAnimationFrame(() => {
-        row.scrollIntoView({ behavior: "smooth", block: "center" });
-      });
     }
   };
 
@@ -1636,6 +2077,28 @@ function TransactionsPageContent() {
     setBulkEditOpen(true);
   };
 
+  const openSearchFilters = () => {
+    if (filterOpen) {
+      searchInputRef.current?.focus();
+      return;
+    }
+
+    setFilterOpen(true);
+  };
+
+  const clearAllTransactionFilters = () => {
+    setQuery("");
+    setCategoryFilters([]);
+    setAccountFilters([]);
+    setTypeFilters([]);
+    setMerchantFilters([]);
+    setMerchantFilterInput("");
+    setDateFilterMode("ltd");
+    setDateFilterAnchor(todayIso);
+    setCustomStart("");
+    setCustomEnd("");
+  };
+
   const openManualAdd = async () => {
     setAddMenuOpen(false);
 
@@ -1647,11 +2110,123 @@ function TransactionsPageContent() {
     try {
       const accountId = await ensureDefaultAccount(selectedWorkspaceId);
       setManualForm(createEmptyManualForm(accountId, getOtherCategoryId(categories)));
+      setManualAdvancedOpen(false);
       setManualOpen(true);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to prepare transaction form.");
     }
   };
+
+  useEffect(() => {
+    const handleKeyboardShortcuts = (event: globalThis.KeyboardEvent) => {
+      const target = event.target;
+      const isEditableTarget =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable);
+
+      if (event.key === "Escape") {
+        if (merchantRenameSuggestion) {
+          setMerchantRenameSuggestion(null);
+          return;
+        }
+
+        if (transactionDeleteConfirmOpen) {
+          setTransactionDeleteConfirmOpen(false);
+          return;
+        }
+
+        if (selectedTransaction) {
+          closeTransactionDetail();
+          return;
+        }
+
+        if (bulkDeleteConfirmOpen) {
+          setBulkDeleteConfirmOpen(false);
+          return;
+        }
+
+        if (manualOpen) {
+          setManualOpen(false);
+          return;
+        }
+
+        if (bulkEditOpen) {
+          setBulkEditOpen(false);
+          return;
+        }
+
+        if (filterOpen) {
+          setFilterOpen(false);
+          return;
+        }
+
+        if (dateFilterOpen) {
+          setDateFilterOpen(false);
+          return;
+        }
+
+        if (addMenuOpen || downloadMenuOpen) {
+          closeToolbarMenus();
+        }
+
+        return;
+      }
+
+      if (isEditableTarget || event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      const key = event.key.toLowerCase();
+      if (key === "/") {
+        event.preventDefault();
+        openSearchFilters();
+        return;
+      }
+
+      if (key === "f") {
+        event.preventDefault();
+        openSearchFilters();
+        return;
+      }
+
+      if (key === "a") {
+        event.preventDefault();
+        void openManualAdd();
+        return;
+      }
+
+      if (key === "i") {
+        event.preventDefault();
+        openImportFiles();
+        return;
+      }
+
+      if (key === "b" && hasSelectedTransactions) {
+        event.preventDefault();
+        openBulkEdit();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyboardShortcuts);
+    return () => document.removeEventListener("keydown", handleKeyboardShortcuts);
+  }, [
+    addMenuOpen,
+    bulkDeleteConfirmOpen,
+    bulkEditOpen,
+    dateFilterOpen,
+    downloadMenuOpen,
+    filterOpen,
+    hasSelectedTransactions,
+    manualOpen,
+    merchantRenameSuggestion,
+    openSearchFilters,
+    openBulkEdit,
+    openManualAdd,
+    selectedTransaction,
+    transactionDeleteConfirmOpen,
+  ]);
 
   const saveManualTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1859,6 +2434,19 @@ function TransactionsPageContent() {
 
       return {
         ...current,
+        merchantRaw: patch.merchantRaw ?? current.merchantRaw,
+        merchantClean: patch.merchantClean ?? current.merchantClean,
+        date: patch.date ? patch.date.slice(0, 10) : current.date,
+        accountId: patch.accountId ?? current.accountId,
+        categoryId: patch.categoryId ?? current.categoryId,
+        amount: patch.amount ?? current.amount,
+        type:
+          patch.type === "income"
+            ? "credit"
+            : patch.type === "expense"
+              ? "debit"
+              : current.type,
+        description: patch.description !== undefined ? patch.description ?? "" : current.description,
         isExcluded: patch.isExcluded ?? current.isExcluded,
         isTransfer: patch.isTransfer ?? current.isTransfer,
       };
@@ -1900,6 +2488,19 @@ function TransactionsPageContent() {
 
       return {
         ...current,
+        merchantRaw: patch.merchantRaw ?? current.merchantRaw,
+        merchantClean: patch.merchantClean ?? current.merchantClean,
+        date: patch.date ? patch.date.slice(0, 10) : current.date,
+        accountId: patch.accountId ?? current.accountId,
+        categoryId: patch.categoryId ?? current.categoryId,
+        amount: patch.amount ?? current.amount,
+        type:
+          patch.type === "income"
+            ? "credit"
+            : patch.type === "expense"
+              ? "debit"
+              : current.type,
+        description: patch.description !== undefined ? patch.description ?? "" : current.description,
         isExcluded: patch.isExcluded ?? current.isExcluded,
         isTransfer: patch.isTransfer ?? current.isTransfer,
       };
@@ -2082,8 +2683,6 @@ function TransactionsPageContent() {
       payload: {
         accountId: bulkEditForm.accountId || undefined,
         categoryId: bulkEditForm.categoryId || undefined,
-        type: bulkEditForm.type || undefined,
-        description: bulkEditForm.description ? bulkEditForm.description : undefined,
         isExcluded:
           bulkEditForm.isExcluded === ""
             ? undefined
@@ -2111,8 +2710,6 @@ function TransactionsPageContent() {
                 categoryName: categoryNames.get(payload.categoryId) ?? transaction.categoryName,
               }
             : {}),
-          ...(payload.type ? { type: payload.type as Transaction["type"] } : {}),
-          ...(payload.description !== undefined ? { description: payload.description ?? null } : {}),
           ...(payload.isExcluded !== undefined ? { isExcluded: payload.isExcluded } : {}),
           ...(payload.isTransfer !== undefined ? { isTransfer: payload.isTransfer } : {}),
         },
@@ -2353,45 +2950,90 @@ function TransactionsPageContent() {
     setMerchantFilterInput("");
   };
 
-  const downloadCsv = () => {
-    const header = ["Name", "Date", "Account", "Category", "Amount", "Type", "Notes", "Warning"];
-    const rows = filteredTransactions.map((transaction) => [
-      transaction.merchantClean ?? transaction.merchantRaw,
-      formatDate(transaction.date),
-      transaction.accountName,
-      transaction.categoryName ?? "Other",
-      transaction.amount,
-      transaction.type === "income" ? "Credit" : "Debit",
-      transaction.description ?? "",
-      warningReasonFor(transaction) ?? "",
-    ]);
+  const fetchAllTransactionsForExport = async () => {
+    if (!selectedWorkspaceId) {
+      return [];
+    }
 
-    const csv = [header, ...rows]
-      .map((row) =>
-        row
-          .map((cell) => `"${String(cell).replaceAll("\"", '""')}"`)
-          .join(",")
-      )
-      .join("\n");
+    const searchParams = buildTransactionQuerySearchParams(
+      selectedWorkspaceId,
+      {
+        query,
+        categoryIds: categoryFilters,
+        accountIds: accountFilters,
+        typeFilters,
+        merchantFilters,
+        dateFilterMode,
+        dateFilterAnchor,
+        customStart,
+        customEnd,
+      },
+      {
+        pageSize: "all",
+      }
+    );
 
-    capturePostHogClientEvent("report_exported", {
-      workspace_id: selectedWorkspaceId || null,
-      export_format: "csv",
-      row_count: filteredTransactions.length,
-      selected_count: selectedTransactionIds.length,
-    });
-    downloadTextFile("clover-transactions.csv", csv, "text/csv;charset=utf-8;");
+    const response = await fetch(`/api/transactions?${searchParams.toString()}`);
+    if (!response.ok) {
+      throw new Error("Unable to export transactions.");
+    }
+
+    const payload = await response.json();
+    return Array.isArray(payload.transactions) ? (payload.transactions as Transaction[]) : [];
   };
 
-  const downloadPdf = () => {
-    if (typeof window !== "undefined") {
+  const downloadCsv = async () => {
+    try {
+      const exportRows = await fetchAllTransactionsForExport();
+      const header = ["Name", "Date", "Account", "Category", "Amount", "Type", "Notes", "Warning"];
+      const rows = exportRows.map((transaction) => [
+        summarizeTransactionMerchantText(
+          transaction.merchantClean ?? transaction.merchantRaw,
+          accountInstitutionById.get(transaction.accountId) ?? null
+        ),
+        formatDate(transaction.date),
+        transaction.accountName,
+        transaction.categoryName ?? "Other",
+        transaction.amount,
+        transaction.type === "income" ? "Credit" : "Debit",
+        transaction.description ?? "",
+        warningReasonFor(transaction) ?? "",
+      ]);
+
+      const csv = [header, ...rows]
+        .map((row) =>
+          row
+            .map((cell) => `"${String(cell).replaceAll("\"", '""')}"`)
+            .join(",")
+        )
+        .join("\n");
+
+      capturePostHogClientEvent("report_exported", {
+        workspace_id: selectedWorkspaceId || null,
+        export_format: "csv",
+        row_count: exportRows.length,
+        selected_count: selectedTransactionIds.length,
+      });
+      downloadTextFile("clover-transactions.csv", csv, "text/csv;charset=utf-8;");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to export transactions.");
+    }
+  };
+
+  const downloadPdf = async () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const exportRows = await fetchAllTransactionsForExport();
       const report = window.open("", "_blank", "width=1280,height=900");
       if (!report) {
         window.print();
         return;
       }
 
-      const rows = filteredTransactions
+      const rows = exportRows
         .map((transaction) => {
           const warningReason = warningReasonFor(transaction);
           const amount = Number(transaction.amount);
@@ -2402,6 +3044,12 @@ function TransactionsPageContent() {
             window.location.origin
           ).toString();
           const categoryTone = getCategoryIconTone(transaction.categoryName ?? categoryLabel);
+          const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
+          const merchantSummary = summarizeTransactionMerchantText(
+            transaction.merchantClean ?? transaction.merchantRaw,
+            accountInstitution
+          );
+          const merchantDisplay = humanizeTransactionMerchantText(transaction.merchantRaw);
 
           return `
             <tr>
@@ -2415,15 +3063,8 @@ function TransactionsPageContent() {
               </td>
               <td>
                 <div class="name-cell">
-                  <div class="name-cell__summary">${escapeHtml(
-                    summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw)
-                  )}</div>
-                  ${
-                    humanizeTransactionMerchantText(transaction.merchantRaw).toLowerCase() !==
-                    summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw).toLowerCase()
-                      ? `<div class="name-cell__subtext">${escapeHtml(humanizeTransactionMerchantText(transaction.merchantRaw))}</div>`
-                      : ""
-                  }
+                  <div class="name-cell__summary">${escapeHtml(merchantSummary)}</div>
+                  ${merchantDisplay.toLowerCase() !== merchantSummary.toLowerCase() ? `<div class="name-cell__subtext">${escapeHtml(merchantDisplay)}</div>` : ""}
                 </div>
               </td>
               <td>${escapeHtml(formatDate(transaction.date))}</td>
@@ -2474,7 +3115,7 @@ function TransactionsPageContent() {
                 text-align: left;
                 vertical-align: top;
                 padding: 9px 8px;
-                border-bottom: 1px solid #e5e7eb;
+                border-bottom: 1px solid var(--stroke);
                 font-size: 11px;
                 word-break: break-word;
               }
@@ -2529,8 +3170,8 @@ function TransactionsPageContent() {
           <body>
             <div class="page">
               <h1>Transactions</h1>
-              <div class="meta">${escapeHtml(filteredTransactions.length.toString())} transaction${
-                filteredTransactions.length === 1 ? "" : "s"
+              <div class="meta">${escapeHtml(transactions.length.toString())} transaction${
+                transactions.length === 1 ? "" : "s"
               }</div>
               <table>
                 <thead>
@@ -2558,17 +3199,20 @@ function TransactionsPageContent() {
       capturePostHogClientEvent("report_exported", {
         workspace_id: selectedWorkspaceId || null,
         export_format: "pdf",
-        row_count: filteredTransactions.length,
+        row_count: exportRows.length,
         selected_count: selectedTransactionIds.length,
       });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to export transactions.");
     }
   };
 
-  const netCashFlow = totals.income - totals.spending;
+  const netCashFlow = transactionsSummary.income - transactionsSummary.spending;
+  const warningTransactionCount = transactionsSummary.review;
   const hasReviewItems = warningTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
   const isTableLoading = !selectedWorkspaceId ? !isWorkspacesLoaded : !isWorkspaceDataReady;
-  const hasSelectedTransactions = selectedTransactionIds.length > 0;
+  const shouldShowInitialLoadingScreen = isTableLoading && !hasInitialTransactionsLoaded;
 
   useEffect(() => {
     if (!selectedWorkspaceId || !isWorkspaceDataReady) {
@@ -2580,11 +3224,19 @@ function TransactionsPageContent() {
       categories,
       transactions,
       imports,
+      page: transactionsPage,
+      pageSize: transactionsPageSize,
+      totalCount: transactionsSummary.totalCount,
+      summary: transactionsSummary,
     });
-  }, [selectedWorkspaceId, isWorkspaceDataReady, accounts, categories, transactions, imports]);
+  }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary]);
 
   useEffect(() => {
     if (!importOpen || !pendingImportSummary || !isWorkspaceDataReady) {
+      return;
+    }
+
+    if (pendingImportSummary.optimistic) {
       return;
     }
 
@@ -2609,6 +3261,22 @@ function TransactionsPageContent() {
     };
   }, [importOpen, isWorkspaceDataReady, pendingImportSummary, transactions]);
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 720px)");
+    const updateViewport = () => setIsCompactViewport(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateViewport);
+    };
+  }, []);
+
+  if (shouldShowInitialLoadingScreen) {
+    return <CloverLoadingScreen label="transactions" />;
+  }
+
   return (
     <CloverShell active="transactions" title="Transactions" showTopbar={false}>
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`}>
@@ -2621,9 +3289,10 @@ function TransactionsPageContent() {
                   className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-search-trigger"
                   style={toolbarChipStyle}
                   type="button"
-                  onClick={() => searchInputRef.current?.focus()}
-                  title="Search"
+                  onClick={openSearchFilters}
+                  title="Search (/)"
                   aria-label="Search transactions"
+                  aria-keyshortcuts="/"
                 >
                   <span className="button-icon" aria-hidden="true">
                     <ActionIcon name="search" />
@@ -2647,14 +3316,16 @@ function TransactionsPageContent() {
                   className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
                   style={toolbarChipStyle}
                   type="button"
-                  title="Filters"
-                  onClick={() => setFilterOpen(true)}
-                  aria-label="Open filters"
+                  title={activeFilterCount > 0 ? `Filters (F) · ${activeFilterCount} active` : "Filters (F)"}
+                  onClick={openSearchFilters}
+                  aria-label={activeFilterCount > 0 ? `Open filters, ${activeFilterCount} active` : "Open filters"}
+                  aria-keyshortcuts="f"
                 >
                   <span className="button-icon" aria-hidden="true">
                     <ActionIcon name="filters" />
                   </span>
                   <span>Filters</span>
+                  {activeFilterCount > 0 ? <span className="transactions-filter-count-badge">{activeFilterCount}</span> : null}
                 </button>
                 <button
                   className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-summary-toggle-button"
@@ -2682,8 +3353,10 @@ function TransactionsPageContent() {
                     onClick={() => {
                       openAddMenu();
                     }}
+                    title="Add transaction (A)"
                     aria-expanded={addMenuOpen}
                     aria-label="Add transaction"
+                    aria-keyshortcuts="a"
                   >
                     <span className="button-icon" aria-hidden="true">
                       <ActionIcon name="plus" />
@@ -2811,6 +3484,36 @@ function TransactionsPageContent() {
             </div>
           </div>
 
+          <div className="transactions-context-strip" aria-label="Transaction helpers">
+            <div className="transactions-context-strip__filters">
+              {activeFilterChips.length ? (
+                <>
+                  <span className="transactions-context-strip__label">Filters</span>
+                  <div className="transactions-context-strip__chips">
+                    {activeFilterChips.map((chip) => (
+                      <button
+                        key={chip.key}
+                        className="pill pill-interactive transactions-filter-pill transactions-context-strip__chip"
+                        type="button"
+                        onClick={chip.onClear}
+                        title={`Clear ${chip.label}`}
+                        aria-label={`Clear ${chip.label}`}
+                      >
+                        <span>{chip.label}</span>
+                        <span aria-hidden="true">×</span>
+                      </button>
+                    ))}
+                    <button className="transactions-context-strip__clear" type="button" onClick={clearAllTransactionFilters}>
+                      Clear all
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <span className="transactions-context-strip__label">Filters</span>
+              )}
+            </div>
+          </div>
+
           {hasSelectedTransactions ? (
             <div className="transactions-status-line transactions-selection-bar" role="status" aria-live="polite">
               <div className="transactions-status-line__meta">
@@ -2914,7 +3617,7 @@ function TransactionsPageContent() {
             </div>
           ) : null}
 
-          <div className="line-item-header" role="row" aria-label="Transaction columns">
+          <div className="line-item-header" role="row" aria-label="Transaction columns" hidden={isCompactViewport}>
             <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
               <input
                 ref={selectAllRef}
@@ -2925,14 +3628,14 @@ function TransactionsPageContent() {
                   setSelectedTransactionIds((current) => {
                     const next = new Set(current);
                     if (shouldSelect) {
-                      filteredTransactionIds.forEach((transactionId) => next.add(transactionId));
+                      visibleTransactionIds.forEach((transactionId) => next.add(transactionId));
                     } else {
-                      filteredTransactionIds.forEach((transactionId) => next.delete(transactionId));
+                      visibleTransactionIds.forEach((transactionId) => next.delete(transactionId));
                     }
                     return Array.from(next);
                   });
                 }}
-                aria-label="Select all visible transactions"
+                aria-label="Select all transactions on this page"
               />
             </label>
             <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
@@ -2955,7 +3658,7 @@ function TransactionsPageContent() {
             <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
           </div>
 
-          <div className="table-wrap transactions-table-wrap" aria-busy={isTableLoading}>
+          <div className="table-wrap transactions-table-wrap" aria-busy={isTableLoading} hidden={isCompactViewport}>
             {isTableLoading ? (
               <div className="transactions-loading-state" role="status" aria-live="polite" aria-label="Loading transactions">
                 <div className="transactions-loading-header">
@@ -2986,17 +3689,28 @@ function TransactionsPageContent() {
                   </div>
                 ))}
               </div>
-            ) : filteredTransactions.length > 0 ? (
-              filteredTransactions.map((transaction) => {
+            ) : transactionsSummary.totalCount > 0 ? (
+              visibleTransactions.map((transaction, index) => {
                 const warningReason = warningReasonFor(transaction);
                 const amount = Number(transaction.amount);
                 const isPositive = transaction.type === "income";
                 const amountToneClass = isPositive ? "positive" : "negative";
                 const categoryValue = transaction.categoryId ?? otherCategoryId;
                 const categoryLabel = categories.find((category) => category.id === categoryValue)?.name ?? "Other";
-                const merchantSummary = summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
+                const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
+                const merchantSummary = summarizeTransactionMerchantText(
+                  transaction.merchantClean ?? transaction.merchantRaw,
+                  accountInstitution
+                );
                 const merchantDisplay = humanizeTransactionMerchantText(transaction.merchantRaw);
                 const showMerchantSubtext = merchantDisplay && merchantDisplay.toLowerCase() !== merchantSummary.toLowerCase();
+                const sourceClass =
+                  transaction.source === "manual"
+                    ? "line-item--manual"
+                    : transaction.source === "upload"
+                      ? "line-item--imported"
+                      : "line-item--other";
+                const rowStateClass = warningReason ? "line-item--warning" : "line-item--clear";
                 return (
                   <div
                     key={transaction.id}
@@ -3008,9 +3722,12 @@ function TransactionsPageContent() {
 
                       transactionRowRefs.current.delete(transaction.id);
                     }}
-                    className={`line-item ${transaction.isExcluded ? "is-muted" : ""} ${
+                    className={`line-item ${sourceClass} ${rowStateClass} ${transaction.isExcluded ? "is-muted" : ""} ${
                       selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
                     }`}
+                    tabIndex={0}
+                    aria-label={`${merchantSummary}, ${formatDate(transaction.date)}, ${categoryLabel}, ${currencyFormatter.format(amount)}`}
+                    onKeyDown={(event) => handleTransactionRowKeyDown(event, transaction, index)}
                   >
                     <label className="transaction-select-cell">
                       <input
@@ -3127,21 +3844,225 @@ function TransactionsPageContent() {
                 </div>
               </div>
             ) : (
-              <div className="empty-state">No transactions match the current filters.</div>
+              <div className="empty-state">No transactions match the current filters. Clear one filter or widen the date range to bring rows back.</div>
+            )}
+          </div>
+
+          <div className="transactions-mobile-view" hidden={!isCompactViewport}>
+            {isTableLoading ? (
+              <div className="transactions-mobile-loading" role="status" aria-live="polite" aria-label="Loading transactions">
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <div key={index} className="transactions-mobile-card glass transactions-mobile-card--loading">
+                    <div className="transactions-mobile-card__top">
+                      <span className="skeleton-block skeleton-block--checkbox" />
+                      <span className="skeleton-block skeleton-block--icon" />
+                      <span className="transactions-mobile-card__loading-name">
+                        <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+                        <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+                      </span>
+                      <span className="skeleton-block skeleton-block--amount" />
+                      <span className="skeleton-block skeleton-block--warning" />
+                    </div>
+                    <div className="transactions-mobile-card__meta">
+                      <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+                      <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+                      <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+                    </div>
+                    <div className="transactions-mobile-card__actions">
+                      <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : transactionsSummary.totalCount > 0 ? (
+              <div className="transactions-mobile-list">
+                {visibleTransactions.map((transaction, index) => {
+                  const warningReason = warningReasonFor(transaction);
+                  const amount = Number(transaction.amount);
+                  const isPositive = transaction.type === "income";
+                  const amountToneClass = isPositive ? "positive" : "negative";
+                  const categoryValue = transaction.categoryId ?? otherCategoryId;
+                  const categoryLabel = categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+                  const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
+                  const merchantSummary = summarizeTransactionMerchantText(
+                    transaction.merchantClean ?? transaction.merchantRaw,
+                    accountInstitution
+                  );
+                  const merchantDisplay = humanizeTransactionMerchantText(transaction.merchantRaw);
+                  const showMerchantSubtext = merchantDisplay && merchantDisplay.toLowerCase() !== merchantSummary.toLowerCase();
+                  const sourceClass =
+                    transaction.source === "manual"
+                      ? "transactions-mobile-card--manual"
+                      : transaction.source === "upload"
+                        ? "transactions-mobile-card--imported"
+                        : "transactions-mobile-card--other";
+                  const rowStateClass = warningReason ? "transactions-mobile-card--warning" : "transactions-mobile-card--clear";
+
+                  return (
+                    <article
+                      key={transaction.id}
+                      ref={(node) => {
+                        if (node) {
+                          transactionRowRefs.current.set(transaction.id, node);
+                          return;
+                        }
+
+                        transactionRowRefs.current.delete(transaction.id);
+                      }}
+                      className={`transactions-mobile-card glass ${sourceClass} ${rowStateClass} ${transaction.isExcluded ? "is-muted" : ""} ${
+                        selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
+                      }`}
+                      tabIndex={0}
+                      aria-label={`${merchantSummary}, ${formatDate(transaction.date)}, ${categoryLabel}, ${currencyFormatter.format(amount)}`}
+                      onKeyDown={(event) => handleTransactionRowKeyDown(event, transaction, index)}
+                    >
+                      <div className="transactions-mobile-card__top">
+                        <label className="transaction-select-cell transactions-mobile-card__select">
+                          <input
+                            type="checkbox"
+                            checked={selectedTransactionIds.includes(transaction.id)}
+                            onChange={(event) => toggleSelectedTransaction(transaction.id, event.target.checked)}
+                            aria-label={`Select ${transaction.merchantRaw}`}
+                          />
+                        </label>
+                        <span className="transaction-category-icon-cell transactions-mobile-card__icon" aria-hidden="true">
+                          <span className="transaction-category-icon" style={getCategoryIconTone(transaction.categoryName ?? categoryLabel)}>
+                            <img src={getCategoryIconSrc(transaction.categoryName ?? categoryLabel)} alt="" aria-hidden="true" />
+                          </span>
+                        </span>
+                        <div className="transactions-mobile-card__name">
+                          <InlineEditableCell
+                            value={transaction.merchantClean ?? transaction.merchantRaw}
+                            displayValue={merchantSummary}
+                            ariaLabel={`Edit name for ${transaction.merchantRaw}`}
+                            kind="text"
+                            className="transaction-inline-edit transaction-inline-edit--name transactions-mobile-card__name-edit"
+                            onCommit={(value) => commitInlineEdit(transaction, "name", value)}
+                          />
+                          {showMerchantSubtext ? <small className="transaction-subtext">{merchantDisplay}</small> : null}
+                        </div>
+                        <div className={`transaction-amount-cell ${amountToneClass} transactions-mobile-card__amount`}>
+                          <InlineEditableCell
+                            value={transaction.amount}
+                            displayValue={currencyFormatter.format(amount)}
+                            ariaLabel={`Edit amount for ${transaction.merchantRaw}`}
+                            kind="number"
+                            className={`transaction-inline-edit transaction-inline-edit--amount ${amountToneClass} transactions-mobile-card__amount-edit`}
+                            onCommit={(value) => commitInlineEdit(transaction, "amount", value)}
+                          />
+                        </div>
+                        {warningReason ? (
+                          <button
+                            type="button"
+                            className="warning-chip transactions-mobile-card__warning"
+                            title={warningReason}
+                            aria-label={warningReason}
+                            onClick={() => openTransactionDetail(transaction)}
+                          >
+                            <span className="warning-mark warning-mark--small" aria-hidden="true" />
+                          </button>
+                        ) : null}
+                      </div>
+
+                      <div className="transactions-mobile-card__meta">
+                        <div className="transactions-mobile-card__field">
+                          <span>Date</span>
+                          <InlineEditableCell
+                            value={transaction.date.slice(0, 10)}
+                            displayValue={formatDate(transaction.date)}
+                            ariaLabel={`Edit date for ${transaction.merchantRaw}`}
+                            kind="date"
+                            className="transaction-inline-edit transaction-inline-edit--date transactions-mobile-card__field-edit"
+                            onCommit={(value) => commitInlineEdit(transaction, "date", value)}
+                          />
+                        </div>
+                        <div className="transactions-mobile-card__field">
+                          <span>Account</span>
+                          <InlineEditableCell
+                            value={transaction.accountId}
+                            displayValue={transaction.accountName}
+                            ariaLabel={`Edit account for ${transaction.merchantRaw}`}
+                            kind="select"
+                            className="transaction-inline-edit transaction-inline-edit--select transactions-mobile-card__field-edit"
+                            options={accounts.map((account) => ({
+                              value: account.id,
+                              label: account.name,
+                            }))}
+                            onCommit={(value) => commitInlineEdit(transaction, "accountId", value)}
+                          />
+                        </div>
+                        <div className="transactions-mobile-card__field">
+                          <span>Category</span>
+                          <InlineEditableCell
+                            value={categoryValue}
+                            displayValue={categoryLabel}
+                            ariaLabel={`Edit category for ${transaction.merchantRaw}`}
+                            kind="select"
+                            className="transaction-inline-edit transaction-inline-edit--select transactions-mobile-card__field-edit"
+                            options={categories.map((category) => ({
+                              value: category.id,
+                              label: category.name,
+                            }))}
+                            onCommit={(value) => commitInlineEdit(transaction, "categoryId", value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="transactions-mobile-card__actions">
+                        <button
+                          type="button"
+                          className="button button-secondary button-small transactions-mobile-card__detail-button"
+                          onClick={() => openTransactionDetail(transaction)}
+                          aria-label={`Open details for ${transaction.merchantRaw}`}
+                        >
+                          Details
+                        </button>
+                        {warningReason ? (
+                          <span className="transactions-mobile-card__warning-copy">
+                            <span className="warning-mark warning-mark--small" aria-hidden="true" />
+                            Needs review
+                          </span>
+                        ) : null}
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : !hasVisibleTransactions ? (
+              <div className="transactions-empty-state">
+                <p className="transactions-empty-state__eyebrow">It is quiet in here</p>
+                <h3>No transactions yet</h3>
+                <p className="transactions-empty-state__copy">
+                  Add your first transaction to get the dashboard moving and start building your categories.
+                </p>
+                <div className="transactions-empty-state__actions">
+                  <button className="button button-primary" type="button" onClick={() => void openManualAdd()}>
+                    Add transaction
+                  </button>
+                  <button className="button button-secondary" type="button" onClick={() => openImportFiles()}>
+                    Import files
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="empty-state">No transactions match the current filters. Clear one filter or widen the date range to bring rows back.</div>
             )}
           </div>
 
           <div className="transactions-footer">
             <div className="table-footer__summary">
-              <span className="pill pill-neutral">{filteredTransactions.length} transactions</span>
-          {warningTransactionCount > 0 ? (
+              <span className="pill pill-neutral">{transactionsSummary.totalCount} transactions</span>
+              {transactionsSummary.totalCount > 0 ? (
+                <span className="pill pill-subtle">Showing {currentPageLabel}</span>
+              ) : null}
+              {warningTransactionCount > 0 ? (
                 <button
                   type="button"
                   className="warning-summary-button"
                   title={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning. Open the first one.`}
                   onClick={() => {
                     if (firstReviewTransaction) {
-                      openTransactionReview(firstReviewTransaction);
+                      openTransactionReview(firstReviewTransaction, transactionsSummary.firstReviewTransactionIndex);
                     }
                   }}
                   aria-label={
@@ -3154,19 +4075,75 @@ function TransactionsPageContent() {
                 </button>
               ) : null}
             </div>
+            <div className="transactions-pagination" aria-label="Transaction pages">
+              <div className="transactions-pagination__nav">
+                <button
+                  className="button button-secondary button-small transactions-action-button"
+                  type="button"
+                  onClick={() => setTransactionsPage((current) => Math.max(1, current - 1))}
+                  disabled={currentTransactionPage <= 1}
+                >
+                  Prev
+                </button>
+                {paginationPages.map((page, index) =>
+                  page === "ellipsis" ? (
+                    <span key={`ellipsis-${index}`} className="transactions-pagination__ellipsis" aria-hidden="true">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={page}
+                      className={`button button-secondary button-small transactions-action-button transactions-pagination__page ${
+                        page === currentTransactionPage ? "is-active" : ""
+                      }`}
+                      type="button"
+                      onClick={() => setTransactionsPage(page)}
+                      aria-current={page === currentTransactionPage ? "page" : undefined}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+                <button
+                  className="button button-secondary button-small transactions-action-button"
+                  type="button"
+                  onClick={() => setTransactionsPage((current) => Math.min(totalTransactionPages, current + 1))}
+                  disabled={currentTransactionPage >= totalTransactionPages}
+                >
+                  Next
+                </button>
+              </div>
+              <label className="transactions-pagination__size">
+                <span>Rows</span>
+                <select
+                  value={transactionsPageSize}
+                  onChange={(event) => {
+                    setTransactionsPageSize(Number(event.target.value));
+                    setTransactionsPage(1);
+                  }}
+                  aria-label="Rows per page"
+                >
+                  {[25, 50, 100, 200].map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <div className="transactions-footer-snapshot" aria-label="Cash flow snapshot">
               <span className="transactions-footer-snapshot__label">This view</span>
               <div className="transactions-footer-snapshot__metrics">
                 <div className="transactions-footer-snapshot__metric">
                   <span className="transactions-footer-snapshot__metric-label">Spending</span>
                   <span className="transactions-footer-snapshot__metric-value negative">
-                    {currencyFormatter.format(totals.spending)}
+                    {currencyFormatter.format(transactionsSummary.spending)}
                   </span>
                 </div>
                 <div className="transactions-footer-snapshot__metric">
                   <span className="transactions-footer-snapshot__metric-label">Transfers</span>
                   <span className="transactions-footer-snapshot__metric-value">
-                    {currencyFormatter.format(totals.transfers)}
+                    {currencyFormatter.format(transactionsSummary.transfers)}
                   </span>
                 </div>
                 <div className="transactions-footer-snapshot__metric transactions-footer-snapshot__metric--net">
@@ -3180,7 +4157,11 @@ function TransactionsPageContent() {
           </div>
         </div>
 
-        <aside className={`transactions-summary-panel glass ${summaryOpen ? "" : "is-hidden"}`} aria-label="Transaction summary">
+        <aside
+          className={`transactions-summary-panel glass ${summaryOpen ? "" : "is-hidden"}`}
+          aria-label="Transaction summary"
+          hidden={isCompactViewport}
+        >
           <div className="transactions-summary-panel__head">
             <p className="eyebrow">Summary</p>
             <h4>Overview</h4>
@@ -3189,19 +4170,19 @@ function TransactionsPageContent() {
           <dl className="transactions-summary-list">
             <div>
               <dt>Total transactions</dt>
-              <dd>{filteredTransactions.length}</dd>
+              <dd>{transactionsSummary.totalCount}</dd>
             </div>
             <div>
               <dt>Income</dt>
-              <dd className="positive">{currencyFormatter.format(totals.income)}</dd>
+              <dd className="positive">{currencyFormatter.format(transactionsSummary.income)}</dd>
             </div>
             <div>
               <dt>Spending</dt>
-              <dd className="negative">{currencyFormatter.format(totals.spending)}</dd>
+              <dd className="negative">{currencyFormatter.format(transactionsSummary.spending)}</dd>
             </div>
             <div>
               <dt>Transfers</dt>
-              <dd>{currencyFormatter.format(totals.transfers)}</dd>
+              <dd>{currencyFormatter.format(transactionsSummary.transfers)}</dd>
             </div>
             <div>
               <dt>Net cash flow</dt>
@@ -3209,23 +4190,23 @@ function TransactionsPageContent() {
             </div>
             <div>
               <dt>Review items</dt>
-              <dd>{totals.review}</dd>
+              <dd>{transactionsSummary.review}</dd>
             </div>
             <div>
               <dt>Top category</dt>
-              <dd>{summaryData.topCategory ? `${summaryData.topCategory[0]} · ${currencyFormatter.format(summaryData.topCategory[1])}` : "—"}</dd>
+              <dd>{transactionsSummary.topCategory ? `${transactionsSummary.topCategory[0]} · ${currencyFormatter.format(transactionsSummary.topCategory[1])}` : "—"}</dd>
             </div>
             <div>
               <dt>Top source</dt>
-              <dd>{summaryData.topAccount ? `${summaryData.topAccount[0]} · ${currencyFormatter.format(summaryData.topAccount[1])}` : "—"}</dd>
+              <dd>{transactionsSummary.topAccount ? `${transactionsSummary.topAccount[0]} · ${currencyFormatter.format(transactionsSummary.topAccount[1])}` : "—"}</dd>
             </div>
             <div>
               <dt>First transaction</dt>
-              <dd>{summaryData.firstTransaction ? formatDate(summaryData.firstTransaction.date) : "—"}</dd>
+              <dd>{transactionsSummary.firstTransactionDate ? formatDate(transactionsSummary.firstTransactionDate) : "—"}</dd>
             </div>
             <div>
               <dt>Last transaction</dt>
-              <dd>{summaryData.lastTransaction ? formatDate(summaryData.lastTransaction.date) : "—"}</dd>
+              <dd>{transactionsSummary.lastTransactionDate ? formatDate(transactionsSummary.lastTransactionDate) : "—"}</dd>
             </div>
           </dl>
 
@@ -3406,6 +4387,7 @@ function TransactionsPageContent() {
               <label className="span-2">
                 Search
                 <input
+                  ref={searchInputRef}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search by merchant, note, or alias"
@@ -3459,12 +4441,7 @@ function TransactionsPageContent() {
                 className="button button-secondary"
                 type="button"
                 onClick={() => {
-                  setQuery("");
-                  setCategoryFilters([]);
-                  setAccountFilters([]);
-                  setTypeFilters([]);
-                  setMerchantFilters([]);
-                  setMerchantFilterInput("");
+                  clearAllTransactionFilters();
                   capturePostHogClientEvent("report_filtered", {
                     workspace_id: selectedWorkspaceId || null,
                     view: "transactions",
@@ -3519,18 +4496,7 @@ function TransactionsPageContent() {
             </div>
 
             <form className="manual-form" onSubmit={applyBulkEdit}>
-              <div className="form-grid">
-                <label>
-                  Account
-                  <select value={bulkEditForm.accountId} onChange={(event) => setBulkEditForm((current) => ({ ...current, accountId: event.target.value }))}>
-                    <option value="">Leave unchanged</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <div className="form-grid transactions-bulk-grid">
                 <label>
                   Category
                   <select value={bulkEditForm.categoryId} onChange={(event) => setBulkEditForm((current) => ({ ...current, categoryId: event.target.value }))}>
@@ -3543,51 +4509,72 @@ function TransactionsPageContent() {
                   </select>
                 </label>
                 <label>
-                  Type
-                  <select
-                    value={bulkEditForm.type}
-                    onChange={(event) => setBulkEditForm((current) => ({ ...current, type: event.target.value as BulkEditForm["type"] }))}
-                  >
+                  Account
+                  <select value={bulkEditForm.accountId} onChange={(event) => setBulkEditForm((current) => ({ ...current, accountId: event.target.value }))}>
                     <option value="">Leave unchanged</option>
-                    <option value="expense">Expense</option>
-                    <option value="income">Income</option>
-                    <option value="transfer">Transfer</option>
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
                   </select>
                 </label>
-                <label>
-                  Review state
-                  <select
-                    value={bulkEditForm.isExcluded}
-                    onChange={(event) =>
-                      setBulkEditForm((current) => ({ ...current, isExcluded: event.target.value as BulkEditForm["isExcluded"] }))
-                    }
-                  >
-                    <option value="">Leave unchanged</option>
-                    <option value="include">Include in totals</option>
-                    <option value="exclude">Ignore in totals</option>
-                  </select>
-                </label>
-                <label>
-                  Transfer state
-                  <select
-                    value={bulkEditForm.isTransfer}
-                    onChange={(event) =>
-                      setBulkEditForm((current) => ({ ...current, isTransfer: event.target.value as BulkEditForm["isTransfer"] }))
-                    }
-                  >
-                    <option value="">Leave unchanged</option>
-                    <option value="true">Mark as transfer</option>
-                    <option value="false">Clear transfer</option>
-                  </select>
-                </label>
-                <label className="span-2">
-                  Notes
-                  <textarea
-                    value={bulkEditForm.description}
-                    onChange={(event) => setBulkEditForm((current) => ({ ...current, description: event.target.value }))}
-                    placeholder="Leave blank to keep existing notes"
-                  />
-                </label>
+                <div className="transactions-bulk-toggle-group">
+                  <span className="transactions-bulk-toggle-group__label">Review state</span>
+                  <div className="transactions-bulk-toggle-group__buttons">
+                    <button
+                      type="button"
+                      className={`pill pill-interactive transactions-filter-pill ${bulkEditForm.isExcluded === "include" ? "pill-is-selected" : ""}`}
+                      onClick={() => setBulkEditForm((current) => ({ ...current, isExcluded: "include" }))}
+                      aria-pressed={bulkEditForm.isExcluded === "include"}
+                    >
+                      Include
+                    </button>
+                    <button
+                      type="button"
+                      className={`pill pill-interactive transactions-filter-pill ${bulkEditForm.isExcluded === "exclude" ? "pill-is-selected" : ""}`}
+                      onClick={() => setBulkEditForm((current) => ({ ...current, isExcluded: "exclude" }))}
+                      aria-pressed={bulkEditForm.isExcluded === "exclude"}
+                    >
+                      Exclude
+                    </button>
+                    <button
+                      type="button"
+                      className="transactions-bulk-toggle-group__clear"
+                      onClick={() => setBulkEditForm((current) => ({ ...current, isExcluded: "" }))}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <div className="transactions-bulk-toggle-group">
+                  <span className="transactions-bulk-toggle-group__label">Transfer</span>
+                  <div className="transactions-bulk-toggle-group__buttons">
+                    <button
+                      type="button"
+                      className={`pill pill-interactive transactions-filter-pill ${bulkEditForm.isTransfer === "false" ? "pill-is-selected" : ""}`}
+                      onClick={() => setBulkEditForm((current) => ({ ...current, isTransfer: "false" }))}
+                      aria-pressed={bulkEditForm.isTransfer === "false"}
+                    >
+                      Not transfer
+                    </button>
+                    <button
+                      type="button"
+                      className={`pill pill-interactive transactions-filter-pill ${bulkEditForm.isTransfer === "true" ? "pill-is-selected" : ""}`}
+                      onClick={() => setBulkEditForm((current) => ({ ...current, isTransfer: "true" }))}
+                      aria-pressed={bulkEditForm.isTransfer === "true"}
+                    >
+                      Transfer
+                    </button>
+                    <button
+                      type="button"
+                      className="transactions-bulk-toggle-group__clear"
+                      onClick={() => setBulkEditForm((current) => ({ ...current, isTransfer: "" }))}
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="form-actions">
@@ -3624,86 +4611,106 @@ function TransactionsPageContent() {
             </div>
 
             <form onSubmit={saveManualTransaction}>
-              <div className="form-grid">
+              <div className="form-grid transactions-manual-grid">
                 <label>
                   Name
                   <input
+                    ref={manualNameInputRef}
                     value={manualForm.merchantRaw}
                     onChange={(event) => setManualForm((current) => ({ ...current, merchantRaw: event.target.value }))}
                     placeholder="Merchant or payee"
                     required
                   />
                 </label>
-                <label>
-                  Date
-                  <input
-                    type="date"
-                    value={manualForm.date}
-                    onChange={(event) => setManualForm((current) => ({ ...current, date: event.target.value }))}
-                    required
-                  />
-                </label>
-                <label>
-                  Account
-                  <select
-                    value={manualForm.accountId}
-                    onChange={(event) => setManualForm((current) => ({ ...current, accountId: event.target.value }))}
+                <div className="transactions-manual-fast-row">
+                  <label>
+                    Date
+                    <input
+                      type="date"
+                      value={manualForm.date}
+                      onChange={(event) => setManualForm((current) => ({ ...current, date: event.target.value }))}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Amount
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={manualForm.amount}
+                      onChange={(event) => setManualForm((current) => ({ ...current, amount: event.target.value }))}
+                      placeholder="0.00"
+                      required
+                    />
+                  </label>
+                  <label>
+                    Type
+                    <select
+                      value={manualForm.type}
+                      onChange={(event) =>
+                        setManualForm((current) => ({
+                          ...current,
+                          type: event.target.value as ManualTransactionForm["type"],
+                        }))
+                      }
+                    >
+                      <option value="debit">Debit</option>
+                      <option value="credit">Credit</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="transactions-manual-advanced-toggle">
+                  <button
+                    className="transactions-manual-advanced-toggle__button"
+                    type="button"
+                    onClick={() => setManualAdvancedOpen((current) => !current)}
+                    aria-expanded={manualAdvancedOpen}
                   >
-                    <option value="">Choose account</option>
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Category
-                  <select
-                    value={manualForm.categoryId}
-                    onChange={(event) => setManualForm((current) => ({ ...current, categoryId: event.target.value }))}
-                  >
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Amount
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={manualForm.amount}
-                    onChange={(event) => setManualForm((current) => ({ ...current, amount: event.target.value }))}
-                    placeholder="0.00"
-                    required
-                  />
-                </label>
-                <label>
-                  Type
-                  <select
-                    value={manualForm.type}
-                    onChange={(event) =>
-                      setManualForm((current) => ({
-                        ...current,
-                        type: event.target.value as ManualTransactionForm["type"],
-                      }))
-                    }
-                  >
-                    <option value="debit">Debit</option>
-                    <option value="credit">Credit</option>
-                  </select>
-                </label>
-                <label className="span-2">
-                  Notes
-                  <textarea
-                    value={manualForm.description}
-                    onChange={(event) => setManualForm((current) => ({ ...current, description: event.target.value }))}
-                    placeholder="Optional note or review context"
-                  />
-                </label>
+                    {manualAdvancedOpen ? "Hide more details" : "More details"}
+                    <span aria-hidden="true">{manualAdvancedOpen ? "−" : "+"}</span>
+                  </button>
+                </div>
+
+                {manualAdvancedOpen ? (
+                  <div className="form-grid transactions-manual-advanced">
+                    <label>
+                      Account
+                      <select
+                        value={manualForm.accountId}
+                        onChange={(event) => setManualForm((current) => ({ ...current, accountId: event.target.value }))}
+                      >
+                        <option value="">Choose account</option>
+                        {accounts.map((account) => (
+                          <option key={account.id} value={account.id}>
+                            {account.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Category
+                      <select
+                        value={manualForm.categoryId}
+                        onChange={(event) => setManualForm((current) => ({ ...current, categoryId: event.target.value }))}
+                      >
+                        {categories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="span-2">
+                      Notes
+                      <textarea
+                        value={manualForm.description}
+                        onChange={(event) => setManualForm((current) => ({ ...current, description: event.target.value }))}
+                        placeholder="Optional note or review context"
+                      />
+                    </label>
+                  </div>
+                ) : null}
               </div>
 
               <div className="form-actions">
@@ -3737,6 +4744,64 @@ function TransactionsPageContent() {
               <button className="icon-button" type="button" onClick={closeTransactionDetail} aria-label="Close notes dialog">
                 ×
               </button>
+            </div>
+
+            <div className="transaction-drawer-summary">
+              <div className="transaction-drawer-summary__row">
+                <span className="transaction-drawer-summary__label">Source</span>
+                <span className={`pill pill-neutral transaction-drawer-summary__pill transaction-drawer-summary__pill--${selectedTransaction.source ?? "unknown"}`}>
+                  {selectedTransaction.source === "manual" ? "Manual" : selectedTransaction.source === "upload" ? "Imported" : "Unknown"}
+                </span>
+                <span className="transaction-drawer-summary__label">Review</span>
+                <span
+                  className={`pill transaction-drawer-summary__pill ${
+                    selectedTransactionWarningReason
+                      ? "transaction-drawer-summary__pill--warn"
+                      : "transaction-drawer-summary__pill--clear"
+                  }`}
+                >
+                  {selectedTransactionWarningReason ?? "Clear"}
+                </span>
+              </div>
+
+              <div className="review-workbench__confidence-grid transaction-drawer-confidence-grid">
+                {selectedTransactionConfidenceSignals.map((signal) => (
+                  <div key={signal.label} className="review-workbench__confidence transaction-drawer-confidence-card">
+                    <div className="review-workbench__confidence-head">
+                      <strong>{signal.label}</strong>
+                      <span>
+                        {getConfidenceLabel(signal.value)} · {signal.value}%
+                      </span>
+                    </div>
+                    <div className="review-workbench__meter" aria-hidden="true">
+                      <span style={{ width: `${signal.value}%` }} />
+                    </div>
+                    <span className="transaction-drawer-confidence-note">{signal.note}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="transaction-drawer-summary__history">
+                <div className="transaction-drawer-summary__history-head">
+                  <span className="transactions-context-strip__label">Change history</span>
+                  <span className="transaction-drawer-summary__history-note">Only saved edits show here.</span>
+                </div>
+                {selectedTransactionHistory.length ? (
+                  <div className="transaction-drawer-summary__history-list">
+                    {selectedTransactionHistory.map((entry, index) => {
+                      const changes = summarizeTransactionChange(entry.before, entry.after, accountNameById, categoryNameById);
+                      return (
+                        <div key={`${entry.before.id}-${index}`} className="transaction-drawer-summary__history-item">
+                          <strong>{changes.length ? changes[0] : "Transaction updated"}</strong>
+                          {changes.length > 1 ? <span>{changes.slice(1).join(" · ")}</span> : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="transaction-drawer-summary__empty">No saved changes yet.</div>
+                )}
+              </div>
             </div>
 
             <div className="form-grid transaction-drawer-grid">
@@ -3812,7 +4877,7 @@ function TransactionsPageContent() {
               </label>
             </div>
 
-            {warningReasonFor(selectedTransaction) ? (
+            {selectedTransactionWarningReason ? (
               <div className="detail-warning-box">
                 <div className="detail-warning-box__header">
                   <span className="detail-warning-box__icon" aria-hidden="true">
@@ -3821,7 +4886,7 @@ function TransactionsPageContent() {
                   <strong>Review warning</strong>
                 </div>
                 <p>
-                  <strong>Warning:</strong> {warningReasonFor(selectedTransaction)}
+                  <strong>Warning:</strong> {selectedTransactionWarningReason}
                 </p>
                 <div className="detail-warning-actions">
                   <button
@@ -4005,49 +5070,69 @@ function TransactionsPageContent() {
         defaultAccountId={accounts[0]?.id ?? null}
         onClose={() => setImportOpen(false)}
         onImported={async (summary) => {
-          if (summary.optimistic) {
-            const optimisticAccount = buildOptimisticImportedAccount(summary);
-            if (optimisticAccount) {
-              flushSync(() => {
-                setIsWorkspaceDataReady(true);
-                setAccounts((current) => {
-                  const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
-                  if (existingIndex >= 0) {
-                    return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
-                  }
-                  return [optimisticAccount, ...current];
-                });
-              });
-            }
-            return;
-          }
+          const previewTransactions = summary.previewTransactions ?? [];
+          const optimisticAccount = buildOptimisticImportedAccount(summary);
+          const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+          const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution);
 
           setPendingImportSummary(summary);
 
-          if (summary.optimisticAccountId) {
-            setAccounts((current) => current.filter((account) => account.id !== summary.optimisticAccountId));
-          }
+          flushSync(() => {
+            setIsWorkspaceDataReady(true);
+
+            if (summary.optimisticAccountId) {
+              setAccounts((current) =>
+                current.filter((account) => {
+                  if (account.id === summary.optimisticAccountId) {
+                    return false;
+                  }
+
+                  if (account.source === "upload") {
+                    return normalizeImportedAccountKey(account.name, account.institution) !== importedAccountKey;
+                  }
+
+                  return true;
+                })
+              );
+            }
+
+            if (importedAccountId) {
+              setTransactions((current) => {
+                const withoutImportedPlaceholders = current.filter(
+                  (transaction) => !(transaction.source === "upload" && transaction.accountId === importedAccountId)
+                );
+                return mergeImportedPreviewTransactions(withoutImportedPlaceholders, previewTransactions);
+              });
+            } else if (previewTransactions.length > 0) {
+              setTransactions((current) => mergeImportedPreviewTransactions(current, previewTransactions));
+            }
+
+            if (optimisticAccount) {
+              setAccounts((current) => {
+                const withoutMatchingUploads = current.filter((account) => {
+                  if (account.source !== "upload") {
+                    return true;
+                  }
+
+                  return normalizeImportedAccountKey(account.name, account.institution) !== importedAccountKey;
+                });
+                const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
+                if (existingIndex >= 0) {
+                  return withoutMatchingUploads.map((account) =>
+                    account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account
+                  );
+                }
+                return [optimisticAccount, ...withoutMatchingUploads];
+              });
+            }
+          });
 
           if (!selectedWorkspaceId) {
             return;
           }
 
-          const optimisticAccount = buildOptimisticImportedAccount(summary);
-          if (optimisticAccount) {
-            flushSync(() => {
-              setIsWorkspaceDataReady(true);
-              setAccounts((current) => {
-                const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
-                if (existingIndex >= 0) {
-                  return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
-                }
-                return [optimisticAccount, ...current];
-              });
-            });
-          }
-          window.setTimeout(() => {
-            void loadWorkspaceData(selectedWorkspaceId, { skipMetadata: true });
-          }, 10000);
+          void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
+          void loadTransactionsPage(selectedWorkspaceId, { background: true });
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />

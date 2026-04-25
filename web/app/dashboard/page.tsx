@@ -1,16 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
-import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
-import { DashboardVisualsIsland } from "@/components/dashboard-visuals-island";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
-import { getGoalDefinition } from "@/lib/goals";
+import { getFinancialExperienceProfile, getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
 import { PostHogEvent } from "@/components/posthog-analytics";
+import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -81,6 +81,14 @@ type VisualCategory = {
   share: number;
 };
 
+type RecurringItemSummary = {
+  name: string;
+  amount: number;
+  count: number;
+  lastSeen: Date;
+  category: string | null;
+};
+
 type WorkspaceSummary = {
   id: string;
   name: string;
@@ -90,12 +98,7 @@ type WorkspaceSummary = {
     institution: string | null;
     type: string;
     currency: string;
-  }>;
-  importFiles: Array<{
-    id: string;
-    fileName: string;
-    status: "processing" | "done" | "failed" | "deleted";
-    uploadedAt: Date;
+    balance: string | null;
   }>;
   _count: {
     accounts: number;
@@ -104,14 +107,10 @@ type WorkspaceSummary = {
   };
 };
 
-type GoalNextStep = {
-  title: string;
-  body: string;
-  href: string;
-  label: string;
-};
+type DashboardExperienceProfile = ReturnType<typeof getFinancialExperienceProfile>;
 
 const toAmount = (value: unknown) => Number(value ?? 0);
+const formatCurrency = (value: number) => currencyFormatter.format(value);
 const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
 
@@ -135,11 +134,9 @@ const formatRelativeDate = (value: Date, now = new Date()) => {
   return relativeTimeFormatter.format(diffDays, "day");
 };
 
-const formatRate = (value: number) => `${value.toFixed(0)}%`;
-
-const getMonthBuckets = (anchor: Date) => {
+const getMonthBuckets = (anchor: Date, count = 6) => {
   const buckets: MonthBucket[] = [];
-  for (let offset = 5; offset >= 0; offset -= 1) {
+  for (let offset = count - 1; offset >= 0; offset -= 1) {
     const date = new Date(anchor.getFullYear(), anchor.getMonth() - offset, 1);
     buckets.push({
       key: toIsoMonth(date),
@@ -278,23 +275,163 @@ const comparePeriods = (currentTransactions: DashboardTransaction[], previousTra
   };
 };
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ import?: string }>;
-}) {
-  const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const session = await getSessionContext();
-  const user = await getOrCreateCurrentUser(session.userId);
-  if (!session.isGuest && !hasCompletedOnboarding(user)) {
-    redirect("/onboarding");
+const recurringItemPattern = /(rent|internet|bill|utility|utilities|subscription|electric|water|phone|insurance|mortgage|loan|fee)/i;
+
+const summarizeRecurringItem = (transactions: DashboardTransaction[]) => {
+  const candidates = transactions.filter((transaction) => {
+    if (transaction.type !== "expense") {
+      return false;
+    }
+
+    return (
+      recurringItemPattern.test(transaction.merchantRaw) ||
+      recurringItemPattern.test(transaction.merchantClean ?? "") ||
+      recurringItemPattern.test(transaction.category?.name ?? "")
+    );
+  });
+
+  if (candidates.length === 0) {
+    return null;
   }
 
-  const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
-  const selectedWorkspace =
-    (await prisma.workspace.findFirst({
-      where: { userId: user.id },
-      orderBy: { createdAt: "asc" },
+  const grouped = new Map<string, RecurringItemSummary>();
+
+  for (const transaction of candidates) {
+    const name = (transaction.merchantClean ?? transaction.merchantRaw).trim();
+    const key = name.toLowerCase();
+    const amount = Math.abs(toAmount(transaction.amount));
+    const category = transaction.category?.name ?? null;
+    const existing = grouped.get(key);
+
+    if (existing) {
+      existing.amount += amount;
+      existing.count += 1;
+      if (transaction.date > existing.lastSeen) {
+        existing.lastSeen = transaction.date;
+      }
+      continue;
+    }
+
+    grouped.set(key, {
+      name,
+      amount,
+      count: 1,
+      lastSeen: transaction.date,
+      category,
+    });
+  }
+
+  return Array.from(grouped.values()).sort(
+    (a, b) => b.count - a.count || b.lastSeen.getTime() - a.lastSeen.getTime() || b.amount - a.amount
+  )[0] ?? null;
+};
+
+function DashboardStreamFallback() {
+  return (
+    <section className="dashboard-home" aria-label="Loading dashboard content">
+      <article className="dashboard-home__hero glass">
+        <div className="dashboard-home__copy">
+          <div className="dashboard-home__kicker-row">
+            <span className="pill pill-subtle">Loading</span>
+            <span className="pill pill-subtle">Goals</span>
+            <span className="pill pill-subtle">Reports</span>
+            <span className="pill pill-subtle">Insights</span>
+          </div>
+          <h3>Pulling your money briefing together</h3>
+          <p>Goals, reports, and insights are loading in a lighter first pass so the page can settle faster.</p>
+        </div>
+        <div className="dashboard-home__hero-visual dashboard-home__hero-visual--loading">
+          <div className="dashboard-home__ring dashboard-home__ring--loading">
+            <div className="dashboard-home__ring-inner">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+            </div>
+          </div>
+          <div className="dashboard-home__hero-visual-grid">
+            <div className="dashboard-home__mini-card dashboard-home__mini-card--loading">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+            </div>
+            <div className="dashboard-home__mini-card dashboard-home__mini-card--loading">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+            </div>
+            <div className="dashboard-home__mini-card dashboard-home__mini-card--loading">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <section className="dashboard-home__summary-grid dashboard-home__summary-grid--visual">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <article key={index} className="dashboard-home__summary-card glass dashboard-home__summary-card--loading">
+            <div className="dashboard-home__summary-card-head">
+              <div className="dashboard-home__summary-card-title">
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+              </div>
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+            </div>
+            <div className="dashboard-home__summary-card-body">
+              <span className="skeleton-block dashboard-home__summary-card-chart" />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <article className="dashboard-home__review-strip glass">
+        <div className="dashboard-home__review-copy">
+          <span className="eyebrow">Loading</span>
+          <strong>Waiting for the review strip</strong>
+          <span>The main summary is loading first so Clover can feel faster to understand.</span>
+        </div>
+      </article>
+    </section>
+  );
+}
+
+async function DashboardStream({
+  user,
+  resolvedSearchParams,
+}: {
+  user: Awaited<ReturnType<typeof getOrCreateCurrentUser>>;
+  resolvedSearchParams?: { import?: string };
+}) {
+  const selectedWorkspaceData = await prisma.workspace.findFirst({
+    where: { userId: user.id },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      name: true,
+      accounts: {
+        select: {
+          id: true,
+          name: true,
+          institution: true,
+          type: true,
+          currency: true,
+          balance: true,
+        },
+      },
+      _count: {
+        select: {
+          accounts: true,
+          importFiles: true,
+          transactions: true,
+        },
+      },
+    },
+  });
+  let workspaceSummary = selectedWorkspaceData;
+
+  if (!workspaceSummary) {
+    const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
+    workspaceSummary = await prisma.workspace.findUnique({
+      where: { id: starterWorkspace.id },
       select: {
         id: true,
         name: true,
@@ -305,16 +442,7 @@ export default async function DashboardPage({
             institution: true,
             type: true,
             currency: true,
-          },
-        },
-        importFiles: {
-          orderBy: { uploadedAt: "desc" },
-          take: 5,
-          select: {
-            id: true,
-            fileName: true,
-            status: true,
-            uploadedAt: true,
+            balance: true,
           },
         },
         _count: {
@@ -325,244 +453,136 @@ export default async function DashboardPage({
           },
         },
       },
-    })) ?? ({
-      id: starterWorkspace.id,
-      name: starterWorkspace.name,
-      accounts: starterWorkspace.accounts.map((account: any) => ({
-        id: account.id,
-        name: account.name,
-        institution: account.institution,
-        type: account.type,
-        currency: account.currency,
-      })),
-      importFiles: [],
-      _count: {
-        accounts: starterWorkspace.accounts.length,
-        importFiles: 0,
-        transactions: 0,
-      },
-    } satisfies WorkspaceSummary);
+    });
+  }
 
-  const selectedImportFiles = selectedWorkspace.importFiles;
-  const isEmptyWorkspace = selectedWorkspace._count.accounts <= 1 && selectedWorkspace._count.transactions === 0 && selectedWorkspace._count.importFiles === 0;
+  if (!workspaceSummary) {
+    redirect("/dashboard");
+  }
 
-  const thirtyDaysAgo = new Date();
+  const accountsWithBalance = workspaceSummary.accounts.filter((account) => account.balance !== null);
+  const linkedBalanceTotal = accountsWithBalance.reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
+  const accountCurrencies = new Set(workspaceSummary.accounts.map((account) => account.currency).filter(Boolean));
+  const trackedBalanceCurrency = accountCurrencies.size === 1 ? workspaceSummary.accounts[0]?.currency ?? null : "mixed";
+  const isEmptyWorkspace =
+    workspaceSummary._count.transactions === 0 && workspaceSummary._count.importFiles === 0 && workspaceSummary._count.accounts <= 1;
+  const experienceProfile = getFinancialExperienceProfile(user.financialExperience);
+
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const sixtyDaysAgo = new Date();
+  const sixtyDaysAgo = new Date(now);
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-  const oneHundredEightyDaysAgo = new Date();
-  oneHundredEightyDaysAgo.setDate(oneHundredEightyDaysAgo.getDate() - 180);
+  const ninetyDaysAgo = new Date(now);
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-  const recentTransactions = await prisma.transaction.findMany({
-    where: {
-      workspaceId: selectedWorkspace.id,
-      isExcluded: false,
-      date: {
-        gte: oneHundredEightyDaysAgo,
-      },
+  const latestImportPromise = prisma.importFile.findFirst({
+    where: { workspaceId: workspaceSummary.id },
+    orderBy: { uploadedAt: "desc" },
+    select: {
+      id: true,
+      fileName: true,
+      status: true,
+      uploadedAt: true,
     },
-    include: {
-      category: true,
-      account: true,
-    },
-    orderBy: { date: "desc" },
-    take: 240,
   });
+
+  const shouldLoadTransactions = !selectedWorkspaceData || workspaceSummary._count.transactions > 0;
+  const transactionsPromise = shouldLoadTransactions
+    ? prisma.transaction.findMany({
+        where: {
+          workspaceId: workspaceSummary.id,
+          isExcluded: false,
+          date: { gte: ninetyDaysAgo },
+        },
+        select: {
+          id: true,
+          date: true,
+          amount: true,
+          isExcluded: true,
+          reviewStatus: true,
+          categoryConfidence: true,
+          categoryId: true,
+          type: true,
+          merchantRaw: true,
+          merchantClean: true,
+          account: {
+            select: {
+              name: true,
+            },
+          },
+          category: {
+            select: {
+              name: true,
+            },
+          },
+        },
+        orderBy: { date: "desc" },
+        take: 180,
+      })
+    : Promise.resolve([] as DashboardTransaction[]);
+
+  const [latestImport, recentTransactions] = await Promise.all([latestImportPromise, transactionsPromise]);
 
   const currentTransactions = recentTransactions as DashboardTransaction[];
   const currentThirtyDayTransactions = currentTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo);
   const previousTransactionsWindow = currentTransactions.filter(
     (transaction) => transaction.date >= sixtyDaysAgo && transaction.date < thirtyDaysAgo
   );
-  const sixMonthTransactionWindow = currentTransactions;
   const currentSummary = comparePeriods(currentThirtyDayTransactions, previousTransactionsWindow);
-  const selectedGoalKey = user.primaryGoal?.trim() ?? null;
-  const selectedGoal = getGoalDefinition(selectedGoalKey);
-  const hasPrimaryGoal = Boolean(selectedGoalKey);
-  const currentNet = currentSummary.net;
-  const currentSavingsRate = currentSummary.current.income > 0 ? currentNet / currentSummary.current.income : null;
-  const previousSavingsRate = currentSummary.previous.income > 0 ? currentSummary.previousNet / currentSummary.previous.income : null;
+  const currentSavingsRate = currentSummary.current.income > 0 ? currentSummary.net / currentSummary.current.income : null;
+  const previousNet = currentSummary.previous.income - currentSummary.previous.expense;
+  const previousSavingsRate = currentSummary.previous.income > 0 ? previousNet / currentSummary.previous.income : null;
+  const spendDelta = currentSummary.current.expense - currentSummary.previous.expense;
+  const recurringItem = summarizeRecurringItem(currentTransactions);
   const uncategorizedTransactions = currentThirtyDayTransactions.filter(
     (transaction) => !transaction.category?.name || !transaction.merchantClean
   );
-  const uncategorizedShare =
-    currentSummary.current.expense > 0
-      ? uncategorizedTransactions.reduce((sum, transaction) => sum + Math.abs(toAmount(transaction.amount)), 0) /
-        currentSummary.current.expense
-      : 0;
-  const duplicateGroups = new Map<string, DashboardTransaction[]>();
-  currentThirtyDayTransactions.forEach((transaction) => {
-    const merchant = (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase();
-    const key = [
-      transaction.date.toISOString().slice(0, 10),
-      transaction.account.name.toLowerCase(),
-      transaction.type,
-      Number(transaction.amount).toFixed(2),
-      merchant,
-    ].join("|");
-
-    const existing = duplicateGroups.get(key) ?? [];
-    existing.push(transaction);
-    duplicateGroups.set(key, existing);
-  });
-  const possibleDuplicateGroups = Array.from(duplicateGroups.values()).filter((group) => group.length > 1);
-  const recurringMerchantSpend = new Map<
-    string,
-    {
-      label: string;
-      amount: number;
-      count: number;
-    }
-  >();
-
-  currentThirtyDayTransactions.forEach((transaction) => {
-    if (transaction.type !== "expense") {
-      return;
-    }
-
-    const label = transaction.merchantClean ?? transaction.merchantRaw;
-    const key = label.trim().toLowerCase();
-    const existing = recurringMerchantSpend.get(key) ?? {
-      label,
-      amount: 0,
-      count: 0,
-    };
-    existing.amount += Math.abs(toAmount(transaction.amount));
-    existing.count += 1;
-    recurringMerchantSpend.set(key, existing);
-  });
-
-  const recurringMerchants = Array.from(recurringMerchantSpend.values())
-    .filter((merchant) => merchant.count > 1)
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, 4);
-
-  const recurringDrag = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0);
-  const recurringShare = currentSummary.current.expense > 0 ? recurringDrag / currentSummary.current.expense : 0;
-  const cleanlinessScore = clamp(Math.round(100 - uncategorizedShare * 120 - possibleDuplicateGroups.length * 7), 20, 100);
-  const trendScore = currentSummary.net >= currentSummary.previousNet ? 18 : 8;
-  const consistencyScore =
-    previousSavingsRate !== null && currentSavingsRate !== null && currentSavingsRate >= previousSavingsRate ? 14 : 7;
-  const savingsScore =
-    currentSavingsRate === null ? 16 : clamp(Math.round((currentSavingsRate * 100 / selectedGoal.targetRate) * 55), 12, 65);
-  const dragPenalty = clamp(Math.round(recurringShare * 100 * 0.35 + Math.max(0, recurringMerchants.length - 1) * 4), 0, 22);
-  const goalScore = clamp(Math.round(savingsScore + trendScore + consistencyScore + cleanlinessScore * 0.2 - dragPenalty), 12, 98);
-  const goalProgressLabel =
-    goalScore >= 85 ? "Ahead of pace" : goalScore >= 70 ? "On pace" : goalScore >= 50 ? "Building momentum" : "Early in the climb";
-  const currentSavingsRatePercent = currentSavingsRate === null ? null : currentSavingsRate * 100;
-  const goalRateGap =
-    currentSavingsRate === null ? null : Math.round(selectedGoal.targetRate - currentSavingsRate * 100);
   const reviewAttentionTransactions = currentThirtyDayTransactions.filter(
     (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || transaction.categoryConfidence < 70
   );
   const reviewAttentionCount = reviewAttentionTransactions.length;
-  const goalProgressCopy =
-    !hasPrimaryGoal
-      ? "Pick a goal so Clover can show you how close you are and what to focus on next."
-      : currentSavingsRate === null
-        ? "Import enough income and spending to calculate a real pace against your goal."
-        : selectedGoalKey === "track_spending"
-          ? `${uncategorizedTransactions.length} item${uncategorizedTransactions.length === 1 ? "" : "s"} still need categorization, and ${reviewAttentionCount} row${
-              reviewAttentionCount === 1 ? "" : "s"
-            } need a quick review.`
-          : goalRateGap !== null && goalRateGap <= 0
-            ? `You are ${Math.abs(goalRateGap)} percentage point${Math.abs(goalRateGap) === 1 ? "" : "s"} ahead of the target pace.`
-            : `You need about ${Math.max(goalRateGap ?? 0, 0)} more percentage point${Math.max(goalRateGap ?? 0, 0) === 1 ? "" : "s"} of savings pace to hit the goal.`;
-  const goalStatusPill =
-    !hasPrimaryGoal
-      ? "No goal set"
-      : `${selectedGoal.title} · ${selectedGoal.targetRate}% target`;
-  const goalNextSteps: GoalNextStep[] = [
-    {
-      title: hasPrimaryGoal ? `Review ${selectedGoal.title.toLowerCase()}` : "Set your goal",
-      body: hasPrimaryGoal
-        ? "Use the Goal page to see the full lane, then come back here for the at-a-glance pace check."
-        : "Pick a focus so Clover can compare your spending pace against a real target.",
-      href: "/goals",
-      label: hasPrimaryGoal ? "Open goals" : "Choose goal",
-    },
-    {
-      title: "Clear the blockers",
-      body:
-        reviewAttentionCount > 0
-          ? `${reviewAttentionCount} transaction${reviewAttentionCount === 1 ? "" : "s"} still need review or categorization.`
-          : "Nothing is waiting in review right now.",
-      href: "/review",
-      label: reviewAttentionCount > 0 ? "Open review" : "View queue",
-    },
-    {
-      title: recurringMerchants[0] ? `Trim ${recurringMerchants[0].label}` : "Watch recurring drag",
-      body: recurringMerchants[0]
-        ? `That recurring spend is carrying ${formatSignedCurrency(recurringMerchants[0].amount)} of pressure.`
-        : "Recurring spend is light right now, so the goal is mostly about consistency.",
-      href: "/reports",
-      label: "Open reports",
-    },
-  ];
-  const goalPaceLabel =
-    currentSavingsRatePercent === null ? "No pace yet" : `${formatRate(currentSavingsRatePercent)} current pace`;
-  const goalTargetLabel = `${selectedGoal.targetRate}% target pace`;
-  const goalGapLabel =
-    currentSavingsRatePercent === null
-      ? "Import enough income to calculate pace"
-      : goalRateGap !== null && goalRateGap > 0
-        ? `${goalRateGap} pts to target`
-        : goalRateGap !== null
-          ? `${Math.abs(goalRateGap)} pts ahead`
-          : "Pace unavailable";
-  const goalScoreCopy =
-    !hasPrimaryGoal
-      ? "Choose a goal to make the dashboard measurable."
-      : currentSavingsRatePercent === null
-        ? "Import enough income and spending to calculate your pace."
-        : `You are ${Math.abs(goalRateGap ?? 0)} percentage point${Math.abs(goalRateGap ?? 0) === 1 ? "" : "s"} ${
-            goalRateGap !== null && goalRateGap <= 0 ? "ahead of" : "away from"
-          } the target pace.`;
-  const goalSnapshot = [
-    {
-      label: "Current pace",
-      value: goalPaceLabel,
-      note: hasPrimaryGoal ? selectedGoal.signal : "Choose a goal to compare pace.",
-    },
-    {
-      label: "Target pace",
-      value: goalTargetLabel,
-      note: goalGapLabel,
-    },
-    {
-      label: "Data health",
-      value: `${cleanlinessScore}% clean`,
-      note:
-        uncategorizedTransactions.length > 0
-          ? `${uncategorizedTransactions.length} uncategorized transaction${uncategorizedTransactions.length === 1 ? "" : "s"}`
-          : "No uncategorized transactions in the last 30 days",
-    },
-    {
-      label: "Recurring drag",
-      value: recurringMerchants.length > 0 ? formatSignedCurrency(recurringDrag) : "Low",
-      note:
-        recurringMerchants.length > 0
-          ? `${recurringMerchants.length} repeated merchant${recurringMerchants.length === 1 ? "" : "s"}`
-          : "Nothing recurring is pulling hard right now",
-    },
-  ];
-
-  const recentConfirmedShare = currentThirtyDayTransactions.length
-    ? Math.round((currentSummary.current.confirmed / currentThirtyDayTransactions.length) * 100)
-    : 0;
   const reviewCoverageText =
     currentThirtyDayTransactions.length > 0
-      ? `${recentConfirmedShare}% of the last 30 days is confirmed or edited`
+      ? `${Math.round((currentSummary.current.confirmed / currentThirtyDayTransactions.length) * 100)}% of the last 30 days is confirmed or edited`
       : "No recent transactions to score yet";
-
-  const latestImport = selectedImportFiles[0] ?? null;
-  const recentImports = selectedImportFiles.slice(0, 3);
-
-  const recentActivityTransactions = currentTransactions.slice(0, 4);
-  const goalRingValue = clamp(goalScore, 0, 100);
-  const monthBuckets = getMonthBuckets(new Date());
-  sixMonthTransactionWindow.forEach((transaction) => {
-    const bucket = getMonthBucket(transaction.date, monthBuckets);
+  const goalKey = user.primaryGoal as GoalKey | null;
+  const goalTargetAmount = user.goalTargetAmount !== null ? Number(user.goalTargetAmount) : null;
+  const goalProgress = getGoalProgressSnapshot({
+    goalKey,
+    targetAmount: goalTargetAmount,
+    currentNet: currentSummary.net,
+    currentSpend: currentSummary.current.expense,
+    monthlyIncome: currentSummary.current.income > 0 ? currentSummary.current.income : null,
+    currentSavingsRate,
+    previousSavingsRate,
+    spendDelta,
+    recurringShare: recurringItem ? recurringItem.amount / Math.max(currentSummary.current.expense, 1) : 0,
+  });
+  const goalProgressPercent = clamp(goalProgress.progressPercent ?? 0, 0, 100);
+  const confidenceScore = clamp(
+    Math.round(66 + currentTransactions.length * 0.12 - reviewAttentionCount * 2.2 - uncategorizedTransactions.length * 1.4),
+    35,
+    99
+  );
+  const confidenceLabel = confidenceScore >= 85 ? "High confidence" : confidenceScore >= 70 ? "Good confidence" : "Watch closely";
+  const latestImportLabel = latestImport ? `${latestImport.fileName} · ${latestImport.status} · ${formatRelativeDate(latestImport.uploadedAt)}` : null;
+  const currentPositionValue = linkedBalanceTotal !== 0 ? linkedBalanceTotal : currentSummary.net;
+  const currentPositionLabel = accountsWithBalance.length > 0 ? (trackedBalanceCurrency === "mixed" ? "Mixed balances" : "Tracked balance") : "Net position";
+  const topCategories = Array.from(currentSummary.current.expenseCategories.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, amount]) => ({
+      name,
+      amount,
+      share: currentSummary.current.expense > 0 ? (amount / currentSummary.current.expense) * 100 : 0,
+    }));
+  const chartWidth = 420;
+  const chartHeight = 160;
+  const chartPadding = 20;
+  const reportsBuckets = getMonthBuckets(now, 3);
+  currentTransactions.forEach((transaction) => {
+    const bucket = getMonthBucket(transaction.date, reportsBuckets);
     if (!bucket || transaction.isExcluded) {
       return;
     }
@@ -575,288 +595,319 @@ export default async function DashboardPage({
     }
     bucket.net = bucket.income - bucket.expense;
   });
+  const { points: monthPoints, linePath } = buildLinePath(reportsBuckets, chartWidth, chartHeight, chartPadding);
+  const goalAction = goalProgress.nextAction;
+  const goalProgressLabel = goalProgress.progressPercent === null ? "Set a target" : `${Math.round(goalProgress.progressPercent)}%`;
+  const topDriver = currentSummary.topCategory?.[0] ?? "No clear driver yet";
+  const topDriverAmount = currentSummary.topCategory?.[1] ?? 0;
+  const insightTrend = currentSummary.biggestMover?.name ?? recurringItem?.name ?? "Patterns are still forming";
+  const insightTrendCopy =
+    currentSummary.biggestMover && currentSummary.biggestMover.previousAmount > 0
+      ? `${formatSignedCurrency(currentSummary.biggestMover.delta)} versus the prior period`
+      : recurringItem
+        ? `${recurringItem.count} repeats over the last 90 days`
+        : "More activity will sharpen the insight";
+  const reviewAttentionText =
+    reviewAttentionCount > 0
+      ? `${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} need review`
+      : "No items need review";
+  const goalSummaryLabel = goalTargetAmount !== null ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}` : goalProgress.currentLabel;
+  const reportDirectionLabel = currentSummary.net >= currentSummary.previousNet ? "Improving" : "Softening";
+  const reportNetLabel = formatSignedCurrency(currentSummary.net);
+  const reportIncomeLabel = formatSignedCurrency(currentSummary.current.income);
+  const reportExpenseLabel = formatSignedCurrency(currentSummary.current.expense);
+  const reportSparkPath =
+    monthPoints.length > 1 ? linePath : `M ${chartPadding} ${chartHeight / 2} L ${chartWidth - chartPadding} ${chartHeight / 2}`;
 
-  const chartWidth = 520;
-  const chartHeight = 210;
-  const chartPadding = 24;
-  const { points: monthPoints, linePath } = buildLinePath(monthBuckets, chartWidth, chartHeight, chartPadding);
-  const topCategoryRows: VisualCategory[] = Array.from(currentSummary.current.expenseCategories.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 4)
-    .map(([name, amount]: any) => ({
-      name,
-      amount,
-      share: currentSummary.current.expense > 0 ? (amount / currentSummary.current.expense) * 100 : 0,
-    }));
   return (
-    <CloverShell
-      active="dashboard"
-      kicker="Goals first"
-      title={hasPrimaryGoal ? selectedGoal.title : "Set your first goal"}
-      subtitle={
-        hasPrimaryGoal
-          ? `Dashboard progress starts with how close you are to ${selectedGoal.title.toLowerCase()}, then shows the blockers still in the way.`
-          : "Set a goal so the dashboard can show your pace, your blockers, and the next move."
-      }
-      showTopbar={false}
-      actions={
-        <>
-          <Link className="pill-link" href="/goals">
-            Goals
-          </Link>
-          <Link className="pill-link" href="/review">
-            Review queue
-          </Link>
-          <Link className="pill-link" href="/reports">
-            Reports
-          </Link>
-        </>
-      }
-    >
+    <>
       <PostHogEvent
         event="dashboard_viewed"
         onceKey={analyticsOnceKey("dashboard_viewed", "session")}
         properties={{
-          workspace_name: selectedWorkspace.name,
-          account_count: selectedWorkspace._count.accounts,
-          transaction_count: selectedWorkspace._count.transactions,
-          import_count: selectedWorkspace._count.importFiles,
+          workspace_name: workspaceSummary.name,
+          account_count: workspaceSummary._count.accounts,
+          transaction_count: workspaceSummary._count.transactions,
+          import_count: workspaceSummary._count.importFiles,
         }}
       />
       {isEmptyWorkspace ? (
-        <EmptyDataCta
-          eyebrow={user.dataWipedAt ? "Fresh start" : "No data yet"}
-          title={user.dataWipedAt ? "Your Clover workspace is clean again." : "Import a statement to unlock the dashboard."}
-          copy={
-            user.dataWipedAt
-              ? "Bring Clover back to life by importing a statement, adding an account, or entering a transaction manually."
-              : "Importing a statement is the fastest way to populate the dashboard. You can also add an account or enter a transaction manually."
-          }
-          importHref="/dashboard?import=1"
-          accountHref="/accounts"
-          transactionHref="/transactions?manual=1"
-        />
+        <div style={{ marginBottom: 20 }}>
+          <EmptyDataCta
+            eyebrow="Get started"
+            title={experienceProfile.emptyStateTitle}
+            copy={experienceProfile.emptyStateCopy}
+            importHref="/dashboard?import=1"
+            accountHref="/accounts"
+            transactionHref="/transactions?manual=1"
+          />
+        </div>
       ) : null}
-      <section className="goals-story">
-        <article className="goals-hero glass">
-          <div className="goals-hero__copy">
-            <div className="goals-hero__header">
-              <span className="pill pill-accent">Goal progress</span>
-              <span className="pill pill-subtle">{goalStatusPill}</span>
-            </div>
-            <h3>
-              {hasPrimaryGoal
-                ? `You are ${goalProgressLabel.toLowerCase()} toward ${selectedGoal.title.toLowerCase()}.`
-                : "Choose a goal so Clover can show how close you are and what to do next."}
-            </h3>
-            <p>{goalProgressCopy}</p>
-
-            <div className="goals-hero__summary">
-              <span className={`pill ${goalScore >= 70 ? "pill-good" : goalScore >= 50 ? "pill-accent" : "pill-warning"}`}>
-                {goalProgressLabel}
-              </span>
-              <span>{hasPrimaryGoal ? selectedGoal.signal : "Set a goal to unlock the pace comparison."}</span>
-              <span>{hasPrimaryGoal ? selectedGoal.coachNote : "The dashboard will show your target, blockers, and momentum."}</span>
+      <section className="dashboard-home">
+        <article className="dashboard-home__hero glass">
+          <div className="dashboard-home__copy">
+            <div className="dashboard-home__kicker-row">
+              <span className="pill pill-accent">Goals</span>
+              <span className="pill pill-subtle">Reports</span>
+              <span className="pill pill-subtle">Insights</span>
+              <span className="pill pill-subtle">{workspaceSummary.name}</span>
+              {latestImport ? <span className="pill pill-subtle">{formatRelativeDate(latestImport.uploadedAt)}</span> : null}
             </div>
 
-            <div className="goals-progress">
-              <div className="goals-progress__head">
-                <strong>{hasPrimaryGoal ? `${selectedGoal.title} pace` : "Goal readiness"}</strong>
-                <span>{goalRingValue} of 100</span>
+            <h3>{goalKey ? "How close are you to your goal?" : "Your finances at a glance, with the important patterns up front."}</h3>
+            <p>{goalProgress.coachCopy}</p>
+
+            <div className="dashboard-home__hero-metrics">
+              <div className="dashboard-home__mini-card">
+                <span>Goal pace</span>
+                <strong>{goalProgressLabel}</strong>
+                <small>{goalProgress.bandLabel}</small>
               </div>
-              <div className="goals-progress__bar" aria-hidden="true">
-                <div className="goals-progress__fill" style={{ width: `${goalRingValue}%` }} />
+              <div className="dashboard-home__mini-card">
+                <span>{currentPositionLabel}</span>
+                <strong>{formatSignedCurrency(currentPositionValue)}</strong>
+                <small>{currentSummary.net >= 0 ? "Positive cash flow" : "Negative cash flow"}</small>
               </div>
-              <p>{goalScoreCopy}</p>
-            </div>
-
-            <div className="hero-actions">
-              <Link className="button button-primary" href="/goals">
-                {hasPrimaryGoal ? "Open goals" : "Choose a goal"}
-              </Link>
-              <Link className="button button-secondary" href={reviewAttentionCount > 0 ? "/review" : "/transactions"}>
-                {reviewAttentionCount > 0 ? "Clear blockers" : "Import more data"}
-              </Link>
-              <Link className="button button-secondary" href="/reports">
-                Weekly summary
-              </Link>
+              <div className="dashboard-home__mini-card">
+                <span>Signal quality</span>
+                <strong>{confidenceLabel}</strong>
+                <small>{reviewCoverageText}</small>
+              </div>
             </div>
           </div>
 
-          <div className="goals-hero__visual">
-            <div className="goals-hero__ring-card">
-              <div className="goals-hero__ring" role="img" aria-label={`Goal readiness at ${goalRingValue}%`}>
-                <svg viewBox="0 0 240 240">
+          <div className="dashboard-home__hero-visual">
+            <div
+              className="dashboard-home__ring"
+              style={{
+                background: `conic-gradient(var(--accent) 0 ${goalProgressPercent}%, rgba(15, 23, 42, 0.08) ${goalProgressPercent}% 100%)`,
+              }}
+            >
+              <div className="dashboard-home__ring-inner">
+                <strong>{goalProgress.progressPercent === null ? "Set" : `${Math.round(goalProgress.progressPercent)}%`}</strong>
+                <span>{goalProgress.bandLabel}</span>
+              </div>
+            </div>
+            <div className="dashboard-home__hero-visual-grid">
+              <div className="dashboard-home__mini-card">
+                <span>Goals</span>
+                <strong>{goalSummaryLabel}</strong>
+                <small>{goalAction}</small>
+              </div>
+              <div className="dashboard-home__mini-card">
+                <span>Reports</span>
+                <strong>{reportNetLabel}</strong>
+                <small>
+                  {reportIncomeLabel} in, {reportExpenseLabel} out
+                </small>
+              </div>
+              <div className="dashboard-home__mini-card">
+                <span>Insights</span>
+                <strong>{topDriver}</strong>
+                <small>
+                  {insightTrend} · {insightTrendCopy} · {formatCurrency(topDriverAmount)} this period
+                </small>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <section className="dashboard-home__summary-grid dashboard-home__summary-grid--visual">
+          <article className="dashboard-home__summary-card glass">
+            <div className="dashboard-home__summary-card-head">
+              <div>
+                <p className="eyebrow">Goals</p>
+                <h4>{goalKey ? `How close are you to ${goalProgress.bandLabel.toLowerCase()}?` : "Set a goal to make this dashboard more useful"}</h4>
+              </div>
+              <span className="dashboard-visual-pill">{goalProgressLabel}</span>
+            </div>
+            <div className="dashboard-home__summary-card-body">
+              <div className="dashboard-home__goal-ring-row">
+                <div
+                  className="dashboard-home__ring dashboard-home__ring--compact"
+                  style={{
+                    background: `conic-gradient(var(--accent) 0 ${goalProgressPercent}%, rgba(15, 23, 42, 0.08) ${goalProgressPercent}% 100%)`,
+                  }}
+                >
+                  <div className="dashboard-home__ring-inner">
+                    <strong>{goalProgress.progressPercent === null ? "—" : `${Math.round(goalProgress.progressPercent)}%`}</strong>
+                    <span>{goalProgress.bandTone === "positive" ? "On track" : goalProgress.bandLabel}</span>
+                  </div>
+                </div>
+                <div className="dashboard-home__mini-card dashboard-home__mini-card--stacked">
+                  <strong>{goalProgress.label}</strong>
+                  <span>
+                    {goalSummaryLabel}
+                    {goalTargetAmount !== null ? ` · target ${formatCurrency(goalTargetAmount)}` : ""}
+                  </span>
+                  <small>{goalAction}</small>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article className="dashboard-home__summary-card glass">
+            <div className="dashboard-home__summary-card-head">
+              <div>
+                <p className="eyebrow">Reports</p>
+                <h4>How the last three months moved</h4>
+              </div>
+              <span className={`dashboard-visual-pill ${currentSummary.net >= currentSummary.previousNet ? "positive" : "negative"}`}>
+                {reportDirectionLabel}
+              </span>
+            </div>
+            <div className="dashboard-home__summary-card-body">
+              <div className="dashboard-line-chart dashboard-line-chart--compact" role="img" aria-label="Net cash flow over the last three months">
+                <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
                   <defs>
-                    <linearGradient id="dashboard-goals-ring-gradient" x1="0" x2="1" y1="0" y2="1">
-                      <stop offset="0%" stopColor="rgba(34, 197, 94, 0.25)" />
-                      <stop offset="100%" stopColor="rgba(3, 168, 192, 0.92)" />
+                    <linearGradient id="dashboard-flow-gradient" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="rgba(3, 168, 192, 0.34)" />
+                      <stop offset="100%" stopColor="rgba(3, 168, 192, 0.03)" />
                     </linearGradient>
                   </defs>
-                  <circle cx="120" cy="120" r="84" className="goals-ring__track" />
-                  <circle
-                    cx="120"
-                    cy="120"
-                    r="84"
-                    className="goals-ring__progress"
-                    stroke="url(#dashboard-goals-ring-gradient)"
-                    style={{
-                      strokeDasharray: `${2 * Math.PI * 84 * (goalRingValue / 100)} ${2 * Math.PI * 84}`,
-                    }}
+                  <path
+                    d={`${reportSparkPath} L ${chartWidth - chartPadding} ${chartHeight - chartPadding} L ${chartPadding} ${chartHeight - chartPadding} Z`}
+                    fill="url(#dashboard-flow-gradient)"
                   />
+                  <path d={reportSparkPath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                  {monthPoints.map((point) => (
+                    <circle key={point.key} cx={point.x} cy={point.y} r="4.5" fill="white" stroke="var(--accent)" strokeWidth="3" />
+                  ))}
                 </svg>
-                <div className="goals-hero__ring-copy">
-                  <strong>{goalRingValue}%</strong>
-                  <span>{hasPrimaryGoal ? selectedGoal.title : "Goal readiness"}</span>
-                </div>
               </div>
-
-              <div className="goals-hero__stats">
-                {goalSnapshot.map((item: any) => (
-                  <div key={item.label} className="goals-stat">
-                    <span>{item.label}</span>
-                    <strong>{item.value}</strong>
-                    <small>{item.note}</small>
-                  </div>
-                ))}
+              <div className="dashboard-home__reports-grid">
+                <div className="dashboard-home__mini-card">
+                  <span>Net position</span>
+                  <strong>{reportNetLabel}</strong>
+                  <small>{currentSummary.net >= currentSummary.previousNet ? "Up versus the prior window" : "Down versus the prior window"}</small>
+                </div>
+                <div className="dashboard-home__mini-card">
+                  <span>Income</span>
+                  <strong>{reportIncomeLabel}</strong>
+                  <small>{currentSummary.current.income > currentSummary.previous.income ? "Higher than last window" : "Lower than last window"}</small>
+                </div>
+                <div className="dashboard-home__mini-card">
+                  <span>Spending</span>
+                  <strong>{reportExpenseLabel}</strong>
+                  <small>{currentSummary.current.expense > currentSummary.previous.expense ? "More than last window" : "Less than last window"}</small>
+                </div>
               </div>
             </div>
-          </div>
-        </article>
-      </section>
+          </article>
 
-      {/* Keep the dashboard visuals as a separate client island so the shell can stream cleanly. */}
-      <DashboardVisualsIsland
-        currentNetDelta={currentSummary.netDelta}
-        currentExpense={currentSummary.current.expense}
-        monthPoints={monthPoints}
-        linePath={linePath}
-        chartWidth={chartWidth}
-        chartHeight={chartHeight}
-        chartPadding={chartPadding}
-        topCategoryRows={topCategoryRows}
-      />
-
-      <DashboardImportLauncher workspaceId={selectedWorkspace.id} accounts={selectedWorkspace.accounts} initialOpen={resolvedSearchParams?.import === "1"} />
-
-      <article className="goals-actions glass">
-        <div className="goals-panel__head">
-          <div>
-            <p className="eyebrow">What to do next</p>
-            <h4>The three moves that will improve your goal fastest</h4>
-          </div>
-          <div className="goals-panel__stat">
-            <strong>{goalProgressLabel}</strong>
-            <span>{hasPrimaryGoal ? selectedGoal.title : "Set a goal first"}</span>
-          </div>
-        </div>
-
-        <div className="goals-action-grid">
-          {goalNextSteps.map((step: any, index: number) => (
-            <article key={step.title} className="goals-action">
-              <div className="goals-lane__top">
-                <div className="goals-lane__icon" aria-hidden="true">
-                  <span>{String(index + 1)}</span>
-                </div>
-                <span className="pill pill-subtle">{step.label}</span>
-              </div>
+          <article className="dashboard-home__summary-card glass">
+            <div className="dashboard-home__summary-card-head">
               <div>
-                <strong>{step.title}</strong>
-                <span>{step.body}</span>
+                <p className="eyebrow">Insights</p>
+                <h4>What is driving the month</h4>
               </div>
-              <Link className="pill-link pill-link--inline" href={step.href}>
-                {step.label}
-              </Link>
-            </article>
-          ))}
-        </div>
-      </article>
+              <span className="dashboard-visual-pill">{confidenceLabel}</span>
+            </div>
+            <div className="dashboard-home__summary-card-body">
+              <div className="dashboard-home__insight-bars">
+                {topCategories.length > 0 ? (
+                  topCategories.map((category, index) => (
+                    <div key={category.name} className="dashboard-home__insight-bar">
+                      <div className="dashboard-home__insight-bar-meta">
+                        <strong>{category.name}</strong>
+                        <span>
+                          {formatCurrency(category.amount)} · {formatCompactPercentage(category.share)}
+                        </span>
+                      </div>
+                      <div className="dashboard-home__insight-track" aria-hidden="true">
+                        <div className={`dashboard-home__insight-fill dashboard-home__insight-fill--${index % 4}`} style={{ width: `${Math.max(category.share, 10)}%` }} />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="dashboard-home__item dashboard-home__item--empty">
+                    <strong>No insight signal yet</strong>
+                    <span>Import a statement or add transactions to surface the strongest pattern.</span>
+                  </div>
+                )}
+              </div>
+              <div className="dashboard-home__insight-footer">
+                <div className="dashboard-home__mini-card">
+                  <span>Recurring item</span>
+                  <strong>{recurringItem ? recurringItem.name : "Nothing repeating yet"}</strong>
+                  <small>
+                    {recurringItem
+                      ? `${formatCurrency(recurringItem.amount / recurringItem.count)} per transaction · last seen ${formatRelativeDate(recurringItem.lastSeen)}`
+                      : "Clover will surface repeating bills here"}
+                  </small>
+                </div>
+                <div className="dashboard-home__mini-card">
+                  <span>Signal quality</span>
+                  <strong>{Math.round(confidenceScore)}%</strong>
+                  <small>{reviewCoverageText}</small>
+                </div>
+              </div>
+            </div>
+          </article>
+        </section>
 
-      <section className="overview-insight-grid" id="insights">
-        <article className="glass insight-card overview-panel overview-panel--large">
-          <p className="eyebrow">Goal health</p>
-          <h4>What is helping or slowing the goal</h4>
-          <div className="overview-panel__list overview-panel__list--wide">
-            <div className="overview-panel__item">
-              <strong>Current pace</strong>
-              <span>{goalPaceLabel}</span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>Target pace</strong>
-              <span>{goalTargetLabel}</span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>Gap</strong>
-              <span>{goalGapLabel}</span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>Data health</strong>
-              <span>
-                {reviewCoverageText}
-                {uncategorizedTransactions.length > 0 ? ` · ${uncategorizedTransactions.length} need categorization` : ""}
-              </span>
-            </div>
+        <article className="dashboard-home__review-strip glass">
+          <div className="dashboard-home__review-copy">
+            <p className="eyebrow">Review, if needed</p>
+            <strong>{reviewAttentionText}</strong>
+            <span>{latestImportLabel ?? "Import a statement to populate the dashboard with live data."}</span>
+          </div>
+          <div className="dashboard-home__review-actions">
+            <Link className="button button-primary button-small" href="/review">
+              Open review
+            </Link>
+            <Link className="pill-link pill-link--inline" href="/dashboard?import=1">
+              Import statement
+            </Link>
           </div>
         </article>
 
-        <article className="glass insight-card overview-panel">
-          <p className="eyebrow">Latest import</p>
-          <h4>Keep the trail visible</h4>
-          <div className="overview-panel__list">
-            <div className="overview-panel__item">
-              <strong>{latestImport ? latestImport.fileName : "No import yet"}</strong>
-              <span>
-                {latestImport ? `${latestImport.status} · ${formatDate(latestImport.uploadedAt)}` : "Upload a statement to unlock the dashboard"}
-              </span>
-            </div>
-            <div className="overview-panel__item">
-              <strong>Recent uploads</strong>
-              <span>
-                {recentImports.length > 0
-                  ? recentImports.map((file: any) => `${file.fileName} (${file.status})`).join(" · ")
-                  : "No uploads in this workspace yet"}
-              </span>
-            </div>
-          </div>
-        </article>
+        <DashboardImportLauncher
+          workspaceId={workspaceSummary.id}
+          accounts={workspaceSummary.accounts.map((account) => ({
+            id: account.id,
+            name: account.name,
+            institution: account.institution,
+            type: account.type,
+            currency: account.currency,
+          }))}
+          initialOpen={resolvedSearchParams?.import === "1"}
+        />
       </section>
+    </>
+  );
+}
 
-      <section className="overview-activity-grid">
-        <article className="glass insight-card overview-panel overview-panel--full">
-          <div className="overview-panel__head">
-            <div>
-              <p className="eyebrow">Activity</p>
-              <h4>Recent imports and transactions</h4>
-            </div>
-          </div>
-          <div className="overview-activity-list">
-            {recentImports.map((file: any) => (
-              <div key={file.id} className="overview-panel__item">
-                <strong>{file.fileName}</strong>
-                <span>
-                  <span className={`status status--${file.status}`}>{file.status}</span> · {formatRelativeDate(file.uploadedAt)}
-                </span>
-              </div>
-            ))}
-            {recentActivityTransactions.map((transaction: any) => (
-              <div key={transaction.id} className="overview-panel__item">
-                <strong>{transaction.merchantClean || transaction.merchantRaw}</strong>
-                <span>
-                  {transaction.account.name}
-                  {transaction.category?.name ? ` · ${transaction.category.name}` : ""} ·{" "}
-                  {currencyFormatter.format(Math.abs(toAmount(transaction.amount)))}
-                </span>
-              </div>
-            ))}
-            {recentImports.length === 0 && recentActivityTransactions.length === 0 ? (
-              <div className="overview-panel__item">
-                <strong>No recent activity</strong>
-                <span>Import a statement or add a transaction to start populating this workspace.</span>
-              </div>
-            ) : null}
-          </div>
-        </article>
-      </section>
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ import?: string }>;
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const session = await getSessionContext();
+  const user = await getOrCreateCurrentUser(session.userId);
+  if (!session.isGuest && !hasCompletedOnboarding(user)) {
+    redirect("/onboarding");
+  }
+
+  const experienceProfile = getFinancialExperienceProfile(user.financialExperience);
+
+  return (
+    <CloverShell
+      active="dashboard"
+      kicker="Home"
+      title="Your finances at a glance"
+      subtitle={experienceProfile.dashboardSubtitle}
+      showTopbar={false}
+      actions={
+        <Link className="pill-link" href="/goals">
+          Open goals
+        </Link>
+      }
+    >
+      <Suspense fallback={<DashboardStreamFallback />}>
+        <DashboardStream user={user} resolvedSearchParams={resolvedSearchParams} />
+      </Suspense>
     </CloverShell>
   );
 }

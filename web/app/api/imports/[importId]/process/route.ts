@@ -1,10 +1,17 @@
 import { requireAuth } from "@/lib/auth";
 import { buildImportKey } from "@/lib/import-keys";
+import {
+  detectStatementMetadataFromText,
+  fetchImportFileCompat,
+  loadStatementTemplate,
+  mergeStatementMetadataWithTemplate,
+  updateImportFileCompat,
+  buildStatementFingerprint,
+} from "@/lib/data-engine";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
-import { fetchImportFileCompat, updateImportFileCompat } from "@/lib/data-engine";
+import { readImportedFileText } from "@/lib/import-file-text.server";
 import { uploadObject } from "@/lib/s3";
 import { prisma } from "@/lib/prisma";
-import { processImportFileText } from "@/workers/import-processor";
 import { NextResponse, after } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -60,10 +67,34 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const file = uploadedFile as File;
       const bytes = new Uint8Array(await file.arrayBuffer());
       await uploadObject(String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)), bytes, file.type || "application/octet-stream");
+      stage = "reading statement metadata";
+      let metadata = null;
+      try {
+        const text = await readImportedFileText(
+          {
+            storageKey: String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
+            fileType: file.type || "application/octet-stream",
+            fileName: file.name || String(importFile.fileName ?? "imported-file"),
+          },
+          password
+        );
+        const detectedMetadata = detectStatementMetadataFromText(text);
+        const statementFingerprint = buildStatementFingerprint(text, detectedMetadata, file.name || String(importFile.fileName ?? "imported-file"), file.type || "application/octet-stream");
+        const template = await loadStatementTemplate({
+          workspaceId: String(importFile.workspaceId),
+          fingerprint: statementFingerprint,
+        });
+        metadata = mergeStatementMetadataWithTemplate(detectedMetadata, template?.metadata && typeof template.metadata === "object" && !Array.isArray(template.metadata)
+          ? (template.metadata as Record<string, unknown>)
+          : null);
+      } catch (error) {
+        console.warn("Unable to pre-read statement metadata", { importId, error });
+      }
       stage = "scheduling background processing";
       after(async () => {
         try {
-          await processImportFileText(importId, { password });
+          const { processImportFileText } = await import("@/workers/import-processor");
+          await processImportFileText(importId, { password, actorUserId: userId });
         } catch (error) {
           console.error("Background import processing failed", { importId, error });
           await updateImportFileCompat(importId, {
@@ -72,6 +103,16 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         }
       });
       queued = true;
+      return NextResponse.json({
+        ok: true,
+        queued,
+        processed: false,
+        importedRows: 0,
+        duplicate: false,
+        status: "queued",
+        importFileId: importId,
+        metadata,
+      });
     } else {
       stage = "loading import record";
       if (!importFile) {
@@ -94,7 +135,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
 
       stage = "processing statement text";
-      const result = await processImportFileText(importId, { text, password });
+      const { processImportFileText } = await import("@/workers/import-processor");
+      const result = await processImportFileText(importId, { text, password, actorUserId: userId });
 
       return NextResponse.json({
         ok: true,
@@ -104,18 +146,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         duplicate: Boolean(result.duplicate),
         status: "done",
         importFileId: importId,
+        metadata: result.metadata,
       });
     }
-
-    return NextResponse.json({
-      ok: true,
-      queued,
-      processed: false,
-      importedRows: 0,
-      duplicate: false,
-      status: "queued",
-      importFileId: importId,
-    });
   } catch (error) {
     console.error("Import processing failed", { stage, error });
     return NextResponse.json(

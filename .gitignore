@@ -12,3 +12,4 @@ web/.env.local
 *.app.broken/
 *.app.bundle/
 .vercel
+.env*.local

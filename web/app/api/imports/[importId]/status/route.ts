@@ -45,7 +45,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         accountId: importFile.accountId,
         confirmedAt: importFile.confirmedAt?.toISOString() ?? null,
         uploadedAt: importFile.uploadedAt.toISOString(),
-        deletedAt: importFile.deletedAt?.toISOString() ?? null,
         updatedAt: importFile.updatedAt.toISOString(),
       },
       parsedRowsCount,
