@@ -110,9 +110,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const bytes = new Uint8Array(await file.arrayBuffer());
       await uploadObject(String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)), bytes, file.type || "application/octet-stream");
       stage = "reading statement metadata";
-      let metadata = null;
+      let metadata: Record<string, unknown> | null = null;
+      let extractedText = "";
       try {
-        const text = await readImportedFileText(
+        extractedText = await readImportedFileText(
           {
             storageKey: String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
             fileType: file.type || "application/octet-stream",
@@ -120,8 +121,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           },
           password
         );
-        const detectedMetadata = detectStatementMetadataFromText(text);
-        const statementFingerprint = buildStatementFingerprint(text, detectedMetadata, file.name || String(importFile.fileName ?? "imported-file"), file.type || "application/octet-stream");
+        const detectedMetadata = detectStatementMetadataFromText(extractedText);
+        const statementFingerprint = buildStatementFingerprint(extractedText, detectedMetadata, file.name || String(importFile.fileName ?? "imported-file"), file.type || "application/octet-stream");
         const template = await loadStatementTemplate({
           workspaceId: String(importFile.workspaceId),
           fingerprint: statementFingerprint,
@@ -132,6 +133,34 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       } catch (error) {
         console.warn("Unable to pre-read statement metadata", { importId, error: summarizeErrorForLog(error) });
       }
+
+      const parsedMetadataConfidence = Number((metadata as { confidence?: unknown } | null)?.confidence ?? 0);
+      const shouldProcessInline =
+        extractedText.trim().length > 0 &&
+        parsedMetadataConfidence >= 85 &&
+        bytes.length <= 8_000_000;
+
+      if (shouldProcessInline) {
+        stage = "processing statement text";
+        await updateImportFileCompat(importId, {
+          status: "processing",
+        });
+
+        const { processImportFileText } = await import("@/workers/import-processor");
+        const result = await processImportFileText(importId, { text: extractedText, password, actorUserId: userId });
+
+        return NextResponse.json({
+          ok: true,
+          queued: false,
+          processed: true,
+          importedRows: result.imported,
+          duplicate: Boolean(result.duplicate),
+          status: "done",
+          importFileId: importId,
+          metadata: result.metadata,
+        });
+      }
+
       stage = "scheduling background processing";
       try {
         await enqueueImportProcessing({
