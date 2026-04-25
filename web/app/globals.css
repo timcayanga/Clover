@@ -6977,13 +6977,13 @@ label {
 .line-item-header {
   display: grid;
   grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
-  gap: 10px;
+  gap: 6px;
   align-items: center;
-  padding: 7px 4px 6px;
+  padding: 2px 2px 1px;
   color: var(--muted-2);
   border-bottom: 1px solid var(--stroke);
-  font-size: 0.68rem;
-  letter-spacing: 0.1em;
+  font-size: 0.6rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   position: sticky;
   top: 0;
@@ -7002,16 +7002,16 @@ label {
   font: inherit;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   cursor: default;
 }
 
 .line-item-header-cell--name {
-  padding-left: 2px;
+  padding-left: 1px;
 }
 
 .line-item-header-cell--select {
-  width: 28px;
+  width: 26px;
 }
 
 .line-item-header-cell--select-all {
@@ -7019,7 +7019,7 @@ label {
 }
 
 .line-item-header-cell--icon {
-  width: 40px;
+  width: 36px;
 }
 
 .line-item-header-cell--amount {
