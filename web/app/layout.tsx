@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
-import { PostHogAnalytics, PostHogClerkIdentity } from "@/components/posthog-analytics";
+import { PostHogAnalytics } from "@/components/posthog-analytics";
 
 export const metadata: Metadata = {
   title: {
@@ -28,7 +28,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         {publishableKey ? (
           <ClerkProvider publishableKey={publishableKey}>
             <PostHogAnalytics />
-            <PostHogClerkIdentity />
             {children}
           </ClerkProvider>
         ) : (
