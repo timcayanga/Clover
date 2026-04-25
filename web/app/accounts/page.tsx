@@ -1350,9 +1350,6 @@ function AccountsPageContent() {
         <section className="accounts-main-grid">
           <div className="accounts-list-column">
             <div className="accounts-list-head">
-              <div>
-                <p className="eyebrow">Account list</p>
-              </div>
               <div className="accounts-list-controls">
                 <label className="accounts-search">
                   <ActionIcon name="search" />
