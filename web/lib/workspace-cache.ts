@@ -46,13 +46,26 @@ export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cach
 const isCachedRecordArray = (value: unknown): value is CachedRecord[] =>
   Array.isArray(value) && value.every((entry) => entry && typeof entry === "object");
 
-const readJsonCache = <T>(key: string): T | null => {
+const getSessionStorage = () => {
   if (typeof window === "undefined") {
     return null;
   }
 
   try {
-    const raw = window.localStorage.getItem(key);
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+};
+
+const readJsonCache = <T>(key: string): T | null => {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return null;
+  }
+
+  try {
+    const raw = storage.getItem(key);
     if (!raw) {
       return null;
     }
@@ -64,11 +77,22 @@ const readJsonCache = <T>(key: string): T | null => {
 };
 
 const writeJsonCache = (key: string, value: unknown) => {
-  if (typeof window === "undefined") {
+  const storage = getSessionStorage();
+  if (!storage) {
     return;
   }
 
-  window.localStorage.setItem(key, JSON.stringify(value));
+  storage.setItem(key, JSON.stringify(value));
+};
+
+const clearStorageKeys = (storage: Storage | null, keys: string[]) => {
+  if (!storage) {
+    return;
+  }
+
+  for (const key of keys) {
+    storage.removeItem(key);
+  }
 };
 
 const createImportedAccountCandidates = (account: ImportedWorkspaceAccount) => {
@@ -103,6 +127,11 @@ const mergeImportedTransactions = <T extends CachedRecord>(items: T[], transacti
 
   return [...(transactions as T[]), ...filtered];
 };
+
+export const mergeImportedWorkspaceTransactions = <T extends CachedRecord>(
+  items: T[],
+  transactions: ImportedWorkspaceTransaction[]
+) => mergeImportedTransactions(items, transactions);
 
 export const readAccountsWorkspaceCache = (): AccountsWorkspaceCacheState | null => {
   const cache = readJsonCache<AccountsWorkspaceCacheState>(accountsWorkspaceCacheKey);
@@ -335,4 +364,21 @@ export const clearWorkspaceCache = (workspaceId: string) => {
       snapshots: nextTransactionsSnapshots,
     } satisfies TransactionsWorkspaceCacheState);
   }
+};
+
+export const clearAllWorkspaceCaches = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  clearStorageKeys(window.sessionStorage, [accountsWorkspaceCacheKey, transactionsWorkspaceCacheKey]);
+  clearStorageKeys(window.localStorage, [accountsWorkspaceCacheKey, transactionsWorkspaceCacheKey]);
+};
+
+export const clearLegacyWorkspaceCaches = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  clearStorageKeys(window.localStorage, [accountsWorkspaceCacheKey, transactionsWorkspaceCacheKey]);
 };

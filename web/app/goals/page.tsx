@@ -435,13 +435,6 @@ export default async function GoalsPage() {
   const currentNet = currentSummary.income - currentSummary.expense;
   const previousNet = previousSummary.income - previousSummary.expense;
   const currentSpend = currentSummary.expense;
-  const goalProgress = getGoalProgressSnapshot({
-    goalKey: selectedGoalKey as GoalKey | null,
-    targetAmount: goalTargetAmount,
-    currentNet,
-    currentSpend,
-    monthlyIncome,
-  });
   const currentSavingsRate = currentSummary.income > 0 ? currentNet / currentSummary.income : null;
   const previousSavingsRate = previousSummary.income > 0 ? (previousSummary.income - previousSummary.expense) / previousSummary.income : null;
   const spendDelta = previousSummary.expense > 0 ? ((currentSummary.expense - previousSummary.expense) / previousSummary.expense) * 100 : null;
@@ -492,6 +485,17 @@ export default async function GoalsPage() {
 
   const recurringDrag = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0);
   const recurringShare = currentSpend > 0 ? recurringDrag / currentSpend : 0;
+  const goalProgress = getGoalProgressSnapshot({
+    goalKey: selectedGoalKey as GoalKey | null,
+    targetAmount: goalTargetAmount,
+    currentNet,
+    currentSpend,
+    monthlyIncome,
+    currentSavingsRate,
+    previousSavingsRate,
+    spendDelta,
+    recurringShare,
+  });
   const uncategorizedShare = currentSpend > 0
     ? uncategorizedTransactions.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0) / currentSpend
     : 0;
@@ -513,7 +517,6 @@ export default async function GoalsPage() {
 
   const weeklyProgress = clamp(goalScore + (currentSavingsRate !== null && currentSavingsRate >= targetRate / 100 ? 8 : 0) - (recurringShare > 0.25 ? 6 : 0), 12, 100);
 
-  const chart = createGoalChart(monthBuckets);
   const paceBars = [
     {
       label: "Current pace",
@@ -535,43 +538,51 @@ export default async function GoalsPage() {
     },
   ];
 
-  const dayBuckets = Array.from({ length: 28 }, (_, index) => {
-    const date = new Date(now);
-    date.setDate(now.getDate() - (27 - index));
-    return {
-      key: toIsoDate(date),
-      day: date.getDate(),
-      count: 0,
-      net: 0,
-      expense: 0,
-      income: 0,
-    };
-  });
+  const movementHighlights = [
+    {
+      label: "Savings rate",
+      value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
+      note:
+        currentSavingsRate === null
+          ? "Need more income context"
+          : currentSavingsRate >= (targetRate / 100)
+            ? "Strong enough to support the goal"
+            : "Below the target line",
+      tone: currentSavingsRate !== null && currentSavingsRate >= targetRate / 100 ? "positive" : "warning",
+    },
+    {
+      label: "Spend pressure",
+      value: spendDelta === null ? "N/A" : formatPercent(spendDelta),
+      note: spendDelta === null ? "No prior comparison" : spendDelta > 0 ? "Spending is rising" : "Spending is easing",
+      tone: spendDelta === null ? "neutral" : spendDelta > 0 ? "negative" : "positive",
+    },
+    {
+      label: "Recurring share",
+      value: formatPercent(recurringShare * 100),
+      note: recurringShare > 0.25 ? "Automatic costs need a look" : "Recurring costs are manageable",
+      tone: recurringShare > 0.25 ? "warning" : "positive",
+    },
+    {
+      label: "Goal band",
+      value: goalProgress.bandLabel,
+      note: goalProgress.nextAction,
+      tone: goalProgress.bandTone,
+    },
+  ] as const;
 
-  const dayBucketMap = new Map(dayBuckets.map((bucket) => [bucket.key, bucket]));
-  currentWindowTransactions.forEach((transaction) => {
-    const bucket = dayBucketMap.get(toIsoDate(transaction.date));
-    if (!bucket) {
-      return;
-    }
-
-    const amount = Number(transaction.amount);
-    bucket.count += 1;
-    if (transaction.type === "income") {
-      bucket.income += amount;
-    } else if (transaction.type === "expense") {
-      bucket.expense += Math.abs(amount);
-    }
-    bucket.net = bucket.income - bucket.expense;
-  });
-
-  const dailyHeatmap = dayBuckets.map((bucket) => {
-    const activityScore = bucket.count === 0 ? 0 : Math.min(4, Math.round(bucket.count / 2 + (bucket.net > 0 ? 1 : 0)));
-    return {
-      ...bucket,
-      intensity: activityScore,
-    };
-  });
+  const goalActionSteps = [
+    goalProgress.nextAction,
+    hasGoalTarget
+      ? goalProgress.achieved
+        ? "Keep the transfer amount on autopilot so the win repeats next month."
+        : "Check the goal again after the next spending update to see whether the band improved."
+      : "Set the target amount first so Clover can measure the next month cleanly.",
+    recurringShare > 0.25
+      ? "Review recurring costs and trim the easiest fixed expense."
+      : currentSavingsRate !== null && currentSavingsRate >= targetRate / 100
+        ? "Keep the current savings rhythm and protect the transfer from small leaks."
+        : "Move one flexible dollar into the goal before the week ends.",
+  ];
 
   const goalSnapshot = [
     {
@@ -601,7 +612,9 @@ export default async function GoalsPage() {
         hasGoalTarget && goalProgress.progressPercent !== null
           ? `${Math.round(goalProgress.progressPercent)}%`
           : "No target yet",
-      note: hasGoalTarget ? `Tracked from ${goalTargetSource ?? "your saved goal"}` : `${uncategorizedTransactions.length} items still need attention`,
+      note: hasGoalTarget
+        ? `${goalProgress.bandLabel} · tracked from ${goalTargetSource ?? "your saved goal"}`
+        : `${uncategorizedTransactions.length} items still need attention`,
     },
     {
       label: "Momentum",
@@ -619,6 +632,33 @@ export default async function GoalsPage() {
       reached,
     };
   });
+
+  const progressBands = [
+    {
+      label: "Ahead",
+      threshold: 75,
+      copy: "The goal is comfortably within reach.",
+      tone: "positive" as const,
+    },
+    {
+      label: "On pace",
+      threshold: 50,
+      copy: "Keep the current rhythm and protect the transfer.",
+      tone: "neutral" as const,
+    },
+    {
+      label: "Building",
+      threshold: 25,
+      copy: "A small adjustment can move the month in your favor.",
+      tone: "warning" as const,
+    },
+    {
+      label: "Setup",
+      threshold: 0,
+      copy: hasGoalTarget ? "You have a target, now let the month do the work." : "Set the first number so Clover can start measuring.",
+      tone: hasGoalTarget ? "negative" as const : "neutral" as const,
+    },
+  ];
 
   const weeklySignals = [
     {
@@ -671,7 +711,7 @@ export default async function GoalsPage() {
           ? `You reached your ${formatCurrency(goalTargetAmount)} monthly target. That is a real win.`
           : goalProgress.remainingAmount !== null
             ? `${formatCurrency(goalProgress.remainingAmount)} left to go this month. Keep the rhythm steady.`
-            : playbook.alertTemplates[0]
+            : goalProgress.nextAction
         : "Set a monthly target to unlock live progress tracking.",
       icon: goalProgress.achieved ? "spark" : hasGoalTarget ? "chart" : "target",
     },
@@ -877,26 +917,37 @@ export default async function GoalsPage() {
             <article className="goals-pace-card glass">
               <div className="goals-panel__head">
                 <div>
-                  <p className="eyebrow">Pace check</p>
-                  <h4>Target vs current rhythm</h4>
+                  <p className="eyebrow">Progress bands</p>
+                  <h4>Where the month stands right now</h4>
                 </div>
                 <div className="goals-panel__stat">
-                  <strong>{formatPercent(targetRate)}</strong>
-                  <span>Goal line</span>
+                  <strong>{goalProgress.bandLabel}</strong>
+                  <span>{goalProgress.bandTone === "positive" ? "Ahead of plan" : goalProgress.bandTone === "negative" ? "Needs a reset" : "Staying steady"}</span>
                 </div>
               </div>
 
               <div className="goals-pace__bars">
-                {paceBars.map((bar) => (
-                  <div key={bar.label} className={`goals-pace__bar ${bar.tone}`}>
+                {progressBands.map((band) => (
+                  <div key={band.label} className={`goals-pace__bar ${band.tone}`}>
                     <div className="goals-pace__label">
-                      <span>{bar.label}</span>
-                      <strong>{formatPercent(bar.value)}</strong>
+                      <span>{band.label}</span>
+                      <strong>{band.threshold}%</strong>
                     </div>
                     <div className="goals-pace__track" aria-hidden="true">
-                      <div className="goals-pace__fill" style={{ width: `${clamp(bar.value, 8, 100)}%` }} />
+                      <div
+                        className="goals-pace__fill"
+                        style={{
+                          width:
+                            goalProgress.progressPercent === null
+                              ? "0%"
+                              : `${clamp(goalProgress.progressPercent >= band.threshold ? 100 : (goalProgress.progressPercent / Math.max(band.threshold, 1)) * 100, 8, 100)}%`,
+                        }}
+                      />
                     </div>
-                    <small>{bar.note}</small>
+                    <small>
+                      {band.copy}
+                      {goalProgress.progressPercent !== null && goalProgress.progressPercent >= band.threshold ? " This band is cleared." : ""}
+                    </small>
                   </div>
                 ))}
               </div>
@@ -904,46 +955,40 @@ export default async function GoalsPage() {
           </div>
         </article>
 
-        <article className="goals-chart-panel glass">
+        <article className="goals-action-plan glass">
           <div className="goals-panel__head">
             <div>
-              <p className="eyebrow">Momentum line</p>
-              <h4>Your last six months at a glance</h4>
+              <p className="eyebrow">Action plan</p>
+              <h4>What Clover wants you to do next</h4>
             </div>
             <div className="goals-panel__stat">
-              <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
-              <span>{currentNet >= previousNet ? "A stronger lane than last month" : "A softer lane than last month"}</span>
+              <strong>{goalProgress.bandLabel}</strong>
+              <span>{goalProgress.achieved ? "Target hit" : "One clear step ahead"}</span>
             </div>
           </div>
 
-          <div className="goals-chart">
-            <svg viewBox={`0 0 ${chart.chartWidth} ${chart.chartHeight}`} role="img" aria-label="Net cash flow trend over the last six months">
-              <defs>
-                <linearGradient id="goals-chart-fill" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="rgba(3,168,192,0.26)" />
-                  <stop offset="100%" stopColor="rgba(3,168,192,0.04)" />
-                </linearGradient>
-              </defs>
-              <path
-                d={`${chart.path} L ${chart.points[chart.points.length - 1].x.toFixed(1)} ${chart.chartHeight - chart.chartPadding} L ${
-                  chart.points[0].x.toFixed(1)
-                } ${chart.chartHeight - chart.chartPadding} Z`}
-                fill="url(#goals-chart-fill)"
-              />
-              <path d={chart.path} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-              {chart.points.map((point) => (
-                <circle key={point.key} cx={point.x} cy={point.y} r="5.5" fill="white" stroke="var(--accent)" strokeWidth="3" />
-              ))}
-            </svg>
+          <div className="goals-action-plan__lead">
+            <strong>{goalProgress.coachCopy}</strong>
+            <p>{goalProgress.nextAction}</p>
+          </div>
 
-            <div className="goals-chart__labels">
-              {chart.points.map((point) => (
-                <div key={point.key} className="goals-chart__label">
-                  <span>{point.label}</span>
-                  <strong>{formatSignedCurrency(point.net)}</strong>
-                </div>
-              ))}
-            </div>
+          <div className="goals-action-plan__steps" aria-label="Goal actions">
+            {goalActionSteps.map((step, index) => (
+              <div key={step} className="goals-action-plan__step">
+                <span>Step {index + 1}</span>
+                <strong>{step}</strong>
+              </div>
+            ))}
+          </div>
+
+          <div className="goals-action-plan__list">
+            {movementHighlights.map((item) => (
+              <div key={item.label} className={`goals-action-plan__item ${item.tone}`}>
+                <span>{item.label}</span>
+                <strong>{item.value}</strong>
+                <small>{item.note}</small>
+              </div>
+            ))}
           </div>
         </article>
 
@@ -951,33 +996,31 @@ export default async function GoalsPage() {
           <article className="goals-heatmap glass">
             <div className="goals-panel__head">
               <div>
-                <p className="eyebrow">Consistency grid</p>
-                <h4>The last 28 days in color</h4>
+                <p className="eyebrow">Current pressure</p>
+                <h4>What is helping or slowing the goal</h4>
               </div>
               <div className="goals-panel__stat">
-                <strong>{dailyHeatmap.filter((day) => day.count > 0).length}</strong>
-                <span>Active days</span>
+                <strong>{formatPercent(recurringShare * 100)}</strong>
+                <span>Recurring share</span>
               </div>
             </div>
 
-            <div className="goals-heatmap__legend">
-              <span>Quiet</span>
-              <span>Steady</span>
-              <span>Strong</span>
-              <span>Locked in</span>
-            </div>
-
-            <div className="goals-heatmap__grid" role="img" aria-label="Daily activity heatmap for the last 28 days">
-              {dailyHeatmap.map((day) => (
-                <div
-                  key={day.key}
-                  className={`goals-heatmap__cell is-${day.intensity}`}
-                  title={`${day.key}: ${day.count} transaction${day.count === 1 ? "" : "s"}${day.net !== 0 ? `, net ${formatSignedCurrency(day.net)}` : ""}`}
-                >
-                  <span>{day.day}</span>
-                  <small>{day.count > 0 ? day.count : "·"}</small>
-                </div>
-              ))}
+            <div className="goals-heatmap__grid goals-heatmap__grid--actions">
+              <div className="goals-heatmap__cell is-4">
+                <span>Spend delta</span>
+                <strong>{spendDelta === null ? "N/A" : formatPercent(spendDelta)}</strong>
+                <small>{spendDelta === null ? "No prior comparison" : spendDelta > 0 ? "Spending is higher than before" : "Spending is easing"}</small>
+              </div>
+              <div className="goals-heatmap__cell is-3">
+                <span>Savings rate</span>
+                <strong>{currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}</strong>
+                <small>{currentSavingsRate === null ? "Need more income context" : goalProgress.bandLabel}</small>
+              </div>
+              <div className="goals-heatmap__cell is-2">
+                <span>Remaining</span>
+                <strong>{goalProgress.remainingAmount === null ? "Set target" : formatCurrency(goalProgress.remainingAmount)}</strong>
+                <small>{goalProgress.achieved ? "Target reached" : "Amount left to close the gap"}</small>
+              </div>
             </div>
           </article>
 
@@ -1061,9 +1104,19 @@ export default async function GoalsPage() {
                   </div>
                   <h5>{goal.title}</h5>
                   <p>{goal.description}</p>
+                  <div className="goals-lane__metrics">
+                    <div>
+                      <span>Target line</span>
+                      <strong>{goal.targetRate}%</strong>
+                    </div>
+                    <div>
+                      <span>Current band</span>
+                      <strong>{isActive ? goalProgress.bandLabel : "Not active"}</strong>
+                    </div>
+                  </div>
                   <div className="goals-lane__footer">
                     <span>{goal.signal}</span>
-                    {isActive ? <strong>{selectedGoal.coachNote}</strong> : <strong>{goal.coachNote}</strong>}
+                    {isActive ? <strong>{goalProgress.nextAction}</strong> : <strong>{goal.coachNote}</strong>}
                   </div>
                 </article>
               );
@@ -1117,12 +1170,13 @@ export default async function GoalsPage() {
                       </span>
                       {milestone.label}
                     </strong>
-                    <span>{milestone.reached ? "Reached" : `${Math.round(milestone.percent)}%`}</span>
+                    <span>{milestone.reached ? "Reached" : `Threshold ${milestone.threshold}%`}</span>
                   </div>
                   <p>{milestone.detail}</p>
                   <div className="goals-milestone__bar" aria-hidden="true">
                     <div className="goals-milestone__fill" style={{ width: `${milestone.percent}%` }} />
                   </div>
+                  <small>{milestone.reached ? "Keep this behavior consistent through month-end." : `You are ${Math.max(0, milestone.threshold - goalScore)} points away from this checkpoint.`}</small>
                 </div>
               ))}
             </div>
