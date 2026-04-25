@@ -2173,7 +2173,7 @@ const parseBdoSavingsImportText = (text: string) => {
 const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = text.replace(/\u00a0/g, " ");
   const compact = normalizeWhitespace(normalized);
-  if (!/\bGCASH\b/i.test(compact)) {
+  if (!/\bGCash Transaction History\b/i.test(compact)) {
     return null;
   }
 
@@ -2188,7 +2188,7 @@ const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null 
     /\bSTARTING BALANCE\b/i,
   ].filter((pattern) => pattern.test(compact)).length;
 
-  if (gcashHeaderSignals < 2) {
+  if (gcashHeaderSignals < 3) {
     return null;
   }
 
