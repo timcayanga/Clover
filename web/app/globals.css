@@ -14078,7 +14078,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .settings-hub {
   display: grid;
-  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  grid-template-columns: minmax(160px, 200px) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
@@ -14088,7 +14088,7 @@ input.transaction-inline-edit--amount::placeholder {
   top: 24px;
   display: grid;
   gap: 0;
-  padding: 12px;
+  padding: 10px;
   max-height: calc(100vh - 48px);
 }
 
@@ -14119,7 +14119,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .settings-hub__menu-item strong {
   color: var(--text);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
@@ -14302,11 +14302,12 @@ input.transaction-inline-edit--amount::placeholder {
 
 .settings-plan-grid {
   align-items: stretch;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .settings-plan-card {
   display: grid;
-  gap: 8px;
+  gap: 14px;
   width: 100%;
   padding: 18px;
   text-align: left;
@@ -14330,6 +14331,11 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 10px;
 }
 
+.settings-plan-card__header {
+  display: grid;
+  gap: 8px;
+}
+
 .settings-plan-card__title-row strong {
   font-size: 16px;
   font-weight: 600;
@@ -14346,6 +14352,98 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--muted);
   line-height: 1.5;
   font-size: 13px;
+}
+
+.settings-plan-card__summary {
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 13px;
+}
+
+.settings-plan-card__features {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-plan-card__features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.settings-plan-card__check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.12);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  flex: none;
+  margin-top: 1px;
+}
+
+.settings-plan-usage {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.settings-plan-usage__card {
+  display: grid;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(247, 249, 250, 0.78);
+}
+
+.settings-plan-usage__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-plan-usage__head strong {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.settings-plan-usage__head span {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.settings-plan-usage__meter {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+}
+
+.settings-plan-usage__meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), rgba(3, 168, 192, 0.6));
+}
+
+.settings-plan-usage__card p {
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 12px;
 }
 
 .settings-plan-panel {
@@ -14376,6 +14474,26 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 12px;
 }
 
+.settings-plan-panel__current {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-plan-panel__note-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-plan-panel__note-grid span {
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.08);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .settings-plan-panel__paypal {
   min-width: 0;
 }
@@ -14393,6 +14511,11 @@ input.transaction-inline-edit--amount::placeholder {
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+}
+
+.settings-pill--muted {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--muted);
 }
 
 .settings-helper {
@@ -14421,7 +14544,8 @@ input.transaction-inline-edit--amount::placeholder {
   .settings-choice-grid,
   .settings-data-grid,
   .settings-data-delete,
-  .settings-plan-grid {
+  .settings-plan-grid,
+  .settings-plan-usage {
     grid-template-columns: 1fr;
   }
 }

@@ -31,6 +31,12 @@ type SettingsHubProps = {
   paypalClientId?: string | null;
   paypalMonthlyPlanId?: string | null;
   paypalAnnualPlanId?: string | null;
+  planUsage: {
+    accountCount: number;
+    cashAccountCount: number;
+    monthlyUploadCount: number;
+    transactionCount: number;
+  };
 };
 
 function SettingsIcon({ path }: { path: string }) {
@@ -76,6 +82,69 @@ const themeOptions: Array<{
   { value: "system", label: "Match system", helper: "Follows the device preference automatically." },
 ];
 
+const planCards = [
+  {
+    value: "free" as const,
+    title: "Free",
+    price: "PHP 0",
+    badge: "Current",
+    helper: "Start here during beta and keep the core Clover workflow open.",
+    description: "Best for getting a small workspace organized without commitment.",
+    features: [
+      "Manual transaction tracking",
+      "Receipt scanning",
+      "5 accounts in addition to Cash",
+      "10 monthly uploads total",
+      "1,000 transaction rows",
+      "Basic reports",
+    ],
+  },
+  {
+    value: "annual" as const,
+    title: "Annual",
+    price: "PHP 1,299 / year",
+    badge: "Default",
+    helper: "Best value. Selected automatically for new users when Plan opens.",
+    description: "Upgrade for the yearly price and keep the same Pro feature set.",
+    features: [
+      "Everything in Free",
+      "Unlimited accounts",
+      "Unlimited monthly uploads",
+      "Unlimited transaction rows",
+      "Advanced reports",
+      "Future Pro features",
+    ],
+  },
+  {
+    value: "monthly" as const,
+    title: "Monthly",
+    price: "PHP 149 / month",
+    helper: "Flexible Pro access for people who prefer month-to-month billing.",
+    description: "Upgrade for shorter commitment while keeping the same Pro feature set.",
+    features: [
+      "Everything in Free",
+      "Unlimited accounts",
+      "Unlimited monthly uploads",
+      "Unlimited transaction rows",
+      "Advanced reports",
+      "Future Pro features",
+    ],
+  },
+] as const;
+
+const usageLimits = {
+  free: {
+    accounts: 5,
+    uploads: 10,
+    transactions: 1000,
+  },
+  pro: {
+    accounts: null,
+    uploads: null,
+    transactions: null,
+  },
+} as const;
+
 function getResolvedTheme(mode: ThemeMode) {
   if (mode !== "system") {
     return mode;
@@ -86,14 +155,6 @@ function getResolvedTheme(mode: ThemeMode) {
   }
 
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
-
-function formatPlanLabel(planTier: "free" | "pro", interval: BillingInterval | null) {
-  if (planTier === "free") {
-    return "Free";
-  }
-
-  return interval ? getBillingPlanLabel(interval) : "Pro";
 }
 
 function downloadBlob(blob: Blob, fileName: string) {
@@ -107,6 +168,22 @@ function downloadBlob(blob: Blob, fileName: string) {
   window.URL.revokeObjectURL(url);
 }
 
+function formatLimitCount(used: number, limit: number | null, suffix?: string) {
+  if (limit === null) {
+    return `Unlimited${suffix ? ` ${suffix}` : ""}`;
+  }
+
+  return `${used.toLocaleString()} / ${limit.toLocaleString()}${suffix ? ` ${suffix}` : ""}`;
+}
+
+function getUsagePercent(used: number, limit: number | null) {
+  if (limit === null) {
+    return 100;
+  }
+
+  return Math.max(0, Math.min((used / limit) * 100, 100));
+}
+
 export function SettingsHub({
   workspaceId,
   workspaceName,
@@ -118,6 +195,7 @@ export function SettingsHub({
   paypalClientId,
   paypalMonthlyPlanId,
   paypalAnnualPlanId,
+  planUsage,
 }: SettingsHubProps) {
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>("profile");
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
@@ -126,7 +204,6 @@ export function SettingsHub({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const currentPlanLabel = useMemo(() => formatPlanLabel(planTier, billingSubscription?.interval ?? null), [billingSubscription?.interval, planTier]);
   const subscriptionStatusLabel = useMemo(() => {
     if (!billingSubscription) {
       return null;
@@ -216,8 +293,35 @@ export function SettingsHub({
   };
 
   const isFree = planTier === "free";
-  const selectedPlanLabel = selectedPlan === "free" ? "Free" : getBillingPlanLabel(selectedPlan);
-  const selectedPlanPrice = selectedPlan === "free" ? "PHP 0" : selectedPlan === "annual" ? "PHP 1,299 / year" : "PHP 149 / month";
+  const currentPlanValue = planTier === "free" ? "free" : billingSubscription?.interval ?? "annual";
+  const currentPlanCard = planCards.find((plan) => plan.value === currentPlanValue) ?? planCards[0];
+  const selectedPlanCard = planCards.find((plan) => plan.value === selectedPlan) ?? planCards[1];
+  const usageLimit = isFree ? usageLimits.free : usageLimits.pro;
+  const planUsageCards = [
+    {
+      label: "Accounts",
+      value: formatLimitCount(planUsage.accountCount, usageLimit.accounts, "accounts"),
+      note: isFree
+        ? `${planUsage.cashAccountCount > 0 ? "Cash is included." : "Cash is ready to be added."} Free covers 5 accounts in addition to Cash.`
+        : "Pro keeps accounts unlimited.",
+      used: planUsage.accountCount,
+      limit: usageLimit.accounts,
+    },
+    {
+      label: "Monthly uploads",
+      value: formatLimitCount(planUsage.monthlyUploadCount, usageLimit.uploads, "uploads"),
+      note: isFree ? "Free covers 10 uploads per month." : "Pro keeps uploads unlimited.",
+      used: planUsage.monthlyUploadCount,
+      limit: usageLimit.uploads,
+    },
+    {
+      label: "Transaction rows",
+      value: formatLimitCount(planUsage.transactionCount, usageLimit.transactions, "rows"),
+      note: isFree ? "Free covers 1,000 rows total." : "Pro keeps transaction rows unlimited.",
+      used: planUsage.transactionCount,
+      limit: usageLimit.transactions,
+    },
+  ];
 
   return (
     <section className="settings-hub">
@@ -434,42 +538,49 @@ export function SettingsHub({
               <div>
                 <p className="eyebrow">Plan</p>
                 <h4>Billing and access</h4>
-                <p>See what you are on now, and switch cadence when you are ready.</p>
+                <p>Pick a plan, see what is included, and keep an eye on the limits that matter most.</p>
               </div>
               <div className="settings-profile-summary">
                 <span className="settings-profile-summary__label">Current plan</span>
-                <strong>{currentPlanLabel}</strong>
+                <strong>{currentPlanCard.title}</strong>
                 {subscriptionStatusLabel ? (
                   <>
                     <span className="settings-profile-summary__label">Status</span>
                     <strong>{subscriptionStatusLabel}</strong>
                   </>
                 ) : null}
+                <span className="settings-profile-summary__label">Usage snapshot</span>
+                <strong>
+                  {formatLimitCount(planUsage.transactionCount, usageLimit.transactions, "transaction rows")}
+                  <br />
+                  {formatLimitCount(planUsage.accountCount, usageLimit.accounts, "accounts")}
+                </strong>
               </div>
             </div>
 
+            <div className="settings-plan-usage" aria-label="Current plan usage">
+              {planUsageCards.map((usage) => {
+                const percent = getUsagePercent(usage.used, usage.limit);
+
+                return (
+                  <article key={usage.label} className="settings-plan-usage__card">
+                    <div className="settings-plan-usage__head">
+                      <strong>{usage.label}</strong>
+                      <span>{usage.value}</span>
+                    </div>
+                    <div className="settings-plan-usage__meter" aria-hidden="true">
+                      <span style={{ width: `${percent}%` }} />
+                    </div>
+                    <p>{usage.note}</p>
+                  </article>
+                );
+              })}
+            </div>
+
             <div className="settings-plan-grid" role="radiogroup" aria-label="Billing plan">
-              {[
-                {
-                  value: "free" as const,
-                  title: "Free",
-                  price: "PHP 0",
-                  helper: "Great for beta testing and basic review flows.",
-                },
-                {
-                  value: "annual" as const,
-                  title: "Annual",
-                  price: "PHP 1,299 / year",
-                  helper: "Best value. Selected by default when you open Plan.",
-                },
-                {
-                  value: "monthly" as const,
-                  title: "Monthly",
-                  price: "PHP 149 / month",
-                  helper: "Flexible if you want a shorter commitment.",
-                },
-              ].map((option) => {
+              {planCards.map((option) => {
                 const isSelected = selectedPlan === option.value;
+                const isCurrent = currentPlanValue === option.value;
 
                 return (
                   <button
@@ -478,12 +589,29 @@ export function SettingsHub({
                     className={`settings-plan-card${isSelected ? " is-selected" : ""}`}
                     onClick={() => setSelectedPlan(option.value)}
                   >
-                    <span className="settings-plan-card__title-row">
-                      <strong>{option.title}</strong>
-                      {planTier === "free" && option.value === "annual" ? <span className="settings-pill">Default</span> : null}
-                    </span>
-                    <span className="settings-plan-card__price">{option.price}</span>
-                    <span className="settings-plan-card__helper">{option.helper}</span>
+                    <div className="settings-plan-card__header">
+                      <span className="settings-plan-card__title-row">
+                        <strong>{option.title}</strong>
+                        {isCurrent ? (
+                          <span className="settings-pill">Current</span>
+                        ) : option.value === "annual" ? (
+                          <span className="settings-pill settings-pill--muted">Default</span>
+                        ) : null}
+                      </span>
+                      <span className="settings-plan-card__price">{option.price}</span>
+                      <span className="settings-plan-card__helper">{option.helper}</span>
+                    </div>
+                    <p className="settings-plan-card__summary">{option.description}</p>
+                    <ul className="settings-plan-card__features">
+                      {option.features.map((feature) => (
+                        <li key={feature}>
+                          <span className="settings-plan-card__check" aria-hidden="true">
+                            ✓
+                          </span>
+                          <span>{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
                   </button>
                 );
               })}
@@ -493,20 +621,27 @@ export function SettingsHub({
               {planTier === "free" ? (
                 <>
                   <div className="settings-plan-panel__copy">
-                    <h5>{selectedPlanLabel}</h5>
+                    <h5>{selectedPlanCard.title}</h5>
                     <p>
                       {selectedPlan === "free"
                         ? "You are currently on the Free plan."
-                        : `Checkout for the ${selectedPlanLabel} plan will appear below.`}
+                        : `Checkout for the ${selectedPlanCard.title} plan will appear below.`}
                     </p>
                   </div>
 
                   {selectedPlan === "free" ? (
-                    <p className="settings-helper">Free stays available during the beta and includes the core Clover workflow.</p>
+                    <div className="settings-plan-panel__current">
+                      <p className="settings-helper">Free stays available during the beta and includes the core Clover workflow.</p>
+                      <div className="settings-plan-panel__note-grid">
+                        <span>Accounts: 5 + Cash</span>
+                        <span>Monthly uploads: 10</span>
+                        <span>Transaction rows: 1,000</span>
+                      </div>
+                    </div>
                   ) : selectedPlan === "annual" ? (
                     paypalClientId && paypalAnnualPlanId ? (
                       <div className="settings-plan-panel__checkout">
-                        <p className="settings-helper">{selectedPlanPrice}</p>
+                        <p className="settings-helper">Annual billing selected. Choose this plan to move into Pro with yearly billing.</p>
                         <PayPalSubscribeButton
                           clientId={paypalClientId}
                           planId={paypalAnnualPlanId}
@@ -519,7 +654,7 @@ export function SettingsHub({
                     )
                   ) : paypalClientId && paypalMonthlyPlanId ? (
                     <div className="settings-plan-panel__checkout">
-                      <p className="settings-helper">{selectedPlanPrice}</p>
+                      <p className="settings-helper">Monthly billing selected. Choose this plan to move into Pro with monthly billing.</p>
                       <PayPalSubscribeButton
                         clientId={paypalClientId}
                         planId={paypalMonthlyPlanId}

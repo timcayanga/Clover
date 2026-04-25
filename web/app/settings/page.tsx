@@ -61,6 +61,34 @@ export default async function SettingsPage() {
     redirect("/dashboard");
   }
 
+  const currentDate = new Date();
+  const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+  const [accountCount, cashAccountCount, monthlyUploadCount, transactionCount] = await Promise.all([
+    prisma.account.count({
+      where: {
+        workspaceId: selectedWorkspace.id,
+        type: { not: "cash" },
+      },
+    }),
+    prisma.account.count({
+      where: {
+        workspaceId: selectedWorkspace.id,
+        type: "cash",
+      },
+    }),
+    prisma.importFile.count({
+      where: {
+        workspaceId: selectedWorkspace.id,
+        uploadedAt: { gte: startOfMonth },
+      },
+    }),
+    prisma.transaction.count({
+      where: {
+        workspaceId: selectedWorkspace.id,
+      },
+    }),
+  ]);
+
   const billingSubscription = await getUserBillingSubscription(user.id);
 
   return (
@@ -89,6 +117,12 @@ export default async function SettingsPage() {
         paypalClientId={env.PAYPAL_CLIENT_ID ?? null}
         paypalMonthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
         paypalAnnualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? null}
+        planUsage={{
+          accountCount,
+          cashAccountCount,
+          monthlyUploadCount,
+          transactionCount,
+        }}
       />
     </CloverShell>
   );
