@@ -9,9 +9,8 @@ import { DashboardVisualsIsland } from "@/components/dashboard-visuals-island";
 import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
-import { getGoalDefinition } from "@/lib/goals";
 import { getFinancialExperienceProfile } from "@/lib/goals";
-import { PostHogEvent } from "@/components/posthog-analytics";
+import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -80,6 +79,14 @@ type VisualCategory = {
   name: string;
   amount: number;
   share: number;
+};
+
+type RecurringItemSummary = {
+  name: string;
+  amount: number;
+  count: number;
+  lastSeen: Date;
+  category: string | null;
 };
 
 type WorkspaceSummary = {
@@ -271,6 +278,57 @@ const comparePeriods = (currentTransactions: DashboardTransaction[], previousTra
   };
 };
 
+const recurringItemPattern = /(rent|internet|bill|utility|utilities|subscription|electric|water|phone|insurance|mortgage|loan|fee)/i;
+
+const summarizeRecurringItem = (transactions: DashboardTransaction[]) => {
+  const candidates = transactions.filter((transaction) => {
+    if (transaction.type !== "expense") {
+      return false;
+    }
+
+    return (
+      recurringItemPattern.test(transaction.merchantRaw) ||
+      recurringItemPattern.test(transaction.merchantClean ?? "") ||
+      recurringItemPattern.test(transaction.category?.name ?? "")
+    );
+  });
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const grouped = new Map<string, RecurringItemSummary>();
+
+  for (const transaction of candidates) {
+    const name = (transaction.merchantClean ?? transaction.merchantRaw).trim();
+    const key = name.toLowerCase();
+    const amount = Math.abs(toAmount(transaction.amount));
+    const category = transaction.category?.name ?? null;
+    const existing = grouped.get(key);
+
+    if (existing) {
+      existing.amount += amount;
+      existing.count += 1;
+      if (transaction.date > existing.lastSeen) {
+        existing.lastSeen = transaction.date;
+      }
+      continue;
+    }
+
+    grouped.set(key, {
+      name,
+      amount,
+      count: 1,
+      lastSeen: transaction.date,
+      category,
+    });
+  }
+
+  return Array.from(grouped.values()).sort(
+    (a, b) => b.count - a.count || b.lastSeen.getTime() - a.lastSeen.getTime() || b.amount - a.amount
+  )[0] ?? null;
+};
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -342,12 +400,17 @@ export default async function DashboardPage({
     } satisfies WorkspaceSummary);
 
   const selectedImportFiles = workspaceSummary.importFiles;
+  const cashAccountCount = workspaceSummary.accounts.filter((account) => account.type === "cash").length;
   const accountsWithBalance = workspaceSummary.accounts.filter((account) => account.balance !== null);
   const linkedBalanceTotal = accountsWithBalance.reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
+  const accountCurrencies = new Set(workspaceSummary.accounts.map((account) => account.currency).filter(Boolean));
+  const trackedBalanceCurrency = accountCurrencies.size === 1 ? workspaceSummary.accounts[0]?.currency ?? null : "mixed";
   const isEmptyWorkspace =
     workspaceSummary._count.transactions === 0 && workspaceSummary._count.importFiles === 0 && workspaceSummary._count.accounts <= 1;
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const sixtyDaysAgo = new Date();
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
   const oneHundredEightyDaysAgo = new Date();
@@ -376,9 +439,7 @@ export default async function DashboardPage({
   );
   const sixMonthTransactionWindow = currentTransactions;
   const currentSummary = comparePeriods(currentThirtyDayTransactions, previousTransactionsWindow);
-  const selectedGoal = getGoalDefinition(user.primaryGoal?.trim() ?? null);
-  const hasPrimaryGoal = Boolean(user.primaryGoal?.trim());
-  const currentNet = currentSummary.net;
+  const importedThisWeekCount = selectedImportFiles.filter((file) => file.uploadedAt >= sevenDaysAgo).length;
   const uncategorizedTransactions = currentThirtyDayTransactions.filter(
     (transaction) => !transaction.category?.name || !transaction.merchantClean
   );
@@ -386,6 +447,7 @@ export default async function DashboardPage({
     (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || transaction.categoryConfidence < 70
   );
   const reviewAttentionCount = reviewAttentionTransactions.length;
+  const nextRecurringItem = summarizeRecurringItem(currentTransactions);
   const reviewPreviewTransactions = reviewAttentionTransactions
     .slice()
     .sort((a, b) => a.categoryConfidence - b.categoryConfidence || b.date.getTime() - a.date.getTime())
@@ -397,40 +459,22 @@ export default async function DashboardPage({
     currentThirtyDayTransactions.length > 0
       ? `${recentConfirmedRatio}% of the last 30 days is confirmed or edited`
       : "No recent transactions to score yet";
-  const currentNetLabel = currentNet >= 0 ? "Positive net cash flow" : "Negative net cash flow";
   const experienceProfile = getFinancialExperienceProfile(user.financialExperience);
-  const currentPositionCopy =
-    currentSummary.current.income > 0
-      ? user.financialExperience === "beginner"
-        ? `In the last 30 days, Clover found ${currencyFormatter.format(currentSummary.current.income)} in income and ${currencyFormatter.format(
-            currentSummary.current.expense
-          )} in spending. ${reviewAttentionCount > 0 ? `${reviewAttentionCount} items still need review.` : "The review queue is clear."}`
-        : user.financialExperience === "advanced"
-          ? `Income ${currencyFormatter.format(currentSummary.current.income)} and spending ${currencyFormatter.format(
-              currentSummary.current.expense
-            )} in the last 30 days. ${reviewAttentionCount > 0 ? `${reviewAttentionCount} items still need review.` : "Review is clear."}`
-          : `Income ${currencyFormatter.format(currentSummary.current.income)} and spending ${currencyFormatter.format(
-              currentSummary.current.expense
-            )} in the last 30 days. ${reviewAttentionCount > 0 ? `${reviewAttentionCount} items need review.` : "Review is clear."}`
-      : experienceProfile.currentPositionCopy;
-  const currentTrendCopy =
-    currentSummary.netDelta >= 0
-      ? `${formatSignedCurrency(currentSummary.netDelta)} better than the previous 30 days`
-      : `${formatSignedCurrency(Math.abs(currentSummary.netDelta))} worse than the previous 30 days`;
-  const reviewQueueCopy =
-    reviewAttentionCount > 0
-      ? `${reviewAttentionCount} transaction${reviewAttentionCount === 1 ? "" : "s"} still need review or categorization.`
-      : "Everything from the last 30 days is caught up.";
   const latestImport = selectedImportFiles[0] ?? null;
+  const currentPositionCopy =
+    reviewAttentionCount > 0
+      ? `${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} still need review. ${latestImport ? `Latest import: ${latestImport.fileName} is ${latestImport.status}.` : "Import a statement to surface the next action."}`
+      : latestImport
+        ? `Latest import: ${latestImport.fileName} · ${latestImport.status}. Clover is current and ready for the next statement.`
+        : experienceProfile.currentPositionCopy;
+  const daysSinceLastImport = latestImport
+    ? Math.max(0, Math.round((Date.now() - latestImport.uploadedAt.getTime()) / (1000 * 60 * 60 * 24)))
+    : null;
   const recentImports = selectedImportFiles.slice(0, 3);
   const recentActivityTransactions = currentTransactions.slice(0, 4);
   const importStatusCopy = latestImport
     ? `${latestImport.fileName} · ${latestImport.status} · ${formatDate(latestImport.uploadedAt)}`
     : "No statement has been imported yet";
-  const importActivityCopy =
-    recentImports.length > 0
-      ? recentImports.map((file) => `${file.fileName} (${file.status})`).join(" · ")
-      : "Import a statement to start filling this workspace.";
   const primaryAction = reviewAttentionCount > 0 ? "Review queue" : "Import statement";
   const primaryActionHref = reviewAttentionCount > 0 ? "/review" : "/dashboard?import=1";
   const actionStripTitle =
@@ -446,54 +490,89 @@ export default async function DashboardPage({
   const actionStripCopy =
     reviewAttentionCount > 0
       ? "Clear the review queue first so Clover can trust the numbers it shows you."
-      : latestImport
-        ? `Last import: ${latestImport.fileName} · ${formatRelativeDate(latestImport.uploadedAt)}`
-        : experienceProfile.actionStripCopy;
+        : latestImport
+          ? `Last import: ${latestImport.fileName} · ${formatRelativeDate(latestImport.uploadedAt)}`
+          : experienceProfile.actionStripCopy;
   const actionStripPill = reviewAttentionCount > 0 ? "Action needed" : latestImport?.status === "processing" ? "Processing" : "Ready";
-  const positionStrip = [
+  const importedThisWeekCard = {
+    label: "Imported this week",
+    value: String(importedThisWeekCount || recentImports.length || 0),
+    note:
+      latestImport && importedThisWeekCount > 0
+        ? `${latestImport.fileName} · ${formatRelativeDate(latestImport.uploadedAt)}`
+        : latestImport
+          ? `${latestImport.fileName} · ${latestImport.status}`
+          : "No imports yet this week",
+  };
+  const needsReviewCard = {
+    label: "Needs review",
+    value: String(reviewAttentionCount),
+    note:
+      reviewAttentionCount > 0
+        ? `${reviewPreviewTransactions.length} high-priority rows are surfaced first`
+        : "No open review items right now",
+  };
+  const unresolvedItemsCard = {
+    label: "Unresolved items",
+    value: String(uncategorizedTransactions.length),
+    note:
+      uncategorizedTransactions.length > 0
+        ? `${uncategorizedTransactions.length} rows still need categorization`
+        : "Everything in the last 30 days is categorized",
+  };
+  const topCategoryCard = currentSummary.topCategory
+    ? {
+        label: "Top spending category",
+        value: `${currentSummary.topCategory[0]}`,
+        note: `${currencyFormatter.format(currentSummary.topCategory[1])} spent in the last 30 days`,
+      }
+    : {
+        label: "Top spending category",
+        value: "No spending yet",
+        note: "Import activity will surface the biggest category here",
+      };
+  const recurringItemCard = nextRecurringItem
+    ? {
+        label: "Next bill or recurring item",
+        value: nextRecurringItem.name,
+        note: `${currencyFormatter.format(nextRecurringItem.amount / nextRecurringItem.count)} per transaction · last seen ${formatRelativeDate(nextRecurringItem.lastSeen)}`,
+      }
+    : {
+        label: "Next bill or recurring item",
+        value: "No recurring item found",
+        note: "Once Clover sees repeating merchants, it will surface the next one here",
+      };
+  const currentPeriodCards = [
+    importedThisWeekCard,
+    needsReviewCard,
+    topCategoryCard,
+    recurringItemCard,
+  ];
+  const changeCards = [
     {
-      label: "Linked balance",
-      value: accountsWithBalance.length > 0 ? formatSignedCurrency(linkedBalanceTotal) : "Add account balances",
-      note: accountsWithBalance.length > 0 ? `${accountsWithBalance.length} account${accountsWithBalance.length === 1 ? "" : "s"} with balance data` : "Balances make the home screen feel current.",
+      label: "Income change",
+      value: formatSignedCurrency(currentSummary.incomeDelta),
+      note: currentSummary.incomeDelta >= 0 ? "Up versus the previous 30 days" : "Down versus the previous 30 days",
     },
     {
-      label: "Connected accounts",
-      value: String(workspaceSummary._count.accounts),
-      note: `${workspaceSummary._count.importFiles} import${workspaceSummary._count.importFiles === 1 ? "" : "s"} on file`,
+      label: "Spending change",
+      value: formatSignedCurrency(currentSummary.expenseDelta),
+      note: currentSummary.expenseDelta >= 0 ? "More spending than last period" : "Spending cooled versus last period",
     },
     {
-      label: "Freshness",
-      value: latestImport ? formatRelativeDate(latestImport.uploadedAt) : "Waiting on import",
-      note: latestImport ? latestImport.status : "No statements uploaded yet",
+      label: "Net change",
+      value: formatSignedCurrency(currentSummary.netDelta),
+      note: currentSummary.netDelta >= 0 ? "Better than the previous period" : "Worse than the previous period",
+    },
+    {
+      label: "What drove it",
+      value: currentSummary.biggestMover?.name ?? "No clear driver",
+      note:
+        currentSummary.biggestMover && currentSummary.biggestMover.previousAmount > 0
+          ? `${formatCompactPercentage(currentSummary.biggestMover.percentage)} above the prior period`
+          : "Clover will surface a stronger driver once more data lands",
     },
   ];
-  const primaryInsight =
-    currentSummary.biggestMover !== undefined && currentSummary.biggestMover !== null
-      ? {
-          eyebrow: "Biggest shift",
-          title: currentSummary.biggestMover.name,
-          value: `${formatSignedCurrency(currentSummary.biggestMover.delta)} vs the previous 30 days`,
-          copy:
-            currentSummary.biggestMover.previousAmount > 0
-              ? `${formatCompactPercentage(currentSummary.biggestMover.percentage)} above the last period.`
-              : "This category is newly active in the latest window.",
-          cta: "Review category",
-        }
-      : currentSummary.topCategory
-        ? {
-            eyebrow: "Top spend driver",
-            title: currentSummary.topCategory[0],
-            value: currencyFormatter.format(currentSummary.topCategory[1]),
-            copy: "This category took the biggest share of spending in the last 30 days.",
-            cta: "See spending",
-          }
-        : {
-            eyebrow: "Top spend driver",
-            title: "No spending yet",
-            value: "Import a statement",
-            copy: "Once Clover sees transactions, it will surface the strongest patterns here.",
-            cta: "Import now",
-          };
   const monthBuckets = getMonthBuckets(new Date());
   sixMonthTransactionWindow.forEach((transaction) => {
     const bucket = getMonthBucket(transaction.date, monthBuckets);
@@ -530,17 +609,9 @@ export default async function DashboardPage({
       subtitle={experienceProfile.dashboardSubtitle}
       showTopbar={false}
       actions={
-        <>
-          <Link className="pill-link" href={reviewAttentionCount > 0 ? "/review" : "/dashboard?import=1"}>
-            {reviewAttentionCount > 0 ? "Review queue" : "Import statement"}
-          </Link>
-          <Link className="pill-link" href="/transactions">
-            Transactions
-          </Link>
-          <Link className="pill-link" href="/goals">
-            Goals
-          </Link>
-        </>
+        <Link className="pill-link" href={reviewAttentionCount > 0 ? "/review" : "/dashboard?import=1"}>
+          {reviewAttentionCount > 0 ? "Review queue" : "Import statement"}
+        </Link>
       }
     >
       <PostHogEvent
@@ -551,6 +622,23 @@ export default async function DashboardPage({
           account_count: workspaceSummary._count.accounts,
           transaction_count: workspaceSummary._count.transactions,
           import_count: workspaceSummary._count.importFiles,
+        }}
+      />
+      <PostHogPersonProperties
+        distinctId={user.clerkUserId}
+        properties={{
+          workspace_name: workspaceSummary.name,
+          account_count: workspaceSummary._count.accounts,
+          cash_account_count: cashAccountCount,
+          tracked_balance_total: linkedBalanceTotal,
+          tracked_balance_currency: trackedBalanceCurrency,
+          transaction_count: workspaceSummary._count.transactions,
+          import_count: workspaceSummary._count.importFiles,
+          review_attention_count: reviewAttentionCount,
+          goal: user.primaryGoal?.trim() || null,
+          financial_experience: user.financialExperience || null,
+          last_import_at: latestImport?.uploadedAt.toISOString() ?? null,
+          days_since_last_import: daysSinceLastImport,
         }}
       />
       {isEmptyWorkspace ? (
@@ -581,70 +669,35 @@ export default async function DashboardPage({
             <Link className="button button-primary button-small" href={primaryActionHref}>
               {primaryAction}
             </Link>
-            <Link className="pill-link pill-link--inline" href="/transactions">
-              Open transactions
-            </Link>
+            <span className="dashboard-home__priority-hint">Keep Clover focused on the next action, not a stack of equal buttons.</span>
           </div>
         </article>
 
         <article className="dashboard-home__hero glass">
           <div className="dashboard-home__copy">
             <div className="dashboard-home__kicker-row">
-              <span className="pill pill-accent">Current financial position</span>
+              <span className="pill pill-accent">What needs attention now</span>
               <span className="pill pill-subtle">{workspaceSummary.name}</span>
-              <span className="pill pill-subtle">{hasPrimaryGoal ? selectedGoal.title : "No goal set"}</span>
+              <span className="pill pill-subtle">{latestImport ? `Last import ${formatRelativeDate(latestImport.uploadedAt)}` : "No import yet"}</span>
             </div>
 
             <h3>
-              {currentNet >= 0
-                ? `You are ${formatSignedCurrency(currentNet)} ahead in the last 30 days.`
-                : `You are ${formatSignedCurrency(currentNet)} behind in the last 30 days.`}
+              {reviewAttentionCount > 0
+                ? `${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} need review.`
+                : latestImport
+                  ? "Your latest import is ready to reconcile."
+                  : "Import a statement to unlock the dashboard."}
             </h3>
             <p>{currentPositionCopy}</p>
 
-            <div className="dashboard-home__kpis">
-              <article className="dashboard-home__kpi">
-                <span>Net position</span>
-                <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
-                <small>{currentNetLabel} · {currentTrendCopy}</small>
-              </article>
-              <article className="dashboard-home__kpi">
-                <span>Income</span>
-                <strong>{currencyFormatter.format(currentSummary.current.income)}</strong>
-                <small>Last 30 days</small>
-              </article>
-              <article className="dashboard-home__kpi">
-                <span>Spending</span>
-                <strong>{currencyFormatter.format(currentSummary.current.expense)}</strong>
-                <small>Last 30 days</small>
-              </article>
-              <article className="dashboard-home__kpi">
-                <span>Review items</span>
-                <strong>{reviewAttentionCount}</strong>
-                <small>{reviewCoverageText}</small>
-              </article>
-            </div>
-
-            <div className="dashboard-home__position-strip" aria-label="Account position summary">
-              {positionStrip.map((item) => (
-                <article key={item.label} className="dashboard-home__position-card">
-                  <span>{item.label}</span>
-                  <strong>{item.value}</strong>
-                  <small>{item.note}</small>
+            <div className="dashboard-home__decision-grid">
+              {currentPeriodCards.map((card) => (
+                <article key={card.label} className="dashboard-home__decision-card">
+                  <span>{card.label}</span>
+                  <strong>{card.value}</strong>
+                  <small>{card.note}</small>
                 </article>
               ))}
-            </div>
-
-            <div className="hero-actions">
-              <Link className="button button-primary" href={reviewAttentionCount > 0 ? "/review" : "/dashboard?import=1"}>
-                {reviewAttentionCount > 0 ? "Review queue" : "Import statement"}
-              </Link>
-              <Link className="button button-secondary" href="/dashboard?import=1">
-                Import files
-              </Link>
-              <Link className="button button-secondary" href="/transactions">
-                Transactions
-              </Link>
             </div>
           </div>
 
@@ -652,89 +705,60 @@ export default async function DashboardPage({
             <article className="dashboard-home__rail-card">
               <div className="dashboard-home__rail-head">
                 <div>
-                  <p className="eyebrow">Review queue</p>
-                  <h4>{reviewAttentionCount > 0 ? `${reviewAttentionCount} items need attention` : "No items need review"}</h4>
+                  <p className="eyebrow">Live status</p>
+                  <h4>{latestImport ? latestImport.fileName : "No import yet"}</h4>
                 </div>
-                <span className={`dashboard-visual-pill ${reviewAttentionCount > 0 ? "negative" : "positive"}`}>
-                  {reviewAttentionCount > 0 ? "Action needed" : "Caught up"}
+                <span
+                  className={`dashboard-visual-pill ${
+                    latestImport ? (latestImport.status === "failed" ? "negative" : "positive") : "negative"
+                  }`}
+                >
+                  {latestImport ? latestImport.status : "Waiting"}
                 </span>
               </div>
-              <p>{reviewQueueCopy}</p>
+              <p>{latestImport ? importStatusCopy : "Import a statement to populate this workspace with live status, review, and movement data."}</p>
               <div className="dashboard-home__list">
-                {reviewPreviewTransactions.length > 0 ? (
-                  reviewPreviewTransactions.map((transaction) => (
-                    <Link key={transaction.id} className="dashboard-home__item dashboard-home__item-link" href={`/transactions?review=${transaction.id}`}>
-                      <strong>{transaction.merchantClean || transaction.merchantRaw}</strong>
-                      <span>
-                        {transaction.account.name}
-                        {transaction.category?.name ? ` · ${transaction.category.name}` : ""} ·{" "}
-                        {currencyFormatter.format(Math.abs(toAmount(transaction.amount)))} · {transaction.categoryConfidence}%
-                      </span>
-                    </Link>
-                  ))
-                ) : (
-                  <div className="dashboard-home__item dashboard-home__item--empty">
-                    <strong>Everything is reviewed</strong>
-                    <span>New rows will show up here as soon as they need attention.</span>
-                  </div>
-                )}
-              </div>
-              <Link className="pill-link pill-link--inline" href="/review">
-                Open review
-              </Link>
-            </article>
-
-            <article className="dashboard-home__rail-card">
-              <div className="dashboard-home__rail-head">
-                <div>
-                  <p className="eyebrow">Latest import</p>
-                  <h4>{latestImport ? latestImport.fileName : "Ready for your next statement"}</h4>
+                <div className="dashboard-home__item">
+                  <strong>Imported this week</strong>
+                  <span>{importedThisWeekCard.value} import{importedThisWeekCard.value === "1" ? "" : "s"} · {importedThisWeekCard.note}</span>
+                </div>
+                <div className="dashboard-home__item">
+                  <strong>Needs review</strong>
+                  <span>{needsReviewCard.note}</span>
+                </div>
+                <div className="dashboard-home__item">
+                  <strong>Unresolved items</strong>
+                  <span>{unresolvedItemsCard.note}</span>
                 </div>
               </div>
-              <p>{importStatusCopy}</p>
-              <div className="dashboard-home__list">
-                <Link className="dashboard-home__item dashboard-home__item-link" href="/imports">
-                  <strong>Recent uploads</strong>
-                  <span>{importActivityCopy}</span>
-                </Link>
-              </div>
-              <Link className="pill-link pill-link--inline" href="/imports">
-                Import now
-              </Link>
-            </article>
-
-            <article className="dashboard-home__rail-card">
-              <div className="dashboard-home__rail-head">
-                <div>
-                  <p className="eyebrow">{primaryInsight.eyebrow}</p>
-                  <h4>{primaryInsight.title}</h4>
-                </div>
-              </div>
-              <p>{primaryInsight.copy}</p>
-              <div className="dashboard-home__mini-metric dashboard-home__mini-metric--insight">
-                <strong>{primaryInsight.value}</strong>
-                <span>{primaryInsight.cta}</span>
-              </div>
-              <Link className="pill-link pill-link--inline" href="/goals">
-                View goals
+              <Link className="pill-link pill-link--inline" href={primaryActionHref}>
+                {primaryAction}
               </Link>
             </article>
           </div>
         </article>
 
-        {/* Keep the dashboard visuals as a separate client island so the shell can stream cleanly. */}
-        <DashboardVisualsIsland
-          currentNetDelta={currentSummary.netDelta}
-          currentExpense={currentSummary.current.expense}
-          monthPoints={monthPoints}
-          linePath={linePath}
-          chartWidth={chartWidth}
-          chartHeight={chartHeight}
-          chartPadding={chartPadding}
-          topCategoryRows={topCategoryRows}
-        />
-
         <DashboardImportLauncher workspaceId={workspaceSummary.id} accounts={workspaceSummary.accounts} initialOpen={resolvedSearchParams?.import === "1"} />
+
+        <section className="dashboard-home__decision-grid">
+          <article className="dashboard-home__decision-card dashboard-home__decision-card--strong glass">
+            <div className="dashboard-home__decision-head">
+              <div>
+                <p className="eyebrow">What changed since last period</p>
+                <h4>Movement that needs your attention</h4>
+              </div>
+            </div>
+            <div className="dashboard-home__change-grid">
+              {changeCards.map((card) => (
+                <div key={card.label} className="dashboard-home__item">
+                  <strong>{card.label}</strong>
+                  <span>{card.value}</span>
+                  <small>{card.note}</small>
+                </div>
+              ))}
+            </div>
+          </article>
+        </section>
 
         <section className="dashboard-home__support-grid">
           <article className="dashboard-home__panel glass">
@@ -762,7 +786,7 @@ export default async function DashboardPage({
                   ) : (
                     <div className="dashboard-home__item dashboard-home__item--empty">
                       <strong>No imports yet</strong>
-                      <span>Start with a statement to populate your activity feed.</span>
+                      <span>Import a statement to give Clover a recent activity trail to summarize.</span>
                     </div>
                   )}
 
@@ -783,14 +807,14 @@ export default async function DashboardPage({
                   ) : (
                     <div className="dashboard-home__item dashboard-home__item--empty">
                       <strong>No transactions yet</strong>
-                      <span>Import a statement or add a manual transaction to start the feed.</span>
+                      <span>Import a statement or add a manual transaction so the dashboard can show what changed.</span>
                     </div>
                   )}
                 </>
               ) : (
                 <div className="dashboard-home__item dashboard-home__item--empty">
                   <strong>No recent activity</strong>
-                  <span>Import your next statement to make the dashboard feel alive.</span>
+                  <span>Import your next statement and Clover will turn it into a living activity feed.</span>
                 </div>
               )}
             </div>
@@ -799,8 +823,8 @@ export default async function DashboardPage({
           <article className="dashboard-home__panel glass">
             <div className="dashboard-home__panel-head">
               <div>
-                <p className="eyebrow">Movement and trust</p>
-                <h4>What changed and how much Clover can trust</h4>
+                <p className="eyebrow">What changed since last period</p>
+                <h4>How the numbers moved and how much Clover can trust</h4>
               </div>
             </div>
             <div className="dashboard-home__summary-grid">
@@ -826,6 +850,18 @@ export default async function DashboardPage({
             </div>
           </article>
         </section>
+
+        {/* Keep the dashboard visuals as a separate client island so the shell can stream cleanly. */}
+        <DashboardVisualsIsland
+          currentNetDelta={currentSummary.netDelta}
+          currentExpense={currentSummary.current.expense}
+          monthPoints={monthPoints}
+          linePath={linePath}
+          chartWidth={chartWidth}
+          chartHeight={chartHeight}
+          chartPadding={chartPadding}
+          topCategoryRows={topCategoryRows}
+        />
       </section>
     </CloverShell>
   );
