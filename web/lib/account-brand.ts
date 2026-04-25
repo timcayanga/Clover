@@ -59,8 +59,8 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       label: "BPI",
       logoSrcs: philippinesLogoWithVariants("bpi"),
       fallbackIconSrc: bankIcon,
-      accent: "#0F5BA7",
-      background: "linear-gradient(135deg, rgba(15, 91, 167, 0.16), rgba(15, 91, 167, 0.06))",
+      accent: "#E71F2C",
+      background: "linear-gradient(135deg, rgba(231, 31, 44, 0.16), rgba(231, 31, 44, 0.06))",
     }),
   },
   {
