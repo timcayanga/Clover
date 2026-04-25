@@ -66,7 +66,8 @@ export default function TermsOfServicePage() {
           <h2>Plans and refunds</h2>
           <p>
             Clover may offer a free plan and one or more paid plans. Free plans may include limits on the number of accounts, monthly uploads,
-            transaction rows, and reports you can use. Paid plans are intended to provide higher limits and additional capacity.
+            transaction rows, and reports you can use. Paid plans are intended to provide higher limits and additional capacity, and Clover may
+            offer monthly and annual billing options for those paid plans.
           </p>
           <p>
             When paid subscriptions become available, Clover will publish the billing terms, renewal terms, and refund policy that apply at the

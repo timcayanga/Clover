@@ -1,4 +1,9 @@
+import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
+import { BillingActions } from "@/components/billing-actions";
+import { getEnv } from "@/lib/env";
+import { getOrCreateCurrentUser } from "@/lib/user-context";
+import { getUserBillingSubscription } from "@/lib/paypal-billing";
 
 function PlanIcon({ name }: { name: "starter" | "growth" }) {
   const common = {
@@ -40,7 +45,12 @@ function CheckIcon() {
   );
 }
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const session = await auth();
+  const env = getEnv();
+  const user = session.userId ? await getOrCreateCurrentUser(session.userId) : null;
+  const billingSubscription = user ? await getUserBillingSubscription(user.id) : null;
+
   return (
     <main className="legal-page pricing-page">
       <div className="legal-page__inner pricing-page__inner">
@@ -54,8 +64,8 @@ export default function PricingPage() {
             <Link href="/pricing" aria-current="page">
               Pricing
             </Link>
-            <Link href="/sign-in">Log in</Link>
-            <Link href="/sign-up">Sign up</Link>
+            {user ? <Link href="/settings#billing">Billing</Link> : <Link href="/sign-in">Log in</Link>}
+            {user ? <Link href="/settings">App</Link> : <Link href="/sign-up">Sign up</Link>}
           </div>
         </nav>
 
@@ -94,7 +104,7 @@ export default function PricingPage() {
               </li>
               <li>
                 <CheckIcon />
-                <span>2 accounts in addition to Cash.</span>
+                <span>5 accounts in addition to Cash.</span>
               </li>
               <li>
                 <CheckIcon />
@@ -102,7 +112,7 @@ export default function PricingPage() {
               </li>
               <li>
                 <CheckIcon />
-                <span>1,500 transaction rows total.</span>
+                <span>1,000 transaction rows total.</span>
               </li>
               <li>
                 <CheckIcon />
@@ -178,13 +188,61 @@ export default function PricingPage() {
 
         <section className="pricing-page__cta">
           <h2>Start with the plan that fits your current needs.</h2>
+          {user ? (
+            <p className="pricing-page__cta-copy">
+              You are signed in, so you can upgrade or switch plans right here. Clover uses your current account to match the subscription
+              automatically.
+            </p>
+          ) : (
+            <p className="pricing-page__cta-copy">
+              Sign up first, then choose the plan you want from Settings or come back here to upgrade after you have an account.
+            </p>
+          )}
+          {user ? (
+            <BillingActions
+              planTier={user.planTier}
+              clientId={env.PAYPAL_CLIENT_ID ?? null}
+              monthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
+              annualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? null}
+              customId={user.id}
+              returnPath="/pricing"
+              subscription={
+                billingSubscription
+                  ? {
+                      status: billingSubscription.status,
+                      interval: billingSubscription.interval,
+                      pendingPlanId: billingSubscription.pendingPlanId,
+                      pendingInterval: billingSubscription.pendingInterval,
+                      providerSubscriptionId: billingSubscription.providerSubscriptionId,
+                      currentPeriodEnd: billingSubscription.currentPeriodEnd ? billingSubscription.currentPeriodEnd.toISOString() : null,
+                      nextBillingTime: billingSubscription.nextBillingTime ? billingSubscription.nextBillingTime.toISOString() : null,
+                      planTier: billingSubscription.planTier,
+                    }
+                  : null
+              }
+              className="pricing-page__billing-actions"
+            />
+          ) : null}
           <div className="pricing-page__cta-actions">
-            <Link className="button button-primary button-pill" href="/sign-up">
-              Get started
-            </Link>
-            <Link className="button button-secondary button-pill" href="/sign-in">
-              Log in
-            </Link>
+            {user ? (
+              <>
+                <Link className="button button-primary button-pill" href="/settings#billing">
+                  Manage billing
+                </Link>
+                <Link className="button button-secondary button-pill" href="/dashboard">
+                  Go to dashboard
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link className="button button-primary button-pill" href="/sign-up">
+                  Get started
+                </Link>
+                <Link className="button button-secondary button-pill" href="/sign-in">
+                  Log in
+                </Link>
+              </>
+            )}
           </div>
         </section>
       </div>

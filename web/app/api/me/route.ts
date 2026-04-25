@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
+import { getUserBillingSubscription } from "@/lib/paypal-billing";
 
 export const dynamic = "force-dynamic";
 
@@ -8,14 +9,29 @@ export async function GET() {
   try {
     const { userId } = await requireAuth();
     const user = await getOrCreateCurrentUser(userId);
+    const billingSubscription = await getUserBillingSubscription(user.id);
 
     return NextResponse.json({
       user: {
         id: user.id,
         planTier: user.planTier,
         primaryGoal: user.primaryGoal,
+        goalTargetAmount: user.goalTargetAmount ? user.goalTargetAmount.toString() : null,
+        goalTargetSource: user.goalTargetSource,
         onboardingCompletedAt: user.onboardingCompletedAt,
         dataWipedAt: user.dataWipedAt,
+        billingSubscription: billingSubscription
+          ? {
+              status: billingSubscription.status,
+              interval: billingSubscription.interval,
+              pendingPlanId: billingSubscription.pendingPlanId,
+              pendingInterval: billingSubscription.pendingInterval,
+              providerSubscriptionId: billingSubscription.providerSubscriptionId,
+              currentPeriodEnd: billingSubscription.currentPeriodEnd ? billingSubscription.currentPeriodEnd.toISOString() : null,
+              nextBillingTime: billingSubscription.nextBillingTime ? billingSubscription.nextBillingTime.toISOString() : null,
+              planTier: billingSubscription.planTier,
+            }
+          : null,
       },
     });
   } catch {

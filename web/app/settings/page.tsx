@@ -1,11 +1,23 @@
+import nextDynamic from "next/dynamic";
 import { redirect } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
-import { AccountActionsPanel } from "@/components/account-actions-panel";
-import { BillingCard } from "@/components/billing-card";
-import { SettingsCenter, type SettingSection } from "@/components/settings-center";
 import { getSessionContext } from "@/lib/auth";
+import { getUserBillingSubscription } from "@/lib/paypal-billing";
 import { getEnv } from "@/lib/env";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+import type { SettingSection } from "@/components/settings-center";
+
+const BillingCard = nextDynamic(() => import("@/components/billing-card").then((module) => module.BillingCard), {
+  loading: () => <div className="glass" aria-label="Loading billing details" />,
+});
+
+const SettingsCenter = nextDynamic(() => import("@/components/settings-center").then((module) => module.SettingsCenter), {
+  loading: () => <div className="settings-layout" aria-label="Loading settings" />,
+});
+
+const AccountActionsPanel = nextDynamic(() => import("@/components/account-actions-panel").then((module) => module.AccountActionsPanel), {
+  loading: () => <div className="glass" aria-label="Loading account actions" />,
+});
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -129,6 +141,7 @@ export default async function SettingsPage() {
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
   const env = getEnv();
+  const billingSubscription = session.isGuest ? null : await getUserBillingSubscription(user.id);
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
@@ -143,7 +156,22 @@ export default async function SettingsPage() {
       <BillingCard
         planTier={user.planTier}
         paypalClientId={env.PAYPAL_CLIENT_ID ?? null}
-        paypalPlanId={env.PAYPAL_PRO_PLAN_ID ?? null}
+        paypalMonthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
+        paypalAnnualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? null}
+        billingSubscription={
+          billingSubscription
+            ? {
+                status: billingSubscription.status,
+                interval: billingSubscription.interval,
+                pendingPlanId: billingSubscription.pendingPlanId,
+                pendingInterval: billingSubscription.pendingInterval,
+                providerSubscriptionId: billingSubscription.providerSubscriptionId,
+                currentPeriodEnd: billingSubscription.currentPeriodEnd ? billingSubscription.currentPeriodEnd.toISOString() : null,
+                nextBillingTime: billingSubscription.nextBillingTime ? billingSubscription.nextBillingTime.toISOString() : null,
+                planTier: billingSubscription.planTier,
+              }
+            : null
+        }
         userId={user.id}
         clerkUserId={user.clerkUserId}
         email={user.email}
