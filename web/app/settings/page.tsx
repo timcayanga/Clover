@@ -159,10 +159,8 @@ export default async function SettingsPage() {
     >
       <BillingCard
         planTier={user.planTier}
-        paypalEnv={env.PAYPAL_ENV ?? null}
         paypalClientId={env.PAYPAL_CLIENT_ID ?? null}
         paypalPlanId={env.PAYPAL_PRO_PLAN_ID ?? null}
-        paypalBuyerCountry={env.PAYPAL_BUYER_COUNTRY ?? null}
         userId={user.id}
         clerkUserId={user.clerkUserId}
         email={user.email}

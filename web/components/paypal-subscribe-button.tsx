@@ -28,8 +28,6 @@ type PayPalSubscribeButtonProps = {
   clientId: string;
   planId: string;
   customId: string;
-  buyerCountry?: string | null;
-  isSandbox?: boolean;
   className?: string;
   disabled?: boolean;
   onApproved?: () => void;
@@ -40,8 +38,6 @@ export function PayPalSubscribeButton({
   clientId,
   planId,
   customId,
-  buyerCountry,
-  isSandbox = false,
   className,
   disabled = false,
   onApproved,
@@ -54,17 +50,13 @@ export function PayPalSubscribeButton({
 
   const scriptSrc = useMemo(() => {
     const params = new URLSearchParams({
-      "client-id": isSandbox ? "sb" : clientId,
+      "client-id": clientId,
       vault: "true",
       intent: "subscription",
     });
 
-    if (buyerCountry) {
-      params.set("buyer-country", buyerCountry);
-    }
-
     return `https://www.paypal.com/sdk/js?${params.toString()}`;
-  }, [buyerCountry, clientId, isSandbox]);
+  }, [clientId]);
 
   useEffect(() => {
     if (!scriptReady || disabled || !containerRef.current || !window.paypal) {
@@ -148,7 +140,7 @@ export function PayPalSubscribeButton({
         containerRef.current.innerHTML = "";
       }
     };
-  }, [buyerCountry, customId, disabled, onApproved, onCancelled, planId, scriptReady]);
+  }, [customId, disabled, onApproved, onCancelled, planId, scriptReady]);
 
   return (
     <div className={className}>
