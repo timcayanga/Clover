@@ -23,6 +23,7 @@ import {
   upsertStatementTemplate,
 } from "@/lib/data-engine";
 import { getTrailingBalanceFromParsedRows, inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { parseImportTextWithOpenAIFallback } from "@/lib/openai-import-parser";
 
 type ImportInsightSummary = {
   incomeTotal: number;
@@ -86,6 +87,7 @@ const resolveConfirmationAccount = async (params: {
   statementMetadata?: {
     accountName?: unknown;
     institution?: unknown;
+    accountType?: unknown;
   } | null;
   parsedRows: Array<{
     accountName?: unknown;
@@ -118,6 +120,11 @@ const resolveConfirmationAccount = async (params: {
     typeof candidateRow?.institution === "string" && candidateRow.institution.trim()
       ? candidateRow.institution.trim()
       : null;
+  const inferredAccountType =
+    typeof params.statementMetadata?.accountType === "string" &&
+    ["bank", "wallet", "credit_card", "cash", "investment", "other"].includes(params.statementMetadata.accountType)
+      ? (params.statementMetadata.accountType as "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other")
+      : null;
 
   const isOptimisticId = params.accountId.startsWith("optimistic-");
   const directAccount = !isOptimisticId
@@ -146,7 +153,7 @@ const resolveConfirmationAccount = async (params: {
         workspaceId,
         name: inferredAccountName,
         institution: inferredInstitution,
-        type: inferAccountTypeFromStatement(inferredInstitution, inferredAccountName, "bank"),
+        type: inferredAccountType ?? inferAccountTypeFromStatement(inferredInstitution, inferredAccountName, "bank"),
         currency: "PHP",
         source: "upload",
       },
@@ -284,10 +291,44 @@ export const processImportFileText = async (
     accountName: mergedMetadata.accountName,
     accountNumber: mergedMetadata.accountNumber,
   });
-  const parsedEndingBalance = getTrailingBalanceFromParsedRows(parsedRows);
+  const openAiParsed = await parseImportTextWithOpenAIFallback({
+    text,
+    fileName: String(importFile.fileName ?? ""),
+    fileType: String(importFile.fileType ?? ""),
+    detectedMetadata: mergedMetadata,
+    parsedRows,
+  });
+
+  const openAiMetadata = openAiParsed
+    ? mergeStatementMetadataWithTemplate(openAiParsed.metadata, {
+        institution:
+          typeof templateMetadata?.institution === "string" && templateMetadata.institution.trim()
+            ? templateMetadata.institution.trim()
+            : null,
+        accountNumber:
+          typeof templateMetadata?.accountNumber === "string" && templateMetadata.accountNumber.trim()
+            ? templateMetadata.accountNumber.trim()
+            : null,
+        accountName:
+          typeof templateMetadata?.accountName === "string" && templateMetadata.accountName.trim()
+            ? templateMetadata.accountName.trim()
+            : null,
+        openingBalance: typeof templateMetadata?.openingBalance === "number" ? templateMetadata.openingBalance : null,
+        endingBalance: typeof templateMetadata?.endingBalance === "number" ? templateMetadata.endingBalance : null,
+        startDate: typeof templateMetadata?.startDate === "string" ? templateMetadata.startDate : null,
+        endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
+      })
+    : null;
+
+  const useOpenAiParse =
+    Boolean(openAiParsed) &&
+    ((openAiMetadata?.confidence ?? 0) >= (mergedMetadata.confidence ?? 0) || parsedRows.length === 0);
+  const effectiveRows = useOpenAiParse && openAiParsed ? openAiParsed.rows : parsedRows;
+  const effectiveMetadataSource = useOpenAiParse && openAiMetadata ? openAiMetadata : mergedMetadata;
+  const parsedEndingBalance = getTrailingBalanceFromParsedRows(effectiveRows);
   const resolvedMetadata = {
-    ...mergedMetadata,
-    endingBalance: mergedMetadata.endingBalance ?? parsedEndingBalance,
+    ...effectiveMetadataSource,
+    endingBalance: effectiveMetadataSource.endingBalance ?? parsedEndingBalance,
   };
   const duplicateImportFileId = await findExistingImportedStatement({
     workspaceId: importFile.workspaceId,
@@ -306,26 +347,26 @@ export const processImportFileText = async (
     metadata: resolvedMetadata,
     fileType: importFile.fileType,
     parserConfig: {
-      accountType: inferAccountTypeFromStatement(resolvedMetadata.institution, resolvedMetadata.accountName, "bank"),
-      rowCount: parsedRows.length,
+      accountType: resolvedMetadata.accountType ?? inferAccountTypeFromStatement(resolvedMetadata.institution, resolvedMetadata.accountName, "bank"),
+      rowCount: effectiveRows.length,
       firstMerchant:
-        typeof parsedRows[0]?.merchantClean === "string"
-          ? parsedRows[0]?.merchantClean
-          : typeof parsedRows[0]?.merchantRaw === "string"
-            ? parsedRows[0]?.merchantRaw
+        typeof effectiveRows[0]?.merchantClean === "string"
+          ? effectiveRows[0]?.merchantClean
+          : typeof effectiveRows[0]?.merchantRaw === "string"
+            ? effectiveRows[0]?.merchantRaw
             : null,
       lastMerchant:
-        typeof parsedRows.at(-1)?.merchantClean === "string"
-          ? parsedRows.at(-1)?.merchantClean
-          : typeof parsedRows.at(-1)?.merchantRaw === "string"
-            ? parsedRows.at(-1)?.merchantRaw
+        typeof effectiveRows.at(-1)?.merchantClean === "string"
+          ? effectiveRows.at(-1)?.merchantClean
+          : typeof effectiveRows.at(-1)?.merchantRaw === "string"
+            ? effectiveRows.at(-1)?.merchantRaw
             : null,
     } as Prisma.InputJsonValue,
   });
 
   const rows = await enrichParsedRowsWithTraining({
     workspaceId: importFile.workspaceId,
-    rows: parsedRows,
+    rows: effectiveRows,
     statementConfidence: resolvedMetadata.confidence ?? 0,
   });
 
@@ -543,6 +584,8 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
         typeof statementMetadata?.accountName === "string" ? statementMetadata.accountName : null,
       institution:
         typeof statementMetadata?.institution === "string" ? statementMetadata.institution : null,
+      accountType:
+        typeof statementMetadata?.accountType === "string" ? statementMetadata.accountType : null,
     },
     parsedRows,
     accountId,

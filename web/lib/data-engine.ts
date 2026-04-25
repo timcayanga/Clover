@@ -1,7 +1,14 @@
 import { Prisma } from "@prisma/client";
 import type { AccountType, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { detectStatementMetadata, parseAmountValue, parseDateValue, type ParsedImportRow } from "@/lib/import-parser";
+import {
+  detectStatementMetadata,
+  type ImportedAccountType,
+  inferAccountTypeFromStatement,
+  parseAmountValue,
+  parseDateValue,
+  type ParsedImportRow,
+} from "@/lib/import-parser";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 
 export const DATA_ENGINE_VERSION = "v2";
@@ -367,13 +374,14 @@ export const detectAccountNumber = (text: string | null | undefined) => {
   return accountNumber;
 };
 
-export const detectStatementMetadataFromText = (text: string) => {
+export const detectStatementMetadataFromText = (text: string): StatementMetadataSnapshot => {
   const metadata = detectStatementMetadata(text);
   const institution = metadata?.institution ?? detectInstitutionFromText(text);
   const accountNumber = metadata?.accountNumber ?? detectAccountNumber(text);
   const accountName =
     metadata?.accountName ??
     (institution && accountNumber ? `${institution} ${accountNumber.slice(-4)}` : institution ?? null);
+  const accountType = metadata?.accountType ?? inferAccountTypeFromStatement(institution, accountName, "bank");
   const confidence =
     metadata?.confidence ??
     Math.min(
@@ -382,6 +390,7 @@ export const detectStatementMetadataFromText = (text: string) => {
         institution ? 35 : 0,
         accountNumber ? 35 : 0,
         accountName ? 10 : 0,
+        accountType ? 5 : 0,
         metadata?.startDate ? 5 : 0,
         metadata?.endDate ? 5 : 0,
         metadata?.openingBalance !== null ? 5 : 0,
@@ -393,6 +402,7 @@ export const detectStatementMetadataFromText = (text: string) => {
     institution,
     accountNumber,
     accountName,
+    accountType,
     openingBalance: metadata?.openingBalance ?? null,
     endingBalance: metadata?.endingBalance ?? null,
     startDate: metadata?.startDate ?? null,
@@ -402,17 +412,18 @@ export const detectStatementMetadataFromText = (text: string) => {
 };
 
 export const mergeStatementMetadataWithTemplate = (
-  detected: ReturnType<typeof detectStatementMetadataFromText>,
+  detected: StatementMetadataSnapshot,
   template?: {
     institution?: string | null;
     accountNumber?: string | null;
     accountName?: string | null;
+    accountType?: ImportedAccountType | null;
     openingBalance?: number | null;
     endingBalance?: number | null;
     startDate?: string | null;
     endDate?: string | null;
   } | null
-) => {
+) : StatementMetadataSnapshot => {
   if (!template) {
     return detected;
   }
@@ -424,6 +435,7 @@ export const mergeStatementMetadataWithTemplate = (
       template.institution ? 35 : 0,
       template.accountNumber ? 35 : 0,
       template.accountName ? 10 : 0,
+      template.accountType ? 5 : 0,
       template.startDate ? 5 : 0,
       template.endDate ? 5 : 0,
       template.openingBalance !== null ? 5 : 0,
@@ -444,6 +456,10 @@ export const mergeStatementMetadataWithTemplate = (
       preferTemplateIdentity && template.accountName
         ? template.accountName
         : detected.accountName ?? template.accountName ?? null,
+    accountType:
+      preferTemplateIdentity && template.accountType
+        ? template.accountType
+        : detected.accountType ?? template.accountType ?? null,
     openingBalance: detected.openingBalance ?? template.openingBalance ?? null,
     endingBalance: detected.endingBalance ?? template.endingBalance ?? null,
     startDate: detected.startDate ?? template.startDate ?? null,
@@ -494,6 +510,18 @@ export const extractMissingDatabaseColumn = (error: unknown) => {
 
 const columnCache = new Map<string, string[]>();
 const tableExistsCache = new Map<string, boolean>();
+
+type StatementMetadataSnapshot = {
+  institution: string | null;
+  accountNumber: string | null;
+  accountName: string | null;
+  accountType: ImportedAccountType | null;
+  openingBalance: number | null;
+  endingBalance: number | null;
+  startDate: string | null;
+  endDate: string | null;
+  confidence: number;
+};
 
 export const hasCompatibleTable = async (tableName: string) => {
   const cached = tableExistsCache.get(tableName);
@@ -1262,6 +1290,7 @@ export const buildStatementFingerprint = (
   const fingerprintSource = [
     metadata.institution ?? "",
     metadata.accountNumber ?? "",
+    metadata.accountType ?? "",
     metadata.startDate ?? "",
     metadata.endDate ?? "",
     (fileName ?? "").toLowerCase(),

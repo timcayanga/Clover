@@ -16,6 +16,7 @@ This document captures the CIMB / GSave parsing rules learned from the training 
 - Use statement date range and account metadata as the starting point for identity.
 - Keep summary totals, ledger rows, and reference numbers separate.
 - Preserve interest and tax pairings as linked ledger logic when possible.
+- Keep statement-shell rows like `Opening Balance`, `Closing Balance`, `Statement of Account`, and page labels out of the transaction stream unless they are explicit ledger movements.
 
 ## Ledger Rules
 

@@ -123,6 +123,20 @@ const openAIJsonSchema = {
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
+const summaryRowPatterns = [
+  /previous\s+statement\s+balance/i,
+  /previous\s+balance/i,
+  /opening\s+balance/i,
+  /closing\s+balance/i,
+  /ending\s+balance/i,
+  /balance\s+brought\s+forward/i,
+  /balance\s+c\/?f/i,
+  /balance\s+b\/?f/i,
+  /statement\s+balance/i,
+];
+
+const isSummaryRowText = (value: string) => summaryRowPatterns.some((pattern) => pattern.test(value));
+
 const buildModelInputText = (text: string) => {
   const normalizedLines = text
     .replace(/\u00a0/g, " ")
@@ -211,6 +225,32 @@ const extractOutputText = (payload: Record<string, unknown>) => {
   return null;
 };
 
+const parseStructuredJsonText = (text: string) => {
+  const trimmed = text.trim();
+  const candidates = [trimmed];
+
+  const fencedMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fencedMatch?.[1]) {
+    candidates.push(fencedMatch[1].trim());
+  }
+
+  const firstBrace = trimmed.indexOf("{");
+  const lastBrace = trimmed.lastIndexOf("}");
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    candidates.push(trimmed.slice(firstBrace, lastBrace + 1));
+  }
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate) as unknown;
+    } catch {
+      // Try the next candidate.
+    }
+  }
+
+  return null;
+};
+
 const responseLooksUseful = (metadata: DetectedStatementMetadata | null, rows: ParsedImportRow[]) => {
   const confidence = metadata?.confidence ?? 0;
   const hasStrongIdentity = Boolean(metadata?.institution && metadata?.accountNumber);
@@ -232,23 +272,26 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   parsedRows: ParsedImportRow[];
 }): Promise<{ metadata: DetectedStatementMetadata; rows: ParsedImportRow[]; model: string } | null> => {
   const env = getEnv();
-  const apiKey = env.OPENAI_API_KEY?.trim();
+  const apiKey = (env as { OPENAI_API_KEY?: string }).OPENAI_API_KEY?.trim();
   if (!apiKey || !responseLooksUseful(params.detectedMetadata, params.parsedRows)) {
     return null;
   }
 
-  const model = env.OPENAI_IMPORT_PARSER_MODEL?.trim() || "gpt-4.1";
+  const model = (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL?.trim() || "gpt-4.1";
   const inputText = buildModelInputText(params.text);
   const systemPrompt = [
     "You are parsing a bank statement for Clover, a personal finance app.",
     "Clover imports statements into accounts and transactions.",
     "The user expects the model to extract account identity, balances, dates, and transaction rows from noisy statement text.",
     "Never invent values. Only use details visible in the statement text.",
+    "Return exactly one JSON object and nothing else: no markdown, no prose, no code fences, and no commentary.",
     "If a field is unknown, use null.",
     "Prefer conservative parsing over guessing.",
     "If the statement is ambiguous, still return the best structured JSON you can, but keep low-confidence fields null and set low confidence.",
     "Rows must stay in the order they appear in the statement.",
     "Use positive amounts only; row.type describes the direction.",
+    "Do not emit statement header rows, footer rows, page labels, or support text as transactions.",
+    "Do not emit opening balance, previous balance, closing balance, ending balance, or statement balance rows as transactions when those are clearly summary fields.",
     "For account names, keep them simple and consistent across imports: use 'BankName last4' when possible, such as 'AUB 9671', 'BPI 3012', 'RCBC 5080', 'UnionBank 8037', or 'GCash 9926'.",
     "Do not append product labels like Savings, Checking, Mastercard, Visa, Signature, Platinum, or similar unless they are required to distinguish two real accounts with the same bank and suffix.",
     "institution should be the bank or wallet brand only, not a product name.",
@@ -323,7 +366,13 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       return null;
     }
 
-    const parsedJson = JSON.parse(outputText) as unknown;
+    const parsedJson = parseStructuredJsonText(outputText);
+    if (!parsedJson) {
+      console.warn("OpenAI import fallback returned unparseable JSON", {
+        sample: outputText.slice(0, 500),
+      });
+      return null;
+    }
     const validation = importedStatementSchema.safeParse(parsedJson);
     if (!validation.success) {
       console.warn("OpenAI import fallback returned invalid schema", {
@@ -362,6 +411,10 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         const amount = parseAmountValue(typeof row.amount === "number" ? String(row.amount) : row.amount ?? null);
         const description = normalizeWhitespace(String(row.description ?? row.merchantRaw ?? row.merchantClean ?? "")).trim();
         if (!description || amount === null) {
+          return null;
+        }
+
+        if (isSummaryRowText(description) && row.type !== "transfer") {
           return null;
         }
 

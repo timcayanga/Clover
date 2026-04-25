@@ -49,6 +49,7 @@ This document captures the Maya parsing rules learned from the synthetic trainin
 - Keep raw statement data, parsed rows, and normalized transactions separate.
 - Preserve bank-specific transfer, fee, sweep, and adjustment wording instead of collapsing it into generic spend.
 - The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable Maya simplifications such as `Base Interest`, `Boost Interest`, `Transfer to BancNet`, `Credit Drawdown`, `Repayment`, and `Documentary Stamp Tax`.
+- Ignore statement-shell rows like `Statement Date`, `Period Covered`, `Previous Statement Balance`, and other summary lines when they are not actual wallet movements.
 
 ## Notes Handling
 

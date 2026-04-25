@@ -22,6 +22,7 @@ export type DetectedStatementMetadata = {
   institution: string | null;
   accountNumber: string | null;
   accountName: string | null;
+  accountType: ImportedAccountType | null;
   openingBalance: number | null;
   endingBalance: number | null;
   startDate: string | null;
@@ -136,6 +137,7 @@ const scoreMetadataConfidence = (metadata: Omit<DetectedStatementMetadata, "conf
   if (metadata.institution) score += 35;
   if (metadata.accountNumber) score += 35;
   if (metadata.accountName) score += 10;
+  if (metadata.accountType) score += 5;
   if (metadata.startDate) score += 5;
   if (metadata.endDate) score += 5;
   if (metadata.openingBalance !== null) score += 5;
@@ -389,6 +391,7 @@ const bpiCreditCardStatementMetadata = (text: string): DetectedStatementMetadata
     institution: "BPI",
     accountNumber: "9001",
     accountName: formatSimpleBankAccountName("BPI", "9001"),
+    accountType: "credit_card",
     openingBalance: previousBalance,
     endingBalance,
     startDate: statementDate ? statementDate.toISOString() : null,
@@ -514,6 +517,7 @@ const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null =
     institution: "RCBC",
     accountNumber,
     accountName,
+    accountType: isSavingsStatement ? "bank" : "credit_card",
     openingBalance,
     endingBalance,
     startDate: startDate ? startDate.toISOString() : null,
@@ -898,6 +902,7 @@ const parseAubCardImportText = (text: string) => {
       institution: "AUB",
       accountNumber,
       accountName,
+      accountType: "credit_card",
       openingBalance: previousBalance,
       endingBalance,
       startDate: statementDateMatch?.[1] ? parseAubDate(statementDateMatch[1])?.toISOString() ?? null : null,
@@ -992,6 +997,7 @@ const parseAubSavingsImportText = (text: string) => {
       institution: "AUB",
       accountNumber,
       accountName,
+      accountType: "bank",
       openingBalance,
       endingBalance,
       startDate: startDate ? startDate.toISOString() : null,
@@ -1058,6 +1064,7 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     institution: "BPI",
     accountNumber,
     accountName,
+    accountType: "bank",
     openingBalance,
     endingBalance,
     startDate: startDate ? startDate.toISOString() : null,
@@ -1593,6 +1600,7 @@ const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null 
     institution: "GCash",
     accountNumber,
     accountName: accountNumber ? `GCash ${accountNumber.slice(-4)}` : "GCash",
+    accountType: "wallet",
     openingBalance,
     endingBalance: null,
     startDate: parseLooseDate(dateRangeMatch?.[1] ?? null)?.toISOString() ?? null,
@@ -2133,6 +2141,7 @@ const parseCimbImportText = (text: string) => {
           institution: "CIMB",
           accountNumber,
           accountName,
+          accountType: "bank",
           openingBalance,
           endingBalance,
           startDate: startDate ? startDate.toISOString() : null,
@@ -2428,6 +2437,7 @@ const unionbankStatementMetadata = (text: string): DetectedStatementMetadata | n
     institution: "UnionBank",
     accountNumber,
     accountName,
+    accountType: "bank",
     openingBalance: null,
     endingBalance: null,
     startDate: null,
@@ -2652,6 +2662,7 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     institution,
     accountNumber,
     accountName,
+    accountType: inferAccountTypeFromStatement(institution, accountName, "bank"),
     openingBalance,
     endingBalance,
     startDate: startDate ? startDate.toISOString() : null,
@@ -2660,6 +2671,7 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
       institution,
       accountNumber,
       accountName,
+      accountType: inferAccountTypeFromStatement(institution, accountName, "bank"),
       openingBalance,
       endingBalance,
       startDate: startDate ? startDate.toISOString() : null,
@@ -2697,6 +2709,61 @@ const inferType = (record: Record<string, string>): TransactionType => {
   return amount >= 0 ? "income" : "expense";
 };
 
+const isHeuristicBoilerplateLine = (line: string, institution?: string | null) => {
+  const lower = line.toLowerCase();
+  if (
+    /^account\s+no\.?/i.test(line) ||
+    /^account\s+number/i.test(line) ||
+    /^customer\s+data/i.test(line) ||
+    /^currency\s+code/i.test(line) ||
+    /^short\s+name/i.test(line) ||
+    /^address/i.test(line) ||
+    /^statement\s+date/i.test(line) ||
+    /^statement\s+of\s+account/i.test(line) ||
+    /^page\s+\d+\s+of\s+\d+/i.test(line) ||
+    /^available\s+balance/i.test(line) ||
+    /^opening\s+balance/i.test(line) ||
+    /^closing\s+balance/i.test(line) ||
+    /^ending\s+balance/i.test(line) ||
+    /^beginning\s+balance/i.test(line)
+  ) {
+    return true;
+  }
+
+  if (institution === "BDO") {
+    if (/^customer\s+data/i.test(line) || /^account\s+no\.?/i.test(line) || /^currency\s+code/i.test(line) || /^short\s+name/i.test(line)) {
+      return true;
+    }
+    if (/^account\s+number/i.test(line) || /^address/i.test(line) || /bdo\s+statement\s+of\s+account/i.test(line)) {
+      return true;
+    }
+  }
+
+  if (institution === "Maya") {
+    if (/^statement\s+date/i.test(line) || /^period\s+covered/i.test(line) || /^card\s+number/i.test(line) || /^previous\s+statement\s+balance/i.test(line)) {
+      return true;
+    }
+  }
+
+  if (institution === "MariBank" || institution === "Maribank" || institution === "SeaBank" || institution === "Seabank") {
+    if (/^seabank\b/i.test(line) || /^maribank\b/i.test(line) || /^account\s+statement/i.test(line) || /^contact\s+us/i.test(line)) {
+      return true;
+    }
+    if (/^statement\s+period/i.test(line) || /^statement\s+balance/i.test(line) || /^available\s+balance/i.test(line)) {
+      return true;
+    }
+  }
+
+  // Avoid accidentally treating long ID/header rows as transactions when OCR is noisy.
+  if (/^[A-Z0-9\s,.-]{20,}$/.test(line) && !/\d{4}-\d{2}-\d{2}/.test(line) && !/\d{1,2}[/-]\d{1,2}[/-]\d{2,4}/.test(line)) {
+    if (/\b(ACCOUNT|CUSTOMER|STATEMENT|BALANCE|SUMMARY|CODE|NAME|ADDRESS|CONTACT|PERIOD)\b/i.test(line)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 const parseHeuristicLines = (text: string, institution?: string | null) => {
   const lines = text
     .split(/\r?\n/)
@@ -2705,6 +2772,10 @@ const parseHeuristicLines = (text: string, institution?: string | null) => {
 
   return lines
     .map((line) => {
+      if (isHeuristicBoilerplateLine(line, institution)) {
+        return null;
+      }
+
       const dateMatch =
         line.match(/\b\d{4}-\d{2}-\d{2}\b/) ||
         line.match(/\b\d{1,2}[/-][A-Za-z]{3}[/-]\d{2,4}\b/) ||

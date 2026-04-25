@@ -42,6 +42,7 @@ This document captures the BDO parsing rules learned from the synthetic training
 - Prefer deterministic parsing from the statement text before any AI fallback.
 - Keep raw statement data, parsed rows, and normalized transactions separate.
 - Preserve bank-specific transfer, fee, sweep, and adjustment wording instead of collapsing it into generic spend.
+- Ignore header noise like `ACCOUNT NO.`, `CURRENCY CODE`, `SHORT NAME`, `CUSTOMER DATA`, and similar statement-shell lines when they are not real transaction rows.
 
 ## Simplification Layer
 
@@ -69,4 +70,5 @@ This document captures the BDO parsing rules learned from the synthetic training
 ## Review
 
 - Unexpected `Other` categories or statement-housekeeping rows should be treated as parser review candidates.
+- If a BDO row looks like statement metadata rather than a transaction, drop it from the transaction stream and keep it only as audit/context text.
 - Rows that collapse to ambiguous system text should retain the raw description for review.
