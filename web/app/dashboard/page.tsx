@@ -1,16 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
-import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
-import { DashboardVisualsIsland } from "@/components/dashboard-visuals-island";
 import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
-import { getFinancialExperienceProfile } from "@/lib/goals";
+import { getFinancialExperienceProfile, getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
 import { PostHogEvent } from "@/components/posthog-analytics";
+import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -100,12 +100,6 @@ type WorkspaceSummary = {
     currency: string;
     balance: string | null;
   }>;
-  importFiles: Array<{
-    id: string;
-    fileName: string;
-    status: "processing" | "done" | "failed" | "deleted";
-    uploadedAt: Date;
-  }>;
   _count: {
     accounts: number;
     importFiles: number;
@@ -113,7 +107,10 @@ type WorkspaceSummary = {
   };
 };
 
+type DashboardExperienceProfile = ReturnType<typeof getFinancialExperienceProfile>;
+
 const toAmount = (value: unknown) => Number(value ?? 0);
+const formatCurrency = (value: number) => currencyFormatter.format(value);
 const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
 
@@ -137,9 +134,9 @@ const formatRelativeDate = (value: Date, now = new Date()) => {
   return relativeTimeFormatter.format(diffDays, "day");
 };
 
-const getMonthBuckets = (anchor: Date) => {
+const getMonthBuckets = (anchor: Date, count = 6) => {
   const buckets: MonthBucket[] = [];
-  for (let offset = 5; offset >= 0; offset -= 1) {
+  for (let offset = count - 1; offset >= 0; offset -= 1) {
     const date = new Date(anchor.getFullYear(), anchor.getMonth() - offset, 1);
     buckets.push({
       key: toIsoMonth(date),
@@ -329,20 +326,82 @@ const summarizeRecurringItem = (transactions: DashboardTransaction[]) => {
   )[0] ?? null;
 };
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ import?: string }>;
-}) {
-  const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const session = await getSessionContext();
-  const user = await getOrCreateCurrentUser(session.userId);
-  if (!session.isGuest && !hasCompletedOnboarding(user)) {
-    redirect("/onboarding");
-  }
+function DashboardStreamFallback() {
+  return (
+    <section className="dashboard-home" aria-label="Loading dashboard content">
+      <article className="dashboard-home__hero glass">
+        <div className="dashboard-home__copy">
+          <div className="dashboard-home__kicker-row">
+            <span className="pill pill-subtle">Loading</span>
+            <span className="pill pill-subtle">Goals</span>
+            <span className="pill pill-subtle">Reports</span>
+            <span className="pill pill-subtle">Insights</span>
+          </div>
+          <h3>Pulling your money briefing together</h3>
+          <p>Goals, reports, and insights are loading in a lighter first pass so the page can settle faster.</p>
+        </div>
+        <div className="dashboard-home__hero-visual dashboard-home__hero-visual--loading">
+          <div className="dashboard-home__ring dashboard-home__ring--loading">
+            <div className="dashboard-home__ring-inner">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+            </div>
+          </div>
+          <div className="dashboard-home__hero-visual-grid">
+            <div className="dashboard-home__mini-card dashboard-home__mini-card--loading">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+            </div>
+            <div className="dashboard-home__mini-card dashboard-home__mini-card--loading">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+            </div>
+            <div className="dashboard-home__mini-card dashboard-home__mini-card--loading">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+            </div>
+          </div>
+        </div>
+      </article>
 
-  const starterWorkspacePromise = ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
-  const selectedWorkspacePromise = prisma.workspace.findFirst({
+      <section className="dashboard-home__summary-grid dashboard-home__summary-grid--visual">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <article key={index} className="dashboard-home__summary-card glass dashboard-home__summary-card--loading">
+            <div className="dashboard-home__summary-card-head">
+              <div className="dashboard-home__summary-card-title">
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+              </div>
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+            </div>
+            <div className="dashboard-home__summary-card-body">
+              <span className="skeleton-block dashboard-home__summary-card-chart" />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <article className="dashboard-home__review-strip glass">
+        <div className="dashboard-home__review-copy">
+          <span className="eyebrow">Loading</span>
+          <strong>Waiting for the review strip</strong>
+          <span>The main summary is loading first so Clover can feel faster to understand.</span>
+        </div>
+      </article>
+    </section>
+  );
+}
+
+async function DashboardStream({
+  user,
+  resolvedSearchParams,
+}: {
+  user: Awaited<ReturnType<typeof getOrCreateCurrentUser>>;
+  resolvedSearchParams?: { import?: string };
+}) {
+  const selectedWorkspaceData = await prisma.workspace.findFirst({
     where: { userId: user.id },
     orderBy: { createdAt: "asc" },
     select: {
@@ -358,16 +417,6 @@ export default async function DashboardPage({
           balance: true,
         },
       },
-      importFiles: {
-        orderBy: { uploadedAt: "desc" },
-        take: 5,
-        select: {
-          id: true,
-          fileName: true,
-          status: true,
-          uploadedAt: true,
-        },
-      },
       _count: {
         select: {
           accounts: true,
@@ -377,69 +426,115 @@ export default async function DashboardPage({
       },
     },
   });
-  const [starterWorkspace, selectedWorkspaceData] = await Promise.all([starterWorkspacePromise, selectedWorkspacePromise]);
-  const workspaceSummary =
-    selectedWorkspaceData ??
-    ({
-      id: starterWorkspace.id,
-      name: starterWorkspace.name,
-      accounts: starterWorkspace.accounts.map((account) => ({
-        id: account.id,
-        name: account.name,
-        institution: account.institution,
-        type: account.type,
-        currency: account.currency,
-        balance: account.balance?.toString() ?? null,
-      })),
-      importFiles: [],
-      _count: {
-        accounts: starterWorkspace.accounts.length,
-        importFiles: 0,
-        transactions: 0,
-      },
-    } satisfies WorkspaceSummary);
+  let workspaceSummary = selectedWorkspaceData;
 
-  const selectedImportFiles = workspaceSummary.importFiles;
-  const cashAccountCount = workspaceSummary.accounts.filter((account) => account.type === "cash").length;
+  if (!workspaceSummary) {
+    const starterWorkspace = await ensureStarterWorkspace(user.clerkUserId, user.email, user.verified);
+    workspaceSummary = await prisma.workspace.findUnique({
+      where: { id: starterWorkspace.id },
+      select: {
+        id: true,
+        name: true,
+        accounts: {
+          select: {
+            id: true,
+            name: true,
+            institution: true,
+            type: true,
+            currency: true,
+            balance: true,
+          },
+        },
+        _count: {
+          select: {
+            accounts: true,
+            importFiles: true,
+            transactions: true,
+          },
+        },
+      },
+    });
+  }
+
+  if (!workspaceSummary) {
+    redirect("/dashboard");
+  }
+
   const accountsWithBalance = workspaceSummary.accounts.filter((account) => account.balance !== null);
   const linkedBalanceTotal = accountsWithBalance.reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
   const accountCurrencies = new Set(workspaceSummary.accounts.map((account) => account.currency).filter(Boolean));
   const trackedBalanceCurrency = accountCurrencies.size === 1 ? workspaceSummary.accounts[0]?.currency ?? null : "mixed";
   const isEmptyWorkspace =
     workspaceSummary._count.transactions === 0 && workspaceSummary._count.importFiles === 0 && workspaceSummary._count.accounts <= 1;
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-  const sixtyDaysAgo = new Date();
-  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-  const oneHundredEightyDaysAgo = new Date();
-  oneHundredEightyDaysAgo.setDate(oneHundredEightyDaysAgo.getDate() - 180);
+  const experienceProfile = getFinancialExperienceProfile(user.financialExperience);
 
-  const recentTransactions = await prisma.transaction.findMany({
-    where: {
-      workspaceId: workspaceSummary.id,
-      isExcluded: false,
-      date: {
-        gte: oneHundredEightyDaysAgo,
-      },
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const sixtyDaysAgo = new Date(now);
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const ninetyDaysAgo = new Date(now);
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+  const latestImportPromise = prisma.importFile.findFirst({
+    where: { workspaceId: workspaceSummary.id },
+    orderBy: { uploadedAt: "desc" },
+    select: {
+      id: true,
+      fileName: true,
+      status: true,
+      uploadedAt: true,
     },
-    include: {
-      category: true,
-      account: true,
-    },
-    orderBy: { date: "desc" },
-    take: 240,
   });
+
+  const shouldLoadTransactions = !selectedWorkspaceData || workspaceSummary._count.transactions > 0;
+  const transactionsPromise = shouldLoadTransactions
+    ? prisma.transaction.findMany({
+        where: {
+          workspaceId: workspaceSummary.id,
+          isExcluded: false,
+          date: { gte: ninetyDaysAgo },
+        },
+        select: {
+          id: true,
+          date: true,
+          amount: true,
+          isExcluded: true,
+          reviewStatus: true,
+          categoryConfidence: true,
+          categoryId: true,
+          type: true,
+          merchantRaw: true,
+          merchantClean: true,
+          account: {
+            select: {
+              name: true,
+            },
+          },
+          category: {
+            select: {
+              name: true,
+            },
+          },
+        },
+        orderBy: { date: "desc" },
+        take: 180,
+      })
+    : Promise.resolve([] as DashboardTransaction[]);
+
+  const [latestImport, recentTransactions] = await Promise.all([latestImportPromise, transactionsPromise]);
 
   const currentTransactions = recentTransactions as DashboardTransaction[];
   const currentThirtyDayTransactions = currentTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo);
   const previousTransactionsWindow = currentTransactions.filter(
     (transaction) => transaction.date >= sixtyDaysAgo && transaction.date < thirtyDaysAgo
   );
-  const sixMonthTransactionWindow = currentTransactions;
   const currentSummary = comparePeriods(currentThirtyDayTransactions, previousTransactionsWindow);
-  const importedThisWeekCount = selectedImportFiles.filter((file) => file.uploadedAt >= sevenDaysAgo).length;
+  const currentSavingsRate = currentSummary.current.income > 0 ? currentSummary.net / currentSummary.current.income : null;
+  const previousNet = currentSummary.previous.income - currentSummary.previous.expense;
+  const previousSavingsRate = currentSummary.previous.income > 0 ? previousNet / currentSummary.previous.income : null;
+  const spendDelta = currentSummary.current.expense - currentSummary.previous.expense;
+  const recurringItem = summarizeRecurringItem(currentTransactions);
   const uncategorizedTransactions = currentThirtyDayTransactions.filter(
     (transaction) => !transaction.category?.name || !transaction.merchantClean
   );
@@ -447,135 +542,47 @@ export default async function DashboardPage({
     (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || transaction.categoryConfidence < 70
   );
   const reviewAttentionCount = reviewAttentionTransactions.length;
-  const nextRecurringItem = summarizeRecurringItem(currentTransactions);
-  const reviewPreviewTransactions = reviewAttentionTransactions
-    .slice()
-    .sort((a, b) => a.categoryConfidence - b.categoryConfidence || b.date.getTime() - a.date.getTime())
-    .slice(0, 3);
-  const recentConfirmedRatio = currentThirtyDayTransactions.length
-    ? Math.round((currentSummary.current.confirmed / currentThirtyDayTransactions.length) * 100)
-    : 0;
   const reviewCoverageText =
     currentThirtyDayTransactions.length > 0
-      ? `${recentConfirmedRatio}% of the last 30 days is confirmed or edited`
+      ? `${Math.round((currentSummary.current.confirmed / currentThirtyDayTransactions.length) * 100)}% of the last 30 days is confirmed or edited`
       : "No recent transactions to score yet";
-  const experienceProfile = getFinancialExperienceProfile(user.financialExperience);
-  const latestImport = selectedImportFiles[0] ?? null;
-  const currentPositionCopy =
-    reviewAttentionCount > 0
-      ? `${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} still need review. ${latestImport ? `Latest import: ${latestImport.fileName} is ${latestImport.status}.` : "Import a statement to surface the next action."}`
-      : latestImport
-        ? `Latest import: ${latestImport.fileName} · ${latestImport.status}. Clover is current and ready for the next statement.`
-        : experienceProfile.currentPositionCopy;
-  const daysSinceLastImport = latestImport
-    ? Math.max(0, Math.round((Date.now() - latestImport.uploadedAt.getTime()) / (1000 * 60 * 60 * 24)))
-    : null;
-  const recentImports = selectedImportFiles.slice(0, 3);
-  const recentActivityTransactions = currentTransactions.slice(0, 4);
-  const importStatusCopy = latestImport
-    ? `${latestImport.fileName} · ${latestImport.status} · ${formatDate(latestImport.uploadedAt)}`
-    : "No statement has been imported yet";
-  const primaryAction = reviewAttentionCount > 0 ? "Review queue" : "Import statement";
-  const primaryActionHref = reviewAttentionCount > 0 ? "/review" : "/dashboard?import=1";
-  const actionStripTitle =
-    reviewAttentionCount > 0
-      ? `${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} need review`
-      : latestImport
-        ? latestImport.status === "processing"
-          ? "Latest import is still processing"
-          : latestImport.status === "failed"
-            ? "Latest import needs another try"
-            : "Your dashboard is up to date"
-        : "Import your first statement";
-  const actionStripCopy =
-    reviewAttentionCount > 0
-      ? "Clear the review queue first so Clover can trust the numbers it shows you."
-        : latestImport
-          ? `Last import: ${latestImport.fileName} · ${formatRelativeDate(latestImport.uploadedAt)}`
-          : experienceProfile.actionStripCopy;
-  const actionStripPill = reviewAttentionCount > 0 ? "Action needed" : latestImport?.status === "processing" ? "Processing" : "Ready";
-  const importedThisWeekCard = {
-    label: "Imported this week",
-    value: String(importedThisWeekCount || recentImports.length || 0),
-    note:
-      latestImport && importedThisWeekCount > 0
-        ? `${latestImport.fileName} · ${formatRelativeDate(latestImport.uploadedAt)}`
-        : latestImport
-          ? `${latestImport.fileName} · ${latestImport.status}`
-          : "No imports yet this week",
-  };
-  const needsReviewCard = {
-    label: "Needs review",
-    value: String(reviewAttentionCount),
-    note:
-      reviewAttentionCount > 0
-        ? `${reviewPreviewTransactions.length} high-priority rows are surfaced first`
-        : "No open review items right now",
-  };
-  const unresolvedItemsCard = {
-    label: "Unresolved items",
-    value: String(uncategorizedTransactions.length),
-    note:
-      uncategorizedTransactions.length > 0
-        ? `${uncategorizedTransactions.length} rows still need categorization`
-        : "Everything in the last 30 days is categorized",
-  };
-  const topCategoryCard = currentSummary.topCategory
-    ? {
-        label: "Top spending category",
-        value: `${currentSummary.topCategory[0]}`,
-        note: `${currencyFormatter.format(currentSummary.topCategory[1])} spent in the last 30 days`,
-      }
-    : {
-        label: "Top spending category",
-        value: "No spending yet",
-        note: "Import activity will surface the biggest category here",
-      };
-  const recurringItemCard = nextRecurringItem
-    ? {
-        label: "Next bill or recurring item",
-        value: nextRecurringItem.name,
-        note: `${currencyFormatter.format(nextRecurringItem.amount / nextRecurringItem.count)} per transaction · last seen ${formatRelativeDate(nextRecurringItem.lastSeen)}`,
-      }
-    : {
-        label: "Next bill or recurring item",
-        value: "No recurring item found",
-        note: "Once Clover sees repeating merchants, it will surface the next one here",
-      };
-  const currentPeriodCards = [
-    importedThisWeekCard,
-    needsReviewCard,
-    topCategoryCard,
-    recurringItemCard,
-  ];
-  const changeCards = [
-    {
-      label: "Income change",
-      value: formatSignedCurrency(currentSummary.incomeDelta),
-      note: currentSummary.incomeDelta >= 0 ? "Up versus the previous 30 days" : "Down versus the previous 30 days",
-    },
-    {
-      label: "Spending change",
-      value: formatSignedCurrency(currentSummary.expenseDelta),
-      note: currentSummary.expenseDelta >= 0 ? "More spending than last period" : "Spending cooled versus last period",
-    },
-    {
-      label: "Net change",
-      value: formatSignedCurrency(currentSummary.netDelta),
-      note: currentSummary.netDelta >= 0 ? "Better than the previous period" : "Worse than the previous period",
-    },
-    {
-      label: "What drove it",
-      value: currentSummary.biggestMover?.name ?? "No clear driver",
-      note:
-        currentSummary.biggestMover && currentSummary.biggestMover.previousAmount > 0
-          ? `${formatCompactPercentage(currentSummary.biggestMover.percentage)} above the prior period`
-          : "Clover will surface a stronger driver once more data lands",
-    },
-  ];
-  const monthBuckets = getMonthBuckets(new Date());
-  sixMonthTransactionWindow.forEach((transaction) => {
-    const bucket = getMonthBucket(transaction.date, monthBuckets);
+  const goalKey = user.primaryGoal as GoalKey | null;
+  const goalTargetAmount = user.goalTargetAmount !== null ? Number(user.goalTargetAmount) : null;
+  const goalProgress = getGoalProgressSnapshot({
+    goalKey,
+    targetAmount: goalTargetAmount,
+    currentNet: currentSummary.net,
+    currentSpend: currentSummary.current.expense,
+    monthlyIncome: currentSummary.current.income > 0 ? currentSummary.current.income : null,
+    currentSavingsRate,
+    previousSavingsRate,
+    spendDelta,
+    recurringShare: recurringItem ? recurringItem.amount / Math.max(currentSummary.current.expense, 1) : 0,
+  });
+  const goalProgressPercent = clamp(goalProgress.progressPercent ?? 0, 0, 100);
+  const confidenceScore = clamp(
+    Math.round(66 + currentTransactions.length * 0.12 - reviewAttentionCount * 2.2 - uncategorizedTransactions.length * 1.4),
+    35,
+    99
+  );
+  const confidenceLabel = confidenceScore >= 85 ? "High confidence" : confidenceScore >= 70 ? "Good confidence" : "Watch closely";
+  const latestImportLabel = latestImport ? `${latestImport.fileName} · ${latestImport.status} · ${formatRelativeDate(latestImport.uploadedAt)}` : null;
+  const currentPositionValue = linkedBalanceTotal !== 0 ? linkedBalanceTotal : currentSummary.net;
+  const currentPositionLabel = accountsWithBalance.length > 0 ? (trackedBalanceCurrency === "mixed" ? "Mixed balances" : "Tracked balance") : "Net position";
+  const topCategories = Array.from(currentSummary.current.expenseCategories.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, amount]) => ({
+      name,
+      amount,
+      share: currentSummary.current.expense > 0 ? (amount / currentSummary.current.expense) * 100 : 0,
+    }));
+  const chartWidth = 420;
+  const chartHeight = 160;
+  const chartPadding = 20;
+  const reportsBuckets = getMonthBuckets(now, 3);
+  currentTransactions.forEach((transaction) => {
+    const bucket = getMonthBucket(transaction.date, reportsBuckets);
     if (!bucket || transaction.isExcluded) {
       return;
     }
@@ -588,32 +595,32 @@ export default async function DashboardPage({
     }
     bucket.net = bucket.income - bucket.expense;
   });
+  const { points: monthPoints, linePath } = buildLinePath(reportsBuckets, chartWidth, chartHeight, chartPadding);
+  const goalAction = goalProgress.nextAction;
+  const goalProgressLabel = goalProgress.progressPercent === null ? "Set a target" : `${Math.round(goalProgress.progressPercent)}%`;
+  const topDriver = currentSummary.topCategory?.[0] ?? "No clear driver yet";
+  const topDriverAmount = currentSummary.topCategory?.[1] ?? 0;
+  const insightTrend = currentSummary.biggestMover?.name ?? recurringItem?.name ?? "Patterns are still forming";
+  const insightTrendCopy =
+    currentSummary.biggestMover && currentSummary.biggestMover.previousAmount > 0
+      ? `${formatSignedCurrency(currentSummary.biggestMover.delta)} versus the prior period`
+      : recurringItem
+        ? `${recurringItem.count} repeats over the last 90 days`
+        : "More activity will sharpen the insight";
+  const reviewAttentionText =
+    reviewAttentionCount > 0
+      ? `${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} need review`
+      : "No items need review";
+  const goalSummaryLabel = goalTargetAmount !== null ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}` : goalProgress.currentLabel;
+  const reportDirectionLabel = currentSummary.net >= currentSummary.previousNet ? "Improving" : "Softening";
+  const reportNetLabel = formatSignedCurrency(currentSummary.net);
+  const reportIncomeLabel = formatSignedCurrency(currentSummary.current.income);
+  const reportExpenseLabel = formatSignedCurrency(currentSummary.current.expense);
+  const reportSparkPath =
+    monthPoints.length > 1 ? linePath : `M ${chartPadding} ${chartHeight / 2} L ${chartWidth - chartPadding} ${chartHeight / 2}`;
 
-  const chartWidth = 520;
-  const chartHeight = 210;
-  const chartPadding = 24;
-  const { points: monthPoints, linePath } = buildLinePath(monthBuckets, chartWidth, chartHeight, chartPadding);
-  const topCategoryRows: VisualCategory[] = Array.from(currentSummary.current.expenseCategories.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 4)
-    .map(([name, amount]) => ({
-      name,
-      amount,
-      share: currentSummary.current.expense > 0 ? (amount / currentSummary.current.expense) * 100 : 0,
-    }));
   return (
-    <CloverShell
-      active="dashboard"
-      kicker="Home"
-      title="Your finances at a glance"
-      subtitle={experienceProfile.dashboardSubtitle}
-      showTopbar={false}
-      actions={
-        <Link className="pill-link" href={reviewAttentionCount > 0 ? "/review" : "/dashboard?import=1"}>
-          {reviewAttentionCount > 0 ? "Review queue" : "Import statement"}
-        </Link>
-      }
-    >
+    <>
       <PostHogEvent
         event="dashboard_viewed"
         onceKey={analyticsOnceKey("dashboard_viewed", "session")}
@@ -637,215 +644,270 @@ export default async function DashboardPage({
         </div>
       ) : null}
       <section className="dashboard-home">
-        <article className="dashboard-home__priority-strip glass">
-          <div className="dashboard-home__priority-copy">
-            <span className={`dashboard-visual-pill ${reviewAttentionCount > 0 ? "negative" : latestImport?.status === "processing" ? "positive" : ""}`}>
-              {actionStripPill}
-            </span>
-            <div>
-              <p className="eyebrow">Next best action</p>
-              <h4>{actionStripTitle}</h4>
-            </div>
-            <p>{actionStripCopy}</p>
-          </div>
-          <div className="dashboard-home__priority-actions">
-            <Link className="button button-primary button-small" href={primaryActionHref}>
-              {primaryAction}
-            </Link>
-            <span className="dashboard-home__priority-hint">Keep Clover focused on the next action, not a stack of equal buttons.</span>
-          </div>
-        </article>
-
         <article className="dashboard-home__hero glass">
           <div className="dashboard-home__copy">
             <div className="dashboard-home__kicker-row">
-              <span className="pill pill-accent">What needs attention now</span>
+              <span className="pill pill-accent">Goals</span>
+              <span className="pill pill-subtle">Reports</span>
+              <span className="pill pill-subtle">Insights</span>
               <span className="pill pill-subtle">{workspaceSummary.name}</span>
-              <span className="pill pill-subtle">{latestImport ? `Last import ${formatRelativeDate(latestImport.uploadedAt)}` : "No import yet"}</span>
+              {latestImport ? <span className="pill pill-subtle">{formatRelativeDate(latestImport.uploadedAt)}</span> : null}
             </div>
 
-            <h3>
-              {reviewAttentionCount > 0
-                ? `${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} need review.`
-                : latestImport
-                  ? "Your latest import is ready to reconcile."
-                  : "Import a statement to unlock the dashboard."}
-            </h3>
-            <p>{currentPositionCopy}</p>
+            <h3>{goalKey ? "How close are you to your goal?" : "Your finances at a glance, with the important patterns up front."}</h3>
+            <p>{goalProgress.coachCopy}</p>
 
-            <div className="dashboard-home__decision-grid">
-              {currentPeriodCards.map((card) => (
-                <article key={card.label} className="dashboard-home__decision-card">
-                  <span>{card.label}</span>
-                  <strong>{card.value}</strong>
-                  <small>{card.note}</small>
-                </article>
-              ))}
+            <div className="dashboard-home__hero-metrics">
+              <div className="dashboard-home__mini-card">
+                <span>Goal pace</span>
+                <strong>{goalProgressLabel}</strong>
+                <small>{goalProgress.bandLabel}</small>
+              </div>
+              <div className="dashboard-home__mini-card">
+                <span>{currentPositionLabel}</span>
+                <strong>{formatSignedCurrency(currentPositionValue)}</strong>
+                <small>{currentSummary.net >= 0 ? "Positive cash flow" : "Negative cash flow"}</small>
+              </div>
+              <div className="dashboard-home__mini-card">
+                <span>Signal quality</span>
+                <strong>{confidenceLabel}</strong>
+                <small>{reviewCoverageText}</small>
+              </div>
             </div>
           </div>
 
-          <div className="dashboard-home__rail">
-            <article className="dashboard-home__rail-card">
-              <div className="dashboard-home__rail-head">
-                <div>
-                  <p className="eyebrow">Live status</p>
-                  <h4>{latestImport ? latestImport.fileName : "No import yet"}</h4>
-                </div>
-                <span
-                  className={`dashboard-visual-pill ${
-                    latestImport ? (latestImport.status === "failed" ? "negative" : "positive") : "negative"
-                  }`}
-                >
-                  {latestImport ? latestImport.status : "Waiting"}
-                </span>
+          <div className="dashboard-home__hero-visual">
+            <div
+              className="dashboard-home__ring"
+              style={{
+                background: `conic-gradient(var(--accent) 0 ${goalProgressPercent}%, rgba(15, 23, 42, 0.08) ${goalProgressPercent}% 100%)`,
+              }}
+            >
+              <div className="dashboard-home__ring-inner">
+                <strong>{goalProgress.progressPercent === null ? "Set" : `${Math.round(goalProgress.progressPercent)}%`}</strong>
+                <span>{goalProgress.bandLabel}</span>
               </div>
-              <p>{latestImport ? importStatusCopy : "Import a statement to populate this workspace with live status, review, and movement data."}</p>
-              <div className="dashboard-home__list">
-                <div className="dashboard-home__item">
-                  <strong>Imported this week</strong>
-                  <span>{importedThisWeekCard.value} import{importedThisWeekCard.value === "1" ? "" : "s"} · {importedThisWeekCard.note}</span>
-                </div>
-                <div className="dashboard-home__item">
-                  <strong>Needs review</strong>
-                  <span>{needsReviewCard.note}</span>
-                </div>
-                <div className="dashboard-home__item">
-                  <strong>Unresolved items</strong>
-                  <span>{unresolvedItemsCard.note}</span>
-                </div>
+            </div>
+            <div className="dashboard-home__hero-visual-grid">
+              <div className="dashboard-home__mini-card">
+                <span>Goals</span>
+                <strong>{goalSummaryLabel}</strong>
+                <small>{goalAction}</small>
               </div>
-              <Link className="pill-link pill-link--inline" href={primaryActionHref}>
-                {primaryAction}
-              </Link>
-            </article>
+              <div className="dashboard-home__mini-card">
+                <span>Reports</span>
+                <strong>{reportNetLabel}</strong>
+                <small>
+                  {reportIncomeLabel} in, {reportExpenseLabel} out
+                </small>
+              </div>
+              <div className="dashboard-home__mini-card">
+                <span>Insights</span>
+                <strong>{topDriver}</strong>
+                <small>
+                  {insightTrend} · {insightTrendCopy} · {formatCurrency(topDriverAmount)} this period
+                </small>
+              </div>
+            </div>
           </div>
         </article>
 
-        <DashboardImportLauncher workspaceId={workspaceSummary.id} accounts={workspaceSummary.accounts} initialOpen={resolvedSearchParams?.import === "1"} />
-
-        <section className="dashboard-home__decision-grid">
-          <article className="dashboard-home__decision-card dashboard-home__decision-card--strong glass">
-            <div className="dashboard-home__decision-head">
+        <section className="dashboard-home__summary-grid dashboard-home__summary-grid--visual">
+          <article className="dashboard-home__summary-card glass">
+            <div className="dashboard-home__summary-card-head">
               <div>
-                <p className="eyebrow">What changed since last period</p>
-                <h4>Movement that needs your attention</h4>
+                <p className="eyebrow">Goals</p>
+                <h4>{goalKey ? `How close are you to ${goalProgress.bandLabel.toLowerCase()}?` : "Set a goal to make this dashboard more useful"}</h4>
+              </div>
+              <span className="dashboard-visual-pill">{goalProgressLabel}</span>
+            </div>
+            <div className="dashboard-home__summary-card-body">
+              <div className="dashboard-home__goal-ring-row">
+                <div
+                  className="dashboard-home__ring dashboard-home__ring--compact"
+                  style={{
+                    background: `conic-gradient(var(--accent) 0 ${goalProgressPercent}%, rgba(15, 23, 42, 0.08) ${goalProgressPercent}% 100%)`,
+                  }}
+                >
+                  <div className="dashboard-home__ring-inner">
+                    <strong>{goalProgress.progressPercent === null ? "—" : `${Math.round(goalProgress.progressPercent)}%`}</strong>
+                    <span>{goalProgress.bandTone === "positive" ? "On track" : goalProgress.bandLabel}</span>
+                  </div>
+                </div>
+                <div className="dashboard-home__mini-card dashboard-home__mini-card--stacked">
+                  <strong>{goalProgress.label}</strong>
+                  <span>
+                    {goalSummaryLabel}
+                    {goalTargetAmount !== null ? ` · target ${formatCurrency(goalTargetAmount)}` : ""}
+                  </span>
+                  <small>{goalAction}</small>
+                </div>
               </div>
             </div>
-            <div className="dashboard-home__change-grid">
-              {changeCards.map((card) => (
-                <div key={card.label} className="dashboard-home__item">
-                  <strong>{card.label}</strong>
-                  <span>{card.value}</span>
-                  <small>{card.note}</small>
+          </article>
+
+          <article className="dashboard-home__summary-card glass">
+            <div className="dashboard-home__summary-card-head">
+              <div>
+                <p className="eyebrow">Reports</p>
+                <h4>How the last three months moved</h4>
+              </div>
+              <span className={`dashboard-visual-pill ${currentSummary.net >= currentSummary.previousNet ? "positive" : "negative"}`}>
+                {reportDirectionLabel}
+              </span>
+            </div>
+            <div className="dashboard-home__summary-card-body">
+              <div className="dashboard-line-chart dashboard-line-chart--compact" role="img" aria-label="Net cash flow over the last three months">
+                <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
+                  <defs>
+                    <linearGradient id="dashboard-flow-gradient" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="rgba(3, 168, 192, 0.34)" />
+                      <stop offset="100%" stopColor="rgba(3, 168, 192, 0.03)" />
+                    </linearGradient>
+                  </defs>
+                  <path
+                    d={`${reportSparkPath} L ${chartWidth - chartPadding} ${chartHeight - chartPadding} L ${chartPadding} ${chartHeight - chartPadding} Z`}
+                    fill="url(#dashboard-flow-gradient)"
+                  />
+                  <path d={reportSparkPath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                  {monthPoints.map((point) => (
+                    <circle key={point.key} cx={point.x} cy={point.y} r="4.5" fill="white" stroke="var(--accent)" strokeWidth="3" />
+                  ))}
+                </svg>
+              </div>
+              <div className="dashboard-home__reports-grid">
+                <div className="dashboard-home__mini-card">
+                  <span>Net position</span>
+                  <strong>{reportNetLabel}</strong>
+                  <small>{currentSummary.net >= currentSummary.previousNet ? "Up versus the prior window" : "Down versus the prior window"}</small>
                 </div>
-              ))}
+                <div className="dashboard-home__mini-card">
+                  <span>Income</span>
+                  <strong>{reportIncomeLabel}</strong>
+                  <small>{currentSummary.current.income > currentSummary.previous.income ? "Higher than last window" : "Lower than last window"}</small>
+                </div>
+                <div className="dashboard-home__mini-card">
+                  <span>Spending</span>
+                  <strong>{reportExpenseLabel}</strong>
+                  <small>{currentSummary.current.expense > currentSummary.previous.expense ? "More than last window" : "Less than last window"}</small>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article className="dashboard-home__summary-card glass">
+            <div className="dashboard-home__summary-card-head">
+              <div>
+                <p className="eyebrow">Insights</p>
+                <h4>What is driving the month</h4>
+              </div>
+              <span className="dashboard-visual-pill">{confidenceLabel}</span>
+            </div>
+            <div className="dashboard-home__summary-card-body">
+              <div className="dashboard-home__insight-bars">
+                {topCategories.length > 0 ? (
+                  topCategories.map((category, index) => (
+                    <div key={category.name} className="dashboard-home__insight-bar">
+                      <div className="dashboard-home__insight-bar-meta">
+                        <strong>{category.name}</strong>
+                        <span>
+                          {formatCurrency(category.amount)} · {formatCompactPercentage(category.share)}
+                        </span>
+                      </div>
+                      <div className="dashboard-home__insight-track" aria-hidden="true">
+                        <div className={`dashboard-home__insight-fill dashboard-home__insight-fill--${index % 4}`} style={{ width: `${Math.max(category.share, 10)}%` }} />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="dashboard-home__item dashboard-home__item--empty">
+                    <strong>No insight signal yet</strong>
+                    <span>Import a statement or add transactions to surface the strongest pattern.</span>
+                  </div>
+                )}
+              </div>
+              <div className="dashboard-home__insight-footer">
+                <div className="dashboard-home__mini-card">
+                  <span>Recurring item</span>
+                  <strong>{recurringItem ? recurringItem.name : "Nothing repeating yet"}</strong>
+                  <small>
+                    {recurringItem
+                      ? `${formatCurrency(recurringItem.amount / recurringItem.count)} per transaction · last seen ${formatRelativeDate(recurringItem.lastSeen)}`
+                      : "Clover will surface repeating bills here"}
+                  </small>
+                </div>
+                <div className="dashboard-home__mini-card">
+                  <span>Signal quality</span>
+                  <strong>{Math.round(confidenceScore)}%</strong>
+                  <small>{reviewCoverageText}</small>
+                </div>
+              </div>
             </div>
           </article>
         </section>
 
-        <section className="dashboard-home__support-grid">
-          <article className="dashboard-home__panel glass">
-            <div className="dashboard-home__panel-head">
-              <div>
-                <p className="eyebrow">Recent activity</p>
-                <h4>Imports and transactions from the latest session</h4>
-              </div>
-            </div>
-            <div className="dashboard-home__activity">
-              {recentImports.length > 0 || recentActivityTransactions.length > 0 ? (
-                <>
-                  {recentImports.length > 0 ? (
-                    <div className="dashboard-home__activity-section">
-                      <strong className="dashboard-home__section-label">Recent imports</strong>
-                      {recentImports.map((file) => (
-                        <Link key={file.id} className="dashboard-home__item dashboard-home__item-link" href="/imports">
-                          <strong>{file.fileName}</strong>
-                          <span>
-                            <span className={`status status--${file.status}`}>{file.status}</span> · {formatRelativeDate(file.uploadedAt)}
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="dashboard-home__item dashboard-home__item--empty">
-                      <strong>No imports yet</strong>
-                      <span>Import a statement to give Clover a recent activity trail to summarize.</span>
-                    </div>
-                  )}
+        <article className="dashboard-home__review-strip glass">
+          <div className="dashboard-home__review-copy">
+            <p className="eyebrow">Review, if needed</p>
+            <strong>{reviewAttentionText}</strong>
+            <span>{latestImportLabel ?? "Import a statement to populate the dashboard with live data."}</span>
+          </div>
+          <div className="dashboard-home__review-actions">
+            <Link className="button button-primary button-small" href="/review">
+              Open review
+            </Link>
+            <Link className="pill-link pill-link--inline" href="/dashboard?import=1">
+              Import statement
+            </Link>
+          </div>
+        </article>
 
-                  {recentActivityTransactions.length > 0 ? (
-                    <div className="dashboard-home__activity-section">
-                      <strong className="dashboard-home__section-label">Recent transactions</strong>
-                      {recentActivityTransactions.map((transaction) => (
-                        <Link key={transaction.id} className="dashboard-home__item dashboard-home__item-link" href={`/transactions?review=${transaction.id}`}>
-                          <strong>{transaction.merchantClean || transaction.merchantRaw}</strong>
-                          <span>
-                            {transaction.account.name}
-                            {transaction.category?.name ? ` · ${transaction.category.name}` : ""} ·{" "}
-                            {currencyFormatter.format(Math.abs(toAmount(transaction.amount)))}
-                          </span>
-                        </Link>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="dashboard-home__item dashboard-home__item--empty">
-                      <strong>No transactions yet</strong>
-                      <span>Import a statement or add a manual transaction so the dashboard can show what changed.</span>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="dashboard-home__item dashboard-home__item--empty">
-                  <strong>No recent activity</strong>
-                  <span>Import your next statement and Clover will turn it into a living activity feed.</span>
-                </div>
-              )}
-            </div>
-          </article>
-
-          <article className="dashboard-home__panel glass">
-            <div className="dashboard-home__panel-head">
-              <div>
-                <p className="eyebrow">What changed since last period</p>
-                <h4>How the numbers moved and how much Clover can trust</h4>
-              </div>
-            </div>
-            <div className="dashboard-home__summary-grid">
-              <div className="dashboard-home__item">
-                <strong>Income</strong>
-                <span>{formatSignedCurrency(currentSummary.incomeDelta)} vs the previous 30 days</span>
-              </div>
-              <div className="dashboard-home__item">
-                <strong>Spending</strong>
-                <span>{formatSignedCurrency(currentSummary.expenseDelta)} vs the previous 30 days</span>
-              </div>
-              <div className="dashboard-home__item">
-                <strong>Net</strong>
-                <span>{formatSignedCurrency(currentSummary.netDelta)} versus the previous 30 days</span>
-              </div>
-              <div className="dashboard-home__item">
-                <strong>Trust</strong>
-                <span>
-                  {reviewCoverageText}
-                  {uncategorizedTransactions.length > 0 ? ` · ${uncategorizedTransactions.length} need categorization` : ""}
-                </span>
-              </div>
-            </div>
-          </article>
-        </section>
-
-        {/* Keep the dashboard visuals as a separate client island so the shell can stream cleanly. */}
-        <DashboardVisualsIsland
-          currentNetDelta={currentSummary.netDelta}
-          currentExpense={currentSummary.current.expense}
-          monthPoints={monthPoints}
-          linePath={linePath}
-          chartWidth={chartWidth}
-          chartHeight={chartHeight}
-          chartPadding={chartPadding}
-          topCategoryRows={topCategoryRows}
+        <DashboardImportLauncher
+          workspaceId={workspaceSummary.id}
+          accounts={workspaceSummary.accounts.map((account) => ({
+            id: account.id,
+            name: account.name,
+            institution: account.institution,
+            type: account.type,
+            currency: account.currency,
+          }))}
+          initialOpen={resolvedSearchParams?.import === "1"}
         />
       </section>
+    </>
+  );
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ import?: string }>;
+}) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const session = await getSessionContext();
+  const user = await getOrCreateCurrentUser(session.userId);
+  if (!session.isGuest && !hasCompletedOnboarding(user)) {
+    redirect("/onboarding");
+  }
+
+  const experienceProfile = getFinancialExperienceProfile(user.financialExperience);
+
+  return (
+    <CloverShell
+      active="dashboard"
+      kicker="Home"
+      title="Your finances at a glance"
+      subtitle={experienceProfile.dashboardSubtitle}
+      showTopbar={false}
+      actions={
+        <Link className="pill-link" href="/goals">
+          Open goals
+        </Link>
+      }
+    >
+      <Suspense fallback={<DashboardStreamFallback />}>
+        <DashboardStream user={user} resolvedSearchParams={resolvedSearchParams} />
+      </Suspense>
     </CloverShell>
   );
 }
