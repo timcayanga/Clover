@@ -816,6 +816,32 @@ const parseAubSavingsTransactionLine = (
   } satisfies ParsedImportRow;
 };
 
+const detectAubSavingsSummaryBalance = (text: string) => {
+  const normalized = normalizeWhitespace(text);
+  const patterns = [
+    /Closing Balance Total\s+([0-9][0-9,]*\.\d{2})/gi,
+    /Current Balance\s+([0-9][0-9,]*\.\d{2})/gi,
+    /Available Balance\s+([0-9][0-9,]*\.\d{2})/gi,
+  ];
+
+  const matches: Array<{ value: number; index: number }> = [];
+  for (const pattern of patterns) {
+    for (const match of normalized.matchAll(pattern)) {
+      const value = parseMoney(match[1]);
+      if (value !== null) {
+        matches.push({ value, index: match.index ?? 0 });
+      }
+    }
+  }
+
+  if (matches.length === 0) {
+    return null;
+  }
+
+  matches.sort((a, b) => a.index - b.index);
+  return matches.at(-1)?.value ?? null;
+};
+
 const aubCardTransactionPattern = /(\d{2}\/\d{2}\/\d{2})\s*(?:\|\s*)?(\d{2}\/\d{2}\/\d{2})\s*(?:\|\s*)?(.+?)\s*(?:\|\s*)?(-?[0-9][0-9,]*\.\d{2})/g;
 
 const guessAubCardCategoryName = (description: string, type: TransactionType) => {
@@ -945,7 +971,7 @@ const parseAubSavingsImportText = (text: string) => {
 
   const rows: ParsedImportRow[] = [];
   const lines = normalizedText.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
-  const rowStartPattern = /^(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})\s+[A-Z0-9-]+\s+[A-Z0-9-]+\s+[0-9][0-9,]*\.\d{2}/i;
+  const rowStartPattern = /^(\d{4}-\d{2}-\d{2}|\d{1,2}\/\d{1,2}\/\d{4})\s+[A-Z0-9-]+(?:\s+[A-Z0-9-]+)?(?:\s+[0-9][0-9,]*\.\d{2})?/i;
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
@@ -958,7 +984,7 @@ const parseAubSavingsImportText = (text: string) => {
       continue;
     }
 
-    const maxSpan = Math.min(4, lines.length - index);
+    const maxSpan = Math.min(8, lines.length - index);
     for (let span = 1; span <= maxSpan; span += 1) {
       const candidate = lines.slice(index, index + span).join(" ");
       const parsed = parseAubSavingsTransactionLine(candidate, {
@@ -991,7 +1017,7 @@ const parseAubSavingsImportText = (text: string) => {
   const lastRow = rows.at(-1);
   const lastRowPayload = lastRow?.rawPayload && typeof lastRow.rawPayload === "object" ? (lastRow.rawPayload as Record<string, unknown>) : null;
   const lastRowBalance = lastRowPayload && typeof lastRowPayload.balanceText === "string" ? parseMoney(lastRowPayload.balanceText) : null;
-  const endingBalance = getTrailingBalanceFromParsedRows(rows) ?? lastRowBalance;
+  const endingBalance = detectAubSavingsSummaryBalance(normalizedText) ?? getTrailingBalanceFromParsedRows(rows) ?? lastRowBalance;
 
   return {
     metadata: {
