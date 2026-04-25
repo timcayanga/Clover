@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { AccountBrandMark } from "@/components/account-brand-mark";
-import { deriveReconciledBalance } from "@/lib/account-balance";
 import { getAccountBrand } from "@/lib/account-brand";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { clearWorkspaceCache, normalizeImportedAccountKey } from "@/lib/workspace-cache";
@@ -61,6 +60,8 @@ const currencyFormatter = new Intl.NumberFormat("en-PH", {
   currency: "PHP",
   minimumFractionDigits: 2,
 });
+
+const TRANSACTION_PAGE_SIZE = 25;
 
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", {
@@ -282,6 +283,11 @@ function AccountDetailPageContent() {
 
   const [account, setAccount] = useState<Account | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactionPage, setTransactionPage] = useState(1);
+  const [transactionTotalCount, setTransactionTotalCount] = useState(0);
+  const [transactionsLoading, setTransactionsLoading] = useState(true);
+  const [transactionsLoadingMore, setTransactionsLoadingMore] = useState(false);
+  const [transactionsError, setTransactionsError] = useState<string | null>(null);
   const [checkpoints, setCheckpoints] = useState<StatementCheckpoint[]>([]);
   const [message, setMessage] = useState("Loading account history...");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -292,7 +298,11 @@ function AccountDetailPageContent() {
 
     const load = async () => {
       try {
-        const accountResponse = await fetch(`/api/accounts/${accountId}`);
+        const accountPromise = fetch(`/api/accounts/${accountId}`);
+        const transactionsPromise = fetch(`/api/accounts/${accountId}/transactions?page=1&pageSize=${TRANSACTION_PAGE_SIZE}`);
+        const checkpointsPromise = fetch(`/api/accounts/${accountId}/statement-checkpoints`);
+
+        const accountResponse = await accountPromise;
         if (!accountResponse.ok) {
           throw new Error("Unable to load this account.");
         }
@@ -305,22 +315,37 @@ function AccountDetailPageContent() {
 
         setAccount(nextAccount);
 
-        const transactionsPromise = fetch(
-          `/api/transactions?workspaceId=${encodeURIComponent(nextAccount.workspaceId)}&accountId=${encodeURIComponent(nextAccount.id)}`
-        );
-        const checkpointsPromise = fetch(`/api/accounts/${accountId}/statement-checkpoints`);
+        void transactionsPromise
+          .then(async (response) => {
+            if (!response.ok || cancelled) {
+              if (!cancelled && !response.ok) {
+                setTransactionsError("Unable to load account transactions.");
+                setTransactionsLoading(false);
+              }
+              return;
+            }
 
-        const transactionsResponse = await transactionsPromise;
-        if (!transactionsResponse.ok) {
-          throw new Error("Unable to load account transactions.");
-        }
+            const transactionsPayload = (await response.json()) as {
+              transactions?: Transaction[];
+              page?: number;
+              totalCount?: number;
+            } | null;
 
-        const transactionsPayload = await transactionsResponse.json();
-        const allTransactions = Array.isArray(transactionsPayload.transactions) ? (transactionsPayload.transactions as Transaction[]) : [];
-        if (!cancelled) {
-          setTransactions(allTransactions.filter((transaction) => transaction.accountId === nextAccount.id));
-          setMessage("");
-        }
+            if (!cancelled) {
+              setTransactions(Array.isArray(transactionsPayload?.transactions) ? transactionsPayload.transactions : []);
+              setTransactionPage(typeof transactionsPayload?.page === "number" ? transactionsPayload.page : 1);
+              setTransactionTotalCount(typeof transactionsPayload?.totalCount === "number" ? transactionsPayload.totalCount : 0);
+              setTransactionsError(null);
+              setTransactionsLoading(false);
+              setMessage("");
+            }
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setTransactionsError("Unable to load account transactions.");
+              setTransactionsLoading(false);
+            }
+          });
 
         void checkpointsPromise
           .then(async (response) => {
@@ -337,6 +362,7 @@ function AccountDetailPageContent() {
       } catch (error) {
         if (!cancelled) {
           setMessage(error instanceof Error ? error.message : "Unable to load this account.");
+          setTransactionsLoading(false);
         }
       }
     };
@@ -347,11 +373,6 @@ function AccountDetailPageContent() {
       cancelled = true;
     };
   }, [accountId]);
-
-  const openingBalanceEntry = useMemo(
-    () => transactions.find((transaction) => transaction.merchantRaw === "Beginning balance") ?? null,
-    [transactions]
-  );
 
   const accountCheckpointKey = useMemo(
     () => normalizeImportedAccountKey(account?.name, account?.institution),
@@ -403,16 +424,6 @@ function AccountDetailPageContent() {
     [transactions]
   );
 
-  const reconciledBalance = useMemo(
-    () =>
-      deriveReconciledBalance({
-        balance: account?.balance ?? null,
-        transactions,
-        checkpoints,
-      }),
-    [account?.balance, checkpoints, transactions]
-  );
-
   const accountBrand = useMemo(
     () =>
       getAccountBrand({
@@ -428,7 +439,7 @@ function AccountDetailPageContent() {
   }, [latestCheckpoint]);
 
   const checkpointBalance = useMemo(() => parseAmount(latestCheckpoint?.endingBalance), [latestCheckpoint?.endingBalance]);
-  const currentBalance = parseAmount(reconciledBalance ?? account?.balance);
+  const currentBalance = parseAmount(account?.balance);
   const checkpointGap =
     latestCheckpoint && Number.isFinite(checkpointBalance) && Number.isFinite(currentBalance)
       ? checkpointBalance - currentBalance
@@ -451,12 +462,38 @@ function AccountDetailPageContent() {
   }, [checkpointGap, latestCheckpoint]);
 
   const visibleTransactions = useMemo(
-    () =>
-      transactions
-        .filter((transaction) => transaction.merchantRaw !== "Beginning balance")
-        .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime()),
+    () => transactions.filter((transaction) => transaction.merchantRaw !== "Beginning balance"),
     [transactions]
   );
+
+  const hasMoreTransactions = transactionTotalCount > transactions.length;
+
+  const loadMoreTransactions = async () => {
+    if (!account || transactionsLoadingMore || !hasMoreTransactions) {
+      return;
+    }
+
+    const nextPage = transactionPage + 1;
+    setTransactionsLoadingMore(true);
+    try {
+      const response = await fetch(`/api/accounts/${accountId}/transactions?page=${nextPage}&pageSize=${TRANSACTION_PAGE_SIZE}`);
+      if (!response.ok) {
+        throw new Error("Unable to load more transactions.");
+      }
+
+      const payload = (await response.json()) as { transactions?: Transaction[]; page?: number; totalCount?: number } | null;
+      const nextTransactions = Array.isArray(payload?.transactions) ? payload.transactions : [];
+      setTransactions((current) => [...current, ...nextTransactions]);
+      setTransactionPage(typeof payload?.page === "number" ? payload.page : nextPage);
+      if (typeof payload?.totalCount === "number") {
+        setTransactionTotalCount(payload.totalCount);
+      }
+    } catch (error) {
+      setTransactionsError(error instanceof Error ? error.message : "Unable to load more transactions.");
+    } finally {
+      setTransactionsLoadingMore(false);
+    }
+  };
 
   const openTransactionsPage = () => {
     if (!account) {
@@ -536,14 +573,14 @@ function AccountDetailPageContent() {
             <div className="status-card">
               <div>
                 <div className="panel-muted">Current balance</div>
-                <strong>{currencyFormatter.format(parseAmount(reconciledBalance ?? account.balance))}</strong>
+                <strong>{currencyFormatter.format(currentBalance)}</strong>
                 <span>{accountBalanceContext.label}</span>
               </div>
             </div>
             <div className="status-card">
               <div>
                 <div className="panel-muted">Spendable amount</div>
-                <strong>{currencyFormatter.format(isSpendableAccountType(account.type) ? parseAmount(reconciledBalance ?? account.balance) : 0)}</strong>
+                <strong>{currencyFormatter.format(isSpendableAccountType(account.type) ? currentBalance : 0)}</strong>
                 <span>{isSpendableAccountType(account.type) ? "Ready to use now" : "Not immediately spendable"}</span>
               </div>
             </div>
@@ -586,80 +623,92 @@ function AccountDetailPageContent() {
           </div>
         ) : null}
 
-        {openingBalanceEntry ? (
-          <div className="status-card" style={{ marginTop: 20 }}>
-            <div>
-              <div className="panel-muted">Opening balance</div>
-              <strong>{formatDate(openingBalanceEntry.date)}</strong>
-            </div>
-            <strong>{currencyFormatter.format(parseAmount(openingBalanceEntry.amount))}</strong>
-          </div>
-        ) : null}
-
         <div className="accounts-detail__transactions glass" style={{ marginTop: 24 }}>
           <div className="accounts-detail__reconciliation-head">
             <div>
               <p className="eyebrow">Transaction history</p>
               <h3>All transactions</h3>
             </div>
-            <button className="button button-secondary button-small" type="button" onClick={openTransactionsPage}>
-              Open in Transactions
-            </button>
-          </div>
-          {visibleTransactions.length > 0 ? (
-            <div className="accounts-detail__transaction-list" aria-label="Transaction history">
-              <div className="line-item-header accounts-detail__transaction-header">
-                <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
-                <button className="line-item-header-cell line-item-header-cell--name" type="button">
-                  Name
-                </button>
-                <button className="line-item-header-cell" type="button">
-                  Date
-                </button>
-                <button className="line-item-header-cell" type="button">
-                  Category
-                </button>
-                <button className="line-item-header-cell" type="button">
-                  Type
-                </button>
-                <button className="line-item-header-cell line-item-header-cell--amount" type="button">
-                  Amount
-                </button>
-              </div>
-              {visibleTransactions.map((transaction) => {
-                const amount = Number(transaction.amount);
-                const amountToneClass = transaction.type === "income" ? "positive" : "negative";
-                const merchantDisplay = transaction.merchantClean || transaction.merchantRaw;
-                const subtext =
-                  transaction.description && transaction.description.trim() && transaction.description !== merchantDisplay
-                    ? transaction.description
-                    : transaction.source === "upload"
-                      ? "Imported"
-                      : transaction.source === "manual"
-                        ? "Manual"
-                        : "";
-
-                return (
-                  <div key={transaction.id} className={`line-item accounts-detail__transaction-row ${transaction.isExcluded ? "is-muted" : ""}`}>
-                    <div className="transaction-category-icon-cell" aria-hidden="true">
-                      <span className="transaction-category-icon" style={getCategoryIconTone(transaction.categoryName)}>
-                        <img src={getCategoryIconSrc(transaction.categoryName)} alt="" aria-hidden="true" />
-                      </span>
-                    </div>
-                    <div className="accounts-detail__transaction-name">
-                      <strong>{merchantDisplay}</strong>
-                      {subtext ? <span>{subtext}</span> : null}
-                    </div>
-                    <div className="accounts-detail__transaction-date">{formatDate(transaction.date)}</div>
-                    <div className="accounts-detail__transaction-category">{transaction.categoryName || "Other"}</div>
-                    <div className="accounts-detail__transaction-type">{getTransactionTypeLabel(transaction.type)}</div>
-                    <div className={`accounts-detail__transaction-amount ${amountToneClass}`}>
-                      {currencyFormatter.format(amount)}
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="accounts-detail__transactions-actions">
+              <span className="accounts-detail__transactions-count">
+                {transactionsLoading ? "Loading..." : `${visibleTransactions.length} of ${transactionTotalCount} loaded`}
+              </span>
+              <button className="button button-secondary button-small" type="button" onClick={openTransactionsPage} disabled={!account}>
+                Open in Transactions
+              </button>
             </div>
+          </div>
+          {transactionsLoading ? (
+            <div className="accounts-detail__transactions-loading">
+              <span />
+              <span />
+              <span />
+            </div>
+          ) : transactionsError ? (
+            <p className="panel-muted">{transactionsError}</p>
+          ) : visibleTransactions.length > 0 ? (
+            <>
+              <div className="accounts-detail__transaction-list" aria-label="Transaction history">
+                <div className="line-item-header accounts-detail__transaction-header">
+                  <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
+                  <button className="line-item-header-cell line-item-header-cell--name" type="button">
+                    Name
+                  </button>
+                  <button className="line-item-header-cell" type="button">
+                    Date
+                  </button>
+                  <button className="line-item-header-cell" type="button">
+                    Category
+                  </button>
+                  <button className="line-item-header-cell" type="button">
+                    Type
+                  </button>
+                  <button className="line-item-header-cell line-item-header-cell--amount" type="button">
+                    Amount
+                  </button>
+                </div>
+                {visibleTransactions.map((transaction) => {
+                  const amount = Number(transaction.amount);
+                  const amountToneClass = transaction.type === "income" ? "positive" : "negative";
+                  const merchantDisplay = transaction.merchantClean || transaction.merchantRaw;
+                  const subtext =
+                    transaction.description && transaction.description.trim() && transaction.description !== merchantDisplay
+                      ? transaction.description
+                      : transaction.source === "upload"
+                        ? "Imported"
+                        : transaction.source === "manual"
+                          ? "Manual"
+                          : "";
+
+                  return (
+                    <div key={transaction.id} className={`line-item accounts-detail__transaction-row ${transaction.isExcluded ? "is-muted" : ""}`}>
+                      <div className="transaction-category-icon-cell" aria-hidden="true">
+                        <span className="transaction-category-icon" style={getCategoryIconTone(transaction.categoryName)}>
+                          <img src={getCategoryIconSrc(transaction.categoryName)} alt="" aria-hidden="true" />
+                        </span>
+                      </div>
+                      <div className="accounts-detail__transaction-name">
+                        <strong>{merchantDisplay}</strong>
+                        {subtext ? <span>{subtext}</span> : null}
+                      </div>
+                      <div className="accounts-detail__transaction-date">{formatDate(transaction.date)}</div>
+                      <div className="accounts-detail__transaction-category">{transaction.categoryName || "Other"}</div>
+                      <div className="accounts-detail__transaction-type">{getTransactionTypeLabel(transaction.type)}</div>
+                      <div className={`accounts-detail__transaction-amount ${amountToneClass}`}>
+                        {currencyFormatter.format(amount)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {hasMoreTransactions ? (
+                <div className="accounts-detail__transactions-more">
+                  <button className="button button-secondary button-small" type="button" onClick={() => void loadMoreTransactions()} disabled={transactionsLoadingMore}>
+                    {transactionsLoadingMore ? "Loading more..." : "Load more transactions"}
+                  </button>
+                </div>
+              ) : null}
+            </>
           ) : (
             <p className="panel-muted">No transactions are linked to this account yet.</p>
           )}
