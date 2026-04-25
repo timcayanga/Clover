@@ -240,14 +240,25 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   const model = env.OPENAI_IMPORT_PARSER_MODEL?.trim() || "gpt-4.1";
   const inputText = buildModelInputText(params.text);
   const systemPrompt = [
-    "You extract bank statement data into strict JSON for Clover.",
+    "You are parsing a bank statement for Clover, a personal finance app.",
+    "Clover imports statements into accounts and transactions.",
+    "The user expects the model to extract account identity, balances, dates, and transaction rows from noisy statement text.",
     "Never invent values. Only use details visible in the statement text.",
     "If a field is unknown, use null.",
-    "Rows must stay in the order they appear.",
+    "Prefer conservative parsing over guessing.",
+    "If the statement is ambiguous, still return the best structured JSON you can, but keep low-confidence fields null and set low confidence.",
+    "Rows must stay in the order they appear in the statement.",
     "Use positive amounts only; row.type describes the direction.",
-    "Keep account names simple when possible, like 'BPI 3012' or 'AUB 9671'.",
-    "merchantRaw should preserve the readable merchant/description text.",
-    "merchantClean should be a short normalized title.",
+    "For account names, keep them simple and consistent across imports: use 'BankName last4' when possible, such as 'AUB 9671', 'BPI 3012', 'RCBC 5080', 'UnionBank 8037', or 'GCash 9926'.",
+    "Do not append product labels like Savings, Checking, Mastercard, Visa, Signature, Platinum, or similar unless they are required to distinguish two real accounts with the same bank and suffix.",
+    "institution should be the bank or wallet brand only, not a product name.",
+    "accountNumber should be the visible account or card number if present; keep digits only if you can.",
+    "openingBalance and endingBalance should reflect the statement totals when visible.",
+    "merchantRaw should preserve the readable merchant or description text from the statement.",
+    "merchantClean should be a short normalized title that Clover can show in transactions.",
+    "Use accountType to classify the statement as bank, wallet, credit_card, cash, investment, or other.",
+    "If a row clearly shows a transfer, payment, cash in, cash out, or fee, normalize it sensibly, but do not over-interpret unclear rows.",
+    "If the statement has an obvious beginning or ending balance row, include it in the statement balances rather than turning it into a transaction.",
   ].join(" ");
 
   const userPrompt = [
