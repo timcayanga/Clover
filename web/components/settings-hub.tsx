@@ -146,7 +146,7 @@ const planCards = [
     title: "Annual",
     price: "PHP 1,299 / year",
     icon: "annual" as const,
-    badge: "Save PHP 489",
+    badge: "Save PHP 489 vs monthly",
     helper: "Best value for people who want to stay on Pro all year.",
     description: "Upgrade for the yearly price and get the same Pro access for less than monthly billing.",
     features: [
@@ -242,7 +242,6 @@ export function SettingsHub({
 }: SettingsHubProps) {
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>("profile");
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
-  const [selectedPlan, setSelectedPlan] = useState<BillingInterval | "free">("annual");
   const [historyCutoff, setHistoryCutoff] = useState(() => new Date().toISOString().slice(0, 10));
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -289,10 +288,6 @@ export function SettingsHub({
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, [themeMode]);
 
-  useEffect(() => {
-    setSelectedPlan(planTier === "pro" ? billingSubscription?.interval ?? "annual" : "annual");
-  }, [billingSubscription?.interval, planTier]);
-
   const runDownload = async (path: string, fileName: string) => {
     const response = await fetch(path);
     if (!response.ok) {
@@ -338,8 +333,9 @@ export function SettingsHub({
   const isFree = planTier === "free";
   const currentPlanValue = planTier === "free" ? "free" : billingSubscription?.interval ?? "annual";
   const currentPlanCard = planCards.find((plan) => plan.value === currentPlanValue) ?? planCards[0];
-  const selectedPlanCard = planCards.find((plan) => plan.value === selectedPlan) ?? planCards[1];
   const usageLimit = isFree ? usageLimits.free : usageLimits.pro;
+  const annualCheckoutReady = Boolean(paypalClientId && paypalAnnualPlanId);
+  const monthlyCheckoutReady = Boolean(paypalClientId && paypalMonthlyPlanId);
   const planUsageCards = [
     {
       label: "Accounts",
@@ -592,12 +588,16 @@ export function SettingsHub({
             <div className="settings-plan-usage" aria-label="Current plan usage">
               {planUsageCards.map((usage) => {
                 const percent = getUsagePercent(usage.used, usage.limit);
+                const usageTierIcon = planTier === "free" ? "free" : "annual";
 
                 return (
                   <article key={usage.label} className="settings-plan-usage__card">
                     <div className="settings-plan-usage__head">
                       <strong>{usage.label}</strong>
-                      <span className="settings-plan-usage__tier">{planTier === "free" ? "Free" : "Pro"}</span>
+                      <span className="settings-plan-usage__tier">
+                        <PlanIcon name={usageTierIcon} />
+                        {planTier === "free" ? "Free" : "Pro"}
+                      </span>
                     </div>
                     <div className="settings-plan-usage__meter" aria-hidden="true">
                       <span style={{ width: `${percent}%` }} />
@@ -610,94 +610,77 @@ export function SettingsHub({
 
             <div className="settings-plan-grid" role="radiogroup" aria-label="Billing plan">
               {planCards.map((option) => {
-                const isSelected = selectedPlan === option.value;
                 const isCurrent = currentPlanValue === option.value;
 
                 return (
-                  <button
+                  <article
                     key={option.value}
-                    type="button"
-                    className={`settings-plan-card settings-plan-card--${option.value}${isSelected ? " is-selected" : ""}`}
-                    onClick={() => setSelectedPlan(option.value)}
+                    className={`settings-plan-card settings-plan-card--${option.value}${isCurrent ? " is-current" : ""}`}
                   >
-                    <div className="settings-plan-card__icon">
-                      <PlanIcon name={option.icon} />
+                    <div className="settings-plan-card__band">
+                      <div className="settings-plan-card__band-copy">
+                        <div className="settings-plan-card__icon">
+                          <PlanIcon name={option.icon} />
+                        </div>
+                        <div className="settings-plan-card__band-text">
+                          <span className="settings-plan-card__band-title">{option.title}</span>
+                          <span className="settings-plan-card__band-price">{option.price}</span>
+                        </div>
+                      </div>
+                      <span className="settings-plan-card__band-badge">{option.badge}</span>
                     </div>
-                    <div className="settings-plan-card__header">
-                      <span className="settings-plan-card__title-row">
-                        <strong>{option.title}</strong>
-                        {isCurrent ? <span className="settings-pill">Current</span> : null}
-                        <span className="settings-pill settings-pill--muted">{option.badge}</span>
-                      </span>
-                      <span className="settings-plan-card__price">{option.price}</span>
-                      <span className="settings-plan-card__helper">{option.helper}</span>
+
+                    <div className="settings-plan-card__body">
+                      <ul className="settings-plan-card__features">
+                        {option.features.map((feature) => (
+                          <li key={feature}>
+                            <span className="settings-plan-card__check" aria-hidden="true">
+                              ✓
+                            </span>
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+
+                      {option.value === "free" ? (
+                        <div className="settings-plan-card__current">
+                          {isCurrent ? <span className="settings-pill">Current plan</span> : null}
+                        </div>
+                      ) : isFree ? (
+                        <div className="settings-plan-card__cta">
+                          {option.value === "annual" && annualCheckoutReady ? (
+                            <PayPalSubscribeButton
+                              clientId={paypalClientId!}
+                              planId={paypalAnnualPlanId!}
+                              customId={workspaceId}
+                              className="settings-plan-card__paypal"
+                              fundingSource="card"
+                            />
+                          ) : option.value === "monthly" && monthlyCheckoutReady ? (
+                            <PayPalSubscribeButton
+                              clientId={paypalClientId!}
+                              planId={paypalMonthlyPlanId!}
+                              customId={workspaceId}
+                              className="settings-plan-card__paypal"
+                              fundingSource="card"
+                            />
+                          ) : (
+                            <p className="settings-helper">PayPal checkout is not configured yet.</p>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="settings-plan-card__current">
+                          {isCurrent ? <span className="settings-pill">Current plan</span> : <span className="settings-helper">Manage this plan below.</span>}
+                        </div>
+                      )}
                     </div>
-                    <p className="settings-plan-card__summary">{option.description}</p>
-                    <ul className="settings-plan-card__features">
-                      {option.features.map((feature) => (
-                        <li key={feature}>
-                          <span className="settings-plan-card__check" aria-hidden="true">
-                            ✓
-                          </span>
-                          <span>{feature}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </button>
+                  </article>
                 );
               })}
             </div>
 
-            <div className="settings-plan-panel">
-              {planTier === "free" ? (
-                <>
-                  <div className="settings-plan-panel__copy">
-                    <h5>{selectedPlanCard.title}</h5>
-                    <p>
-                      {selectedPlan === "free"
-                        ? "You are currently on the Free plan."
-                        : `Checkout for the ${selectedPlanCard.title} plan will appear below.`}
-                    </p>
-                  </div>
-
-                  {selectedPlan === "free" ? (
-                    <div className="settings-plan-panel__current">
-                      <p className="settings-helper">Free stays available during the beta and includes the core Clover workflow.</p>
-                      <div className="settings-plan-panel__note-grid">
-                        <span>Accounts: 5 + Cash</span>
-                        <span>Monthly uploads: 10</span>
-                        <span>Transaction rows: 1,000</span>
-                      </div>
-                    </div>
-                  ) : selectedPlan === "annual" ? (
-                    paypalClientId && paypalAnnualPlanId ? (
-                      <div className="settings-plan-panel__checkout">
-                        <p className="settings-helper">Annual billing selected. Choose this plan to move into Pro with yearly billing.</p>
-                        <PayPalSubscribeButton
-                          clientId={paypalClientId}
-                          planId={paypalAnnualPlanId}
-                          customId={workspaceId}
-                          className="settings-plan-panel__paypal"
-                        />
-                      </div>
-                    ) : (
-                      <p className="settings-helper">Annual checkout is not configured yet.</p>
-                    )
-                  ) : paypalClientId && paypalMonthlyPlanId ? (
-                    <div className="settings-plan-panel__checkout">
-                      <p className="settings-helper">Monthly billing selected. Choose this plan to move into Pro with monthly billing.</p>
-                      <PayPalSubscribeButton
-                        clientId={paypalClientId}
-                        planId={paypalMonthlyPlanId}
-                        customId={workspaceId}
-                        className="settings-plan-panel__paypal"
-                      />
-                    </div>
-                  ) : (
-                    <p className="settings-helper">Monthly checkout is not configured yet.</p>
-                  )}
-                </>
-              ) : (
+            {planTier === "pro" ? (
+              <div className="settings-plan-panel">
                 <BillingActions
                   planTier="pro"
                   clientId={paypalClientId}
@@ -708,8 +691,8 @@ export function SettingsHub({
                   subscription={billingSubscription}
                   className="settings-plan-panel__billing"
                 />
-              )}
-            </div>
+              </div>
+            ) : null}
           </section>
         ) : null}
 
