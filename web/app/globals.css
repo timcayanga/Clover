@@ -6488,6 +6488,11 @@ label {
   gap: 4px;
 }
 
+.review-workbench__summary > div {
+  display: grid;
+  gap: 4px;
+}
+
 .status-card--review strong {
   font-family: var(--font-heading);
   font-size: 2rem;

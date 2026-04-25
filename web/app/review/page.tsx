@@ -94,8 +94,8 @@ export default async function ReviewPage() {
     <CloverShell
       active="transactions"
       title="Review queue"
-      kicker="Learning loop"
-      subtitle="Fast triage for uncertain transactions. Confirm the right category, account, or note before they affect totals and insights."
+      kicker="Learning backbone"
+      subtitle="Fast triage for uncertain transactions. Confirm, fix, or exclude rows so Clover learns what to trust next time."
       showTopbar={false}
     >
       <PostHogEvent
@@ -111,8 +111,8 @@ export default async function ReviewPage() {
       <section className="panel">
         <h2>Review queue</h2>
         <p className="panel-muted">
-          Workspace: {selectedWorkspace.name}. These are the rows that need a human decision before they can be
-          trusted in totals, insights, or exports.
+          Workspace: {selectedWorkspace.name}. These rows need a human decision before Clover trusts them in totals,
+          insights, exports, and merchant rules.
         </p>
 
         <div style={{ marginTop: 20 }}>

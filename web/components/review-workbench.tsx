@@ -46,6 +46,13 @@ type Draft = {
   description: string;
 };
 
+type ReviewQueueAction = "accept" | "fix" | "exclude";
+type ReviewSignal = {
+  label: string;
+  detail: string;
+  tone: "good" | "warn" | "danger";
+};
+
 type ReviewWorkbenchProps = {
   workspaceId: string;
   workspaceName: string;
@@ -85,20 +92,73 @@ const nextItemId = (items: ReviewTransaction[], currentId: string) => {
   return items[currentIndex + 1]?.id ?? items[currentIndex - 1]?.id ?? null;
 };
 
+const getReviewSignals = (transaction: ReviewTransaction): ReviewSignal[] => {
+  const items: ReviewSignal[] = [];
+
+  if (transaction.reviewStatus === "pending_review") {
+    items.push({
+      label: "Pending review",
+      detail: "This row was flagged by the import pipeline and needs a quick decision.",
+      tone: "warn",
+    });
+  }
+
+  if (transaction.categoryId === null) {
+    items.push({
+      label: "Missing category",
+      detail: "The system could not confidently place this transaction into a category.",
+      tone: "danger",
+    });
+  } else if (transaction.categoryConfidence < 70) {
+    items.push({
+      label: "Low category confidence",
+      detail: "The guessed category is plausible, but not strong enough to confirm automatically.",
+      tone: confidenceTone(transaction.categoryConfidence),
+    });
+  }
+
+  if (transaction.accountMatchConfidence < 70) {
+    items.push({
+      label: "Account mismatch",
+      detail: "The account match is uncertain and should be confirmed before it becomes trusted data.",
+      tone: confidenceTone(transaction.accountMatchConfidence),
+    });
+  }
+
+  if (transaction.duplicateConfidence >= 50) {
+    items.push({
+      label: "Possible duplicate",
+      detail: "Another transaction with the same date, amount, and merchant may already exist.",
+      tone: confidenceTone(transaction.duplicateConfidence),
+    });
+  }
+
+  if (transaction.transferConfidence >= 50 || transaction.isTransfer) {
+    items.push({
+      label: "Possible transfer",
+      detail: "This looks like a transfer, so it needs a human check before it counts as spending.",
+      tone: confidenceTone(transaction.transferConfidence),
+    });
+  }
+
+  return items;
+};
+
+const buildDraftFromTransaction = (transaction: ReviewTransaction): Draft => ({
+  accountId: transaction.accountId,
+  categoryId: transaction.categoryId ?? "",
+  description: transaction.description ?? "",
+});
+
 export function ReviewWorkbench({ workspaceId, workspaceName, transactions, accounts, categories }: ReviewWorkbenchProps) {
   const [items, setItems] = useState(transactions);
   const [selectedId, setSelectedId] = useState(transactions[0]?.id ?? null);
+  const [selectedIds, setSelectedIds] = useState<string[]>(transactions[0]?.id ? [transactions[0].id] : []);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [status, setStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const current = useMemo(() => items.find((item) => item.id === selectedId) ?? null, [items, selectedId]);
-  const currentDraft = current
-    ? drafts[current.id] ?? {
-        accountId: current.accountId,
-        categoryId: current.categoryId ?? "",
-        description: current.description ?? "",
-      }
-    : null;
+  const currentDraft = current ? drafts[current.id] ?? buildDraftFromTransaction(current) : null;
   const currentCategory = currentDraft?.categoryId ? categories.find((category) => category.id === currentDraft.categoryId) : null;
   const currentAccount = currentDraft?.accountId ? accounts.find((account) => account.id === currentDraft.accountId) : null;
   const currentCategoryName = currentCategory?.name ?? current?.categoryName ?? "Uncategorized";
@@ -116,90 +176,14 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
     );
   })();
 
-  const reasons = useMemo(() => {
-    if (!current) return [];
-
-    const items: Array<{ label: string; tone: "good" | "warn" | "danger" }> = [];
-    if (current.reviewStatus === "pending_review") items.push({ label: "Pending review", tone: "warn" });
-    if (current.categoryId === null) items.push({ label: "No category", tone: "danger" });
-    if (current.categoryConfidence < 70) {
-      items.push({
-        label: `Category confidence ${current.categoryConfidence}%`,
-        tone: confidenceTone(current.categoryConfidence),
-      });
-    }
-    if (current.accountMatchConfidence < 70) {
-      items.push({
-        label: `Account confidence ${current.accountMatchConfidence}%`,
-        tone: confidenceTone(current.accountMatchConfidence),
-      });
-    }
-    if (current.duplicateConfidence >= 50) {
-      items.push({
-        label: `Duplicate risk ${current.duplicateConfidence}%`,
-        tone: confidenceTone(current.duplicateConfidence),
-      });
-    }
-    if (current.transferConfidence >= 50 || current.isTransfer) {
-      items.push({
-        label: `Transfer confidence ${current.transferConfidence}%`,
-        tone: confidenceTone(current.transferConfidence),
-      });
-    }
-
-    return items;
-  }, [current]);
-
-  const reasonDetails = useMemo(() => {
-    if (!current) return [];
-
-    const items: Array<{ label: string; detail: string; tone: "good" | "warn" | "danger" }> = [];
-    if (current.reviewStatus === "pending_review") {
-      items.push({
-        label: "Pending review",
-        detail: "This row was flagged by the import pipeline and needs a quick decision.",
-        tone: "warn",
-      });
-    }
-    if (current.categoryId === null) {
-      items.push({
-        label: "Missing category",
-        detail: "The system could not confidently place this transaction into a category.",
-        tone: "danger",
-      });
-    } else if (current.categoryConfidence < 70) {
-      items.push({
-        label: "Low category confidence",
-        detail: "The guessed category is plausible, but not strong enough to confirm automatically.",
-        tone: confidenceTone(current.categoryConfidence),
-      });
-    }
-    if (current.accountMatchConfidence < 70) {
-      items.push({
-        label: "Low account confidence",
-        detail: "The source account match is uncertain and should be confirmed before it becomes trusted data.",
-        tone: confidenceTone(current.accountMatchConfidence),
-      });
-    }
-    if (current.duplicateConfidence >= 50) {
-      items.push({
-        label: "Possible duplicate",
-        detail: "Another transaction with the same date, amount, and merchant may already exist.",
-        tone: confidenceTone(current.duplicateConfidence),
-      });
-    }
-    if (current.transferConfidence >= 50 || current.isTransfer) {
-      items.push({
-        label: "Possible transfer",
-        detail: "This looks like a transfer, so it needs a human check before it counts as spending.",
-        tone: confidenceTone(current.transferConfidence),
-      });
-    }
-
-    return items;
-  }, [current]);
+  const reasonDetails = useMemo(() => (current ? getReviewSignals(current) : []), [current]);
+  const reasons = reasonDetails;
 
   const primaryReason = reasonDetails[0] ?? null;
+  const selectedItems = useMemo(() => items.filter((item) => selectedIds.includes(item.id)), [items, selectedIds]);
+  const selectedCount = selectedItems.length;
+  const selectedContainsCurrent = current ? selectedIds.includes(current.id) : false;
+  const canBatchFix = Boolean(current && selectedContainsCurrent && draftChanged && selectedCount > 0);
 
   const summary = useMemo(() => {
     return items.reduce(
@@ -215,52 +199,17 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
     );
   }, [items]);
 
+  const categorySignalLabel = current ? "Category confidence" : "Category";
+  const accountSignalLabel = current ? (current.accountMatchConfidence < 70 ? "Account mismatch" : "Account match") : "Account";
+  const duplicateSignalLabel = current ? "Duplicate risk" : "Duplicate";
+  const transferSignalLabel = current ? "Transfer risk" : "Transfer";
+
   useEffect(() => {
     setItems(transactions);
     setSelectedId(transactions[0]?.id ?? null);
     setDrafts({});
     setStatus(null);
   }, [transactions]);
-
-  useEffect(() => {
-    if (!current) return;
-    const handler = (event: KeyboardEvent) => {
-      if (isSaving) {
-        return;
-      }
-
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement || event.target instanceof HTMLSelectElement) {
-        return;
-      }
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-
-      const key = event.key.toLowerCase();
-      if (key === "j" || key === "n" || key === "arrowright") {
-        event.preventDefault();
-        const nextId = nextItemId(items, current.id);
-        if (nextId) setSelectedId(nextId);
-        return;
-      }
-      if (key === "k" || key === "p" || key === "arrowleft") {
-        event.preventDefault();
-        const currentIndex = items.findIndex((item) => item.id === current.id);
-        setSelectedId(items[currentIndex - 1]?.id ?? current.id);
-        return;
-      }
-      if (key === "a") {
-        event.preventDefault();
-        void resolveCurrent("confirmed");
-        return;
-      }
-      if (key === "i") {
-        event.preventDefault();
-        void ignoreCurrent();
-      }
-    };
-
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [current, items, draftChanged, selectedId, isSaving]);
 
   const updateDraft = (patch: Partial<Draft>) => {
     if (!current) return;
@@ -275,25 +224,51 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
     }));
   };
 
-  const removeCurrentFromQueue = (transactionId: string, preferredNextId: string | null = null) => {
+  const removeTransactionsFromQueue = (transactionIds: string[], preferredNextId: string | null = null) => {
+    const removedIds = new Set(transactionIds);
     setItems((currentItems) => {
-      const currentIndex = currentItems.findIndex((item) => item.id === transactionId);
-      const nextItems = currentItems.filter((item) => item.id !== transactionId);
+      const currentIndex = currentItems.findIndex((item) => removedIds.has(item.id));
+      const nextItems = currentItems.filter((item) => !removedIds.has(item.id));
       const nextId =
         preferredNextId && nextItems.some((item) => item.id === preferredNextId)
           ? preferredNextId
           : nextItems[currentIndex]?.id ?? nextItems[currentIndex - 1]?.id ?? nextItems[0]?.id ?? null;
       setSelectedId((currentSelectedId) => {
-        if (currentSelectedId !== transactionId) return currentSelectedId;
+        if (!removedIds.has(currentSelectedId)) return currentSelectedId;
         return nextId;
+      });
+      setSelectedIds((currentSelectedIds) => {
+        const nextSelectedIds = currentSelectedIds.filter((id) => !removedIds.has(id));
+        if (nextSelectedIds.length > 0) {
+          return nextSelectedIds;
+        }
+        return nextId ? [nextId] : [];
       });
       return nextItems;
     });
     setDrafts((value) => {
       const next = { ...value };
-      delete next[transactionId];
+      for (const transactionId of transactionIds) {
+        delete next[transactionId];
+      }
       return next;
     });
+  };
+
+  const toggleSelectedId = (transactionId: string) => {
+    setSelectedIds((currentSelectedIds) =>
+      currentSelectedIds.includes(transactionId)
+        ? currentSelectedIds.filter((id) => id !== transactionId)
+        : [...currentSelectedIds, transactionId]
+    );
+  };
+
+  const selectAllQueueItems = () => {
+    setSelectedIds(items.map((item) => item.id));
+  };
+
+  const clearSelection = () => {
+    setSelectedIds([]);
   };
 
   const patchCurrent = async (body: Record<string, unknown>, message: string, eventName: AnalyticsEventName) => {
@@ -307,7 +282,7 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
     const reviewStatusValue = typeof body.reviewStatus === "string" ? body.reviewStatus : null;
 
     setIsSaving(true);
-    removeCurrentFromQueue(transactionId, preferredNextId);
+    removeTransactionsFromQueue([transactionId], preferredNextId);
     setStatus("Saving changes...");
 
     try {
@@ -336,6 +311,135 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
       setIsSaving(false);
     }
   };
+
+  const buildPayloadForTransaction = (
+    transaction: ReviewTransaction,
+    action: ReviewQueueAction,
+    sourceDraft?: Draft | null
+  ) => {
+    if (action === "exclude") {
+      return {
+        body: {
+          isExcluded: true,
+          reviewStatus: "rejected" as const,
+        },
+        hasLearningChange: false,
+      };
+    }
+
+    const draft = sourceDraft ?? drafts[transaction.id] ?? buildDraftFromTransaction(transaction);
+    const body: Record<string, unknown> = {};
+    const nextAccountId = draft.accountId;
+    const nextCategoryId = draft.categoryId || null;
+    const nextDescription = draft.description.trim();
+
+    if (nextAccountId !== transaction.accountId) {
+      body.accountId = nextAccountId;
+    }
+    if ((nextCategoryId ?? null) !== (transaction.categoryId ?? null)) {
+      body.categoryId = nextCategoryId;
+    }
+    if (nextDescription !== (transaction.description ?? "").trim()) {
+      body.description = nextDescription || null;
+    }
+
+    const hasLearningChange = Object.keys(body).length > 0;
+    body.reviewStatus = hasLearningChange ? "edited" : "confirmed";
+
+    return { body, hasLearningChange };
+  };
+
+  async function applyBatchAction(action: ReviewQueueAction) {
+    const transactionIds = selectedIds.filter((id) => items.some((item) => item.id === id));
+    if (!transactionIds.length || isSaving) {
+      return;
+    }
+
+    const batchTargets = items.filter((item) => transactionIds.includes(item.id));
+    const previousItems = items;
+    const previousDrafts = { ...drafts };
+    const previousSelectedId = selectedId;
+    const previousSelectedIds = [...selectedIds];
+    const preferredNextId = nextItemId(items, current?.id ?? transactionIds[0]);
+    const acceptedCount = batchTargets.length;
+
+    setIsSaving(true);
+    removeTransactionsFromQueue(transactionIds, preferredNextId);
+    setStatus("Saving review changes...");
+
+    try {
+      for (const transaction of batchTargets) {
+        const sourceDraft =
+          action === "fix"
+            ? currentDraft
+            : action === "accept"
+              ? drafts[transaction.id] ?? buildDraftFromTransaction(transaction)
+              : null;
+        const { body, hasLearningChange } = buildPayloadForTransaction(transaction, action, sourceDraft);
+
+        const response = await fetch(`/api/transactions/${transaction.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Unable to update ${transaction.merchantRaw}.`);
+        }
+
+        const payload = await response.json().catch(() => null);
+        const updated = payload?.transaction as ReviewTransaction | undefined;
+
+        if (updated) {
+          setItems((currentItems) =>
+            currentItems.map((item) =>
+              item.id === updated.id
+                ? {
+                    ...item,
+                    ...updated,
+                  }
+                : item
+            )
+          );
+        }
+
+        capturePostHogClientEvent(
+          action === "exclude"
+            ? "review_item_rejected"
+            : hasLearningChange
+              ? "review_item_edited"
+              : "review_item_accepted",
+          {
+            workspace_id: workspaceId,
+            transaction_id: transaction.id,
+            review_status: body.reviewStatus as string,
+          }
+        );
+      }
+
+      if (action === "exclude") {
+        setStatus(
+          `${acceptedCount} item${acceptedCount === 1 ? "" : "s"} excluded from the queue and totals.`
+        );
+      } else if (action === "fix") {
+        setStatus(
+          `${acceptedCount} item${acceptedCount === 1 ? "" : "s"} corrected and sent to Clover's learning system.`
+        );
+      } else {
+        setStatus(
+          `${acceptedCount} item${acceptedCount === 1 ? "" : "s"} confirmed and reinforced Clover's learning signals.`
+        );
+      }
+    } catch (error) {
+      setItems(previousItems);
+      setDrafts(previousDrafts);
+      setSelectedId(previousSelectedId);
+      setSelectedIds(previousSelectedIds);
+      setStatus(error instanceof Error ? error.message : "Unable to update transactions.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   const resolveCurrent = async (reviewStatus: "confirmed" | "edited") => {
     if (!current || !currentDraft) return;
@@ -372,10 +476,80 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
         isExcluded: true,
         reviewStatus: "rejected",
       },
-      "Ignored and removed from the queue.",
+      "Excluded and removed from the queue.",
       "review_item_rejected"
     );
   };
+
+  useEffect(() => {
+    if (!current) return;
+    const handler = (event: KeyboardEvent) => {
+      if (isSaving) {
+        return;
+      }
+
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement ||
+        event.target instanceof HTMLSelectElement ||
+        event.target instanceof HTMLButtonElement ||
+        event.target instanceof HTMLAnchorElement
+      ) {
+        return;
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      const key = event.key.toLowerCase();
+      if (key === "j" || key === "n" || key === "arrowright") {
+        event.preventDefault();
+        const nextId = nextItemId(items, current.id);
+        if (nextId) setSelectedId(nextId);
+        return;
+      }
+      if (key === "k" || key === "p" || key === "arrowleft") {
+        event.preventDefault();
+        const currentIndex = items.findIndex((item) => item.id === current.id);
+        setSelectedId(items[currentIndex - 1]?.id ?? current.id);
+        return;
+      }
+      if (key === "a") {
+        event.preventDefault();
+        void resolveCurrent("confirmed");
+        return;
+      }
+      if (key === "f") {
+        event.preventDefault();
+        if (canBatchFix) {
+          void applyBatchAction("fix");
+        }
+        return;
+      }
+      if (key === "i") {
+        event.preventDefault();
+        void ignoreCurrent();
+        return;
+      }
+      if (key === "x") {
+        event.preventDefault();
+        if (selectedCount > 0) {
+          void applyBatchAction("exclude");
+        }
+        return;
+      }
+      if (event.code === "Space") {
+        event.preventDefault();
+        toggleSelectedId(current.id);
+        return;
+      }
+      if (key === "escape") {
+        event.preventDefault();
+        clearSelection();
+      }
+    };
+
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [applyBatchAction, canBatchFix, clearSelection, current, isSaving, items, selectedCount, resolveCurrent, ignoreCurrent]);
 
   if (!items.length || !current) {
     return (
@@ -417,7 +591,10 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
           <span>← previous</span>
           <span>→ next</span>
           <span>A accept</span>
-          <span>I ignore</span>
+          <span>F fix selected</span>
+          <span>I exclude</span>
+          <span>X exclude selected</span>
+          <span>Space select</span>
         </div>
       </div>
 
@@ -426,10 +603,14 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
           <strong>{summary.total}</strong>
           <div className="panel-muted">actionable items</div>
         </div>
+        <div>
+          <strong>{selectedCount}</strong>
+          <div className="panel-muted">selected</div>
+        </div>
         <div className="status-stack">
           <span className="status status--processing">{summary.lowConfidence} low confidence</span>
           <span className="status">{summary.pending} pending review</span>
-          <span className="status">{summary.lowAccount} low account confidence</span>
+          <span className="status">{summary.lowAccount} account mismatch</span>
           <span className="status">{summary.duplicateRisk} duplicate risk</span>
         </div>
       </div>
@@ -478,27 +659,36 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
           </div>
 
           <div className="review-workbench__confidence-grid">
-            <div className="review-workbench__confidence">
+            <div className="review-workbench__confidence review-workbench__confidence--category">
               <div className="review-workbench__confidence-head">
-                <span>Category</span>
+                <span>{categorySignalLabel}</span>
                 <strong>{current.categoryConfidence}%</strong>
               </div>
               <div className="review-workbench__meter" aria-hidden="true">
                 <span style={{ width: `${Math.max(6, Math.min(current.categoryConfidence, 100))}%` }} />
               </div>
             </div>
-            <div className="review-workbench__confidence">
+            <div className="review-workbench__confidence review-workbench__confidence--account">
               <div className="review-workbench__confidence-head">
-                <span>Account</span>
+                <span>{accountSignalLabel}</span>
                 <strong>{current.accountMatchConfidence}%</strong>
               </div>
               <div className="review-workbench__meter" aria-hidden="true">
                 <span style={{ width: `${Math.max(6, Math.min(current.accountMatchConfidence, 100))}%` }} />
               </div>
             </div>
-            <div className="review-workbench__confidence">
+            <div className="review-workbench__confidence review-workbench__confidence--duplicate">
               <div className="review-workbench__confidence-head">
-                <span>Transfer</span>
+                <span>{duplicateSignalLabel}</span>
+                <strong>{current.duplicateConfidence}%</strong>
+              </div>
+              <div className="review-workbench__meter" aria-hidden="true">
+                <span style={{ width: `${Math.max(6, Math.min(current.duplicateConfidence, 100))}%` }} />
+              </div>
+            </div>
+            <div className="review-workbench__confidence review-workbench__confidence--transfer">
+              <div className="review-workbench__confidence-head">
+                <span>{transferSignalLabel}</span>
                 <strong>{current.transferConfidence}%</strong>
               </div>
               <div className="review-workbench__meter" aria-hidden="true">
@@ -577,6 +767,118 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
             </ul>
           </div>
 
+          <div className="review-workbench__panel review-workbench__batch-panel">
+            <div className="review-workbench__queue-head">
+              <div>
+                <p className="eyebrow">Batch triage</p>
+                <h4>Queue selection</h4>
+              </div>
+              <div className="review-workbench__queue-tools">
+                <button className="button button-secondary button-small" type="button" onClick={selectAllQueueItems} disabled={!items.length || isSaving}>
+                  Select all
+                </button>
+                <button
+                  className="button button-secondary button-small"
+                  type="button"
+                  onClick={clearSelection}
+                  disabled={!selectedCount || isSaving}
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <p className="review-workbench__queue-copy">
+              Select one or more rows, then accept, fix, or exclude them without opening each transaction.
+            </p>
+            <div className="review-workbench__queue-summary">
+              <span>{selectedCount} selected</span>
+              <span>{items.length} in queue</span>
+            </div>
+            <div className="review-workbench__queue-list" role="list" aria-label="Review queue items">
+              {items.map((item) => {
+                const itemSignals = getReviewSignals(item);
+                const itemPrimaryReason = itemSignals[0] ?? null;
+                const itemSummary = summarizeMerchantText(item.merchantClean ?? item.merchantRaw);
+                const itemSubtext = humanizeMerchantText(item.merchantRaw);
+                const itemIsSelected = selectedIds.includes(item.id);
+                const itemIsActive = item.id === current?.id;
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`review-workbench__queue-item ${itemIsSelected ? "is-selected" : ""} ${itemIsActive ? "is-active" : ""}`}
+                    role="listitem"
+                  >
+                    <button
+                      className="review-workbench__queue-check"
+                      type="button"
+                      onClick={() => toggleSelectedId(item.id)}
+                      aria-label={`${itemIsSelected ? "Deselect" : "Select"} ${itemSummary}`}
+                      aria-pressed={itemIsSelected}
+                    >
+                      {itemIsSelected ? "✓" : null}
+                    </button>
+                    <button
+                      className="review-workbench__queue-main"
+                      type="button"
+                      onClick={() => {
+                        setSelectedId(item.id);
+                        setSelectedIds((currentSelectedIds) =>
+                          currentSelectedIds.includes(item.id) ? currentSelectedIds : [...currentSelectedIds, item.id]
+                        );
+                      }}
+                      aria-current={itemIsActive ? "true" : undefined}
+                    >
+                      <strong>{itemSummary}</strong>
+                      <span>{itemSubtext.toLowerCase() !== itemSummary.toLowerCase() ? itemSubtext : item.description ?? "No extra note"}</span>
+                      <small>
+                        {formatDate(item.date)} · {item.accountName} · {item.categoryName ?? "Uncategorized"}
+                      </small>
+                    </button>
+                    {itemPrimaryReason ? (
+                      <span
+                        className={`pill pill-subtle review-workbench__queue-reason review-workbench__reason--${itemPrimaryReason.tone}`}
+                        title={itemPrimaryReason.detail}
+                      >
+                        {itemPrimaryReason.label}
+                      </span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="review-workbench__batch-actions">
+              <button
+                className="button button-primary review-workbench__button-primary"
+                type="button"
+                onClick={() => void applyBatchAction("accept")}
+                disabled={isSaving || selectedCount === 0}
+              >
+                Accept selected
+              </button>
+              <button
+                className="button button-secondary review-workbench__button-secondary"
+                type="button"
+                onClick={() => void applyBatchAction("fix")}
+                disabled={isSaving || !canBatchFix}
+              >
+                Fix selected
+              </button>
+              <button
+                className="button button-secondary review-workbench__button-secondary"
+                type="button"
+                onClick={() => void applyBatchAction("exclude")}
+                disabled={isSaving || selectedCount === 0}
+              >
+                Exclude selected
+              </button>
+            </div>
+            <p className="review-workbench__batch-copy">
+              Accept confirms trusted rows, fix writes the active edits back to every selected row, and exclude removes
+              rows from totals. Every correction updates Clover&apos;s learning signals and merchant rules.
+            </p>
+          </div>
+
           <div className="review-workbench__actions">
             <button
               className="button button-primary review-workbench__button-primary"
@@ -592,7 +894,7 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
               onClick={() => void ignoreCurrent()}
               disabled={isSaving}
             >
-              Ignore
+              Exclude
             </button>
             <Link
               className="button button-secondary"
