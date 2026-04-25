@@ -14348,7 +14348,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .settings-plan-card {
   display: grid;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
   padding: 18px;
   text-align: left;
@@ -14363,6 +14363,70 @@ input.transaction-inline-edit--amount::placeholder {
   border-color: rgba(3, 168, 192, 0.16);
   background: rgba(3, 168, 192, 0.09);
   box-shadow: 0 12px 24px rgba(3, 168, 192, 0.08);
+}
+
+.settings-plan-card--free {
+  background: linear-gradient(180deg, rgba(247, 249, 250, 0.94), rgba(255, 255, 255, 0.88));
+}
+
+.settings-plan-card--annual {
+  border-color: rgba(3, 168, 192, 0.22);
+  background: linear-gradient(145deg, rgba(3, 168, 192, 0.18), rgba(35, 190, 206, 0.12));
+}
+
+.settings-plan-card--annual .settings-plan-card__title-row strong,
+.settings-plan-card--annual .settings-plan-card__price,
+.settings-plan-card--annual .settings-plan-card__summary,
+.settings-plan-card--annual .settings-plan-card__helper,
+.settings-plan-card--annual .settings-plan-card__features li {
+  color: #07333c;
+}
+
+.settings-plan-card--monthly {
+  border-color: rgba(5, 58, 74, 0.08);
+  background: linear-gradient(145deg, rgba(4, 101, 122, 0.9), rgba(3, 168, 192, 0.88));
+  box-shadow: 0 18px 30px rgba(3, 168, 192, 0.16);
+}
+
+.settings-plan-card--monthly .settings-plan-card__title-row strong,
+.settings-plan-card--monthly .settings-plan-card__price,
+.settings-plan-card--monthly .settings-plan-card__helper,
+.settings-plan-card--monthly .settings-plan-card__summary,
+.settings-plan-card--monthly .settings-plan-card__features li,
+.settings-plan-card--monthly .settings-plan-card__savings {
+  color: #ffffff;
+}
+
+.settings-plan-card--monthly .settings-plan-card__check {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.settings-plan-card--monthly .settings-pill--muted,
+.settings-plan-card--monthly .settings-pill {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+}
+
+.settings-plan-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.4);
+  color: var(--accent);
+}
+
+.settings-plan-card--annual .settings-plan-card__icon {
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--accent);
+}
+
+.settings-plan-card--monthly .settings-plan-card__icon {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
 }
 
 .settings-plan-card__title-row {
@@ -14395,10 +14459,30 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 13px;
 }
 
+.settings-plan-card--annual .settings-plan-card__helper {
+  color: rgba(6, 36, 42, 0.72);
+}
+
 .settings-plan-card__summary {
   color: var(--muted);
   line-height: 1.5;
   font-size: 13px;
+}
+
+.settings-plan-card--annual .settings-plan-card__summary {
+  color: rgba(6, 36, 42, 0.82);
+}
+
+.settings-plan-card__savings {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.12);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .settings-plan-card__features {
@@ -14441,16 +14525,16 @@ input.transaction-inline-edit--amount::placeholder {
 
 .settings-plan-usage__card {
   display: grid;
-  gap: 10px;
-  padding: 16px 18px;
-  border-radius: 22px;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 18px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(247, 249, 250, 0.78);
 }
 
 .settings-plan-usage__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
@@ -14461,14 +14545,27 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-plan-usage__head span {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--text);
+  color: var(--accent);
+}
+
+.settings-plan-usage__tier {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.1);
+  color: var(--accent);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .settings-plan-usage__meter {
   position: relative;
-  height: 8px;
+  height: 6px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(148, 163, 184, 0.18);
@@ -14485,6 +14582,12 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--muted);
   line-height: 1.45;
   font-size: 12px;
+}
+
+.settings-plan-usage__value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
 }
 
 .settings-plan-panel {
@@ -14518,21 +14621,6 @@ input.transaction-inline-edit--amount::placeholder {
 .settings-plan-panel__current {
   display: grid;
   gap: 12px;
-}
-
-.settings-plan-panel__note-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.settings-plan-panel__note-grid span {
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: rgba(3, 168, 192, 0.08);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 500;
 }
 
 .settings-plan-panel__paypal {

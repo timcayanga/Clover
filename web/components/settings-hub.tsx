@@ -47,6 +47,48 @@ function SettingsIcon({ path }: { path: string }) {
   );
 }
 
+function PlanIcon({ name }: { name: "free" | "annual" | "monthly" }) {
+  const common = {
+    width: 20,
+    height: 20,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  if (name === "free") {
+    return (
+      <svg {...common}>
+        <path d="M12 3.5 5.5 8l6.5 4.5L18.5 8 12 3.5Z" />
+        <path d="M5.5 16l6.5 4.5 6.5-4.5" />
+      </svg>
+    );
+  }
+
+  if (name === "annual") {
+    return (
+      <svg {...common}>
+        <path d="M4 18h16" />
+        <path d="M7 18V9l5-3 5 3v9" />
+        <path d="M10 18v-5h4v5" />
+        <path d="M12 2.5 14.5 5 12 7.5 9.5 5 12 2.5Z" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...common}>
+      <path d="M4 18h16" />
+      <path d="M7 18V11l5-4 5 4v7" />
+      <path d="M12 2.5 14.5 5 12 7.5 9.5 5 12 2.5Z" />
+    </svg>
+  );
+}
+
 const sectionCopy: Record<
   SettingsSectionKey,
   {
@@ -87,12 +129,12 @@ const planCards = [
     value: "free" as const,
     title: "Free",
     price: "PHP 0",
-    badge: "Current",
+    icon: "free" as const,
+    badge: "Beta",
     helper: "Start here during beta and keep the core Clover workflow open.",
     description: "Best for getting a small workspace organized without commitment.",
     features: [
       "Manual transaction tracking",
-      "Receipt scanning",
       "5 accounts in addition to Cash",
       "10 monthly uploads total",
       "1,000 transaction rows",
@@ -103,22 +145,24 @@ const planCards = [
     value: "annual" as const,
     title: "Annual",
     price: "PHP 1,299 / year",
-    badge: "Default",
-    helper: "Best value. Selected automatically for new users when Plan opens.",
-    description: "Upgrade for the yearly price and keep the same Pro feature set.",
+    icon: "annual" as const,
+    badge: "Save PHP 489",
+    helper: "Best value for people who want to stay on Pro all year.",
+    description: "Upgrade for the yearly price and get the same Pro access for less than monthly billing.",
     features: [
       "Everything in Free",
       "Unlimited accounts",
       "Unlimited monthly uploads",
       "Unlimited transaction rows",
       "Advanced reports",
-      "Future Pro features",
     ],
   },
   {
     value: "monthly" as const,
     title: "Monthly",
     price: "PHP 149 / month",
+    icon: "monthly" as const,
+    badge: "Flexible",
     helper: "Flexible Pro access for people who prefer month-to-month billing.",
     description: "Upgrade for shorter commitment while keeping the same Pro feature set.",
     features: [
@@ -127,7 +171,6 @@ const planCards = [
       "Unlimited monthly uploads",
       "Unlimited transaction rows",
       "Advanced reports",
-      "Future Pro features",
     ],
   },
 ] as const;
@@ -301,23 +344,18 @@ export function SettingsHub({
     {
       label: "Accounts",
       value: formatLimitCount(planUsage.accountCount, usageLimit.accounts, "accounts"),
-      note: isFree
-        ? `${planUsage.cashAccountCount > 0 ? "Cash is included." : "Cash is ready to be added."} Free covers 5 accounts in addition to Cash.`
-        : "Pro keeps accounts unlimited.",
       used: planUsage.accountCount,
       limit: usageLimit.accounts,
     },
     {
       label: "Monthly uploads",
       value: formatLimitCount(planUsage.monthlyUploadCount, usageLimit.uploads, "uploads"),
-      note: isFree ? "Free covers 10 uploads per month." : "Pro keeps uploads unlimited.",
       used: planUsage.monthlyUploadCount,
       limit: usageLimit.uploads,
     },
     {
       label: "Transaction rows",
       value: formatLimitCount(planUsage.transactionCount, usageLimit.transactions, "rows"),
-      note: isFree ? "Free covers 1,000 rows total." : "Pro keeps transaction rows unlimited.",
       used: planUsage.transactionCount,
       limit: usageLimit.transactions,
     },
@@ -537,8 +575,7 @@ export function SettingsHub({
             <div className="settings-section__intro">
               <div>
                 <p className="eyebrow">Plan</p>
-                <h4>Billing and access</h4>
-                <p>Pick a plan, see what is included, and keep an eye on the limits that matter most.</p>
+                <h4>Plan</h4>
               </div>
               <div className="settings-profile-summary">
                 <span className="settings-profile-summary__label">Current plan</span>
@@ -549,12 +586,6 @@ export function SettingsHub({
                     <strong>{subscriptionStatusLabel}</strong>
                   </>
                 ) : null}
-                <span className="settings-profile-summary__label">Usage snapshot</span>
-                <strong>
-                  {formatLimitCount(planUsage.transactionCount, usageLimit.transactions, "transaction rows")}
-                  <br />
-                  {formatLimitCount(planUsage.accountCount, usageLimit.accounts, "accounts")}
-                </strong>
               </div>
             </div>
 
@@ -566,12 +597,12 @@ export function SettingsHub({
                   <article key={usage.label} className="settings-plan-usage__card">
                     <div className="settings-plan-usage__head">
                       <strong>{usage.label}</strong>
-                      <span>{usage.value}</span>
+                      <span className="settings-plan-usage__tier">{planTier === "free" ? "Free" : "Pro"}</span>
                     </div>
                     <div className="settings-plan-usage__meter" aria-hidden="true">
                       <span style={{ width: `${percent}%` }} />
                     </div>
-                    <p>{usage.note}</p>
+                    <div className="settings-plan-usage__value">{usage.value}</div>
                   </article>
                 );
               })}
@@ -586,17 +617,17 @@ export function SettingsHub({
                   <button
                     key={option.value}
                     type="button"
-                    className={`settings-plan-card${isSelected ? " is-selected" : ""}`}
+                    className={`settings-plan-card settings-plan-card--${option.value}${isSelected ? " is-selected" : ""}`}
                     onClick={() => setSelectedPlan(option.value)}
                   >
+                    <div className="settings-plan-card__icon">
+                      <PlanIcon name={option.icon} />
+                    </div>
                     <div className="settings-plan-card__header">
                       <span className="settings-plan-card__title-row">
                         <strong>{option.title}</strong>
-                        {isCurrent ? (
-                          <span className="settings-pill">Current</span>
-                        ) : option.value === "annual" ? (
-                          <span className="settings-pill settings-pill--muted">Default</span>
-                        ) : null}
+                        {isCurrent ? <span className="settings-pill">Current</span> : null}
+                        <span className="settings-pill settings-pill--muted">{option.badge}</span>
                       </span>
                       <span className="settings-plan-card__price">{option.price}</span>
                       <span className="settings-plan-card__helper">{option.helper}</span>
