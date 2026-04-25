@@ -24,6 +24,7 @@ import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
+import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
@@ -74,8 +75,18 @@ const mergeImportedPreviewTransactions = (
 
 const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentAccounts: Account[]) => {
   const fetchedById = new Map(fetchedAccounts.map((account) => [account.id, account] as const));
+  const fetchedByKey = new Map(
+    fetchedAccounts.map((account) => [normalizeImportedAccountKey(account.name, account.institution), account] as const)
+  );
   const mergedFetchedAccounts = fetchedAccounts.map((account) => {
-    const optimistic = currentAccounts.find((currentAccount) => currentAccount.id === account.id && currentAccount.source === "upload");
+    const accountKey = normalizeImportedAccountKey(account.name, account.institution);
+    const optimistic = currentAccounts.find((currentAccount) => {
+      if (currentAccount.source !== "upload") {
+        return false;
+      }
+
+      return normalizeImportedAccountKey(currentAccount.name, currentAccount.institution) === accountKey;
+    });
     if (!optimistic) {
       return account;
     }
@@ -92,7 +103,8 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
       return false;
     }
 
-    return !fetchedById.has(account.id);
+    const accountKey = normalizeImportedAccountKey(account.name, account.institution);
+    return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
   });
 
   return [...optimisticAccounts, ...mergedFetchedAccounts];
@@ -5052,6 +5064,7 @@ function TransactionsPageContent() {
           const previewTransactions = summary.previewTransactions ?? [];
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+          const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution);
 
           setPendingImportSummary(summary);
 
@@ -5059,7 +5072,19 @@ function TransactionsPageContent() {
             setIsWorkspaceDataReady(true);
 
             if (summary.optimisticAccountId) {
-              setAccounts((current) => current.filter((account) => account.id !== summary.optimisticAccountId));
+              setAccounts((current) =>
+                current.filter((account) => {
+                  if (account.id === summary.optimisticAccountId) {
+                    return false;
+                  }
+
+                  if (account.source === "upload") {
+                    return normalizeImportedAccountKey(account.name, account.institution) !== importedAccountKey;
+                  }
+
+                  return true;
+                })
+              );
             }
 
             if (importedAccountId) {
@@ -5075,11 +5100,20 @@ function TransactionsPageContent() {
 
             if (optimisticAccount) {
               setAccounts((current) => {
+                const withoutMatchingUploads = current.filter((account) => {
+                  if (account.source !== "upload") {
+                    return true;
+                  }
+
+                  return normalizeImportedAccountKey(account.name, account.institution) !== importedAccountKey;
+                });
                 const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
                 if (existingIndex >= 0) {
-                  return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
+                  return withoutMatchingUploads.map((account) =>
+                    account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account
+                  );
                 }
-                return [optimisticAccount, ...current];
+                return [optimisticAccount, ...withoutMatchingUploads];
               });
             }
           });

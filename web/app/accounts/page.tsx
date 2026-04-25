@@ -13,6 +13,7 @@ import {
   clearWorkspaceCache,
   getCachedAccountsWorkspace,
   persistAccountsWorkspaceCache,
+  normalizeImportedAccountKey,
 } from "@/lib/workspace-cache";
 import { getAccountBrand } from "@/lib/account-brand";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
@@ -79,8 +80,18 @@ const mergeAccountsWithOptimisticImports = (
   const visibleFetchedAccounts = fetchedAccounts.filter((account) => !deletedAccountIds.has(account.id));
   const visibleCurrentAccounts = currentAccounts.filter((account) => !deletedAccountIds.has(account.id));
   const fetchedById = new Map(visibleFetchedAccounts.map((account) => [account.id, account] as const));
+  const fetchedByKey = new Map(
+    visibleFetchedAccounts.map((account) => [normalizeImportedAccountKey(account.name, account.institution), account] as const)
+  );
   const mergedFetchedAccounts = visibleFetchedAccounts.map((account) => {
-    const optimistic = visibleCurrentAccounts.find((currentAccount) => currentAccount.id === account.id && currentAccount.source === "upload");
+    const accountKey = normalizeImportedAccountKey(account.name, account.institution);
+    const optimistic = visibleCurrentAccounts.find((currentAccount) => {
+      if (currentAccount.source !== "upload") {
+        return false;
+      }
+
+      return normalizeImportedAccountKey(currentAccount.name, currentAccount.institution) === accountKey;
+    });
     if (!optimistic) {
       return account;
     }
@@ -97,7 +108,8 @@ const mergeAccountsWithOptimisticImports = (
       return false;
     }
 
-    return !fetchedById.has(account.id);
+    const accountKey = normalizeImportedAccountKey(account.name, account.institution);
+    return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
   });
 
   return [...optimisticAccounts, ...mergedFetchedAccounts];
@@ -2014,11 +2026,24 @@ function AccountsPageContent() {
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
           const previewTransactions = summary.previewTransactions ?? [];
           const optimisticAccount = buildOptimisticImportedAccount(summary);
+          const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution);
 
           flushSync(() => {
             setAccountsLoading(false);
             if (summary.optimisticAccountId) {
-              setAccounts((current) => current.filter((account) => account.id !== summary.optimisticAccountId));
+              setAccounts((current) =>
+                current.filter((account) => {
+                  if (account.id === summary.optimisticAccountId) {
+                    return false;
+                  }
+
+                  if (account.source === "upload") {
+                    return normalizeImportedAccountKey(account.name, account.institution) !== importedAccountKey;
+                  }
+
+                  return true;
+                })
+              );
             }
 
             if (importedAccountId) {
@@ -2034,11 +2059,20 @@ function AccountsPageContent() {
 
             if (optimisticAccount) {
               setAccounts((current) => {
+                const withoutMatchingUploads = current.filter((account) => {
+                  if (account.source !== "upload") {
+                    return true;
+                  }
+
+                  return normalizeImportedAccountKey(account.name, account.institution) !== importedAccountKey;
+                });
                 const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
                 if (existingIndex >= 0) {
-                  return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
+                  return withoutMatchingUploads.map((account) =>
+                    account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account
+                  );
                 }
-                return [optimisticAccount, ...current];
+                return [optimisticAccount, ...withoutMatchingUploads];
               });
             }
 

@@ -46,6 +46,27 @@ export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cach
 const isCachedRecordArray = (value: unknown): value is CachedRecord[] =>
   Array.isArray(value) && value.every((entry) => entry && typeof entry === "object");
 
+const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+
+const normalizeMerchantText = (value?: string | null) =>
+  normalizeWhitespace(String(value ?? ""))
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const extractLastFourDigits = (value?: string | null) => {
+  if (!value) return null;
+  const digits = String(value).replace(/\D/g, "");
+  if (digits.length < 4) return null;
+  return digits.slice(-4);
+};
+
+export const normalizeImportedAccountKey = (accountName?: string | null, institution?: string | null) =>
+  normalizeMerchantText(
+    `${institution ?? ""} ${extractLastFourDigits(accountName) ?? normalizeWhitespace(String(accountName ?? ""))}`
+  );
+
 const getSessionStorage = () => {
   if (typeof window === "undefined") {
     return null;
@@ -105,9 +126,17 @@ const createImportedAccountCandidates = (account: ImportedWorkspaceAccount) => {
 
 const mergeImportedAccount = <T extends CachedRecord>(items: T[], account: ImportedWorkspaceAccount) => {
   const idsToReplace = createImportedAccountCandidates(account);
+  const accountKey = normalizeImportedAccountKey(
+    typeof account.name === "string" ? account.name : null,
+    typeof account.institution === "string" ? account.institution : null
+  );
   const filtered = items.filter((entry) => {
     const id = typeof entry.id === "string" ? entry.id : "";
-    return !idsToReplace.has(id);
+    const entryKey = normalizeImportedAccountKey(
+      typeof entry.name === "string" ? entry.name : null,
+      typeof entry.institution === "string" ? entry.institution : null
+    );
+    return !idsToReplace.has(id) && entryKey !== accountKey;
   });
 
   return [account as T, ...filtered];
