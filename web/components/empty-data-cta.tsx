@@ -4,7 +4,7 @@ type EmptyDataCtaProps = {
   eyebrow?: string;
   title: string;
   copy: string;
-  importHref: string;
+  importHref?: string;
   accountHref: string;
   transactionHref: string;
   importLabel?: string;
@@ -29,9 +29,11 @@ export function EmptyDataCta({
       <h3>{title}</h3>
       <p className="transactions-empty-state__copy">{copy}</p>
       <div className="transactions-empty-state__actions">
-        <Link className="button button-primary button-small" href={importHref}>
-          {importLabel}
-        </Link>
+        {importHref ? (
+          <Link className="button button-primary button-small" href={importHref}>
+            {importLabel}
+          </Link>
+        ) : null}
         <Link className="button button-secondary button-small" href={accountHref}>
           {accountLabel}
         </Link>
