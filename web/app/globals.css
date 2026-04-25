@@ -7495,6 +7495,12 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 0.72rem;
 }
 
+.transactions-page .pill {
+  min-height: 28px;
+  padding: 5px 9px;
+  font-size: 0.72rem;
+}
+
 .transactions-context-strip__clear {
   border: 0;
   background: transparent;
@@ -7504,33 +7510,6 @@ input.transaction-inline-edit--amount::placeholder {
   font-weight: 600;
   padding: 0 4px;
   flex: 0 0 auto;
-}
-
-.transactions-context-strip__keys {
-  display: flex;
-  flex-wrap: nowrap;
-  justify-content: flex-end;
-  gap: 4px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding-bottom: 2px;
-}
-
-.transactions-context-strip__keys::-webkit-scrollbar {
-  display: none;
-}
-
-.transactions-context-strip__key {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 0 7px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  background: rgba(248, 251, 252, 0.92);
-  color: var(--muted);
-  font-size: 0.66rem;
-  white-space: nowrap;
 }
 
 .transactions-filter-count-badge {
@@ -8618,8 +8597,9 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-filter-pill {
-  min-height: 36px;
-  padding-inline: 12px;
+  min-height: 28px;
+  padding-inline: 9px;
+  font-size: 0.72rem;
 }
 
 .transactions-filter-pill--merchant {
@@ -11481,8 +11461,7 @@ input.transaction-inline-edit--amount::placeholder {
     gap: 10px;
   }
 
-  .transactions-context-strip__filters,
-  .transactions-context-strip__keys {
+  .transactions-context-strip__filters {
     min-width: 100%;
     justify-content: flex-start;
   }

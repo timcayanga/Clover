@@ -3495,14 +3495,6 @@ function TransactionsPageContent() {
                 <span className="transactions-context-strip__label">Filters</span>
               )}
             </div>
-            <div className="transactions-context-strip__keys" aria-label="Keyboard shortcuts">
-              <span className="transactions-context-strip__key">↑↓</span>
-              <span className="transactions-context-strip__key">Enter</span>
-              <span className="transactions-context-strip__key">Space</span>
-              <span className="transactions-context-strip__key">A</span>
-              <span className="transactions-context-strip__key">F</span>
-              <span className="transactions-context-strip__key">/</span>
-            </div>
           </div>
 
           {hasSelectedTransactions ? (
