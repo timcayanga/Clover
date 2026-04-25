@@ -6,6 +6,7 @@ type BillingCardProps = {
   paypalClientId?: string | null;
   paypalPlanId?: string | null;
   paypalBuyerCountry?: string | null;
+  paypalEnv?: "sandbox" | "live" | null;
   userId: string;
   clerkUserId: string;
   email: string;
@@ -29,6 +30,7 @@ export function BillingCard({
   paypalClientId,
   paypalPlanId,
   paypalBuyerCountry,
+  paypalEnv,
   userId,
   clerkUserId,
   email,
@@ -66,6 +68,7 @@ export function BillingCard({
                 planId={paypalPlanId as string}
                 customId={customId}
                 buyerCountry={paypalBuyerCountry}
+                isSandbox={paypalEnv === "sandbox"}
                 className="billing-card__paypal"
               />
             ) : (
