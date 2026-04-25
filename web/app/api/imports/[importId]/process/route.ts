@@ -94,7 +94,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       after(async () => {
         try {
           const { processImportFileText } = await import("@/workers/import-processor");
-          await processImportFileText(importId, { password });
+          await processImportFileText(importId, { password, actorUserId: userId });
         } catch (error) {
           console.error("Background import processing failed", { importId, error });
           await updateImportFileCompat(importId, {
@@ -136,7 +136,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       stage = "processing statement text";
       const { processImportFileText } = await import("@/workers/import-processor");
-      const result = await processImportFileText(importId, { text, password });
+      const result = await processImportFileText(importId, { text, password, actorUserId: userId });
 
       return NextResponse.json({
         ok: true,

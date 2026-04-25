@@ -3,66 +3,149 @@ import { getEnv } from "@/lib/env";
 import {
   type DetectedStatementMetadata,
   inferAccountTypeFromStatement,
-  parseAmountValue,
   type ParsedImportRow,
 } from "@/lib/import-parser";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 
-type OpenAIImportRow = {
+const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v1";
+
+const ALLOWED_MOVEMENT_TYPES = [
+  "income",
+  "real_spend",
+  "transfer",
+  "internal_movement",
+  "refund",
+  "fee",
+  "passive_income",
+] as const;
+
+const ALLOWED_CATEGORIES = [
+  "Income",
+  "Bills & Utilities",
+  "Business",
+  "Education",
+  "Financial",
+  "Food & Dining",
+  "Gifts & Donations",
+  "Health & Wellness",
+  "Housing",
+  "Other",
+  "Shopping",
+  "Transport",
+  "Travel & Lifestyle",
+  "Opening Balance",
+  "Transfers",
+] as const;
+
+type AllowedMovementType = (typeof ALLOWED_MOVEMENT_TYPES)[number];
+type AllowedCategory = (typeof ALLOWED_CATEGORIES)[number];
+
+type OpenAIExtractedTransaction = {
   date: string | null;
-  amount: number | string | null;
-  merchantRaw: string | null;
-  merchantClean: string | null;
-  description: string | null;
-  categoryName: string | null;
-  accountName: string | null;
-  institution: string | null;
-  type: "income" | "expense" | "transfer";
-  confidence: number | null;
-  sourceLine: string | null;
+  post_date: string | null;
+  transaction_date: string | null;
+  raw_name: string;
+  normalized_name: string | null;
+  amount: number;
+  type: "Debit" | "Credit";
+  movement_type: AllowedMovementType;
+  category: AllowedCategory;
+  account: string | null;
+  notes: string | null;
+  confidence_score: number;
+  review_required: boolean;
+  parser_evidence: {
+    page: number | null;
+    source_text: string | null;
+    reason: string;
+  };
 };
 
-type OpenAIImportResult = {
-  institution: string | null;
-  accountNumber: string | null;
-  accountName: string | null;
-  openingBalance: number | null;
-  endingBalance: number | null;
-  startDate: string | null;
-  endDate: string | null;
-  confidence: number;
-  notes: string | null;
-  rows: OpenAIImportRow[];
+type OpenAIParsedAccount = {
+  display_name: string | null;
+  institution_name: string;
+  account_last4: string | null;
+  account_type: string | null;
+  currency: string | null;
+  statement_period: {
+    start: string | null;
+    end: string | null;
+  };
+  statement_balance: number | null;
+  computed_balance: number | null;
+  source: "openai_fallback";
 };
 
 const importedStatementSchema = z.object({
   institution: z.string().nullable().optional().default(null),
-  accountNumber: z.string().nullable().optional().default(null),
-  accountName: z.string().nullable().optional().default(null),
-  accountType: z.enum(["bank", "wallet", "credit_card", "cash", "investment", "other"]).nullable().optional().default(null),
-  openingBalance: z.number().nullable().optional().default(null),
-  endingBalance: z.number().nullable().optional().default(null),
-  startDate: z.string().nullable().optional().default(null),
-  endDate: z.string().nullable().optional().default(null),
-  confidence: z.number().min(0).max(100).optional().default(0),
-  notes: z.string().nullable().optional().default(null),
-  rows: z
+  institution_raw: z.string().nullable().optional().default(null),
+  statement_type: z.string().min(1).optional().default("unknown"),
+  account: z.object({
+    display_name: z.string().nullable().optional().default(null),
+    institution_name: z.string().min(1),
+    account_last4: z.string().nullable().optional().default(null),
+    account_type: z.string().nullable().optional().default(null),
+    currency: z.string().nullable().optional().default(null),
+    statement_period: z
+      .object({
+        start: z.string().nullable().optional().default(null),
+        end: z.string().nullable().optional().default(null),
+      })
+      .default({ start: null, end: null }),
+    statement_balance: z.number().nullable().optional().default(null),
+    computed_balance: z.number().nullable().optional().default(null),
+    source: z.literal("openai_fallback"),
+  }),
+  transactions: z
     .array(
       z.object({
         date: z.string().nullable().optional().default(null),
-        amount: z.union([z.number(), z.string()]).nullable().optional().default(null),
-        merchantRaw: z.string().nullable().optional().default(null),
-        merchantClean: z.string().nullable().optional().default(null),
-        description: z.string().nullable().optional().default(null),
-        categoryName: z.string().nullable().optional().default(null),
-        accountName: z.string().nullable().optional().default(null),
-        institution: z.string().nullable().optional().default(null),
-        type: z.enum(["income", "expense", "transfer"]),
-        confidence: z.number().min(0).max(100).nullable().optional().default(null),
-        sourceLine: z.string().nullable().optional().default(null),
+        post_date: z.string().nullable().optional().default(null),
+        transaction_date: z.string().nullable().optional().default(null),
+        raw_name: z.string(),
+        normalized_name: z.string().nullable().optional().default(null),
+        amount: z.number(),
+        type: z.enum(["Debit", "Credit"]),
+        movement_type: z.enum(ALLOWED_MOVEMENT_TYPES),
+        category: z.enum(ALLOWED_CATEGORIES),
+        account: z.string().nullable().optional().default(null),
+        notes: z.string().nullable().optional().default(null),
+        confidence_score: z.number().min(0).max(100),
+        review_required: z.boolean(),
+        parser_evidence: z.object({
+          page: z.number().nullable().optional().default(null),
+          source_text: z.string().nullable().optional().default(null),
+          reason: z.string(),
+        }),
       })
     )
     .default([]),
+  quality_checks: z
+    .object({
+      transaction_count: z.number().int().nonnegative(),
+      balance_reconciled: z.boolean(),
+      reconciliation_notes: z.array(z.string()).default([]),
+      warnings: z.array(z.string()).default([]),
+    })
+    .default({
+      transaction_count: 0,
+      balance_reconciled: false,
+      reconciliation_notes: [],
+      warnings: [],
+    }),
+  learning_candidates: z
+    .object({
+      merchant_mappings: z.array(z.unknown()).default([]),
+      code_mappings: z.array(z.unknown()).default([]),
+      institution_aliases: z.array(z.unknown()).default([]),
+      edge_cases: z.array(z.unknown()).default([]),
+    })
+    .default({
+      merchant_mappings: [],
+      code_mappings: [],
+      institution_aliases: [],
+      edge_cases: [],
+    }),
 });
 
 const openAIJsonSchema = {
@@ -70,55 +153,114 @@ const openAIJsonSchema = {
   additionalProperties: false,
   properties: {
     institution: { type: ["string", "null"] },
-    accountNumber: { type: ["string", "null"] },
-    accountName: { type: ["string", "null"] },
-    accountType: {
-      anyOf: [
-        { type: "string", enum: ["bank", "wallet", "credit_card", "cash", "investment", "other"] },
-        { type: "null" },
+    institution_raw: { type: ["string", "null"] },
+    statement_type: { type: "string" },
+    account: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        display_name: { type: ["string", "null"] },
+        institution_name: { type: "string" },
+        account_last4: { type: ["string", "null"] },
+        account_type: { type: ["string", "null"] },
+        currency: { type: ["string", "null"] },
+        statement_period: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            start: { type: ["string", "null"] },
+            end: { type: ["string", "null"] },
+          },
+          required: ["start", "end"],
+        },
+        statement_balance: { type: ["number", "null"] },
+        computed_balance: { type: ["number", "null"] },
+        source: { type: "string", enum: ["openai_fallback"] },
+      },
+      required: [
+        "display_name",
+        "institution_name",
+        "account_last4",
+        "account_type",
+        "currency",
+        "statement_period",
+        "statement_balance",
+        "computed_balance",
+        "source",
       ],
     },
-    openingBalance: { type: ["number", "null"] },
-    endingBalance: { type: ["number", "null"] },
-    startDate: { type: ["string", "null"] },
-    endDate: { type: ["string", "null"] },
-    confidence: { type: "number" },
-    notes: { type: ["string", "null"] },
-    rows: {
+    transactions: {
       type: "array",
       items: {
         type: "object",
         additionalProperties: false,
         properties: {
           date: { type: ["string", "null"] },
-          amount: { type: ["number", "string", "null"] },
-          merchantRaw: { type: ["string", "null"] },
-          merchantClean: { type: ["string", "null"] },
-          description: { type: ["string", "null"] },
-          categoryName: { type: ["string", "null"] },
-          accountName: { type: ["string", "null"] },
-          institution: { type: ["string", "null"] },
-          type: { type: "string", enum: ["income", "expense", "transfer"] },
-          confidence: { type: ["number", "null"] },
-          sourceLine: { type: ["string", "null"] },
+          post_date: { type: ["string", "null"] },
+          transaction_date: { type: ["string", "null"] },
+          raw_name: { type: "string" },
+          normalized_name: { type: ["string", "null"] },
+          amount: { type: "number" },
+          type: { type: "string", enum: ["Debit", "Credit"] },
+          movement_type: { type: "string", enum: ALLOWED_MOVEMENT_TYPES },
+          category: { type: "string", enum: ALLOWED_CATEGORIES },
+          account: { type: ["string", "null"] },
+          notes: { type: ["string", "null"] },
+          confidence_score: { type: "number" },
+          review_required: { type: "boolean" },
+          parser_evidence: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              page: { type: ["number", "null"] },
+              source_text: { type: ["string", "null"] },
+              reason: { type: "string" },
+            },
+            required: ["page", "source_text", "reason"],
+          },
         },
-        required: ["date", "amount", "merchantRaw", "merchantClean", "description", "categoryName", "accountName", "institution", "type", "confidence", "sourceLine"],
+        required: [
+          "date",
+          "post_date",
+          "transaction_date",
+          "raw_name",
+          "normalized_name",
+          "amount",
+          "type",
+          "movement_type",
+          "category",
+          "account",
+          "notes",
+          "confidence_score",
+          "review_required",
+          "parser_evidence",
+        ],
       },
     },
+    quality_checks: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        transaction_count: { type: "number" },
+        balance_reconciled: { type: "boolean" },
+        reconciliation_notes: { type: "array", items: { type: "string" } },
+        warnings: { type: "array", items: { type: "string" } },
+      },
+      required: ["transaction_count", "balance_reconciled", "reconciliation_notes", "warnings"],
+    },
+    learning_candidates: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        merchant_mappings: { type: "array", items: { type: "object" } },
+        code_mappings: { type: "array", items: { type: "object" } },
+        institution_aliases: { type: "array", items: { type: "object" } },
+        edge_cases: { type: "array", items: { type: "object" } },
+      },
+      required: ["merchant_mappings", "code_mappings", "institution_aliases", "edge_cases"],
+    },
   },
-  required: [
-    "institution",
-    "accountNumber",
-    "accountName",
-    "accountType",
-    "openingBalance",
-    "endingBalance",
-    "startDate",
-    "endDate",
-    "confidence",
-    "notes",
-    "rows",
-  ],
+  required: ["institution", "institution_raw", "statement_type", "account", "transactions", "quality_checks", "learning_candidates"],
 } as const;
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -152,6 +294,30 @@ const buildModelInputText = (text: string) => {
   return `${compact.slice(0, 42_000)}\n\n[TRUNCATED FOR MODEL INPUT]\n\n${compact.slice(-18_000)}`;
 };
 
+const buildDeterministicParserSummary = (params: {
+  detectedMetadata: DetectedStatementMetadata | null;
+  parsedRows: ParsedImportRow[];
+}) => {
+  const sampleRows = params.parsedRows.slice(0, 12).map((row) => ({
+    date: row.date ?? null,
+    amount: row.amount ?? null,
+    merchantRaw: row.merchantRaw ?? null,
+    merchantClean: row.merchantClean ?? null,
+    description: row.description ?? null,
+    categoryName: row.categoryName ?? null,
+    accountName: row.accountName ?? null,
+    institution: row.institution ?? null,
+    type: row.type ?? null,
+    confidence: row.confidence ?? null,
+  }));
+
+  return {
+    metadata: params.detectedMetadata,
+    rowCount: params.parsedRows.length,
+    sampleRows,
+  };
+};
+
 const simplifyAccountLabel = (value?: string | null) => {
   if (!value) {
     return null;
@@ -168,26 +334,149 @@ const simplifyInstitutionName = (value?: string | null) => {
   return simplified || null;
 };
 
-const inferFallbackCategory = (description: string, type: OpenAIImportRow["type"]) => {
-  const lower = description.toLowerCase();
-  if (type === "transfer") {
-    return "Transfers";
+const buildBankInstructionJson = (params: {
+  institution?: string | null;
+  accountType?: string | null;
+  accountName?: string | null;
+}) => {
+  const normalized = `${params.institution ?? ""} ${params.accountType ?? ""} ${params.accountName ?? ""}`.toLowerCase();
+  const base = {
+    naming: "Use simple bank name + last 4 digits when possible.",
+    movement_type_rules: {
+      atm_withdrawals: "transfer",
+      wallet_topups: "transfer",
+      bank_transfers: "transfer",
+      credit_card_payments: "transfer",
+      cash_check_deposits: "transfer unless clearly salary or income",
+      salary: "income",
+      interest: "passive_income",
+      bank_fees_taxes_charges: "fee",
+      refunds: "refund",
+      bill_payments: "real_spend",
+      purchases: "real_spend",
+      opening_balances: "Opening Balance metadata",
+    },
+    category_rules: {
+      allowed_categories: ALLOWED_CATEGORIES,
+      transfers_never_spend: true,
+      opening_balance_not_spend_or_income: true,
+    },
+  };
+
+  if (/bpi/.test(normalized)) {
+    return {
+      ...base,
+      institution: "BPI",
+      notes: [
+        "BPI credit-card statements may use BE######## identifiers.",
+        "Keep BPI account names simple; do not append product labels unless required.",
+        "Treat payment lines and balance rows conservatively.",
+      ],
+    };
   }
-  if (/salary|payroll|income|deposit|credit memo/.test(lower)) return "Income";
-  if (/fee|interest|loan|financial|bank charge|tax/.test(lower)) return "Financial";
-  if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout/.test(lower)) return "Food & Dining";
-  if (/grab|uber|taxi|bus|train|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
-  if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
-  if (/bill|utilities|electric|water|internet|phone|subscription/.test(lower)) return "Bills & Utilities";
-  if (/travel|airbnb|hotel|airline|flight|tour|holiday/.test(lower)) return "Travel & Lifestyle";
-  if (/entertainment|movie|cinema|theater|theatre|concert|show|ticket|tickets|game|gaming|arcade|karaoke|amusement/.test(lower))
-    return "Entertainment";
-  if (/shop|shopping|mall|amazon|lazada|shopee|retail/.test(lower)) return "Shopping";
-  if (/health|doctor|clinic|pharmacy|medical|hospital/.test(lower)) return "Health & Wellness";
-  if (/education|tuition|school|college|course|learning/.test(lower)) return "Education";
-  if (/gift|donation|charity|present/.test(lower)) return "Gifts & Donations";
-  if (/business|invoice|client|contract/.test(lower)) return "Business";
-  return "Other";
+
+  if (/rcbc/.test(normalized)) {
+    return {
+      ...base,
+      institution: "RCBC",
+      notes: [
+        "RCBC savings and credit-card statements often mix summary rows with transactions.",
+        "Do not turn statement balance rows into transactions.",
+      ],
+    };
+  }
+
+  if (/aub/.test(normalized)) {
+    return {
+      ...base,
+      institution: "AUB",
+      notes: ["AUB statements may split rows across lines; preserve merchant text and join broken OCR text conservatively."],
+    };
+  }
+
+  if (/cimb/.test(normalized)) {
+    return {
+      ...base,
+      institution: "CIMB",
+      notes: ["CIMB statements often include interest/tax summary lines; keep them out of the transaction stream unless they are real ledger movements."],
+    };
+  }
+
+  if (/gcash/.test(normalized)) {
+    return {
+      ...base,
+      institution: "GCash",
+      notes: ["GCash rows often show cash in/out, wallet funding, transfers, and bills payment; classify them conservatively by movement type."],
+    };
+  }
+
+  if (/maya/.test(normalized)) {
+    return {
+      ...base,
+      institution: "Maya",
+      notes: ["Maya credit/wallet statements may include repayment, fees, and interest. Keep the statement balance separate from row amounts."],
+    };
+  }
+
+  if (/unionbank/.test(normalized)) {
+    return {
+      ...base,
+      institution: "UnionBank",
+      notes: ["UnionBank statements should keep the account label simple and preserve the trailing account digits when visible."],
+    };
+  }
+
+  return {
+    ...base,
+    institution: params.institution ?? null,
+    notes: [
+      "Use the extracted text and any deterministic parser result to stay conservative.",
+      "Do not invent account details or transactions.",
+    ],
+  };
+};
+
+const mapMovementTypeToInternalType = (movementType: AllowedMovementType, notes: string | null, rawName: string): "income" | "expense" | "transfer" => {
+  if (movementType === "income" || movementType === "passive_income") {
+    return "income";
+  }
+  if (movementType === "transfer" || movementType === "internal_movement" || movementType === "refund") {
+    return "transfer";
+  }
+  if (movementType === "fee" || movementType === "real_spend") {
+    return "expense";
+  }
+
+  const lower = `${notes ?? ""} ${rawName}`.toLowerCase();
+  if (/interest|salary|payroll|deposit/.test(lower)) {
+    return "income";
+  }
+  if (/fee|tax|charge|refund|payment|transfer|withdraw|cash in|cash out/.test(lower)) {
+    return "transfer";
+  }
+  return "expense";
+};
+
+const normalizeAccountTypeValue = (
+  value: string | null | undefined,
+  institution: string | null,
+  accountName: string | null,
+  fallback: "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other" = "bank"
+) => {
+  const normalized = normalizeWhitespace(String(value ?? "")).toLowerCase();
+  if (normalized === "bank" || normalized === "wallet" || normalized === "credit_card" || normalized === "cash" || normalized === "investment" || normalized === "other") {
+    return normalized;
+  }
+
+  return inferAccountTypeFromStatement(institution, accountName, fallback);
+};
+
+const normalizeOpenAICategory = (category: string | null, movementType: AllowedMovementType) => {
+  if (!category) {
+    return movementType === "transfer" || movementType === "internal_movement" ? "Transfers" : "Other";
+  }
+  const candidate = ALLOWED_CATEGORIES.find((value) => value.toLowerCase() === category.toLowerCase());
+  return candidate ?? (movementType === "transfer" || movementType === "internal_movement" ? "Transfers" : "Other");
 };
 
 const extractOutputText = (payload: Record<string, unknown>) => {
@@ -264,55 +553,125 @@ const responseLooksUseful = (metadata: DetectedStatementMetadata | null, rows: P
   return confidence < 75 && (!hasStrongIdentity || fileNameLike);
 };
 
+const isTruthyEnvValue = (value?: string | null) => {
+  if (!value) {
+    return false;
+  }
+
+  return /^(1|true|yes|on|primary)$/i.test(value.trim());
+};
+
+const buildOpenAIInputPayload = (params: {
+  fileName?: string | null;
+  fileType?: string | null;
+  detectedMetadata: DetectedStatementMetadata | null;
+  parsedRows: ParsedImportRow[];
+  text: string;
+  pageImages?: Array<{ page: number; dataUrl: string }> | null;
+}) => {
+  const institution = params.detectedMetadata?.institution ?? null;
+  const accountType = params.detectedMetadata?.accountType ?? null;
+  const bankInstructionJson = buildBankInstructionJson({
+    institution,
+    accountType,
+    accountName: params.detectedMetadata?.accountName ?? null,
+  });
+
+  return [
+    "Parse this bank statement for Clover.",
+    "",
+    `File name: ${params.fileName ?? "unknown"}`,
+    `File type: ${params.fileType ?? "unknown"}`,
+    "",
+    `Known institution: ${institution ?? "null"}`,
+    `Known parser result: ${JSON.stringify(buildDeterministicParserSummary({ detectedMetadata: params.detectedMetadata, parsedRows: params.parsedRows }))}`,
+    `Bank-specific instructions: ${JSON.stringify(bankInstructionJson)}`,
+    "",
+    "Extracted text:",
+    params.text,
+    "",
+    `Images/pages: ${JSON.stringify(params.pageImages ?? [])}`,
+    "",
+    "Return only valid JSON matching the schema.",
+  ].join("\n");
+};
+
+const buildFallbackMetadata = (metadata: DetectedStatementMetadata | null): DetectedStatementMetadata => {
+  if (metadata) {
+    return metadata;
+  }
+
+  return {
+    institution: null,
+    accountNumber: null,
+    accountName: null,
+    accountType: null,
+    openingBalance: null,
+    endingBalance: null,
+    startDate: null,
+    endDate: null,
+    confidence: 0,
+  };
+};
+
 export const parseImportTextWithOpenAIFallback = async (params: {
   text: string;
   fileName?: string | null;
   fileType?: string | null;
   detectedMetadata: DetectedStatementMetadata | null;
   parsedRows: ParsedImportRow[];
-}): Promise<{ metadata: DetectedStatementMetadata; rows: ParsedImportRow[]; model: string } | null> => {
+  pageImages?: Array<{ page: number; dataUrl: string }> | null;
+  preferPrimary?: boolean;
+}): Promise<
+  | {
+      metadata: DetectedStatementMetadata;
+      rows: ParsedImportRow[];
+      model: string;
+      promptVersion: string;
+      audit: {
+        sourceFilename: string | null;
+        confidence: number;
+        schemaValidated: boolean;
+        schemaValidationResult: string;
+        rawResponse: string;
+      };
+    }
+  | null
+> => {
   const env = getEnv();
   const apiKey = (env as { OPENAI_API_KEY?: string }).OPENAI_API_KEY?.trim();
-  if (!apiKey || !responseLooksUseful(params.detectedMetadata, params.parsedRows)) {
+  const isPrimaryMode =
+    params.preferPrimary ?? isTruthyEnvValue((env as { OPENAI_IMPORT_PARSER_PRIMARY?: string }).OPENAI_IMPORT_PARSER_PRIMARY);
+  if (!apiKey || (!isPrimaryMode && !responseLooksUseful(params.detectedMetadata, params.parsedRows))) {
     return null;
   }
 
   const model = (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL?.trim() || "gpt-4.1";
   const inputText = buildModelInputText(params.text);
   const systemPrompt = [
-    "You are parsing a bank statement for Clover, a personal finance app.",
-    "Clover imports statements into accounts and transactions.",
-    "The user expects the model to extract account identity, balances, dates, and transaction rows from noisy statement text.",
-    "Never invent values. Only use details visible in the statement text.",
-    "Return exactly one JSON object and nothing else: no markdown, no prose, no code fences, and no commentary.",
+    "You are Clover’s financial statement extraction engine.",
+    "Extract transactions from bank statements into strict JSON.",
+    "Do not invent data.",
+    "Preserve raw text.",
+    "Classify transactions using Clover’s allowed categories and movement types.",
+    "Transfers, wallet funding, ATM withdrawals, card payments, and deposits are not spending or income by default.",
+    "Return JSON only.",
+    "Use the schema exactly as given.",
+    "Use only the allowed movement_type and category values.",
     "If a field is unknown, use null.",
+    "Keep rows in statement order.",
     "Prefer conservative parsing over guessing.",
-    "If the statement is ambiguous, still return the best structured JSON you can, but keep low-confidence fields null and set low confidence.",
-    "Rows must stay in the order they appear in the statement.",
-    "Use positive amounts only; row.type describes the direction.",
-    "Do not emit statement header rows, footer rows, page labels, or support text as transactions.",
-    "Do not emit opening balance, previous balance, closing balance, ending balance, or statement balance rows as transactions when those are clearly summary fields.",
-    "For account names, keep them simple and consistent across imports: use 'BankName last4' when possible, such as 'AUB 9671', 'BPI 3012', 'RCBC 5080', 'UnionBank 8037', or 'GCash 9926'.",
-    "Do not append product labels like Savings, Checking, Mastercard, Visa, Signature, Platinum, or similar unless they are required to distinguish two real accounts with the same bank and suffix.",
-    "institution should be the bank or wallet brand only, not a product name.",
-    "accountNumber should be the visible account or card number if present; keep digits only if you can.",
-    "openingBalance and endingBalance should reflect the statement totals when visible.",
-    "merchantRaw should preserve the readable merchant or description text from the statement.",
-    "merchantClean should be a short normalized title that Clover can show in transactions.",
-    "Use accountType to classify the statement as bank, wallet, credit_card, cash, investment, or other.",
-    "If a row clearly shows a transfer, payment, cash in, cash out, or fee, normalize it sensibly, but do not over-interpret unclear rows.",
-    "If the statement has an obvious beginning or ending balance row, include it in the statement balances rather than turning it into a transaction.",
+    "Reconcile balances when possible and report mismatches clearly.",
   ].join(" ");
 
-  const userPrompt = [
-    `File name: ${params.fileName ?? "unknown"}`,
-    `File type: ${params.fileType ?? "unknown"}`,
-    `Deterministic metadata: ${JSON.stringify(params.detectedMetadata ?? null)}`,
-    `Deterministic rows found: ${params.parsedRows.length}`,
-    "",
-    "Parse the statement below and return the JSON structure described by the schema.",
-    inputText,
-  ].join("\n");
+  const userPrompt = buildOpenAIInputPayload({
+    fileName: params.fileName ?? null,
+    fileType: params.fileType ?? null,
+    detectedMetadata: params.detectedMetadata,
+    parsedRows: params.parsedRows,
+    text: inputText,
+    pageImages: params.pageImages ?? null,
+  });
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
@@ -371,82 +730,135 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       console.warn("OpenAI import fallback returned unparseable JSON", {
         sample: outputText.slice(0, 500),
       });
-      return null;
+      return {
+        metadata: buildFallbackMetadata(params.detectedMetadata),
+        rows: [],
+        model,
+        promptVersion: OPENAI_PROMPT_VERSION,
+        audit: {
+          sourceFilename: params.fileName ?? null,
+          confidence: params.detectedMetadata?.confidence ?? 0,
+          schemaValidated: false,
+          schemaValidationResult: "unparseable_json",
+          rawResponse: outputText,
+        },
+      };
     }
     const validation = importedStatementSchema.safeParse(parsedJson);
-    if (!validation.success) {
+    const schemaValidated = validation.success;
+    const validationSummary = schemaValidated ? "valid" : validation.error.issues.slice(0, 5).map((issue) => issue.message).join("; ");
+    if (!schemaValidated) {
       console.warn("OpenAI import fallback returned invalid schema", {
         issues: validation.error.issues.slice(0, 3),
       });
-      return null;
+      return {
+        metadata: buildFallbackMetadata(params.detectedMetadata),
+        rows: [],
+        model,
+        promptVersion: OPENAI_PROMPT_VERSION,
+        audit: {
+          sourceFilename: params.fileName ?? null,
+          confidence: params.detectedMetadata?.confidence ?? 0,
+          schemaValidated: false,
+          schemaValidationResult: validationSummary,
+          rawResponse: outputText,
+        },
+      };
     }
 
     const value = validation.data;
-    const institution = simplifyInstitutionName(value.institution ?? params.detectedMetadata?.institution ?? null);
-    const accountNumber = value.accountNumber?.replace(/\D/g, "").slice(0, 16) ?? params.detectedMetadata?.accountNumber ?? null;
+    const institution = simplifyInstitutionName(value.institution ?? value.account.institution_name ?? params.detectedMetadata?.institution ?? null);
+    const institutionRaw = normalizeWhitespace(String(value.institution_raw ?? value.institution ?? institution ?? params.detectedMetadata?.institution ?? "")).trim() || null;
+    const accountLast4 = value.account.account_last4?.replace(/\D/g, "").slice(-4) ?? params.detectedMetadata?.accountNumber?.slice(-4) ?? null;
+    const accountNumber = accountLast4 ?? params.detectedMetadata?.accountNumber ?? null;
     const accountNameCandidate =
-      simplifyAccountLabel(value.accountName ?? null) ??
-      (institution && accountNumber ? `${institution} ${accountNumber.slice(-4)}` : null) ??
+      simplifyAccountLabel(value.account.display_name ?? null) ??
+      (institution && accountLast4 ? `${institution} ${accountLast4}` : null) ??
       simplifyAccountLabel(params.detectedMetadata?.accountName ?? null) ??
       institution ??
       null;
-
+    const accountType = normalizeAccountTypeValue(value.account.account_type ?? null, institution, accountNameCandidate, params.detectedMetadata?.accountType ?? "bank");
+    const statementBalance = value.account.statement_balance ?? params.detectedMetadata?.endingBalance ?? null;
+    const computedBalance = value.account.computed_balance ?? statementBalance;
+    const transactionConfidenceAverage =
+      value.transactions.length > 0
+        ? value.transactions.reduce((sum, row) => sum + row.confidence_score, 0) / value.transactions.length
+        : 0;
+    const qualityBoost = value.quality_checks.balance_reconciled ? 10 : 0;
     const metadata: DetectedStatementMetadata = {
       institution: institution ?? null,
       accountNumber: accountNumber ?? null,
       accountName: accountNameCandidate,
-      accountType:
-        value.accountType ??
-        params.detectedMetadata?.accountType ??
-        inferAccountTypeFromStatement(institution, accountNameCandidate, "bank"),
-      openingBalance: value.openingBalance ?? params.detectedMetadata?.openingBalance ?? null,
-      endingBalance: value.endingBalance ?? params.detectedMetadata?.endingBalance ?? null,
-      startDate: value.startDate ?? params.detectedMetadata?.startDate ?? null,
-      endDate: value.endDate ?? params.detectedMetadata?.endDate ?? null,
-      confidence: Math.max(0, Math.min(100, Math.round(value.confidence ?? params.detectedMetadata?.confidence ?? 0))),
+      accountType,
+      openingBalance: params.detectedMetadata?.openingBalance ?? null,
+      endingBalance: statementBalance,
+      startDate: value.account.statement_period.start ?? params.detectedMetadata?.startDate ?? null,
+      endDate: value.account.statement_period.end ?? params.detectedMetadata?.endDate ?? null,
+      confidence: Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round((params.detectedMetadata?.confidence ?? 0) * 0.25 + transactionConfidenceAverage * 0.75 + qualityBoost)
+        )
+      ),
     };
 
-    const rows: ParsedImportRow[] = value.rows
-      .map((row) => {
-        const amount = parseAmountValue(typeof row.amount === "number" ? String(row.amount) : row.amount ?? null);
-        const description = normalizeWhitespace(String(row.description ?? row.merchantRaw ?? row.merchantClean ?? "")).trim();
-        if (!description || amount === null) {
+    const balanceReconciled =
+      statementBalance !== null &&
+      computedBalance !== null &&
+      Math.abs(Number(statementBalance) - Number(computedBalance)) < 0.01;
+
+    const mappedRows = value.transactions.map((row): ParsedImportRow | null => {
+        const description = normalizeWhitespace(String(row.normalized_name ?? row.raw_name ?? "")).trim();
+        const rawName = normalizeWhitespace(String(row.raw_name ?? description)).trim();
+        const amount = Math.abs(Number(row.amount));
+        if (!rawName || !Number.isFinite(amount)) {
           return null;
         }
 
-        if (isSummaryRowText(description) && row.type !== "transfer") {
-          return null;
-        }
-
-        const rowInstitution = simplifyInstitutionName(row.institution ?? metadata.institution ?? null) ?? metadata.institution ?? null;
-        const rowAccountName =
-          simplifyAccountLabel(row.accountName ?? null) ??
-          (rowInstitution && metadata.accountNumber ? `${rowInstitution} ${metadata.accountNumber.slice(-4)}` : null) ??
-          metadata.accountName ??
-          null;
-        const merchantBase = row.merchantClean ?? row.merchantRaw ?? row.description ?? description;
+        const rowInstitution = simplifyInstitutionName(institution ?? value.account.institution_name ?? params.detectedMetadata?.institution ?? null) ?? institution ?? null;
+        const rowAccountName = accountNameCandidate ?? value.account.display_name ?? null;
+        const movementType = row.movement_type;
+        const category = normalizeOpenAICategory(row.category, movementType);
+        const internalType = mapMovementTypeToInternalType(movementType, row.notes ?? null, rawName);
+        const merchantBase = row.normalized_name ?? row.raw_name ?? description;
         const merchantClean = summarizeMerchantText(merchantBase, rowInstitution);
+        const reviewRequired = row.review_required || row.confidence_score < 85 || category === "Other" || movementType === "internal_movement";
 
         return {
           date: row.date ?? undefined,
           amount: amount.toFixed(2),
-          merchantRaw: normalizeWhitespace(String(row.merchantRaw ?? row.description ?? description)),
+          merchantRaw: rawName,
           merchantClean,
-          description: row.description ?? description,
-          categoryName: row.categoryName ?? inferFallbackCategory(description, row.type),
+          description: description || rawName,
+          categoryName: category,
           accountName: rowAccountName ?? metadata.accountName ?? undefined,
           institution: rowInstitution ?? undefined,
-          type: row.type,
-          confidence: Math.max(0, Math.min(100, Math.round(row.confidence ?? metadata.confidence ?? 0))),
+          type: internalType,
+          confidence: Math.max(0, Math.min(100, Math.round(row.confidence_score ?? metadata.confidence ?? 0))),
           rawPayload: {
             source: "openai",
             model,
-            sourceLine: row.sourceLine ?? null,
-            parsedDescription: row.description ?? description,
+            promptVersion: OPENAI_PROMPT_VERSION,
+            statementType: value.statement_type,
+            institutionRaw,
+            sourceLine: row.parser_evidence.source_text ?? null,
+            parserEvidence: row.parser_evidence,
+            normalizedName: row.normalized_name ?? null,
+            movementType,
+            category,
+            reviewRequired,
+            notes: row.notes ?? null,
+            amountType: row.type,
+            balanceReconciled,
+            computedBalance,
+            qualityChecks: value.quality_checks,
+            learningCandidates: value.learning_candidates,
           },
         } satisfies ParsedImportRow;
-      })
-      .filter(Boolean) as ParsedImportRow[];
+    });
+
+    const rows = mappedRows.filter((row): row is ParsedImportRow => row !== null);
 
     if (rows.length === 0) {
       return null;
@@ -456,6 +868,14 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       metadata,
       rows,
       model,
+      promptVersion: OPENAI_PROMPT_VERSION,
+      audit: {
+        sourceFilename: params.fileName ?? null,
+        confidence: metadata.confidence,
+        schemaValidated,
+        schemaValidationResult: validationSummary,
+        rawResponse: outputText,
+      },
     };
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {

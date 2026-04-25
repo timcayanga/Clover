@@ -11,6 +11,7 @@ const envSchema = z.object({
   REDIS_URL: z.string().min(1).optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
   OPENAI_IMPORT_PARSER_MODEL: z.string().min(1).optional(),
+  OPENAI_IMPORT_PARSER_PRIMARY: z.string().min(1).optional(),
   PAYPAL_ENV: z.enum(["sandbox", "live"]).optional(),
   PAYPAL_CLIENT_ID: z.string().min(1).optional(),
   PAYPAL_CLIENT_SECRET: z.string().min(1).optional(),

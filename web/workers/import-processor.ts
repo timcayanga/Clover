@@ -1,5 +1,6 @@
 import type { Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { getEnv } from "@/lib/env";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { parseAmountValue, parseImportText } from "@/lib/import-parser";
 import { readImportedFileText } from "@/lib/import-file-text.server";
@@ -69,6 +70,14 @@ type ProcessImportResult = {
 };
 
 const shouldRouteToReview = (confidence: number) => confidence < 85;
+
+const isTruthyEnvValue = (value?: string | null) => {
+  if (!value) {
+    return false;
+  }
+
+  return /^(1|true|yes|on|primary)$/i.test(value.trim());
+};
 
 const chunkArray = <T,>(items: T[], size: number) => {
   if (size <= 0) {
@@ -228,7 +237,7 @@ const buildTransactionInsertRecord = (params: {
 
 export const processImportFileText = async (
   importFileId: string,
-  options: { text?: string; password?: string } = {}
+  options: { text?: string; password?: string; actorUserId?: string | null } = {}
 ): Promise<ProcessImportResult> => {
   const importFile = await fetchImportFileCompat(importFileId);
 
@@ -291,12 +300,14 @@ export const processImportFileText = async (
     accountName: mergedMetadata.accountName,
     accountNumber: mergedMetadata.accountNumber,
   });
+  const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
   const openAiParsed = await parseImportTextWithOpenAIFallback({
     text,
     fileName: String(importFile.fileName ?? ""),
     fileType: String(importFile.fileType ?? ""),
     detectedMetadata: mergedMetadata,
     parsedRows,
+    preferPrimary: openAiPrimaryMode,
   });
 
   const openAiMetadata = openAiParsed
@@ -320,9 +331,34 @@ export const processImportFileText = async (
       })
     : null;
 
+  if (openAiParsed?.audit && options.actorUserId) {
+    await prisma.auditLog.create({
+      data: {
+        workspaceId: importFile.workspaceId as string,
+        actorUserId: options.actorUserId,
+        action: "import.openai_fallback",
+        entity: "ImportFile",
+        entityId: importFileId,
+        metadata: {
+          model: openAiParsed.model,
+          promptVersion: openAiParsed.promptVersion,
+          sourceFilename: openAiParsed.audit.sourceFilename ?? importFile.fileName,
+          confidence: openAiParsed.audit.confidence,
+          schemaValidated: openAiParsed.audit.schemaValidated,
+          schemaValidationResult: openAiParsed.audit.schemaValidationResult,
+          rawResponse: openAiParsed.audit.rawResponse,
+        },
+      },
+    });
+  }
+
   const useOpenAiParse =
-    Boolean(openAiParsed) &&
-    ((openAiMetadata?.confidence ?? 0) >= (mergedMetadata.confidence ?? 0) || parsedRows.length === 0);
+    Boolean(openAiParsed?.rows.length) &&
+    Boolean(openAiParsed?.audit.schemaValidated) &&
+    (openAiPrimaryMode ||
+      (openAiMetadata
+        ? (openAiMetadata?.confidence ?? 0) >= (mergedMetadata.confidence ?? 0)
+        : parsedRows.length === 0));
   const effectiveRows = useOpenAiParse && openAiParsed ? openAiParsed.rows : parsedRows;
   const effectiveMetadataSource = useOpenAiParse && openAiMetadata ? openAiMetadata : mergedMetadata;
   const parsedEndingBalance = getTrailingBalanceFromParsedRows(effectiveRows);
