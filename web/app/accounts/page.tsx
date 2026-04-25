@@ -1115,17 +1115,7 @@ function AccountsPageContent() {
   };
 
   const openAccountDrawer = (account: Account) => {
-    setDrawerAccountId(account.id);
-    setDrawerTransactions(transactions.filter((transaction) => transactionMatchesAccount(transaction, account)));
-    setAccountDeleteConfirmOpen(false);
-    setDrawerNotice(null);
-    setAccountEditName(account.name);
-    setAccountEditInstitution(account.institution ?? "");
-    setAccountEditType(getEffectiveAccountType(account));
-    setAccountEditCurrency(account.currency);
-    setAccountEditBalance(account.balance?.toString() ?? "");
-    setAccountEditSource(account.source);
-    setBalanceDraft(account.balance?.toString() ?? "");
+    router.push(`/accounts/${account.id}`);
   };
 
   const openFullAccountPage = () => {
@@ -1134,8 +1124,8 @@ function AccountsPageContent() {
   };
 
   const openDrawerForWarning = (account: Account, warning: string) => {
-    openAccountDrawer(account);
-    setDrawerNotice(warning);
+    void warning;
+    router.push(`/accounts/${account.id}`);
   };
 
   const saveAccountChanges = async (event?: FormEvent<HTMLFormElement>) => {

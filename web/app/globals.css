@@ -9734,6 +9734,77 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 0.8rem;
 }
 
+.accounts-detail__transactions {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-soft);
+}
+
+.accounts-detail__transaction-list {
+  display: grid;
+  gap: 2px;
+  max-height: 760px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.accounts-detail__transaction-header,
+.accounts-detail__transaction-row {
+  grid-template-columns: 36px minmax(0, 2.6fr) minmax(110px, 0.8fr) minmax(120px, 0.9fr) minmax(90px, 0.72fr) minmax(110px, 0.82fr);
+}
+
+.accounts-detail__transaction-header {
+  top: 0;
+  padding: 2px 2px 4px;
+}
+
+.accounts-detail__transaction-row {
+  padding: 8px 4px;
+}
+
+.accounts-detail__transaction-name {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.accounts-detail__transaction-name strong {
+  font-size: 0.94rem;
+  letter-spacing: -0.02em;
+}
+
+.accounts-detail__transaction-name span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.accounts-detail__transaction-date,
+.accounts-detail__transaction-category,
+.accounts-detail__transaction-type {
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.accounts-detail__transaction-amount {
+  text-align: right;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.accounts-detail__transaction-amount.positive {
+  color: var(--good);
+}
+
+.accounts-detail__transaction-amount.negative {
+  color: var(--bad);
+}
+
 .accounts-drawer__checkpoint {
   display: grid;
   gap: 12px;

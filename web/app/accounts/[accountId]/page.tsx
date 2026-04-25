@@ -6,6 +6,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { getAccountBrand } from "@/lib/account-brand";
+import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 
 type Account = {
@@ -71,6 +72,95 @@ const formatDate = (value: string) =>
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
 const isSpendableAccountType = (value: string) => value === "bank" || value === "wallet" || value === "cash";
+
+const getCategoryIconSrc = (categoryName: string | null | undefined) => {
+  switch ((categoryName ?? "").trim().toLowerCase()) {
+    case "income":
+      return "/category-icons/income.svg";
+    case "food & dining":
+      return "/category-icons/food.svg";
+    case "transport":
+      return "/category-icons/transport.svg";
+    case "housing":
+      return "/category-icons/housing.svg";
+    case "bills & utilities":
+    case "utilities":
+      return "/category-icons/utilities.svg";
+    case "travel & lifestyle":
+      return "/category-icons/travel.svg";
+    case "entertainment":
+      return "/category-icons/entertainment.svg";
+    case "shopping":
+      return "/category-icons/shopping.svg";
+    case "health & wellness":
+      return "/category-icons/health.svg";
+    case "education":
+      return "/category-icons/education.svg";
+    case "financial":
+      return "/category-icons/financial.svg";
+    case "gifts & donations":
+      return "/category-icons/gift.svg";
+    case "business":
+      return "/category-icons/business.svg";
+    case "transfers":
+      return "/category-icons/transfer.svg";
+    case "groceries":
+      return "/category-icons/groceries.svg";
+    case "medical":
+      return "/category-icons/medical.svg";
+    case "salary":
+      return "/category-icons/salary.svg";
+    case "investments":
+    case "investment":
+      return "/category-icons/investments.svg";
+    case "other":
+    default:
+      return "/category-icons/default.svg";
+  }
+};
+
+const getCategoryIconTone = (categoryName: string | null | undefined) => {
+  switch ((categoryName ?? "").trim().toLowerCase()) {
+    case "income":
+    case "salary":
+      return { backgroundColor: "rgba(34, 197, 94, 0.14)", borderColor: "rgba(34, 197, 94, 0.24)" };
+    case "food & dining":
+    case "groceries":
+      return { backgroundColor: "rgba(249, 115, 22, 0.14)", borderColor: "rgba(249, 115, 22, 0.24)" };
+    case "transport":
+      return { backgroundColor: "rgba(59, 130, 246, 0.14)", borderColor: "rgba(59, 130, 246, 0.24)" };
+    case "housing":
+      return { backgroundColor: "rgba(168, 85, 247, 0.14)", borderColor: "rgba(168, 85, 247, 0.24)" };
+    case "bills & utilities":
+    case "utilities":
+      return { backgroundColor: "rgba(14, 165, 233, 0.14)", borderColor: "rgba(14, 165, 233, 0.24)" };
+    case "travel & lifestyle":
+      return { backgroundColor: "rgba(236, 72, 153, 0.14)", borderColor: "rgba(236, 72, 153, 0.24)" };
+    case "entertainment":
+      return { backgroundColor: "rgba(245, 158, 11, 0.14)", borderColor: "rgba(245, 158, 11, 0.24)" };
+    case "shopping":
+      return { backgroundColor: "rgba(244, 63, 94, 0.14)", borderColor: "rgba(244, 63, 94, 0.24)" };
+    case "health & wellness":
+    case "medical":
+      return { backgroundColor: "rgba(20, 184, 166, 0.14)", borderColor: "rgba(20, 184, 166, 0.24)" };
+    case "education":
+      return { backgroundColor: "rgba(234, 179, 8, 0.14)", borderColor: "rgba(234, 179, 8, 0.24)" };
+    case "financial":
+      return { backgroundColor: "rgba(37, 99, 235, 0.14)", borderColor: "rgba(37, 99, 235, 0.24)" };
+    case "gifts & donations":
+      return { backgroundColor: "rgba(190, 24, 93, 0.14)", borderColor: "rgba(190, 24, 93, 0.24)" };
+    case "business":
+      return { backgroundColor: "rgba(100, 116, 139, 0.14)", borderColor: "rgba(100, 116, 139, 0.24)" };
+    case "transfers":
+      return { backgroundColor: "rgba(6, 182, 212, 0.14)", borderColor: "rgba(6, 182, 212, 0.24)" };
+    case "investments":
+    case "investment":
+      return { backgroundColor: "rgba(124, 58, 237, 0.14)", borderColor: "rgba(124, 58, 237, 0.24)" };
+    case "other":
+    default:
+      return { backgroundColor: "rgba(148, 163, 184, 0.14)", borderColor: "rgba(148, 163, 184, 0.24)" };
+  }
+};
 
 const getBalanceContext = (accountType: string) => {
   if (accountType === "credit_card") {
@@ -164,6 +254,12 @@ const getCheckpointSymbol = (tone: "good" | "danger" | "neutral") => {
   if (tone === "good") return "✓";
   if (tone === "danger") return "!";
   return "•";
+};
+
+const getTransactionTypeLabel = (type: Transaction["type"]) => {
+  if (type === "income") return "Income";
+  if (type === "expense") return "Expense";
+  return "Transfer";
 };
 
 const formatAccountType = (value: string) =>
@@ -352,6 +448,19 @@ function AccountDetailPageContent() {
     [transactions]
   );
 
+  const openTransactionsPage = () => {
+    if (!account) {
+      return;
+    }
+
+    const params = buildTransactionQuerySearchParams(
+      account.workspaceId,
+      { accountIds: [account.id] },
+      { pageSize: "all" }
+    );
+    router.push(`/transactions?${params.toString()}`);
+  };
+
   return (
     <CloverShell active="accounts" title={account?.name ?? "Account"} kicker="Account history" subtitle="View the full statement history for a single account." showTopbar={false}>
       <section className="panel">
@@ -406,6 +515,107 @@ function AccountDetailPageContent() {
           </div>
         ) : null}
 
+        {importSummaries.length > 0 ? (
+          <div className="accounts-detail__imports glass" style={{ marginTop: 20 }}>
+            <div className="accounts-detail__reconciliation-head">
+              <div>
+                <p className="eyebrow">Imports</p>
+                <h3>Recent import batches</h3>
+              </div>
+            </div>
+            <div className="accounts-detail__imports-list">
+              {importSummaries.slice(0, 3).map((summary) => (
+                <div key={summary.key} className="accounts-detail__import-row">
+                  <div>
+                    <strong>{summary.label}</strong>
+                    <span>{summary.count} rows · {formatDate(summary.latestDate)}</span>
+                  </div>
+                  <strong>{currencyFormatter.format(summary.total)}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {openingBalanceEntry ? (
+          <div className="status-card" style={{ marginTop: 20 }}>
+            <div>
+              <div className="panel-muted">Opening balance</div>
+              <strong>{formatDate(openingBalanceEntry.date)}</strong>
+            </div>
+            <strong>{currencyFormatter.format(parseAmount(openingBalanceEntry.amount))}</strong>
+          </div>
+        ) : null}
+
+        <div className="accounts-detail__transactions glass" style={{ marginTop: 24 }}>
+          <div className="accounts-detail__reconciliation-head">
+            <div>
+              <p className="eyebrow">Transaction history</p>
+              <h3>All transactions</h3>
+            </div>
+            <button className="button button-secondary button-small" type="button" onClick={openTransactionsPage}>
+              Open in Transactions
+            </button>
+          </div>
+          {visibleTransactions.length > 0 ? (
+            <div className="accounts-detail__transaction-list" aria-label="Transaction history">
+              <div className="line-item-header accounts-detail__transaction-header">
+                <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
+                <button className="line-item-header-cell line-item-header-cell--name" type="button">
+                  Name
+                </button>
+                <button className="line-item-header-cell" type="button">
+                  Date
+                </button>
+                <button className="line-item-header-cell" type="button">
+                  Category
+                </button>
+                <button className="line-item-header-cell" type="button">
+                  Type
+                </button>
+                <button className="line-item-header-cell line-item-header-cell--amount" type="button">
+                  Amount
+                </button>
+              </div>
+              {visibleTransactions.map((transaction) => {
+                const amount = Number(transaction.amount);
+                const amountToneClass = transaction.type === "income" ? "positive" : "negative";
+                const merchantDisplay = transaction.merchantClean || transaction.merchantRaw;
+                const subtext =
+                  transaction.description && transaction.description.trim() && transaction.description !== merchantDisplay
+                    ? transaction.description
+                    : transaction.source === "upload"
+                      ? "Imported"
+                      : transaction.source === "manual"
+                        ? "Manual"
+                        : "";
+
+                return (
+                  <div key={transaction.id} className={`line-item accounts-detail__transaction-row ${transaction.isExcluded ? "is-muted" : ""}`}>
+                    <div className="transaction-category-icon-cell" aria-hidden="true">
+                      <span className="transaction-category-icon" style={getCategoryIconTone(transaction.categoryName)}>
+                        <img src={getCategoryIconSrc(transaction.categoryName)} alt="" aria-hidden="true" />
+                      </span>
+                    </div>
+                    <div className="accounts-detail__transaction-name">
+                      <strong>{merchantDisplay}</strong>
+                      {subtext ? <span>{subtext}</span> : null}
+                    </div>
+                    <div className="accounts-detail__transaction-date">{formatDate(transaction.date)}</div>
+                    <div className="accounts-detail__transaction-category">{transaction.categoryName || "Other"}</div>
+                    <div className="accounts-detail__transaction-type">{getTransactionTypeLabel(transaction.type)}</div>
+                    <div className={`accounts-detail__transaction-amount ${amountToneClass}`}>
+                      {currencyFormatter.format(amount)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="panel-muted">No transactions are linked to this account yet.</p>
+          )}
+        </div>
+
         {latestCheckpoint ? (
           <div className="accounts-detail__reconciliation glass" style={{ marginTop: 20 }}>
             <div className="accounts-detail__reconciliation-head">
@@ -451,70 +661,6 @@ function AccountDetailPageContent() {
             </p>
           </div>
         ) : null}
-
-        {importSummaries.length > 0 ? (
-          <div className="accounts-detail__imports glass" style={{ marginTop: 20 }}>
-            <div className="accounts-detail__reconciliation-head">
-              <div>
-                <p className="eyebrow">Imports</p>
-                <h3>Recent import batches</h3>
-              </div>
-            </div>
-            <div className="accounts-detail__imports-list">
-              {importSummaries.slice(0, 3).map((summary) => (
-                <div key={summary.key} className="accounts-detail__import-row">
-                  <div>
-                    <strong>{summary.label}</strong>
-                    <span>{summary.count} rows · {formatDate(summary.latestDate)}</span>
-                  </div>
-                  <strong>{currencyFormatter.format(summary.total)}</strong>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-
-        {openingBalanceEntry ? (
-          <div className="status-card" style={{ marginTop: 20 }}>
-            <div>
-              <div className="panel-muted">Opening balance</div>
-              <strong>{formatDate(openingBalanceEntry.date)}</strong>
-            </div>
-            <strong>{currencyFormatter.format(parseAmount(openingBalanceEntry.amount))}</strong>
-          </div>
-        ) : null}
-
-        <div style={{ marginTop: 24 }}>
-          <h3>All transactions</h3>
-          {visibleTransactions.length > 0 ? (
-            <div style={{ overflowX: "auto" }}>
-              <table className="preview-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Description</th>
-                    <th>Category</th>
-                    <th>Type</th>
-                    <th>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleTransactions.map((transaction) => (
-                    <tr key={transaction.id}>
-                      <td>{formatDate(transaction.date)}</td>
-                      <td>{transaction.merchantClean || transaction.merchantRaw}</td>
-                      <td>{transaction.categoryName || "—"}</td>
-                      <td>{transaction.type}</td>
-                      <td>{currencyFormatter.format(parseAmount(transaction.amount))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="panel-muted">No transactions are linked to this account yet.</p>
-          )}
-        </div>
       </section>
     </CloverShell>
   );
