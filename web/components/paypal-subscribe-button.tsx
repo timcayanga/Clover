@@ -48,6 +48,12 @@ export function PayPalSubscribeButton({
   const [scriptReady, setScriptReady] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (window.paypal) {
+      setScriptReady(true);
+    }
+  }, []);
+
   const scriptSrc = useMemo(() => {
     const params = new URLSearchParams({
       "client-id": clientId,

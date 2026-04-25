@@ -1,39 +1,77 @@
 import Link from "next/link";
-import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
+import { BillingActions } from "@/components/billing-actions";
+import { BILLING_COPY, type BillingInterval } from "@/lib/billing-plans";
+
+type BillingSubscriptionSummary = {
+  status: string;
+  interval: BillingInterval | null;
+  pendingPlanId: string | null;
+  pendingInterval: BillingInterval | null;
+  providerSubscriptionId: string | null;
+  currentPeriodEnd: string | null;
+  nextBillingTime: string | null;
+  planTier: "free" | "pro";
+};
 
 type BillingCardProps = {
   planTier: "free" | "pro";
+  billingSubscription?: BillingSubscriptionSummary | null;
   paypalClientId?: string | null;
-  paypalPlanId?: string | null;
+  paypalMonthlyPlanId?: string | null;
+  paypalAnnualPlanId?: string | null;
   userId: string;
   clerkUserId: string;
   email: string;
 };
 
-const tierMeta = {
-  free: {
-    label: "Free",
-    headline: "Start free and upgrade when you need more room.",
-    detail: "Free is the default Clover plan. It keeps the core workflow open while we validate the paid path.",
-  },
-  pro: {
-    label: "Pro",
-    headline: "Your Pro access is active.",
-    detail: "PayPal manages the subscription, and Clover updates access automatically when billing events arrive.",
-  },
-} as const;
+function formatBillingDate(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(parsed);
+}
+
+function statusLabel(status: string) {
+  switch (status) {
+    case "approval_pending":
+      return "Awaiting approval";
+    case "active":
+      return "Active";
+    case "cancelled":
+      return "Cancelled";
+    case "suspended":
+      return "Suspended";
+    case "expired":
+      return "Expired";
+    default:
+      return "Unknown";
+  }
+}
 
 export function BillingCard({
   planTier,
+  billingSubscription,
   paypalClientId,
-  paypalPlanId,
+  paypalMonthlyPlanId,
+  paypalAnnualPlanId,
   userId,
   clerkUserId,
   email,
 }: BillingCardProps) {
-  const meta = tierMeta[planTier];
-  const canCheckout = Boolean(paypalClientId && paypalPlanId);
+  const meta = BILLING_COPY[planTier];
   const customId = userId || clerkUserId || email;
+  const formattedNextBilling = formatBillingDate(billingSubscription?.nextBillingTime ?? billingSubscription?.currentPeriodEnd ?? null);
+  const isGuestBillingContext = clerkUserId === "staging-guest";
 
   return (
     <article id="billing" className="settings-billing-card glass">
@@ -50,32 +88,37 @@ export function BillingCard({
           <p className="billing-card__eyebrow">{meta.label}</p>
           <strong>{meta.headline}</strong>
           <p>{meta.detail}</p>
+          {billingSubscription ? (
+            <p className="billing-card__status">
+              Subscription {statusLabel(billingSubscription.status)}
+              {billingSubscription.interval ? ` · ${billingSubscription.interval === "monthly" ? "Monthly" : "Annual"}` : ""}
+              {billingSubscription.pendingInterval ? ` · Pending ${billingSubscription.pendingInterval === "monthly" ? "Monthly" : "Annual"}` : ""}
+              {formattedNextBilling ? ` · Next billing ${formattedNextBilling}` : ""}
+            </p>
+          ) : null}
         </div>
 
-        {planTier === "free" ? (
+        {isGuestBillingContext ? (
           <div className="billing-card__cta">
             <p className="billing-card__cta-copy">
-              Upgrade from Settings, or tap the prompt when you hit a Free limit. The subscription stays tied to your Clover account via a stable
-              custom ID.
+              Billing is available when you are signed in to a real Clover account. Sign in to manage a subscription, choose monthly or annual
+              billing, or cancel a plan.
             </p>
-            {canCheckout ? (
-              <PayPalSubscribeButton
-                clientId={paypalClientId as string}
-                planId={paypalPlanId as string}
-                customId={customId}
-                className="billing-card__paypal"
-              />
-            ) : (
-              <p className="billing-helper">Add the PayPal client id and Pro plan id to enable checkout here.</p>
-            )}
-          </div>
-        ) : (
-          <div className="billing-card__cta">
-            <p className="billing-card__cta-copy">You can keep using Clover Pro. If PayPal changes your subscription state, Clover will follow it.</p>
-            <Link className="button button-secondary button-small" href="/settings#billing">
-              Review billing
+            <Link className="button button-secondary button-small" href="/sign-in">
+              Sign in to manage billing
             </Link>
           </div>
+        ) : (
+          <BillingActions
+            planTier={planTier}
+            clientId={paypalClientId}
+            monthlyPlanId={paypalMonthlyPlanId}
+            annualPlanId={paypalAnnualPlanId}
+            customId={customId}
+            returnPath="/settings"
+            subscription={billingSubscription ?? null}
+            className="billing-card__cta"
+          />
         )}
       </div>
     </article>

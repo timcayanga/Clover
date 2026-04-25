@@ -2,6 +2,7 @@ import { Prisma, type User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { syncClerkUser } from "@/lib/clerk";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { reconcileBillingPlanTier } from "@/lib/paypal-billing";
 
 export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User> => {
   const clerkUser = await syncClerkUser(clerkUserId);
@@ -14,11 +15,15 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
       where: { clerkUserId: clerkUser.clerkUserId },
       update: {
         email: clerkUser.email,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
         verified: clerkUser.verified,
       },
       create: {
         clerkUserId: clerkUser.clerkUserId,
         email: clerkUser.email,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
         verified: clerkUser.verified,
         planTier: "free",
       },
@@ -31,6 +36,10 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
       void capturePostHogServerEvent("first_login", clerkUser.clerkUserId, {
         email_verified: clerkUser.verified,
       });
+    }
+
+    if (!user.planTierLocked) {
+      await reconcileBillingPlanTier(user.id).catch(() => null);
     }
 
     return user;
@@ -54,6 +63,8 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
       where: { id: existingByEmail.id },
       data: {
         clerkUserId: clerkUser.clerkUserId,
+        firstName: clerkUser.firstName,
+        lastName: clerkUser.lastName,
         verified: clerkUser.verified,
       },
     });

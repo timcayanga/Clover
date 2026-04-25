@@ -17,8 +17,11 @@ const envSchema = z.object({
   PAYPAL_CLIENT_ID: z.string().min(1).optional(),
   PAYPAL_CLIENT_SECRET: z.string().min(1).optional(),
   PAYPAL_WEBHOOK_ID: z.string().min(1).optional(),
+  PAYPAL_MONTHLY_PLAN_ID: z.string().min(1).optional(),
+  PAYPAL_ANNUAL_PLAN_ID: z.string().min(1).optional(),
   PAYPAL_PRO_PLAN_ID: z.string().min(1).optional(),
   PAYPAL_BUYER_COUNTRY: z.string().length(2).optional(),
+  ADMIN_USER_IDS: z.string().min(1).optional(),
   STAGING_BASIC_AUTH_USERNAME: z.string().min(1).optional(),
   STAGING_BASIC_AUTH_PASSWORD: z.string().min(1).optional(),
 });
