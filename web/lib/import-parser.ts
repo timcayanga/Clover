@@ -1712,7 +1712,11 @@ const parseBdoDate = (
       const end = metadata.endDate ? new Date(metadata.endDate) : null;
       let year = end?.getUTCFullYear() ?? start?.getUTCFullYear() ?? new Date().getUTCFullYear();
       if (start && end && start.getUTCFullYear() !== end.getUTCFullYear()) {
-        year = monthIndex >= start.getUTCMonth() ? start.getUTCFullYear() : end.getUTCFullYear();
+        const endMonth = end.getUTCMonth();
+        const endDay = end.getUTCDate();
+        year = monthIndex > endMonth || (monthIndex === endMonth && Number(dayMonthMatch[1]) > endDay)
+          ? start.getUTCFullYear()
+          : end.getUTCFullYear();
       } else if (dayMonthMatch[3]) {
         year = Number(dayMonthMatch[3]);
       }
@@ -1728,7 +1732,11 @@ const parseBdoDate = (
     const end = metadata.endDate ? new Date(metadata.endDate) : null;
     let year = end?.getUTCFullYear() ?? start?.getUTCFullYear() ?? new Date().getUTCFullYear();
     if (start && end && start.getUTCFullYear() !== end.getUTCFullYear()) {
-      year = month >= start.getUTCMonth() ? start.getUTCFullYear() : end.getUTCFullYear();
+      const endMonth = end.getUTCMonth();
+      const endDay = end.getUTCDate();
+      year = month > endMonth || (month === endMonth && day > endDay)
+        ? start.getUTCFullYear()
+        : end.getUTCFullYear();
     } else if (numericMatch[3]) {
       year = Number(numericMatch[3].length === 2 ? `20${numericMatch[3]}` : numericMatch[3]);
     }
@@ -1743,7 +1751,11 @@ const parseBdoDate = (
       const end = metadata.endDate ? new Date(metadata.endDate) : null;
       let year = end?.getUTCFullYear() ?? start?.getUTCFullYear() ?? new Date().getUTCFullYear();
       if (start && end && start.getUTCFullYear() !== end.getUTCFullYear()) {
-        year = monthIndex >= start.getUTCMonth() ? start.getUTCFullYear() : end.getUTCFullYear();
+        const endMonth = end.getUTCMonth();
+        const endDay = end.getUTCDate();
+        year = monthIndex > endMonth || (monthIndex === endMonth && Number(monthDayMatch[2]) > endDay)
+          ? start.getUTCFullYear()
+          : end.getUTCFullYear();
       } else if (monthDayMatch[3]) {
         year = Number(monthDayMatch[3]);
       }
@@ -1816,7 +1828,13 @@ const bdoStatementMetadata = (text: string): DetectedStatementMetadata | null =>
   const previousBalance =
     parseMoney(compact.match(/PREVIOUS\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(compact.match(/BAL\s+AS\s+OF\s+[^\n]+?([0-9,]+\.\d{2})/i)?.[1] ?? null);
+  const headerCurrentBalance =
+    parseMoney(compact.match(/\bCURRENT\s+([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(compact.match(/\bAVAIL\s+TODAY\s+([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(compact.match(/\bTOMORROW\s+([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(compact.match(/\bMEMO\s+([0-9,]+\.\d{2})/i)?.[1] ?? null);
   const currentBalance =
+    headerCurrentBalance ??
     parseMoney(compact.match(/\bCUR(?:RENT)?\s+BALANCE\s*([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(compact.match(/\bBALANCE\s+P?\s*([0-9,]+\.\d{2})/i)?.[1] ?? null);
   const endingBalance =
@@ -2101,17 +2119,17 @@ const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null 
   }
 
   const gcashHeaderSignals = [
-    /^GCash Transaction History$/im,
-    /^Date and Time$/im,
-    /^Description$/im,
-    /^Reference No\.?$/im,
-    /^Debit$/im,
-    /^Credit$/im,
-    /^Balance$/im,
-    /^STARTING BALANCE$/im,
+    /\bGCash Transaction History\b/i,
+    /\bDate and Time\b/i,
+    /\bDescription\b/i,
+    /\bReference No\.?\b/i,
+    /\bDebit\b/i,
+    /\bCredit\b/i,
+    /\bBalance\b/i,
+    /\bSTARTING BALANCE\b/i,
   ].filter((pattern) => pattern.test(compact)).length;
 
-  if (gcashHeaderSignals < 3) {
+  if (gcashHeaderSignals < 2) {
     return null;
   }
 
