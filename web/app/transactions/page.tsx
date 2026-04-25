@@ -1398,6 +1398,7 @@ function TransactionsPageContent() {
   };
 
   const openImportFiles = () => {
+    setPendingImportSummary(null);
     closeToolbarMenus();
     setImportOpen(true);
   };
