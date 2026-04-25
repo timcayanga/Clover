@@ -2,175 +2,8 @@ import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
-import { isStagingHost } from "@/lib/auth";
 
 type StarterWorkspaceUser = Pick<User, "id" | "clerkUserId" | "email" | "verified" | "dataWipedAt">;
-
-const stagingSampleTransactions = [
-  {
-    merchantRaw: "ACME Payroll",
-    merchantClean: "Salary",
-    description: "Monthly salary deposit",
-    categoryName: "Income",
-    type: "income",
-    amount: "45000.00",
-    daysAgo: 2,
-  },
-  {
-    merchantRaw: "Luna Coffee Bar",
-    merchantClean: "Coffee",
-    description: "Morning coffee and pastry",
-    categoryName: "Food & Dining",
-    type: "expense",
-    amount: "185.00",
-    daysAgo: 1,
-  },
-  {
-    merchantRaw: "MRT / Jeepney Fare",
-    merchantClean: "Transit",
-    description: "Commuting expense",
-    categoryName: "Transport",
-    type: "expense",
-    amount: "120.00",
-    daysAgo: 3,
-  },
-  {
-    merchantRaw: "Manila Home Rentals",
-    merchantClean: "Rent",
-    description: "Monthly apartment rent",
-    categoryName: "Housing",
-    type: "expense",
-    amount: "12000.00",
-    daysAgo: 6,
-  },
-  {
-    merchantRaw: "FiberNet Internet",
-    merchantClean: "Internet bill",
-    description: "Broadband subscription",
-    categoryName: "Bills & Utilities",
-    type: "expense",
-    amount: "1799.00",
-    daysAgo: 8,
-  },
-  {
-    merchantRaw: "FiberNet Internet",
-    merchantClean: "Internet bill",
-    description: "Broadband subscription",
-    categoryName: "Bills & Utilities",
-    type: "expense",
-    amount: "1799.00",
-    daysAgo: 38,
-  },
-  {
-    merchantRaw: "CineMax Downtown",
-    merchantClean: "Movie night",
-    description: "Cinema tickets and snacks",
-    categoryName: "Entertainment",
-    type: "expense",
-    amount: "980.00",
-    daysAgo: 9,
-  },
-  {
-    merchantRaw: "Green Basket Market",
-    merchantClean: "Groceries",
-    description: "Weekend grocery run",
-    categoryName: "Other",
-    type: "expense",
-    amount: "2640.00",
-    daysAgo: 10,
-  },
-  {
-    merchantRaw: "Blue Ridge Pharmacy",
-    merchantClean: "Pharmacy",
-    description: "Medicine and supplies",
-    categoryName: "Health & Wellness",
-    type: "expense",
-    amount: "640.00",
-    daysAgo: 12,
-  },
-  {
-    merchantRaw: "Atlas Savings Transfer",
-    merchantClean: "Transfer to savings",
-    description: "Moved funds to savings",
-    categoryName: "Transfers",
-    type: "transfer",
-    amount: "5000.00",
-    daysAgo: 13,
-  },
-  {
-    merchantRaw: "Manila Home Rentals",
-    merchantClean: "Rent",
-    description: "Monthly apartment rent",
-    categoryName: "Housing",
-    type: "expense",
-    amount: "12000.00",
-    daysAgo: 36,
-  },
-] as const;
-
-const sampleTransactionDate = (daysAgo: number) => {
-  const date = new Date();
-  date.setDate(date.getDate() - daysAgo);
-  return date;
-};
-
-const seedStagingSampleTransactions = async (workspaceId: string) => {
-  const existingCount = await prisma.transaction.count({ where: { workspaceId } });
-  if (existingCount > 0) {
-    return;
-  }
-
-  const [accounts, categories] = await Promise.all([
-    prisma.account.findMany({ where: { workspaceId } }),
-    prisma.category.findMany({ where: { workspaceId } }),
-  ]);
-
-  const primaryAccount = accounts[0];
-  const fallbackAccount = accounts.find((account) => account.type === "cash") ?? primaryAccount;
-  const categoryByName = new Map(categories.map((category) => [category.name.trim().toLowerCase(), category]));
-
-  if (!primaryAccount || !fallbackAccount) {
-    return;
-  }
-
-  const sampleImportFile = await prisma.importFile.create({
-    data: {
-      workspaceId,
-      accountId: primaryAccount.id,
-      fileName: "Staging sample statement.pdf",
-      fileType: "application/pdf",
-      storageKey: `staging/sample-import-${workspaceId}.pdf`,
-      status: "done",
-      parsedRowsCount: stagingSampleTransactions.length,
-      confirmedTransactionsCount: stagingSampleTransactions.length,
-      confirmedAt: sampleTransactionDate(1),
-      uploadedAt: sampleTransactionDate(2),
-    },
-  });
-
-  const rows = stagingSampleTransactions.map((transaction) => {
-    const category = categoryByName.get(transaction.categoryName.toLowerCase()) ?? categoryByName.get("other") ?? null;
-    const accountId = transaction.categoryName === "Transfers" ? fallbackAccount.id : primaryAccount.id;
-
-    return {
-      workspaceId,
-      accountId,
-      categoryId: category?.id ?? null,
-      date: sampleTransactionDate(transaction.daysAgo),
-      amount: transaction.amount,
-      currency: "PHP",
-      type: transaction.type,
-      merchantRaw: transaction.merchantRaw,
-      merchantClean: transaction.merchantClean,
-      description: transaction.description,
-      isTransfer: transaction.type === "transfer",
-      isExcluded: false,
-      importFileId: sampleImportFile.id,
-    };
-  });
-
-  await prisma.transaction.createMany({ data: rows });
-};
 
 const normalizeStarterCashAccount = async (workspaceId: string) => {
   await prisma.account.updateMany({
@@ -195,8 +28,6 @@ export const ensureStarterWorkspace = async (
     typeof userOrClerkUserId === "string"
       ? await getOrCreateCurrentUser(userOrClerkUserId)
       : userOrClerkUserId;
-  const stagingHost = await isStagingHost();
-  const useFreshStartWorkspace = user.dataWipedAt !== null;
 
   const existing = await prisma.workspace.findFirst({
     where: { userId: user.id },
@@ -208,10 +39,6 @@ export const ensureStarterWorkspace = async (
 
   if (existing) {
     await normalizeStarterCashAccount(existing.id);
-
-    if (stagingHost && !useFreshStartWorkspace) {
-      await seedStagingSampleTransactions(existing.id);
-    }
 
     return existing;
   }
@@ -245,10 +72,6 @@ export const ensureStarterWorkspace = async (
       categories: true,
     },
   });
-
-  if (stagingHost) {
-    await seedStagingSampleTransactions(workspace.id);
-  }
 
   return workspace;
 };
@@ -286,8 +109,4 @@ export const seedWorkspaceDefaults = async (workspaceId: string) => {
   }
 
   await normalizeStarterCashAccount(workspaceId);
-
-  if ((await isStagingHost()) && existingAccounts.some((account) => account.name === "Imported transactions" || account.source === "upload")) {
-    await seedStagingSampleTransactions(workspaceId);
-  }
 };

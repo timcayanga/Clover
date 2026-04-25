@@ -7,7 +7,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
-import { getSessionContext, isStagingHost } from "@/lib/auth";
+import { getSessionContext } from "@/lib/auth";
 import { getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
@@ -395,9 +395,7 @@ const createStagingInsightsSampleData = (anchor: Date) => {
 };
 
 export default async function InsightsPage() {
-  const stagingHost = await isStagingHost();
   const now = new Date();
-  let stagingDemoData: ReturnType<typeof createStagingInsightsSampleData> | null = null;
   let currentWindowTransactionsRaw: InsightTransaction[] = [];
   let previousWindowTransactionsRaw: InsightTransaction[] = [];
   let ninetyDayTransactions: InsightTransaction[] = [];
@@ -406,181 +404,166 @@ export default async function InsightsPage() {
   let importFiles: Array<{ status: "processing" | "done" | "failed" | "deleted" }> = [];
   let selectedGoalValue: string | null = null;
   let goalTargetAmount: number | null = null;
-  let workspaceId = "staging-demo";
   let isFreshResetWorkspace = false;
-
-  if (stagingHost) {
-    stagingDemoData = createStagingInsightsSampleData(now);
-    currentWindowTransactionsRaw = stagingDemoData.currentWindowTransactions;
-    previousWindowTransactionsRaw = stagingDemoData.previousWindowTransactions as InsightTransaction[];
-    ninetyDayTransactions = stagingDemoData.ninetyDayTransactions;
-    sixMonthTransactions = stagingDemoData.sixMonthTransactions;
-    workspaceAccounts = stagingDemoData.accounts;
-    importFiles = stagingDemoData.importFiles;
-    selectedGoalValue = stagingDemoData.selectedGoal;
-  } else {
-    const session = await getSessionContext();
-    const existingUser = await prisma.user.findUnique({
-      where: { clerkUserId: session.userId },
-    });
-    const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
-    if (!hasCompletedOnboarding(user)) {
-      redirect("/onboarding");
-    }
-
-    const cookieStore = await cookies();
-    const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
-    const workspaceInclude = {
-      accounts: true,
-      importFiles: {
-        orderBy: { uploadedAt: "desc" },
-      },
-    } as const;
-
-    const selectedWorkspace =
-      (selectedWorkspaceCookieId
-        ? await prisma.workspace.findFirst({
-            where: {
-              id: selectedWorkspaceCookieId,
-              userId: user.id,
-            },
-            include: workspaceInclude,
-          })
-        : null) ??
-      (await prisma.workspace.findFirst({
-        where: { userId: user.id },
-        include: workspaceInclude,
-        orderBy: { createdAt: "asc" },
-      }));
-
-    const resolvedWorkspace =
-      selectedWorkspace ??
-      (await ensureStarterWorkspace(user).then(async (starterWorkspace) => {
-        const starterWorkspaceData = await prisma.workspace.findUnique({
-          where: { id: starterWorkspace.id },
-          include: workspaceInclude,
-        });
-        if (!starterWorkspaceData) {
-          redirect("/dashboard");
-        }
-        return starterWorkspaceData;
-      }));
-
-    if (!resolvedWorkspace) {
-      redirect("/dashboard");
-    }
-
-    workspaceId = resolvedWorkspace.id;
-
-    const thirtyDaysAgo = new Date(now);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const sixtyDaysAgo = new Date(now);
-    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-    const ninetyDaysAgo = new Date(now);
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-
-    const [currentWindowTransactionsQuery, previousWindowTransactionsQuery, ninetyDayTransactionsQuery, sixMonthTransactionsQuery] = await Promise.all([
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: resolvedWorkspace.id,
-          isExcluded: false,
-          date: { gte: thirtyDaysAgo },
-        },
-        select: {
-          id: true,
-          date: true,
-          amount: true,
-          type: true,
-          merchantRaw: true,
-          merchantClean: true,
-          account: {
-            select: {
-              name: true,
-            },
-          },
-          category: {
-            select: {
-              name: true,
-            },
-          },
-        },
-        orderBy: { date: "desc" },
-        take: 500,
-      }),
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: resolvedWorkspace.id,
-          isExcluded: false,
-          date: {
-            gte: sixtyDaysAgo,
-            lt: thirtyDaysAgo,
-          },
-        },
-        select: {
-          amount: true,
-          type: true,
-          category: {
-            select: {
-              name: true,
-            },
-          },
-        },
-      }),
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: resolvedWorkspace.id,
-          isExcluded: false,
-          date: { gte: ninetyDaysAgo },
-        },
-        select: {
-          id: true,
-          date: true,
-          amount: true,
-          type: true,
-          merchantRaw: true,
-          merchantClean: true,
-          account: {
-            select: {
-              name: true,
-            },
-          },
-          category: {
-            select: {
-              name: true,
-            },
-          },
-        },
-        orderBy: { date: "desc" },
-        take: 500,
-      }),
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: resolvedWorkspace.id,
-          isExcluded: false,
-          date: { gte: sixMonthsAgo },
-        },
-        select: {
-          date: true,
-          amount: true,
-          type: true,
-        },
-      }),
-    ]);
-
-    currentWindowTransactionsRaw = currentWindowTransactionsQuery as InsightTransaction[];
-    previousWindowTransactionsRaw = previousWindowTransactionsQuery as InsightTransaction[];
-    ninetyDayTransactions = ninetyDayTransactionsQuery as InsightTransaction[];
-    sixMonthTransactions = sixMonthTransactionsQuery as Array<Pick<InsightTransaction, "date" | "amount" | "type">>;
-    workspaceAccounts = resolvedWorkspace.accounts.map((account) => ({
-      name: account.name,
-      balance: account.balance === null ? null : Number(account.balance),
-    }));
-    importFiles = resolvedWorkspace.importFiles;
-    selectedGoalValue = user.primaryGoal?.trim() ?? null;
-    goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
-    isFreshResetWorkspace = user.dataWipedAt !== null && resolvedWorkspace.accounts.length <= 1 && resolvedWorkspace.importFiles.length === 0;
+  const session = await getSessionContext();
+  const existingUser = await prisma.user.findUnique({
+    where: { clerkUserId: session.userId },
+  });
+  const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
+  if (!hasCompletedOnboarding(user)) {
+    redirect("/onboarding");
   }
+
+  const cookieStore = await cookies();
+  const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
+  const workspaceInclude = {
+    accounts: true,
+    importFiles: {
+      orderBy: { uploadedAt: "desc" },
+    },
+  } as const;
+
+  const selectedWorkspace =
+    (selectedWorkspaceCookieId
+      ? await prisma.workspace.findFirst({
+          where: {
+            id: selectedWorkspaceCookieId,
+            userId: user.id,
+          },
+          include: workspaceInclude,
+        })
+      : null) ??
+    (await prisma.workspace.findFirst({
+      where: { userId: user.id },
+      include: workspaceInclude,
+      orderBy: { createdAt: "asc" },
+    }));
+
+  const resolvedWorkspace =
+    selectedWorkspace ??
+    (await ensureStarterWorkspace(user).then(async (starterWorkspace) => {
+      const starterWorkspaceData = await prisma.workspace.findUnique({
+        where: { id: starterWorkspace.id },
+        include: workspaceInclude,
+      });
+      if (!starterWorkspaceData) {
+        redirect("/dashboard");
+      }
+      return starterWorkspaceData;
+    }));
+
+  if (!resolvedWorkspace) {
+    redirect("/dashboard");
+  }
+
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const sixtyDaysAgo = new Date(now);
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const ninetyDaysAgo = new Date(now);
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+  const [currentWindowTransactionsQuery, previousWindowTransactionsQuery, ninetyDayTransactionsQuery, sixMonthTransactionsQuery] = await Promise.all([
+    prisma.transaction.findMany({
+      where: {
+        workspaceId: resolvedWorkspace.id,
+        isExcluded: false,
+        date: { gte: thirtyDaysAgo },
+      },
+      select: {
+        id: true,
+        date: true,
+        amount: true,
+        type: true,
+        merchantRaw: true,
+        merchantClean: true,
+        account: {
+          select: {
+            name: true,
+          },
+        },
+        category: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: { date: "desc" },
+      take: 500,
+    }),
+    prisma.transaction.findMany({
+      where: {
+        workspaceId: resolvedWorkspace.id,
+        isExcluded: false,
+        date: {
+          gte: sixtyDaysAgo,
+          lt: thirtyDaysAgo,
+        },
+      },
+      select: {
+        amount: true,
+        type: true,
+        category: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    }),
+    prisma.transaction.findMany({
+      where: {
+        workspaceId: resolvedWorkspace.id,
+        isExcluded: false,
+        date: { gte: ninetyDaysAgo },
+      },
+      select: {
+        id: true,
+        date: true,
+        amount: true,
+        type: true,
+        merchantRaw: true,
+        merchantClean: true,
+        account: {
+          select: {
+            name: true,
+          },
+        },
+        category: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: { date: "desc" },
+      take: 500,
+    }),
+    prisma.transaction.findMany({
+      where: {
+        workspaceId: resolvedWorkspace.id,
+        isExcluded: false,
+        date: { gte: sixMonthsAgo },
+      },
+      select: {
+        date: true,
+        amount: true,
+        type: true,
+      },
+    }),
+  ]);
+
+  currentWindowTransactionsRaw = currentWindowTransactionsQuery as InsightTransaction[];
+  previousWindowTransactionsRaw = previousWindowTransactionsQuery as InsightTransaction[];
+  ninetyDayTransactions = ninetyDayTransactionsQuery as InsightTransaction[];
+  sixMonthTransactions = sixMonthTransactionsQuery as Array<Pick<InsightTransaction, "date" | "amount" | "type">>;
+  workspaceAccounts = resolvedWorkspace.accounts.map((account) => ({
+    name: account.name,
+    balance: account.balance === null ? null : Number(account.balance),
+  }));
+  importFiles = resolvedWorkspace.importFiles;
+  selectedGoalValue = user.primaryGoal?.trim() ?? null;
+  goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
+  isFreshResetWorkspace = user.dataWipedAt !== null && resolvedWorkspace.accounts.length <= 1 && resolvedWorkspace.importFiles.length === 0;
 
   const reportType = "insights";
   const currentWindowTransactions = currentWindowTransactionsRaw;
