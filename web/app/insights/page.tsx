@@ -294,6 +294,7 @@ export default async function InsightsPage() {
   }
 
   const reportType = "insights";
+  const workspaceId = resolvedWorkspace.id;
   const currentWindowTransactions = currentWindowTransactionsRaw;
   const previousWindowTransactions = previousWindowTransactionsRaw;
   const ninetyDayInsightTransactions = ninetyDayTransactions;
