@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import {
-  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -21,6 +20,7 @@ import {
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
+import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
@@ -122,6 +122,21 @@ type Transaction = {
   isExcluded: boolean;
   source?: string | null;
   importFileId?: string | null;
+  warningReason?: string | null;
+};
+
+type TransactionPageMeta = {
+  totalCount: number;
+  income: number;
+  spending: number;
+  transfers: number;
+  review: number;
+  topCategory: [string, number] | null;
+  topAccount: [string, number] | null;
+  firstTransactionDate: string | null;
+  lastTransactionDate: string | null;
+  firstReviewTransaction: Transaction | null;
+  firstReviewTransactionIndex: number | null;
 };
 
 type ImportFile = {
@@ -137,6 +152,10 @@ type TransactionsWorkspaceCacheSnapshot = {
   categories: Category[];
   transactions: Transaction[];
   imports: ImportFile[];
+  page?: number;
+  pageSize?: number;
+  totalCount?: number;
+  summary?: TransactionPageMeta;
   updatedAt: number;
 };
 
@@ -554,41 +573,6 @@ const getDateFilterLabel = (mode: DateFilterMode, anchor: string, customStart: s
     default:
       return "Lifetime to date";
   }
-};
-
-const dateMatchesFilter = (dateValue: string, mode: DateFilterMode, anchor: string, customStart: string, customEnd: string) => {
-  const date = dateValue.slice(0, 10);
-  if (mode === "ltd") {
-    return true;
-  }
-  if (mode === "day") {
-    return date === anchor.slice(0, 10);
-  }
-  if (mode === "week") {
-    return date >= startOfWeekIso(anchor) && date <= endOfWeekIso(anchor);
-  }
-  if (mode === "month") {
-    return date >= startOfMonthIso(anchor) && date <= endOfMonthIso(anchor);
-  }
-  if (mode === "quarter") {
-    return date >= startOfQuarterIso(anchor) && date <= endOfQuarterIso(anchor);
-  }
-  if (mode === "year") {
-    return date >= startOfYearIso(anchor) && date <= endOfYearIso(anchor);
-  }
-  if (mode === "custom") {
-    if (!customStart && !customEnd) {
-      return true;
-    }
-    if (customStart && date < customStart) {
-      return false;
-    }
-    if (customEnd && date > customEnd) {
-      return false;
-    }
-    return true;
-  }
-  return true;
 };
 
 const createEmptyBulkEditForm = (): BulkEditForm => ({
@@ -1125,6 +1109,24 @@ function TransactionsPageContent() {
   const [imports, setImports] = useState<ImportFile[]>(
     () => (initialCachedWorkspace?.imports as ImportFile[]) ?? []
   );
+  const [transactionsSummary, setTransactionsSummary] = useState<TransactionPageMeta>(
+    () =>
+      initialCachedWorkspace?.summary ?? {
+        totalCount: initialCachedWorkspace?.transactions?.length ?? 0,
+        income: 0,
+        spending: 0,
+        transfers: 0,
+        review: 0,
+        topCategory: null,
+        topAccount: null,
+        firstTransactionDate: null,
+        lastTransactionDate: null,
+        firstReviewTransaction: null,
+        firstReviewTransactionIndex: null,
+      }
+  );
+  const [transactionsPageSize, setTransactionsPageSize] = useState(25);
+  const [transactionsPage, setTransactionsPage] = useState(1);
   const [query, setQuery] = useState("");
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
   const [accountFilters, setAccountFilters] = useState<string[]>([]);
@@ -1163,6 +1165,7 @@ function TransactionsPageContent() {
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
   const transactionRowRefs = useRef(new Map<string, HTMLElement>());
+  const transactionsLoadRequestRef = useRef(0);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const reviewTransactionParamRef = useRef<string | null>(null);
   const drilldownParamRef = useRef<string | null>(null);
@@ -1195,12 +1198,64 @@ function TransactionsPageContent() {
     }
   };
 
-  const loadWorkspaceData = async (workspaceId: string, options?: { skipMetadata?: boolean; background?: boolean }) => {
+  const loadWorkspaceMetadata = async (workspaceId: string, options?: { skipImports?: boolean; background?: boolean }) => {
     if (!workspaceId) {
       setAccounts([]);
       setCategories([]);
-      setTransactions([]);
       setImports([]);
+      return;
+    }
+
+    try {
+      const [accountsResponse, categoriesResponse, importResponse] = await Promise.all([
+        fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
+        fetch(`/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`),
+        options?.skipImports ? Promise.resolve(null) : fetch(`/api/imports?workspaceId=${encodeURIComponent(workspaceId)}`),
+      ]);
+
+      if (accountsResponse.ok) {
+        const payload = await accountsResponse.json();
+        const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+        setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
+      }
+
+      if (categoriesResponse.ok) {
+        const payload = await categoriesResponse.json();
+        setCategories(Array.isArray(payload.categories) ? payload.categories : []);
+      }
+
+      if (importResponse && importResponse.ok) {
+        const payload = await importResponse.json();
+        setImports(Array.isArray(payload.importFiles) ? payload.importFiles : []);
+      }
+    } catch {
+      if (!options?.background) {
+        setMessage("Unable to load workspace metadata.");
+      }
+    }
+  };
+
+  const loadTransactionsPage = async (
+    workspaceId: string,
+    options?: { background?: boolean; includeAll?: boolean; pageOverride?: number; pageSizeOverride?: number }
+  ) => {
+    const requestId = ++transactionsLoadRequestRef.current;
+
+    if (!workspaceId) {
+      setTransactions([]);
+      setTransactionsSummary({
+        totalCount: 0,
+        income: 0,
+        spending: 0,
+        transfers: 0,
+        review: 0,
+        topCategory: null,
+        topAccount: null,
+        firstTransactionDate: null,
+        lastTransactionDate: null,
+        firstReviewTransaction: null,
+        firstReviewTransactionIndex: null,
+      });
       setIsWorkspaceDataReady(true);
       return;
     }
@@ -1209,61 +1264,97 @@ function TransactionsPageContent() {
       setIsWorkspaceDataReady(false);
     }
 
-    try {
-      const transactionsResponse = await fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`);
+    const searchParams = buildTransactionQuerySearchParams(
+      workspaceId,
+      {
+        query,
+        categoryIds: categoryFilters,
+        accountIds: accountFilters,
+        typeFilters,
+        merchantFilters,
+        dateFilterMode,
+        dateFilterAnchor,
+        customStart,
+        customEnd,
+      },
+      {
+        page: options?.pageOverride ?? transactionsPage,
+        pageSize: options?.includeAll ? "all" : options?.pageSizeOverride ?? transactionsPageSize,
+      }
+    );
 
-      if (transactionsResponse.ok) {
-        const payload = await transactionsResponse.json();
-        setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
+    try {
+      const response = await fetch(`/api/transactions?${searchParams.toString()}`);
+      if (!response.ok) {
+        throw new Error("Unable to load transactions.");
       }
 
-      const loadMetadata = async () => {
-        try {
-          if (options?.skipMetadata) {
-            const accountsResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
+      if (requestId !== transactionsLoadRequestRef.current) {
+        return;
+      }
 
-            if (accountsResponse.ok) {
-              const payload = await accountsResponse.json();
-              const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
-              setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
+      const payload = await response.json();
+      setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
+      setTransactionsSummary(
+        payload.summary && typeof payload.summary === "object"
+          ? {
+              totalCount:
+                typeof payload.totalCount === "number"
+                  ? payload.totalCount
+                  : typeof payload.summary.totalCount === "number"
+                    ? payload.summary.totalCount
+                    : Array.isArray(payload.transactions)
+                      ? payload.transactions.length
+                      : 0,
+              income: typeof payload.summary.income === "number" ? payload.summary.income : 0,
+              spending: typeof payload.summary.spending === "number" ? payload.summary.spending : 0,
+              transfers: typeof payload.summary.transfers === "number" ? payload.summary.transfers : 0,
+              review: typeof payload.summary.review === "number" ? payload.summary.review : 0,
+              topCategory: Array.isArray(payload.summary.topCategory) ? payload.summary.topCategory : null,
+              topAccount: Array.isArray(payload.summary.topAccount) ? payload.summary.topAccount : null,
+              firstTransactionDate:
+                typeof payload.summary.firstTransactionDate === "string" ? payload.summary.firstTransactionDate : null,
+              lastTransactionDate:
+                typeof payload.summary.lastTransactionDate === "string" ? payload.summary.lastTransactionDate : null,
+              firstReviewTransaction:
+                payload.summary.firstReviewTransaction && typeof payload.summary.firstReviewTransaction === "object"
+                  ? (payload.summary.firstReviewTransaction as Transaction)
+                  : null,
+              firstReviewTransactionIndex:
+                typeof payload.summary.firstReviewTransactionIndex === "number"
+                  ? payload.summary.firstReviewTransactionIndex
+                  : null,
             }
-
-            return;
-          }
-
-          const [accountsResponse, categoriesResponse, importResponse] = await Promise.all([
-            fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
-            fetch(`/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`),
-            fetch(`/api/imports?workspaceId=${encodeURIComponent(workspaceId)}`),
-          ]);
-
-          if (accountsResponse.ok) {
-            const payload = await accountsResponse.json();
-            const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
-            setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
-          }
-
-          if (categoriesResponse.ok) {
-            const payload = await categoriesResponse.json();
-            setCategories(Array.isArray(payload.categories) ? payload.categories : []);
-          }
-
-          if (importResponse.ok) {
-            const payload = await importResponse.json();
-            setImports(Array.isArray(payload.importFiles) ? payload.importFiles : []);
-          }
-        } catch {
-          // Secondary metadata is best-effort so the first view can stay responsive.
-        }
-      };
+          : {
+              totalCount:
+                typeof payload.totalCount === "number"
+                  ? payload.totalCount
+                  : Array.isArray(payload.transactions)
+                    ? payload.transactions.length
+                    : 0,
+              income: 0,
+              spending: 0,
+              transfers: 0,
+              review: 0,
+              topCategory: null,
+              topAccount: null,
+              firstTransactionDate: null,
+              lastTransactionDate: null,
+              firstReviewTransaction: null,
+              firstReviewTransactionIndex: null,
+            }
+      );
 
       if (!options?.background) {
         setIsWorkspaceDataReady(true);
       }
+    } catch {
+      if (requestId !== transactionsLoadRequestRef.current) {
+        return;
+      }
 
-      void loadMetadata();
-    } finally {
       if (!options?.background) {
+        setMessage("Unable to load transactions.");
         setIsWorkspaceDataReady(true);
       }
     }
@@ -1289,6 +1380,19 @@ function TransactionsPageContent() {
       setCategories([]);
       setTransactions([]);
       setImports([]);
+      setTransactionsSummary({
+        totalCount: 0,
+        income: 0,
+        spending: 0,
+        transfers: 0,
+        review: 0,
+        topCategory: null,
+        topAccount: null,
+        firstTransactionDate: null,
+        lastTransactionDate: null,
+        firstReviewTransaction: null,
+        firstReviewTransactionIndex: null,
+      });
       setIsWorkspaceDataReady(true);
       return;
     }
@@ -1299,8 +1403,23 @@ function TransactionsPageContent() {
       setCategories(cachedSnapshot.categories);
       setTransactions(cachedSnapshot.transactions);
       setImports(cachedSnapshot.imports);
+      setTransactionsSummary(
+        cachedSnapshot.summary ?? {
+          totalCount: cachedSnapshot.totalCount ?? cachedSnapshot.transactions.length,
+          income: 0,
+          spending: 0,
+          transfers: 0,
+          review: 0,
+          topCategory: null,
+          topAccount: null,
+          firstTransactionDate: null,
+          lastTransactionDate: null,
+          firstReviewTransaction: null,
+          firstReviewTransactionIndex: null,
+        }
+      );
       setIsWorkspaceDataReady(true);
-      void loadWorkspaceData(selectedWorkspaceId, { skipMetadata: true, background: true });
+      void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
       return;
     }
 
@@ -1309,8 +1428,29 @@ function TransactionsPageContent() {
     setTransactions([]);
     setImports([]);
     setIsWorkspaceDataReady(false);
-    void loadWorkspaceData(selectedWorkspaceId);
+    void loadWorkspaceMetadata(selectedWorkspaceId);
   }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    void loadTransactionsPage(selectedWorkspaceId);
+  }, [
+    selectedWorkspaceId,
+    query,
+    categoryFilters,
+    accountFilters,
+    typeFilters,
+    merchantFilters,
+    dateFilterMode,
+    dateFilterAnchor,
+    customStart,
+    customEnd,
+    transactionsPage,
+    transactionsPageSize,
+  ]);
 
   useEffect(() => {
     if (!addMenuOpen && !downloadMenuOpen) {
@@ -1523,76 +1663,24 @@ function TransactionsPageContent() {
     setAccounts([data.account]);
     return accountId;
   };
-
-  const filteredTransactions = useMemo(() => {
-    return transactions.filter((transaction) => {
-      if (transaction.merchantRaw === "Beginning balance" || transaction.description === "Beginning balance") {
-        return false;
-      }
-
-      const term = query.trim().toLowerCase();
-      const matchesQuery =
-        !term ||
-        transaction.merchantRaw.toLowerCase().includes(term) ||
-        (transaction.merchantClean ?? "").toLowerCase().includes(term) ||
-        (transaction.description ?? "").toLowerCase().includes(term);
-      const matchesCategory =
-        categoryFilters.length === 0 ||
-        (transaction.categoryId ? categoryFilters.includes(transaction.categoryId) : false);
-      const matchesAccount = accountFilters.length === 0 || accountFilters.includes(transaction.accountId);
-      const transactionFilterType = transaction.type === "income" ? "credit" : "debit";
-      const matchesType = typeFilters.length === 0 || typeFilters.includes(transactionFilterType);
-      const merchantValue = normalizeFilterValue(`${transaction.merchantClean ?? transaction.merchantRaw} ${transaction.description ?? ""}`);
-      const matchesMerchant =
-        merchantFilters.length === 0 ||
-        merchantFilters.some((merchantFilter) => merchantValue.includes(normalizeFilterValue(merchantFilter)));
-      const matchesDate = dateMatchesFilter(transaction.date, dateFilterMode, dateFilterAnchor, customStart, customEnd);
-      return matchesQuery && matchesCategory && matchesAccount && matchesType && matchesMerchant && matchesDate;
-    });
-  }, [
-    transactions,
-    query,
-    categoryFilters,
-    accountFilters,
-    typeFilters,
-    merchantFilters,
-    dateFilterMode,
-    dateFilterAnchor,
-    customStart,
-    customEnd,
-  ]);
-  const deferredFilteredTransactions = useDeferredValue(filteredTransactions);
-  const [transactionsPageSize, setTransactionsPageSize] = useState(25);
-  const [transactionsPage, setTransactionsPage] = useState(1);
-  const totalTransactionPages = Math.max(1, Math.ceil(filteredTransactions.length / Math.max(transactionsPageSize, 1)));
+  const totalTransactionPages = Math.max(1, Math.ceil(transactionsSummary.totalCount / Math.max(transactionsPageSize, 1)));
   const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);
   const pageStartIndex = (currentTransactionPage - 1) * transactionsPageSize;
   const pageEndIndex = pageStartIndex + transactionsPageSize;
-  const visibleTransactions = useMemo(
-    () => filteredTransactions.slice(pageStartIndex, pageEndIndex),
-    [filteredTransactions, pageStartIndex, pageEndIndex]
-  );
-  const hasVisibleTransactions = useMemo(
-    () =>
-      transactions.some(
-        (transaction) => transaction.merchantRaw !== "Beginning balance" && transaction.description !== "Beginning balance"
-      ),
-    [transactions]
-  );
-
-  const filteredTransactionIds = useMemo(() => filteredTransactions.map((transaction) => transaction.id), [filteredTransactions]);
+  const visibleTransactions = transactions;
+  const hasVisibleTransactions = transactionsSummary.totalCount > 0;
   const visibleTransactionIds = useMemo(() => visibleTransactions.map((transaction) => transaction.id), [visibleTransactions]);
   const allVisibleSelected =
     visibleTransactionIds.length > 0 && visibleTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
   const someVisibleSelected = visibleTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
 
   const currentPageLabel = useMemo(() => {
-    if (filteredTransactions.length === 0) {
+    if (transactionsSummary.totalCount === 0) {
       return "0 of 0";
     }
 
-    return `${pageStartIndex + 1}-${Math.min(pageEndIndex, filteredTransactions.length)} of ${filteredTransactions.length}`;
-  }, [filteredTransactions.length, pageEndIndex, pageStartIndex]);
+    return `${pageStartIndex + 1}-${Math.min(pageEndIndex, transactionsSummary.totalCount)} of ${transactionsSummary.totalCount}`;
+  }, [pageEndIndex, pageStartIndex, transactionsSummary.totalCount]);
 
   const paginationPages = useMemo(() => {
     if (totalTransactionPages <= 1) {
@@ -1717,62 +1805,6 @@ function TransactionsPageContent() {
     setTransactionsPage((current) => Math.min(Math.max(current, 1), totalTransactionPages));
   }, [totalTransactionPages]);
 
-  const duplicateLookup = useMemo(() => {
-    const counts = new Map<string, number>();
-
-    for (const transaction of deferredFilteredTransactions) {
-      const signature = [
-        transaction.date.slice(0, 10),
-        Number(transaction.amount).toFixed(2),
-        (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase(),
-      ].join("|");
-
-      counts.set(signature, (counts.get(signature) ?? 0) + 1);
-    }
-
-    return counts;
-  }, [deferredFilteredTransactions]);
-
-  const totals = useMemo(() => {
-    return deferredFilteredTransactions.reduce(
-      (accumulator, transaction) => {
-        const amount = Math.abs(Number(transaction.amount));
-        const signature = [
-          transaction.date.slice(0, 10),
-          Number(transaction.amount).toFixed(2),
-          (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase(),
-        ].join("|");
-        const hasReviewIssue =
-          transaction.isExcluded ||
-          transaction.isTransfer ||
-          !transaction.categoryId ||
-          (duplicateLookup.get(signature) ?? 0) > 1;
-
-        if (transaction.isExcluded) {
-          if (hasReviewIssue) {
-            accumulator.review += 1;
-          }
-          return accumulator;
-        }
-
-        if (transaction.type === "income") {
-          accumulator.income += amount;
-        } else if (transaction.type === "transfer") {
-          accumulator.transfers += amount;
-        } else {
-          accumulator.spending += amount;
-        }
-
-        if (hasReviewIssue) {
-          accumulator.review += 1;
-        }
-
-        return accumulator;
-      },
-      { income: 0, spending: 0, transfers: 0, review: 0 }
-    );
-  }, [deferredFilteredTransactions, duplicateLookup]);
-
   const importSummary = useMemo(() => {
     return imports.reduce(
       (accumulator, file) => {
@@ -1789,59 +1821,14 @@ function TransactionsPageContent() {
     );
   }, [imports]);
 
-  const summaryData = useMemo(() => {
-    const topCategories = new Map<string, number>();
-    const topAccounts = new Map<string, number>();
-
-    for (const transaction of deferredFilteredTransactions) {
-      const amount = Math.abs(Number(transaction.amount));
-      const categoryName = transaction.categoryName ?? "Other";
-      topCategories.set(categoryName, (topCategories.get(categoryName) ?? 0) + amount);
-      topAccounts.set(transaction.accountName, (topAccounts.get(transaction.accountName) ?? 0) + amount);
+  const warningReasonFor = (transaction: Transaction) => {
+    if (transaction.warningReason) {
+      return transaction.warningReason;
     }
 
-    const topCategory = Array.from(topCategories.entries()).sort((a, b) => b[1] - a[1])[0];
-    const topAccount = Array.from(topAccounts.entries()).sort((a, b) => b[1] - a[1])[0];
-    const sortedDates = [...deferredFilteredTransactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const firstTransaction = sortedDates[0];
-    const lastTransaction = sortedDates[sortedDates.length - 1];
-
-    return {
-      topCategory,
-      topAccount,
-      firstTransaction,
-      lastTransaction,
-    };
-  }, [deferredFilteredTransactions]);
-
-  const reviewTransactionCount = useMemo(
-    () =>
-      deferredFilteredTransactions.reduce((count, transaction) => {
-        if (isResolvedReviewStatus(transaction.reviewStatus) || transaction.isExcluded || !transaction.categoryId) {
-          return count;
-        }
-
-        const signature = [
-          transaction.date.slice(0, 10),
-          Number(transaction.amount).toFixed(2),
-          (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase(),
-        ].join("|");
-
-        return (duplicateLookup.get(signature) ?? 0) > 1 ? count + 1 : count;
-      }, 0),
-    [deferredFilteredTransactions, duplicateLookup]
-  );
-
-  const warningReasonFor = (transaction: Transaction) => {
     if (isResolvedReviewStatus(transaction.reviewStatus)) {
       return null;
     }
-
-    const signature = [
-      transaction.date.slice(0, 10),
-      Number(transaction.amount).toFixed(2),
-      (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase(),
-    ].join("|");
 
     if (transaction.isExcluded) {
       return "Ignored from totals";
@@ -1851,43 +1838,16 @@ function TransactionsPageContent() {
       return "Needs category review";
     }
 
-    if ((duplicateLookup.get(signature) ?? 0) > 1) {
-      return "Possible duplicate";
-    }
-
     return null;
   };
 
   const isReviewableTransaction = (transaction: Transaction) => {
-    if (isResolvedReviewStatus(transaction.reviewStatus)) {
-      return false;
-    }
-
-    if (transaction.isExcluded) {
-      return false;
-    }
-
-    if (!transaction.categoryId) {
-      return true;
-    }
-
-    const signature = [
-      transaction.date.slice(0, 10),
-      Number(transaction.amount).toFixed(2),
-      (transaction.merchantClean ?? transaction.merchantRaw).trim().toLowerCase(),
-    ].join("|");
-
-    return (duplicateLookup.get(signature) ?? 0) > 1;
+    return Boolean(warningReasonFor(transaction));
   };
 
   const firstReviewTransaction = useMemo(
-    () => deferredFilteredTransactions.find((transaction) => isReviewableTransaction(transaction)) ?? null,
-    [deferredFilteredTransactions, duplicateLookup]
-  );
-
-  const warningTransactionCount = useMemo(
-    () => deferredFilteredTransactions.filter((transaction) => warningReasonFor(transaction) !== null).length,
-    [deferredFilteredTransactions, duplicateLookup]
+    () => transactionsSummary.firstReviewTransaction ?? transactions.find((transaction) => isReviewableTransaction(transaction)) ?? null,
+    [transactions, transactionsSummary.firstReviewTransaction]
   );
 
   const selectedTransactionWarningReason = selectedTransaction ? warningReasonFor(selectedTransaction) : null;
@@ -1917,7 +1877,7 @@ function TransactionsPageContent() {
   };
 
   const focusTransactionById = (transactionId: string) => {
-    const transactionIndex = filteredTransactions.findIndex((transaction) => transaction.id === transactionId);
+    const transactionIndex = visibleTransactions.findIndex((transaction) => transaction.id === transactionId);
     if (transactionIndex < 0) {
       return;
     }
@@ -1976,8 +1936,12 @@ function TransactionsPageContent() {
     });
   };
 
-  const openTransactionReview = (transaction: Transaction) => {
-    focusTransactionById(transaction.id);
+  const openTransactionReview = (transaction: Transaction, transactionIndex?: number | null) => {
+    if (typeof transactionIndex === "number" && transactionIndex > 0) {
+      setTransactionsPage(Math.max(1, Math.ceil(transactionIndex / Math.max(transactionsPageSize, 1))));
+    } else {
+      focusTransactionById(transaction.id);
+    }
     openTransactionDetail(transaction);
     const warningReason = warningReasonFor(transaction);
     if (warningReason) {
@@ -2966,48 +2930,90 @@ function TransactionsPageContent() {
     setMerchantFilterInput("");
   };
 
-  const downloadCsv = () => {
-    const header = ["Name", "Date", "Account", "Category", "Amount", "Type", "Notes", "Warning"];
-    const rows = filteredTransactions.map((transaction) => [
-      summarizeTransactionMerchantText(
-        transaction.merchantClean ?? transaction.merchantRaw,
-        accountInstitutionById.get(transaction.accountId) ?? null
-      ),
-      formatDate(transaction.date),
-      transaction.accountName,
-      transaction.categoryName ?? "Other",
-      transaction.amount,
-      transaction.type === "income" ? "Credit" : "Debit",
-      transaction.description ?? "",
-      warningReasonFor(transaction) ?? "",
-    ]);
+  const fetchAllTransactionsForExport = async () => {
+    if (!selectedWorkspaceId) {
+      return [];
+    }
 
-    const csv = [header, ...rows]
-      .map((row) =>
-        row
-          .map((cell) => `"${String(cell).replaceAll("\"", '""')}"`)
-          .join(",")
-      )
-      .join("\n");
+    const searchParams = buildTransactionQuerySearchParams(
+      selectedWorkspaceId,
+      {
+        query,
+        categoryIds: categoryFilters,
+        accountIds: accountFilters,
+        typeFilters,
+        merchantFilters,
+        dateFilterMode,
+        dateFilterAnchor,
+        customStart,
+        customEnd,
+      },
+      {
+        pageSize: "all",
+      }
+    );
 
-    capturePostHogClientEvent("report_exported", {
-      workspace_id: selectedWorkspaceId || null,
-      export_format: "csv",
-      row_count: filteredTransactions.length,
-      selected_count: selectedTransactionIds.length,
-    });
-    downloadTextFile("clover-transactions.csv", csv, "text/csv;charset=utf-8;");
+    const response = await fetch(`/api/transactions?${searchParams.toString()}`);
+    if (!response.ok) {
+      throw new Error("Unable to export transactions.");
+    }
+
+    const payload = await response.json();
+    return Array.isArray(payload.transactions) ? (payload.transactions as Transaction[]) : [];
   };
 
-  const downloadPdf = () => {
-    if (typeof window !== "undefined") {
+  const downloadCsv = async () => {
+    try {
+      const exportRows = await fetchAllTransactionsForExport();
+      const header = ["Name", "Date", "Account", "Category", "Amount", "Type", "Notes", "Warning"];
+      const rows = exportRows.map((transaction) => [
+        summarizeTransactionMerchantText(
+          transaction.merchantClean ?? transaction.merchantRaw,
+          accountInstitutionById.get(transaction.accountId) ?? null
+        ),
+        formatDate(transaction.date),
+        transaction.accountName,
+        transaction.categoryName ?? "Other",
+        transaction.amount,
+        transaction.type === "income" ? "Credit" : "Debit",
+        transaction.description ?? "",
+        warningReasonFor(transaction) ?? "",
+      ]);
+
+      const csv = [header, ...rows]
+        .map((row) =>
+          row
+            .map((cell) => `"${String(cell).replaceAll("\"", '""')}"`)
+            .join(",")
+        )
+        .join("\n");
+
+      capturePostHogClientEvent("report_exported", {
+        workspace_id: selectedWorkspaceId || null,
+        export_format: "csv",
+        row_count: exportRows.length,
+        selected_count: selectedTransactionIds.length,
+      });
+      downloadTextFile("clover-transactions.csv", csv, "text/csv;charset=utf-8;");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to export transactions.");
+    }
+  };
+
+  const downloadPdf = async () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    try {
+      const exportRows = await fetchAllTransactionsForExport();
       const report = window.open("", "_blank", "width=1280,height=900");
       if (!report) {
         window.print();
         return;
       }
 
-      const rows = filteredTransactions
+      const rows = exportRows
         .map((transaction) => {
           const warningReason = warningReasonFor(transaction);
           const amount = Number(transaction.amount);
@@ -3144,8 +3150,8 @@ function TransactionsPageContent() {
           <body>
             <div class="page">
               <h1>Transactions</h1>
-              <div class="meta">${escapeHtml(filteredTransactions.length.toString())} transaction${
-                filteredTransactions.length === 1 ? "" : "s"
+              <div class="meta">${escapeHtml(transactions.length.toString())} transaction${
+                transactions.length === 1 ? "" : "s"
               }</div>
               <table>
                 <thead>
@@ -3173,13 +3179,16 @@ function TransactionsPageContent() {
       capturePostHogClientEvent("report_exported", {
         workspace_id: selectedWorkspaceId || null,
         export_format: "pdf",
-        row_count: filteredTransactions.length,
+        row_count: exportRows.length,
         selected_count: selectedTransactionIds.length,
       });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to export transactions.");
     }
   };
 
-  const netCashFlow = totals.income - totals.spending;
+  const netCashFlow = transactionsSummary.income - transactionsSummary.spending;
+  const warningTransactionCount = transactionsSummary.review;
   const hasReviewItems = warningTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
   const isTableLoading = !selectedWorkspaceId ? !isWorkspacesLoaded : !isWorkspaceDataReady;
@@ -3194,8 +3203,12 @@ function TransactionsPageContent() {
       categories,
       transactions,
       imports,
+      page: transactionsPage,
+      pageSize: transactionsPageSize,
+      totalCount: transactionsSummary.totalCount,
+      summary: transactionsSummary,
     });
-  }, [selectedWorkspaceId, isWorkspaceDataReady, accounts, categories, transactions, imports]);
+  }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary]);
 
   useEffect(() => {
     if (!importOpen || !pendingImportSummary || !isWorkspaceDataReady) {
@@ -3655,7 +3668,7 @@ function TransactionsPageContent() {
                   </div>
                 ))}
               </div>
-            ) : filteredTransactions.length > 0 ? (
+            ) : transactionsSummary.totalCount > 0 ? (
               visibleTransactions.map((transaction, index) => {
                 const warningReason = warningReasonFor(transaction);
                 const amount = Number(transaction.amount);
@@ -3840,7 +3853,7 @@ function TransactionsPageContent() {
                   </div>
                 ))}
               </div>
-            ) : filteredTransactions.length > 0 ? (
+            ) : transactionsSummary.totalCount > 0 ? (
               <div className="transactions-mobile-list">
                 {visibleTransactions.map((transaction, index) => {
                   const warningReason = warningReasonFor(transaction);
@@ -4017,8 +4030,8 @@ function TransactionsPageContent() {
 
           <div className="transactions-footer">
             <div className="table-footer__summary">
-              <span className="pill pill-neutral">{filteredTransactions.length} transactions</span>
-              {filteredTransactions.length > 0 ? (
+              <span className="pill pill-neutral">{transactionsSummary.totalCount} transactions</span>
+              {transactionsSummary.totalCount > 0 ? (
                 <span className="pill pill-subtle">Showing {currentPageLabel}</span>
               ) : null}
               {warningTransactionCount > 0 ? (
@@ -4028,7 +4041,7 @@ function TransactionsPageContent() {
                   title={`${warningTransactionCount} transaction${warningTransactionCount === 1 ? "" : "s"} have a warning. Open the first one.`}
                   onClick={() => {
                     if (firstReviewTransaction) {
-                      openTransactionReview(firstReviewTransaction);
+                      openTransactionReview(firstReviewTransaction, transactionsSummary.firstReviewTransactionIndex);
                     }
                   }}
                   aria-label={
@@ -4103,13 +4116,13 @@ function TransactionsPageContent() {
                 <div className="transactions-footer-snapshot__metric">
                   <span className="transactions-footer-snapshot__metric-label">Spending</span>
                   <span className="transactions-footer-snapshot__metric-value negative">
-                    {currencyFormatter.format(totals.spending)}
+                    {currencyFormatter.format(transactionsSummary.spending)}
                   </span>
                 </div>
                 <div className="transactions-footer-snapshot__metric">
                   <span className="transactions-footer-snapshot__metric-label">Transfers</span>
                   <span className="transactions-footer-snapshot__metric-value">
-                    {currencyFormatter.format(totals.transfers)}
+                    {currencyFormatter.format(transactionsSummary.transfers)}
                   </span>
                 </div>
                 <div className="transactions-footer-snapshot__metric transactions-footer-snapshot__metric--net">
@@ -4136,19 +4149,19 @@ function TransactionsPageContent() {
           <dl className="transactions-summary-list">
             <div>
               <dt>Total transactions</dt>
-              <dd>{filteredTransactions.length}</dd>
+              <dd>{transactionsSummary.totalCount}</dd>
             </div>
             <div>
               <dt>Income</dt>
-              <dd className="positive">{currencyFormatter.format(totals.income)}</dd>
+              <dd className="positive">{currencyFormatter.format(transactionsSummary.income)}</dd>
             </div>
             <div>
               <dt>Spending</dt>
-              <dd className="negative">{currencyFormatter.format(totals.spending)}</dd>
+              <dd className="negative">{currencyFormatter.format(transactionsSummary.spending)}</dd>
             </div>
             <div>
               <dt>Transfers</dt>
-              <dd>{currencyFormatter.format(totals.transfers)}</dd>
+              <dd>{currencyFormatter.format(transactionsSummary.transfers)}</dd>
             </div>
             <div>
               <dt>Net cash flow</dt>
@@ -4156,23 +4169,23 @@ function TransactionsPageContent() {
             </div>
             <div>
               <dt>Review items</dt>
-              <dd>{totals.review}</dd>
+              <dd>{transactionsSummary.review}</dd>
             </div>
             <div>
               <dt>Top category</dt>
-              <dd>{summaryData.topCategory ? `${summaryData.topCategory[0]} · ${currencyFormatter.format(summaryData.topCategory[1])}` : "—"}</dd>
+              <dd>{transactionsSummary.topCategory ? `${transactionsSummary.topCategory[0]} · ${currencyFormatter.format(transactionsSummary.topCategory[1])}` : "—"}</dd>
             </div>
             <div>
               <dt>Top source</dt>
-              <dd>{summaryData.topAccount ? `${summaryData.topAccount[0]} · ${currencyFormatter.format(summaryData.topAccount[1])}` : "—"}</dd>
+              <dd>{transactionsSummary.topAccount ? `${transactionsSummary.topAccount[0]} · ${currencyFormatter.format(transactionsSummary.topAccount[1])}` : "—"}</dd>
             </div>
             <div>
               <dt>First transaction</dt>
-              <dd>{summaryData.firstTransaction ? formatDate(summaryData.firstTransaction.date) : "—"}</dd>
+              <dd>{transactionsSummary.firstTransactionDate ? formatDate(transactionsSummary.firstTransactionDate) : "—"}</dd>
             </div>
             <div>
               <dt>Last transaction</dt>
-              <dd>{summaryData.lastTransaction ? formatDate(summaryData.lastTransaction.date) : "—"}</dd>
+              <dd>{transactionsSummary.lastTransactionDate ? formatDate(transactionsSummary.lastTransactionDate) : "—"}</dd>
             </div>
           </dl>
 
@@ -5075,7 +5088,8 @@ function TransactionsPageContent() {
             return;
           }
 
-          void loadWorkspaceData(selectedWorkspaceId, { background: true });
+          void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
+          void loadTransactionsPage(selectedWorkspaceId, { background: true });
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />

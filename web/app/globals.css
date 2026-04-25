@@ -941,6 +941,13 @@ label {
   line-height: 1.55;
 }
 
+.billing-card__status {
+  margin: 0;
+  color: var(--muted-2);
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
 .billing-card__cta {
   display: grid;
   gap: 12px;
@@ -951,6 +958,86 @@ label {
   display: grid;
   gap: 10px;
   max-width: 360px;
+}
+
+.billing-actions {
+  display: grid;
+  gap: 14px;
+}
+
+.billing-actions__intro {
+  display: grid;
+  gap: 6px;
+}
+
+.billing-actions__eyebrow {
+  margin: 0;
+  color: var(--muted-2);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.billing-actions__text {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.billing-actions__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.billing-action-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.billing-action-card--featured {
+  border-color: rgba(3, 168, 192, 0.2);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(245, 252, 253, 0.95));
+}
+
+.billing-action-card__copy {
+  display: grid;
+  gap: 6px;
+}
+
+.billing-action-card__label {
+  margin: 0;
+  color: var(--muted-2);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.billing-action-card__copy strong {
+  color: var(--text);
+  font-size: 1.15rem;
+  letter-spacing: -0.03em;
+}
+
+.billing-action-card__copy p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.billing-actions__stack {
+  display: grid;
+  gap: 12px;
+}
+
+.billing-actions__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .import-limit-cta {
@@ -12908,6 +12995,17 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: start;
 }
 
+.pricing-page__cta-copy {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.pricing-page__billing-actions {
+  padding-top: 4px;
+}
+
 .pricing-page__cta-actions {
   display: flex;
   flex-wrap: wrap;
@@ -12956,6 +13054,10 @@ input.transaction-inline-edit--amount::placeholder {
 
   .landing-cta__actions {
     justify-content: center;
+  }
+
+  .billing-actions__grid {
+    grid-template-columns: 1fr;
   }
 
   .landing-footer {
@@ -13047,6 +13149,11 @@ input.transaction-inline-edit--amount::placeholder {
 
   .landing-hero__actions {
     gap: 10px;
+  }
+
+  .billing-actions__row {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .landing-gallery-section {
