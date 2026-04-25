@@ -2871,6 +2871,40 @@ label {
   line-height: 1.5;
 }
 
+.reports-pro-preview {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px;
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.1), transparent 34%),
+    rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow);
+}
+
+.reports-pro-preview h3 {
+  margin: 8px 0 10px;
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+
+.reports-pro-preview p {
+  margin: 0;
+  max-width: 60ch;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.reports-pro-preview__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .reports-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -11354,6 +11388,15 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .reports-range-switch__controls {
+    justify-content: flex-start;
+  }
+
+  .reports-pro-preview {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .reports-pro-preview__actions {
     justify-content: flex-start;
   }
 

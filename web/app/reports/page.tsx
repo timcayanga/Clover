@@ -1,3 +1,4 @@
+import nextDynamic from "next/dynamic";
 import Link from "next/link";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -5,12 +6,33 @@ import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
-import { ReportsReviewQueue, type ReportsQueueItem } from "@/components/reports-review-queue";
+import type { ReportsQueueItem } from "@/components/reports-review-queue";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
+import { getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
+import { Suspense } from "react";
+
+const ReportsReviewQueue = nextDynamic(() => import("@/components/reports-review-queue").then((module) => module.ReportsReviewQueue), {
+  loading: () => (
+    <div className="reports-review-queue reports-review-queue--loading" aria-label="Loading review queue">
+      <div className="report-card__head">
+        <div>
+          <p className="eyebrow">Action queue</p>
+          <h4>Review queue</h4>
+        </div>
+      </div>
+      <div className="reports-review-queue__body">
+        <div className="empty-state">
+          <strong>Loading review items</strong>
+          <p>Clover is pulling the queue together in the background.</p>
+        </div>
+      </div>
+    </div>
+  ),
+});
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -181,7 +203,25 @@ const getMonthBuckets = (anchor: Date) => {
   return buckets;
 };
 
-async function ReportsPageView({
+function ReportsStreamFallback() {
+  return (
+    <section className="reports-grid reports-grid--primary" aria-label="Loading reports content">
+      <article className="report-card glass report-card--wide">
+        <div className="report-card__head">
+          <div>
+            <h4>Cash flow</h4>
+          </div>
+        </div>
+        <div className="empty-state">
+          <strong>Loading report data</strong>
+          <p>Clover is fetching transactions, imports, and balances in the background.</p>
+        </div>
+      </article>
+    </section>
+  );
+}
+
+async function ReportsStream({
   active = "reports",
   searchParams,
 }: {
@@ -301,23 +341,7 @@ async function ReportsPageView({
     let donutOffset = 0;
 
     return (
-      <CloverShell
-        active={active}
-        kicker="Insights"
-        title="Turn your statements into clear next steps."
-        subtitle="These sample reports are shown in staging so the page feels complete even before live workspace data is available."
-        showTopbar={false}
-        actions={
-          <>
-            <Link className="pill-link" href="/transactions">
-              Transactions
-            </Link>
-            <Link className="pill-link" href="/settings">
-              Settings
-            </Link>
-          </>
-        }
-      >
+      <>
         <section className="reports-range-switch glass">
           <div className="reports-range-switch__copy">
             <span className="eyebrow">Range</span>
@@ -615,7 +639,7 @@ async function ReportsPageView({
             </div>
           </article>
         </section>
-      </CloverShell>
+      </>
     );
   }
 
@@ -624,6 +648,7 @@ async function ReportsPageView({
     where: { clerkUserId: session.userId },
   });
   const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
+  const isPro = user.planTier === "pro";
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
@@ -1119,6 +1144,7 @@ async function ReportsPageView({
     const manualAmount = Number(manualTransactionStatsSummary._sum?.amount ?? 0);
     const goalKey = user.primaryGoal?.trim() ?? null;
     const goalLabel = goalKey ? goalLabels[goalKey] ?? goalKey : null;
+    const goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
 
     const merchantSpend = new Map<
       string,
@@ -1229,6 +1255,17 @@ async function ReportsPageView({
     const previousTopCategoryAmount = topCategoryName ? previousSummary.expenseCategories.get(topCategoryName) ?? 0 : 0;
     const topCategoryDelta = topCategoryAmount - previousTopCategoryAmount;
     const topCategoryDeltaPercent = previousTopCategoryAmount > 0 ? (topCategoryDelta / previousTopCategoryAmount) * 100 : null;
+    const goalProgress = getGoalProgressSnapshot({
+      goalKey: goalKey as GoalKey | null,
+      targetAmount: goalTargetAmount,
+      currentNet,
+      currentSpend,
+      monthlyIncome: currentSummary.income > 0 ? currentSummary.income : null,
+      currentSavingsRate: savingsRate,
+      previousSavingsRate: previousSummary.income > 0 ? (previousSummary.income - previousSummary.expense) / previousSummary.income : null,
+      spendDelta,
+      recurringShare: recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0) / Math.max(currentSpend, 1),
+    });
     const topBalanceAccount = workspaceAccountSummaries.find((account) => account.balance !== null) ?? null;
     const topBalanceAccountName = topBalanceAccount?.name ?? null;
     const accountBalanceCoverage = accountCount > 0 ? activeAccountCount / accountCount : 0;
@@ -1354,9 +1391,11 @@ async function ReportsPageView({
     const spendDirection = spendDelta === null ? null : spendDelta > 0 ? "up" : spendDelta < 0 ? "down" : "flat";
 
     const goalSummary = goalLabel
-      ? currentNet >= 0
-        ? `Your ${goalLabel.toLowerCase()} goal has room to move forward because the last ${rangeWindowText} ended positive.`
-        : `Your ${goalLabel.toLowerCase()} goal needs a tighter spending pattern or higher income to move faster.`
+      ? goalTargetAmount !== null
+        ? `${goalLabel} is ${goalProgress.progressPercent === null ? "set" : `${Math.round(goalProgress.progressPercent)}% complete`}. ${goalProgress.nextAction}`
+        : currentNet >= 0
+          ? `Your ${goalLabel.toLowerCase()} goal has room to move forward because the last ${rangeWindowText} ended positive.`
+          : `Your ${goalLabel.toLowerCase()} goal needs a tighter spending pattern or higher income to move faster.`
       : "Set a primary goal so Clover can compare your cash flow and spending against something specific.";
     const comparisonCopy =
       selectedRange === "ytd"
@@ -1437,7 +1476,9 @@ async function ReportsPageView({
     const goalNextStep = goalLabel
       ? {
           title: `Keep ${goalLabel.toLowerCase()} in view`,
-          body: "Use goal-aware insights to see whether spending and cash flow are helping or slowing you down.",
+          body: goalTargetAmount !== null
+            ? `${goalProgress.bandLabel} right now. ${goalProgress.nextAction}`
+            : "Use goal-aware insights to see whether spending and cash flow are helping or slowing you down.",
           href: "/goals",
           label: "Open goals",
         }
@@ -1449,22 +1490,7 @@ async function ReportsPageView({
         };
 
     return (
-      <CloverShell
-        active={active}
-        kicker="Reports"
-        title="A clearer report on where your money stands."
-        subtitle="Cash flow, spending concentration, recurring costs, and review items are pulled directly from your uploaded transactions and accounts."
-        actions={
-          <>
-            <Link className="pill-link" href="/transactions">
-              Transactions
-            </Link>
-            <Link className="pill-link" href="/settings">
-              Settings
-            </Link>
-          </>
-        }
-      >
+      <>
         <PostHogEvent
           event="report_viewed"
           onceKey={analyticsOnceKey("report_viewed", `workspace:${selectedWorkspaceId}:${selectedRange}`)}
@@ -1555,68 +1581,92 @@ async function ReportsPageView({
         />
         {isEmptyWorkspace ? (
           <div style={{ marginBottom: 20 }}>
-          <EmptyDataCta
-            eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
-            title="Your reports are ready for new data."
-            copy="Add transactions and accounts, and Clover will populate cash flow, spending, review items, and goal-aware summaries for you."
-            accountHref="/accounts"
-            transactionHref="/transactions?manual=1"
-          />
+            <EmptyDataCta
+              eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
+              title="Your reports are ready for new data."
+              copy="Add transactions and accounts, and Clover will populate cash flow, spending, review items, and goal-aware summaries for you."
+              accountHref="/accounts"
+              transactionHref="/transactions?manual=1"
+            />
           </div>
         ) : null}
-        <section className="reports-hero">
-          <div className="reports-hero__copy glass">
-            <span className="pill pill-accent">Decision-ready reports</span>
-            <h3>A clearer view of your money, with the numbers that matter most.</h3>
-            <p>
-              Every report is grounded in the transactions you uploaded, then sharpened with comparisons, labels, and
-              actions that point to the next useful step.
-            </p>
-            <div className="hero-actions">
-              <Link className="button button-primary" href={nextStep.href}>
-                {nextStep.label}
-              </Link>
-              <Link className="button button-secondary" href="/transactions">
-                Open transactions
-              </Link>
-              <Link className="button button-secondary" href="/settings">
-                Review settings
-              </Link>
-            </div>
-          </div>
 
-          <article className="reports-next glass">
-            <p className="eyebrow">Goal lens</p>
-            <h4>{goalNextStep.title}</h4>
-            <p>{goalSummary}</p>
-            <div className="reports-next__meta">
-              <span>{goalLabel ?? "No primary goal set"}</span>
-              <span>{savingsRate === null ? "Savings rate unavailable" : `${formatPercent(savingsRate * 100)} savings rate`}</span>
-            </div>
-            <Link className="button button-primary button-pill" href={goalNextStep.href}>
-              {goalNextStep.label}
-            </Link>
-            <div className="reports-next__meta">
-              <span>
-                {actionableCount} item{actionableCount === 1 ? "" : "s"} need attention
-              </span>
-              <span>{accountCount} account{accountCount === 1 ? "" : "s"}</span>
-            </div>
-          </article>
-        </section>
+        {isPro ? (
+          <>
+            <section className="reports-hero">
+              <div className="reports-hero__copy glass">
+                <span className="pill pill-accent">Decision-ready reports</span>
+                <h3>A clearer view of your money, with the numbers that matter most.</h3>
+                <p>
+                  Every report is grounded in the transactions you uploaded, then sharpened with comparisons, labels, and
+                  actions that point to the next useful step.
+                </p>
+                <div className="hero-actions">
+                  <Link className="button button-primary" href={nextStep.href}>
+                    {nextStep.label}
+                  </Link>
+                  <Link className="button button-secondary" href="/transactions">
+                    Open transactions
+                  </Link>
+                  <Link className="button button-secondary" href="/settings">
+                    Review settings
+                  </Link>
+                </div>
+              </div>
 
-        <section className="reports-attention-strip">
-          {attentionItems.map((item) => (
-            <article key={item.title} className="reports-attention-card glass">
-              <span className="eyebrow">Attention</span>
-              <h4>{item.title}</h4>
-              <p>{item.body}</p>
-              <Link className="pill-link pill-link--inline" href={item.href}>
-                {item.label}
+              <article className="reports-next glass">
+                <p className="eyebrow">Goal lens</p>
+                <h4>{goalNextStep.title}</h4>
+                <p>{goalSummary}</p>
+                <div className="reports-next__meta">
+                  <span>{goalLabel ?? "No primary goal set"}</span>
+                  <span>{savingsRate === null ? "Savings rate unavailable" : `${formatPercent(savingsRate * 100)} savings rate`}</span>
+                </div>
+                <Link className="button button-primary button-pill" href={goalNextStep.href}>
+                  {goalNextStep.label}
+                </Link>
+                <div className="reports-next__meta">
+                  <span>
+                    {actionableCount} item{actionableCount === 1 ? "" : "s"} need attention
+                  </span>
+                  <span>{accountCount} account{accountCount === 1 ? "" : "s"}</span>
+                </div>
+              </article>
+            </section>
+
+            <section className="reports-attention-strip">
+              {attentionItems.map((item) => (
+                <article key={item.title} className="reports-attention-card glass">
+                  <span className="eyebrow">Attention</span>
+                  <h4>{item.title}</h4>
+                  <p>{item.body}</p>
+                  <Link className="pill-link pill-link--inline" href={item.href}>
+                    {item.label}
+                  </Link>
+                </article>
+              ))}
+            </section>
+          </>
+        ) : (
+          <section className="reports-pro-preview glass">
+            <div>
+              <p className="eyebrow">Pro preview</p>
+              <h3>Unlock the explanation layer.</h3>
+              <p>
+                Pro adds the briefing cards that explain what changed, why it changed, and what to do next, plus goal context and
+                deeper account detail.
+              </p>
+            </div>
+            <div className="reports-pro-preview__actions">
+              <Link className="button button-primary button-pill" href="/pricing">
+                Upgrade to Pro
               </Link>
-            </article>
-          ))}
-        </section>
+              <Link className="button button-secondary button-pill" href="/settings">
+                Review billing
+              </Link>
+            </div>
+          </section>
+        )}
 
         <section className="reports-range-switch glass">
           <div className="reports-range-switch__copy">
@@ -1635,59 +1685,61 @@ async function ReportsPageView({
           </div>
         </section>
 
-        <section className="reports-ai-grid">
-          <article className="report-ai-card report-ai-card--featured glass">
-            <p className="eyebrow">What changed</p>
-            <h3>{aiHeadline}</h3>
-            <p>{aiSummary}</p>
-            <div className="report-ai-card__actions">
-              <Link className="button button-primary button-pill" href={buildTransactionsHref({ month: currentMonthBucket.key })}>
-                Open cash flow
-              </Link>
-              <Link className="button button-secondary button-pill" href="/transactions">
-                Open transactions
-              </Link>
-            </div>
-          </article>
-
-          <article className="report-ai-card glass">
-            <div className="report-card__head">
-              <div>
-                <h4>Why it changed</h4>
+        {isPro ? (
+          <section className="reports-ai-grid">
+            <article className="report-ai-card report-ai-card--featured glass">
+              <p className="eyebrow">What changed</p>
+              <h3>{aiHeadline}</h3>
+              <p>{aiSummary}</p>
+              <div className="report-ai-card__actions">
+                <Link className="button button-primary button-pill" href={buildTransactionsHref({ month: currentMonthBucket.key })}>
+                  Open cash flow
+                </Link>
+                <Link className="button button-secondary button-pill" href="/transactions">
+                  Open transactions
+                </Link>
               </div>
-            </div>
-            <div className="report-ai-signal-grid">
-              {aiSignals.map((signal) => (
-                <div key={signal.label} className={`report-ai-signal report-ai-signal--${signal.tone}`}>
-                  <span>{signal.label}</span>
-                  <strong>{signal.value}</strong>
-                  <small>{signal.detail}</small>
+            </article>
+
+            <article className="report-ai-card glass">
+              <div className="report-card__head">
+                <div>
+                  <h4>Why it changed</h4>
                 </div>
-              ))}
-            </div>
-          </article>
-
-          <article className="report-ai-card glass">
-            <div className="report-card__head">
-              <div>
-                <h4>What to do next</h4>
               </div>
-            </div>
-            <div className="report-list">
-              {aiActions.map((action) => (
-                <div key={action.title} className="report-list__item report-list__item--compact">
-                  <div className="report-list__meta">
-                    <strong>{action.title}</strong>
-                    <span>{action.body}</span>
+              <div className="report-ai-signal-grid">
+                {aiSignals.map((signal) => (
+                  <div key={signal.label} className={`report-ai-signal report-ai-signal--${signal.tone}`}>
+                    <span>{signal.label}</span>
+                    <strong>{signal.value}</strong>
+                    <small>{signal.detail}</small>
                   </div>
-                  <Link className="pill-link pill-link--inline" href={action.href}>
-                    {action.label}
-                  </Link>
+                ))}
+              </div>
+            </article>
+
+            <article className="report-ai-card glass">
+              <div className="report-card__head">
+                <div>
+                  <h4>What to do next</h4>
                 </div>
-              ))}
-            </div>
-          </article>
-        </section>
+              </div>
+              <div className="report-list">
+                {aiActions.map((action) => (
+                  <div key={action.title} className="report-list__item report-list__item--compact">
+                    <div className="report-list__meta">
+                      <strong>{action.title}</strong>
+                      <span>{action.body}</span>
+                    </div>
+                    <Link className="pill-link pill-link--inline" href={action.href}>
+                      {action.label}
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+        ) : null}
 
         <section className="reports-summary-grid">
           <article className="metric compact glass">
@@ -2077,7 +2129,13 @@ async function ReportsPageView({
               <div className="report-insight">
                 <span>Tracked balance</span>
                 <strong>{formatCurrency(totalAccountBalance)}</strong>
-                <small>{accountConcentrationShare === null ? "Balance coverage pending" : `${formatPercent(accountConcentrationShare * 100)} in the largest account`}</small>
+                <small>
+                  {isPro
+                    ? accountConcentrationShare === null
+                      ? "Balance coverage pending"
+                      : `${formatPercent(accountConcentrationShare * 100)} in the largest account`
+                    : "Balance summary only on Free"}
+                </small>
               </div>
               <div className="report-insight">
                 <span>Review load</span>
@@ -2086,40 +2144,58 @@ async function ReportsPageView({
               </div>
             </div>
 
-            <div className="report-subsection">
-              <p className="eyebrow">Decision lens</p>
-              <div className="report-list">
-                <div className="report-list__item">
-                  <div className="report-list__meta">
-                    <strong>{goalLabel ?? "No goal set yet"}</strong>
-                    <span>{goalSummary}</span>
+            {isPro ? (
+              <div className="report-subsection">
+                <p className="eyebrow">Decision lens</p>
+                <div className="report-list">
+                  <div className="report-list__item">
+                    <div className="report-list__meta">
+                      <strong>{goalLabel ?? "No goal set yet"}</strong>
+                      <span>{goalSummary}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-
-            <div className="report-subsection">
-              <p className="eyebrow">Account health</p>
-              <div className="report-list">
-                {workspaceAccountSummaries.length > 0 ? (
-                  workspaceAccountSummaries.map((account) => (
-                    <div key={account.id} className="report-list__item">
-                      <div className="report-list__meta">
-                        <strong>{account.name}</strong>
-                        <span>
-                          {account.balance === null ? "No balance recorded" : `${formatCurrency(Number(account.balance))} · ${account.type}`}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="empty-state">No account balances available yet. Add account snapshots so Clover can show the live balance picture.</div>
-                )}
+            ) : (
+              <div className="report-subsection">
+                <p className="eyebrow">Pro preview</p>
+                <div className="empty-state">
+                  Pro adds the goal lens so Reports can explain whether cash flow and spending are helping your target.
+                </div>
               </div>
-            </div>
+            )}
+
+            {isPro ? (
+              <div className="report-subsection">
+                <p className="eyebrow">Account health</p>
+                <div className="report-list">
+                  {workspaceAccountSummaries.length > 0 ? (
+                    workspaceAccountSummaries.map((account) => (
+                      <div key={account.id} className="report-list__item">
+                        <div className="report-list__meta">
+                          <strong>{account.name}</strong>
+                          <span>
+                            {account.balance === null ? "No balance recorded" : `${formatCurrency(Number(account.balance))} · ${account.type}`}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="empty-state">No account balances available yet. Add account snapshots so Clover can show the live balance picture.</div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="report-subsection">
+                <p className="eyebrow">Pro preview</p>
+                <div className="empty-state">
+                  Pro adds account concentration and account-level health detail so you can see which balances are carrying the most weight.
+                </div>
+              </div>
+            )}
           </article>
         </section>
-      </CloverShell>
+      </>
     );
   } catch (error) {
     console.error("Reports page failed to load", error);
@@ -2130,22 +2206,7 @@ async function ReportsPageView({
         : "";
 
     return (
-      <CloverShell
-        active={active}
-        kicker="Insights"
-        title="Turn your statements into clear next steps."
-        subtitle="The insights page could not load right now, but your workspace and transactions are still available."
-        actions={
-          <>
-            <Link className="pill-link" href="/transactions">
-              Transactions
-            </Link>
-            <Link className="pill-link" href="/settings">
-              Settings
-            </Link>
-          </>
-        }
-      >
+      <>
         <section className="report-card glass">
           <p className="eyebrow">Reports unavailable</p>
           <h4>We hit a temporary server issue while building this page.</h4>
@@ -2160,11 +2221,39 @@ async function ReportsPageView({
             </pre>
           </details>
         </section>
-      </CloverShell>
+      </>
     );
   }
 }
 
 export default async function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
-  return <ReportsPageView active="reports" searchParams={searchParams ? await searchParams : undefined} />;
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const session = await getSessionContext();
+  const user = await getOrCreateCurrentUser(session.userId);
+  if (!session.isGuest && !hasCompletedOnboarding(user)) {
+    redirect("/onboarding");
+  }
+
+  return (
+    <CloverShell
+      active="reports"
+      kicker="Insights"
+      title="A clearer report on where your money stands."
+      subtitle="Cash flow, spending concentration, recurring costs, and review items are pulled directly from your uploaded transactions and accounts."
+      actions={
+        <>
+          <Link className="pill-link" href="/transactions">
+            Transactions
+          </Link>
+          <Link className="pill-link" href="/settings">
+            Settings
+          </Link>
+        </>
+      }
+    >
+      <Suspense fallback={<ReportsStreamFallback />}>
+        <ReportsStream active="reports" searchParams={resolvedSearchParams} />
+      </Suspense>
+    </CloverShell>
+  );
 }
