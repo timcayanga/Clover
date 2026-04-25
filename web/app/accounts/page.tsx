@@ -149,6 +149,11 @@ type StatementCheckpoint = {
   rowCount: number;
   createdAt: string;
   updatedAt: string;
+  sourceMetadata?: {
+    accountName?: string | null;
+    institution?: string | null;
+    accountNumber?: string | null;
+  } | null;
 };
 
 type SummaryMode = "totals" | "percent";
@@ -312,6 +317,12 @@ const getCheckpointTrustLabel = (checkpoint: StatementCheckpoint | null | undefi
 
   return `Checkpoint pending${formattedDate ? ` · ${formattedDate}` : ""}`;
 };
+
+const getCheckpointIdentityKey = (checkpoint: StatementCheckpoint) =>
+  normalizeImportedAccountKey(
+    typeof checkpoint.sourceMetadata?.accountName === "string" ? checkpoint.sourceMetadata.accountName : null,
+    typeof checkpoint.sourceMetadata?.institution === "string" ? checkpoint.sourceMetadata.institution : null
+  );
 
 const mergeStatementCheckpoints = (current: StatementCheckpoint[], next: StatementCheckpoint[]) => {
   if (next.length === 0) {
@@ -873,35 +884,47 @@ function AccountsPageContent() {
     return counts;
   }, [reconciledAccounts]);
 
-  const latestCheckpointsByAccountId = useMemo(() => {
+  const latestCheckpoints = useMemo(() => {
     const checkpointsByAccountId = new Map<string, StatementCheckpoint>();
+    const checkpointsByAccountKey = new Map<string, StatementCheckpoint>();
 
     for (const checkpoint of statementCheckpoints) {
-      if (!checkpoint.accountId) {
-        continue;
-      }
-
-      const current = checkpointsByAccountId.get(checkpoint.accountId);
-      if (!current) {
-        checkpointsByAccountId.set(checkpoint.accountId, checkpoint);
-        continue;
-      }
-
       const checkpointTime = Math.max(
         checkpoint.statementEndDate ? new Date(checkpoint.statementEndDate).getTime() : 0,
         new Date(checkpoint.createdAt).getTime()
       );
-      const currentTime = Math.max(
-        current.statementEndDate ? new Date(current.statementEndDate).getTime() : 0,
-        new Date(current.createdAt).getTime()
-      );
 
-      if (checkpointTime >= currentTime) {
-        checkpointsByAccountId.set(checkpoint.accountId, checkpoint);
+      if (checkpoint.accountId) {
+        const current = checkpointsByAccountId.get(checkpoint.accountId);
+        const currentTime = current
+          ? Math.max(
+              current.statementEndDate ? new Date(current.statementEndDate).getTime() : 0,
+              new Date(current.createdAt).getTime()
+            )
+          : -1;
+
+        if (!current || checkpointTime >= currentTime) {
+          checkpointsByAccountId.set(checkpoint.accountId, checkpoint);
+        }
+      }
+
+      const checkpointKey = getCheckpointIdentityKey(checkpoint);
+      if (checkpointKey) {
+        const current = checkpointsByAccountKey.get(checkpointKey);
+        const currentTime = current
+          ? Math.max(
+              current.statementEndDate ? new Date(current.statementEndDate).getTime() : 0,
+              new Date(current.createdAt).getTime()
+            )
+          : -1;
+
+        if (!current || checkpointTime >= currentTime) {
+          checkpointsByAccountKey.set(checkpointKey, checkpoint);
+        }
       }
     }
 
-    return checkpointsByAccountId;
+    return { checkpointsByAccountId, checkpointsByAccountKey };
   }, [statementCheckpoints]);
 
   const latestCheckpoint = useMemo(() => drawerStatementCheckpoints[0] ?? null, [drawerStatementCheckpoints]);
@@ -1363,14 +1386,6 @@ function AccountsPageContent() {
                     <option value="balance_desc">Balance</option>
                   </select>
                 </label>
-                <button
-                  className={`button button-secondary button-small ${showNeedsReviewOnly ? "is-active" : ""}`}
-                  type="button"
-                  onClick={() => setShowNeedsReviewOnly((current) => !current)}
-                  aria-pressed={showNeedsReviewOnly}
-                >
-                  Needs review only
-                </button>
               </div>
             </div>
 
@@ -1414,7 +1429,10 @@ function AccountsPageContent() {
                             name: account.name,
                             type: getEffectiveAccountType(account),
                           });
-                          const checkpoint = latestCheckpointsByAccountId.get(account.id) ?? null;
+                          const checkpoint =
+                            latestCheckpoints.checkpointsByAccountId.get(account.id) ??
+                            latestCheckpoints.checkpointsByAccountKey.get(normalizeImportedAccountKey(account.name, account.institution)) ??
+                            null;
                           const checkpointSummary = getCheckpointSummary(checkpoint);
                           const balanceContext = getBalanceContext(account);
                           const balanceValue = isLiability ? -Math.abs(value) : value;

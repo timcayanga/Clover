@@ -8889,29 +8889,29 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-list-controls {
   display: flex;
   align-items: flex-end;
-  gap: 4px;
+  gap: 3px;
   flex-wrap: wrap;
 }
 
 .accounts-list-controls label {
-  gap: 4px;
-  font-size: 0.72rem;
+  gap: 3px;
+  font-size: 0.68rem;
 }
 
 .accounts-list-controls select {
-  min-height: 30px;
-  padding: 0 10px;
-  font-size: 13px;
-  border-radius: 11px;
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 12px;
+  border-radius: 10px;
 }
 
 .accounts-search {
   display: flex;
   align-items: center;
-  gap: 5px;
-  min-height: 28px;
-  padding: 0 7px;
-  border-radius: 10px;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 6px;
+  border-radius: 9px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.92);
   color: var(--muted);
@@ -8920,10 +8920,10 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-search input {
   border: 0;
   background: transparent;
-  min-width: 108px;
+  min-width: 96px;
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .accounts-search input:focus {
@@ -8939,9 +8939,6 @@ input.transaction-inline-edit--amount::placeholder {
   border-color: rgba(3, 168, 192, 0.22);
   background: rgba(3, 168, 192, 0.08);
   color: var(--accent);
-  min-height: 30px;
-  padding-inline: 10px;
-  font-size: 12px;
 }
 
 .accounts-toolbar-filters {
