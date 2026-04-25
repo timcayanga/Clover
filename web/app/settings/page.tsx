@@ -92,7 +92,7 @@ export default async function SettingsPage() {
   const billingSubscription = await getUserBillingSubscription(user.id);
 
   return (
-    <CloverShell active="settings" title="Settings" kicker="Control room" subtitle="Keep the active controls tucked into a single left menu.">
+    <CloverShell active="settings" title="Settings">
       <SettingsHub
         workspaceId={selectedWorkspace.id}
         workspaceName={selectedWorkspace.name}
