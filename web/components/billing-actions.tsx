@@ -22,6 +22,7 @@ type BillingActionsProps = {
   clientId?: string | null;
   monthlyPlanId?: string | null;
   annualPlanId?: string | null;
+  buyerCountry?: string | null;
   customId?: string | null;
   returnPath: string;
   subscription?: BillingSubscriptionSummary | null;
@@ -72,6 +73,7 @@ export function BillingActions({
   clientId,
   monthlyPlanId,
   annualPlanId,
+  buyerCountry,
   customId,
   returnPath,
   subscription,
@@ -150,6 +152,7 @@ export function BillingActions({
                   clientId={clientId as string}
                   planId={monthlyPlanId as string}
                   customId={customId as string}
+                  buyerCountry={buyerCountry}
                   className="billing-action-card__button"
                 />
               ) : (
@@ -168,6 +171,7 @@ export function BillingActions({
                   clientId={clientId as string}
                   planId={annualPlanId as string}
                   customId={customId as string}
+                  buyerCountry={buyerCountry}
                   className="billing-action-card__button"
                 />
               ) : (

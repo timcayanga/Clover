@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { UserProfile } from "@clerk/nextjs";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { BillingActions } from "@/components/billing-actions";
-import { getBillingPlanLabel, type BillingInterval } from "@/lib/billing-plans";
+import { type BillingInterval } from "@/lib/billing-plans";
 
 type ThemeMode = "light" | "dark" | "system";
 type SettingsSectionKey = "profile" | "display" | "data" | "plan";
@@ -31,6 +31,7 @@ type SettingsHubProps = {
   paypalClientId?: string | null;
   paypalMonthlyPlanId?: string | null;
   paypalAnnualPlanId?: string | null;
+  paypalBuyerCountry?: string | null;
   planUsage: {
     accountCount: number;
     cashAccountCount: number;
@@ -72,19 +73,39 @@ function PlanIcon({ name }: { name: "free" | "annual" | "monthly" }) {
   if (name === "annual") {
     return (
       <svg {...common}>
-        <path d="M4 18h16" />
-        <path d="M7 18V9l5-3 5 3v9" />
-        <path d="M10 18v-5h4v5" />
-        <path d="M12 2.5 14.5 5 12 7.5 9.5 5 12 2.5Z" />
+        <path d="m12 3 1.7 4.8 4.9.2-3.8 3 1.3 4.7L12 13.3 7.9 15.7l1.3-4.7-3.8-3 4.9-.2L12 3Z" />
       </svg>
     );
   }
 
   return (
     <svg {...common}>
-      <path d="M4 18h16" />
-      <path d="M7 18V11l5-4 5 4v7" />
-      <path d="M12 2.5 14.5 5 12 7.5 9.5 5 12 2.5Z" />
+      <path d="m12 3 1.7 4.8 4.9.2-3.8 3 1.3 4.7L12 13.3 7.9 15.7l1.3-4.7-3.8-3 4.9-.2L12 3Z" />
+    </svg>
+  );
+}
+
+function FeatureIcon({ tier }: { tier: "free" | "pro" }) {
+  if (tier === "pro") {
+    return (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 20 20"
+        className="settings-plan-card__feature-icon"
+      >
+        <path d="m10 2.5 1.4 3.9 4 .2-3.1 2.5 1.1 3.8L10 10.7 6.6 12.9l1.1-3.8-3.1-2.5 4-.2L10 2.5Z" fill="currentColor" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 20 20"
+      className="settings-plan-card__feature-icon"
+    >
+      <circle cx="10" cy="10" r="4" fill="currentColor" />
+      <path d="M10 3.8V2.2M10 17.8v-1.6M3.8 10H2.2M17.8 10h-1.6" stroke="currentColor" strokeLinecap="round" strokeWidth="1.4" />
     </svg>
   );
 }
@@ -146,7 +167,8 @@ const planCards = [
     title: "Annual",
     price: "PHP 1,299 / year",
     icon: "annual" as const,
-    badge: "Save PHP 489 vs monthly",
+    badge: "Pro",
+    savings: "Save PHP 489 vs monthly",
     helper: "Best value for people who want to stay on Pro all year.",
     description: "Upgrade for the yearly price and get the same Pro access for less than monthly billing.",
     features: [
@@ -162,7 +184,7 @@ const planCards = [
     title: "Monthly",
     price: "PHP 149 / month",
     icon: "monthly" as const,
-    badge: "Flexible",
+    badge: "",
     helper: "Flexible Pro access for people who prefer month-to-month billing.",
     description: "Upgrade for shorter commitment while keeping the same Pro feature set.",
     features: [
@@ -238,6 +260,7 @@ export function SettingsHub({
   paypalClientId,
   paypalMonthlyPlanId,
   paypalAnnualPlanId,
+  paypalBuyerCountry,
   planUsage,
 }: SettingsHubProps) {
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>("profile");
@@ -245,22 +268,6 @@ export function SettingsHub({
   const [historyCutoff, setHistoryCutoff] = useState(() => new Date().toISOString().slice(0, 10));
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-
-  const subscriptionStatusLabel = useMemo(() => {
-    if (!billingSubscription) {
-      return null;
-    }
-
-    if (planTier === "free") {
-      return "Free";
-    }
-
-    if (billingSubscription.pendingInterval) {
-      return `Pending ${getBillingPlanLabel(billingSubscription.pendingInterval)}`;
-    }
-
-    return billingSubscription.interval ? getBillingPlanLabel(billingSubscription.interval) : "Pro";
-  }, [billingSubscription, planTier]);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem("clover.settings-theme") as ThemeMode | null;
@@ -568,24 +575,25 @@ export function SettingsHub({
 
         {activeSection === "plan" ? (
           <section className="settings-section" role="tabpanel">
-            <div className="settings-section__intro">
+            <div className="settings-section__intro settings-section__intro--single">
               <div>
                 <p className="eyebrow">Plan</p>
                 <h4>Plan</h4>
               </div>
-              <div className="settings-profile-summary">
-                <span className="settings-profile-summary__label">Current plan</span>
-                <strong>{currentPlanCard.title}</strong>
-                {subscriptionStatusLabel ? (
-                  <>
-                    <span className="settings-profile-summary__label">Status</span>
-                    <strong>{subscriptionStatusLabel}</strong>
-                  </>
-                ) : null}
-              </div>
             </div>
 
-            <div className="settings-plan-usage" aria-label="Current plan usage">
+            <div className="settings-plan-usage settings-plan-usage--with-plan" aria-label="Current plan usage">
+              <article className="settings-plan-usage__card settings-plan-usage__card--plan">
+                <div className="settings-plan-usage__head">
+                  <strong>Current plan</strong>
+                  <span className="settings-plan-usage__tier">
+                    <PlanIcon name={currentPlanValue === "free" ? "free" : "annual"} />
+                    {currentPlanCard.title}
+                  </span>
+                </div>
+                <div className="settings-plan-usage__value">{currentPlanCard.title}</div>
+              </article>
+
               {planUsageCards.map((usage) => {
                 const percent = getUsagePercent(usage.used, usage.limit);
                 const usageTierIcon = planTier === "free" ? "free" : "annual";
@@ -627,52 +635,58 @@ export function SettingsHub({
                           <span className="settings-plan-card__band-price">{option.price}</span>
                         </div>
                       </div>
-                      <span className="settings-plan-card__band-badge">{option.badge}</span>
+                      {option.badge ? <span className="settings-plan-card__band-badge">{option.badge}</span> : null}
                     </div>
 
                     <div className="settings-plan-card__body">
                       <ul className="settings-plan-card__features">
                         {option.features.map((feature) => (
                           <li key={feature}>
-                            <span className="settings-plan-card__check" aria-hidden="true">
-                              ✓
-                            </span>
+                            <FeatureIcon tier={option.value === "free" ? "free" : "pro"} />
                             <span>{feature}</span>
                           </li>
                         ))}
                       </ul>
 
-                      {option.value === "free" ? (
-                        <div className="settings-plan-card__current">
-                          {isCurrent ? <span className="settings-pill">Current plan</span> : null}
-                        </div>
-                      ) : isFree ? (
-                        <div className="settings-plan-card__cta">
-                          {option.value === "annual" && annualCheckoutReady ? (
-                            <PayPalSubscribeButton
-                              clientId={paypalClientId!}
+                      <div className="settings-plan-card__footer">
+                        {option.value === "annual" ? (
+                          <p className="settings-plan-card__savings">{option.savings}</p>
+                        ) : null}
+
+                        {option.value === "free" ? (
+                          <div className="settings-plan-card__current">
+                            {isCurrent ? <span className="settings-pill">Current plan</span> : null}
+                          </div>
+                        ) : isFree ? (
+                          <div className="settings-plan-card__cta">
+                            {option.value === "annual" && annualCheckoutReady ? (
+                              <PayPalSubscribeButton
+                                clientId={paypalClientId!}
                               planId={paypalAnnualPlanId!}
                               customId={workspaceId}
+                              buyerCountry={paypalBuyerCountry}
                               className="settings-plan-card__paypal"
                               fundingSource="card"
                             />
-                          ) : option.value === "monthly" && monthlyCheckoutReady ? (
-                            <PayPalSubscribeButton
-                              clientId={paypalClientId!}
+                            ) : option.value === "monthly" && monthlyCheckoutReady ? (
+                              <PayPalSubscribeButton
+                                clientId={paypalClientId!}
                               planId={paypalMonthlyPlanId!}
                               customId={workspaceId}
+                              buyerCountry={paypalBuyerCountry}
                               className="settings-plan-card__paypal"
                               fundingSource="card"
                             />
-                          ) : (
-                            <p className="settings-helper">PayPal checkout is not configured yet.</p>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="settings-plan-card__current">
-                          {isCurrent ? <span className="settings-pill">Current plan</span> : <span className="settings-helper">Manage this plan below.</span>}
-                        </div>
-                      )}
+                            ) : (
+                              <p className="settings-helper">PayPal checkout is not configured yet.</p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="settings-plan-card__current">
+                            {isCurrent ? <span className="settings-pill">Current plan</span> : <span className="settings-helper">Manage this plan below.</span>}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </article>
                 );
@@ -686,6 +700,7 @@ export function SettingsHub({
                   clientId={paypalClientId}
                   monthlyPlanId={paypalMonthlyPlanId}
                   annualPlanId={paypalAnnualPlanId}
+                  buyerCountry={paypalBuyerCountry}
                   customId={workspaceId}
                   returnPath="/settings"
                   subscription={billingSubscription}

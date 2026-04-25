@@ -14200,6 +14200,10 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: start;
 }
 
+.settings-section__intro--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .settings-section__intro h4 {
   font-size: clamp(1.6rem, 2.4vw, 2rem);
   line-height: 1.05;
@@ -14346,6 +14350,14 @@ input.transaction-inline-edit--amount::placeholder {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.settings-plan-usage--with-plan {
+  grid-template-columns: minmax(0, 1.1fr) repeat(3, minmax(0, 1fr));
+}
+
+.settings-plan-usage__card--plan {
+  background: linear-gradient(180deg, rgba(247, 249, 250, 0.96), rgba(255, 255, 255, 0.92));
+}
+
 .settings-plan-card {
   display: grid;
   grid-template-rows: auto 1fr;
@@ -14423,6 +14435,7 @@ input.transaction-inline-edit--amount::placeholder {
 .settings-plan-card__band-price {
   font-size: 15px;
   font-weight: 600;
+  white-space: nowrap;
   color: var(--text);
 }
 
@@ -14474,8 +14487,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-plan-card--monthly .settings-plan-card__band-badge {
-  background: rgba(8, 61, 47, 0.12);
-  color: #083d2f;
+  display: none;
 }
 
 .settings-plan-card--monthly .settings-plan-card__icon {
@@ -14516,6 +14528,45 @@ input.transaction-inline-edit--amount::placeholder {
   line-height: 1.45;
 }
 
+.settings-plan-card__feature-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--accent);
+  margin-top: 1px;
+}
+
+.settings-plan-card__feature-icon circle,
+.settings-plan-card__feature-icon path {
+  fill: currentColor;
+}
+
+.settings-plan-card__feature-icon path[stroke] {
+  fill: none;
+}
+
+.settings-plan-card__footer {
+  display: grid;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.settings-plan-card__savings {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.12);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .settings-plan-card__check {
   display: inline-flex;
   align-items: center;
@@ -14550,7 +14601,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .settings-plan-usage {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 

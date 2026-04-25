@@ -33,6 +33,7 @@ type PayPalSubscribeButtonProps = {
   clientId: string;
   planId: string;
   customId: string;
+  buyerCountry?: string | null;
   className?: string;
   disabled?: boolean;
   onApproved?: () => void;
@@ -44,6 +45,7 @@ export function PayPalSubscribeButton({
   clientId,
   planId,
   customId,
+  buyerCountry,
   className,
   disabled = false,
   onApproved,
@@ -73,8 +75,12 @@ export function PayPalSubscribeButton({
       params.set("disable-funding", "paypal");
     }
 
+    if (buyerCountry) {
+      params.set("buyer-country", buyerCountry);
+    }
+
     return `https://www.paypal.com/sdk/js?${params.toString()}`;
-  }, [clientId, fundingSource]);
+  }, [buyerCountry, clientId, fundingSource]);
 
   useEffect(() => {
     if (!scriptReady || disabled || !containerRef.current || !window.paypal) {

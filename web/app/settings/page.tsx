@@ -117,6 +117,7 @@ export default async function SettingsPage() {
         paypalClientId={env.PAYPAL_CLIENT_ID ?? null}
         paypalMonthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
         paypalAnnualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? null}
+        paypalBuyerCountry={env.PAYPAL_BUYER_COUNTRY ?? null}
         planUsage={{
           accountCount,
           cashAccountCount,
