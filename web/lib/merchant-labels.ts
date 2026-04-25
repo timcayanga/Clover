@@ -81,6 +81,14 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "ATM Withdrawal",
     },
     {
+      patterns: [/\bcw\b/i, /(?:^|\s)\d+\s+cw(?:\s|$)/i],
+      replacement: "Cash Withdrawal",
+    },
+    {
+      patterns: [/\bcd\b/i, /(?:^|\s)\d+\s+cd(?:\s|$)/i],
+      replacement: "Cash Deposit",
+    },
+    {
       patterns: [/service\s+charge\s+debit/i, /atm\s+charges?/i],
       replacement: "Service Charge",
     },
@@ -97,7 +105,7 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Bank Transfer",
     },
     {
-      patterns: [/interbank\s+deposit/i, /funds?\s+deposited/i, /received\s+a\/c/i],
+      patterns: [/interbank\s+deposit/i, /funds?\s+deposited/i, /received\s+a\/c/i, /recived\s+a\/c/i],
       replacement: "Incoming Transfer",
     },
     {

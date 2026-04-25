@@ -1560,6 +1560,459 @@ const parseRcbcImportText = (text: string) => {
   };
 };
 
+const normalizeBdoText = (text: string) =>
+  text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => {
+      const normalized = decompactOcrText(line);
+      if (!normalized) {
+        return normalized;
+      }
+
+      const tokens = normalizeWhitespace(normalized).split(" ");
+      const singleCharacterTokens = tokens.filter((token) => /^[A-Za-z0-9,.-]$/.test(token)).length;
+      const looksCharacterSpaced = tokens.length >= 6 && singleCharacterTokens / tokens.length >= 0.65;
+      const collapsed = looksCharacterSpaced ? tokens.join("") : normalized;
+      return normalizeWhitespace(decompactOcrText(collapsed));
+    })
+    .join("\n");
+
+const detectBdoAccountNumberFromText = (text: string) => {
+  const normalized = normalizeBdoText(text);
+  const compact = compactWhitespace(normalized);
+
+  const labeledPatterns = [
+    /ACCOUNT\s*(?:NBR|NO\.?|NUMBER|#)\s*[:\-]?\s*([0-9][0-9\s-]{5,})/i,
+    /ACCOUNT\s+SUMMARY\s*([0-9][0-9\s-]{5,})/i,
+  ];
+
+  for (const pattern of labeledPatterns) {
+    const match = normalized.match(pattern)?.[1];
+    if (match) {
+      const digits = match.replace(/\D/g, "").slice(0, 16);
+      if (digits) {
+        return digits;
+      }
+    }
+  }
+
+  const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const accountHeadingIndex = lines.findIndex((line) => /^ACCOUNT\s*(?:NBR|NO\.?|NUMBER|#|SUMMARY)\b/i.test(line));
+  if (accountHeadingIndex >= 0) {
+    for (const line of lines.slice(accountHeadingIndex, accountHeadingIndex + 4)) {
+      const digits = line.replace(/[^0-9]/g, "");
+      if (digits.length >= 8) {
+        return digits.slice(0, 16);
+      }
+    }
+  }
+
+  const fallbackMatch = compact.match(/\b\d{1,4}[-\s]?\d{1,4}[-\s]?\d{1,4}[-\s]?\d{1,4}\b/);
+  if (fallbackMatch) {
+    const digits = fallbackMatch[0].replace(/\D/g, "");
+    if (digits.length >= 8) {
+      return digits.slice(0, 16);
+    }
+  }
+
+  return null;
+};
+
+const parseBdoDate = (
+  value: string,
+  metadata: Pick<DetectedStatementMetadata, "startDate" | "endDate">
+) => {
+  const normalized = normalizeWhitespace(value).replace(/\./g, "");
+  const dayMonthMatch = normalized.match(new RegExp(`^(\\d{1,2})\\s+(${monthNamePattern})(?:,?\\s*(\\d{4}))?$`, "i"));
+  if (dayMonthMatch) {
+    const monthIndex = monthIndexByAbbr[dayMonthMatch[2].slice(0, 3).toUpperCase()];
+    if (monthIndex !== undefined) {
+      const start = metadata.startDate ? new Date(metadata.startDate) : null;
+      const end = metadata.endDate ? new Date(metadata.endDate) : null;
+      let year = end?.getUTCFullYear() ?? start?.getUTCFullYear() ?? new Date().getUTCFullYear();
+      if (start && end && start.getUTCFullYear() !== end.getUTCFullYear()) {
+        year = monthIndex >= start.getUTCMonth() ? start.getUTCFullYear() : end.getUTCFullYear();
+      } else if (dayMonthMatch[3]) {
+        year = Number(dayMonthMatch[3]);
+      }
+      return new Date(Date.UTC(year, monthIndex, Number(dayMonthMatch[1]), 12));
+    }
+  }
+
+  const numericMatch = normalized.match(/^(\d{1,2})[-/](\d{1,2})(?:[-/](\d{2,4}))?$/);
+  if (numericMatch) {
+    const month = Number(numericMatch[1]) - 1;
+    const day = Number(numericMatch[2]);
+    const start = metadata.startDate ? new Date(metadata.startDate) : null;
+    const end = metadata.endDate ? new Date(metadata.endDate) : null;
+    let year = end?.getUTCFullYear() ?? start?.getUTCFullYear() ?? new Date().getUTCFullYear();
+    if (start && end && start.getUTCFullYear() !== end.getUTCFullYear()) {
+      year = month >= start.getUTCMonth() ? start.getUTCFullYear() : end.getUTCFullYear();
+    } else if (numericMatch[3]) {
+      year = Number(numericMatch[3].length === 2 ? `20${numericMatch[3]}` : numericMatch[3]);
+    }
+    return new Date(Date.UTC(year, month, day, 12));
+  }
+
+  const monthDayMatch = normalized.match(new RegExp(`^(${monthNamePattern})\\s+(\\d{1,2})(?:,?\\s*(\\d{4}))?$`, "i"));
+  if (monthDayMatch) {
+    const monthIndex = monthIndexByAbbr[monthDayMatch[1].slice(0, 3).toUpperCase()];
+    if (monthIndex !== undefined) {
+      const start = metadata.startDate ? new Date(metadata.startDate) : null;
+      const end = metadata.endDate ? new Date(metadata.endDate) : null;
+      let year = end?.getUTCFullYear() ?? start?.getUTCFullYear() ?? new Date().getUTCFullYear();
+      if (start && end && start.getUTCFullYear() !== end.getUTCFullYear()) {
+        year = monthIndex >= start.getUTCMonth() ? start.getUTCFullYear() : end.getUTCFullYear();
+      } else if (monthDayMatch[3]) {
+        year = Number(monthDayMatch[3]);
+      }
+      return new Date(Date.UTC(year, monthIndex, Number(monthDayMatch[2]), 12));
+    }
+  }
+
+  const parsed = parseDateValue(normalized);
+  if (parsed) {
+    return parsed;
+  }
+
+  const parsedLoose = new Date(normalized);
+  return Number.isNaN(parsedLoose.getTime()) ? null : parsedLoose;
+};
+
+const bdoStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+  const normalized = normalizeBdoText(text);
+  const compact = normalizeWhitespace(normalized);
+  if (!/\bBDO\b|\bBANCO\s+DE\s+ORO\b/i.test(compact) && !/ACCOUNT\s+(?:NBR|NO\.?|NUMBER|SUMMARY)/i.test(compact)) {
+    return null;
+  }
+
+  const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const accountNumber = detectBdoAccountNumberFromText(normalized) ?? detectAccountNumberFromText(normalized);
+  const accountName = accountNumber ? formatSimpleBankAccountName("BDO", accountNumber) : "BDO";
+
+  const periodLine =
+    lines.find((line) => /BAL\s+AS\s+OF/i.test(line)) ??
+    lines.find((line) => /^FOR\s+/i.test(line)) ??
+    lines.find((line) => /STATEMENT\s+PERIOD\s+ENDING/i.test(line)) ??
+    null;
+
+  let startDate: Date | null = null;
+  let endDate: Date | null = null;
+  if (periodLine) {
+    const asOfMatch = periodLine.match(/BAL\s+AS\s+OF\s+(.+?)\s+TO\s+(.+)$/i);
+    const forMatch = periodLine.match(/^FOR\s+(.+?)\s*[-–—]\s*(.+)$/i);
+    const endingMatch = periodLine.match(/STATEMENT\s+PERIOD\s+ENDING\s*[:\-]?\s*(.+)$/i);
+
+    if (asOfMatch) {
+      endDate = parseBdoDate(asOfMatch[2], { startDate: null, endDate: null });
+      startDate = parseBdoDate(asOfMatch[1], {
+        startDate: null,
+        endDate: endDate ? endDate.toISOString() : null,
+      });
+    } else if (forMatch) {
+      endDate = parseBdoDate(forMatch[2], { startDate: null, endDate: null });
+      startDate = parseBdoDate(forMatch[1], {
+        startDate: null,
+        endDate: endDate ? endDate.toISOString() : null,
+      });
+    } else if (endingMatch) {
+      endDate = parseBdoDate(endingMatch[1], { startDate: null, endDate: null });
+    }
+  }
+
+  const openProcMatch = compact.match(/OPEN\/PROC\s+THRU\s+(\d{1,2}-\d{1,2}-\d{2,4})\s+(\d{1,2}-\d{1,2}-\d{2,4})/i);
+  if (openProcMatch) {
+    startDate = parseBdoDate(openProcMatch[1], {
+      startDate: null,
+      endDate: endDate ? endDate.toISOString() : null,
+    });
+    endDate = parseBdoDate(openProcMatch[2], {
+      startDate: startDate ? startDate.toISOString() : null,
+      endDate: null,
+    });
+  }
+
+  const previousBalance =
+    parseMoney(compact.match(/PREVIOUS\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(compact.match(/BAL\s+AS\s+OF\s+[^\n]+?([0-9,]+\.\d{2})/i)?.[1] ?? null);
+  const currentBalance =
+    parseMoney(compact.match(/\bCUR(?:RENT)?\s+BALANCE\s*([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(compact.match(/\bBALANCE\s+P?\s*([0-9,]+\.\d{2})/i)?.[1] ?? null);
+  const endingBalance =
+    parseMoney(compact.match(/ENDING\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(compact.match(/CLOSING\s+BALANCE(?:\s+TOTAL)?\s*([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
+    currentBalance;
+
+  return {
+    institution: "BDO",
+    accountNumber,
+    accountName,
+    accountType: "bank",
+    openingBalance: previousBalance,
+    endingBalance,
+    startDate: startDate ? startDate.toISOString() : null,
+    endDate: endDate ? endDate.toISOString() : null,
+    confidence: accountNumber ? 93 : 82,
+  };
+};
+
+const isBdoBoilerplateLine = (line: string) => {
+  const normalized = normalizeWhitespace(line);
+  const compact = normalized.replace(/\s+/g, " ").trim();
+  return (
+    /^ACCOUNT\s*(?:NBR|NO\.?|NUMBER|SUMMARY)\b/i.test(compact) ||
+    /^CURRENCY\s+CODE/i.test(compact) ||
+    /^SHORT\s+NAME/i.test(compact) ||
+    /^CUSTOMER\s+DATA/i.test(compact) ||
+    /^ADDRESS/i.test(compact) ||
+    /^PAGE\s+\d+/i.test(compact) ||
+    /^BDO\s+UNIBANK/i.test(compact) ||
+    /^SWIFT\s+CODE/i.test(compact) ||
+    /^TEL\s+/i.test(compact) ||
+    /^WE\s+FIND\s+WAYS/i.test(compact) ||
+    /^FOR\s+[A-Za-z]{3}\s+\d{1,2}[-–—]\s*[A-Za-z]{3}\s+\d{1,2},?\s+\d{4}$/i.test(compact) ||
+    /^STATEMENT\s+PERIOD\s+ENDING/i.test(compact) ||
+    /^DATE\s+DESCRIPTION\s+REF\s+DETAILS/i.test(compact) ||
+    /^SEL\s+POST\s+EFF\s+TC\s+DESCRIPTION\s+AMOUNT\s+BALANCE/i.test(compact) ||
+    /^BEGINNING\s+BALANCE$/i.test(compact) ||
+    /^ENDING\s+BALANCE$/i.test(compact) ||
+    /^CLOSING\s+BALANCE(?:\s+TOTAL)?$/i.test(compact) ||
+    /^PREVIOUS\s+BALANCE$/i.test(compact) ||
+    /^BALANCE$/i.test(compact) ||
+    /^AVAIL\s+TODAY$/i.test(compact) ||
+    /^TOMORROW$/i.test(compact) ||
+    /^MEMO$/i.test(compact) ||
+    /^WITHDRAWALS$/i.test(compact) ||
+    /^DEPOSITS$/i.test(compact) ||
+    /^DEBIT$/i.test(compact) ||
+    /^CREDIT$/i.test(compact) ||
+    /^F\s+\d+\s*=+/i.test(compact) ||
+    /^EXIT$/i.test(compact) ||
+    /^CANCEL$/i.test(compact) ||
+    /^FIRST\/LAST$/i.test(compact) ||
+    /^FOLD\/UNFOLD$/i.test(compact) ||
+    /^PRINT\s+STMT$/i.test(compact) ||
+    /^RELOAD\s+ENTERPRISE\s+DESCRIPTION$/i.test(compact) ||
+    /^BALANCE\s+DATA$/i.test(compact) ||
+    /^ACCOUNT\s+DATA$/i.test(compact) ||
+    /^ACTIVITY\/INTEREST\s+DATA$/i.test(compact) ||
+    /^ATTN\s+FLAGS$/i.test(compact) ||
+    /^PRODUCT\s+TYPE$/i.test(compact) ||
+    /^RELATIONSHIP\s+CODE$/i.test(compact) ||
+    /^OD\s+LIMIT\/TOD\/ACA$/i.test(compact) ||
+    /^UNCLEARED\s+LIMIT$/i.test(compact) ||
+    /^EFT\s+CARD\s+CODE$/i.test(compact) ||
+    /^ACCOUNT\s+STATUS$/i.test(compact) ||
+    /^[A-Z]{2,4}\s*$/i.test(compact) ||
+    /^\d{4}$/i.test(compact) ||
+    /^0{3,}$/i.test(compact)
+  );
+};
+
+const isBdoTransactionStartLine = (line: string) => {
+  const normalized = normalizeWhitespace(line);
+  const compact = normalized.replace(/\s+/g, " ");
+  return (
+    /^(?:-?\s*)?(?:\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?|(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:,?\s*\d{4})?)/i.test(
+      compact
+    ) || /^(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2},?\s+\d{4}/i.test(compact)
+  );
+};
+
+const cleanupBdoDescription = (value: string) =>
+  normalizeWhitespace(
+    decompactOcrText(value)
+      .replace(/\b(?:JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|JAN|FEB|MAR|APR|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)\b\s+\d{1,2}(?:,\s*\d{4})?/gi, " ")
+      .replace(/\b\d{1,2}[-/]\d{1,2}(?:[-/]\d{2,4})?\b/g, " ")
+      .replace(/\b\d{3,4}\b/g, " ")
+      .replace(/\bP\b/gi, " ")
+      .replace(/-?\d[\d,]*\.\d{2}/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+
+const guessBdoCategoryName = (description: string, type: TransactionType) => {
+  const lower = description.toLowerCase();
+  if (/interest/.test(lower)) return "Income";
+  if (/salary|payroll/.test(lower)) return "Income";
+  if (/service\s+charge|tax|withheld|fee|charge/.test(lower)) return "Financial";
+  if (
+    /deposit|received|funds\s+deposited|cash\s+deposit|\bcd\b|interbank\s+deposit|bank\s+transfer|fund\s+transfer|withdrawal|atm|cash\s+withdrawal|cw\b|w\/d|wdrawal|pob\s+ibft/i.test(
+      lower
+    )
+  ) {
+    return "Transfers";
+  }
+  if (/merchant\s+payment|ma[_\s-]?pc/i.test(lower)) return "Shopping";
+  return guessCategoryName(description, type);
+};
+
+const parseBdoSavingsTransactionBlock = (
+  blockLines: string[],
+  metadata: DetectedStatementMetadata
+): ParsedImportRow | null => {
+  const normalizedLines = blockLines.map((line) => normalizeWhitespace(decompactOcrText(line))).filter(Boolean);
+  if (normalizedLines.length === 0) {
+    return null;
+  }
+
+  const blockText = normalizedLines.join(" ");
+  const dateSource =
+    normalizedLines.find((line) => isBdoTransactionStartLine(line)) ??
+    normalizedLines.find((line) => /\b(?:JANUARY|FEBRUARY|MARCH|APRIL|MAY|JUNE|JULY|AUGUST|SEPTEMBER|OCTOBER|NOVEMBER|DECEMBER|JAN|FEB|MAR|APR|JUN|JUL|AUG|SEP|SEPT|OCT|NOV|DEC)\b/i.test(line)) ??
+    blockText;
+
+  const dateMatch =
+    dateSource.match(/^(?:-?\s*)?(\d{1,2}[-/]\d{1,2})/) ??
+    dateSource.match(new RegExp(`^(?:-?\\s*)?((?:${monthNamePattern})\\s+\\d{1,2})`, "i"));
+  const date = dateMatch ? parseBdoDate(dateMatch[1], metadata) : null;
+  if (!date) {
+    return null;
+  }
+
+  const textCandidates = normalizedLines.filter(
+    (line) =>
+      /[A-Za-z]/.test(line) &&
+      !isBdoBoilerplateLine(line) &&
+      !/^\d{1,4}$/.test(line) &&
+      !/^-?\s*\d[\d,]*\.\d{2}\s*P?$/i.test(line)
+  );
+  const descriptionSource = textCandidates.at(-1) ?? normalizedLines.at(0) ?? blockText;
+  const notes = textCandidates.length > 1 ? textCandidates.slice(0, -1).join(" • ") : null;
+  let description = cleanupBdoDescription(descriptionSource);
+  if ((!description || !/[A-Za-z]/.test(description)) && normalizedLines.some((line) => /\bCW\b/i.test(line))) {
+    description = "Cash Withdrawal";
+  }
+  if (
+    (!description || !/[A-Za-z]/.test(description)) &&
+    normalizedLines.some((line) => /\b(?:POB\s+IBFT|BANK\s+TRANSFER|FUND\s+TRANSFER|W\/?D\s+FR\s+SAV\s+BDO|ATM\s+WITHDRAWAL)\b/i.test(line))
+  ) {
+    description = "Bank Transfer";
+  }
+  if (!description || !/[A-Za-z]/.test(description)) {
+    return null;
+  }
+
+  const moneyValues = Array.from(blockText.matchAll(/-?\d[\d,]*\.\d{2}/g))
+    .map((match) => parseMoney(match[0]))
+    .filter((value): value is number => value !== null);
+
+  if (moneyValues.length === 0) {
+    return null;
+  }
+
+  const signedAmount = moneyValues.find((value) => value < 0) ?? null;
+  const sortedByAbs = [...moneyValues].sort((left, right) => Math.abs(left) - Math.abs(right));
+  const amountValue = Math.abs(signedAmount ?? sortedByAbs[0]);
+  const balanceValue = moneyValues.length > 1 ? Math.abs(sortedByAbs.at(-1) ?? amountValue) : null;
+
+  const lower = description.toLowerCase();
+  const type: TransactionType =
+    /salary|payroll/.test(lower) || /interest/.test(lower)
+      ? "income"
+      : /service\s+charge|tax|withheld|fee|charge/.test(lower)
+        ? "expense"
+        : /deposit|received|funds\s+deposited|cash\s+deposit|\bcd\b|interbank\s+deposit|bank\s+transfer|fund\s+transfer|withdrawal|atm|cash\s+withdrawal|cw\b|w\/d|wdrawal|pob\s+ibft/i.test(
+            lower
+          )
+          ? "transfer"
+          : "expense";
+
+  const categoryName = guessBdoCategoryName(description, type);
+
+  return {
+    date: date.toISOString().slice(0, 10),
+    amount: amountValue.toFixed(2),
+    merchantRaw: humanizeMerchantText(description),
+    merchantClean: summarizeMerchantText(description, metadata.institution ?? "BDO"),
+    description,
+    categoryName,
+    accountName: metadata.accountName ?? "BDO",
+    institution: metadata.institution ?? undefined,
+    type,
+    rawPayload: {
+      bank: "BDO",
+      line: blockText,
+      amountValues: moneyValues.map((value) => value.toFixed(2)),
+      amountText: amountValue.toFixed(2),
+      balanceText: balanceValue !== null ? balanceValue.toFixed(2) : null,
+      notes,
+    },
+  } satisfies ParsedImportRow;
+};
+
+const parseBdoSavingsImportText = (text: string) => {
+  const normalizedText = normalizeBdoText(text);
+  const metadata = bdoStatementMetadata(normalizedText);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = normalizedText.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const headerIndex = lines.findIndex(
+    (line) =>
+      /DATE\s+DESCRIPTION\s+REF\s+DETAILS\s+DEBIT\s+AMT\s+CREDIT\s+AMNT\s+BALANCE/i.test(line) ||
+      /^EFF\s+TC\s+DESCRIPTION\s+AMOUNT\s+BALANCE/i.test(line) ||
+      /SEL\s+POST\s+EFF\s+TC\s+DESCRIPTION\s+AMOUNT\s+BALANCE/i.test(line) ||
+      /DATE\s+DETAILS\s+WITHDRAWALS\s+DEBIT\s+DEPOSITS\s+BALANCE/i.test(line) ||
+      /DATE\s+DETAILS/i.test(line)
+  );
+
+  if (headerIndex < 0) {
+    return null;
+  }
+
+  const transactionLines = lines.slice(headerIndex + 1);
+  const blocks: string[][] = [];
+  let current: string[] = [];
+
+  for (const line of transactionLines) {
+    if (isBdoBoilerplateLine(line)) {
+      if (current.length > 0) {
+        blocks.push(current);
+        current = [];
+      }
+      continue;
+    }
+
+    if (isBdoTransactionStartLine(line)) {
+      if (current.length > 0) {
+        blocks.push(current);
+      }
+      current = [line];
+      continue;
+    }
+
+    if (current.length > 0) {
+      current.push(line);
+    }
+  }
+
+  if (current.length > 0) {
+    blocks.push(current);
+  }
+
+  const rows = blocks
+    .map((block) => parseBdoSavingsTransactionBlock(block, metadata))
+    .filter(Boolean) as ParsedImportRow[];
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const endingBalance = metadata.endingBalance ?? getTrailingBalanceFromParsedRows(rows) ?? parseMoney(rows.at(-1)?.rawPayload?.balanceText as string | null);
+
+  return {
+    metadata: {
+      ...metadata,
+      endingBalance,
+      confidence: Math.min(100, metadata.confidence + (rows.length > 0 ? 4 : 0)),
+    },
+    rows,
+  };
+};
+
 const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = text.replace(/\u00a0/g, " ");
   const compact = normalizeWhitespace(normalized);
@@ -2846,6 +3299,11 @@ export const parseImportText = (
   const rcbcParsed = parseRcbcImportText(text);
   if (rcbcParsed) {
     return rcbcParsed.rows;
+  }
+
+  const bdoParsed = parseBdoSavingsImportText(text);
+  if (bdoParsed) {
+    return bdoParsed.rows;
   }
 
   const unionbankParsed = parseUnionBankImportText(text);
