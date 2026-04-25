@@ -1621,12 +1621,17 @@ const detectBdoAccountNumberFromText = (text: string) => {
   const compact = compactWhitespace(normalized);
   const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
   const accountLabelPattern =
-    /(?:ACCOUNT\s*(?:NBR|NO\.?|NUMBER|#)|ACCT\s*(?:NBR|NO\.?|NUMBER|#)|A\/C\s*(?:NBR|NO\.?|NUMBER|#)|CARD\s*(?:NO\.?|NUMBER|#)|NO)\s*[:\-]?\s*(\d[\d\s-]{6,})/i;
+    /(?:ACCOUNT\s*(?:NBR|NO\.?|NUMBER|#)|ACCT\s*(?:NBR|NO\.?|NUMBER|#)|A\/C\s*(?:NBR|NO\.?|NUMBER|#)|CARD\s*(?:NO\.?|NUMBER|#)|ACCOUNT\s+SUMMARY|NO)\s*[:\-]?\s*(\d[\d\s-]{6,})/i;
+  const bdoNumberPattern = /\b(?:\d{3}[-\s]?\d{4}[-\s]?\d{3}[-\s]?\d{2}|\d{4}[-\s]?\d{4}[-\s]?\d{4})\b/;
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
     const normalizedLine = line.replace(/^(?:\d+\s+)+/, "");
-    if (!/(ACCOUNT|ACCT|A\/C|CARD)\s*(?:NBR|NO\.?|NUMBER|#)|\bNO\b/i.test(line) && !/(ACCOUNT|ACCT|A\/C|CARD)\s*(?:NBR|NO\.?|NUMBER|#)|\bNO\b/i.test(normalizedLine)) {
+    if (
+      !/(ACCOUNT|ACCT|A\/C|CARD)\s*(?:NBR|NO\.?|NUMBER|#)|\bNO\b/i.test(line) &&
+      !/(ACCOUNT|ACCT|A\/C|CARD)\s*(?:NBR|NO\.?|NUMBER|#)|\bNO\b/i.test(normalizedLine) &&
+      !/ACCOUNT\s+SUMMARY/i.test(line)
+    ) {
       continue;
     }
 
@@ -1638,10 +1643,38 @@ const detectBdoAccountNumberFromText = (text: string) => {
       }
     }
 
+    const numberMatch = line.match(bdoNumberPattern) ?? normalizedLine.match(bdoNumberPattern);
+    if (numberMatch) {
+      const digits = numberMatch[0].replace(/\D/g, "").slice(0, 16);
+      if (digits.length >= 8) {
+        return digits;
+      }
+    }
+
     const followingLine = lines[index + 1] ?? "";
-    const combinedDigits = `${line} ${followingLine}`.replace(/[^0-9]/g, "").slice(0, 16);
-    if (combinedDigits.length >= 8) {
-      return combinedDigits;
+    const followingNumberMatch = followingLine.match(bdoNumberPattern) ?? followingLine.match(accountLabelPattern);
+    if (followingNumberMatch) {
+      const digits = followingNumberMatch[0].replace(/\D/g, "").slice(0, 16);
+      if (digits.length >= 8) {
+        return digits;
+      }
+    }
+
+    const currentDigits = line.replace(/[^0-9]/g, "");
+    if (currentDigits.length >= 8 && currentDigits.length <= 16) {
+      const candidate = currentDigits.slice(0, 16);
+      if (!/(?:\d{8,})\d{2,}$/i.test(candidate) || candidate.length <= 12) {
+        return candidate;
+      }
+    }
+
+    if (/ACCOUNT\s+SUMMARY/i.test(line) || /ACCOUNT\s+NUMBER/i.test(line)) {
+      const combinedDigits = `${line} ${followingLine}`
+        .replace(/[^0-9]/g, "")
+        .slice(0, 12);
+      if (combinedDigits.length >= 8) {
+        return combinedDigits;
+      }
     }
   }
 
