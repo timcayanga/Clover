@@ -97,10 +97,13 @@ export default function HomePage() {
           </p>
 
           <div className="landing-hero__actions">
-            <Link className="button button-primary button-pill" href="/sign-up">
+            <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
               Get started
             </Link>
-            <Link className="button button-secondary button-pill" href="/sign-in">
+            <Link className="button button-secondary button-pill" href="/pricing" prefetch={false}>
+              Pricing
+            </Link>
+            <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>
               Log in
             </Link>
           </div>
@@ -167,10 +170,13 @@ export default function HomePage() {
             </p>
           </div>
           <div className="landing-cta__actions">
-            <Link className="button button-primary button-pill" href="/sign-up">
+            <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
               Sign up
             </Link>
-            <Link className="button button-secondary button-pill" href="/sign-in">
+            <Link className="button button-secondary button-pill" href="/pricing" prefetch={false}>
+              Pricing
+            </Link>
+            <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>
               Log in
             </Link>
           </div>
@@ -179,8 +185,12 @@ export default function HomePage() {
 
       <footer className="landing-footer" aria-label="Legal links">
         <nav className="landing-footer__nav" aria-label="Legal">
-          <Link href="/privacy-policy">Privacy Policy</Link>
-          <Link href="/terms-of-service">Terms of Service</Link>
+          <Link href="/privacy-policy" prefetch={false}>
+            Privacy Policy
+          </Link>
+          <Link href="/terms-of-service" prefetch={false}>
+            Terms of Service
+          </Link>
         </nav>
       </footer>
     </main>
