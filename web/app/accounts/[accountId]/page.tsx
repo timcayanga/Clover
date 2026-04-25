@@ -6,6 +6,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { getAccountBrand } from "@/lib/account-brand";
+import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 
 type Account = {
   id: string;
@@ -37,6 +38,7 @@ type Transaction = {
 
 type StatementCheckpoint = {
   id: string;
+  accountId: string | null;
   statementStartDate: string | null;
   statementEndDate: string | null;
   openingBalance: string | null;
@@ -46,6 +48,11 @@ type StatementCheckpoint = {
   rowCount: number;
   createdAt: string;
   updatedAt: string;
+  sourceMetadata?: {
+    accountName?: string | null;
+    institution?: string | null;
+    accountNumber?: string | null;
+  } | null;
 };
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
@@ -240,10 +247,40 @@ function AccountDetailPageContent() {
     [transactions]
   );
 
-  const latestCheckpoint = useMemo(
-    () => checkpoints[0] ?? null,
-    [checkpoints]
+  const accountCheckpointKey = useMemo(
+    () => normalizeImportedAccountKey(account?.name, account?.institution),
+    [account?.institution, account?.name]
   );
+
+  const latestCheckpoint = useMemo(() => {
+    if (checkpoints.length === 0) {
+      return null;
+    }
+
+    const matchingCheckpoints = checkpoints.filter((checkpoint) => {
+      if (checkpoint.accountId === accountId) {
+        return true;
+      }
+
+      const checkpointKey = normalizeImportedAccountKey(
+        typeof checkpoint.sourceMetadata?.accountName === "string" ? checkpoint.sourceMetadata.accountName : null,
+        typeof checkpoint.sourceMetadata?.institution === "string" ? checkpoint.sourceMetadata.institution : null
+      );
+      return checkpointKey === accountCheckpointKey;
+    });
+
+    return matchingCheckpoints.sort((left, right) => {
+      const leftTime = Math.max(
+        left.statementEndDate ? new Date(left.statementEndDate).getTime() : 0,
+        new Date(left.createdAt).getTime()
+      );
+      const rightTime = Math.max(
+        right.statementEndDate ? new Date(right.statementEndDate).getTime() : 0,
+        new Date(right.createdAt).getTime()
+      );
+      return rightTime - leftTime;
+    })[0] ?? null;
+  }, [accountCheckpointKey, accountId, checkpoints]);
 
   const latestCheckpointSummary = useMemo(
     () => getCheckpointSummary(latestCheckpoint),
