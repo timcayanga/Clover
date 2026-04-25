@@ -1140,7 +1140,6 @@ function TransactionsPageContent() {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [importSessionId, setImportSessionId] = useState(0);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualAdvancedOpen, setManualAdvancedOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
@@ -1541,7 +1540,6 @@ function TransactionsPageContent() {
   const openImportFiles = () => {
     setPendingImportSummary(null);
     closeToolbarMenus();
-    setImportSessionId((current) => current + 1);
     setImportOpen(true);
   };
 
@@ -3461,7 +3459,7 @@ function TransactionsPageContent() {
             <div className="transactions-context-strip__filters">
               {activeFilterChips.length ? (
                 <>
-                  <span className="transactions-context-strip__label">Active filters</span>
+                  <span className="transactions-context-strip__label">Filters</span>
                   <div className="transactions-context-strip__chips">
                     {activeFilterChips.map((chip) => (
                       <button
@@ -3482,16 +3480,16 @@ function TransactionsPageContent() {
                   </div>
                 </>
               ) : (
-                <span className="transactions-context-strip__label">No active filters</span>
+                <span className="transactions-context-strip__label">Filters</span>
               )}
             </div>
             <div className="transactions-context-strip__keys" aria-label="Keyboard shortcuts">
-              <span className="transactions-context-strip__key">↑/↓ rows</span>
-              <span className="transactions-context-strip__key">Enter details</span>
-              <span className="transactions-context-strip__key">Space select</span>
-              <span className="transactions-context-strip__key">A add</span>
-              <span className="transactions-context-strip__key">F filters</span>
-              <span className="transactions-context-strip__key">/ search</span>
+              <span className="transactions-context-strip__key">↑↓</span>
+              <span className="transactions-context-strip__key">Enter</span>
+              <span className="transactions-context-strip__key">Space</span>
+              <span className="transactions-context-strip__key">A</span>
+              <span className="transactions-context-strip__key">F</span>
+              <span className="transactions-context-strip__key">/</span>
             </div>
           </div>
 
@@ -5045,7 +5043,6 @@ function TransactionsPageContent() {
       ) : null}
 
       <ImportFilesModal
-        key={importSessionId}
         open={importOpen}
         workspaceId={selectedWorkspaceId}
         accounts={accounts}

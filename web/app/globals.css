@@ -6776,14 +6776,14 @@ label {
 .transactions-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
+  gap: 10px;
   align-items: start;
   min-height: 0;
   height: 100%;
 }
 
 .transactions-layout--summary-open {
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 280px;
 }
 
 .transactions-main-panel {
@@ -6791,14 +6791,14 @@ label {
   height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   overflow: hidden;
 }
 
 .transactions-topbar {
   display: grid;
-  gap: 10px;
-  padding-bottom: 8px;
+  gap: 6px;
+  padding-bottom: 4px;
   border-bottom: 1px solid var(--stroke);
   position: sticky;
   top: 0;
@@ -6810,7 +6810,7 @@ label {
 
 .transactions-toolbar-row {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .transactions-toolbar-row--top {
@@ -6826,7 +6826,7 @@ label {
 .transactions-toolbar-group {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -6836,9 +6836,9 @@ label {
 }
 
 .transactions-action-button {
-  min-height: 34px;
+  min-height: 30px;
   border-radius: 999px;
-  padding-inline: 12px;
+  padding-inline: 10px;
   flex: 0 0 auto;
 }
 
@@ -6899,7 +6899,7 @@ label {
 }
 
 .transactions-filter-strip {
-  padding: 14px 16px 4px;
+  padding: 10px 12px 2px;
   border-top: 1px solid rgba(215, 228, 233, 0.72);
   border-bottom: 1px solid rgba(215, 228, 233, 0.72);
 }
@@ -7455,35 +7455,44 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-context-strip {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
   align-items: flex-start;
-  padding: 8px 2px 2px;
+  padding: 4px 2px 0;
   flex-wrap: wrap;
 }
 
 .transactions-context-strip__filters {
   display: grid;
-  gap: 8px;
-  min-width: min(100%, 520px);
+  gap: 4px;
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .transactions-context-strip__label {
   color: var(--muted-2);
-  font-size: 0.66rem;
+  font-size: 0.6rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
 }
 
 .transactions-context-strip__chips {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.transactions-context-strip__chips::-webkit-scrollbar {
+  display: none;
 }
 
 .transactions-context-strip__chip {
-  min-height: 28px;
-  padding-inline: 10px;
-  gap: 6px;
+  min-height: 24px;
+  padding-inline: 8px;
+  gap: 4px;
+  font-size: 0.72rem;
 }
 
 .transactions-context-strip__clear {
@@ -7491,28 +7500,36 @@ input.transaction-inline-edit--amount::placeholder {
   background: transparent;
   color: var(--accent);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 600;
   padding: 0 4px;
+  flex: 0 0 auto;
 }
 
 .transactions-context-strip__keys {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  gap: 6px;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.transactions-context-strip__keys::-webkit-scrollbar {
+  display: none;
 }
 
 .transactions-context-strip__key {
   display: inline-flex;
   align-items: center;
-  min-height: 26px;
-  padding: 0 9px;
+  min-height: 22px;
+  padding: 0 7px;
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   background: rgba(248, 251, 252, 0.92);
   color: var(--muted);
-  font-size: 0.74rem;
+  font-size: 0.66rem;
   white-space: nowrap;
 }
 
@@ -7585,8 +7602,8 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding-top: 10px;
+  gap: 8px;
+  padding-top: 6px;
   padding-bottom: 2px;
   margin-top: 2px;
   border-top: 1px solid var(--stroke);
@@ -7602,14 +7619,14 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .transactions-pagination__nav {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
   justify-content: center;
 }
@@ -7623,24 +7640,24 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-pagination__ellipsis {
   color: var(--muted-2);
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   padding: 0 4px;
 }
 
 .transactions-pagination__size {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: var(--muted-2);
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
 .transactions-pagination__size select {
-  min-height: 34px;
-  padding: 0 12px;
+  min-height: 28px;
+  padding: 0 10px;
   border-radius: 999px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.94);
@@ -7656,14 +7673,14 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-footer-snapshot {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   justify-items: end;
-  min-width: min(100%, 340px);
+  min-width: min(100%, 260px);
 }
 
 .transactions-footer-snapshot__label {
   color: var(--muted-2);
-  font-size: 0.68rem;
+  font-size: 0.6rem;
   letter-spacing: 0.14em;
   text-transform: uppercase;
 }
@@ -7671,16 +7688,16 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-footer-snapshot__metrics {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
   width: 100%;
 }
 
 .transactions-footer-snapshot__metric {
   display: grid;
-  gap: 3px;
-  padding: 8px 10px;
+  gap: 2px;
+  padding: 5px 8px;
   border: 1px solid var(--stroke);
-  border-radius: 16px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: var(--shadow-soft);
 }
@@ -7692,13 +7709,13 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-footer-snapshot__metric-label {
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.58rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .transactions-footer-snapshot__metric-value {
-  font-size: 0.92rem;
+  font-size: 0.8rem;
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.02em;
@@ -7714,15 +7731,15 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-summary-panel {
   display: grid;
-  gap: 18px;
+  gap: 10px;
   align-content: start;
-  padding: 20px;
-  border-radius: 30px;
+  padding: 14px;
+  border-radius: 22px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow-soft);
   position: sticky;
-  top: 22px;
+  top: 14px;
   min-height: 0;
 }
 
@@ -7732,20 +7749,20 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-summary-panel__head h4 {
   margin: 4px 0 0;
-  font-size: 1.25rem;
+  font-size: 1rem;
   letter-spacing: -0.03em;
 }
 
 .transactions-summary-list {
   display: grid;
-  gap: 12px;
+  gap: 8px;
   margin: 0;
 }
 
 .transactions-summary-list div {
   display: grid;
-  gap: 4px;
-  padding-bottom: 12px;
+  gap: 3px;
+  padding-bottom: 8px;
   border-bottom: 1px solid rgba(217, 231, 235, 0.7);
 }
 
@@ -7756,12 +7773,12 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-summary-list dt {
   color: var(--muted);
-  font-size: 0.82rem;
+  font-size: 0.72rem;
 }
 
 .transactions-summary-list dd {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.86rem;
   font-weight: 800;
   letter-spacing: -0.01em;
 }
@@ -7783,7 +7800,8 @@ input.transaction-inline-edit--amount::placeholder {
   text-align: left;
   justify-self: start;
   align-self: end;
-  min-height: 28px;
+  min-height: 22px;
+  font-size: 0.78rem;
 }
 
 .transactions-popover-card {
@@ -8691,7 +8709,7 @@ input.transaction-inline-edit--amount::placeholder {
   color: #111111;
   box-shadow: none;
   font-weight: 600;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
 }
 
 .transactions-page .transactions-toolbar-chip.button-secondary:hover,
@@ -8709,8 +8727,8 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-summary-toggle-button {
-  width: 34px;
-  min-width: 34px;
+  width: 30px;
+  min-width: 30px;
   padding-inline: 0;
   justify-content: center;
 }
@@ -8730,7 +8748,7 @@ input.transaction-inline-edit--amount::placeholder {
   color: #ffffff;
   box-shadow: none;
   font-weight: 600;
-  font-size: 0.84rem;
+  font-size: 0.78rem;
 }
 
 .transactions-page .transactions-toolbar-add.button-primary:hover,
@@ -8764,14 +8782,14 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .transactions-action-button {
-    min-height: 38px;
+    min-height: 34px;
     padding-inline: 10px;
   }
 
   .transactions-page .transactions-toolbar-chip.button-secondary,
   .transactions-page .transactions-toolbar-add.button-primary {
-    width: 38px;
-    min-width: 38px;
+    width: 34px;
+    min-width: 34px;
     padding-inline: 0;
     justify-content: center;
   }
@@ -8794,8 +8812,8 @@ input.transaction-inline-edit--amount::placeholder {
   .transactions-page .transactions-toolbar-chip.button-secondary svg,
   .transactions-page .transactions-toolbar-add.button-primary svg,
   .transactions-page .transactions-summary-toggle-button svg {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
   }
 }
 
