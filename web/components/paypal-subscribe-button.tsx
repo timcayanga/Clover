@@ -88,10 +88,10 @@ export function PayPalSubscribeButton({
       const buttons = window.paypal?.Buttons({
         style: {
           layout: "vertical",
-          color: "gold",
-          shape: "rect",
-          label: "subscribe",
-          height: 44,
+          color: "white",
+          shape: "pill",
+          label: "paypal",
+          height: 45,
         },
         createSubscription: (_data, actions) =>
           actions.subscription.create({
@@ -150,7 +150,12 @@ export function PayPalSubscribeButton({
 
   return (
     <div className={className}>
-      <Script src={scriptSrc} strategy="afterInteractive" onLoad={() => setScriptReady(true)} />
+      <Script
+        src={scriptSrc}
+        strategy="afterInteractive"
+        data-sdk-integration-source="button-factory"
+        onLoad={() => setScriptReady(true)}
+      />
       <div ref={containerRef} aria-live="polite" />
       {message ? <p className="billing-helper">{message}</p> : null}
       {!scriptReady ? <p className="billing-helper">Loading PayPal checkout...</p> : null}
