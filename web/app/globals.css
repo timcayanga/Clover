@@ -9021,6 +9021,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-brand-mark {
+  position: relative;
   width: 44px;
   height: 44px;
   border-radius: 16px;
@@ -9037,7 +9038,6 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-brand-mark img {
   display: block;
   object-position: center;
-  margin: auto;
 }
 
 .accounts-brand-mark__logo {
@@ -9048,19 +9048,23 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-brand-mark__fallback {
-  width: 64%;
-  height: 64%;
-  display: block;
+  position: absolute;
+  inset: 0;
+  width: 66%;
+  height: 66%;
   margin: auto;
   object-fit: contain;
   object-position: center;
 }
 
 .accounts-brand-mark__logo-fallback {
+  position: absolute;
+  inset: 0;
   width: 68%;
   height: 68%;
-  display: block;
   margin: auto;
+  object-fit: contain;
+  object-position: center;
 }
 
 .accounts-detail__headline {
