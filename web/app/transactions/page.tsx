@@ -111,6 +111,11 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
   return [...optimisticAccounts, ...mergedFetchedAccounts];
 };
 
+const accountMatchesTransaction = (transaction: Transaction, account: Account) =>
+  transaction.accountId === account.id ||
+  normalizeImportedAccountKey(transaction.accountName, account.institution) ===
+    normalizeImportedAccountKey(account.name, account.institution);
+
 type Category = {
   id: string;
   name: string;
@@ -1192,6 +1197,27 @@ function TransactionsPageContent() {
     [accounts]
   );
   const accountNameById = useMemo(() => new Map(accounts.map((account) => [account.id, account.name] as const)), [accounts]);
+  const accountKeyById = useMemo(
+    () => new Map(accounts.map((account) => [account.id, normalizeImportedAccountKey(account.name, account.institution)] as const)),
+    [accounts]
+  );
+  const expandedAccountFilters = useMemo(() => {
+    if (accountFilters.length === 0) {
+      return accountFilters;
+    }
+
+    const selectedKeys = new Set(
+      accountFilters.map((accountId) => accountKeyById.get(accountId)).filter((value): value is string => Boolean(value))
+    );
+
+    if (selectedKeys.size === 0) {
+      return accountFilters;
+    }
+
+    return accounts
+      .filter((account) => selectedKeys.has(normalizeImportedAccountKey(account.name, account.institution)))
+      .map((account) => account.id);
+  }, [accountFilters, accountKeyById, accounts]);
   const categoryNameById = useMemo(
     () => new Map(categories.map((category) => [category.id, category.name] as const)),
     [categories]
@@ -1281,13 +1307,13 @@ function TransactionsPageContent() {
 
     const searchParams = buildTransactionQuerySearchParams(
       workspaceId,
-      {
-        query,
-        categoryIds: categoryFilters,
-        accountIds: accountFilters,
-        typeFilters,
-        merchantFilters,
-        dateFilterMode,
+        {
+          query,
+          categoryIds: categoryFilters,
+          accountIds: expandedAccountFilters,
+          typeFilters,
+          merchantFilters,
+          dateFilterMode,
         dateFilterAnchor,
         customStart,
         customEnd,
@@ -1741,12 +1767,12 @@ function TransactionsPageContent() {
     }
 
     count += categoryFilters.length;
-    count += accountFilters.length;
+    count += expandedAccountFilters.length;
     count += typeFilters.length;
     count += merchantFilters.length;
 
     return count;
-  }, [accountFilters.length, categoryFilters.length, dateFilterMode, merchantFilters.length, query, typeFilters.length]);
+  }, [accountFilters.length, categoryFilters.length, dateFilterMode, expandedAccountFilters.length, merchantFilters.length, query, typeFilters.length]);
 
   const activeFilterChips = useMemo(
     () => [
@@ -3245,7 +3271,10 @@ function TransactionsPageContent() {
       return;
     }
 
-    const visibleTransactionCount = transactions.filter((transaction) => transaction.accountId === targetAccountId).length;
+    const targetAccount = accounts.find((account) => account.id === targetAccountId) ?? null;
+    const visibleTransactionCount = targetAccount
+      ? transactions.filter((transaction) => accountMatchesTransaction(transaction, targetAccount)).length
+      : transactions.filter((transaction) => transaction.accountId === targetAccountId).length;
     const importedRows = pendingImportSummary.rowsImported ?? 0;
     if (importedRows > 0 && visibleTransactionCount < importedRows) {
       return;

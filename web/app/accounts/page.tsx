@@ -72,6 +72,11 @@ const mergeImportedPreviewTransactions = (
   return mergeImportedWorkspaceTransactions(currentTransactions, previewTransactions);
 };
 
+const transactionMatchesAccount = (transaction: Transaction, account: Account) =>
+  transaction.accountId === account.id ||
+  normalizeImportedAccountKey(transaction.accountName ?? null, account.institution) ===
+    normalizeImportedAccountKey(account.name, account.institution);
+
 const mergeAccountsWithOptimisticImports = (
   fetchedAccounts: Account[],
   currentAccounts: Account[],
@@ -125,6 +130,7 @@ type AccountRule = {
 type Transaction = {
   id: string;
   accountId: string;
+  accountName?: string;
   amount: string;
   type: "income" | "expense" | "transfer";
   date: string;
@@ -582,7 +588,9 @@ function AccountsPageContent() {
   const reconciledAccounts = useMemo(
     () =>
       accounts.map((account) => {
-        const accountTransactions = drawerAccountId === account.id ? drawerTransactions : transactions.filter((transaction) => transaction.accountId === account.id);
+        const accountTransactions = drawerAccountId === account.id
+          ? drawerTransactions
+          : transactions.filter((transaction) => transactionMatchesAccount(transaction, account));
         const accountCheckpoints = drawerAccountId === account.id ? drawerStatementCheckpoints : [];
         const effectiveType = getEffectiveAccountType(account);
         const reconciledBalance = deriveReconciledBalance({
@@ -805,8 +813,13 @@ function AccountsPageContent() {
       return;
     }
 
-    setDrawerTransactions(transactions.filter((transaction) => transaction.accountId === drawerAccountId));
-  }, [drawerAccountId, transactions]);
+    const account = reconciledAccounts.find((entry) => entry.id === drawerAccountId) ?? null;
+    if (!account) {
+      return;
+    }
+
+    setDrawerTransactions(transactions.filter((transaction) => transactionMatchesAccount(transaction, account)));
+  }, [drawerAccountId, reconciledAccounts, transactions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1103,7 +1116,7 @@ function AccountsPageContent() {
 
   const openAccountDrawer = (account: Account) => {
     setDrawerAccountId(account.id);
-    setDrawerTransactions(transactions.filter((transaction) => transaction.accountId === account.id));
+    setDrawerTransactions(transactions.filter((transaction) => transactionMatchesAccount(transaction, account)));
     setAccountDeleteConfirmOpen(false);
     setDrawerNotice(null);
     setAccountEditName(account.name);
