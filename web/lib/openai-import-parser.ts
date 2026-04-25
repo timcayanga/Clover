@@ -422,7 +422,12 @@ const buildBankInstructionJson = (params: {
     return {
       ...base,
       institution: "AUB",
-      notes: ["AUB statements may split rows across lines; preserve merchant text and join broken OCR text conservatively."],
+      notes: [
+        "AUB statements may split rows across lines; preserve merchant text and join broken OCR text conservatively.",
+        "For scanned AUB pages, the full account number is usually printed near the top under an 'Account Number' heading and may include hyphens. Keep every digit group; do not truncate it to the last 4 digits if the full number is visible.",
+        "Prefer the final explicit ending balance or closing balance near the bottom of the last page, even if earlier pages show a different running balance.",
+        "Do not stop after the first page; capture transaction rows from every page.",
+      ],
     };
   }
 
@@ -619,6 +624,14 @@ const buildOpenAIInputPayload = (params: {
     `Known parser result: ${JSON.stringify(buildDeterministicParserSummary({ detectedMetadata: params.detectedMetadata, parsedRows: params.parsedRows }))}`,
     `Bank-specific instructions: ${JSON.stringify(bankInstructionJson)}`,
     "",
+    ...(params.pageImages?.length
+      ? [
+          "This is a scanned or image-heavy PDF. The text layer may be empty or incomplete.",
+          "Read the page images directly and extract every transaction row from the visible statement pages.",
+          "Use the account number and balance shown in the page image, not any earlier summary-like number unless it is the final ending balance.",
+          "",
+        ]
+      : []),
     "Extracted text:",
     params.text,
     "",
@@ -733,7 +746,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         body: JSON.stringify({
           model: selectedModel,
           temperature: 0,
-          max_output_tokens: 4_000,
+        max_output_tokens: pageImages.length > 0 ? 2_500 : 4_000,
           input: [
             {
               role: "system",
@@ -776,7 +789,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   };
 
   try {
-    const primaryTimeoutMs = model === imageModel ? 15_000 : 30_000;
+    const primaryTimeoutMs = model === imageModel ? 60_000 : 45_000;
     let response = await callOpenAI(model, pageImagesToSend, primaryTimeoutMs);
 
     if (!response || !response.ok) {
@@ -803,7 +816,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             imageCount: pageImagesToSend.length,
           });
         }
-        response = await callOpenAI(textModel, pageImagesToSend.slice(0, 1), 30_000);
+        response = await callOpenAI(textModel, pageImagesToSend.slice(0, 1), 45_000);
       }
 
       if (!response || !response.ok) {

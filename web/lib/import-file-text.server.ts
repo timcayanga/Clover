@@ -240,7 +240,7 @@ const loadCreateCanvas = async () => {
   return canvasModule.createCanvas;
 };
 
-const renderPdfPageImagesFromBytes = async (data: Uint8Array, password?: string, maxPages = 2, scale = 0.7) => {
+const renderPdfPageImagesFromBytes = async (data: Uint8Array, password?: string, maxPages = 2, scale = 1.1) => {
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
   const createCanvas = await loadCreateCanvas();
   const standardFontDataUrl = getPdfJsStandardFontDataUrl();
