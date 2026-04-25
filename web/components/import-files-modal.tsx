@@ -2,6 +2,7 @@
 
 import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ImportPasswordModal } from "@/components/import-password-modal";
@@ -10,6 +11,7 @@ import { capturePostHogClientEvent, capturePostHogClientEventOnce, analyticsOnce
 import { formatDuplicateImportMessage } from "@/lib/import-duplicate-message";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { postFileWithProgress } from "@/lib/import-file-post";
+import { MAX_IMPORT_FILE_SIZE, isSupportedImportFile } from "@/lib/import-file-validation";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { syncImportedWorkspaceAccountCaches, syncImportedWorkspaceTransactionCaches } from "@/lib/workspace-cache";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
@@ -75,7 +77,6 @@ const isPasswordError = (error: unknown) => {
 
 const fileKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
 const MAX_IMPORT_FILES = 10;
-const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
 
 const fileTypeLabel = (file: File) => {
   const lowerName = file.name.toLowerCase();
@@ -657,12 +658,18 @@ export function ImportFilesModal({
       const existing = new Set(current.map((item) => fileKey(item.file)));
       const availableSlots = Math.max(0, MAX_IMPORT_FILES - current.length);
       let skippedTooLarge = 0;
+      let skippedUnsupported = 0;
       let skippedTooMany = 0;
       let additionsCount = 0;
 
       const additions = nextFiles.flatMap((file) => {
         if (file.size > MAX_IMPORT_FILE_SIZE) {
           skippedTooLarge += 1;
+          return [];
+        }
+
+        if (!isSupportedImportFile(file.name, file.type)) {
+          skippedUnsupported += 1;
           return [];
         }
 
@@ -734,6 +741,8 @@ export function ImportFilesModal({
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooLarge} over 2 MB and ${skippedTooMany} over the 10-file limit.`;
       } else if (skippedTooLarge > 0) {
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooLarge} file${skippedTooLarge === 1 ? "" : "s"} over 2 MB.`;
+      } else if (skippedUnsupported > 0) {
+        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedUnsupported} unsupported file${skippedUnsupported === 1 ? "" : "s"}.`;
       } else if (skippedTooMany > 0) {
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the 10-file limit.`;
         setLimitReached(true);
@@ -775,6 +784,7 @@ export function ImportFilesModal({
       institution: string | null;
       accountType: UploadInsightsSummary["accountType"];
       optimisticAccountId: string | null;
+      previewTransactions?: NonNullable<UploadInsightsSummary["previewTransactions"]>;
     }
   ): Promise<ImportProcessResult> => {
     const resolvedAccountId =
@@ -845,6 +855,7 @@ export function ImportFilesModal({
             accountType: resolvedAccountType,
             balance: accountBalance,
             optimisticAccountId: summaryContext.optimisticAccountId ?? null,
+            previewTransactions: summaryContext.previewTransactions ?? [],
             incomeTotal: Number(insightSummary.incomeTotal ?? 0),
             expenseTotal: Number(insightSummary.expenseTotal ?? 0),
             netTotal: Number(insightSummary.netTotal ?? 0),
@@ -893,6 +904,7 @@ export function ImportFilesModal({
       accountType: UploadInsightsSummary["accountType"];
       optimisticAccountId: string | null;
       password?: string;
+      previewTransactions?: NonNullable<UploadInsightsSummary["previewTransactions"]>;
     }
   ) => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -1044,7 +1056,8 @@ export function ImportFilesModal({
             resolvedAccountType ??
               inferAccountTypeFromStatement(resolvedIdentity.institution, resolvedIdentity.accountName, "bank"),
             summaryContext.optimisticAccountId,
-            resolvedIdentity.balance
+            resolvedIdentity.balance,
+            summaryContext.previewTransactions ?? []
           );
 
           updateItem(itemId, {
@@ -1059,6 +1072,7 @@ export function ImportFilesModal({
             accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
             institution: resolvedIdentity.institution ?? summaryContext.institution,
             accountType: resolvedAccountType,
+            previewTransactions: summaryContext.previewTransactions ?? [],
           });
           if (result.summary) {
             seedImportedWorkspaceCaches(workspaceId, result.summary);
@@ -1311,6 +1325,7 @@ export function ImportFilesModal({
             : null,
           optimisticAccountId: canUseOptimisticGuess ? item.optimisticAccountId : null,
           password: item.password.trim() || undefined,
+          previewTransactions,
         });
 
         return {
@@ -1353,6 +1368,7 @@ export function ImportFilesModal({
           institution: guessedIdentity?.institution ?? null,
           accountType: inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank"),
           optimisticAccountId: item.optimisticAccountId,
+          previewTransactions,
         }).then((result) => {
           if (result.summary) {
             seedImportedWorkspaceCaches(workspaceId, result.summary);
@@ -1664,8 +1680,14 @@ export function ImportFilesModal({
     return null;
   }
 
-  if (activePasswordItem) {
-    return (
+  const portalTarget = typeof document === "undefined" ? null : document.body;
+  if (!portalTarget) {
+    return null;
+  }
+
+  const showCompactProgress = busy || Boolean(activeItem);
+
+  const modalContent = activePasswordItem ? (
       <ImportPasswordModal
         open
         files={passwordItems.map((item) => ({
@@ -1684,11 +1706,7 @@ export function ImportFilesModal({
         }
         onUnlock={(id) => void handleRetry(id)}
       />
-    );
-  }
-
-  if (items.length > 0) {
-    return (
+    ) : showCompactProgress ? (
       <ImportUploadDock
         open
         fileName={activeProgressItem?.file.name ?? null}
@@ -1721,10 +1739,7 @@ export function ImportFilesModal({
         }
         onClose={onClose}
         />
-    );
-  }
-
-  return (
+    ) : (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <section
         className="modal-card modal-card--wide accounts-import-modal glass"
@@ -1775,7 +1790,7 @@ export function ImportFilesModal({
             ref={fileInputRef}
             className="hidden-file-input"
             type="file"
-            accept=".csv,.pdf"
+            accept=".csv,.tsv,.pdf"
             multiple
             onChange={handleInputChange}
           />
@@ -1802,8 +1817,8 @@ export function ImportFilesModal({
               </p>
             </div>
             <div className="import-limit-cta__actions">
-              <Link className="button button-primary button-small" href="/settings#billing">
-                Upgrade to Pro
+              <Link className="button button-primary button-small" href="/pricing">
+                View pricing
               </Link>
               <button className="button button-secondary button-small" type="button" onClick={() => setLimitReached(false)}>
                 Dismiss
@@ -1931,4 +1946,6 @@ export function ImportFilesModal({
       </section>
     </div>
   );
+
+  return createPortal(modalContent, portalTarget);
 }
