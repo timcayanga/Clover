@@ -48,9 +48,17 @@ type TransactionSummaryRow = {
   merchantRaw: string;
   merchantClean: string | null;
   categoryId: string | null;
+  reviewStatus: string | null;
+  parserConfidence: number;
+  categoryConfidence: number;
+  accountMatchConfidence: number;
+  duplicateConfidence: number;
+  transferConfidence: number;
+  currency: string;
+  description: string | null;
   category: { name: string } | null;
   account: { name: string } | null;
-  reviewStatus: string | null;
+  createdAt: Date;
   isTransfer: boolean;
   isExcluded: boolean;
 };
@@ -170,46 +178,41 @@ export async function GET(request: Request) {
     const requestedPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const requestedPageSize = includeAll ? null : Math.max(1, Number(pageSizeParam ?? "25") || 25);
 
-    const [totalCount, summaryRows, pageRows] = await Promise.all([
-      prisma.transaction.count({ where }),
-      prisma.transaction.findMany({
-        where,
-        select: {
-          id: true,
-          accountId: true,
-          date: true,
-          amount: true,
-          type: true,
-          merchantRaw: true,
-          merchantClean: true,
-          categoryId: true,
-          category: {
-            select: {
-              name: true,
-            },
+    const summaryRows = await prisma.transaction.findMany({
+      where,
+      select: {
+        id: true,
+        accountId: true,
+        date: true,
+        amount: true,
+        type: true,
+        merchantRaw: true,
+        merchantClean: true,
+        categoryId: true,
+        reviewStatus: true,
+        parserConfidence: true,
+        categoryConfidence: true,
+        accountMatchConfidence: true,
+        duplicateConfidence: true,
+        transferConfidence: true,
+        currency: true,
+        description: true,
+        category: {
+          select: {
+            name: true,
           },
-          account: {
-            select: {
-              name: true,
-            },
+        },
+        account: {
+          select: {
+            name: true,
           },
-          reviewStatus: true,
-          createdAt: true,
-          isTransfer: true,
-          isExcluded: true,
         },
-        orderBy: { date: "desc" },
-      }),
-      prisma.transaction.findMany({
-        where,
-        include: {
-          category: true,
-          account: true,
-        },
-        orderBy: { date: "desc" },
-        ...(requestedPageSize ? { skip: (requestedPage - 1) * requestedPageSize, take: requestedPageSize } : {}),
-      }),
-    ]);
+        createdAt: true,
+        isTransfer: true,
+        isExcluded: true,
+      },
+      orderBy: { date: "desc" },
+    });
 
     const duplicateCounts = new Map<string, number>();
     for (const transaction of summaryRows) {
@@ -223,7 +226,7 @@ export async function GET(request: Request) {
     }
 
     const summaryState = {
-      totalCount,
+      totalCount: summaryRows.length,
       income: 0,
       spending: 0,
       transfers: 0,
@@ -236,65 +239,15 @@ export async function GET(request: Request) {
       firstReviewTransactionIndex: null as number | null,
     };
 
+    const transactions: TransactionApiRow[] = [];
     summaryRows.forEach((transaction, index) => {
+      const warningReason = getTransactionWarningReason(transaction, duplicateCounts);
       const amount = Math.abs(Number(transaction.amount));
       const categoryName = transaction.category?.name ?? "Other";
       const accountName = transaction.account?.name ?? "";
-      const warningReason = getTransactionWarningReason(transaction, duplicateCounts);
-
-      if (!transaction.isExcluded) {
-        if (transaction.type === "income") {
-          summaryState.income += amount;
-        } else if (transaction.type === "transfer") {
-          summaryState.transfers += amount;
-        } else {
-          summaryState.spending += amount;
-        }
-
-        summaryState.topCategories.set(categoryName, (summaryState.topCategories.get(categoryName) ?? 0) + amount);
-        summaryState.topAccounts.set(accountName, (summaryState.topAccounts.get(accountName) ?? 0) + amount);
-      }
-
-      if (warningReason) {
-        summaryState.review += 1;
-        if (!summaryState.firstReviewTransaction) {
-          summaryState.firstReviewTransaction = mapTransactionRow({
-            id: transaction.id,
-            workspaceId,
-            accountId: transaction.accountId,
-            account: { name: accountName },
-            categoryId: transaction.categoryId,
-            category: transaction.category ? { name: transaction.category.name } : null,
-            reviewStatus: transaction.reviewStatus,
-            parserConfidence: 0,
-            categoryConfidence: 0,
-            accountMatchConfidence: 0,
-            duplicateConfidence: 0,
-            transferConfidence: 0,
-            date: transaction.date,
-            amount: transaction.amount,
-            currency: "PHP",
-            type: transaction.type,
-            merchantRaw: transaction.merchantRaw,
-            merchantClean: transaction.merchantClean,
-            description: null,
-            isTransfer: transaction.isTransfer,
-            isExcluded: transaction.isExcluded,
-            createdAt: transaction.createdAt,
-            warningReason,
-          });
-          summaryState.firstReviewTransactionIndex = index + 1;
-        }
-      }
-    });
-
-    const topCategory = Array.from(summaryState.topCategories.entries()).sort((a, b) => b[1] - a[1])[0] ?? null;
-    const topAccount = Array.from(summaryState.topAccounts.entries()).sort((a, b) => b[1] - a[1])[0] ?? null;
-
-    const transactions = pageRows.map((transaction) =>
-      mapTransactionRow({
+      const mappedTransaction = mapTransactionRow({
         id: transaction.id,
-        workspaceId: transaction.workspaceId,
+        workspaceId,
         accountId: transaction.accountId,
         account: transaction.account,
         categoryId: transaction.categoryId,
@@ -315,31 +268,42 @@ export async function GET(request: Request) {
         isTransfer: transaction.isTransfer,
         isExcluded: transaction.isExcluded,
         createdAt: transaction.createdAt,
-        warningReason: getTransactionWarningReason(
-          {
-            id: transaction.id,
-            date: transaction.date,
-            amount: transaction.amount,
-            type: transaction.type,
-            merchantRaw: transaction.merchantRaw,
-            merchantClean: transaction.merchantClean,
-            categoryId: transaction.categoryId,
-            category: transaction.category,
-            account: transaction.account,
-            reviewStatus: transaction.reviewStatus,
-            isTransfer: transaction.isTransfer,
-            isExcluded: transaction.isExcluded,
-          },
-          duplicateCounts
-        ),
-      })
-    );
+        warningReason,
+      });
+      transactions.push(mappedTransaction);
+
+      if (!transaction.isExcluded) {
+        if (transaction.type === "income") {
+          summaryState.income += amount;
+        } else if (transaction.type === "transfer") {
+          summaryState.transfers += amount;
+        } else {
+          summaryState.spending += amount;
+        }
+
+        summaryState.topCategories.set(categoryName, (summaryState.topCategories.get(categoryName) ?? 0) + amount);
+        summaryState.topAccounts.set(accountName, (summaryState.topAccounts.get(accountName) ?? 0) + amount);
+      }
+
+      if (warningReason) {
+        summaryState.review += 1;
+        if (!summaryState.firstReviewTransaction) {
+          summaryState.firstReviewTransaction = mappedTransaction;
+          summaryState.firstReviewTransactionIndex = index + 1;
+        }
+      }
+    });
+
+    const topCategory = Array.from(summaryState.topCategories.entries()).sort((a, b) => b[1] - a[1])[0] ?? null;
+    const topAccount = Array.from(summaryState.topAccounts.entries()).sort((a, b) => b[1] - a[1])[0] ?? null;
+    const pageStart = (requestedPage - 1) * (requestedPageSize ?? 25);
+    const pageTransactions = includeAll ? transactions : transactions.slice(pageStart, pageStart + (requestedPageSize ?? 25));
 
     return NextResponse.json({
-      transactions,
+      transactions: pageTransactions,
       page: includeAll ? 1 : requestedPage,
-      pageSize: includeAll ? totalCount : requestedPageSize ?? 25,
-      totalCount,
+      pageSize: includeAll ? summaryState.totalCount : requestedPageSize ?? 25,
+      totalCount: summaryState.totalCount,
       summary: {
         totalCount: summaryState.totalCount,
         income: summaryState.income,
