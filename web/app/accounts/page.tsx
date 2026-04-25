@@ -50,7 +50,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     id: summary.accountId,
     name: summary.accountName,
     institution: summary.institution,
-    type: inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
+    type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
     currency: "PHP",
     source: "upload",
     balance: summary.balance,
@@ -145,8 +145,7 @@ const formatDate = (value: string) =>
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
-const getEffectiveAccountType = (account: Account) =>
-  inferAccountTypeFromStatement(account.institution, account.name, account.type);
+const getEffectiveAccountType = (account: Account) => account.type;
 
 const getAccountDisplayType = (account: Account) => {
   const effectiveType = getEffectiveAccountType(account);
@@ -167,6 +166,102 @@ const getAccountWarning = (account: Account, duplicateCount: number) => {
   if (account.source === "imported" && !account.institution) return "Needs category";
   if (account.balance === null) return "Add balance";
   return null;
+};
+
+const getBalanceContext = (account: Account) => {
+  const type = getEffectiveAccountType(account);
+  if (type === "credit_card") {
+    return { label: "Outstanding balance", tone: "danger" as const };
+  }
+  if (type === "investment") {
+    return { label: "Held balance", tone: "neutral" as const };
+  }
+  if (type === "cash" || type === "wallet" || type === "bank") {
+    return { label: "Spendable amount", tone: "good" as const };
+  }
+  return { label: "Current balance", tone: "neutral" as const };
+};
+
+const isSpendableAccountType = (type: Account["type"]) => type === "bank" || type === "wallet" || type === "cash";
+
+const getSpendableBalance = (account: Account) => (isSpendableAccountType(getEffectiveAccountType(account)) ? parseAmount(account.balance) : 0);
+
+const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined) => {
+  if (!checkpoint) {
+    return {
+      label: "No statement checkpoint yet",
+      detail: "Import a statement to anchor this balance.",
+      tone: "neutral" as const,
+      icon: "clock" as const,
+    };
+  }
+
+  const endingDate = checkpoint.statementEndDate ? formatDate(checkpoint.statementEndDate) : "No date";
+  if (checkpoint.status === "mismatch") {
+    return {
+      label: "Needs review",
+      detail: checkpoint.mismatchReason ?? `Mismatch detected · ${endingDate}`,
+      tone: "danger" as const,
+      icon: "warning" as const,
+    };
+  }
+
+  if (checkpoint.status === "reconciled") {
+    return {
+      label: "Reconciled",
+      detail: endingDate,
+      tone: "good" as const,
+      icon: "refresh" as const,
+    };
+  }
+
+  return {
+    label: "Checkpoint pending",
+    detail: endingDate,
+    tone: "neutral" as const,
+    icon: "calendar" as const,
+  };
+};
+
+const buildImportSummaries = (transactions: Transaction[]) => {
+  const importGroups = new Map<
+    string,
+    { key: string; count: number; latestDate: string; label: string; total: number }
+  >();
+
+  for (const transaction of transactions) {
+    if (transaction.merchantRaw === "Beginning balance") {
+      continue;
+    }
+
+    if (transaction.source !== "upload" && !transaction.importFileId) {
+      continue;
+    }
+
+    const key = transaction.importFileId ?? `${transaction.accountId}:${transaction.date.slice(0, 10)}`;
+    const current = importGroups.get(key);
+    const amount = parseAmount(transaction.amount);
+    const next = current
+      ? {
+          ...current,
+          count: current.count + 1,
+          latestDate: new Date(transaction.date) > new Date(current.latestDate) ? transaction.date : current.latestDate,
+          total: current.total + amount,
+        }
+      : {
+          key,
+          count: 1,
+          latestDate: transaction.date,
+          label: transaction.importFileId ? "Imported batch" : "Uploaded statement",
+          total: amount,
+        };
+
+    importGroups.set(key, next);
+  }
+
+  return Array.from(importGroups.values()).sort(
+    (left, right) => new Date(right.latestDate).getTime() - new Date(left.latestDate).getTime()
+  );
 };
 
 const getCheckpointTone = (status?: StatementCheckpoint["status"] | null) => {
@@ -209,7 +304,9 @@ function ActionIcon({
     | "upload"
     | "history"
     | "chevron-right"
-    | "warning";
+    | "warning"
+    | "check"
+    | "clock";
 }) {
   const common = {
     width: 14,
@@ -323,6 +420,19 @@ function ActionIcon({
           <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" />
           <path d="M12 9v4" />
           <path d="M12 17h.01" />
+        </svg>
+      );
+    case "check":
+      return (
+        <svg {...common}>
+          <path d="m5 13 4 4 10-10" />
+        </svg>
+      );
+    case "clock":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9" />
+          <path d="M12 7v5l3 2" />
         </svg>
       );
     case "chevron-down":
@@ -685,6 +795,12 @@ function AccountsPageContent() {
     return checkpointsByAccountId;
   }, [statementCheckpoints]);
 
+  const latestCheckpoint = useMemo(() => drawerStatementCheckpoints[0] ?? null, [drawerStatementCheckpoints]);
+  const selectedAccountCheckpointSummary = useMemo(
+    () => getCheckpointSummary(latestCheckpoint),
+    [latestCheckpoint]
+  );
+
   const searchedAccounts = useMemo(() => {
     const term = searchQuery.trim().toLowerCase();
     const base = term
@@ -735,6 +851,11 @@ function AccountsPageContent() {
       { assets: 0, liabilities: 0, netWorth: 0 }
     );
   }, [reconciledAccounts]);
+
+  const spendableAmount = useMemo(
+    () => reconciledAccounts.reduce((sum, account) => sum + getSpendableBalance(account), 0),
+    [reconciledAccounts]
+  );
 
   const accountGroups = useMemo(() => {
     const groups = [
@@ -817,8 +938,14 @@ function AccountsPageContent() {
     () => selectedAccountTransactions.find((transaction) => transaction.merchantRaw === "Beginning balance") ?? null,
     [selectedAccountTransactions]
   );
-
-  const latestCheckpoint = useMemo(() => drawerStatementCheckpoints[0] ?? null, [drawerStatementCheckpoints]);
+  const selectedAccountImportSummaries = useMemo(
+    () => buildImportSummaries(selectedAccountTransactions),
+    [selectedAccountTransactions]
+  );
+  const selectedAccountBalanceContext = useMemo(
+    () => (selectedAccount ? getBalanceContext(selectedAccount) : null),
+    [selectedAccount]
+  );
   const manualAccountBrand = useMemo(
     () =>
       getAccountBrand({
@@ -1093,11 +1220,12 @@ function AccountsPageContent() {
             <article className="accounts-overview-card glass">
               <p className="eyebrow">Net worth</p>
               <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.netWorth)}</strong>
-              <span>
-                {accountsLoading
-                  ? "Loading accounts"
-                  : `${accounts.length} accounts across ${workspaces.length} workspace${workspaces.length === 1 ? "" : "s"}`}
-              </span>
+              <span>Assets minus liabilities across the workspace</span>
+            </article>
+            <article className="accounts-overview-card glass">
+              <p className="eyebrow">Spendable</p>
+              <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(spendableAmount)}</strong>
+              <span>Cash, wallets, and bank balances you can use now</span>
             </article>
             <article className="accounts-overview-card glass">
               <p className="eyebrow">Assets</p>
@@ -1172,8 +1300,8 @@ function AccountsPageContent() {
                       <span className={`accounts-group__tone accounts-group__tone--${group.tone}`}>{group.title}</span>
                     </div>
 
-                      <div className="accounts-card-grid" aria-label={`${group.title} accounts`}>
-                        {group.rows.map((account) => {
+                    <div className="accounts-card-grid" aria-label={`${group.title} accounts`}>
+                      {group.rows.map((account) => {
                           const value = parseAmount(account.balance);
                           const isLiability = getEffectiveAccountType(account) === "credit_card";
                           const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
@@ -1184,7 +1312,8 @@ function AccountsPageContent() {
                             type: getEffectiveAccountType(account),
                           });
                           const checkpoint = latestCheckpointsByAccountId.get(account.id) ?? null;
-                          const checkpointTone = getCheckpointTone(checkpoint?.status ?? null);
+                          const checkpointSummary = getCheckpointSummary(checkpoint);
+                          const balanceContext = getBalanceContext(account);
                           const balanceValue = isLiability ? -Math.abs(value) : value;
                           const sourceLabel = account.source === "manual" ? "Manual" : "Imported";
                           return (
@@ -1257,6 +1386,16 @@ function AccountsPageContent() {
                                 <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
                                   {currencyFormatter.format(balanceValue)}
                                 </div>
+                                <div className="accounts-account-card__balance-meta">
+                                  <span>{balanceContext.label}</span>
+                                  <span className={`accounts-account-card__balance-pill is-${balanceContext.tone}`}>
+                                    {balanceContext.tone === "good"
+                                      ? "Spendable"
+                                      : balanceContext.tone === "danger"
+                                        ? "Outstanding"
+                                        : "Tracked"}
+                                  </span>
+                                </div>
                                 <div className="accounts-account-card__copy">
                                   <span className={`accounts-type-tag ${getAccountTone(account) === "liability" ? "is-liability" : ""}`}>
                                     {getAccountDisplayType(account)}
@@ -1265,7 +1404,15 @@ function AccountsPageContent() {
                                   <span>{formatDate(account.updatedAt)}</span>
                                 </div>
                                 <div className="accounts-account-card__trust">
-                                  <span className={`accounts-summary-chip is-${checkpointTone}`}>{getCheckpointTrustLabel(checkpoint)}</span>
+                                  <div className={`accounts-checkpoint-badge is-${checkpointSummary.tone}`}>
+                                    <span className="accounts-checkpoint-badge__icon">
+                                      <ActionIcon name={checkpointSummary.icon} />
+                                    </span>
+                                    <div>
+                                      <strong>{checkpointSummary.label}</strong>
+                                      <span>{checkpointSummary.detail}</span>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </article>
@@ -1349,6 +1496,14 @@ function AccountsPageContent() {
               </div>
             )}
 
+            <div className="accounts-summary-guide">
+              <strong>Balance guide</strong>
+              <p>
+                Current balance is the number on each account card. Spendable amount is the cash-like balance you can use now.
+                Net worth is assets minus liabilities across the workspace.
+              </p>
+            </div>
+
             <div className="accounts-summary-group">
               <p className="eyebrow">Import shortcuts</p>
               <div className="accounts-summary-actions">
@@ -1419,6 +1574,14 @@ function AccountsPageContent() {
                 <span>Status</span>
                 <strong>{getAccountWarning(selectedAccount, duplicateCounts.get(`${selectedAccount.name.trim().toLowerCase()}::${(selectedAccount.institution ?? "").trim().toLowerCase()}`) ?? 0) ?? "Ready"}</strong>
               </div>
+            </div>
+
+            <div className="accounts-drawer__guide">
+              <strong>{selectedAccountBalanceContext?.label ?? "Balance guide"}</strong>
+              <p>
+                Current balance is the number on this account now. Spendable amount is the cash-like portion you can use right away.
+                Net worth is tracked at the workspace level.
+              </p>
             </div>
 
             {drawerNotice ? (
@@ -1512,16 +1675,41 @@ function AccountsPageContent() {
                   <ActionIcon name="calendar" />
                 </div>
                 <div className="accounts-drawer__checkpoint">
-                  <div className="accounts-drawer__note">
-                    <strong>{latestCheckpoint.statementEndDate ? formatDate(latestCheckpoint.statementEndDate) : "Unknown date"}</strong>
-                    <span>
-                      {latestCheckpoint.status === "mismatch"
-                        ? latestCheckpoint.mismatchReason ?? "Mismatch detected"
-                        : latestCheckpoint.status === "reconciled"
-                          ? "Reconciled"
-                          : "Pending"}
-                    </span>
-                    <span>{currencyFormatter.format(parseAmount(latestCheckpoint.endingBalance))}</span>
+                  <div className={`accounts-drawer__checkpoint-hero is-${getCheckpointSummary(latestCheckpoint).tone}`}>
+                    <div className="accounts-drawer__checkpoint-hero-head">
+                      <div className={`accounts-checkpoint-badge is-${getCheckpointSummary(latestCheckpoint).tone}`}>
+                        <span className="accounts-checkpoint-badge__icon">
+                          <ActionIcon name={getCheckpointSummary(latestCheckpoint).icon} />
+                        </span>
+                        <div>
+                          <strong>{getCheckpointSummary(latestCheckpoint).label}</strong>
+                          <span>{getCheckpointSummary(latestCheckpoint).detail}</span>
+                        </div>
+                      </div>
+                      <span className={`accounts-summary-chip is-${getCheckpointTone(latestCheckpoint.status)}`}>
+                        {latestCheckpoint.rowCount} rows
+                      </span>
+                    </div>
+                    <div className="accounts-drawer__checkpoint-grid">
+                      <div>
+                        <span>Statement date</span>
+                        <strong>{latestCheckpoint.statementEndDate ? formatDate(latestCheckpoint.statementEndDate) : "Unknown date"}</strong>
+                      </div>
+                      <div>
+                        <span>Statement balance</span>
+                        <strong>{currencyFormatter.format(parseAmount(latestCheckpoint.endingBalance))}</strong>
+                      </div>
+                      <div>
+                        <span>Difference</span>
+                        <strong>
+                          {latestCheckpoint.status === "mismatch"
+                            ? latestCheckpoint.mismatchReason ?? "Mismatch detected"
+                            : latestCheckpoint.status === "reconciled"
+                              ? "Matches ledger"
+                              : "Pending review"}
+                        </strong>
+                      </div>
+                    </div>
                   </div>
                   <div className="accounts-drawer__actions">
                     <button className="button button-secondary button-small" type="button" onClick={openFullAccountPage}>
@@ -1544,10 +1732,24 @@ function AccountsPageContent() {
 
             <section className="accounts-drawer__section">
               <div className="accounts-drawer__section-head">
-                <h5>Import files</h5>
+                <h5>Recent imports</h5>
                 <ActionIcon name="upload" />
               </div>
-              <p className="accounts-drawer__note">Bring in CSV or PDF support files to map balances and transactions back to this account.</p>
+              {selectedAccountImportSummaries.length > 0 ? (
+                <div className="accounts-drawer__imports">
+                  {selectedAccountImportSummaries.slice(0, 3).map((summary) => (
+                    <div key={summary.key} className="accounts-drawer__import">
+                      <div>
+                        <strong>{summary.label}</strong>
+                        <span>{summary.count} rows · {formatDate(summary.latestDate)}</span>
+                      </div>
+                      <strong>{currencyFormatter.format(summary.total)}</strong>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="accounts-drawer__note">No uploaded import batches are linked to this account yet.</p>
+              )}
               <div className="accounts-drawer__actions">
                 <button className="button button-secondary button-small" type="button" onClick={openImportFiles}>
                   Import files
@@ -1706,53 +1908,53 @@ function AccountsPageContent() {
         accountRules={accountRules}
         defaultAccountId={selectedAccount?.id ?? accounts[0]?.id ?? null}
         onClose={() => setImportOpen(false)}
-      onImported={async (summary) => {
-        if (summary.optimistic) {
+        onImported={async (summary) => {
+          if (summary.optimistic) {
+            const optimisticAccount = buildOptimisticImportedAccount(summary);
+            const previewTransactions = summary.previewTransactions ?? [];
+            if (optimisticAccount) {
+              flushSync(() => {
+                setAccountsLoading(false);
+                setAccounts((current) => {
+                  const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
+                  if (existingIndex >= 0) {
+                    return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
+                  }
+                  return [optimisticAccount, ...current];
+                });
+              });
+            }
+            if (previewTransactions.length > 0) {
+              flushSync(() => {
+                setTransactions((current) => {
+                  const previewIds = new Set(previewTransactions.map((transaction) => transaction.id));
+                  const filtered = current.filter((transaction) => {
+                    if (previewIds.has(transaction.id)) {
+                      return false;
+                    }
+                    return !(transaction.source === "upload" && transaction.accountId === summary.accountId);
+                  });
+                  return [...previewTransactions, ...filtered];
+                });
+              });
+            }
+            return;
+          }
+
+          setPendingImportSummary(summary);
+
+          if (summary.optimisticAccountId) {
+            setAccounts((current) => current.filter((account) => account.id !== summary.optimisticAccountId));
+          }
+          const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+          if (importedAccountId) {
+            setTransactions((current) => current.filter((transaction) => !(transaction.source === "upload" && transaction.accountId === importedAccountId)));
+          }
           const optimisticAccount = buildOptimisticImportedAccount(summary);
-          const previewTransactions = summary.previewTransactions ?? [];
           if (optimisticAccount) {
             flushSync(() => {
               setAccountsLoading(false);
               setAccounts((current) => {
-                const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
-                if (existingIndex >= 0) {
-                  return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
-                }
-                return [optimisticAccount, ...current];
-              });
-            });
-          }
-          if (previewTransactions.length > 0) {
-            flushSync(() => {
-              setTransactions((current) => {
-                const previewIds = new Set(previewTransactions.map((transaction) => transaction.id));
-                const filtered = current.filter((transaction) => {
-                  if (previewIds.has(transaction.id)) {
-                    return false;
-                  }
-                  return !(transaction.source === "upload" && transaction.accountId === summary.accountId);
-                });
-                return [...previewTransactions, ...filtered];
-              });
-            });
-          }
-          return;
-        }
-
-        setPendingImportSummary(summary);
-
-        if (summary.optimisticAccountId) {
-          setAccounts((current) => current.filter((account) => account.id !== summary.optimisticAccountId));
-        }
-        const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
-        if (importedAccountId) {
-          setTransactions((current) => current.filter((transaction) => !(transaction.source === "upload" && transaction.accountId === importedAccountId)));
-        }
-        const optimisticAccount = buildOptimisticImportedAccount(summary);
-        if (optimisticAccount) {
-          flushSync(() => {
-            setAccountsLoading(false);
-            setAccounts((current) => {
                 const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
                 if (existingIndex >= 0) {
                   return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
