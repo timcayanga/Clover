@@ -1,3 +1,4 @@
+import { Prisma, type TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
@@ -25,6 +26,8 @@ import {
 } from "@/lib/data-engine";
 import { getTrailingBalanceFromParsedRows, inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { parseImportTextWithOpenAIFallback } from "@/lib/openai-import-parser";
+
+type JsonValue = Prisma.InputJsonValue;
 
 type ImportInsightSummary = {
   incomeTotal: number;

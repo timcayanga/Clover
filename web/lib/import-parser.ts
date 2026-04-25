@@ -42,18 +42,6 @@ const delimiterForFile = (fileType: string, fileName: string) => {
   return ",";
 };
 
-const scoreMetadataConfidence = (metadata: Omit<DetectedStatementMetadata, "confidence">) => {
-  let score = 0;
-  if (metadata.institution) score += 35;
-  if (metadata.accountNumber) score += 35;
-  if (metadata.accountName) score += 10;
-  if (metadata.startDate) score += 5;
-  if (metadata.endDate) score += 5;
-  if (metadata.openingBalance !== null) score += 5;
-  if (metadata.endingBalance !== null) score += 5;
-  return Math.min(100, score);
-};
-
 const guessCategoryName = (text: string, type: TransactionType) => {
   const lower = text.toLowerCase();
   const compact = compactWhitespace(text).toLowerCase();
