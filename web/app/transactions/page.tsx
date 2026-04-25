@@ -12,6 +12,7 @@ import {
 import { flushSync } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import {
   analyticsOnceKey,
   capturePostHogClientEvent,
@@ -1171,6 +1172,7 @@ function TransactionsPageContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [isWorkspacesLoaded, setIsWorkspacesLoaded] = useState(false);
   const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(true);
+  const [hasInitialTransactionsLoaded, setHasInitialTransactionsLoaded] = useState(Boolean(initialCachedWorkspace));
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
@@ -1269,6 +1271,7 @@ function TransactionsPageContent() {
         firstReviewTransactionIndex: null,
       });
       setIsWorkspaceDataReady(true);
+      setHasInitialTransactionsLoaded(true);
       return;
     }
 
@@ -1359,6 +1362,7 @@ function TransactionsPageContent() {
 
       if (!options?.background) {
         setIsWorkspaceDataReady(true);
+        setHasInitialTransactionsLoaded(true);
       }
     } catch {
       if (requestId !== transactionsLoadRequestRef.current) {
@@ -1368,6 +1372,7 @@ function TransactionsPageContent() {
       if (!options?.background) {
         setMessage("Unable to load transactions.");
         setIsWorkspaceDataReady(true);
+        setHasInitialTransactionsLoaded(true);
       }
     }
   };
@@ -1406,6 +1411,7 @@ function TransactionsPageContent() {
         firstReviewTransactionIndex: null,
       });
       setIsWorkspaceDataReady(true);
+      setHasInitialTransactionsLoaded(true);
       return;
     }
 
@@ -1431,6 +1437,7 @@ function TransactionsPageContent() {
         }
       );
       setIsWorkspaceDataReady(true);
+      setHasInitialTransactionsLoaded(true);
       void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
       return;
     }
@@ -1440,7 +1447,8 @@ function TransactionsPageContent() {
     setTransactions([]);
     setImports([]);
     setIsWorkspaceDataReady(false);
-    void loadWorkspaceMetadata(selectedWorkspaceId);
+    setHasInitialTransactionsLoaded(false);
+    void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true });
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
@@ -3204,6 +3212,7 @@ function TransactionsPageContent() {
   const hasReviewItems = warningTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
   const isTableLoading = !selectedWorkspaceId ? !isWorkspacesLoaded : !isWorkspaceDataReady;
+  const shouldShowInitialLoadingScreen = isTableLoading && !hasInitialTransactionsLoaded;
 
   useEffect(() => {
     if (!selectedWorkspaceId || !isWorkspaceDataReady) {
@@ -3259,6 +3268,10 @@ function TransactionsPageContent() {
       mediaQuery.removeEventListener("change", updateViewport);
     };
   }, []);
+
+  if (shouldShowInitialLoadingScreen) {
+    return <CloverLoadingScreen label="transactions" />;
+  }
 
   return (
     <CloverShell active="transactions" title="Transactions" showTopbar={false}>
