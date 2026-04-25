@@ -14591,8 +14591,8 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-plan-card__paypal {
-  width: 100%;
-  min-height: 44px;
+  width: min(100%, 220px);
+  min-height: 40px;
 }
 
 .settings-plan-card__current .settings-pill {

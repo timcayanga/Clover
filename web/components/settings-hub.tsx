@@ -660,21 +660,23 @@ export function SettingsHub({
                         ) : isFree ? (
                           <div className="settings-plan-card__cta">
                             {option.value === "annual" && annualCheckoutReady ? (
-                              <PayPalSubscribeButton
-                                clientId={paypalClientId!}
-                                planId={paypalAnnualPlanId!}
-                                customId={workspaceId}
-                                buyerCountry={paypalBuyerCountry}
-                                className="settings-plan-card__paypal"
-                              />
-                            ) : option.value === "monthly" && monthlyCheckoutReady ? (
-                              <PayPalSubscribeButton
-                                clientId={paypalClientId!}
-                                planId={paypalMonthlyPlanId!}
-                                customId={workspaceId}
-                                buyerCountry={paypalBuyerCountry}
-                                className="settings-plan-card__paypal"
-                              />
+                            <PayPalSubscribeButton
+                              clientId={paypalClientId!}
+                              planId={paypalAnnualPlanId!}
+                              customId={workspaceId}
+                              buyerCountry={paypalBuyerCountry}
+                              className="settings-plan-card__paypal"
+                              fundingSource="card"
+                            />
+                          ) : option.value === "monthly" && monthlyCheckoutReady ? (
+                            <PayPalSubscribeButton
+                              clientId={paypalClientId!}
+                              planId={paypalMonthlyPlanId!}
+                              customId={workspaceId}
+                              buyerCountry={paypalBuyerCountry}
+                              className="settings-plan-card__paypal"
+                              fundingSource="card"
+                            />
                             ) : (
                               <p className="settings-helper">PayPal checkout is not configured yet.</p>
                             )}

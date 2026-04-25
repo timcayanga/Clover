@@ -109,8 +109,8 @@ export function PayPalSubscribeButton({
           layout: "vertical",
           color: "white",
           shape: "pill",
-          label: "subscribe",
-          height: 45,
+          label: fundingSource === "card" ? "pay" : "subscribe",
+          height: fundingSource === "card" ? 40 : 45,
         },
         createSubscription: (_data, actions) =>
           actions.subscription.create({
