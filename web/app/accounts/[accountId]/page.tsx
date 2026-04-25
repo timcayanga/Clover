@@ -305,11 +305,12 @@ function AccountDetailPageContent() {
 
         setAccount(nextAccount);
 
-        const [transactionsResponse, checkpointsResponse] = await Promise.all([
-          fetch(`/api/transactions?workspaceId=${encodeURIComponent(nextAccount.workspaceId)}&accountId=${encodeURIComponent(nextAccount.id)}`),
-          fetch(`/api/accounts/${accountId}/statement-checkpoints`),
-        ]);
+        const transactionsPromise = fetch(
+          `/api/transactions?workspaceId=${encodeURIComponent(nextAccount.workspaceId)}&accountId=${encodeURIComponent(nextAccount.id)}`
+        );
+        const checkpointsPromise = fetch(`/api/accounts/${accountId}/statement-checkpoints`);
 
+        const transactionsResponse = await transactionsPromise;
         if (!transactionsResponse.ok) {
           throw new Error("Unable to load account transactions.");
         }
@@ -321,12 +322,18 @@ function AccountDetailPageContent() {
           setMessage("");
         }
 
-        if (checkpointsResponse.ok) {
-          const checkpointsPayload = await checkpointsResponse.json();
-          if (!cancelled) {
-            setCheckpoints(Array.isArray(checkpointsPayload.checkpoints) ? (checkpointsPayload.checkpoints as StatementCheckpoint[]) : []);
-          }
-        }
+        void checkpointsPromise
+          .then(async (response) => {
+            if (!response.ok || cancelled) {
+              return;
+            }
+
+            const checkpointsPayload = (await response.json()) as { checkpoints?: StatementCheckpoint[] } | null;
+            if (!cancelled) {
+              setCheckpoints(Array.isArray(checkpointsPayload?.checkpoints) ? checkpointsPayload!.checkpoints : []);
+            }
+          })
+          .catch(() => null);
       } catch (error) {
         if (!cancelled) {
           setMessage(error instanceof Error ? error.message : "Unable to load this account.");
