@@ -3236,6 +3236,10 @@ function TransactionsPageContent() {
       return;
     }
 
+    if (pendingImportSummary.optimistic) {
+      return;
+    }
+
     const targetAccountId = pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
     if (!targetAccountId) {
       return;
