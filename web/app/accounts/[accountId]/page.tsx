@@ -7,7 +7,7 @@ import { AccountBrandMark } from "@/components/account-brand-mark";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { getAccountBrand } from "@/lib/account-brand";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
-import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import { clearWorkspaceCache, normalizeImportedAccountKey } from "@/lib/workspace-cache";
 
 type Account = {
   id: string;
@@ -465,13 +465,13 @@ function AccountDetailPageContent() {
   };
 
   const deleteAccount = async () => {
-    if (!account) {
+    if (!accountId) {
       return;
     }
 
     setDeleteBusy(true);
     try {
-      const response = await fetch(`/api/accounts/${account.id}`, {
+      const response = await fetch(`/api/accounts/${accountId}`, {
         method: "DELETE",
       });
 
@@ -486,6 +486,12 @@ function AccountDetailPageContent() {
           // Ignore JSON parsing failures and fall back to the generic error.
         }
         throw new Error(errorMessage);
+      }
+
+      const payload = (await response.json().catch(() => null)) as { account?: { workspaceId?: string | null } } | null;
+      const workspaceId = payload?.account?.workspaceId ?? account?.workspaceId ?? null;
+      if (workspaceId) {
+        clearWorkspaceCache(workspaceId);
       }
 
       router.replace("/accounts");
