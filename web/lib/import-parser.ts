@@ -1043,8 +1043,22 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
           return null;
         })()
       : null;
+  const rawAccountNumber =
+    text.match(/ACCOUNT\s*(?:NBR|NO\.?|NUMBER|#)\s*[:\-]?\s*([0-9][0-9\s-]{5,})/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+    text.match(/ACCOUNT\s+SUMMARY\s*([0-9][0-9\s-]{5,})/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+    null;
+  const directAccountNumber =
+    normalized.match(/ACCOUNT\s*(?:NBR|NO\.?|NUMBER|#)\s*[:\-]?\s*([0-9][0-9\s-]{5,})/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+    null;
+  const explicitAccountNumberMatch =
+    normalized.match(/ACCOUNT\s*(?:NBR|NO\.?|NUMBER|#)\s*[:\-]?\s*([0-9][0-9\s-]{5,})/i)?.[1] ??
+    lines.find((line) => /^ACCOUNT\s*(?:NBR|NO\.?|NUMBER|#)/i.test(line))?.replace(/[^0-9]/g, "") ??
+    null;
   const cardAccountMatch = normalized.match(/\bBE\d{8}\b/i)?.[0] ?? null;
   const accountSection =
+    rawAccountNumber ??
+    directAccountNumber ??
+    (explicitAccountNumberMatch ? explicitAccountNumberMatch.replace(/\D/g, "").slice(0, 16) : null) ??
     splitAccountNumber ??
     headerPrefix.match(/\b\d{4}[-\s]?\d{4}[-\s]?\d{2}\b/)?.[0] ??
     headerCompact.match(/(?:PERIODCOVERED.*?NO|ACCOUNT(?:NO|NUMBER|#)|ACCT(?:NO|NUMBER|#)|A\/C(?:NO|NUMBER|#)|NO):?([0-9-]{8,})/i)?.[1] ??
@@ -1053,7 +1067,7 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     "";
   const accountNumber =
     (/^BE\d{8}$/i.test(accountSection) ? accountSection.toUpperCase() : null) ||
-    accountSection.replace(/\D/g, "").slice(0, 10) ||
+    accountSection.replace(/\D/g, "").slice(0, 16) ||
     null;
   const accountName = accountNumber ? `BPI ${accountNumber.slice(-4)}` : "BPI";
 
@@ -1605,6 +1619,43 @@ const normalizeBdoText = (text: string) =>
 const detectBdoAccountNumberFromText = (text: string) => {
   const normalized = normalizeBdoText(text);
   const compact = compactWhitespace(normalized);
+  const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const accountLabelPattern =
+    /(?:ACCOUNT\s*(?:NBR|NO\.?|NUMBER|#)|ACCT\s*(?:NBR|NO\.?|NUMBER|#)|A\/C\s*(?:NBR|NO\.?|NUMBER|#)|CARD\s*(?:NO\.?|NUMBER|#)|NO)\s*[:\-]?\s*(\d[\d\s-]{6,})/i;
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const normalizedLine = line.replace(/^(?:\d+\s+)+/, "");
+    if (!/(ACCOUNT|ACCT|A\/C|CARD)\s*(?:NBR|NO\.?|NUMBER|#)|\bNO\b/i.test(line) && !/(ACCOUNT|ACCT|A\/C|CARD)\s*(?:NBR|NO\.?|NUMBER|#)|\bNO\b/i.test(normalizedLine)) {
+      continue;
+    }
+
+    const directMatch = line.match(accountLabelPattern) ?? normalizedLine.match(accountLabelPattern);
+    if (directMatch) {
+      const digits = directMatch[1].replace(/\D/g, "").slice(0, 16);
+      if (digits.length >= 8) {
+        return digits;
+      }
+    }
+
+    const followingLine = lines[index + 1] ?? "";
+    const combinedDigits = `${line} ${followingLine}`.replace(/[^0-9]/g, "").slice(0, 16);
+    if (combinedDigits.length >= 8) {
+      return combinedDigits;
+    }
+  }
+
+  const accountNbrHeadingIndex = lines.findIndex((line) => {
+    const lineCompact = compactWhitespace(line).replace(/\s+/g, "");
+    return /^ACCOUNT(?:NBR|NO\.?|NUMBER|#)/i.test(line) || /^ACCOUNT(?:NBR|NO\.?|NUMBER|#)/i.test(lineCompact);
+  });
+  if (accountNbrHeadingIndex >= 0) {
+    const headingWindow = lines.slice(accountNbrHeadingIndex, accountNbrHeadingIndex + 5);
+    const joinedDigits = headingWindow.map((line) => line.replace(/[^0-9]/g, "")).join("");
+    if (joinedDigits.length >= 8) {
+      return joinedDigits.slice(0, 16);
+    }
+  }
 
   const labeledPatterns = [
     /ACCOUNT\s*(?:NBR|NO\.?|NUMBER|#)\s*[:\-]?\s*([0-9][0-9\s-]{5,})/i,
@@ -1621,10 +1672,15 @@ const detectBdoAccountNumberFromText = (text: string) => {
     }
   }
 
-  const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
   const accountHeadingIndex = lines.findIndex((line) => /^ACCOUNT\s*(?:NBR|NO\.?|NUMBER|#|SUMMARY)\b/i.test(line));
   if (accountHeadingIndex >= 0) {
-    for (const line of lines.slice(accountHeadingIndex, accountHeadingIndex + 4)) {
+    const headingWindow = lines.slice(accountHeadingIndex, accountHeadingIndex + 4);
+    const windowDigits = headingWindow.map((line) => line.replace(/[^0-9]/g, "")).join("");
+    if (windowDigits.length >= 8) {
+      return windowDigits.slice(0, 16);
+    }
+
+    for (const line of headingWindow) {
       const digits = line.replace(/[^0-9]/g, "");
       if (digits.length >= 8) {
         return digits.slice(0, 16);
@@ -3131,6 +3187,11 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
   const cimbMetadata = parseCimbImportText(text);
   if (cimbMetadata) {
     return cimbMetadata.metadata;
+  }
+
+  const bdoParsed = parseBdoSavingsImportText(text);
+  if (bdoParsed) {
+    return bdoParsed.metadata;
   }
 
   const normalized = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
