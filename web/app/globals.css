@@ -2905,6 +2905,101 @@ label {
   justify-content: flex-end;
 }
 
+.reports-plan-split {
+  display: grid;
+  gap: 18px;
+  padding: 18px 20px;
+  border: 1px solid rgba(3, 168, 192, 0.14);
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(247, 251, 252, 0.95));
+  box-shadow: var(--shadow);
+}
+
+.reports-plan-split__intro h3 {
+  margin: 8px 0 10px;
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+
+.reports-plan-split__intro p:last-child {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.reports-plan-split__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.reports-plan-card {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 18px;
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.reports-plan-card--active {
+  border-color: rgba(15, 163, 179, 0.24);
+  background:
+    linear-gradient(180deg, rgba(3, 168, 192, 0.08), rgba(255, 255, 255, 0.98)),
+    rgba(255, 255, 255, 0.96);
+}
+
+.reports-plan-card--pro {
+  border-color: rgba(59, 130, 246, 0.16);
+}
+
+.reports-plan-card__head h4 {
+  margin: 8px 0 8px;
+  font-size: 20px;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+}
+
+.reports-plan-card__head p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.reports-plan-card__list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reports-plan-card__list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.reports-plan-card__list li::before {
+  content: "•";
+  flex: none;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.reports-plan-split__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .reports-summary-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -11394,6 +11489,14 @@ input.transaction-inline-edit--amount::placeholder {
   .reports-pro-preview {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .reports-plan-split__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .reports-plan-split__actions {
+    justify-content: flex-start;
   }
 
   .reports-pro-preview__actions {

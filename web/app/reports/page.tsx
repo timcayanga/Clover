@@ -649,6 +649,23 @@ async function ReportsStream({
   });
   const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
   const isPro = user.planTier === "pro";
+  const freePlanReports = [
+    "Cash flow",
+    "Spending by category",
+    "Recurring payments",
+    "Top merchants",
+    "Monthly summary",
+    "Review queue",
+    "Data health",
+  ] as const;
+  const proPlanReports = [
+    "What changed / why / what next",
+    "Goal lens",
+    "Attention strip",
+    "Decision lens",
+    "Account health detail",
+    "Comparison modes",
+  ] as const;
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
@@ -1648,16 +1665,43 @@ async function ReportsStream({
             </section>
           </>
         ) : (
-          <section className="reports-pro-preview glass">
-            <div>
-              <p className="eyebrow">Pro preview</p>
-              <h3>Unlock the explanation layer.</h3>
+          <section className="reports-plan-split glass">
+            <div className="reports-plan-split__intro">
+              <p className="eyebrow">Plan split</p>
+              <h3>Keep the essentials on Free. Add the explanation layer on Pro.</h3>
               <p>
-                Pro adds the briefing cards that explain what changed, why it changed, and what to do next, plus goal context and
-                deeper account detail.
+                Free stays focused on the reports that help users scan, review, and clean up. Pro adds the analytical layer that
+                turns the same data into clear next steps.
               </p>
             </div>
-            <div className="reports-pro-preview__actions">
+            <div className="reports-plan-split__grid">
+              <article className="reports-plan-card reports-plan-card--active">
+                <div className="reports-plan-card__head">
+                  <p className="eyebrow">Free plan</p>
+                  <h4>Reports users can scan at a glance.</h4>
+                  <p>Operational reporting for cash flow, spending, cleanup, and recurring costs.</p>
+                </div>
+                <ul className="reports-plan-card__list">
+                  {freePlanReports.map((report) => (
+                    <li key={report}>{report}</li>
+                  ))}
+                </ul>
+              </article>
+
+              <article className="reports-plan-card reports-plan-card--pro">
+                <div className="reports-plan-card__head">
+                  <p className="eyebrow">Pro plan</p>
+                  <h4>Reports that explain what changed and what to do next.</h4>
+                  <p>Decision support for goal progress, account health, and the context behind spending shifts.</p>
+                </div>
+                <ul className="reports-plan-card__list">
+                  {proPlanReports.map((report) => (
+                    <li key={report}>{report}</li>
+                  ))}
+                </ul>
+              </article>
+            </div>
+            <div className="reports-plan-split__actions">
               <Link className="button button-primary button-pill" href="/pricing">
                 Upgrade to Pro
               </Link>
