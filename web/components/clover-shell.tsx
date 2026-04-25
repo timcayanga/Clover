@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { persistSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
+import { clearAllWorkspaceCaches, clearLegacyWorkspaceCaches } from "@/lib/workspace-cache";
 
 type CloverShellProps = {
   active: "dashboard" | "accounts" | "transactions" | "reports" | "insights" | "goals" | "settings" | "profile" | "notifications";
@@ -130,11 +131,9 @@ function MenuIcon({ name }: { name: IconName }) {
     case "reports":
       return (
         <svg {...common}>
-          <path d="M4 19h16" />
-          <path d="M6 16V10.5" />
-          <path d="M11 16V7.5" />
-          <path d="M16 16V12" />
-          <path d="M6 16h12" />
+          <path d="M12 12V4a8 8 0 1 1-8 8h8Z" />
+          <path d="M13.5 4.2A8 8 0 0 1 20 10.8h-6.5Z" />
+          <path d="M4 12a8 8 0 0 1 6.5-7.8V12Z" />
         </svg>
       );
     case "insights":
@@ -196,6 +195,7 @@ export function CloverShell({
   useEffect(() => {
     setIsSidebarOpen(false);
     syncSelectedWorkspaceCookie();
+    clearLegacyWorkspaceCaches();
     const handlePointerDown = (event: MouseEvent) => {
       if (!shellRef.current || event.target instanceof Node === false) {
         return;
@@ -224,6 +224,7 @@ export function CloverShell({
   const notificationCount = notifications.length;
   const handleSignOut = () => {
     persistSelectedWorkspaceId("");
+    clearAllWorkspaceCaches();
     void signOut({
       redirectUrl: "/",
     }).catch(() => {
