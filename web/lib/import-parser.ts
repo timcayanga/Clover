@@ -386,11 +386,12 @@ const bpiCreditCardStatementMetadata = (text: string): DetectedStatementMetadata
   const endingBalance =
     parseMoney(compact.match(/TOTALAMOUNTDUE([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(compact.match(/ENDINGBALANCE([0-9,]+\.\d{2})/i)?.[1] ?? null);
+  const accountNumber = detectAccountNumberFromText(normalized) ?? "9001";
 
   return {
     institution: "BPI",
-    accountNumber: "9001",
-    accountName: formatSimpleBankAccountName("BPI", "9001"),
+    accountNumber,
+    accountName: formatSimpleBankAccountName("BPI", accountNumber.slice(-4)),
     accountType: "credit_card",
     openingBalance: previousBalance,
     endingBalance,
@@ -1228,7 +1229,8 @@ const parseBpiCreditCardImportText = (text: string) => {
     .map((segment) =>
       parseBpiCreditCardSegment(segment, {
         year: startYear,
-        accountName: metadata.accountName ?? formatSimpleBankAccountName("BPI", "9001"),
+        accountName: metadata.accountName ?? formatSimpleBankAccountName("BPI", metadata.accountNumber?.slice(-4) ?? "9001"),
+        accountNumber: metadata.accountNumber ?? null,
         institution: metadata.institution ?? "BPI",
         statementDate: metadata.startDate,
         paymentDueDate: metadata.endDate,
@@ -1280,7 +1282,10 @@ const isBpiCreditCardBoilerplateLine = (line: string) => {
     compact.startsWith("TOTALOUTSTANDINGBALANCE") ||
     compact === "REWARDS" ||
     compact.includes("BPIPOINTS") ||
-    compact.startsWith("BPISIGNATURECARD")
+    compact.startsWith("BPISIGNATURECARD") ||
+    compact.includes("BALANCESUMMARY") ||
+    compact.includes("TRANSACTIONLASTPAYMENTDESCRIPTIONPURCHASEAMOUNTREMAININGDATEBALANCE") ||
+    compact.includes("SIPBALANCESUMMARY")
   );
 };
 
@@ -1295,6 +1300,7 @@ const parseBpiCreditCardSegment = (
   state: {
     year: number;
     accountName: string;
+    accountNumber: string | null;
     institution: string | null;
     statementDate: string | null;
     paymentDueDate: string | null;
@@ -1382,7 +1388,7 @@ const parseBpiCreditCardSegment = (
     rawPayload: {
       bank: "BPI",
       accountName: state.accountName,
-      accountNumber: "9001",
+      accountNumber: state.accountNumber ?? state.accountName.replace(/\D/g, "").slice(-4) ?? null,
       statementDate: state.statementDate,
       paymentDueDate: state.paymentDueDate,
       saleDate: saleDate.toISOString().slice(0, 10),
