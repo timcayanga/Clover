@@ -9443,6 +9443,14 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 5px;
 }
 
+.accounts-account-card__balance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
 .accounts-account-card__amount {
   font-size: 1.22rem;
   font-weight: 700;
@@ -9454,7 +9462,8 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
+  flex: none;
 }
 
 .accounts-account-card__balance-pill {

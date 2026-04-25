@@ -1505,17 +1505,19 @@ function AccountsPageContent() {
                               </div>
 
                               <div className="accounts-account-card__body">
-                                <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
-                                  {currencyFormatter.format(balanceValue)}
-                                </div>
-                                <div className="accounts-account-card__balance-meta">
-                                  <span className={`accounts-account-card__balance-pill is-${balanceContext.tone}`}>
-                                    {balanceContext.tone === "good"
-                                      ? "Spendable"
-                                      : balanceContext.tone === "danger"
-                                        ? "Outstanding"
-                                        : "Tracked"}
-                                  </span>
+                                <div className="accounts-account-card__balance-row">
+                                  <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
+                                    {currencyFormatter.format(balanceValue)}
+                                  </div>
+                                  <div className="accounts-account-card__balance-meta">
+                                    <span className={`accounts-account-card__balance-pill is-${balanceContext.tone}`}>
+                                      {balanceContext.tone === "good"
+                                        ? "Spendable"
+                                        : balanceContext.tone === "danger"
+                                          ? "Outstanding"
+                                          : "Tracked"}
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
                             </article>
