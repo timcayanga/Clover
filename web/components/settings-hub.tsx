@@ -662,21 +662,19 @@ export function SettingsHub({
                             {option.value === "annual" && annualCheckoutReady ? (
                               <PayPalSubscribeButton
                                 clientId={paypalClientId!}
-                              planId={paypalAnnualPlanId!}
-                              customId={workspaceId}
-                              buyerCountry={paypalBuyerCountry}
-                              className="settings-plan-card__paypal"
-                              fundingSource="card"
-                            />
+                                planId={paypalAnnualPlanId!}
+                                customId={workspaceId}
+                                buyerCountry={paypalBuyerCountry}
+                                className="settings-plan-card__paypal"
+                              />
                             ) : option.value === "monthly" && monthlyCheckoutReady ? (
                               <PayPalSubscribeButton
                                 clientId={paypalClientId!}
-                              planId={paypalMonthlyPlanId!}
-                              customId={workspaceId}
-                              buyerCountry={paypalBuyerCountry}
-                              className="settings-plan-card__paypal"
-                              fundingSource="card"
-                            />
+                                planId={paypalMonthlyPlanId!}
+                                customId={workspaceId}
+                                buyerCountry={paypalBuyerCountry}
+                                className="settings-plan-card__paypal"
+                              />
                             ) : (
                               <p className="settings-helper">PayPal checkout is not configured yet.</p>
                             )}
