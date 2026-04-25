@@ -1561,7 +1561,7 @@ function TransactionsPageContent() {
     customEnd,
   ]);
   const deferredFilteredTransactions = useDeferredValue(filteredTransactions);
-  const [transactionsPageSize, setTransactionsPageSize] = useState(50);
+  const [transactionsPageSize, setTransactionsPageSize] = useState(25);
   const [transactionsPage, setTransactionsPage] = useState(1);
   const totalTransactionPages = Math.max(1, Math.ceil(filteredTransactions.length / Math.max(transactionsPageSize, 1)));
   const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);
