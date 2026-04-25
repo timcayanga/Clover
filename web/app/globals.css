@@ -9440,11 +9440,11 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-account-card__body {
   display: grid;
-  gap: 7px;
+  gap: 5px;
 }
 
 .accounts-account-card__amount {
-  font-size: 1.28rem;
+  font-size: 1.22rem;
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 1;
@@ -9459,7 +9459,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-account-card__balance-meta span:first-child {
   color: var(--muted);
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -9467,10 +9467,10 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-account-card__balance-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 20px;
-  padding: 0 6px;
+  min-height: 18px;
+  padding: 0 5px;
   border-radius: 999px;
-  font-size: 0.64rem;
+  font-size: 0.62rem;
   font-weight: 600;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.9);
@@ -9495,21 +9495,6 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-account-card__amount.is-liability {
   color: var(--bad);
-}
-
-.accounts-account-card__copy {
-  display: flex;
-  gap: 5px;
-  flex-wrap: wrap;
-  align-items: center;
-  color: var(--muted);
-  font-size: 0.7rem;
-}
-
-.accounts-account-card__copy .accounts-type-tag {
-  min-height: 22px;
-  padding-inline: 7px;
-  font-size: 0.66rem;
 }
 
 .accounts-brand-mark {

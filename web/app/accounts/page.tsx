@@ -1438,7 +1438,6 @@ function AccountsPageContent() {
                           });
                           const balanceContext = getBalanceContext(account);
                           const balanceValue = isLiability ? -Math.abs(value) : value;
-                          const sourceLabel = account.source === "manual" ? "Manual" : "Imported";
                           return (
                             <article
                               key={account.id}
@@ -1518,13 +1517,6 @@ function AccountsPageContent() {
                                         ? "Outstanding"
                                         : "Tracked"}
                                   </span>
-                                </div>
-                                <div className="accounts-account-card__copy">
-                                  <span className={`accounts-type-tag ${getAccountTone(account) === "liability" ? "is-liability" : ""}`}>
-                                    {getAccountDisplayType(account)}
-                                  </span>
-                                  <span>{sourceLabel}</span>
-                                  <span>{formatDate(account.updatedAt)}</span>
                                 </div>
                               </div>
                             </article>
