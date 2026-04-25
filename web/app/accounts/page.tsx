@@ -1436,11 +1436,6 @@ function AccountsPageContent() {
                             name: account.name,
                             type: getEffectiveAccountType(account),
                           });
-                          const checkpoint =
-                            latestCheckpoints.checkpointsByAccountId.get(account.id) ??
-                            latestCheckpoints.checkpointsByAccountKey.get(normalizeImportedAccountKey(account.name, account.institution)) ??
-                            null;
-                          const checkpointSummary = getCheckpointSummary(checkpoint);
                           const balanceContext = getBalanceContext(account);
                           const balanceValue = isLiability ? -Math.abs(value) : value;
                           const sourceLabel = account.source === "manual" ? "Manual" : "Imported";
@@ -1530,17 +1525,6 @@ function AccountsPageContent() {
                                   </span>
                                   <span>{sourceLabel}</span>
                                   <span>{formatDate(account.updatedAt)}</span>
-                                </div>
-                                <div className="accounts-account-card__trust">
-                                  <div className={`accounts-checkpoint-badge is-${checkpointSummary.tone}`}>
-                                    <span className="accounts-checkpoint-badge__icon">
-                                      <ActionIcon name={checkpointSummary.icon} />
-                                    </span>
-                                    <div>
-                                      <strong>{checkpointSummary.label}</strong>
-                                      <span>{checkpointSummary.detail}</span>
-                                    </div>
-                                  </div>
                                 </div>
                               </div>
                             </article>
