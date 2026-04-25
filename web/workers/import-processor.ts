@@ -292,18 +292,6 @@ export const processImportFileText = async (
     );
   }
 
-  const pageImages = !text.trim() && importFile.fileType === "application/pdf"
-    ? await readImportedPdfPageImages(
-        {
-          storageKey: String(importFile.storageKey ?? ""),
-          fileType: String(importFile.fileType ?? ""),
-          fileName: String(importFile.fileName ?? ""),
-        },
-        options.password,
-        2
-      )
-    : null;
-
   const metadata = detectStatementMetadataFromText(text);
   const statementFingerprint = buildStatementFingerprint(text, metadata, importFile.fileName, importFile.fileType);
   const existingTemplate = await loadStatementTemplate({
@@ -338,6 +326,25 @@ export const processImportFileText = async (
     accountName: mergedMetadata.accountName,
     accountNumber: mergedMetadata.accountNumber,
   });
+  const shouldUseVisionFallback =
+    importFile.fileType === "application/pdf" &&
+    (!text.trim() ||
+      parsedRows.length === 0 ||
+      (mergedMetadata.confidence ?? 0) < 70 ||
+      !mergedMetadata.accountNumber ||
+      !mergedMetadata.endingBalance);
+  const pageImages =
+    shouldUseVisionFallback
+      ? await readImportedPdfPageImages(
+          {
+            storageKey: String(importFile.storageKey ?? ""),
+            fileType: String(importFile.fileType ?? ""),
+            fileName: String(importFile.fileName ?? ""),
+          },
+          options.password,
+          2
+        )
+      : null;
   const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
   const openAiParsed = await parseImportTextWithOpenAIFallback({
     text,

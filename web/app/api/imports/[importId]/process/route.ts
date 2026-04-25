@@ -9,10 +9,13 @@ import {
   buildStatementFingerprint,
 } from "@/lib/data-engine";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { enqueueImportProcessing } from "@/lib/import-queue";
 import { readImportedFileText } from "@/lib/import-file-text.server";
 import { uploadObject } from "@/lib/s3";
 import { prisma } from "@/lib/prisma";
-import { NextResponse, after } from "next/server";
+import { validateImportFile } from "@/lib/import-file-validation";
+import { summarizeErrorForLog } from "@/lib/security-logging";
+import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +41,20 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const formFileType = typeof formData.get("fileType") === "string" ? String(formData.get("fileType")) : "";
       password = typeof formPassword === "string" && formPassword.length > 0 ? formPassword : undefined;
 
+      if (!uploadedFile || typeof uploadedFile !== "object" || typeof (uploadedFile as { arrayBuffer?: unknown }).arrayBuffer !== "function") {
+        return NextResponse.json({ error: "Missing uploaded file." }, { status: 400 });
+      }
+
+      const file = uploadedFile as File;
+      const validationError = validateImportFile({
+        fileName: file.name || formFileName || "imported-file",
+        fileSize: file.size,
+        contentType: file.type || formFileType || null,
+      });
+      if (validationError) {
+        return NextResponse.json({ error: validationError }, { status: 400 });
+      }
+
       if (!importFile) {
         if (!formWorkspaceId) {
           return NextResponse.json({ error: "workspaceId is required" }, { status: 400 });
@@ -49,9 +66,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           data: {
             id: importId,
             workspaceId: formWorkspaceId,
-            fileName: formFileName || "imported-file",
-            fileType: formFileType || "unknown",
-            storageKey: buildImportKey(formWorkspaceId, formFileName || "imported-file"),
+            fileName: formFileName || file.name || "imported-file",
+            fileType: formFileType || file.type || "unknown",
+            storageKey: buildImportKey(formWorkspaceId, formFileName || file.name || "imported-file"),
             status: "processing",
           },
         });
@@ -59,12 +76,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         await assertWorkspaceAccess(userId, importFile.workspaceId as string);
       }
 
-      if (!uploadedFile || typeof uploadedFile !== "object" || typeof (uploadedFile as { arrayBuffer?: unknown }).arrayBuffer !== "function") {
-        return NextResponse.json({ error: "Missing uploaded file." }, { status: 400 });
-      }
-
       stage = "uploading raw file";
-      const file = uploadedFile as File;
       const bytes = new Uint8Array(await file.arrayBuffer());
       await uploadObject(String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)), bytes, file.type || "application/octet-stream");
       stage = "reading statement metadata";
@@ -88,20 +100,27 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           ? (template.metadata as Record<string, unknown>)
           : null);
       } catch (error) {
-        console.warn("Unable to pre-read statement metadata", { importId, error });
+        console.warn("Unable to pre-read statement metadata", { importId, error: summarizeErrorForLog(error) });
       }
       stage = "scheduling background processing";
-      after(async () => {
-        try {
-          const { processImportFileText } = await import("@/workers/import-processor");
-          await processImportFileText(importId, { password, actorUserId: userId });
-        } catch (error) {
-          console.error("Background import processing failed", { importId, error });
-          await updateImportFileCompat(importId, {
-            status: "failed",
-          });
-        }
-      });
+      try {
+        await enqueueImportProcessing({
+          importFileId: importId,
+          password,
+        });
+      } catch (error) {
+        console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
+        await updateImportFileCompat(importId, {
+          status: "failed",
+        });
+        return NextResponse.json(
+          {
+            error: "Unable to queue import processing",
+            stage,
+          },
+          { status: 400 }
+        );
+      }
       queued = true;
       return NextResponse.json({
         ok: true,
@@ -150,10 +169,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     }
   } catch (error) {
-    console.error("Import processing failed", { stage, error });
+    console.error("Import processing failed", { stage, error: summarizeErrorForLog(error) });
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Unable to process import",
+        error: "Unable to process import",
         stage,
       },
       { status: 400 }
