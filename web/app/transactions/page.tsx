@@ -1,10 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import dynamic from "next/dynamic";
+import {
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { flushSync } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
-import { ImportFilesModal } from "@/components/import-files-modal";
 import {
   analyticsOnceKey,
   capturePostHogClientEvent,
@@ -15,6 +23,12 @@ import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
+import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
+
+const ImportFilesModal = dynamic(
+  () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
+  { ssr: false }
+);
 
 type Workspace = {
   id: string;
@@ -45,6 +59,17 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     currency: "PHP",
     balance: summary.balance,
   };
+};
+
+const mergeImportedPreviewTransactions = (
+  currentTransactions: Transaction[],
+  previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]>
+) => {
+  if (previewTransactions.length === 0) {
+    return currentTransactions;
+  }
+
+  return mergeImportedWorkspaceTransactions(currentTransactions, previewTransactions);
 };
 
 const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentAccounts: Account[]) => {
@@ -601,12 +626,25 @@ const splitMerchantFilters = (value: string) =>
     .map((entry) => entry.trim())
     .filter(Boolean);
 
-const readTransactionsWorkspaceCache = (): TransactionsWorkspaceCacheState | null => {
+const getSessionStorage = () => {
   if (typeof window === "undefined") {
     return null;
   }
 
-  const stored = window.localStorage.getItem(transactionsWorkspaceCacheKey);
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+};
+
+const readTransactionsWorkspaceCache = (): TransactionsWorkspaceCacheState | null => {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return null;
+  }
+
+  const stored = storage.getItem(transactionsWorkspaceCacheKey);
   if (!stored) {
     return null;
   }
@@ -653,7 +691,8 @@ const persistTransactionsWorkspaceCache = (
   workspaceId: string,
   snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
 ) => {
-  if (typeof window === "undefined" || !workspaceId) {
+  const storage = getSessionStorage();
+  if (!storage || !workspaceId) {
     return;
   }
 
@@ -672,7 +711,7 @@ const persistTransactionsWorkspaceCache = (
     },
   };
 
-  window.localStorage.setItem(transactionsWorkspaceCacheKey, JSON.stringify(nextState));
+  storage.setItem(transactionsWorkspaceCacheKey, JSON.stringify(nextState));
 };
 
 const looksLikeJsonBlob = (value: string) => {
@@ -1178,39 +1217,51 @@ function TransactionsPageContent() {
         setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
       }
 
-      if (options?.skipMetadata) {
-        const accountsResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
+      const loadMetadata = async () => {
+        try {
+          if (options?.skipMetadata) {
+            const accountsResponse = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`);
 
-        if (accountsResponse.ok) {
-          const payload = await accountsResponse.json();
-          const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
-          setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
+            if (accountsResponse.ok) {
+              const payload = await accountsResponse.json();
+              const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+              setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
+            }
+
+            return;
+          }
+
+          const [accountsResponse, categoriesResponse, importResponse] = await Promise.all([
+            fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
+            fetch(`/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`),
+            fetch(`/api/imports?workspaceId=${encodeURIComponent(workspaceId)}`),
+          ]);
+
+          if (accountsResponse.ok) {
+            const payload = await accountsResponse.json();
+            const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+            setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
+          }
+
+          if (categoriesResponse.ok) {
+            const payload = await categoriesResponse.json();
+            setCategories(Array.isArray(payload.categories) ? payload.categories : []);
+          }
+
+          if (importResponse.ok) {
+            const payload = await importResponse.json();
+            setImports(Array.isArray(payload.importFiles) ? payload.importFiles : []);
+          }
+        } catch {
+          // Secondary metadata is best-effort so the first view can stay responsive.
         }
+      };
 
-        return;
+      if (!options?.background) {
+        setIsWorkspaceDataReady(true);
       }
 
-      const [accountsResponse, categoriesResponse, importResponse] = await Promise.all([
-        fetch(`/api/accounts?workspaceId=${encodeURIComponent(workspaceId)}`),
-        fetch(`/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`),
-        fetch(`/api/imports?workspaceId=${encodeURIComponent(workspaceId)}`),
-      ]);
-
-      if (accountsResponse.ok) {
-        const payload = await accountsResponse.json();
-        const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
-        setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
-      }
-
-      if (categoriesResponse.ok) {
-        const payload = await categoriesResponse.json();
-        setCategories(Array.isArray(payload.categories) ? payload.categories : []);
-      }
-
-      if (importResponse.ok) {
-        const payload = await importResponse.json();
-        setImports(Array.isArray(payload.importFiles) ? payload.importFiles : []);
-      }
+      void loadMetadata();
     } finally {
       if (!options?.background) {
         setIsWorkspaceDataReady(true);
@@ -1509,6 +1560,17 @@ function TransactionsPageContent() {
     customStart,
     customEnd,
   ]);
+  const deferredFilteredTransactions = useDeferredValue(filteredTransactions);
+  const [transactionsPageSize, setTransactionsPageSize] = useState(50);
+  const [transactionsPage, setTransactionsPage] = useState(1);
+  const totalTransactionPages = Math.max(1, Math.ceil(filteredTransactions.length / Math.max(transactionsPageSize, 1)));
+  const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);
+  const pageStartIndex = (currentTransactionPage - 1) * transactionsPageSize;
+  const pageEndIndex = pageStartIndex + transactionsPageSize;
+  const visibleTransactions = useMemo(
+    () => filteredTransactions.slice(pageStartIndex, pageEndIndex),
+    [filteredTransactions, pageStartIndex, pageEndIndex]
+  );
   const hasVisibleTransactions = useMemo(
     () =>
       transactions.some(
@@ -1518,8 +1580,45 @@ function TransactionsPageContent() {
   );
 
   const filteredTransactionIds = useMemo(() => filteredTransactions.map((transaction) => transaction.id), [filteredTransactions]);
-  const allVisibleSelected = filteredTransactionIds.length > 0 && filteredTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
-  const someVisibleSelected = filteredTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
+  const visibleTransactionIds = useMemo(() => visibleTransactions.map((transaction) => transaction.id), [visibleTransactions]);
+  const allVisibleSelected =
+    visibleTransactionIds.length > 0 && visibleTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
+  const someVisibleSelected = visibleTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
+
+  const currentPageLabel = useMemo(() => {
+    if (filteredTransactions.length === 0) {
+      return "0 of 0";
+    }
+
+    return `${pageStartIndex + 1}-${Math.min(pageEndIndex, filteredTransactions.length)} of ${filteredTransactions.length}`;
+  }, [filteredTransactions.length, pageEndIndex, pageStartIndex]);
+
+  const paginationPages = useMemo(() => {
+    if (totalTransactionPages <= 1) {
+      return [1];
+    }
+
+    const candidatePages = new Set<number>([
+      1,
+      totalTransactionPages,
+      Math.max(1, currentTransactionPage - 1),
+      currentTransactionPage,
+      Math.min(totalTransactionPages, currentTransactionPage + 1),
+    ]);
+
+    const sortedPages = Array.from(candidatePages)
+      .filter((page) => page >= 1 && page <= totalTransactionPages)
+      .sort((a, b) => a - b);
+
+    return sortedPages.reduce<Array<number | "ellipsis">>((pages, page) => {
+      const previous = pages[pages.length - 1];
+      if (typeof previous === "number" && page - previous > 1) {
+        pages.push("ellipsis");
+      }
+      pages.push(page);
+      return pages;
+    }, []);
+  }, [currentTransactionPage, totalTransactionPages]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
@@ -1597,10 +1696,30 @@ function TransactionsPageContent() {
     selectAllRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
   }, [allVisibleSelected, someVisibleSelected]);
 
+  useEffect(() => {
+    setTransactionsPage(1);
+  }, [
+    selectedWorkspaceId,
+    query,
+    categoryFilters,
+    accountFilters,
+    typeFilters,
+    merchantFilters,
+    dateFilterMode,
+    dateFilterAnchor,
+    customStart,
+    customEnd,
+    transactionsPageSize,
+  ]);
+
+  useEffect(() => {
+    setTransactionsPage((current) => Math.min(Math.max(current, 1), totalTransactionPages));
+  }, [totalTransactionPages]);
+
   const duplicateLookup = useMemo(() => {
     const counts = new Map<string, number>();
 
-    for (const transaction of filteredTransactions) {
+    for (const transaction of deferredFilteredTransactions) {
       const signature = [
         transaction.date.slice(0, 10),
         Number(transaction.amount).toFixed(2),
@@ -1611,10 +1730,10 @@ function TransactionsPageContent() {
     }
 
     return counts;
-  }, [filteredTransactions]);
+  }, [deferredFilteredTransactions]);
 
   const totals = useMemo(() => {
-    return filteredTransactions.reduce(
+    return deferredFilteredTransactions.reduce(
       (accumulator, transaction) => {
         const amount = Math.abs(Number(transaction.amount));
         const signature = [
@@ -1651,7 +1770,7 @@ function TransactionsPageContent() {
       },
       { income: 0, spending: 0, transfers: 0, review: 0 }
     );
-  }, [filteredTransactions, duplicateLookup]);
+  }, [deferredFilteredTransactions, duplicateLookup]);
 
   const importSummary = useMemo(() => {
     return imports.reduce(
@@ -1673,7 +1792,7 @@ function TransactionsPageContent() {
     const topCategories = new Map<string, number>();
     const topAccounts = new Map<string, number>();
 
-    for (const transaction of filteredTransactions) {
+    for (const transaction of deferredFilteredTransactions) {
       const amount = Math.abs(Number(transaction.amount));
       const categoryName = transaction.categoryName ?? "Other";
       topCategories.set(categoryName, (topCategories.get(categoryName) ?? 0) + amount);
@@ -1682,7 +1801,7 @@ function TransactionsPageContent() {
 
     const topCategory = Array.from(topCategories.entries()).sort((a, b) => b[1] - a[1])[0];
     const topAccount = Array.from(topAccounts.entries()).sort((a, b) => b[1] - a[1])[0];
-    const sortedDates = [...filteredTransactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const sortedDates = [...deferredFilteredTransactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const firstTransaction = sortedDates[0];
     const lastTransaction = sortedDates[sortedDates.length - 1];
 
@@ -1692,11 +1811,11 @@ function TransactionsPageContent() {
       firstTransaction,
       lastTransaction,
     };
-  }, [filteredTransactions]);
+  }, [deferredFilteredTransactions]);
 
   const reviewTransactionCount = useMemo(
     () =>
-      filteredTransactions.reduce((count, transaction) => {
+      deferredFilteredTransactions.reduce((count, transaction) => {
         if (isResolvedReviewStatus(transaction.reviewStatus) || transaction.isExcluded || !transaction.categoryId) {
           return count;
         }
@@ -1709,7 +1828,7 @@ function TransactionsPageContent() {
 
         return (duplicateLookup.get(signature) ?? 0) > 1 ? count + 1 : count;
       }, 0),
-    [filteredTransactions, duplicateLookup]
+    [deferredFilteredTransactions, duplicateLookup]
   );
 
   const warningReasonFor = (transaction: Transaction) => {
@@ -1761,13 +1880,13 @@ function TransactionsPageContent() {
   };
 
   const firstReviewTransaction = useMemo(
-    () => filteredTransactions.find((transaction) => isReviewableTransaction(transaction)) ?? null,
-    [filteredTransactions, duplicateLookup]
+    () => deferredFilteredTransactions.find((transaction) => isReviewableTransaction(transaction)) ?? null,
+    [deferredFilteredTransactions, duplicateLookup]
   );
 
   const warningTransactionCount = useMemo(
-    () => filteredTransactions.filter((transaction) => warningReasonFor(transaction) !== null).length,
-    [filteredTransactions, duplicateLookup]
+    () => deferredFilteredTransactions.filter((transaction) => warningReasonFor(transaction) !== null).length,
+    [deferredFilteredTransactions, duplicateLookup]
   );
 
   const selectedTransactionWarningReason = selectedTransaction ? warningReasonFor(selectedTransaction) : null;
@@ -1781,9 +1900,9 @@ function TransactionsPageContent() {
     : [];
 
   const nextReviewTransactionAfter = (transactionId: string) => {
-    const startIndex = filteredTransactions.findIndex((transaction) => transaction.id === transactionId);
+    const startIndex = visibleTransactions.findIndex((transaction) => transaction.id === transactionId);
     const start = startIndex >= 0 ? startIndex + 1 : 0;
-    const ordered = [...filteredTransactions.slice(start), ...filteredTransactions.slice(0, start)];
+    const ordered = [...visibleTransactions.slice(start), ...visibleTransactions.slice(0, start)];
     return ordered.find((transaction) => isReviewableTransaction(transaction)) ?? null;
   };
 
@@ -1796,6 +1915,28 @@ function TransactionsPageContent() {
     row?.focus();
   };
 
+  const focusTransactionById = (transactionId: string) => {
+    const transactionIndex = filteredTransactions.findIndex((transaction) => transaction.id === transactionId);
+    if (transactionIndex < 0) {
+      return;
+    }
+
+    const targetPage = Math.floor(transactionIndex / Math.max(transactionsPageSize, 1)) + 1;
+    setTransactionsPage(targetPage);
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const row = transactionRowRefs.current.get(transactionId);
+        if (!row) {
+          return;
+        }
+
+        row.scrollIntoView({ behavior: "smooth", block: "center" });
+        row.focus();
+      });
+    });
+  };
+
   const handleTransactionRowKeyDown = (event: ReactKeyboardEvent<HTMLElement>, transaction: Transaction, index: number) => {
     if (event.target !== event.currentTarget) {
       return;
@@ -1803,13 +1944,13 @@ function TransactionsPageContent() {
 
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      focusTransactionRow(filteredTransactions[index + 1]?.id);
+      focusTransactionRow(visibleTransactions[index + 1]?.id);
       return;
     }
 
     if (event.key === "ArrowUp") {
       event.preventDefault();
-      focusTransactionRow(filteredTransactions[index - 1]?.id);
+      focusTransactionRow(visibleTransactions[index - 1]?.id);
       return;
     }
 
@@ -1835,6 +1976,7 @@ function TransactionsPageContent() {
   };
 
   const openTransactionReview = (transaction: Transaction) => {
+    focusTransactionById(transaction.id);
     openTransactionDetail(transaction);
     const warningReason = warningReasonFor(transaction);
     if (warningReason) {
@@ -1848,12 +1990,6 @@ function TransactionsPageContent() {
         },
         analyticsOnceKey("review_item_opened", `transaction:${transaction.id}`)
       );
-    }
-    const row = transactionRowRefs.current.get(transaction.id);
-    if (row) {
-      window.requestAnimationFrame(() => {
-        row.scrollIntoView({ behavior: "smooth", block: "center" });
-      });
     }
   };
 
@@ -3457,14 +3593,14 @@ function TransactionsPageContent() {
                   setSelectedTransactionIds((current) => {
                     const next = new Set(current);
                     if (shouldSelect) {
-                      filteredTransactionIds.forEach((transactionId) => next.add(transactionId));
+                      visibleTransactionIds.forEach((transactionId) => next.add(transactionId));
                     } else {
-                      filteredTransactionIds.forEach((transactionId) => next.delete(transactionId));
+                      visibleTransactionIds.forEach((transactionId) => next.delete(transactionId));
                     }
                     return Array.from(next);
                   });
                 }}
-                aria-label="Select all visible transactions"
+                aria-label="Select all transactions on this page"
               />
             </label>
             <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
@@ -3519,7 +3655,7 @@ function TransactionsPageContent() {
                 ))}
               </div>
             ) : filteredTransactions.length > 0 ? (
-              filteredTransactions.map((transaction, index) => {
+              visibleTransactions.map((transaction, index) => {
                 const warningReason = warningReasonFor(transaction);
                 const amount = Number(transaction.amount);
                 const isPositive = transaction.type === "income";
@@ -3705,7 +3841,7 @@ function TransactionsPageContent() {
               </div>
             ) : filteredTransactions.length > 0 ? (
               <div className="transactions-mobile-list">
-                {filteredTransactions.map((transaction, index) => {
+                {visibleTransactions.map((transaction, index) => {
                   const warningReason = warningReasonFor(transaction);
                   const amount = Number(transaction.amount);
                   const isPositive = transaction.type === "income";
@@ -3881,7 +4017,10 @@ function TransactionsPageContent() {
           <div className="transactions-footer">
             <div className="table-footer__summary">
               <span className="pill pill-neutral">{filteredTransactions.length} transactions</span>
-          {warningTransactionCount > 0 ? (
+              {filteredTransactions.length > 0 ? (
+                <span className="pill pill-subtle">Showing {currentPageLabel}</span>
+              ) : null}
+              {warningTransactionCount > 0 ? (
                 <button
                   type="button"
                   className="warning-summary-button"
@@ -3900,6 +4039,62 @@ function TransactionsPageContent() {
                   <span className="warning-mark warning-mark--small" aria-hidden="true" />
                 </button>
               ) : null}
+            </div>
+            <div className="transactions-pagination" aria-label="Transaction pages">
+              <div className="transactions-pagination__nav">
+                <button
+                  className="button button-secondary button-small transactions-action-button"
+                  type="button"
+                  onClick={() => setTransactionsPage((current) => Math.max(1, current - 1))}
+                  disabled={currentTransactionPage <= 1}
+                >
+                  Prev
+                </button>
+                {paginationPages.map((page, index) =>
+                  page === "ellipsis" ? (
+                    <span key={`ellipsis-${index}`} className="transactions-pagination__ellipsis" aria-hidden="true">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={page}
+                      className={`button button-secondary button-small transactions-action-button transactions-pagination__page ${
+                        page === currentTransactionPage ? "is-active" : ""
+                      }`}
+                      type="button"
+                      onClick={() => setTransactionsPage(page)}
+                      aria-current={page === currentTransactionPage ? "page" : undefined}
+                    >
+                      {page}
+                    </button>
+                  )
+                )}
+                <button
+                  className="button button-secondary button-small transactions-action-button"
+                  type="button"
+                  onClick={() => setTransactionsPage((current) => Math.min(totalTransactionPages, current + 1))}
+                  disabled={currentTransactionPage >= totalTransactionPages}
+                >
+                  Next
+                </button>
+              </div>
+              <label className="transactions-pagination__size">
+                <span>Rows</span>
+                <select
+                  value={transactionsPageSize}
+                  onChange={(event) => {
+                    setTransactionsPageSize(Number(event.target.value));
+                    setTransactionsPage(1);
+                  }}
+                  aria-label="Rows per page"
+                >
+                  {[25, 50, 100, 200].map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
             <div className="transactions-footer-snapshot" aria-label="Cash flow snapshot">
               <span className="transactions-footer-snapshot__label">This view</span>
@@ -4839,57 +5034,32 @@ function TransactionsPageContent() {
         accounts={accounts}
         defaultAccountId={accounts[0]?.id ?? null}
         onClose={() => setImportOpen(false)}
-      onImported={async (summary) => {
-        if (summary.optimistic) {
-          const optimisticAccount = buildOptimisticImportedAccount(summary);
+        onImported={async (summary) => {
           const previewTransactions = summary.previewTransactions ?? [];
-          if (optimisticAccount) {
-            flushSync(() => {
-              setIsWorkspaceDataReady(true);
-              setAccounts((current) => {
-                const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
-                if (existingIndex >= 0) {
-                  return current.map((account) => (account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account));
-                }
-                return [optimisticAccount, ...current];
-              });
-            });
-          }
-          if (previewTransactions.length > 0) {
-            flushSync(() => {
-              setTransactions((current) => {
-                const previewIds = new Set(previewTransactions.map((transaction) => transaction.id));
-                const filtered = current.filter((transaction) => {
-                  if (previewIds.has(transaction.id)) {
-                    return false;
-                  }
-                  return !(transaction.source === "upload" && transaction.accountId === summary.accountId);
-                });
-                return [...previewTransactions, ...filtered];
-              });
-            });
-          }
-          return;
-        }
-
-        setPendingImportSummary(summary);
-
-        if (summary.optimisticAccountId) {
-          setAccounts((current) => current.filter((account) => account.id !== summary.optimisticAccountId));
-        }
-        const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
-        if (importedAccountId) {
-          setTransactions((current) => current.filter((transaction) => !(transaction.source === "upload" && transaction.accountId === importedAccountId)));
-        }
-
-        if (!selectedWorkspaceId) {
-          return;
-        }
-
           const optimisticAccount = buildOptimisticImportedAccount(summary);
-          if (optimisticAccount) {
-            flushSync(() => {
-              setIsWorkspaceDataReady(true);
+          const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+
+          setPendingImportSummary(summary);
+
+          flushSync(() => {
+            setIsWorkspaceDataReady(true);
+
+            if (summary.optimisticAccountId) {
+              setAccounts((current) => current.filter((account) => account.id !== summary.optimisticAccountId));
+            }
+
+            if (importedAccountId) {
+              setTransactions((current) => {
+                const withoutImportedPlaceholders = current.filter(
+                  (transaction) => !(transaction.source === "upload" && transaction.accountId === importedAccountId)
+                );
+                return mergeImportedPreviewTransactions(withoutImportedPlaceholders, previewTransactions);
+              });
+            } else if (previewTransactions.length > 0) {
+              setTransactions((current) => mergeImportedPreviewTransactions(current, previewTransactions));
+            }
+
+            if (optimisticAccount) {
               setAccounts((current) => {
                 const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
                 if (existingIndex >= 0) {
@@ -4897,9 +5067,14 @@ function TransactionsPageContent() {
                 }
                 return [optimisticAccount, ...current];
               });
-            });
+            }
+          });
+
+          if (!selectedWorkspaceId) {
+            return;
           }
-          void loadWorkspaceData(selectedWorkspaceId, { skipMetadata: true });
+
+          void loadWorkspaceData(selectedWorkspaceId, { background: true });
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />
