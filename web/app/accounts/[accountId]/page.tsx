@@ -31,6 +31,8 @@ type Transaction = {
   categoryName: string | null;
   description: string | null;
   isExcluded: boolean;
+  source?: string | null;
+  importFileId?: string | null;
 };
 
 type StatementCheckpoint = {
@@ -60,6 +62,101 @@ const formatDate = (value: string) =>
   });
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
+
+const isSpendableAccountType = (value: string) => value === "bank" || value === "wallet" || value === "cash";
+
+const getBalanceContext = (accountType: string) => {
+  if (accountType === "credit_card") {
+    return { label: "Outstanding balance", tone: "danger" as const };
+  }
+  if (accountType === "investment") {
+    return { label: "Held balance", tone: "neutral" as const };
+  }
+  if (isSpendableAccountType(accountType)) {
+    return { label: "Spendable amount", tone: "good" as const };
+  }
+  return { label: "Current balance", tone: "neutral" as const };
+};
+
+const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined) => {
+  if (!checkpoint) {
+    return {
+      label: "No statement checkpoint yet",
+      detail: "Import a statement to anchor this balance.",
+      tone: "neutral" as const,
+      icon: "clock" as const,
+    };
+  }
+
+  const endingDate = checkpoint.statementEndDate ? formatDate(checkpoint.statementEndDate) : "No date";
+  if (checkpoint.status === "mismatch") {
+    return {
+      label: "Needs review",
+      detail: checkpoint.mismatchReason ?? `Mismatch detected · ${endingDate}`,
+      tone: "danger" as const,
+      icon: "warning" as const,
+    };
+  }
+
+  if (checkpoint.status === "reconciled") {
+    return {
+      label: "Reconciled",
+      detail: endingDate,
+      tone: "good" as const,
+      icon: "refresh" as const,
+    };
+  }
+
+  return {
+    label: "Checkpoint pending",
+    detail: endingDate,
+    tone: "neutral" as const,
+    icon: "calendar" as const,
+  };
+};
+
+const buildImportSummaries = (transactions: Transaction[]) => {
+  const groups = new Map<string, { key: string; count: number; latestDate: string; label: string; total: number }>();
+
+  for (const transaction of transactions) {
+    if (transaction.merchantRaw === "Beginning balance") {
+      continue;
+    }
+
+    if (transaction.source !== "upload" && !transaction.importFileId) {
+      continue;
+    }
+
+    const key = transaction.importFileId ?? `${transaction.accountId}:${transaction.date.slice(0, 10)}`;
+    const current = groups.get(key);
+    const amount = parseAmount(transaction.amount);
+    groups.set(
+      key,
+      current
+        ? {
+            ...current,
+            count: current.count + 1,
+            latestDate: new Date(transaction.date) > new Date(current.latestDate) ? transaction.date : current.latestDate,
+            total: current.total + amount,
+          }
+        : {
+            key,
+            count: 1,
+            latestDate: transaction.date,
+            label: transaction.importFileId ? "Imported batch" : "Uploaded statement",
+            total: amount,
+          }
+    );
+  }
+
+  return Array.from(groups.values()).sort((left, right) => new Date(right.latestDate).getTime() - new Date(left.latestDate).getTime());
+};
+
+const getCheckpointSymbol = (tone: "good" | "danger" | "neutral") => {
+  if (tone === "good") return "✓";
+  if (tone === "danger") return "!";
+  return "•";
+};
 
 const formatAccountType = (value: string) =>
   value
@@ -145,6 +242,21 @@ function AccountDetailPageContent() {
     [checkpoints]
   );
 
+  const latestCheckpointSummary = useMemo(
+    () => getCheckpointSummary(latestCheckpoint),
+    [latestCheckpoint]
+  );
+
+  const accountBalanceContext = useMemo(
+    () => getBalanceContext(account?.type ?? ""),
+    [account?.type]
+  );
+
+  const importSummaries = useMemo(
+    () => buildImportSummaries(transactions),
+    [transactions]
+  );
+
   const reconciledBalance = useMemo(
     () =>
       deriveReconciledBalance({
@@ -166,19 +278,7 @@ function AccountDetailPageContent() {
   );
 
   const checkpointStatus = useMemo(() => {
-    if (!latestCheckpoint) {
-      return "No checkpoint yet";
-    }
-
-    if (latestCheckpoint.status === "mismatch") {
-      return latestCheckpoint.mismatchReason ?? "Mismatch";
-    }
-
-    if (latestCheckpoint.status === "reconciled") {
-      return "Reconciled";
-    }
-
-    return "Pending";
+    return getCheckpointSummary(latestCheckpoint).label;
   }, [latestCheckpoint]);
 
   const checkpointBalance = useMemo(() => parseAmount(latestCheckpoint?.endingBalance), [latestCheckpoint?.endingBalance]);
@@ -236,20 +336,32 @@ function AccountDetailPageContent() {
         {account ? (
           <div className="accounts-detail__summary">
             <div className="status-card">
-              <div className="panel-muted">Current balance</div>
-              <strong>{currencyFormatter.format(parseAmount(reconciledBalance ?? account.balance))}</strong>
+              <div>
+                <div className="panel-muted">Current balance</div>
+                <strong>{currencyFormatter.format(parseAmount(reconciledBalance ?? account.balance))}</strong>
+                <span>{accountBalanceContext.label}</span>
+              </div>
             </div>
             <div className="status-card">
-              <div className="panel-muted">Account type</div>
-              <strong>{formatAccountType(account.type)}</strong>
+              <div>
+                <div className="panel-muted">Spendable amount</div>
+                <strong>{currencyFormatter.format(isSpendableAccountType(account.type) ? parseAmount(reconciledBalance ?? account.balance) : 0)}</strong>
+                <span>{isSpendableAccountType(account.type) ? "Ready to use now" : "Not immediately spendable"}</span>
+              </div>
             </div>
             <div className="status-card">
-              <div className="panel-muted">Created</div>
-              <strong>{formatDate(account.createdAt)}</strong>
+              <div>
+                <div className="panel-muted">Account type</div>
+                <strong>{formatAccountType(account.type)}</strong>
+                <span>{accountBrand.label}</span>
+              </div>
             </div>
             <div className="status-card">
-              <div className="panel-muted">Updated</div>
-              <strong>{formatDate(account.updatedAt)}</strong>
+              <div>
+                <div className="panel-muted">Institution</div>
+                <strong>{account.institution ?? accountBrand.label}</strong>
+                <span>{account.source === "manual" ? "Manual" : "Imported"} · Updated {formatDate(account.updatedAt)}</span>
+              </div>
             </div>
           </div>
         ) : null}
@@ -261,30 +373,33 @@ function AccountDetailPageContent() {
                 <p className="eyebrow">Reconciliation</p>
                 <h3>Statement checkpoint</h3>
               </div>
-              <span
-                className={`accounts-summary-chip ${
-                  latestCheckpoint.status === "mismatch"
-                    ? "is-danger"
-                    : latestCheckpoint.status === "reconciled"
-                      ? "is-good"
-                      : "is-neutral"
-                }`}
-              >
+              <span className={`accounts-summary-chip is-${latestCheckpointSummary.tone}`}>
                 {checkpointStatus}
               </span>
             </div>
-            <div className="accounts-detail__reconciliation-grid">
-              <div className="status-card">
-                <div className="panel-muted">Statement date</div>
-                <strong>{latestCheckpoint.statementEndDate ? formatDate(latestCheckpoint.statementEndDate) : "Unknown"}</strong>
+            <div className={`accounts-detail__checkpoint-hero is-${latestCheckpointSummary.tone}`}>
+              <div className={`accounts-checkpoint-badge is-${latestCheckpointSummary.tone}`}>
+                <span className="accounts-checkpoint-badge__icon" aria-hidden="true">
+                  {getCheckpointSymbol(latestCheckpointSummary.tone)}
+                </span>
+                <div>
+                  <strong>{latestCheckpointSummary.label}</strong>
+                  <span>{latestCheckpointSummary.detail}</span>
+                </div>
               </div>
-              <div className="status-card">
-                <div className="panel-muted">Statement balance</div>
-                <strong>{currencyFormatter.format(checkpointBalance)}</strong>
-              </div>
-              <div className="status-card">
-                <div className="panel-muted">Difference</div>
-                <strong>{checkpointGapLabel}</strong>
+              <div className="accounts-detail__reconciliation-grid">
+                <div className="status-card">
+                  <div className="panel-muted">Statement date</div>
+                  <strong>{latestCheckpoint.statementEndDate ? formatDate(latestCheckpoint.statementEndDate) : "Unknown"}</strong>
+                </div>
+                <div className="status-card">
+                  <div className="panel-muted">Statement balance</div>
+                  <strong>{currencyFormatter.format(checkpointBalance)}</strong>
+                </div>
+                <div className="status-card">
+                  <div className="panel-muted">Difference</div>
+                  <strong>{checkpointGapLabel}</strong>
+                </div>
               </div>
             </div>
             <p className="panel-muted" style={{ margin: "12px 0 0" }}>
@@ -294,6 +409,28 @@ function AccountDetailPageContent() {
                   ? "The checkpoint matches the account history and anchors the current balance."
                   : "This checkpoint is waiting for confirmation."}
             </p>
+          </div>
+        ) : null}
+
+        {importSummaries.length > 0 ? (
+          <div className="accounts-detail__imports glass" style={{ marginTop: 20 }}>
+            <div className="accounts-detail__reconciliation-head">
+              <div>
+                <p className="eyebrow">Imports</p>
+                <h3>Recent import batches</h3>
+              </div>
+            </div>
+            <div className="accounts-detail__imports-list">
+              {importSummaries.slice(0, 3).map((summary) => (
+                <div key={summary.key} className="accounts-detail__import-row">
+                  <div>
+                    <strong>{summary.label}</strong>
+                    <span>{summary.count} rows · {formatDate(summary.latestDate)}</span>
+                  </div>
+                  <strong>{currencyFormatter.format(summary.total)}</strong>
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
 
