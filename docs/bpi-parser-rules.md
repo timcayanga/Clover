@@ -14,6 +14,8 @@ Use these rules for BPI savings and related statement imports.
 - BPI credit card statements should infer the visible account suffix from the customer/account number on the statement and resolve to `BPI <last4>` rather than falling back to a generic account.
 - `BPI Signature` and other BPI card statements should be treated as `credit_card`, not bank savings, even when the OCR text is compacted, but the visible account name should stay bank-simple as `BPI <last4>`.
 - The parsed suffix may vary by statement, for example `9001`, `8556`, or `8705`, depending on the card's customer number.
+- BPI savings account numbers can be line-wrapped in OCR, so a split pattern like `3189-2104-84` should still resolve to the full account number and a visible suffix of `0484`, not `2104`.
+- When the account number is split across lines, the parser should join the trailing 2-digit suffix back onto the `4-4` prefix before deriving the visible suffix.
 
 ## Parsing Guidance
 

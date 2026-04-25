@@ -1027,8 +1027,26 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     lines.find((line) => /FORBES\s*PARK\s*SAVINGS/i.test(line)) ??
     normalized;
   const headerCompact = compactWhitespace(headerLine);
+  const headerPrefix = lines.slice(0, 18).join(" ");
+  const splitAccountLineIndex = lines.findIndex((line) => /^\d{4}\s*-\s*\d{4}\s*-\s*$/i.test(compactWhitespace(line)));
+  const splitAccountNumber =
+    splitAccountLineIndex >= 0
+      ? (() => {
+          const prefixDigits = lines[splitAccountLineIndex].replace(/\D/g, "");
+          const suffixLine = lines
+            .slice(splitAccountLineIndex + 1, splitAccountLineIndex + 5)
+            .find((line) => /^\d{2}$/.test(compactWhitespace(line).replace(/\D/g, "")));
+          const suffixDigits = suffixLine ? suffixLine.replace(/\D/g, "") : null;
+          if (prefixDigits.length === 8 && suffixDigits) {
+            return `${prefixDigits}${suffixDigits}`;
+          }
+          return null;
+        })()
+      : null;
   const cardAccountMatch = normalized.match(/\bBE\d{8}\b/i)?.[0] ?? null;
   const accountSection =
+    splitAccountNumber ??
+    headerPrefix.match(/\b\d{4}[-\s]?\d{4}[-\s]?\d{2}\b/)?.[0] ??
     headerCompact.match(/(?:PERIODCOVERED.*?NO|ACCOUNT(?:NO|NUMBER|#)|ACCT(?:NO|NUMBER|#)|A\/C(?:NO|NUMBER|#)|NO):?([0-9-]{8,})/i)?.[1] ??
     headerCompact.match(/NO:([0-9-]{8,})/i)?.[1] ??
     cardAccountMatch ??
