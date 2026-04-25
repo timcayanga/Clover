@@ -7,7 +7,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
-import { getSessionContext, isStagingHost } from "@/lib/auth";
+import { getSessionContext } from "@/lib/auth";
 import { getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
@@ -106,9 +106,7 @@ const getMonthBuckets = (anchor: Date) => {
 };
 
 export default async function InsightsPage() {
-  const stagingHost = await isStagingHost();
   const now = new Date();
-  let stagingDemoData: ReturnType<typeof createStagingInsightsSampleData> | null = null;
   let currentWindowTransactionsRaw: InsightTransaction[] = [];
   let previousWindowTransactionsRaw: InsightTransaction[] = [];
   let ninetyDayTransactions: InsightTransaction[] = [];
@@ -117,181 +115,166 @@ export default async function InsightsPage() {
   let importFiles: Array<{ status: "processing" | "done" | "failed" | "deleted" }> = [];
   let selectedGoalValue: string | null = null;
   let goalTargetAmount: number | null = null;
-  let workspaceId = "staging-demo";
   let isFreshResetWorkspace = false;
-
-  if (stagingHost) {
-    stagingDemoData = createStagingInsightsSampleData(now);
-    currentWindowTransactionsRaw = stagingDemoData.currentWindowTransactions;
-    previousWindowTransactionsRaw = stagingDemoData.previousWindowTransactions as InsightTransaction[];
-    ninetyDayTransactions = stagingDemoData.ninetyDayTransactions;
-    sixMonthTransactions = stagingDemoData.sixMonthTransactions;
-    workspaceAccounts = stagingDemoData.accounts;
-    importFiles = stagingDemoData.importFiles;
-    selectedGoalValue = stagingDemoData.selectedGoal;
-  } else {
-    const session = await getSessionContext();
-    const existingUser = await prisma.user.findUnique({
-      where: { clerkUserId: session.userId },
-    });
-    const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
-    if (!hasCompletedOnboarding(user)) {
-      redirect("/onboarding");
-    }
-
-    const cookieStore = await cookies();
-    const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
-    const workspaceInclude = {
-      accounts: true,
-      importFiles: {
-        orderBy: { uploadedAt: "desc" },
-      },
-    } as const;
-
-    const selectedWorkspace =
-      (selectedWorkspaceCookieId
-        ? await prisma.workspace.findFirst({
-            where: {
-              id: selectedWorkspaceCookieId,
-              userId: user.id,
-            },
-            include: workspaceInclude,
-          })
-        : null) ??
-      (await prisma.workspace.findFirst({
-        where: { userId: user.id },
-        include: workspaceInclude,
-        orderBy: { createdAt: "asc" },
-      }));
-
-    const resolvedWorkspace =
-      selectedWorkspace ??
-      (await ensureStarterWorkspace(user).then(async (starterWorkspace) => {
-        const starterWorkspaceData = await prisma.workspace.findUnique({
-          where: { id: starterWorkspace.id },
-          include: workspaceInclude,
-        });
-        if (!starterWorkspaceData) {
-          redirect("/dashboard");
-        }
-        return starterWorkspaceData;
-      }));
-
-    if (!resolvedWorkspace) {
-      redirect("/dashboard");
-    }
-
-    workspaceId = resolvedWorkspace.id;
-
-    const thirtyDaysAgo = new Date(now);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const sixtyDaysAgo = new Date(now);
-    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-    const ninetyDaysAgo = new Date(now);
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-
-    const [currentWindowTransactionsQuery, previousWindowTransactionsQuery, ninetyDayTransactionsQuery, sixMonthTransactionsQuery] = await Promise.all([
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: resolvedWorkspace.id,
-          isExcluded: false,
-          date: { gte: thirtyDaysAgo },
-        },
-        select: {
-          id: true,
-          date: true,
-          amount: true,
-          type: true,
-          merchantRaw: true,
-          merchantClean: true,
-          account: {
-            select: {
-              name: true,
-            },
-          },
-          category: {
-            select: {
-              name: true,
-            },
-          },
-        },
-        orderBy: { date: "desc" },
-        take: 500,
-      }),
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: resolvedWorkspace.id,
-          isExcluded: false,
-          date: {
-            gte: sixtyDaysAgo,
-            lt: thirtyDaysAgo,
-          },
-        },
-        select: {
-          amount: true,
-          type: true,
-          category: {
-            select: {
-              name: true,
-            },
-          },
-        },
-      }),
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: resolvedWorkspace.id,
-          isExcluded: false,
-          date: { gte: ninetyDaysAgo },
-        },
-        select: {
-          id: true,
-          date: true,
-          amount: true,
-          type: true,
-          merchantRaw: true,
-          merchantClean: true,
-          account: {
-            select: {
-              name: true,
-            },
-          },
-          category: {
-            select: {
-              name: true,
-            },
-          },
-        },
-        orderBy: { date: "desc" },
-        take: 500,
-      }),
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: resolvedWorkspace.id,
-          isExcluded: false,
-          date: { gte: sixMonthsAgo },
-        },
-        select: {
-          date: true,
-          amount: true,
-          type: true,
-        },
-      }),
-    ]);
-
-    currentWindowTransactionsRaw = currentWindowTransactionsQuery as InsightTransaction[];
-    previousWindowTransactionsRaw = previousWindowTransactionsQuery as InsightTransaction[];
-    ninetyDayTransactions = ninetyDayTransactionsQuery as InsightTransaction[];
-    sixMonthTransactions = sixMonthTransactionsQuery as Array<Pick<InsightTransaction, "date" | "amount" | "type">>;
-    workspaceAccounts = resolvedWorkspace.accounts.map((account: any) => ({
-      name: account.name,
-      balance: account.balance === null ? null : Number(account.balance),
-    }));
-    importFiles = resolvedWorkspace.importFiles;
-    selectedGoalValue = user.primaryGoal?.trim() ?? null;
-    goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
-    isFreshResetWorkspace = user.dataWipedAt !== null && resolvedWorkspace.accounts.length <= 1 && resolvedWorkspace.importFiles.length === 0;
+  const session = await getSessionContext();
+  const existingUser = await prisma.user.findUnique({
+    where: { clerkUserId: session.userId },
+  });
+  const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
+  if (!hasCompletedOnboarding(user)) {
+    redirect("/onboarding");
   }
+
+  const cookieStore = await cookies();
+  const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
+  const workspaceInclude = {
+    accounts: true,
+    importFiles: {
+      orderBy: { uploadedAt: "desc" },
+    },
+  } as const;
+
+  const selectedWorkspace =
+    (selectedWorkspaceCookieId
+      ? await prisma.workspace.findFirst({
+          where: {
+            id: selectedWorkspaceCookieId,
+            userId: user.id,
+          },
+          include: workspaceInclude,
+        })
+      : null) ??
+    (await prisma.workspace.findFirst({
+      where: { userId: user.id },
+      include: workspaceInclude,
+      orderBy: { createdAt: "asc" },
+    }));
+
+  const resolvedWorkspace =
+    selectedWorkspace ??
+    (await ensureStarterWorkspace(user).then(async (starterWorkspace) => {
+      const starterWorkspaceData = await prisma.workspace.findUnique({
+        where: { id: starterWorkspace.id },
+        include: workspaceInclude,
+      });
+      if (!starterWorkspaceData) {
+        redirect("/dashboard");
+      }
+      return starterWorkspaceData;
+    }));
+
+  if (!resolvedWorkspace) {
+    redirect("/dashboard");
+  }
+
+  const thirtyDaysAgo = new Date(now);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const sixtyDaysAgo = new Date(now);
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const ninetyDaysAgo = new Date(now);
+  ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+
+  const [currentWindowTransactionsQuery, previousWindowTransactionsQuery, ninetyDayTransactionsQuery, sixMonthTransactionsQuery] = await Promise.all([
+    prisma.transaction.findMany({
+      where: {
+        workspaceId: resolvedWorkspace.id,
+        isExcluded: false,
+        date: { gte: thirtyDaysAgo },
+      },
+      select: {
+        id: true,
+        date: true,
+        amount: true,
+        type: true,
+        merchantRaw: true,
+        merchantClean: true,
+        account: {
+          select: {
+            name: true,
+          },
+        },
+        category: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: { date: "desc" },
+      take: 500,
+    }),
+    prisma.transaction.findMany({
+      where: {
+        workspaceId: resolvedWorkspace.id,
+        isExcluded: false,
+        date: {
+          gte: sixtyDaysAgo,
+          lt: thirtyDaysAgo,
+        },
+      },
+      select: {
+        amount: true,
+        type: true,
+        category: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    }),
+    prisma.transaction.findMany({
+      where: {
+        workspaceId: resolvedWorkspace.id,
+        isExcluded: false,
+        date: { gte: ninetyDaysAgo },
+      },
+      select: {
+        id: true,
+        date: true,
+        amount: true,
+        type: true,
+        merchantRaw: true,
+        merchantClean: true,
+        account: {
+          select: {
+            name: true,
+          },
+        },
+        category: {
+          select: {
+            name: true,
+          },
+        },
+      },
+      orderBy: { date: "desc" },
+      take: 500,
+    }),
+    prisma.transaction.findMany({
+      where: {
+        workspaceId: resolvedWorkspace.id,
+        isExcluded: false,
+        date: { gte: sixMonthsAgo },
+      },
+      select: {
+        date: true,
+        amount: true,
+        type: true,
+      },
+    }),
+  ]);
+
+  currentWindowTransactionsRaw = currentWindowTransactionsQuery as InsightTransaction[];
+  previousWindowTransactionsRaw = previousWindowTransactionsQuery as InsightTransaction[];
+  ninetyDayTransactions = ninetyDayTransactionsQuery as InsightTransaction[];
+  sixMonthTransactions = sixMonthTransactionsQuery as Array<Pick<InsightTransaction, "date" | "amount" | "type">>;
+  workspaceAccounts = resolvedWorkspace.accounts.map((account) => ({
+    name: account.name,
+    balance: account.balance === null ? null : Number(account.balance),
+  }));
+  importFiles = resolvedWorkspace.importFiles;
+  selectedGoalValue = user.primaryGoal?.trim() ?? null;
+  goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
+  isFreshResetWorkspace = user.dataWipedAt !== null && resolvedWorkspace.accounts.length <= 1 && resolvedWorkspace.importFiles.length === 0;
 
   const reportType = "insights";
   const workspaceId = resolvedWorkspace.id;
@@ -476,7 +459,7 @@ export default async function InsightsPage() {
   const categoryDriverChanges = Array.from(
     new Set([...currentSummary.expenseCategories.keys(), ...previousSummary.expenseCategories.keys()])
   )
-    .map((categoryName: string) => {
+    .map((categoryName) => {
       const currentAmount = currentSummary.expenseCategories.get(categoryName) ?? 0;
       const previousAmount = previousSummary.expenseCategories.get(categoryName) ?? 0;
       const delta = currentAmount - previousAmount;
@@ -693,17 +676,17 @@ export default async function InsightsPage() {
   const chartPadding = 18;
   const chartXSpan = chartWidth - chartPadding * 2;
   const chartYSpan = chartHeight - chartPadding * 2;
-  const monthValues = monthBuckets.map((bucket: any) => bucket.net);
+  const monthValues = monthBuckets.map((bucket) => bucket.net);
   const chartMax = Math.max(...monthValues);
   const chartMin = Math.min(...monthValues);
   const chartRange = Math.max(chartMax - chartMin, 1);
-  const chartPoints = monthBuckets.map((bucket: any, index: number) => {
+  const chartPoints = monthBuckets.map((bucket, index) => {
     const x = chartPadding + (index / Math.max(monthBuckets.length - 1, 1)) * chartXSpan;
     const normalized = (bucket.net - chartMin) / chartRange;
     const y = chartPadding + (1 - normalized) * chartYSpan;
     return { ...bucket, x, y };
   });
-  const chartPath = chartPoints.map((point: any, index: number) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
+  const chartPath = chartPoints.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
 
   const headlineNetLabel =
     currentNet >= previousNet
@@ -810,7 +793,7 @@ export default async function InsightsPage() {
           </div>
 
           <div className="insights-snapshot__metrics" aria-label="Insights snapshot metrics">
-            {primarySnapshotItems.map((item: any) => (
+            {primarySnapshotItems.map((item) => (
               <div key={item.label} className="insights-snapshot__metric">
                 <span>{item.label}</span>
                 <strong className={item.tone === "positive" ? "positive" : item.tone === "negative" ? "negative" : undefined}>
@@ -890,7 +873,7 @@ export default async function InsightsPage() {
                 fill="url(#insight-flow-gradient)"
               />
               <path d={chartPath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-              {chartPoints.map((point: any) => (
+              {chartPoints.map((point) => (
                 <circle key={point.key} cx={point.x} cy={point.y} r="5.5" fill="white" stroke="var(--accent)" strokeWidth="3" />
               ))}
             </svg>
@@ -932,7 +915,7 @@ export default async function InsightsPage() {
                 {topCategories.length > 0
                   ? (() => {
                       let offset = 0;
-                      return topCategories.map(([categoryName, amount]: any, index: number) => {
+                      return topCategories.map(([categoryName, amount], index) => {
                         const share = currentSpend > 0 ? amount / currentSpend : 0;
                         const circumference = 2 * Math.PI * 82;
                         const dashLength = share * circumference;
@@ -964,7 +947,7 @@ export default async function InsightsPage() {
 
             <div className="insight-donut__legend">
               {topCategories.length > 0 ? (
-                topCategories.map(([categoryName, amount]: any) => {
+                topCategories.map(([categoryName, amount]) => {
                   const share = currentSpend > 0 ? (amount / currentSpend) * 100 : 0;
                   return (
                     <Link key={categoryName} href={buildTransactionsHref({ category: categoryName })} className="insight-donut__item insight-donut__item--link">
