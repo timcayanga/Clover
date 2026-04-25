@@ -14,10 +14,40 @@ import { readImportedFileText } from "@/lib/import-file-text.server";
 import { uploadObject } from "@/lib/s3";
 import { prisma } from "@/lib/prisma";
 import { validateImportFile } from "@/lib/import-file-validation";
-import { summarizeErrorForLog } from "@/lib/security-logging";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
+
+type ErrorLike = {
+  name?: unknown;
+  message?: unknown;
+};
+
+const truncate = (value: string, max = 160) => (value.length <= max ? value : `${value.slice(0, max - 1)}…`);
+
+const summarizeErrorForLog = (error: unknown) => {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: truncate(error.message.replace(/\s+/g, " ").trim()),
+    };
+  }
+
+  if (error && typeof error === "object") {
+    const errorLike = error as ErrorLike;
+    const name = typeof errorLike.name === "string" ? errorLike.name : "Error";
+    const message = typeof errorLike.message === "string" ? errorLike.message : "";
+    return {
+      name,
+      message: message ? truncate(message.replace(/\s+/g, " ").trim()) : "",
+    };
+  }
+
+  return {
+    name: "Error",
+    message: typeof error === "string" ? truncate(error.replace(/\s+/g, " ").trim()) : "Unknown error",
+  };
+};
 
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   let stage = "initializing";
