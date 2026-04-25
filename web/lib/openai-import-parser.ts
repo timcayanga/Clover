@@ -252,10 +252,42 @@ const openAIJsonSchema = {
       type: "object",
       additionalProperties: false,
       properties: {
-        merchant_mappings: { type: "array", items: { type: "object" } },
-        code_mappings: { type: "array", items: { type: "object" } },
-        institution_aliases: { type: "array", items: { type: "object" } },
-        edge_cases: { type: "array", items: { type: "object" } },
+        merchant_mappings: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {},
+            required: [],
+          },
+        },
+        code_mappings: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {},
+            required: [],
+          },
+        },
+        institution_aliases: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {},
+            required: [],
+          },
+        },
+        edge_cases: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {},
+            required: [],
+          },
+        },
       },
       required: ["merchant_mappings", "code_mappings", "institution_aliases", "edge_cases"],
     },
