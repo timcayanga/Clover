@@ -14526,6 +14526,13 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--text);
   font-size: 13px;
   line-height: 1.45;
+  min-width: 0;
+}
+
+.settings-plan-card__features li span {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .settings-plan-card__feature-icon {
