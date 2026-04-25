@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { UserProfile } from "@clerk/nextjs";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { BillingActions } from "@/components/billing-actions";
@@ -33,28 +33,36 @@ type SettingsHubProps = {
   paypalAnnualPlanId?: string | null;
 };
 
+function SettingsIcon({ path }: { path: string }) {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="settings-hub__menu-icon">
+      <path d={path} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
 const sectionCopy: Record<
   SettingsSectionKey,
   {
     title: string;
-    description: string;
+    icon: ReactNode;
   }
 > = {
   profile: {
     title: "Profile",
-    description: "Manage the account details Clerk owns for you.",
+    icon: <SettingsIcon path="M12 13.5c2.761 0 5-2.462 5-5.5S14.761 2.5 12 2.5 7 4.962 7 8s2.239 5.5 5 5.5Zm0 1.5c-4.418 0-8 2.91-8 6.5V22h16v-.5c0-3.59-3.582-6.5-8-6.5Z" />,
   },
   display: {
     title: "Display",
-    description: "Choose how Clover looks on this device.",
+    icon: <SettingsIcon path="M7 7h10v10H7z M4 4h2M18 4h2M4 20h2M18 20h2M4 18V6M20 18V6" />,
   },
   data: {
     title: "Data",
-    description: "Download or prune data in the active workspace.",
+    icon: <SettingsIcon path="M4 6h16M6 6v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6M9 10v6M15 10v6M10 3h4a1 1 0 0 1 1 1v2H9V4a1 1 0 0 1 1-1Z" />,
   },
   plan: {
     title: "Plan",
-    description: "See the current plan and switch billing cadence.",
+    icon: <SettingsIcon path="M12 3.5 14.9 8.8 21 9.7l-4.4 4.3 1 6.1L12 17.8 6.4 20.1l1-6.1L3 9.7l6.1-.9L12 3.5Z" />,
   },
 };
 
@@ -214,12 +222,6 @@ export function SettingsHub({
   return (
     <section className="settings-hub">
       <aside className="settings-hub__menu glass">
-        <div className="settings-hub__menu-head">
-          <p className="eyebrow">Settings</p>
-          <h3>Control center</h3>
-          <p>Pick a section. Clover keeps the rest tucked away.</p>
-        </div>
-
         <div className="settings-hub__menu-list" role="tablist" aria-label="Settings sections">
           {(Object.keys(sectionCopy) as SettingsSectionKey[]).map((sectionKey) => {
             const section = sectionCopy[sectionKey];
@@ -234,8 +236,8 @@ export function SettingsHub({
                 className={`settings-hub__menu-item${isActive ? " is-active" : ""}`}
                 onClick={() => setActiveSection(sectionKey)}
               >
+                {section.icon}
                 <strong>{section.title}</strong>
-                <span>{section.description}</span>
               </button>
             );
           })}
