@@ -31,6 +31,25 @@ export type GoalPlaybook = GoalDefinition & {
   historyMarkers: string[];
 };
 
+export type GoalProgressContext = {
+  goalKey: GoalKey | null;
+  targetAmount: number | null;
+  currentNet: number;
+  currentSpend: number;
+  monthlyIncome: number | null;
+};
+
+export type GoalProgressSnapshot = {
+  label: string;
+  currentLabel: string;
+  currentAmount: number;
+  targetAmount: number | null;
+  progressPercent: number | null;
+  remainingAmount: number | null;
+  achieved: boolean;
+  coachCopy: string;
+};
+
 export type FinancialExperienceProfile = {
   title: string;
   onboardingLead: string;
@@ -326,6 +345,109 @@ export const getGoalMoneyLabel = (goalKey: GoalKey | null) =>
 
 export const getGoalProgressLabel = (goalKey: GoalKey | null) =>
   goalKey ? goalProgressLabels[goalKey] : "Progress this month";
+
+export const getGoalProgressSnapshot = ({
+  goalKey,
+  targetAmount,
+  currentNet,
+  currentSpend,
+  monthlyIncome,
+}: GoalProgressContext): GoalProgressSnapshot => {
+  const baseTarget = targetAmount !== null && Number.isFinite(targetAmount) ? Math.max(0, targetAmount) : null;
+  const netSurplus = Math.max(0, currentNet);
+  const savingsBase = netSurplus;
+
+  if (!goalKey || baseTarget === null) {
+    return {
+      label: getGoalProgressLabel(goalKey),
+      currentLabel: getGoalProgressLabel(goalKey),
+      currentAmount: goalKey === "track_spending" ? Math.max(0, currentSpend) : netSurplus,
+      targetAmount: baseTarget,
+      progressPercent: null,
+      remainingAmount: null,
+      achieved: false,
+      coachCopy:
+        monthlyIncome !== null
+          ? "You have enough recent activity to estimate a strong target. Set one to unlock live progress tracking."
+          : "Set a monthly target to unlock live progress tracking.",
+    };
+  }
+
+  if (goalKey === "track_spending") {
+    const remaining = Math.max(0, baseTarget - currentSpend);
+    const overBudget = currentSpend - baseTarget;
+    const progressPercent = baseTarget > 0 ? clamp((remaining / baseTarget) * 100, 0, 100) : null;
+
+    return {
+      label: "Budget left",
+      currentLabel: "Still available",
+      currentAmount: remaining,
+      targetAmount: baseTarget,
+      progressPercent,
+      remainingAmount: remaining,
+      achieved: currentSpend <= baseTarget,
+      coachCopy:
+        currentSpend <= baseTarget
+          ? "You are under the cap, which means you kept the month in shape."
+          : `You are over the cap by ${formatCompactCurrency(overBudget)}. Trim one leak and you can close the gap.`,
+    };
+  }
+
+  const currentAmount = goalKey === "pay_down_debt" ? netSurplus : savingsBase;
+  const progressPercent = baseTarget > 0 ? clamp((currentAmount / baseTarget) * 100, 0, 100) : null;
+  const remainingAmount = Math.max(0, baseTarget - currentAmount);
+  const achieved = currentAmount >= baseTarget;
+
+  return {
+    label:
+      goalKey === "save_more"
+        ? "Saved this month"
+        : goalKey === "pay_down_debt"
+          ? "Available for debt"
+          : goalKey === "build_emergency_fund"
+            ? "Set aside so far"
+            : "Ready to invest",
+    currentLabel:
+      goalKey === "save_more"
+        ? "Current savings"
+        : goalKey === "pay_down_debt"
+          ? "Debt runway"
+          : goalKey === "build_emergency_fund"
+            ? "Emergency buffer"
+            : "Investable surplus",
+    currentAmount,
+    targetAmount: baseTarget,
+    progressPercent,
+    remainingAmount,
+    achieved,
+    coachCopy:
+      goalKey === "save_more"
+        ? achieved
+          ? "You reached your savings target. That is a strong month."
+          : "Every extra peso saved now makes the next month easier."
+        : goalKey === "pay_down_debt"
+          ? achieved
+            ? "You created enough room to hit the debt target. Nice work."
+            : "This is the money you can point at principal before it gets absorbed elsewhere."
+          : goalKey === "build_emergency_fund"
+            ? achieved
+              ? "Your emergency fund target is covered for this month."
+              : "You are building resilience one consistent transfer at a time."
+            : achieved
+              ? "You have a clean surplus to invest. Keep the habit steady."
+              : "You are protecting the investing runway by keeping the month tidy.",
+  };
+};
+
+const formatCompactCurrency = (value: number) =>
+  new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 export const getSuggestedGoalAmount = (goalKey: GoalKey | null, monthlyIncome: number | null) => {
   if (!goalKey || monthlyIncome === null || Number.isNaN(monthlyIncome) || monthlyIncome <= 0) {
