@@ -8830,7 +8830,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-page {
   display: grid;
-  gap: 18px;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -8838,23 +8838,23 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
+  gap: 12px;
   padding: 0 4px;
   flex-wrap: wrap;
 }
 
 .accounts-page__headline-copy {
   display: grid;
-  gap: 8px;
+  gap: 4px;
   max-width: 56ch;
 }
 
 .accounts-page__headline-copy h1 {
   margin: 0;
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 600;
   letter-spacing: -0.05em;
-  line-height: 1.12;
+  line-height: 1.08;
 }
 
 .accounts-page__subtitle {
@@ -8867,7 +8867,7 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-page__headline-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
@@ -8875,46 +8875,51 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-overview-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 
 .accounts-overview-card {
   display: grid;
-  gap: 8px;
-  padding: 16px 18px;
-  border-radius: 22px;
+  gap: 5px;
+  padding: 10px 12px;
+  border-radius: 18px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow-soft);
 }
 
+.accounts-overview-card .eyebrow {
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+}
+
 .accounts-overview-card strong {
-  font-size: 24px;
+  font-size: 18px;
   font-weight: 600;
-  letter-spacing: -0.04em;
-  line-height: 1.15;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
 }
 
 .accounts-overview-card span {
   color: var(--muted);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .accounts-list-controls {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .accounts-search {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: 14px;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 12px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.92);
   color: var(--muted);
@@ -8923,9 +8928,10 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-search input {
   border: 0;
   background: transparent;
-  min-width: 180px;
+  min-width: 140px;
   color: var(--text);
   font: inherit;
+  font-size: 14px;
 }
 
 .accounts-search input:focus {
@@ -8998,13 +9004,13 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-main-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.3fr) 320px;
-  gap: 16px;
+  gap: 12px;
   align-items: start;
 }
 
 .accounts-list-column {
   display: grid;
-  gap: 14px;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -9012,14 +9018,14 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
 }
 
 .accounts-list-head h4,
 .accounts-summary-column__head h4 {
-  margin: 4px 0 0;
-  font-size: 1.3rem;
-  letter-spacing: -0.03em;
+  margin: 2px 0 0;
+  font-size: 1.08rem;
+  letter-spacing: -0.025em;
 }
 
 .accounts-list-head p {
@@ -9029,14 +9035,14 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-sections {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .accounts-group {
   display: grid;
-  gap: 14px;
-  padding: 16px;
-  border-radius: 22px;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 18px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.88);
   box-shadow: var(--shadow-soft);
@@ -9046,31 +9052,31 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 10px;
 }
 
 .accounts-group__head h5 {
   margin: 0;
-  font-size: 1.06rem;
+  font-size: 0.98rem;
   letter-spacing: -0.03em;
 }
 
 .accounts-group__head p {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: 0.8rem;
 }
 
 .accounts-group__tone {
   display: inline-flex;
   align-items: center;
-  min-height: 32px;
-  padding: 0 12px;
+  min-height: 26px;
+  padding: 0 10px;
   border-radius: 999px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.72);
   color: var(--muted);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
 }
 
 .accounts-group__tone--assets {
@@ -9092,16 +9098,16 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
 }
 
 .accounts-account-card {
   position: relative;
   display: grid;
-  gap: 16px;
-  padding: 14px;
-  border-radius: 22px;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 18px;
   border: 1px solid var(--stroke);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 252, 253, 0.9)),
@@ -9133,47 +9139,47 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
 }
 
 .accounts-account-card__brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
 }
 
 .accounts-account-card__brand strong {
   display: block;
-  font-size: 1rem;
+  font-size: 0.94rem;
   letter-spacing: -0.03em;
 }
 
 .accounts-account-card__brand span {
   display: block;
-  margin-top: 3px;
+  margin-top: 2px;
   color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.4;
+  font-size: 0.76rem;
+  line-height: 1.3;
 }
 
 .accounts-account-card__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: none;
 }
 
 .accounts-account-card__body {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .accounts-account-card__amount {
-  font-size: 1.8rem;
+  font-size: 1.45rem;
   font-weight: 700;
-  letter-spacing: -0.05em;
-  line-height: 1;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
 }
 
 .accounts-account-card__balance-meta {
@@ -9185,18 +9191,18 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-account-card__balance-meta span:first-child {
   color: var(--muted);
-  font-size: 0.8rem;
-  letter-spacing: 0.03em;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .accounts-account-card__balance-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  padding: 0 8px;
+  min-height: 22px;
+  padding: 0 7px;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 600;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.9);
@@ -9225,17 +9231,17 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-account-card__copy {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   align-items: center;
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.74rem;
 }
 
 .accounts-account-card__copy .accounts-type-tag {
-  min-height: 26px;
-  padding-inline: 9px;
-  font-size: 0.74rem;
+  min-height: 24px;
+  padding-inline: 8px;
+  font-size: 0.7rem;
 }
 
 .accounts-account-card__trust {
@@ -9246,11 +9252,11 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-checkpoint-badge {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   width: 100%;
-  padding: 10px 12px;
-  border-radius: 18px;
+  padding: 8px 10px;
+  border-radius: 16px;
   border: 1px solid var(--stroke);
   background: rgba(247, 249, 250, 0.94);
 }
@@ -9258,29 +9264,29 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-checkpoint-badge__icon {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 999px;
   background: rgba(3, 168, 192, 0.12);
   color: var(--accent);
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .accounts-checkpoint-badge div {
   display: grid;
-  gap: 2px;
+  gap: 1px;
 }
 
 .accounts-checkpoint-badge strong {
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   letter-spacing: -0.02em;
 }
 
 .accounts-checkpoint-badge span {
   color: var(--muted);
-  font-size: 0.76rem;
-  line-height: 1.35;
+  font-size: 0.68rem;
+  line-height: 1.25;
 }
 
 .accounts-checkpoint-badge.is-good {
@@ -9585,11 +9591,11 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-view-pill {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
+  min-height: 24px;
+  padding: 0 8px;
   border-radius: 999px;
   border: 1px solid var(--stroke);
-  font-size: 0.74rem;
+  font-size: 0.68rem;
   white-space: nowrap;
 }
 
@@ -9602,8 +9608,8 @@ input.transaction-inline-edit--amount::placeholder {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border-radius: 999px;
   border: 1px solid rgba(245, 158, 11, 0.26);
@@ -9657,10 +9663,10 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-row-button {
-  min-height: 32px;
-  min-width: 32px;
+  min-height: 28px;
+  min-width: 28px;
   padding: 0;
-  width: 32px;
+  width: 28px;
   border-radius: 999px;
 }
 
