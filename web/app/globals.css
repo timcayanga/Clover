@@ -10792,6 +10792,15 @@ input.transaction-inline-edit--amount::placeholder {
   line-height: 1.45;
 }
 
+.accounts-import-footer-copy__warning {
+  color: #b91c1c !important;
+  font-weight: 600;
+}
+
+.accounts-import-footer-copy__status {
+  color: var(--muted);
+}
+
 .accounts-import-files {
   display: grid;
   gap: 12px;

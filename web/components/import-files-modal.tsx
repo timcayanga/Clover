@@ -11,7 +11,7 @@ import { capturePostHogClientEvent, capturePostHogClientEventOnce, analyticsOnce
 import { formatDuplicateImportMessage } from "@/lib/import-duplicate-message";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { postFileWithProgress } from "@/lib/import-file-post";
-import { MAX_IMPORT_FILE_SIZE, isSupportedImportFile } from "@/lib/import-file-validation";
+import { validateImportFile } from "@/lib/import-file-validation";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { syncImportedWorkspaceAccountCaches, syncImportedWorkspaceTransactionCaches } from "@/lib/workspace-cache";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
@@ -502,6 +502,7 @@ export function ImportFilesModal({
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("Upload CSV or PDF files to import transactions and balances.");
+  const [validationNotice, setValidationNotice] = useState<string | null>(null);
   const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [limitReached, setLimitReached] = useState(false);
@@ -519,6 +520,7 @@ export function ImportFilesModal({
       upgradePromptTrackedRef.current = false;
       accountIdByKeyRef.current.clear();
       setMessage("Upload CSV or PDF files to import transactions and balances.");
+      setValidationNotice(null);
       return;
     }
 
@@ -545,6 +547,7 @@ export function ImportFilesModal({
       return defaultAccountId ?? accounts[0]?.id ?? "";
     });
     setMessage("Upload CSV or PDF files to import transactions and balances.");
+    setValidationNotice(null);
   }, [accounts, defaultAccountId, open]);
 
   useEffect(() => {
@@ -654,22 +657,29 @@ export function ImportFilesModal({
     if (nextFiles.length === 0) return;
 
     let feedbackMessage = "";
+    let validationMessage = "";
     setItems((current) => {
       const existing = new Set(current.map((item) => fileKey(item.file)));
       const availableSlots = Math.max(0, MAX_IMPORT_FILES - current.length);
-      let skippedTooLarge = 0;
-      let skippedUnsupported = 0;
       let skippedTooMany = 0;
       let additionsCount = 0;
+      const validationIssues: string[] = [];
 
       const additions = nextFiles.flatMap((file) => {
-        if (file.size > MAX_IMPORT_FILE_SIZE) {
-          skippedTooLarge += 1;
-          return [];
-        }
+        const validationError = validateImportFile({
+          fileName: file.name,
+          fileSize: file.size,
+          contentType: file.type,
+        });
 
-        if (!isSupportedImportFile(file.name, file.type)) {
-          skippedUnsupported += 1;
+        if (validationError) {
+          if (validationError === "Import files must be 2 MB or smaller.") {
+            validationIssues.push(`${file.name} is larger than 2 MB.`);
+          } else if (validationError === "Only PDF, CSV, and TSV files are supported.") {
+            validationIssues.push(`${file.name} has an invalid file extension.`);
+          } else {
+            validationIssues.push(`${file.name} could not be added.`);
+          }
           return [];
         }
 
@@ -737,12 +747,16 @@ export function ImportFilesModal({
         ];
       });
 
-      if (skippedTooLarge > 0 && skippedTooMany > 0) {
-        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooLarge} over 2 MB and ${skippedTooMany} over the 10-file limit.`;
-      } else if (skippedTooLarge > 0) {
-        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooLarge} file${skippedTooLarge === 1 ? "" : "s"} over 2 MB.`;
-      } else if (skippedUnsupported > 0) {
-        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedUnsupported} unsupported file${skippedUnsupported === 1 ? "" : "s"}.`;
+      if (validationIssues.length > 0 && additions.length > 0) {
+        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"} to the queue.`;
+      } else if (validationIssues.length > 0 || skippedTooMany > 0) {
+        feedbackMessage = "No files were added.";
+      }
+
+      if (validationIssues.length > 0 && skippedTooMany > 0) {
+        validationMessage = `Warning: ${validationIssues.join(" ")} Clover also skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the 10-file limit.`;
+      } else if (validationIssues.length > 0) {
+        validationMessage = `Warning: ${validationIssues.join(" ")}`;
       } else if (skippedTooMany > 0) {
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the 10-file limit.`;
         setLimitReached(true);
@@ -768,6 +782,8 @@ export function ImportFilesModal({
     if (feedbackMessage) {
       setMessage(feedbackMessage);
     }
+
+    setValidationNotice(validationMessage || null);
   };
 
   const updateItem = (id: string, patch: Partial<QueuedFile>) => {
@@ -1488,6 +1504,7 @@ export function ImportFilesModal({
     if (busy) return;
 
     setBusy(true);
+    setValidationNotice(null);
     setMessage("Clover is lining up your statements...");
     capturePostHogClientEventOnce(
       "first_import_started",
@@ -1802,7 +1819,8 @@ export function ImportFilesModal({
         </div>
 
         <div className="accounts-import-footer-copy">
-          <p>{message}</p>
+          {validationNotice ? <p className="accounts-import-footer-copy__warning">{validationNotice}</p> : null}
+          <p className="accounts-import-footer-copy__status">{message}</p>
           <p>Accepted files: CSV and PDF. Password-protected files are supported.</p>
           <p>We upload the file first, then parse it on the server so the workflow stays responsive.</p>
         </div>
