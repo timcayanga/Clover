@@ -14,8 +14,8 @@ import { readImportedFileText } from "@/lib/import-file-text.server";
 import { uploadObject } from "@/lib/s3";
 import { prisma } from "@/lib/prisma";
 import { validateImportFile } from "@/lib/import-file-validation";
+import { summarizeErrorForLog } from "@/lib/security-logging";
 import { NextResponse } from "next/server";
-import { recordAppError, getErrorDetails } from "@/lib/error-logs";
 
 export const dynamic = "force-dynamic";
 
@@ -101,15 +101,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           ? (template.metadata as Record<string, unknown>)
           : null);
       } catch (error) {
-        await recordAppError({
-          ...getErrorDetails(error),
-          source: "import-processing",
-          route: "/api/imports/[importId]/process",
-          metadata: {
-            stage: "reading statement metadata",
-            importId,
-          },
-        }).catch(() => null);
+        console.warn("Unable to pre-read statement metadata", { importId, error: summarizeErrorForLog(error) });
       }
 
       const parsedMetadataConfidence = Number((metadata as { confidence?: unknown } | null)?.confidence ?? 0);
@@ -146,15 +138,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           password,
         });
       } catch (error) {
-        await recordAppError({
-          ...getErrorDetails(error),
-          source: "import-processing",
-          route: "/api/imports/[importId]/process",
-          metadata: {
-            stage: "scheduling background processing",
-            importId,
-          },
-        }).catch(() => null);
+        console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
         await updateImportFileCompat(importId, {
           status: "failed",
         });
@@ -214,15 +198,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     }
   } catch (error) {
-    const details = getErrorDetails(error);
-    await recordAppError({
-      ...details,
-      source: "import-processing",
-      route: "/api/imports/[importId]/process",
-      metadata: {
-        stage,
-      },
-    }).catch(() => null);
+    console.error("Import processing failed", { stage, error: summarizeErrorForLog(error) });
     return NextResponse.json(
       {
         error: "Unable to process import",
