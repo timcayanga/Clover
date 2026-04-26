@@ -287,6 +287,14 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
   const lower = merchantText.toLowerCase();
   const compact = normalizeWhitespace(merchantText).replace(/\s+/g, "").toLowerCase();
 
+  if (/office\s*365|google\s+one/.test(lower) || /office365|googleone/.test(compact)) {
+    return "Business";
+  }
+
+  if (/discord\s+nitro|mlbb\s+top\s+up|mlbbtopup|foodpanda\s+ph|foodpanda/.test(lower) || /discordnitro|mlbbtopup|foodpandaph/.test(compact)) {
+    return /foodpanda/.test(lower) || /foodpandaph/.test(compact) ? "Food & Dining" : "Shopping";
+  }
+
   if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) {
     return "Financial";
   }
