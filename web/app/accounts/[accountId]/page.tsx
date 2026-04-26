@@ -553,31 +553,25 @@ function AccountDetailPageContent() {
 
     setDeleteBusy(true);
     try {
-      const response = await fetch(`/api/accounts/${accountId}`, {
+      const deleteRequest = fetch(`/api/accounts/${accountId}`, {
         method: "DELETE",
       });
 
-      if (!response.ok) {
-        let errorMessage = "Unable to delete account.";
-        try {
-          const payload = (await response.json()) as { error?: string };
-          if (payload.error) {
-            errorMessage = payload.error;
-          }
-        } catch {
-          // Ignore JSON parsing failures and fall back to the generic error.
-        }
-        throw new Error(errorMessage);
-      }
-
-      const payload = (await response.json().catch(() => null)) as { account?: { workspaceId?: string | null } } | null;
-      const workspaceId = payload?.account?.workspaceId ?? account?.workspaceId ?? null;
-      if (workspaceId) {
-        markDeletedWorkspaceAccount(workspaceId, accountId);
-        clearWorkspaceCache(workspaceId);
-      }
-
       router.replace("/accounts");
+      void deleteRequest
+        .then(async (response) => {
+          if (!response.ok) {
+            return;
+          }
+
+          const payload = (await response.json().catch(() => null)) as { account?: { workspaceId?: string | null } } | null;
+          const workspaceId = payload?.account?.workspaceId ?? account?.workspaceId ?? null;
+          if (workspaceId) {
+            markDeletedWorkspaceAccount(workspaceId, accountId);
+            clearWorkspaceCache(workspaceId);
+          }
+        })
+        .catch(() => null);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to delete account.");
       setDeleteConfirmOpen(false);
