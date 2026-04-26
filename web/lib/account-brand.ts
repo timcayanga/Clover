@@ -109,8 +109,8 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       label: "RCBC",
       logoSrcs: philippinesLogoWithVariants("rcbc"),
       fallbackIconSrc: bankIcon,
-      accent: "#8B1D41",
-      background: "linear-gradient(135deg, rgba(139, 29, 65, 0.16), rgba(139, 29, 65, 0.06))",
+      accent: "#20B0E0",
+      background: "linear-gradient(135deg, rgba(32, 176, 224, 0.18), rgba(32, 176, 224, 0.06))",
     }),
   },
   {
