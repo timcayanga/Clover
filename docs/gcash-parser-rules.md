@@ -18,6 +18,10 @@ This document captures the GCash parsing rules learned from the training bundles
 - Keep merchant payments like `Meralco`, `Globe Telecom`, `Smart Postpaid`, `Foodpanda`, `GrabPay Top Up`, `MRT Transport`, `Alipay`, and `BancNet P2M` as category candidates based on the merchant.
 - Keep `Transfer Fee` as `Financial`.
 - Keep `Interest Boost Reward` as `Income`.
+- Infer the wallet account number from transfer direction when the statement does not print it explicitly:
+  - `Transfer from 09173009926 to 09175308181` with a debit means the wallet account is `09173009926`.
+  - `Transfer from 09178303926 to 09173009926` with a credit means the wallet account is `09173009926`.
+  - Preserve the source and destination phone numbers in the parsed row payload for downstream matching and learning.
 - OCR often fuses the date fragment into the merchant text on some exports; the parser should strip leading date noise and trailing amount-looking fragments before simplifying the merchant title.
 - The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable GCash simplifications like `Buy Load`, `Food Panda`, `Grab`, `Lazada`, `GCredit`, `GGives Repayment`, `Transfer to GSave`, and the `Received/Sent GCash` transfer variants.
 

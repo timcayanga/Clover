@@ -2237,6 +2237,101 @@ const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null 
   };
 };
 
+const extractGcashPhoneNumbers = (value: string) => Array.from(new Set(value.match(/\b09\d{9}\b/g) ?? []));
+
+const getParsedRowBalance = (row: ParsedImportRow) => {
+  if (!row.rawPayload || typeof row.rawPayload !== "object") {
+    return NaN;
+  }
+
+  const balance = row.rawPayload.balance;
+  return typeof balance === "number" ? balance : NaN;
+};
+
+const inferGcashAccountNumberFromRows = (rows: ParsedImportRow[], fallback?: string | null) => {
+  const scores = new Map<string, number>();
+
+  const bump = (value: string | null | undefined, points: number) => {
+    if (!value) {
+      return;
+    }
+
+    const digits = value.replace(/\D/g, "").slice(-11);
+    if (digits.length !== 11 || !digits.startsWith("09")) {
+      return;
+    }
+
+    scores.set(digits, (scores.get(digits) ?? 0) + points);
+  };
+
+  const fallbackDigits = fallback?.replace(/\D/g, "").slice(-11) ?? null;
+  if (fallbackDigits && fallbackDigits.startsWith("09")) {
+    bump(fallbackDigits, 2);
+  }
+
+  rows.forEach((row, index) => {
+    const rawLine = String(
+      (row.rawPayload && typeof row.rawPayload === "object" && typeof row.rawPayload.line === "string" && row.rawPayload.line) ||
+        row.description ||
+        row.merchantRaw ||
+        ""
+    );
+    const numbers = extractGcashPhoneNumbers(rawLine);
+    const balance = getParsedRowBalance(row);
+    const previousBalance = index > 0 ? getParsedRowBalance(rows[index - 1]) : NaN;
+    const balanceDelta = Number.isFinite(balance) && Number.isFinite(previousBalance) ? balance - previousBalance : null;
+
+    const transferMatch = rawLine.match(/\bTransfer\s+from\s+(09\d{9})\s+to\s+(09\d{9})\b/i);
+    if (transferMatch) {
+      const source = transferMatch[1];
+      const destination = transferMatch[2];
+      const transferDirection = balanceDelta !== null ? (balanceDelta > 0 ? "incoming" : "outgoing") : null;
+      if (transferDirection === "incoming") {
+        bump(destination, 6);
+        bump(source, 2);
+      } else if (transferDirection === "outgoing") {
+        bump(source, 6);
+        bump(destination, 2);
+      } else {
+        bump(source, 4);
+        bump(destination, 4);
+      }
+
+      return;
+    }
+
+    if (/^Received GCash from/i.test(rawLine)) {
+      numbers.forEach((number) => bump(number, 2));
+      return;
+    }
+
+    if (/^Sent GCash to/i.test(rawLine)) {
+      numbers.forEach((number) => bump(number, 2));
+      return;
+    }
+
+    if (numbers.length === 1) {
+      bump(numbers[0], 1);
+    } else if (numbers.length > 1) {
+      numbers.forEach((number) => bump(number, 1));
+    }
+  });
+
+  const sorted = [...scores.entries()].sort((left, right) => right[1] - left[1]);
+  const [bestNumber, bestScore] = sorted[0] ?? [];
+  const secondScore = sorted[1]?.[1] ?? 0;
+
+  if (!bestNumber || (bestScore ?? 0) < 3) {
+    return fallback?.replace(/\D/g, "").slice(-11) ?? null;
+  }
+
+  if (bestScore !== undefined && bestScore - secondScore < 2 && fallbackDigits && fallbackDigits !== bestNumber) {
+    return fallbackDigits;
+  }
+
+  return bestNumber;
+};
+
 const normalizeGcashMerchant = (description: string) => {
   let trimmed = decompactOcrText(description);
 
@@ -2321,6 +2416,7 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
   const categoryName = guessGcashCategoryName(description, type);
   const date = parseDateValue(match.groups.date);
   const amount = parseMoney(match.groups.amount);
+  const transferMatch = description.match(/\bTransfer\s+from\s+(09\d{9})\s+to\s+(09\d{9})\b/i);
 
   if (!date || amount === null) {
     return null;
@@ -2341,6 +2437,8 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
       amountText: match.groups.amount,
       balanceText: match.groups.balance,
       balance: parseMoney(match.groups.balance),
+      transferFromAccountNumber: transferMatch?.[1] ?? null,
+      transferToAccountNumber: transferMatch?.[2] ?? null,
       line: normalized,
     },
   } satisfies ParsedImportRow;
@@ -2394,12 +2492,17 @@ const parseGcashImportText = (text: string) => {
     .map((record) => parseGcashTransactionRecord(record, metadata.institution))
     .filter(Boolean) as ParsedImportRow[];
 
+  const inferredAccountNumber = inferGcashAccountNumberFromRows(rows, metadata.accountNumber);
   const endingBalance = getTrailingBalanceFromParsedRows(rows);
+  const accountNumber = inferredAccountNumber ?? metadata.accountNumber;
 
   return {
     metadata: {
       ...metadata,
+      accountNumber,
+      accountName: accountNumber ? `GCash ${accountNumber.slice(-4)}` : metadata.accountName,
       endingBalance: metadata.endingBalance ?? endingBalance,
+      confidence: accountNumber ? Math.max(metadata.confidence, 90) : metadata.confidence,
     },
     rows,
   };
