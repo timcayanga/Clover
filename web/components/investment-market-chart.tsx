@@ -4,12 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   buildMarketLinePath,
+  formatMarketSymbolForRegion,
   filterMarketHistoryByRange,
   MARKET_RANGES,
   normalizeMarketSymbol,
-  type MarketAssetType,
   type MarketHistoryPoint,
   type MarketRange,
+  type MarketRegion,
 } from "@/lib/market-data";
 import { isMarketInvestmentSubtype } from "@/lib/investments";
 
@@ -22,8 +23,9 @@ type InvestmentAccount = {
 
 type MarketHistoryResponse = {
   symbol: string;
-  assetType: MarketAssetType;
+  market: MarketRegion;
   provider: "alpha-vantage" | "yahoo-finance";
+  range: MarketRange;
   points: MarketHistoryPoint[];
   latest: MarketHistoryPoint;
   previous: MarketHistoryPoint;
@@ -36,12 +38,21 @@ type CurrencyCode = "USD" | "PHP";
 
 type BenchmarkKey = "none" | "sp500" | "nasdaq" | "bitcoin";
 
+type MarketKey = "us" | "ph" | "crypto";
+
 type BenchmarkOption = {
   key: BenchmarkKey;
   label: string;
   symbol: string;
-  assetType: MarketAssetType;
+  market: MarketKey;
   note: string;
+};
+
+type TickerSuggestion = {
+  symbol: string;
+  name: string;
+  market: MarketKey;
+  popularity: number;
 };
 
 type InvestmentMarketChartProps = {
@@ -70,15 +81,63 @@ const percentFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
+const volumeFormatter = new Intl.NumberFormat("en-US", {
+  notation: "compact",
+  maximumFractionDigits: 2,
+});
+
+const MARKET_OPTIONS: Array<{ key: MarketKey; label: string; description: string }> = [
+  { key: "us", label: "US", description: "United States" },
+  { key: "ph", label: "PH", description: "Philippines" },
+  { key: "crypto", label: "Crypto", description: "Digital assets" },
+];
+
+const POPULAR_TICKERS: Record<MarketKey, TickerSuggestion[]> = {
+  us: [
+    { symbol: "AAPL", name: "Apple", market: "us", popularity: 100 },
+    { symbol: "MSFT", name: "Microsoft", market: "us", popularity: 99 },
+    { symbol: "NVDA", name: "NVIDIA", market: "us", popularity: 98 },
+    { symbol: "AMZN", name: "Amazon", market: "us", popularity: 97 },
+    { symbol: "GOOGL", name: "Alphabet", market: "us", popularity: 96 },
+    { symbol: "SPY", name: "S&P 500 ETF", market: "us", popularity: 95 },
+    { symbol: "QQQ", name: "Nasdaq 100 ETF", market: "us", popularity: 94 },
+    { symbol: "TSLA", name: "Tesla", market: "us", popularity: 93 },
+  ],
+  ph: [
+    { symbol: "BPI", name: "Bank of the Philippine Islands", market: "ph", popularity: 100 },
+    { symbol: "BDO", name: "BDO Unibank", market: "ph", popularity: 99 },
+    { symbol: "ALI", name: "Ayala Land", market: "ph", popularity: 98 },
+    { symbol: "SM", name: "SM Investments", market: "ph", popularity: 97 },
+    { symbol: "JFC", name: "Jollibee Foods", market: "ph", popularity: 96 },
+    { symbol: "FMETF", name: "First Metro ETF", market: "ph", popularity: 95 },
+    { symbol: "PSEI", name: "PSEi Index", market: "ph", popularity: 94 },
+    { symbol: "ICT", name: "International Container Terminal", market: "ph", popularity: 93 },
+  ],
+  crypto: [
+    { symbol: "BTC", name: "Bitcoin", market: "crypto", popularity: 100 },
+    { symbol: "ETH", name: "Ethereum", market: "crypto", popularity: 99 },
+    { symbol: "SOL", name: "Solana", market: "crypto", popularity: 98 },
+    { symbol: "XRP", name: "XRP", market: "crypto", popularity: 97 },
+    { symbol: "BNB", name: "BNB", market: "crypto", popularity: 96 },
+    { symbol: "ADA", name: "Cardano", market: "crypto", popularity: 95 },
+    { symbol: "DOGE", name: "Dogecoin", market: "crypto", popularity: 94 },
+    { symbol: "TON", name: "Toncoin", market: "crypto", popularity: 93 },
+  ],
+};
+
 const formatAxisDate = (value: string, range: MarketRange) => {
   const date = new Date(value);
 
-  if (range === "5Y" || range === "MAX") {
-    return date.toLocaleDateString("en-PH", { year: "numeric" });
+  if (range === "1D") {
+    return date.toLocaleTimeString("en-PH", { hour: "numeric", minute: "2-digit" });
   }
 
-  if (range === "1Y") {
-    return date.toLocaleDateString("en-PH", { month: "short", year: "2-digit" });
+  if (range === "5D") {
+    return date.toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "2-digit" });
+  }
+
+  if (range === "5Y" || range === "MAX") {
+    return date.toLocaleDateString("en-PH", { year: "numeric" });
   }
 
   return date.toLocaleDateString("en-PH", { month: "short", day: "2-digit" });
@@ -96,10 +155,10 @@ const buildTicks = (minValue: number, maxValue: number, count = 4) => {
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const BENCHMARK_OPTIONS: BenchmarkOption[] = [
-  { key: "none", label: "None", symbol: "", assetType: "equity", note: "No benchmark comparison" },
-  { key: "sp500", label: "S&P 500", symbol: "SPY", assetType: "equity", note: "US large-cap market proxy" },
-  { key: "nasdaq", label: "Nasdaq 100", symbol: "QQQ", assetType: "equity", note: "US tech-heavy benchmark" },
-  { key: "bitcoin", label: "Bitcoin", symbol: "BTC", assetType: "crypto", note: "Crypto market reference" },
+  { key: "none", label: "None", symbol: "", market: "us", note: "No benchmark comparison" },
+  { key: "sp500", label: "S&P 500", symbol: "SPY", market: "us", note: "US large-cap market proxy" },
+  { key: "nasdaq", label: "Nasdaq 100", symbol: "QQQ", market: "us", note: "US tech-heavy benchmark" },
+  { key: "bitcoin", label: "Bitcoin", symbol: "BTC", market: "crypto", note: "Crypto market reference" },
 ];
 
 const formatRelativeTime = (timestamp: number) => {
@@ -132,47 +191,19 @@ const formatShortDate = (value: string) =>
     day: "2-digit",
   });
 
-const inferAssetType = (subtype: string | null | undefined): MarketAssetType => {
-  if (subtype && subtype === "crypto") {
-    return "crypto";
-  }
-
-  return "equity";
-};
-
 export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketChartProps) {
-  const tickerSuggestions = useMemo(() => {
-    const seen = new Set<string>();
-    return investmentAccounts
-      .filter((account) => isMarketInvestmentSubtype(account.investmentSubtype) || account.investmentSubtype === "other")
-      .map((account) => {
-        const symbol = normalizeMarketSymbol(account.investmentSymbol ?? "");
-        if (!symbol || seen.has(symbol)) {
-          return null;
-        }
-
-        seen.add(symbol);
-        return {
-          id: account.id,
-          name: account.name,
-          symbol,
-          subtype: account.investmentSubtype,
-        };
-      })
-      .filter((entry): entry is { id: string; name: string; symbol: string; subtype: string | null } => entry !== null);
-  }, [investmentAccounts]);
-
-  const defaultSuggestion = tickerSuggestions[0] ?? null;
-  const [tickerInput, setTickerInput] = useState(defaultSuggestion?.symbol ?? "");
-  const [assetType, setAssetType] = useState<MarketAssetType>(inferAssetType(defaultSuggestion?.subtype));
-  const [range, setRange] = useState<MarketRange>("1Y");
-  const [submittedSymbol, setSubmittedSymbol] = useState(defaultSuggestion?.symbol ?? "");
-  const [submittedAssetType, setSubmittedAssetType] = useState<MarketAssetType>(inferAssetType(defaultSuggestion?.subtype));
+  const defaultSuggestion = POPULAR_TICKERS.us[0];
+  const [tickerInput, setTickerInput] = useState(defaultSuggestion.symbol);
+  const [selectedMarket, setSelectedMarket] = useState<MarketKey>(defaultSuggestion.market);
+  const [submittedSymbol, setSubmittedSymbol] = useState(defaultSuggestion.symbol);
+  const [submittedMarket, setSubmittedMarket] = useState<MarketKey>(defaultSuggestion.market);
+  const [queryRevision, setQueryRevision] = useState(0);
+  const [isTickerFocused, setTickerFocused] = useState(false);
+  const [range, setRange] = useState<MarketRange>("1D");
   const [history, setHistory] = useState<MarketHistoryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
-  const [refreshTick, setRefreshTick] = useState(0);
   const [displayCurrency, setDisplayCurrency] = useState<CurrencyCode>("USD");
   const [exchangeRate, setExchangeRate] = useState(1);
   const [rateError, setRateError] = useState<string | null>(null);
@@ -182,14 +213,63 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
   const [benchmarkHistory, setBenchmarkHistory] = useState<MarketHistoryResponse | null>(null);
   const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
 
+  const tickerSuggestions = useMemo(() => {
+    const query = normalizeMarketSymbol(tickerInput);
+    const pool = POPULAR_TICKERS[selectedMarket];
+
+    return pool
+      .filter((suggestion) => {
+        if (!query) {
+          return true;
+        }
+
+        return (
+          suggestion.symbol.includes(query) ||
+          suggestion.name.toUpperCase().includes(query) ||
+          formatMarketSymbolForRegion(suggestion.symbol, suggestion.market).includes(query)
+        );
+      })
+      .sort((left, right) => {
+        const leftScore =
+          query.length === 0
+            ? 0
+            : left.symbol.startsWith(query)
+              ? 0
+              : left.name.toUpperCase().startsWith(query)
+                ? 1
+                : 2;
+        const rightScore =
+          query.length === 0
+            ? 0
+            : right.symbol.startsWith(query)
+              ? 0
+              : right.name.toUpperCase().startsWith(query)
+                ? 1
+                : 2;
+        return leftScore - rightScore || right.popularity - left.popularity;
+      })
+      .slice(0, 8);
+  }, [selectedMarket, tickerInput]);
+
   useEffect(() => {
-    if (!submittedSymbol && defaultSuggestion) {
-      setTickerInput(defaultSuggestion.symbol);
-      setAssetType(inferAssetType(defaultSuggestion.subtype));
-      setSubmittedSymbol(defaultSuggestion.symbol);
-      setSubmittedAssetType(inferAssetType(defaultSuggestion.subtype));
+    if (tickerInput) {
+      setTickerFocused(true);
     }
-  }, [defaultSuggestion, submittedSymbol]);
+  }, [tickerInput]);
+
+  const submitTicker = (symbolValue = tickerInput, marketValue: MarketKey = selectedMarket) => {
+    const next = normalizeMarketSymbol(symbolValue);
+    if (!next) {
+      return;
+    }
+
+    setTickerInput(next);
+    setSelectedMarket(marketValue);
+    setSubmittedSymbol(next);
+    setSubmittedMarket(marketValue);
+    setQueryRevision((value) => value + 1);
+    setTickerFocused(false);
+  };
 
   useEffect(() => {
     if (!submittedSymbol) {
@@ -206,7 +286,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
       setHistory(null);
       try {
         const response = await fetch(
-          `/api/market-history?symbol=${encodeURIComponent(submittedSymbol)}&assetType=${encodeURIComponent(submittedAssetType)}`,
+          `/api/market-history?symbol=${encodeURIComponent(submittedSymbol)}&market=${encodeURIComponent(submittedMarket)}&range=${encodeURIComponent(range)}`,
           { signal: controller.signal }
         );
         const payload = (await response.json()) as MarketHistoryResponse;
@@ -232,14 +312,14 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
           setLoading(false);
         }
       }
-    }, 350);
+    }, 250);
 
     return () => {
       cancelled = true;
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [refreshTick, submittedAssetType, submittedSymbol]);
+  }, [queryRevision, range, submittedMarket, submittedSymbol]);
 
   useEffect(() => {
     let cancelled = false;
@@ -256,7 +336,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
         setBenchmarkHistory(null);
         setBenchmarkError(null);
         const response = await fetch(
-          `/api/market-history?symbol=${encodeURIComponent(benchmark.symbol)}&assetType=${encodeURIComponent(benchmark.assetType)}`
+          `/api/market-history?symbol=${encodeURIComponent(benchmark.symbol)}&assetType=${encodeURIComponent(benchmark.assetType)}&range=${encodeURIComponent(range)}`
         );
         const payload = (await response.json()) as MarketHistoryResponse;
         if (cancelled) {
@@ -284,7 +364,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
     return () => {
       cancelled = true;
     };
-  }, [benchmarkKey]);
+  }, [benchmarkKey, range]);
 
   useEffect(() => {
     let cancelled = false;
@@ -335,7 +415,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
   }, [history, range]);
 
   const displayPoints = useMemo(
-    () => visiblePoints.map((point) => ({ ...point, value: point.value * exchangeRate })),
+    () => visiblePoints.map((point) => ({ ...point, value: point.value * exchangeRate, volume: point.volume })),
     [exchangeRate, visiblePoints]
   );
 
@@ -349,12 +429,15 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
       return [0];
     }
 
-    const desiredTicks = Math.min(5, displayPoints.length);
+    const desiredTicks = Math.min(
+      displayPoints.length,
+      range === "1D" || range === "5D" ? 6 : range === "5Y" || range === "MAX" ? 8 : 7
+    );
     const indexes = Array.from({ length: desiredTicks }, (_, index) =>
       Math.round((index * (displayPoints.length - 1)) / Math.max(desiredTicks - 1, 1))
     );
     return [...new Set(indexes)];
-  }, [displayPoints.length]);
+  }, [displayPoints.length, range]);
 
   const hoveredPoint = hoverIndex === null ? null : displayPoints[hoverIndex] ?? null;
   const benchmarkOption = BENCHMARK_OPTIONS.find((option) => option.key === benchmarkKey) ?? BENCHMARK_OPTIONS[0];
@@ -380,6 +463,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
       benchmarkVisiblePoints.map((point) => ({
         ...point,
         value: point.value * benchmarkScale * exchangeRate,
+        volume: point.volume,
       })),
     [benchmarkScale, benchmarkVisiblePoints, exchangeRate]
   );
@@ -395,7 +479,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
       maxValue: Math.max(...chartPoints.map((point) => point.value)),
     };
   }, [chartPoints]);
-  const yTicks = useMemo(() => buildTicks(chartBounds?.minValue ?? 0, chartBounds?.maxValue ?? 0), [chartBounds]);
+  const yTicks = useMemo(() => buildTicks(chartBounds?.minValue ?? 0, chartBounds?.maxValue ?? 0, 5), [chartBounds]);
   const lineChart = useMemo(
     () => buildMarketLinePath(displayPoints, chartWidth, chartHeight, chartPadding, chartBounds ?? undefined),
     [chartBounds, displayPoints]
@@ -404,18 +488,22 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
     () => buildMarketLinePath(benchmarkDisplayPoints, chartWidth, chartHeight, chartPadding, chartBounds ?? undefined),
     [benchmarkDisplayPoints, chartBounds]
   );
-
-  const selectSuggestion = (suggestion: (typeof tickerSuggestions)[number]) => {
-    setTickerInput(suggestion.symbol);
-    setAssetType(inferAssetType(suggestion.subtype));
-    setSubmittedSymbol(suggestion.symbol);
-    setSubmittedAssetType(inferAssetType(suggestion.subtype));
-  };
+  const chartInnerHeight = chartHeight - chartPadding * 2;
+  const chartRange = Math.max((chartBounds?.maxValue ?? 0) - (chartBounds?.minValue ?? 0), 1);
+  const valueToY = (value: number) => chartPadding + (1 - ((value - (chartBounds?.minValue ?? 0)) / chartRange)) * chartInnerHeight;
 
   const formatAmount = (value: number) => currencyFormatters[displayCurrency].format(value);
+  const formatVolume = (value: number | null | undefined) => {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return "Volume not available";
+    }
+
+    return volumeFormatter.format(value);
+  };
   const chartSubtitle = displayCurrency === "PHP" ? "Converted from USD using the latest FX rate." : "Prices are shown in USD.";
   const chartError = rateError ?? error;
   const sourceLabel = history?.provider === "alpha-vantage" ? "Alpha Vantage" : "Yahoo Finance";
+  const submittedMarketLabel = MARKET_OPTIONS.find((option) => option.key === submittedMarket)?.description ?? "United States";
 
   return (
     <section className="investments-market glass">
@@ -424,29 +512,71 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
           <p className="eyebrow">Market tracker</p>
           <h3>Track a ticker</h3>
         </div>
-        <div className="investments-market__controls">
+        <form
+          className="investments-market__controls"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submitTicker();
+          }}
+        >
+          <div className="investments-market__ticker-field">
+            <label>
+              Ticker
+              <input
+                value={tickerInput}
+                onChange={(event) => {
+                  setTickerInput(event.target.value.toUpperCase());
+                  setTickerFocused(true);
+                }}
+                onFocus={() => setTickerFocused(true)}
+                onBlur={() => {
+                  window.setTimeout(() => setTickerFocused(false), 120);
+                  setTickerInput((current) => normalizeMarketSymbol(current));
+                }}
+                placeholder="AAPL, BPI, BTC"
+              />
+            </label>
+
+            {isTickerFocused && tickerSuggestions.length > 0 ? (
+              <div className="investments-market__suggestions" role="listbox" aria-label="Ticker suggestions">
+                {tickerSuggestions.map((suggestion) => (
+                  <button
+                    key={`${suggestion.market}:${suggestion.symbol}`}
+                    className="investments-market__suggestion"
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => {
+                      setTickerInput(suggestion.symbol);
+                      setSelectedMarket(suggestion.market);
+                      submitTicker(suggestion.symbol, suggestion.market);
+                    }}
+                  >
+                    <strong>{suggestion.symbol}</strong>
+                    <span>{suggestion.name}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
           <label>
-            Ticker
-            <input
-              list="investment-market-symbols"
-              value={tickerInput}
-              onChange={(event) => setTickerInput(event.target.value.toUpperCase())}
-              onBlur={() => {
-                const next = normalizeMarketSymbol(tickerInput);
-                if (next) {
-                  setTickerInput(next);
-                }
+            Market
+            <select
+              value={selectedMarket}
+              onChange={(event) => {
+                const nextMarket = event.target.value as MarketKey;
+                setSelectedMarket(nextMarket);
+                setTickerFocused(true);
               }}
-              placeholder="AAPL, QQQ, BTC"
-            />
-          </label>
-          <label>
-            Asset type
-            <select value={assetType} onChange={(event) => setAssetType(event.target.value as MarketAssetType)}>
-              <option value="equity">Equity / fund</option>
-              <option value="crypto">Crypto</option>
+            >
+              {MARKET_OPTIONS.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
+
           <label className="investments-market__currency-select">
             Currency
             <select value={displayCurrency} onChange={(event) => setDisplayCurrency(event.target.value as CurrencyCode)}>
@@ -454,6 +584,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
               <option value="PHP">PHP</option>
             </select>
           </label>
+
           <label className="investments-market__currency-select">
             Benchmark
             <select value={benchmarkKey} onChange={(event) => setBenchmarkKey(event.target.value as BenchmarkKey)}>
@@ -464,52 +595,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
               ))}
             </select>
           </label>
-          <button
-            className="button button-primary"
-            type="button"
-            onClick={() => {
-              const next = normalizeMarketSymbol(tickerInput);
-              setSubmittedSymbol(next);
-              setSubmittedAssetType(assetType);
-            }}
-            disabled={!normalizeMarketSymbol(tickerInput)}
-          >
-            Load ticker
-          </button>
-          <button
-            className="button button-secondary"
-            type="button"
-            onClick={() => setRefreshTick((value) => value + 1)}
-            disabled={!submittedSymbol || loading}
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      <datalist id="investment-market-symbols">
-        {tickerSuggestions.map((suggestion) => (
-          <option key={suggestion.id} value={suggestion.symbol}>
-            {suggestion.name}
-          </option>
-        ))}
-      </datalist>
-
-      <div className="investments-market__chips">
-        {tickerSuggestions.length > 0 ? (
-          tickerSuggestions.map((suggestion) => (
-            <button
-              key={suggestion.id}
-              className={`button button-small ${suggestion.symbol === submittedSymbol ? "button-primary" : "button-secondary"}`}
-              type="button"
-              onClick={() => selectSuggestion(suggestion)}
-            >
-              {suggestion.symbol}
-            </button>
-          ))
-        ) : (
-          <p className="panel-muted">Add a symbol to an investment account to make it appear here as a quick tracker.</p>
-        )}
+        </form>
       </div>
 
       <div className="investments-market__range">
@@ -537,97 +623,121 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
           </div>
         ) : displayPoints.length > 1 ? (
           <>
-            <div className="market-chart__y-axis">
-              {yTicks
-                .slice()
-                .reverse()
-                .map((tick) => (
-                  <span key={tick}>{formatAmount(tick)}</span>
-                ))}
-            </div>
-
-            <div className="market-chart__plot">
-              <svg
-                viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                role="img"
-                aria-label={`${submittedSymbol} price history`}
-              >
-                <defs>
-                  <linearGradient id="market-chart-fill" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="rgba(3, 168, 192, 0.24)" />
-                    <stop offset="100%" stopColor="rgba(3, 168, 192, 0.03)" />
-                  </linearGradient>
-                </defs>
-                <path
-                  d={`${lineChart.linePath} L ${lineChart.points[lineChart.points.length - 1].x.toFixed(1)} ${chartHeight - chartPadding} L ${lineChart.points[0].x.toFixed(1)} ${chartHeight - chartPadding} Z`}
-                  fill="url(#market-chart-fill)"
-                />
-                <path d={lineChart.linePath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                {benchmarkIsActive ? (
-                  <path
-                    d={benchmarkLineChart.linePath}
-                    fill="none"
-                    stroke="rgba(59, 130, 246, 0.95)"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeDasharray="8 7"
-                  />
-                ) : null}
-                {lineChart.points.map((point) => (
-                  <circle key={`${point.date}-${point.value}`} cx={point.x} cy={point.y} r="3.5" fill="white" stroke="var(--accent)" strokeWidth="2" />
-                ))}
-                <rect
-                  x="0"
-                  y="0"
-                  width={chartWidth}
-                  height={chartHeight}
-                  fill="transparent"
-                  onMouseMove={(event) => {
-                    const bounds = event.currentTarget.getBoundingClientRect();
-                    const x = ((event.clientX - bounds.left) / bounds.width) * chartWidth;
-                    const nearestIndex = lineChart.points.reduce(
-                      (nearest, point, index) =>
-                        Math.abs(point.x - x) < Math.abs(lineChart.points[nearest].x - x) ? index : nearest,
-                      0
-                    );
-                    const point = lineChart.points[nearestIndex];
-                    if (!point) {
-                      return;
-                    }
-
-                    setHoverIndex(nearestIndex);
-                    setHoverPosition({ x: point.x, y: point.y });
-                  }}
-                  onMouseLeave={() => {
-                    setHoverIndex(null);
-                    setHoverPosition(null);
-                  }}
-                />
-              </svg>
-              {hoverPosition && hoveredPoint ? (
-                <div
-                  className="market-chart__tooltip"
-                  style={{
-                    left: `${clamp(hoverPosition.x - 80, 6, chartWidth - 166)}px`,
-                    top: `${clamp(hoverPosition.y - 92, 6, chartHeight - 92)}px`,
-                  }}
-                >
-                  <strong>{formatShortDate(hoveredPoint.date)}</strong>
-                  <span>{formatAmount(hoveredPoint.value)}</span>
-                  <small>{displayCurrency} equivalent</small>
-                </div>
-              ) : null}
-            </div>
-
-            {benchmarkIsActive ? (
-              <div className="investments-market__comparison">
-                <span>
-                  {benchmarkOption.label} scaled to the same starting value. This shows relative movement, not absolute price.
-                </span>
-                <span>{benchmarkOption.note}</span>
+            <div className="market-chart__canvas">
+              <div className="market-chart__y-axis" aria-hidden="true">
+                {yTicks
+                  .slice()
+                  .reverse()
+                  .map((tick) => (
+                    <span key={tick}>{formatAmount(tick)}</span>
+                  ))}
               </div>
-            ) : null}
+
+              <div className="market-chart__plot">
+                <svg
+                  viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                  role="img"
+                  aria-label={`${submittedSymbol} price history`}
+                >
+                  <defs>
+                    <linearGradient id="market-chart-fill" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="rgba(3, 168, 192, 0.24)" />
+                      <stop offset="100%" stopColor="rgba(3, 168, 192, 0.03)" />
+                    </linearGradient>
+                  </defs>
+
+                  {yTicks.map((tick) => {
+                    const y = valueToY(tick);
+                    return <line key={tick} x1={chartPadding} x2={chartWidth - chartPadding} y1={y} y2={y} stroke="rgba(148, 163, 184, 0.18)" strokeWidth="1" />;
+                  })}
+
+                  {benchmarkIsActive ? (
+                    <path
+                      d={benchmarkLineChart.linePath}
+                      fill="none"
+                      stroke="rgba(59, 130, 246, 0.95)"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray="8 7"
+                    />
+                  ) : null}
+
+                  <path
+                    d={`${lineChart.linePath} L ${lineChart.points[lineChart.points.length - 1].x.toFixed(1)} ${chartHeight - chartPadding} L ${lineChart.points[0].x.toFixed(1)} ${chartHeight - chartPadding} Z`}
+                    fill="url(#market-chart-fill)"
+                  />
+                  <path d={lineChart.linePath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+
+                  {lineChart.points.map((point) => (
+                    <circle key={`${point.date}-${point.value}`} cx={point.x} cy={point.y} r="3.5" fill="white" stroke="var(--accent)" strokeWidth="2" />
+                  ))}
+
+                  {hoverPosition && hoveredPoint ? (
+                    <>
+                      <line
+                        x1={hoverPosition.x}
+                        x2={hoverPosition.x}
+                        y1={chartPadding}
+                        y2={chartHeight - chartPadding}
+                        stroke="rgba(15, 23, 42, 0.15)"
+                        strokeDasharray="4 6"
+                      />
+                      <circle cx={hoverPosition.x} cy={hoverPosition.y} r="6" fill="white" stroke="var(--accent)" strokeWidth="3" />
+                    </>
+                  ) : null}
+
+                  <rect
+                    x="0"
+                    y="0"
+                    width={chartWidth}
+                    height={chartHeight}
+                    fill="transparent"
+                    onMouseMove={(event) => {
+                      const bounds = event.currentTarget.getBoundingClientRect();
+                      const x = ((event.clientX - bounds.left) / bounds.width) * chartWidth;
+                      const nearestIndex = lineChart.points.reduce(
+                        (nearest, point, index) =>
+                          Math.abs(point.x - x) < Math.abs(lineChart.points[nearest].x - x) ? index : nearest,
+                        0
+                      );
+                      const point = lineChart.points[nearestIndex];
+                      if (!point) {
+                        return;
+                      }
+
+                      setHoverIndex(nearestIndex);
+                      setHoverPosition({ x: point.x, y: point.y });
+                    }}
+                    onMouseLeave={() => {
+                      setHoverIndex(null);
+                      setHoverPosition(null);
+                    }}
+                  />
+                </svg>
+
+                {hoverPosition && hoveredPoint ? (
+                  <div
+                    className="market-chart__tooltip"
+                    style={{
+                      left: `${clamp(hoverPosition.x - 80, 6, chartWidth - 166)}px`,
+                      top: `${clamp(hoverPosition.y - 116, 6, chartHeight - 100)}px`,
+                    }}
+                  >
+                    <strong>{new Date(hoveredPoint.date).toLocaleString("en-PH", { month: "short", day: "2-digit", hour: "numeric", minute: "2-digit" })}</strong>
+                    <span>{formatAmount(hoveredPoint.value)}</span>
+                    <small>Volume: {formatVolume(hoveredPoint.volume)}</small>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="investments-market__comparison">
+              <span>
+                {benchmarkIsActive ? `${benchmarkOption.label} scaled to the same starting value.` : `${submittedMarketLabel} market`}
+              </span>
+              <span>{benchmarkIsActive ? benchmarkOption.note : chartSubtitle}</span>
+            </div>
 
             <div className="market-chart__x-axis">
               {xTickIndexes.map((index) => {
@@ -666,7 +776,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
         ) : (
           <div className="empty-state">
             <strong>Pick a ticker to see its movement.</strong>
-            <p>Use one of the chips below, or type your own symbol and choose equity or crypto.</p>
+            <p>Choose a market, type a ticker, and press Enter to load it.</p>
           </div>
         )}
       </div>
@@ -678,7 +788,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
       {history && displayPoints.length > 1 ? (
         <div className="investments-market__footnote">
           <span>
-            Source: {sourceLabel}, using {submittedAssetType === "crypto" ? "daily crypto history" : "daily market history"}.
+            Source: {sourceLabel}, {submittedMarketLabel}, using {range} history.
           </span>
           <span>
             {lastUpdatedAt ? `Updated ${formatRelativeTime(lastUpdatedAt)}` : "Waiting for first refresh"}

@@ -41,7 +41,31 @@ export type AdminErrorLogListResponse = {
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
 
-function mapLog(log: Awaited<ReturnType<typeof prisma.appErrorLog.findMany>>[number]): AdminErrorLogItem {
+type AdminErrorLogRecord = Prisma.AppErrorLogGetPayload<{
+  select: {
+    id: true;
+    message: true;
+    name: true;
+    stack: true;
+    source: true;
+    route: true;
+    url: true;
+    method: true;
+    statusCode: true;
+    buildId: true;
+    deploymentId: true;
+    environment: true;
+    userAgent: true;
+    clerkUserId: true;
+    userId: true;
+    workspaceId: true;
+    metadata: true;
+    occurredAt: true;
+    createdAt: true;
+  };
+}>;
+
+function mapLog(log: AdminErrorLogRecord): AdminErrorLogItem {
   return {
     id: log.id,
     message: log.message,
