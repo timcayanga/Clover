@@ -1717,7 +1717,8 @@ export function ImportFilesModal({
     return null;
   }
 
-  const showCompactProgress = busy || Boolean(activeItem);
+  const hasCompletedBatch = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
+  const showCompactProgress = busy || Boolean(activeItem) || hasCompletedBatch;
 
   const modalContent = activePasswordItem ? (
       <ImportPasswordModal
