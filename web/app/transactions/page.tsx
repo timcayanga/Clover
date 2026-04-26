@@ -5103,6 +5103,9 @@ function TransactionsPageContent() {
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
           const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution);
+          const hasVisibleMatchingAccount = accounts.some(
+            (account) => normalizeImportedAccountKey(account.name, account.institution) === importedAccountKey
+          );
 
           setPendingImportSummary(summary);
 
@@ -5161,8 +5164,15 @@ function TransactionsPageContent() {
           }
 
           if (!summary.optimistic) {
-            void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
-            void loadTransactionsPage(selectedWorkspaceId, { background: true });
+            if (hasVisibleMatchingAccount) {
+              window.setTimeout(() => {
+                void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
+                void loadTransactionsPage(selectedWorkspaceId, { background: true });
+              }, 10_000);
+            } else {
+              void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
+              void loadTransactionsPage(selectedWorkspaceId, { background: true });
+            }
           }
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}

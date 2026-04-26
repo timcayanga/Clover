@@ -2025,6 +2025,9 @@ function AccountsPageContent() {
           const previewTransactions = summary.previewTransactions ?? [];
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution);
+          const hasVisibleMatchingAccount = accounts.some(
+            (account) => normalizeImportedAccountKey(account.name, account.institution) === importedAccountKey
+          );
 
           flushSync(() => {
             setAccountsLoading(false);
@@ -2084,7 +2087,13 @@ function AccountsPageContent() {
           });
 
           if (!summary.optimistic) {
-            void refreshAll();
+            if (hasVisibleMatchingAccount) {
+              window.setTimeout(() => {
+                void refreshAll();
+              }, 10_000);
+            } else {
+              void refreshAll();
+            }
           }
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
