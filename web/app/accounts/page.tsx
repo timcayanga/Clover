@@ -162,7 +162,6 @@ type StatementCheckpoint = {
   } | null;
 };
 
-type SummaryMode = "totals" | "percent";
 type AccountSort = "name" | "balance_desc" | "updated_desc";
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
@@ -559,7 +558,6 @@ function AccountsPageContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<AccountSort>("updated_desc");
   const [showNeedsReviewOnly, setShowNeedsReviewOnly] = useState(false);
-  const [summaryMode, setSummaryMode] = useState<SummaryMode>("totals");
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
@@ -1057,16 +1055,6 @@ function AccountsPageContent() {
     [selectedAccount, drawerTransactions]
   );
 
-  const needsReviewCount = useMemo(() => {
-    return reconciledAccounts.filter((account) => {
-      const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
-      const duplicate = (duplicateCounts.get(duplicateKey) ?? 0) > 1;
-      const missingInstitution = account.source === "imported" && !account.institution;
-      const missingBalance = account.balance === null;
-      return duplicate || missingInstitution || missingBalance;
-    }).length;
-  }, [duplicateCounts, reconciledAccounts]);
-
   const accountHistoryEntries = useMemo(() => {
     if (!selectedAccount) return [];
     return selectedAccountTransactions.slice(0, 5).map((transaction) => ({
@@ -1539,110 +1527,6 @@ function AccountsPageContent() {
             </div>
           </div>
 
-          <aside className="accounts-summary-column glass">
-            <div className="accounts-summary-column__head">
-              <div>
-                <p className="eyebrow">Summary</p>
-                <h4>Assets vs liabilities</h4>
-              </div>
-              <div className="accounts-summary-tabs">
-                <button
-                  type="button"
-                  className={summaryMode === "totals" ? "is-active" : ""}
-                  onClick={() => setSummaryMode("totals")}
-                >
-                  Totals
-                </button>
-                <button
-                  type="button"
-                  className={summaryMode === "percent" ? "is-active" : ""}
-                  onClick={() => setSummaryMode("percent")}
-                >
-                  Percent
-                </button>
-              </div>
-            </div>
-
-            {summaryMode === "totals" ? (
-              <div className="accounts-summary-list">
-                <div className="accounts-summary-item">
-                  <span>Assets</span>
-                  <strong>{currencyFormatter.format(totals.assets)}</strong>
-                </div>
-                <div className="accounts-summary-bar">
-                  <span style={{ width: `${Math.max((totals.assets / Math.max(totals.assets + totals.liabilities, 1)) * 100, 12)}%` }} />
-                </div>
-                <div className="accounts-summary-item">
-                  <span>Liabilities</span>
-                  <strong>{currencyFormatter.format(totals.liabilities)}</strong>
-                </div>
-                <div className="accounts-summary-bar accounts-summary-bar--liability">
-                  <span style={{ width: `${Math.max((totals.liabilities / Math.max(totals.assets + totals.liabilities, 1)) * 100, 12)}%` }} />
-                </div>
-                <div className="accounts-summary-item">
-                  <span>Needs review</span>
-                  <strong>{needsReviewCount}</strong>
-                </div>
-              </div>
-            ) : (
-              <div className="accounts-summary-list">
-                <div className="accounts-summary-item">
-                  <span>Assets share</span>
-                  <strong>{Math.round((totals.assets / Math.max(totals.assets + totals.liabilities, 1)) * 100)}%</strong>
-                </div>
-                <div className="accounts-summary-item">
-                  <span>Liabilities share</span>
-                  <strong>{Math.round((totals.liabilities / Math.max(totals.assets + totals.liabilities, 1)) * 100)}%</strong>
-                </div>
-                <div className="accounts-summary-item">
-                  <span>Net worth</span>
-                  <strong>{currencyFormatter.format(totals.netWorth)}</strong>
-                </div>
-              </div>
-            )}
-
-            <div className="accounts-summary-guide">
-              <strong>Balance guide</strong>
-              <p>
-                Current balance is the number on each account card. Spendable amount is the cash-like balance you can use now.
-                Net worth is assets minus liabilities across the workspace.
-              </p>
-            </div>
-
-            <div className="accounts-summary-group">
-              <p className="eyebrow">Import shortcuts</p>
-              <div className="accounts-summary-actions">
-                <button className="button button-secondary button-small accounts-summary-download" type="button" onClick={openImportFiles}>
-                  <ActionIcon name="upload" />
-                  <span>Import files</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="accounts-summary-actions" ref={downloadMenuRef}>
-              <button
-                className="button button-secondary button-small accounts-summary-download"
-                type="button"
-                onClick={() => setDownloadMenuOpen((current) => !current)}
-                aria-haspopup="menu"
-                aria-expanded={downloadMenuOpen}
-              >
-                <ActionIcon name="download" />
-                <span>Download</span>
-                <ActionIcon name="chevron-down" />
-              </button>
-              {downloadMenuOpen ? (
-                <div className="accounts-summary-dropdown" role="menu" aria-label="Download options">
-                  <button type="button" role="menuitem" onClick={() => downloadSummary("csv")}>
-                    Download CSV
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => downloadSummary("pdf")}>
-                    Download PDF
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </aside>
         </section>
       </div>
 

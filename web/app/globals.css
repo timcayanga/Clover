@@ -9437,7 +9437,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-main-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) 320px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-items: start;
 }
@@ -12531,11 +12531,6 @@ input.transaction-inline-edit--amount::placeholder {
 
   .accounts-overview-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .accounts-summary-column {
-    position: relative;
-    top: 0;
   }
 
   .accounts-card-grid {
