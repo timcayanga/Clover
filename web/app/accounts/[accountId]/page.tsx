@@ -98,11 +98,11 @@ const getCategoryIconSrc = (categoryName: string | null | undefined) => {
     case "education":
       return "/category-icons/education.svg";
     case "financial":
-      return "/category-icons/financial.svg";
+      return "/category-icons/financial.png";
     case "gifts & donations":
       return "/category-icons/gift.svg";
     case "business":
-      return "/category-icons/business.svg";
+      return "/category-icons/business.png";
     case "transfers":
       return "/category-icons/transfer.svg";
     case "groceries":
