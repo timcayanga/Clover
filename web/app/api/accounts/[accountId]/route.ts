@@ -199,10 +199,6 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
           data: { accountId: mergeTarget.id },
         });
       } else {
-        await tx.transaction.deleteMany({
-          where: { accountId },
-        });
-
         await tx.importFile.updateMany({
           where: { accountId },
           data: { accountId: null },

@@ -22,6 +22,7 @@ import {
   markDeletingWorkspaceAccount,
   clearDeletingWorkspaceAccount,
   normalizeImportedAccountKey,
+  deletingAccountsWorkspaceCacheKey,
 } from "@/lib/workspace-cache";
 import { getAccountBrand } from "@/lib/account-brand";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
@@ -685,7 +686,10 @@ function AccountsPageContent() {
     [accounts, drawerAccountId, drawerStatementCheckpoints, drawerTransactions, transactions]
   );
 
-  const deletingAccountIdsSet = useMemo(() => new Set(deletingAccountIds), [deletingAccountIds]);
+  const deletingAccountIdsSet = useMemo(
+    () => new Set([...deletingAccountIds, ...getDeletingWorkspaceAccountIds(selectedWorkspaceId)]),
+    [deletingAccountIds, selectedWorkspaceId]
+  );
 
   const loadWorkspaces = async () => {
     setWorkspacesLoading(true);
@@ -842,6 +846,7 @@ function AccountsPageContent() {
       if (
         event.key !== accountsWorkspaceCacheKey &&
         event.key !== deletedAccountsWorkspaceCacheKey &&
+        event.key !== deletingAccountsWorkspaceCacheKey &&
         event.key !== "clover.selected-workspace-id.v1"
       ) {
         return;
@@ -1217,11 +1222,7 @@ function AccountsPageContent() {
   );
 
   useEffect(() => {
-    if (!importOpen || !pendingImportSummary || accountsLoading) {
-      return;
-    }
-
-    if (pendingImportSummary.optimistic) {
+    if (!importOpen || !pendingImportSummary) {
       return;
     }
 
@@ -1247,7 +1248,7 @@ function AccountsPageContent() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [accounts, accountsLoading, importOpen, pendingImportSummary]);
+  }, [accounts, importOpen, pendingImportSummary]);
 
   const manualAccountBrand = useMemo(
     () =>
