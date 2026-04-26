@@ -38,6 +38,8 @@ type Account = {
   id: string;
   name: string;
   institution: string | null;
+  investmentSymbol: string | null;
+  investmentCostBasis: string | null;
   type: "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
   currency: string;
   source: string;
@@ -55,6 +57,8 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     id: summary.accountId,
     name: summary.accountName,
     institution: summary.institution,
+    investmentSymbol: null,
+    investmentCostBasis: null,
     type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
     currency: "PHP",
     source: "upload",
@@ -181,6 +185,16 @@ const formatDate = (value: string) =>
   });
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
+
+const parseNullableNumberInput = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 const getEffectiveAccountType = (account: Account) => account.type;
 
@@ -565,10 +579,14 @@ function AccountsPageContent() {
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
+  const [manualInvestmentSymbol, setManualInvestmentSymbol] = useState("");
+  const [manualInvestmentCostBasis, setManualInvestmentCostBasis] = useState("");
   const [manualBalance, setManualBalance] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [accountEditName, setAccountEditName] = useState("");
   const [accountEditInstitution, setAccountEditInstitution] = useState("");
+  const [accountEditInvestmentSymbol, setAccountEditInvestmentSymbol] = useState("");
+  const [accountEditInvestmentCostBasis, setAccountEditInvestmentCostBasis] = useState("");
   const [accountEditType, setAccountEditType] = useState<Account["type"]>("bank");
   const [accountEditCurrency, setAccountEditCurrency] = useState("PHP");
   const [accountEditBalance, setAccountEditBalance] = useState("");
@@ -1064,6 +1082,23 @@ function AccountsPageContent() {
     [drawerAccountId, reconciledAccounts]
   );
 
+  useEffect(() => {
+    if (!selectedAccount) {
+      return;
+    }
+
+    setAccountEditName(selectedAccount.name);
+    setAccountEditInstitution(selectedAccount.institution ?? "");
+    setAccountEditInvestmentSymbol(selectedAccount.investmentSymbol ?? "");
+    setAccountEditInvestmentCostBasis(selectedAccount.investmentCostBasis ?? "");
+    setAccountEditType(selectedAccount.type);
+    setAccountEditCurrency(selectedAccount.currency);
+    setAccountEditSource(selectedAccount.source);
+    setAccountEditBalance(selectedAccount.balance ?? "");
+    setBalanceDraft(selectedAccount.balance ?? "");
+    setAccountDeleteConfirmOpen(false);
+  }, [selectedAccount]);
+
   const selectedAccountTransactions = useMemo(
     () =>
       selectedAccount
@@ -1152,6 +1187,9 @@ function AccountsPageContent() {
           workspaceId: selectedWorkspaceId,
           name,
           institution: accountEditInstitution.trim() || null,
+          investmentSymbol: accountEditType === "investment" ? accountEditInvestmentSymbol.trim() || null : null,
+          investmentCostBasis:
+            accountEditType === "investment" ? parseNullableNumberInput(accountEditInvestmentCostBasis) : null,
           type: accountEditType,
           currency: accountEditCurrency || "PHP",
           source: accountEditSource || selectedAccount.source,
@@ -1237,6 +1275,8 @@ function AccountsPageContent() {
           workspaceId: selectedWorkspaceId,
           name,
           institution: manualType === "cash" ? "Cash" : manualInstitution.trim() || null,
+          investmentSymbol: manualType === "investment" ? manualInvestmentSymbol.trim() || null : null,
+          investmentCostBasis: manualType === "investment" ? parseNullableNumberInput(manualInvestmentCostBasis) : null,
           type: manualType,
           currency: "PHP",
           source: "manual",
@@ -1254,6 +1294,8 @@ function AccountsPageContent() {
       }
       setManualName("");
       setManualInstitution("");
+      setManualInvestmentSymbol("");
+      setManualInvestmentCostBasis("");
       setManualBalance("");
       setManualType("bank");
       setAddOpen(false);
@@ -1609,7 +1651,11 @@ function AccountsPageContent() {
                 </label>
                 <label>
                   Institution
-                  <input value={accountEditInstitution} onChange={(event) => setAccountEditInstitution(event.target.value)} placeholder="Bank or wallet name" />
+                  <input
+                    value={accountEditInstitution}
+                    onChange={(event) => setAccountEditInstitution(event.target.value)}
+                    placeholder={accountEditType === "investment" ? "Broker or platform" : "Bank or wallet name"}
+                  />
                 </label>
                 <label>
                   Type
@@ -1622,6 +1668,27 @@ function AccountsPageContent() {
                     <option value="other">Other</option>
                   </select>
                 </label>
+                {accountEditType === "investment" ? (
+                  <div className="accounts-investment-fields">
+                    <label>
+                      Symbol / ticker
+                      <input
+                        value={accountEditInvestmentSymbol}
+                        onChange={(event) => setAccountEditInvestmentSymbol(event.target.value)}
+                        placeholder="Example: FMETF"
+                      />
+                    </label>
+                    <label>
+                      Cost basis
+                      <input
+                        value={accountEditInvestmentCostBasis}
+                        onChange={(event) => setAccountEditInvestmentCostBasis(event.target.value)}
+                        inputMode="decimal"
+                        placeholder="0.00"
+                      />
+                    </label>
+                  </div>
+                ) : null}
                 <label>
                   Balance
                   <input value={accountEditBalance} onChange={(event) => setAccountEditBalance(event.target.value)} inputMode="decimal" placeholder="0.00" />
@@ -1865,7 +1932,7 @@ function AccountsPageContent() {
                   <input
                     value={manualInstitution}
                     onChange={(event) => setManualInstitution(event.target.value)}
-                    placeholder="Example: BDO"
+                    placeholder={manualType === "investment" ? "Example: COL Financial" : "Example: BDO"}
                   />
                 </label>
                 <label>
@@ -1879,6 +1946,27 @@ function AccountsPageContent() {
                     <option value="other">Other</option>
                   </select>
                 </label>
+                {manualType === "investment" ? (
+                  <div className="accounts-investment-fields">
+                    <label>
+                      Symbol / ticker
+                      <input
+                        value={manualInvestmentSymbol}
+                        onChange={(event) => setManualInvestmentSymbol(event.target.value)}
+                        placeholder="Example: FMETF"
+                      />
+                    </label>
+                    <label>
+                      Cost basis
+                      <input
+                        value={manualInvestmentCostBasis}
+                        onChange={(event) => setManualInvestmentCostBasis(event.target.value)}
+                        inputMode="decimal"
+                        placeholder="0.00"
+                      />
+                    </label>
+                  </div>
+                ) : null}
                 <label>
                   Balance
                   <input
@@ -1905,7 +1993,21 @@ function AccountsPageContent() {
                   {manualAccountBrand.label}
                   {manualType !== "cash" && manualInstitution.trim() ? ` · ${manualInstitution.trim()}` : ""}
                 </p>
-                <span>We use the institution to match the right logo and statement rules.</span>
+                {manualType === "investment" ? (
+                  <div className="accounts-add-preview__investment">
+                    <span>
+                      Symbol <strong>{manualInvestmentSymbol.trim() || "—"}</strong>
+                    </span>
+                    <span>
+                      Cost basis <strong>{manualInvestmentCostBasis.trim() || "0.00"}</strong>
+                    </span>
+                  </div>
+                ) : null}
+                <span>
+                  {manualType === "investment"
+                    ? "Symbol and cost basis help track holdings and performance."
+                    : "We use the institution to match the right logo and statement rules."}
+                </span>
               </aside>
             </div>
           </section>

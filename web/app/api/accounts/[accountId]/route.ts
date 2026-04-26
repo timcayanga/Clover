@@ -11,10 +11,25 @@ const accountPatchSchema = z.object({
   workspaceId: z.string().min(1),
   name: z.string().min(1).optional(),
   institution: z.string().nullable().optional(),
+  investmentSymbol: z.string().nullable().optional(),
+  investmentCostBasis: z.union([z.string(), z.number(), z.null()]).optional(),
   type: z.enum(["bank", "wallet", "credit_card", "cash", "investment", "other"]).optional(),
   currency: z.string().optional(),
   source: z.string().optional(),
   balance: z.union([z.string(), z.number(), z.null()]).optional(),
+});
+
+const serializeAccount = <T extends {
+  balance: { toString: () => string } | null;
+  investmentCostBasis: { toString: () => string } | null;
+  createdAt: Date;
+  updatedAt: Date;
+}>(account: T) => ({
+  ...account,
+  balance: account.balance?.toString() ?? null,
+  investmentCostBasis: account.investmentCostBasis?.toString() ?? null,
+  createdAt: account.createdAt.toISOString(),
+  updatedAt: account.updatedAt.toISOString(),
 });
 
 export async function GET(_request: Request, { params }: { params: Promise<{ accountId: string }> }) {
@@ -30,12 +45,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
     await assertWorkspaceAccess(userId, account.workspaceId);
 
     return NextResponse.json({
-      account: {
-        ...account,
-        balance: account.balance?.toString() ?? null,
-        createdAt: account.createdAt.toISOString(),
-        updatedAt: account.updatedAt.toISOString(),
-      },
+      account: serializeAccount(account),
     });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -55,6 +65,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
       data: {
         name: payload.name?.trim() ?? undefined,
         institution: payload.institution === undefined ? undefined : payload.institution?.trim() || null,
+        investmentSymbol: payload.investmentSymbol === undefined ? undefined : payload.investmentSymbol?.trim() || null,
+        investmentCostBasis:
+          payload.investmentCostBasis === undefined
+            ? undefined
+            : payload.investmentCostBasis === null || payload.investmentCostBasis === ""
+              ? null
+              : payload.investmentCostBasis.toString(),
         type: payload.type,
         currency: payload.currency ? payload.currency.toUpperCase() : undefined,
         source: payload.source,
@@ -72,14 +89,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
       confidence: 100,
     }).catch(() => null);
 
-    return NextResponse.json({
-      account: {
-        ...account,
-        balance: account.balance?.toString() ?? null,
-        createdAt: account.createdAt.toISOString(),
-        updatedAt: account.updatedAt.toISOString(),
-      },
-    });
+    return NextResponse.json({ account: serializeAccount(account) });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -157,14 +167,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
       });
     });
 
-    return NextResponse.json({
-      account: {
-        ...account,
-        balance: account.balance?.toString() ?? null,
-        createdAt: account.createdAt.toISOString(),
-        updatedAt: account.updatedAt.toISOString(),
-      },
-    });
+    return NextResponse.json({ account: serializeAccount(account) });
   } catch (error) {
     return NextResponse.json(
       {

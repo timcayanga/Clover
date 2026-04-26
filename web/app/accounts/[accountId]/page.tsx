@@ -15,6 +15,8 @@ type Account = {
   workspaceId: string;
   name: string;
   institution: string | null;
+  investmentSymbol: string | null;
+  investmentCostBasis: string | null;
   type: string;
   currency: string;
   source: string;
@@ -73,6 +75,15 @@ const formatDate = (value: string) =>
   });
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
+
+const parseNullableNumber = (value: string | null | undefined) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 const isSpendableAccountType = (value: string) => value === "bank" || value === "wallet" || value === "cash";
 
@@ -426,6 +437,9 @@ function AccountDetailPageContent() {
     [account?.type]
   );
 
+  const investmentSymbol = account?.investmentSymbol?.trim() || null;
+  const investmentCostBasis = useMemo(() => parseNullableNumber(account?.investmentCostBasis), [account?.investmentCostBasis]);
+
   const importSummaries = useMemo(
     () => buildImportSummaries(transactions),
     [transactions]
@@ -457,6 +471,13 @@ function AccountDetailPageContent() {
       ),
     [account?.balance, latestCheckpoint, transactions]
   );
+  const investmentGainLoss = useMemo(() => {
+    if (account?.type !== "investment" || investmentCostBasis === null) {
+      return null;
+    }
+
+    return currentBalance - investmentCostBasis;
+  }, [account?.type, currentBalance, investmentCostBasis]);
   const checkpointGap =
     latestCheckpoint && Number.isFinite(checkpointBalance) && Number.isFinite(currentBalance)
       ? checkpointBalance - currentBalance
@@ -618,6 +639,38 @@ function AccountDetailPageContent() {
                 <div className="panel-muted">Institution</div>
                 <strong>{account.institution ?? accountBrand.label}</strong>
                 <span>{account.source === "manual" ? "Manual" : "Imported"} · Updated {formatDate(account.updatedAt)}</span>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {account?.type === "investment" ? (
+          <div className="accounts-detail__investment glass" style={{ marginTop: 20 }}>
+            <div className="accounts-detail__reconciliation-head">
+              <div>
+                <p className="eyebrow">Investment details</p>
+                <h3>Holdings snapshot</h3>
+              </div>
+            </div>
+            <div className="accounts-detail__investment-grid">
+              <div className="status-card">
+                <div className="panel-muted">Symbol / ticker</div>
+                <strong>{investmentSymbol ?? "Not set"}</strong>
+                <span>{account.institution ?? accountBrand.label}</span>
+              </div>
+              <div className="status-card">
+                <div className="panel-muted">Cost basis</div>
+                <strong>{investmentCostBasis === null ? "Not set" : currencyFormatter.format(investmentCostBasis)}</strong>
+                <span>Historical purchase value</span>
+              </div>
+              <div className="status-card">
+                <div className="panel-muted">Unrealized gain / loss</div>
+                <strong>
+                  {investmentGainLoss === null
+                    ? "Not set"
+                    : currencyFormatter.format(investmentGainLoss)}
+                </strong>
+                <span>{investmentGainLoss === null ? "Add a cost basis to compare performance." : investmentGainLoss >= 0 ? "Above cost basis" : "Below cost basis"}</span>
               </div>
             </div>
           </div>

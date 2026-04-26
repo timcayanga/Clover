@@ -6,6 +6,19 @@ import { hasCompatibleTable, loadAccountRules, normalizeAccountRuleKey, upsertAc
 
 export const dynamic = "force-dynamic";
 
+const serializeAccount = <T extends {
+  balance: { toString: () => string } | null;
+  investmentCostBasis: { toString: () => string } | null;
+  createdAt: Date;
+  updatedAt: Date;
+}>(account: T) => ({
+  ...account,
+  balance: account.balance?.toString() ?? null,
+  investmentCostBasis: account.investmentCostBasis?.toString() ?? null,
+  createdAt: account.createdAt.toISOString(),
+  updatedAt: account.updatedAt.toISOString(),
+});
+
 export async function GET(request: Request) {
   try {
     const { userId } = await requireAuth();
@@ -86,6 +99,11 @@ export async function POST(request: Request) {
     const name = String(body?.name || "").trim();
     const institution = body?.institution ? String(body.institution) : null;
     const type = body?.type || "bank";
+    const investmentSymbol = body?.investmentSymbol ? String(body.investmentSymbol).trim() || null : null;
+    const investmentCostBasis =
+      body?.investmentCostBasis === undefined || body?.investmentCostBasis === null || body?.investmentCostBasis === ""
+        ? null
+        : String(body.investmentCostBasis);
 
     if (!workspaceId || !name) {
       return NextResponse.json({ error: "workspaceId and name are required" }, { status: 400 });
@@ -103,12 +121,7 @@ export async function POST(request: Request) {
       null;
     if (existingAccount) {
       return NextResponse.json({
-        account: {
-          ...existingAccount,
-          balance: existingAccount.balance?.toString() ?? null,
-          createdAt: existingAccount.createdAt.toISOString(),
-          updatedAt: existingAccount.updatedAt.toISOString(),
-        },
+        account: serializeAccount(existingAccount),
       });
     }
 
@@ -117,6 +130,8 @@ export async function POST(request: Request) {
         workspaceId,
         name,
         institution,
+        investmentSymbol: type === "investment" ? investmentSymbol : null,
+        investmentCostBasis: type === "investment" ? investmentCostBasis : null,
         type,
         currency: body?.currency ? String(body.currency).toUpperCase() : "PHP",
         source: body?.source ? String(body.source) : "upload",
@@ -133,7 +148,7 @@ export async function POST(request: Request) {
       confidence: 100,
     }).catch(() => null);
 
-    return NextResponse.json({ account });
+    return NextResponse.json({ account: serializeAccount(account) });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
