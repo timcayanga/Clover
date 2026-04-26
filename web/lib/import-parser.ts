@@ -3211,12 +3211,13 @@ const unionbankStatementMetadata = (text: string): DetectedStatementMetadata | n
   const statementDateLine = lines.find((line) => /TRANSACTION HISTORY AS OF/i.test(line)) ?? "";
   const statementDateMatch = statementDateLine.match(/TRANSACTION HISTORY AS OF\s+(.+)$/i);
   const endDate = statementDateMatch?.[1] ? new Date(statementDateMatch[1]) : null;
+  const accountType = /credit\s*card|visa|mastercard|amex|platinum/i.test(normalized) ? "credit_card" : "bank";
 
   return {
     institution: "UnionBank",
     accountNumber,
     accountName,
-    accountType: "bank",
+    accountType,
     openingBalance: null,
     endingBalance: null,
     startDate: null,
@@ -3249,24 +3250,25 @@ const parseUnionBankTransactionSegment = (
   }
 
   const firstLine = normalizeWhitespace(segment[0] ?? "");
-  const dateMatch = firstLine.match(/^\d{2}\/\d{2}\/\d{2}/);
-  const date = parseDateValue(dateMatch?.[0] ?? null);
-  if (!date) {
+  const dateTokenMatch = firstLine.match(/^\d{2}\/\d{2}\/\d{2}|^[A-Za-z]+\s+\d{1,2},\s+\d{4}/);
+  const dateToken = dateTokenMatch?.[0] ?? null;
+  const date = parseDateValue(dateToken ?? null);
+  if (!date || !dateToken) {
     return null;
   }
 
   const body = [
-    firstLine.slice(dateMatch?.[0].length ?? 0).trim(),
+    firstLine.slice(dateToken.length).trim(),
     ...segment.slice(1),
   ].filter((line) => line && !isUnionBankBoilerplateLine(line));
   const rowText = normalizeWhitespace(body.join(" "));
   const moneyMatches = Array.from(rowText.matchAll(/PHP\s*[0-9][0-9,]*\.\d{2}/gi));
-  if (moneyMatches.length < 2) {
+  if (moneyMatches.length === 0) {
     return null;
   }
 
   const transactionAmountLine = moneyMatches[0][0];
-  const balanceLine = moneyMatches.at(-1)?.[0] ?? null;
+  const balanceLine = moneyMatches.length > 1 ? moneyMatches.at(-1)?.[0] ?? null : null;
   const transactionAmount = parseMoney(transactionAmountLine?.replace(/^PHP\s*/i, "") ?? null);
   if (transactionAmount === null) {
     return null;
@@ -3277,11 +3279,18 @@ const parseUnionBankTransactionSegment = (
     .replace(/PHP\s*[0-9][0-9,]*\.\d{2}/gi, " ")
     .replace(refIndex >= 0 ? body[refIndex] : "", " ");
   descriptionSource = descriptionSource.replace(/Date\s+Check No\.?\s+Ref\.?\s+No\.?\s+Description\s+Debit\s+Credit\s+Balance/gi, " ");
+  descriptionSource = descriptionSource.replace(/Date\s+Description\s+Amount/gi, " ");
   descriptionSource = descriptionSource.replace(/Page\s+\d+\s+of\s+\d+/gi, " ");
   descriptionSource = descriptionSource.replace(/For billing concerns, you may contact our 24-Hour Customer Service at \+632 8841-8600 or send us your concern via our Mailbox-Support Feature\./gi, " ");
   descriptionSource = descriptionSource.replace(/For best results, print your Transaction History on A4 paper using portrait orientation at actual size or fit-to-page settings/gi, " ");
   const description = normalizeWhitespace(descriptionSource);
-  if (!description || isUnionBankBoilerplateLine(description)) {
+  if (
+    !description ||
+    isUnionBankBoilerplateLine(description) ||
+    /^transactions$/i.test(description) ||
+    /^date\s+description\s+amount$/i.test(description) ||
+    /^transactions\s+date\s+description\s+amount$/i.test(description)
+  ) {
     return null;
   }
 
@@ -3335,7 +3344,7 @@ const parseUnionBankImportText = (text: string) => {
   let current: string[] = [];
 
   for (const line of lines) {
-    if (/^\d{2}\/\d{2}\/\d{2}\b/.test(line)) {
+    if (/^\d{2}\/\d{2}\/\d{2}\b|^[A-Za-z]+\s+\d{1,2},\s+\d{4}\b/.test(line)) {
       if (current.length > 0) {
         segments.push(current);
       }
@@ -3362,10 +3371,14 @@ const parseUnionBankImportText = (text: string) => {
     .filter(Boolean) as ParsedImportRow[];
 
   const lastRow = rows.at(-1);
+  const footerBalanceLine =
+    lines.find((line) => /total amount due|outstanding balance|amount due|current balance/i.test(line)) ?? null;
+  const footerBalanceText = footerBalanceLine?.match(/PHP\s*[0-9][0-9,]*\.\d{2}/i)?.[0] ?? null;
   const endingBalanceText =
-    lastRow?.rawPayload && typeof lastRow.rawPayload === "object" && typeof lastRow.rawPayload.balanceText === "string"
+    footerBalanceText ??
+    (lastRow?.rawPayload && typeof lastRow.rawPayload === "object" && typeof lastRow.rawPayload.balanceText === "string"
       ? lastRow.rawPayload.balanceText
-      : null;
+      : null);
   const endingBalance = parseMoney(endingBalanceText?.replace(/^PHP\s*/i, "") ?? null);
 
   return rows.length > 0

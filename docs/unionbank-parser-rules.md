@@ -24,6 +24,9 @@ This document captures the UnionBank parsing rules learned from the synthetic tr
 
 ## Credit Card Rules
 
+- Detect credit-card statements from the header wording and keep them as `credit_card` accounts, even when the account number still looks like a long UnionBank identifier.
+- Treat month-name date rows like `August 01, 2024` the same way as `MM/DD/YY` rows.
+- Ignore header rows such as `Transactions DATE DESCRIPTION AMOUNT`; they are table labels, not real transactions.
 - Keep `Cash Payment` as a card-payment credit, not income.
 - Keep merchant rows such as `Grab`, `Starbucks`, `Lazada`, `Airbnb`, `Klook`, `Qantas`, `Cebu Pacific`, `Din Tai Fung`, `Petron`, and `Apple` as learned merchant/category candidates.
 - Keep `OpenAI ChatGPT Subscription` as `Business` for this user.

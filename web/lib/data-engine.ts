@@ -1482,9 +1482,11 @@ export const loadTrainingSignals = async (workspaceId: string) => {
       take: 500,
     });
   } catch (error) {
-    if (!isMissingDatabaseRelationError(error, "TrainingSignal")) {
+    if (!isMissingDatabaseRelationError(error, "TrainingSignal") && !isMissingDatabaseColumnError(error)) {
       throw error;
     }
+
+    return [];
   }
 
   return signals.map((signal) => ({
@@ -1573,6 +1575,10 @@ export const recordTrainingSignal = async (params: {
     return null;
   }
 
+  if (!columns.includes("dedupeKey")) {
+    return null;
+  }
+
   const signalData = {
     workspaceId: params.workspaceId,
     importFileId: params.importFileId ?? null,
@@ -1588,31 +1594,27 @@ export const recordTrainingSignal = async (params: {
     notes: params.notes ?? null,
   };
 
-  const signal = columns.includes("dedupeKey")
-    ? await prisma.trainingSignal.upsert({
-        where: {
-          workspaceId_dedupeKey: {
-            workspaceId: params.workspaceId,
-            dedupeKey,
-          },
-        },
-        create: signalData,
-        update: {
-          importFileId: params.importFileId ?? null,
-          transactionId: params.transactionId ?? null,
-          source: params.source,
-          merchantKey,
-          merchantTokens: merchantTokens as Prisma.InputJsonValue,
-          categoryId: params.categoryId,
-          categoryName: params.categoryName ?? null,
-          type: params.type,
-          confidence: params.confidence ?? 100,
-          notes: params.notes ?? null,
-        },
-      })
-    : await prisma.trainingSignal.create({
-        data: signalData,
-      });
+  const signal = await prisma.trainingSignal.upsert({
+    where: {
+      workspaceId_dedupeKey: {
+        workspaceId: params.workspaceId,
+        dedupeKey,
+      },
+    },
+    create: signalData,
+    update: {
+      importFileId: params.importFileId ?? null,
+      transactionId: params.transactionId ?? null,
+      source: params.source,
+      merchantKey,
+      merchantTokens: merchantTokens as Prisma.InputJsonValue,
+      categoryId: params.categoryId,
+      categoryName: params.categoryName ?? null,
+      type: params.type,
+      confidence: params.confidence ?? 100,
+      notes: params.notes ?? null,
+    },
+  });
 
   const category = await prisma.category.findUnique({
     where: { id: params.categoryId },
