@@ -76,7 +76,6 @@ const isPasswordError = (error: unknown) => {
 };
 
 const fileKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
-const MAX_IMPORT_FILES = 10;
 
 const fileTypeLabel = (file: File) => {
   const lowerName = file.name.toLowerCase();
@@ -505,6 +504,7 @@ export function ImportFilesModal({
   const [validationNotice, setValidationNotice] = useState<string | null>(null);
   const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
+  const [monthlyUploadLimit, setMonthlyUploadLimit] = useState(10);
   const [limitReached, setLimitReached] = useState(false);
   const upgradePromptTrackedRef = useRef(false);
 
@@ -516,6 +516,7 @@ export function ImportFilesModal({
       setSelectedAccountId("");
       setSelectedPasswordItemId(null);
       setPlanTier("unknown");
+      setMonthlyUploadLimit(10);
       setLimitReached(false);
       upgradePromptTrackedRef.current = false;
       accountIdByKeyRef.current.clear();
@@ -566,8 +567,10 @@ export function ImportFilesModal({
 
         const payload = await response.json();
         const nextPlanTier = payload?.user?.planTier === "pro" ? "pro" : "free";
+        const nextMonthlyUploadLimit = Number(payload?.user?.monthlyUploadLimit ?? 10);
         if (!cancelled) {
           setPlanTier(nextPlanTier);
+          setMonthlyUploadLimit(Number.isFinite(nextMonthlyUploadLimit) && nextMonthlyUploadLimit >= 0 ? nextMonthlyUploadLimit : 10);
         }
       } catch {
         if (!cancelled) {
@@ -658,9 +661,10 @@ export function ImportFilesModal({
 
     let feedbackMessage = "";
     let validationMessage = "";
-    setItems((current) => {
-      const existing = new Set(current.map((item) => fileKey(item.file)));
-      const availableSlots = Math.max(0, MAX_IMPORT_FILES - current.length);
+      setItems((current) => {
+        const existing = new Set(current.map((item) => fileKey(item.file)));
+        const fileQueueLimit = Math.max(0, monthlyUploadLimit);
+        const availableSlots = Math.max(0, fileQueueLimit - current.length);
       let skippedTooMany = 0;
       let additionsCount = 0;
       const validationIssues: string[] = [];
@@ -754,16 +758,16 @@ export function ImportFilesModal({
       }
 
       if (validationIssues.length > 0 && skippedTooMany > 0) {
-        validationMessage = `Warning: ${validationIssues.join(" ")} Clover also skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the 10-file limit.`;
+        validationMessage = `Warning: ${validationIssues.join(" ")} Clover also skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the ${monthlyUploadLimit}-file limit.`;
       } else if (validationIssues.length > 0) {
         validationMessage = `Warning: ${validationIssues.join(" ")}`;
       } else if (skippedTooMany > 0) {
-        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the 10-file limit.`;
+        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the ${monthlyUploadLimit}-file limit.`;
         setLimitReached(true);
         capturePostHogClientEvent("plan_limit_reached", {
           limit_type: "upload_file_count",
           current_usage: current.length + additionsCount,
-          limit_value: 10,
+          limit_value: monthlyUploadLimit,
           workspace_id: workspaceId || null,
         });
       } else if (additions.length > 0) {
@@ -1491,25 +1495,6 @@ export function ImportFilesModal({
   }, [shouldShowUpgradePrompt, workspaceId]);
 
   useEffect(() => {
-    if (!open || busy || items.length === 0) {
-      return;
-    }
-
-    const allFinished = items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
-    if (!allFinished) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      onClose();
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [busy, items, onClose, open]);
-
-  useEffect(() => {
     if (!open || passwordItems.length === 0) {
       setSelectedPasswordItemId(null);
       return;
@@ -1852,7 +1837,7 @@ export function ImportFilesModal({
               <p className="eyebrow">Free limit reached</p>
               <strong>Upgrade to Pro for more import room.</strong>
               <p>
-                Free users can queue up to 10 statement files at a time. Pro is the path for heavier importing and later premium limits.
+                Free users can queue up to {monthlyUploadLimit} statement files at a time. Pro is the path for heavier importing and later premium limits.
               </p>
             </div>
             <div className="import-limit-cta__actions">
