@@ -1948,9 +1948,7 @@ export function ImportFilesModal({
                 </article>
               );
             })
-          ) : (
-            <div className="empty-state">No files added yet.</div>
-          )}
+          ) : null}
         </div>
 
         <div className="form-actions">
