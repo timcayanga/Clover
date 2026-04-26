@@ -36,6 +36,21 @@ type AlphaVantageResponse = Record<string, unknown> & {
   Note?: string;
 };
 
+type StockAnalysisHistoryResponse = {
+  source?: string;
+  updated?: string;
+  data?: Array<{
+    a?: number;
+    c?: number;
+    h?: number;
+    l?: number;
+    o?: number;
+    t?: string;
+    v?: number;
+    ch?: number;
+  }>;
+};
+
 type YahooRangeConfig = {
   range: string;
   interval: string;
@@ -98,6 +113,66 @@ const parseSeries = (series: Record<string, Record<string, string>>, priceField:
 
   points.sort((left, right) => left.date.localeCompare(right.date));
   return points;
+};
+
+const parseStockAnalysisSeries = (html: string, symbol: string) => {
+  const normalized = normalizeMarketSymbol(symbol).replace(/\.PS$/, "");
+  const startIndex = html.indexOf(`symbol:"PSE-${normalized}"`);
+  if (startIndex < 0) {
+    return { error: "No market history found for that ticker." as const };
+  }
+
+  const dataStart = html.indexOf("data:[", startIndex);
+  const dataEnd = html.indexOf("],other:{", dataStart);
+  if (dataStart < 0 || dataEnd < 0) {
+    return { error: "No market history found for that ticker." as const };
+  }
+
+  const dataBlock = html.slice(dataStart + "data:[".length, dataEnd);
+  const rows: MarketHistoryPoint[] = [];
+
+  for (const match of dataBlock.matchAll(
+    /\{a:([^,]+),c:([^,]+),h:([^,]+),l:([^,]+),o:([^,]+),t:"([^"]+)",v:([^,]+),ch:([^}]+)\}/g
+  )) {
+    const adjusted = Number(match[1]);
+    const close = Number(match[2]);
+    const volume = Number(match[7]);
+    const date = match[6];
+    const value = Number.isFinite(adjusted) ? adjusted : close;
+
+    if (!Number.isFinite(value) || !date) {
+      continue;
+    }
+
+    rows.push({
+      date: new Date(`${date}T12:00:00+08:00`).toISOString(),
+      value,
+      volume: Number.isFinite(volume) ? volume : null,
+    });
+  }
+
+  rows.sort((left, right) => left.date.localeCompare(right.date));
+  if (rows.length === 0) {
+    return { error: "No market history found for that ticker." as const };
+  }
+
+  const latest = rows[rows.length - 1];
+  const previous = rows[rows.length - 2] ?? latest;
+  const change = latest.value - previous.value;
+  const changePercent = previous.value === 0 ? 0 : (change / previous.value) * 100;
+
+  return {
+    symbol: normalizeMarketSymbol(symbol),
+    market: "ph" as const,
+    provider: "stockanalysis" as const,
+    currency: "PHP" as const,
+    range: "MAX" as const,
+    points: rows,
+    latest,
+    previous,
+    change,
+    changePercent,
+  };
 };
 
 const parseYahooSeries = (payload: YahooFinanceResponse) => {
@@ -166,6 +241,7 @@ const fetchYahooHistory = async (symbol: string, market: MarketRegion, range: Ma
     symbol: normalizeMarketSymbol(symbol),
     market,
     provider: "yahoo-finance" as const,
+    currency: "USD" as const,
     range,
     points,
     latest,
@@ -225,6 +301,7 @@ const fetchAlphaFallback = async (symbol: string, market: MarketRegion) => {
     symbol: normalizeMarketSymbol(symbol),
     market,
     provider: "alpha-vantage" as const,
+    currency: "USD" as const,
     range: "MAX" as const,
     points,
     latest,
@@ -242,6 +319,24 @@ export async function GET(request: Request) {
 
   if (!symbol) {
     return NextResponse.json({ error: "symbol is required" }, { status: 400 });
+  }
+
+  if (market === "ph") {
+    const stockAnalysisSymbol = normalizeMarketSymbol(symbol).replace(/\.PS$/, "");
+    const stockAnalysisResponse = await fetch(`https://stockanalysis.com/quote/pse/${encodeURIComponent(stockAnalysisSymbol)}/history/`, {
+      cache: "no-store",
+      headers: {
+        "user-agent": "Mozilla/5.0",
+        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      },
+    });
+    if (stockAnalysisResponse.ok) {
+      const html = await stockAnalysisResponse.text();
+      const stockAnalysisResult = parseStockAnalysisSeries(html, symbol);
+      if (!("error" in stockAnalysisResult)) {
+        return NextResponse.json(stockAnalysisResult);
+      }
+    }
   }
 
   const yahooResult = await fetchYahooHistory(symbol, market, range);
