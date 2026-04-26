@@ -1,13 +1,13 @@
+import nextDynamic from "next/dynamic";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
-import { GoalsEditor } from "@/components/goals-editor";
-import { GoalsChecklist } from "@/components/goals-checklist";
-import { GoalGlyph, GoalIllustration } from "@/components/goals-visuals";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import {
@@ -21,6 +21,22 @@ import {
   getSuggestedGoalAmount,
   type GoalKey,
 } from "@/lib/goals";
+
+const GoalsEditor = nextDynamic(() => import("@/components/goals-editor").then((module) => module.GoalsEditor), {
+  loading: () => <section className="goals-editor glass" aria-label="Loading goal editor" />,
+});
+
+const GoalsChecklist = nextDynamic(() => import("@/components/goals-checklist").then((module) => module.GoalsChecklist), {
+  loading: () => <section className="goals-checklist glass" aria-label="Loading weekly actions" />,
+});
+
+const GoalIllustration = nextDynamic(() => import("@/components/goals-visuals").then((module) => module.GoalIllustration), {
+  loading: () => <div className="goal-illustration__art" aria-label="Loading goal illustration" />,
+});
+
+const GoalGlyph = nextDynamic(() => import("@/components/goals-visuals").then((module) => module.GoalGlyph), {
+  loading: () => <span aria-hidden="true" />,
+});
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -187,7 +203,7 @@ const createGoalChart = (buckets: MonthBucket[]) => {
   return { chartWidth, chartHeight, chartPadding, points, path };
 };
 
-export default async function GoalsPage() {
+async function GoalsPageStream() {
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
 
@@ -1285,5 +1301,13 @@ export default async function GoalsPage() {
         </article>
       </section>
     </CloverShell>
+  );
+}
+
+export default function GoalsPage() {
+  return (
+    <Suspense fallback={<CloverLoadingScreen label="goals" />}>
+      <GoalsPageStream />
+    </Suspense>
   );
 }

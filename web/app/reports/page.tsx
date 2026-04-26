@@ -3,6 +3,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
@@ -1642,7 +1643,7 @@ async function ReportsStream({
   }
 }
 
-export default async function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
+async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
@@ -1672,5 +1673,13 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         <ReportsStream active="reports" searchParams={resolvedSearchParams} />
       </Suspense>
     </CloverShell>
+  );
+}
+
+export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
+  return (
+    <Suspense fallback={<CloverLoadingScreen label="reports" />}>
+      <ReportsPageStream searchParams={searchParams} />
+    </Suspense>
   );
 }

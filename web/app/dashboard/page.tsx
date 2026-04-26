@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
@@ -878,7 +879,7 @@ async function DashboardStream({
   );
 }
 
-export default async function DashboardPage({
+async function DashboardPageStream({
   searchParams,
 }: {
   searchParams?: Promise<{ import?: string }>;
@@ -909,5 +910,17 @@ export default async function DashboardPage({
         <DashboardStream user={user} resolvedSearchParams={resolvedSearchParams} />
       </Suspense>
     </CloverShell>
+  );
+}
+
+export default function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ import?: string }>;
+}) {
+  return (
+    <Suspense fallback={<CloverLoadingScreen label="dashboard" />}>
+      <DashboardPageStream searchParams={searchParams} />
+    </Suspense>
   );
 }

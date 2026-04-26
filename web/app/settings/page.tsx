@@ -1,5 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
@@ -17,7 +19,7 @@ export const metadata = {
   title: "Settings",
 };
 
-export default async function SettingsPage() {
+async function SettingsPageStream() {
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
   const env = getEnv();
@@ -126,5 +128,13 @@ export default async function SettingsPage() {
         }}
       />
     </CloverShell>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<CloverLoadingScreen label="settings" />}>
+      <SettingsPageStream />
+    </Suspense>
   );
 }

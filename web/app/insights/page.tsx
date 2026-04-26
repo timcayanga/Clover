@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import { Suspense } from "react";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
@@ -105,7 +107,7 @@ const getMonthBuckets = (anchor: Date) => {
   return buckets;
 };
 
-export default async function InsightsPage() {
+async function InsightsPageStream() {
   const now = new Date();
   let currentWindowTransactionsRaw: InsightTransaction[] = [];
   let previousWindowTransactionsRaw: InsightTransaction[] = [];
@@ -1078,5 +1080,13 @@ export default async function InsightsPage() {
         </article>
       </section>
     </CloverShell>
+  );
+}
+
+export default function InsightsPage() {
+  return (
+    <Suspense fallback={<CloverLoadingScreen label="insights" />}>
+      <InsightsPageStream />
+    </Suspense>
   );
 }
