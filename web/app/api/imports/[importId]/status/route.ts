@@ -32,11 +32,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         const { processImportFileText } = await import("@/workers/import-processor");
         await processImportFileText(importId, { actorUserId: null });
         const recoveredImportFile = await fetchImportFileCompat(importId);
-        parsedRowsCount = Number(recoveredImportFile?.parsedRowsCount ?? parsedRowsCount);
+        if (recoveredImportFile) {
+          importFile = recoveredImportFile;
+          parsedRowsCount = Number(recoveredImportFile.parsedRowsCount ?? parsedRowsCount);
+          confirmedTransactionsCount = Number(recoveredImportFile.confirmedTransactionsCount ?? confirmedTransactionsCount);
+        }
       } catch {
         // Let the existing status response continue; the UI can retry.
       }
     }
+
+    importFile = (await fetchImportFileCompat(importId)) ?? importFile;
+    parsedRowsCount = Number(importFile.parsedRowsCount ?? parsedRowsCount);
+    confirmedTransactionsCount = Number(importFile.confirmedTransactionsCount ?? confirmedTransactionsCount);
 
     const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
       ? await prisma.accountStatementCheckpoint.findUnique({
@@ -44,9 +52,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         })
       : null;
     const shouldAutoConfirm =
-      importFile.status === "done" &&
       parsedRowsCount > 0 &&
       confirmedTransactionsCount === 0 &&
+      importFile.status !== "failed" &&
       !importFile.accountId;
 
     if (shouldAutoConfirm) {
