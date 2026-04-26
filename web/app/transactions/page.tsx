@@ -3361,7 +3361,7 @@ function TransactionsPageContent() {
   }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary]);
 
   useEffect(() => {
-    if (!importOpen || !pendingImportSummary) {
+    if (!importOpen || !pendingImportSummary || pendingImportSummary.optimistic || importRefreshInFlight) {
       return;
     }
 
@@ -3378,7 +3378,7 @@ function TransactionsPageContent() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [importOpen, pendingImportSummary, accounts, transactions]);
+  }, [importOpen, importRefreshInFlight, pendingImportSummary, accounts, transactions]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 720px)");

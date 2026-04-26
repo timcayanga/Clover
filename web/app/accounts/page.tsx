@@ -1222,7 +1222,7 @@ function AccountsPageContent() {
   );
 
   useEffect(() => {
-    if (!importOpen || !pendingImportSummary) {
+    if (!importOpen || !pendingImportSummary || pendingImportSummary.optimistic || importRefreshInFlight) {
       return;
     }
 
@@ -1248,7 +1248,7 @@ function AccountsPageContent() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [accounts, importOpen, pendingImportSummary]);
+  }, [accounts, importOpen, importRefreshInFlight, pendingImportSummary]);
 
   const manualAccountBrand = useMemo(
     () =>
