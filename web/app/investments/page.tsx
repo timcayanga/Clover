@@ -253,9 +253,6 @@ export default function InvestmentsPage() {
     const loadWorkspaces = async () => {
       const response = await fetch("/api/workspaces");
       if (!response.ok || cancelled) {
-        if (!cancelled) {
-          setMessage("Unable to load workspaces.");
-        }
         return;
       }
 
