@@ -15,39 +15,9 @@ import { uploadObject } from "@/lib/s3";
 import { prisma } from "@/lib/prisma";
 import { validateImportFile } from "@/lib/import-file-validation";
 import { NextResponse } from "next/server";
+import { recordAppError, getErrorDetails } from "@/lib/error-logs";
 
 export const dynamic = "force-dynamic";
-
-type ErrorLike = {
-  name?: unknown;
-  message?: unknown;
-};
-
-const truncate = (value: string, max = 160) => (value.length <= max ? value : `${value.slice(0, max - 1)}…`);
-
-const summarizeErrorForLog = (error: unknown) => {
-  if (error instanceof Error) {
-    return {
-      name: error.name,
-      message: truncate(error.message.replace(/\s+/g, " ").trim()),
-    };
-  }
-
-  if (error && typeof error === "object") {
-    const errorLike = error as ErrorLike;
-    const name = typeof errorLike.name === "string" ? errorLike.name : "Error";
-    const message = typeof errorLike.message === "string" ? errorLike.message : "";
-    return {
-      name,
-      message: message ? truncate(message.replace(/\s+/g, " ").trim()) : "",
-    };
-  }
-
-  return {
-    name: "Error",
-    message: typeof error === "string" ? truncate(error.replace(/\s+/g, " ").trim()) : "Unknown error",
-  };
-};
 
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   let stage = "initializing";
@@ -131,14 +101,22 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           ? (template.metadata as Record<string, unknown>)
           : null);
       } catch (error) {
-        console.warn("Unable to pre-read statement metadata", { importId, error: summarizeErrorForLog(error) });
+        await recordAppError({
+          ...getErrorDetails(error),
+          source: "import-processing",
+          route: "/api/imports/[importId]/process",
+          metadata: {
+            stage: "reading statement metadata",
+            importId,
+          },
+        }).catch(() => null);
       }
 
       const parsedMetadataConfidence = Number((metadata as { confidence?: unknown } | null)?.confidence ?? 0);
+      const hasExtractedText = extractedText.trim().length > 0;
       const shouldProcessInline =
-        extractedText.trim().length > 0 &&
-        parsedMetadataConfidence >= 85 &&
-        bytes.length <= 8_000_000;
+        (hasExtractedText && parsedMetadataConfidence >= 85 && bytes.length <= 8_000_000) ||
+        (!hasExtractedText && bytes.length <= 2_500_000);
 
       if (shouldProcessInline) {
         stage = "processing statement text";
@@ -168,7 +146,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           password,
         });
       } catch (error) {
-        console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
+        await recordAppError({
+          ...getErrorDetails(error),
+          source: "import-processing",
+          route: "/api/imports/[importId]/process",
+          metadata: {
+            stage: "scheduling background processing",
+            importId,
+          },
+        }).catch(() => null);
         await updateImportFileCompat(importId, {
           status: "failed",
         });
@@ -228,7 +214,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     }
   } catch (error) {
-    console.error("Import processing failed", { stage, error: summarizeErrorForLog(error) });
+    const details = getErrorDetails(error);
+    await recordAppError({
+      ...details,
+      source: "import-processing",
+      route: "/api/imports/[importId]/process",
+      metadata: {
+        stage,
+      },
+    }).catch(() => null);
     return NextResponse.json(
       {
         error: "Unable to process import",
