@@ -173,8 +173,8 @@ const planCards = [
     description: "Upgrade for the yearly price and get the same Pro access for less than monthly billing.",
     features: [
       "Everything in Free",
-      "Unlimited accounts",
-      "Unlimited monthly uploads",
+      "20 accounts",
+      "100 monthly uploads",
       "Unlimited transaction rows",
       "Advanced reports",
     ],
@@ -189,8 +189,8 @@ const planCards = [
     description: "Upgrade for shorter commitment while keeping the same Pro feature set.",
     features: [
       "Everything in Free",
-      "Unlimited accounts",
-      "Unlimited monthly uploads",
+      "20 accounts",
+      "100 monthly uploads",
       "Unlimited transaction rows",
       "Advanced reports",
     ],
@@ -204,8 +204,8 @@ const usageLimits = {
     transactions: 1000,
   },
   pro: {
-    accounts: null,
-    uploads: null,
+    accounts: 20,
+    uploads: 100,
     transactions: null,
   },
 } as const;
@@ -239,6 +239,23 @@ function formatLimitCount(used: number, limit: number | null, suffix?: string) {
   }
 
   return `${used.toLocaleString()} / ${limit.toLocaleString()}${suffix ? ` ${suffix}` : ""}`;
+}
+
+function formatPlanDate(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-PH", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
 }
 
 function getUsagePercent(used: number, limit: number | null) {
@@ -340,6 +357,7 @@ export function SettingsHub({
   const isFree = planTier === "free";
   const currentPlanValue = planTier === "free" ? "free" : billingSubscription?.interval ?? "annual";
   const currentPlanCard = planCards.find((plan) => plan.value === currentPlanValue) ?? planCards[0];
+  const renewalDate = formatPlanDate(billingSubscription?.currentPeriodEnd ?? billingSubscription?.nextBillingTime ?? null);
   const usageLimit = isFree ? usageLimits.free : usageLimits.pro;
   const annualCheckoutReady = Boolean(paypalClientId && paypalAnnualPlanId);
   const monthlyCheckoutReady = Boolean(paypalClientId && paypalMonthlyPlanId);
@@ -592,6 +610,13 @@ export function SettingsHub({
                   </span>
                 </div>
                 <div className="settings-plan-usage__value">{currentPlanCard.title}</div>
+                {planTier === "pro" && renewalDate ? (
+                  <div className="settings-plan-usage__renewal">
+                    <span>Next charge and limits refresh</span>
+                    <strong>{renewalDate}</strong>
+                    <p>This is the day Clover restores your Pro limits.</p>
+                  </div>
+                ) : null}
               </article>
 
               {planUsageCards.map((usage) => {
@@ -651,6 +676,12 @@ export function SettingsHub({
                       <div className="settings-plan-card__footer">
                         {option.value === "annual" ? (
                           <p className="settings-plan-card__savings">{option.savings}</p>
+                        ) : null}
+
+                        {option.value !== "free" && planTier === "pro" && renewalDate ? (
+                          <p className="settings-plan-card__renewal">
+                            Renews and refreshes on <strong>{renewalDate}</strong>
+                          </p>
                         ) : null}
 
                         {option.value === "free" ? (

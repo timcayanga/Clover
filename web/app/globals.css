@@ -15265,6 +15265,18 @@ input.transaction-inline-edit--amount::placeholder {
   font-weight: 600;
 }
 
+.settings-plan-card__renewal {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.settings-plan-card__renewal strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .settings-plan-card__check {
   display: inline-flex;
   align-items: center;
@@ -15369,6 +15381,31 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 12px;
   font-weight: 600;
   color: var(--text);
+}
+
+.settings-plan-usage__renewal {
+  display: grid;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.settings-plan-usage__renewal span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.settings-plan-usage__renewal strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.settings-plan-usage__renewal p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .settings-plan-panel {

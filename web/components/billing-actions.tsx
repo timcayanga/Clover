@@ -51,6 +51,23 @@ function getBillingPlanLabel(interval: BillingInterval) {
   return interval === "monthly" ? "Monthly" : "Annual";
 }
 
+function formatBillingDate(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return new Intl.DateTimeFormat("en-PH", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+}
+
 async function postBillingAction<T extends Record<string, unknown>>(url: string, body: Record<string, unknown>) {
   const response = await fetch(url, {
     method: "POST",
@@ -84,6 +101,7 @@ export function BillingActions({
 
   const currentInterval = subscription?.interval ?? null;
   const pendingInterval = subscription?.pendingInterval ?? null;
+  const renewalDate = formatBillingDate(subscription?.currentPeriodEnd ?? subscription?.nextBillingTime ?? null);
   const hasMonthly = Boolean(clientId && monthlyPlanId && customId);
   const hasAnnual = Boolean(clientId && annualPlanId && customId);
 
@@ -188,6 +206,11 @@ export function BillingActions({
               You are on {subscription?.interval ? `the ${getBillingPlanLabel(subscription.interval)} Clover Pro plan` : "the Clover Pro plan"}.
               {pendingInterval ? ` A change to ${getBillingPlanLabel(pendingInterval)} is waiting for approval.` : ""}
             </p>
+            {renewalDate ? (
+              <p className="billing-helper">
+                Your next charge and limits refresh on <strong>{renewalDate}</strong>.
+              </p>
+            ) : null}
           </div>
 
           <div className="billing-actions__stack">
