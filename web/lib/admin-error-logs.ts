@@ -41,29 +41,27 @@ export type AdminErrorLogListResponse = {
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
 
-type AdminErrorLogRecord = Prisma.AppErrorLogGetPayload<{
-  select: {
-    id: true;
-    message: true;
-    name: true;
-    stack: true;
-    source: true;
-    route: true;
-    url: true;
-    method: true;
-    statusCode: true;
-    buildId: true;
-    deploymentId: true;
-    environment: true;
-    userAgent: true;
-    clerkUserId: true;
-    userId: true;
-    workspaceId: true;
-    metadata: true;
-    occurredAt: true;
-    createdAt: true;
-  };
-}>;
+type AdminErrorLogRecord = {
+  id: string;
+  message: string;
+  name: string | null;
+  stack: string | null;
+  source: string;
+  route: string | null;
+  url: string | null;
+  method: string | null;
+  statusCode: number | null;
+  buildId: string;
+  deploymentId: string | null;
+  environment: string;
+  userAgent: string | null;
+  clerkUserId: string | null;
+  userId: string | null;
+  workspaceId: string | null;
+  metadata: Prisma.JsonValue | null;
+  occurredAt: Date;
+  createdAt: Date;
+};
 
 function mapLog(log: AdminErrorLogRecord): AdminErrorLogItem {
   return {
@@ -95,6 +93,28 @@ export async function getAdminErrorLogs(filters: AdminErrorLogFilters = {}): Pro
   const skip = (page - 1) * pageSize;
   const query = filters.query?.trim() ?? "";
 
+  const appErrorLog = (prisma as typeof prisma & {
+    appErrorLog?: {
+      count: (args: { where?: Prisma.AppErrorLogWhereInput }) => Promise<number>;
+      findMany: (args: {
+        where?: Prisma.AppErrorLogWhereInput;
+        orderBy?: Array<{ occurredAt?: "asc" | "desc"; createdAt?: "asc" | "desc" }>;
+        skip?: number;
+        take?: number;
+      }) => Promise<AdminErrorLogRecord[]>;
+    };
+  }).appErrorLog;
+
+  if (!appErrorLog) {
+    return {
+      logs: [],
+      page,
+      pageSize,
+      totalCount: 0,
+      totalPages: 1,
+    };
+  }
+
   const where: Prisma.AppErrorLogWhereInput = query
     ? {
         OR: [
@@ -112,8 +132,8 @@ export async function getAdminErrorLogs(filters: AdminErrorLogFilters = {}): Pro
     : {};
 
   const [totalCount, logs] = await Promise.all([
-    prisma.appErrorLog.count({ where }),
-    prisma.appErrorLog.findMany({
+    appErrorLog.count({ where }),
+    appErrorLog.findMany({
       where,
       orderBy: [{ occurredAt: "desc" }, { createdAt: "desc" }],
       skip,
