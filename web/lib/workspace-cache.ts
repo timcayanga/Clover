@@ -84,8 +84,19 @@ const getSessionStorage = () => {
   }
 };
 
-const readJsonCache = <T>(key: string): T | null => {
-  const storage = getSessionStorage();
+const getLocalStorage = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+};
+
+const readJsonCacheFromStorage = <T>(storage: Storage | null, key: string): T | null => {
   if (!storage) {
     return null;
   }
@@ -102,13 +113,22 @@ const readJsonCache = <T>(key: string): T | null => {
   }
 };
 
+const readJsonCache = <T>(key: string): T | null => {
+  return readJsonCacheFromStorage<T>(getLocalStorage(), key) ?? readJsonCacheFromStorage<T>(getSessionStorage(), key);
+};
+
 const writeJsonCache = (key: string, value: unknown) => {
-  const storage = getSessionStorage();
-  if (!storage) {
-    return;
+  const serialized = JSON.stringify(value);
+  const localStorageRef = getLocalStorage();
+  const sessionStorageRef = getSessionStorage();
+
+  if (localStorageRef) {
+    localStorageRef.setItem(key, serialized);
   }
 
-  storage.setItem(key, JSON.stringify(value));
+  if (sessionStorageRef) {
+    sessionStorageRef.setItem(key, serialized);
+  }
 };
 
 const clearStorageKeys = (storage: Storage | null, keys: string[]) => {

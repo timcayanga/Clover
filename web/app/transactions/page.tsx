@@ -25,7 +25,7 @@ import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
-import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
+import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 
@@ -630,6 +630,18 @@ const splitMerchantFilters = (value: string) =>
     .map((entry) => entry.trim())
     .filter(Boolean);
 
+const getLocalStorage = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+};
+
 const getSessionStorage = () => {
   if (typeof window === "undefined") {
     return null;
@@ -643,43 +655,46 @@ const getSessionStorage = () => {
 };
 
 const readTransactionsWorkspaceCache = (): TransactionsWorkspaceCacheState | null => {
-  const storage = getSessionStorage();
-  if (!storage) {
-    return null;
-  }
-
-  const stored = storage.getItem(transactionsWorkspaceCacheKey);
-  if (!stored) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(stored) as Partial<TransactionsWorkspaceCacheState>;
-    if (!parsed || typeof parsed !== "object") {
+  const readFromStorage = (storage: Storage | null): TransactionsWorkspaceCacheState | null => {
+    if (!storage) {
       return null;
     }
 
-    const selectedWorkspaceId = typeof parsed.selectedWorkspaceId === "string" ? parsed.selectedWorkspaceId : "";
-    const snapshots = parsed.snapshots && typeof parsed.snapshots === "object" ? parsed.snapshots : {};
-    return {
-      selectedWorkspaceId,
-      snapshots: Object.fromEntries(
-        Object.entries(snapshots).filter(([, snapshot]) => {
-          return (
-            snapshot &&
-            typeof snapshot === "object" &&
-            typeof snapshot.workspaceId === "string" &&
-            Array.isArray(snapshot.accounts) &&
-            Array.isArray(snapshot.categories) &&
-            Array.isArray(snapshot.transactions) &&
-            Array.isArray(snapshot.imports)
-          );
-        })
-      ) as Record<string, TransactionsWorkspaceCacheSnapshot>,
-    };
-  } catch {
-    return null;
-  }
+    const stored = storage.getItem(transactionsWorkspaceCacheKey);
+    if (!stored) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(stored) as Partial<TransactionsWorkspaceCacheState>;
+      if (!parsed || typeof parsed !== "object") {
+        return null;
+      }
+
+      const selectedWorkspaceId = typeof parsed.selectedWorkspaceId === "string" ? parsed.selectedWorkspaceId : "";
+      const snapshots = parsed.snapshots && typeof parsed.snapshots === "object" ? parsed.snapshots : {};
+      return {
+        selectedWorkspaceId,
+        snapshots: Object.fromEntries(
+          Object.entries(snapshots).filter(([, snapshot]) => {
+            return (
+              snapshot &&
+              typeof snapshot === "object" &&
+              typeof snapshot.workspaceId === "string" &&
+              Array.isArray(snapshot.accounts) &&
+              Array.isArray(snapshot.categories) &&
+              Array.isArray(snapshot.transactions) &&
+              Array.isArray(snapshot.imports)
+            );
+          })
+        ) as Record<string, TransactionsWorkspaceCacheSnapshot>,
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  return readFromStorage(getLocalStorage()) ?? readFromStorage(getSessionStorage());
 };
 
 const getCachedTransactionsWorkspace = (workspaceId: string): TransactionsWorkspaceCacheSnapshot | null => {
@@ -695,8 +710,9 @@ const persistTransactionsWorkspaceCache = (
   workspaceId: string,
   snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
 ) => {
-  const storage = getSessionStorage();
-  if (!storage || !workspaceId) {
+  const localStorageRef = getLocalStorage();
+  const sessionStorageRef = getSessionStorage();
+  if ((!localStorageRef && !sessionStorageRef) || !workspaceId) {
     return;
   }
 
@@ -715,7 +731,9 @@ const persistTransactionsWorkspaceCache = (
     },
   };
 
-  storage.setItem(transactionsWorkspaceCacheKey, JSON.stringify(nextState));
+  const serialized = JSON.stringify(nextState);
+  localStorageRef?.setItem(transactionsWorkspaceCacheKey, serialized);
+  sessionStorageRef?.setItem(transactionsWorkspaceCacheKey, serialized);
 };
 
 const looksLikeJsonBlob = (value: string) => {
@@ -1438,6 +1456,40 @@ function TransactionsPageContent() {
     }
   };
 
+  const hydrateWorkspaceFromCache = (workspaceId: string) => {
+    if (!workspaceId) {
+      return false;
+    }
+
+    const cachedSnapshot = getCachedTransactionsWorkspace(workspaceId);
+    if (!cachedSnapshot) {
+      return false;
+    }
+
+    setAccounts(cachedSnapshot.accounts);
+    setCategories(cachedSnapshot.categories);
+    setTransactions(cachedSnapshot.transactions);
+    setImports(cachedSnapshot.imports);
+    setTransactionsSummary(
+      cachedSnapshot.summary ?? {
+        totalCount: cachedSnapshot.totalCount ?? cachedSnapshot.transactions.length,
+        income: 0,
+        spending: 0,
+        transfers: 0,
+        review: 0,
+        topCategory: null,
+        topAccount: null,
+        firstTransactionDate: null,
+        lastTransactionDate: null,
+        firstReviewTransaction: null,
+        firstReviewTransactionIndex: null,
+      }
+    );
+    setIsWorkspaceDataReady(true);
+    setHasInitialTransactionsLoaded(true);
+    return true;
+  };
+
   useEffect(() => {
     void loadWorkspaces();
   }, []);
@@ -1476,27 +1528,7 @@ function TransactionsPageContent() {
       return;
     }
 
-    const cachedSnapshot = getCachedTransactionsWorkspace(selectedWorkspaceId);
-    if (cachedSnapshot) {
-      setAccounts(cachedSnapshot.accounts);
-      setCategories(cachedSnapshot.categories);
-      setTransactions(cachedSnapshot.transactions);
-      setImports(cachedSnapshot.imports);
-      setTransactionsSummary(
-        cachedSnapshot.summary ?? {
-          totalCount: cachedSnapshot.totalCount ?? cachedSnapshot.transactions.length,
-          income: 0,
-          spending: 0,
-          transfers: 0,
-          review: 0,
-          topCategory: null,
-          topAccount: null,
-          firstTransactionDate: null,
-          lastTransactionDate: null,
-          firstReviewTransaction: null,
-          firstReviewTransactionIndex: null,
-        }
-      );
+    if (hydrateWorkspaceFromCache(selectedWorkspaceId)) {
       setIsWorkspaceDataReady(true);
       setHasInitialTransactionsLoaded(true);
       void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
@@ -1511,6 +1543,39 @@ function TransactionsPageContent() {
     setHasInitialTransactionsLoaded(false);
     void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true });
   }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || typeof window === "undefined") {
+      return;
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.storageArea !== window.localStorage) {
+        return;
+      }
+
+      if (
+        event.key !== transactionsWorkspaceCacheKey &&
+        event.key !== selectedWorkspaceKey
+      ) {
+        return;
+      }
+
+      const activeWorkspaceId = readSelectedWorkspaceId() || selectedWorkspaceId;
+      if (!activeWorkspaceId || activeWorkspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      if (!hydrateWorkspaceFromCache(activeWorkspaceId)) {
+        setIsWorkspaceDataReady(false);
+        void loadWorkspaceMetadata(activeWorkspaceId, { skipImports: true, background: true });
+        void loadTransactionsPage(activeWorkspaceId, { background: true });
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [loadTransactionsPage, loadWorkspaceMetadata, selectedWorkspaceId]);
 
   useEffect(() => {
     if (!selectedWorkspaceId) {

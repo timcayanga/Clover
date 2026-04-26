@@ -12,6 +12,8 @@ import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   clearWorkspaceCache,
+  accountsWorkspaceCacheKey,
+  deletedAccountsWorkspaceCacheKey,
   getCachedAccountsWorkspace,
   getDeletedWorkspaceAccountIds,
   persistAccountsWorkspaceCache,
@@ -751,6 +753,26 @@ function AccountsPageContent() {
     }
   };
 
+  const hydrateWorkspaceFromCache = (workspaceId: string) => {
+    if (!workspaceId) {
+      return false;
+    }
+
+    const cachedSnapshot = getCachedAccountsWorkspace(workspaceId);
+    deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(workspaceId));
+    if (!cachedSnapshot) {
+      return false;
+    }
+
+    setAccounts(cachedSnapshot.accounts as Account[]);
+    setAccountRules(cachedSnapshot.accountRules as AccountRule[]);
+    setTransactions(cachedSnapshot.transactions as Transaction[]);
+    setStatementCheckpoints(cachedSnapshot.statementCheckpoints as StatementCheckpoint[]);
+    setAccountsLoading(false);
+    setHasInitialWorkspaceDataLoaded(true);
+    return true;
+  };
+
   useEffect(() => {
     void loadWorkspaces();
   }, []);
@@ -810,15 +832,7 @@ function AccountsPageContent() {
       return;
     }
 
-    const cachedSnapshot = getCachedAccountsWorkspace(selectedWorkspaceId);
-    deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(selectedWorkspaceId));
-    if (cachedSnapshot) {
-      setAccounts(cachedSnapshot.accounts as Account[]);
-      setAccountRules(cachedSnapshot.accountRules as AccountRule[]);
-      setTransactions(cachedSnapshot.transactions as Transaction[]);
-      setStatementCheckpoints(cachedSnapshot.statementCheckpoints as StatementCheckpoint[]);
-      setAccountsLoading(false);
-      setHasInitialWorkspaceDataLoaded(true);
+    if (hydrateWorkspaceFromCache(selectedWorkspaceId)) {
       void loadWorkspaceData(selectedWorkspaceId, { silent: true });
       return;
     }
@@ -831,6 +845,39 @@ function AccountsPageContent() {
     setHasInitialWorkspaceDataLoaded(false);
     void loadWorkspaceData(selectedWorkspaceId);
   }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || typeof window === "undefined") {
+      return;
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.storageArea !== window.localStorage) {
+        return;
+      }
+
+      if (
+        event.key !== accountsWorkspaceCacheKey &&
+        event.key !== deletedAccountsWorkspaceCacheKey &&
+        event.key !== "clover.selected-workspace-id.v1"
+      ) {
+        return;
+      }
+
+      const activeWorkspaceId = readSelectedWorkspaceId() || selectedWorkspaceId;
+      if (!activeWorkspaceId || activeWorkspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      if (!hydrateWorkspaceFromCache(activeWorkspaceId)) {
+        setAccountsLoading(true);
+        void loadWorkspaceData(activeWorkspaceId);
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [loadWorkspaceData, selectedWorkspaceId]);
 
   useEffect(() => {
     if (!selectedWorkspaceId || accountsLoading) {
