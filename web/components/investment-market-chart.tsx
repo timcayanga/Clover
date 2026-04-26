@@ -32,6 +32,8 @@ type MarketHistoryResponse = {
   error?: string;
 };
 
+type CurrencyCode = "USD" | "PHP";
+
 type InvestmentMarketChartProps = {
   investmentAccounts: InvestmentAccount[];
 };
@@ -40,16 +42,48 @@ const chartWidth = 760;
 const chartHeight = 220;
 const chartPadding = 24;
 
-const currencyFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  maximumFractionDigits: 2,
-});
+const currencyFormatters: Record<CurrencyCode, Intl.NumberFormat> = {
+  USD: new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }),
+  PHP: new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    maximumFractionDigits: 2,
+  }),
+};
 
 const percentFormatter = new Intl.NumberFormat("en-US", {
   style: "percent",
   maximumFractionDigits: 2,
 });
+
+const formatAxisDate = (value: string, range: MarketRange) => {
+  const date = new Date(value);
+
+  if (range === "5Y" || range === "MAX") {
+    return date.toLocaleDateString("en-PH", { year: "numeric" });
+  }
+
+  if (range === "1Y") {
+    return date.toLocaleDateString("en-PH", { month: "short", year: "2-digit" });
+  }
+
+  return date.toLocaleDateString("en-PH", { month: "short", day: "2-digit" });
+};
+
+const buildTicks = (minValue: number, maxValue: number, count = 4) => {
+  if (!Number.isFinite(minValue) || !Number.isFinite(maxValue) || count <= 1) {
+    return [maxValue];
+  }
+
+  const span = Math.max(maxValue - minValue, 1);
+  return Array.from({ length: count }, (_, index) => minValue + (span * index) / (count - 1));
+};
+
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
 const formatRelativeTime = (timestamp: number) => {
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
@@ -122,6 +156,11 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [displayCurrency, setDisplayCurrency] = useState<CurrencyCode>("USD");
+  const [exchangeRate, setExchangeRate] = useState(1);
+  const [rateError, setRateError] = useState<string | null>(null);
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!submittedSymbol && defaultSuggestion) {
@@ -182,6 +221,46 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
     };
   }, [refreshTick, submittedAssetType, submittedSymbol]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadExchangeRate = async () => {
+      if (displayCurrency === "USD") {
+        setExchangeRate(1);
+        setRateError(null);
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/fx-rate?base=USD&quote=PHP");
+        const payload = (await response.json()) as { rate?: number; error?: string };
+        if (cancelled) {
+          return;
+        }
+
+        if (!response.ok || typeof payload.rate !== "number" || !Number.isFinite(payload.rate)) {
+          setExchangeRate(1);
+          setRateError(payload.error ?? "Unable to load PHP conversion rate.");
+          return;
+        }
+
+        setExchangeRate(payload.rate);
+        setRateError(null);
+      } catch (fetchError) {
+        if (!cancelled) {
+          setExchangeRate(1);
+          setRateError(fetchError instanceof Error ? fetchError.message : "Unable to load PHP conversion rate.");
+        }
+      }
+    };
+
+    void loadExchangeRate();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [displayCurrency]);
+
   const visiblePoints = useMemo(() => {
     if (!history) {
       return [];
@@ -190,11 +269,33 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
     return filterMarketHistoryByRange(history.points, range);
   }, [history, range]);
 
-  const lineChart = useMemo(() => buildMarketLinePath(visiblePoints, chartWidth, chartHeight, chartPadding), [visiblePoints]);
-  const currentPoint = visiblePoints[visiblePoints.length - 1] ?? null;
-  const firstPoint = visiblePoints[0] ?? null;
-  const priceChange = currentPoint && firstPoint ? currentPoint.value - firstPoint.value : null;
-  const priceChangePercent = currentPoint && firstPoint && firstPoint.value !== 0 ? (priceChange ?? 0) / firstPoint.value : null;
+  const displayPoints = useMemo(
+    () => visiblePoints.map((point) => ({ ...point, value: point.value * exchangeRate })),
+    [exchangeRate, visiblePoints]
+  );
+
+  const lineChart = useMemo(() => buildMarketLinePath(displayPoints, chartWidth, chartHeight, chartPadding), [displayPoints]);
+  const currentDisplayPoint = displayPoints[displayPoints.length - 1] ?? null;
+  const firstDisplayPoint = displayPoints[0] ?? null;
+  const priceChange = currentDisplayPoint && firstDisplayPoint ? currentDisplayPoint.value - firstDisplayPoint.value : null;
+  const priceChangePercent =
+    currentDisplayPoint && firstDisplayPoint && firstDisplayPoint.value !== 0 ? (priceChange ?? 0) / firstDisplayPoint.value : null;
+  const minDisplayValue = displayPoints.length > 0 ? Math.min(...displayPoints.map((point) => point.value)) : 0;
+  const maxDisplayValue = displayPoints.length > 0 ? Math.max(...displayPoints.map((point) => point.value)) : 0;
+  const yTicks = useMemo(() => buildTicks(minDisplayValue, maxDisplayValue), [maxDisplayValue, minDisplayValue]);
+  const xTickIndexes = useMemo(() => {
+    if (displayPoints.length <= 1) {
+      return [0];
+    }
+
+    const desiredTicks = Math.min(5, displayPoints.length);
+    const indexes = Array.from({ length: desiredTicks }, (_, index) =>
+      Math.round((index * (displayPoints.length - 1)) / Math.max(desiredTicks - 1, 1))
+    );
+    return [...new Set(indexes)];
+  }, [displayPoints.length]);
+
+  const hoveredPoint = hoverIndex === null ? null : displayPoints[hoverIndex] ?? null;
 
   const selectSuggestion = (suggestion: (typeof tickerSuggestions)[number]) => {
     setTickerInput(suggestion.symbol);
@@ -203,15 +304,17 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
     setSubmittedAssetType(inferAssetType(suggestion.subtype));
   };
 
+  const formatAmount = (value: number) => currencyFormatters[displayCurrency].format(value);
+  const chartSubtitle = displayCurrency === "PHP" ? "Converted from USD using the latest FX rate." : "Prices are shown in USD.";
+  const chartError = rateError ?? error;
+  const sourceLabel = history?.provider === "alpha-vantage" ? "Alpha Vantage" : "Yahoo Finance";
+
   return (
     <section className="investments-market glass">
       <div className="investments-market__head">
         <div>
           <p className="eyebrow">Market tracker</p>
           <h3>Track a ticker</h3>
-          <p className="panel-muted">
-            Enter a stock, ETF, fund, or crypto ticker to see a line chart from a live market feed. For equities and ETFs, we prefer adjusted closes when available.
-          </p>
         </div>
         <div className="investments-market__controls">
           <label>
@@ -234,6 +337,13 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
             <select value={assetType} onChange={(event) => setAssetType(event.target.value as MarketAssetType)}>
               <option value="equity">Equity / fund</option>
               <option value="crypto">Crypto</option>
+            </select>
+          </label>
+          <label className="investments-market__currency-select">
+            Currency
+            <select value={displayCurrency} onChange={(event) => setDisplayCurrency(event.target.value as CurrencyCode)}>
+              <option value="USD">USD</option>
+              <option value="PHP">PHP</option>
             </select>
           </label>
           <button
@@ -300,39 +410,109 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
       <div className="insight-chart">
         {loading ? (
           <div className="empty-state">Loading market data...</div>
-        ) : error ? (
+        ) : chartError ? (
           <div className="empty-state">
             <strong>Unable to load market data.</strong>
-            <p>{error}</p>
+            <p>{chartError}</p>
           </div>
-        ) : visiblePoints.length > 1 ? (
+        ) : displayPoints.length > 1 ? (
           <>
-            <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} role="img" aria-label={`${submittedSymbol} price history`}>
-              <defs>
-                <linearGradient id="market-chart-fill" x1="0" x2="0" y1="0" y2="1">
-                  <stop offset="0%" stopColor="rgba(3, 168, 192, 0.24)" />
-                  <stop offset="100%" stopColor="rgba(3, 168, 192, 0.03)" />
-                </linearGradient>
-              </defs>
-              <path
-                d={`${lineChart.linePath} L ${lineChart.points[lineChart.points.length - 1].x.toFixed(1)} ${chartHeight - chartPadding} L ${lineChart.points[0].x.toFixed(1)} ${chartHeight - chartPadding} Z`}
-                fill="url(#market-chart-fill)"
-              />
-              <path d={lineChart.linePath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-              {lineChart.points.map((point) => (
-                <circle key={`${point.date}-${point.value}`} cx={point.x} cy={point.y} r="3.5" fill="white" stroke="var(--accent)" strokeWidth="2" />
-              ))}
-            </svg>
+            <div className="market-chart__y-axis">
+              {yTicks
+                .slice()
+                .reverse()
+                .map((tick) => (
+                  <span key={tick}>{formatAmount(tick)}</span>
+                ))}
+            </div>
+
+            <div className="market-chart__plot">
+              <svg
+                viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                role="img"
+                aria-label={`${submittedSymbol} price history`}
+              >
+                <defs>
+                  <linearGradient id="market-chart-fill" x1="0" x2="0" y1="0" y2="1">
+                    <stop offset="0%" stopColor="rgba(3, 168, 192, 0.24)" />
+                    <stop offset="100%" stopColor="rgba(3, 168, 192, 0.03)" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d={`${lineChart.linePath} L ${lineChart.points[lineChart.points.length - 1].x.toFixed(1)} ${chartHeight - chartPadding} L ${lineChart.points[0].x.toFixed(1)} ${chartHeight - chartPadding} Z`}
+                  fill="url(#market-chart-fill)"
+                />
+                <path d={lineChart.linePath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                {lineChart.points.map((point) => (
+                  <circle key={`${point.date}-${point.value}`} cx={point.x} cy={point.y} r="3.5" fill="white" stroke="var(--accent)" strokeWidth="2" />
+                ))}
+                <rect
+                  x="0"
+                  y="0"
+                  width={chartWidth}
+                  height={chartHeight}
+                  fill="transparent"
+                  onMouseMove={(event) => {
+                    const bounds = event.currentTarget.getBoundingClientRect();
+                    const x = ((event.clientX - bounds.left) / bounds.width) * chartWidth;
+                    const nearestIndex = lineChart.points.reduce(
+                      (nearest, point, index) =>
+                        Math.abs(point.x - x) < Math.abs(lineChart.points[nearest].x - x) ? index : nearest,
+                      0
+                    );
+                    const point = lineChart.points[nearestIndex];
+                    if (!point) {
+                      return;
+                    }
+
+                    setHoverIndex(nearestIndex);
+                    setHoverPosition({ x: point.x, y: point.y });
+                  }}
+                  onMouseLeave={() => {
+                    setHoverIndex(null);
+                    setHoverPosition(null);
+                  }}
+                />
+              </svg>
+              {hoverPosition && hoveredPoint ? (
+                <div
+                  className="market-chart__tooltip"
+                  style={{
+                    left: `${clamp(hoverPosition.x - 80, 6, chartWidth - 166)}px`,
+                    top: `${clamp(hoverPosition.y - 92, 6, chartHeight - 92)}px`,
+                  }}
+                >
+                  <strong>{formatShortDate(hoveredPoint.date)}</strong>
+                  <span>{formatAmount(hoveredPoint.value)}</span>
+                  <small>{displayCurrency} equivalent</small>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="market-chart__x-axis">
+              {xTickIndexes.map((index) => {
+                const point = displayPoints[index];
+                if (!point) {
+                  return null;
+                }
+
+                return (
+                  <span key={point.date} style={{ left: `${lineChart.points[index]?.x ?? 0}px` }}>
+                    {formatAxisDate(point.date, range)}
+                  </span>
+                );
+              })}
+            </div>
 
             <div className="insight-chart__labels">
               <div className="insight-chart__label">
                 <span>Latest</span>
-                <strong>{currencyFormatter.format(currentPoint?.value ?? 0)}</strong>
+                <strong>{formatAmount(currentDisplayPoint?.value ?? 0)}</strong>
               </div>
               <div className="insight-chart__label">
                 <span>Change</span>
                 <strong className={priceChange !== null && priceChange >= 0 ? "is-positive" : "is-negative"}>
-                  {priceChange === null ? "Not enough data" : `${priceChange >= 0 ? "+" : "-"}${currencyFormatter.format(Math.abs(priceChange))}`}
+                  {priceChange === null ? "Not enough data" : `${priceChange >= 0 ? "+" : "-"}${formatAmount(Math.abs(priceChange))}`}
                 </strong>
               </div>
               <div className="insight-chart__label">
@@ -341,11 +521,6 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
                   {priceChangePercent === null ? "Not enough data" : `${priceChangePercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(priceChangePercent))}`}
                 </strong>
               </div>
-            </div>
-
-            <div className="investments-market__meta">
-              <span>{firstPoint ? formatShortDate(firstPoint.date) : "Start"}</span>
-              <span>{currentPoint ? formatShortDate(currentPoint.date) : "Latest"}</span>
             </div>
           </>
         ) : (
@@ -356,13 +531,20 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
         )}
       </div>
 
-      {history && visiblePoints.length > 1 ? (
+      <p className="investments-market__disclaimer panel-muted">
+        Market prices can differ by broker or exchange. Use Clover as a ballpark estimate and rely on the actual platform price for final decisions.
+      </p>
+
+      {history && displayPoints.length > 1 ? (
         <div className="investments-market__footnote">
           <span>
-            Source: {history.provider === "alpha-vantage" ? "Alpha Vantage" : "Yahoo Finance"}, using{" "}
-            {submittedAssetType === "crypto" ? "daily crypto history" : "daily market history"}.
+            Source: {sourceLabel}, using {submittedAssetType === "crypto" ? "daily crypto history" : "daily market history"}.
           </span>
-          <span>{lastUpdatedAt ? `Updated ${formatRelativeTime(lastUpdatedAt)}` : "Waiting for first refresh"}</span>
+          <span>
+            {lastUpdatedAt ? `Updated ${formatRelativeTime(lastUpdatedAt)}` : "Waiting for first refresh"}
+            {displayCurrency === "PHP" ? ` · FX ${exchangeRate.toFixed(2)} PHP/USD` : ""}
+          </span>
+          <span>{chartSubtitle}</span>
           {isMarketInvestmentSubtype(
             investmentAccounts.find((account) => normalizeMarketSymbol(account.investmentSymbol ?? "") === submittedSymbol)?.investmentSubtype
           ) ? (

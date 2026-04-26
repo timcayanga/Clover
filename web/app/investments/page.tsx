@@ -446,9 +446,6 @@ export default function InvestmentsPage() {
           <div className="investments-page__header-copy">
             <p className="eyebrow">Investments</p>
             <h1>Investments</h1>
-            <p className="accounts-page__subtitle">
-              Create market holdings, time deposits, and bonds here. Anything with type <code>investment</code> shows up here automatically.
-            </p>
           </div>
           <div className="investments-page__header-actions">
             <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>

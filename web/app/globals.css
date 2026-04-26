@@ -9498,11 +9498,23 @@ input.transaction-inline-edit--amount::placeholder {
   min-height: 38px;
 }
 
+.investments-market__currency-toggle {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding-bottom: 2px;
+}
+
 .investments-market__chips,
 .investments-market__range {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.investments-market__disclaimer {
+  margin: 0;
+  font-size: 12px;
 }
 
 .investments-market__meta,
@@ -9524,7 +9536,72 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .investments-market .insight-chart svg {
-  height: 200px;
+  height: 220px;
+}
+
+.market-chart__plot {
+  position: relative;
+}
+
+.market-chart__tooltip {
+  position: absolute;
+  display: grid;
+  gap: 4px;
+  min-width: 160px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.96);
+  color: white;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.24);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.market-chart__tooltip strong {
+  font-size: 13px;
+}
+
+.market-chart__tooltip span {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.market-chart__tooltip small {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
+}
+
+.market-chart__y-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  padding-bottom: 6px;
+}
+
+.market-chart__y-axis span {
+  white-space: nowrap;
+}
+
+.market-chart__x-axis {
+  position: relative;
+  height: 18px;
+  margin-top: 2px;
+}
+
+.market-chart__x-axis span {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.insight-chart__labels {
+  margin-top: 4px;
 }
 
 .investments-allocation {
