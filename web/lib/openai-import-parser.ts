@@ -64,6 +64,7 @@ type OpenAIExtractedTransaction = {
 type OpenAIParsedAccount = {
   display_name: string | null;
   institution_name: string | null;
+  account_number: string | null;
   account_last4: string | null;
   account_type: string | null;
   currency: string | null;
@@ -80,12 +81,13 @@ const importedStatementSchema = z.object({
   institution: z.string().nullable().optional().default(null),
   institution_raw: z.string().nullable().optional().default(null),
   statement_type: z.string().min(1).optional().default("unknown"),
-  account: z.object({
-    display_name: z.string().nullable().optional().default(null),
-    institution_name: z.string().nullable().optional().default(null),
-    account_last4: z.string().nullable().optional().default(null),
-    account_type: z.string().nullable().optional().default(null),
-    currency: z.string().nullable().optional().default(null),
+    account: z.object({
+      display_name: z.string().nullable().optional().default(null),
+      institution_name: z.string().nullable().optional().default(null),
+      account_number: z.string().nullable().optional().default(null),
+      account_last4: z.string().nullable().optional().default(null),
+      account_type: z.string().nullable().optional().default(null),
+      currency: z.string().nullable().optional().default(null),
     statement_period: z
       .object({
         start: z.string().nullable().optional().default(null),
@@ -161,6 +163,7 @@ const openAIJsonSchema = {
       properties: {
         display_name: { type: ["string", "null"] },
         institution_name: { type: ["string", "null"] },
+        account_number: { type: ["string", "null"] },
         account_last4: { type: ["string", "null"] },
         account_type: { type: ["string", "null"] },
         currency: { type: ["string", "null"] },
@@ -180,6 +183,7 @@ const openAIJsonSchema = {
       required: [
         "display_name",
         "institution_name",
+        "account_number",
         "account_last4",
         "account_type",
         "currency",
@@ -459,7 +463,10 @@ const buildBankInstructionJson = (params: {
     return {
       ...base,
       institution: "UnionBank",
-      notes: ["UnionBank statements should keep the account label simple and preserve the trailing account digits when visible."],
+      notes: [
+        "UnionBank statements should keep the account label simple and preserve the trailing account digits when visible.",
+        "If the statement shows a full account number, return it in account.account_number with all digits preserved. Use account.account_last4 only as a display fallback.",
+      ],
     };
   }
 
@@ -884,8 +891,16 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     const value = validation.data;
     const institution = simplifyInstitutionName(value.institution ?? value.account.institution_name ?? params.detectedMetadata?.institution ?? null);
     const institutionRaw = normalizeWhitespace(String(value.institution_raw ?? value.institution ?? institution ?? params.detectedMetadata?.institution ?? "")).trim() || null;
-    const accountLast4 = value.account.account_last4?.replace(/\D/g, "").slice(-4) ?? params.detectedMetadata?.accountNumber?.slice(-4) ?? null;
-    const accountNumber = accountLast4 ?? params.detectedMetadata?.accountNumber ?? null;
+    const accountNumberFull =
+      value.account.account_number?.replace(/\D/g, "").slice(0, 32) ??
+      params.detectedMetadata?.accountNumber?.replace(/\D/g, "").slice(0, 32) ??
+      null;
+    const accountLast4 =
+      value.account.account_last4?.replace(/\D/g, "").slice(-4) ??
+      accountNumberFull?.slice(-4) ??
+      params.detectedMetadata?.accountNumber?.slice(-4) ??
+      null;
+    const accountNumber = accountNumberFull ?? accountLast4 ?? params.detectedMetadata?.accountNumber ?? null;
     const accountNameCandidate =
       simplifyAccountLabel(value.account.display_name ?? null) ??
       (institution && accountLast4 ? `${institution} ${accountLast4}` : null) ??
