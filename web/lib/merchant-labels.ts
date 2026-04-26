@@ -169,6 +169,26 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
   ],
   UnionBank: [
     {
+      patterns: [/office\s*365/i],
+      replacement: "Office 365",
+    },
+    {
+      patterns: [/google\s+one/i],
+      replacement: "Google One",
+    },
+    {
+      patterns: [/discord\s+nitro/i],
+      replacement: "Discord Nitro",
+    },
+    {
+      patterns: [/foodpanda\s+ph/i, /food\s*panda\s+ph/i, /foodpanda/i],
+      replacement: "Foodpanda PH",
+    },
+    {
+      patterns: [/mlbb\s+\d+\s*di/i, /mlbb\s+pass/i, /\bmlbb\b/i],
+      replacement: "MLBB Top Up",
+    },
+    {
       patterns: [/bills?\s*payment/i, /billspayment/i],
       replacement: "Bills Payment",
     },

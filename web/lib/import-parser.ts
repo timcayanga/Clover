@@ -3230,6 +3230,8 @@ const guessUnionBankCategoryName = (description: string, type: TransactionType) 
   const lower = description.toLowerCase();
   if (/^not applicable$/i.test(description)) return "Other";
   if (/interest earned/.test(lower)) return "Income";
+  if (/office\s*365|google\s+one/.test(lower)) return "Business";
+  if (/discord\s+nitro|mlbb\s+\d+\s*di|mlbb\s+pass|foodpanda/.test(lower)) return /foodpanda/.test(lower) ? "Food & Dining" : "Shopping";
   if (/bills payment/.test(lower)) return "Transfers";
   if (/sent to|transfer to|transfer from|online fund transfer|xendit transfer|cash in|cash out|received credit/.test(lower)) {
     return "Transfers";
