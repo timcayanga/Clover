@@ -288,7 +288,7 @@ const detectBalanceFromText = (text: string) => {
   };
 };
 
-const parseBpiDate = (value?: string | null) => {
+const parseBpiDate = (value?: string | null, yearHint?: number) => {
   if (!value) return null;
   const normalized = normalizeWhitespace(value);
   const compact = compactWhitespace(normalized);
@@ -303,7 +303,7 @@ const parseBpiDate = (value?: string | null) => {
     return null;
   }
 
-  const year = match[3] ? Number(match[3]) : new Date().getUTCFullYear();
+  const year = match[3] ? Number(match[3]) : yearHint ?? new Date().getUTCFullYear();
   return new Date(Date.UTC(year, monthIndex, Number(match[2]), 12));
 };
 
@@ -1379,8 +1379,8 @@ const parseBpiCreditCardSegment = (
     return null;
   }
 
-  const saleDate = parseBpiDate(match[1]);
-  const postDate = parseBpiDate(match[2]);
+  const saleDate = parseBpiDate(match[1], state.year);
+  const postDate = parseBpiDate(match[2], state.year);
   if (!saleDate || !postDate) {
     return null;
   }
