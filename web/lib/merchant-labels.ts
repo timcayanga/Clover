@@ -363,6 +363,48 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Outgoing Transfer",
     },
   ],
+  RCBC: [
+    {
+      patterns: [/\bthe\s+sm\s+store\b.*\bsm\s+fairview\b/i, /\bsm\s+fairview\b/i],
+      replacement: "SM Store - SM Fairview",
+    },
+    {
+      patterns: [/\bthe\s+sm\s+store\b.*\bsm\s+grand\s+caloocan\b/i, /\bsm\s+grand\s+caloocan\b/i],
+      replacement: "SM Store - SM Grand Caloocan",
+    },
+    {
+      patterns: [/\bbayad\s+online\b.*\bpasig\b/i, /\bbayad\s+online\b/i],
+      replacement: "Bayad Online",
+    },
+    {
+      patterns: [/\bsec\s+pasay\b/i],
+      replacement: "SEC Pasay PH",
+    },
+    {
+      patterns: [/cash\s+payment/i],
+      replacement: "Cash Payment",
+    },
+    {
+      patterns: [/payment\s+to\s+card/i],
+      replacement: "Card Payment",
+    },
+    {
+      patterns: [/card\s+payment/i],
+      replacement: "Card Payment",
+    },
+    {
+      patterns: [/cash\s+advance/i],
+      replacement: "Cash Advance",
+    },
+    {
+      patterns: [/interest\s+charge/i, /finance\s+charge/i, /late\s+charge/i],
+      replacement: "Finance Charge",
+    },
+    {
+      patterns: [/cash\s+payment\s*-\s*thank\s+you/i],
+      replacement: "Cash Payment",
+    },
+  ],
   Maya: [
     {
       patterns: [/interest\s+applied\s*\(at\s*3\.5%\s*p\.a\.\)/i, /interest\s+applied/i],

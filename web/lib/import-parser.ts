@@ -1467,6 +1467,8 @@ const guessRcbcCategoryName = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
   if (/^cash payment$/i.test(description) || /cash payment|payment to card|card payment/.test(lower)) return "Transfers";
   if (/transfer|instapay|pesonet/.test(lower)) return "Transfers";
+  if (/the\s+sm\s+store|sm\s+fairview|sm\s+grand\s+caloocan/i.test(lower)) return "Shopping";
+  if (/bayad\s+online/i.test(lower)) return "Bills & Utilities";
   if (/interest|\bfee\b|charge|finance charge|late charge|cash advance/.test(lower)) return "Financial";
   if (/bills payment|utility|bill|payment/.test(lower)) return "Bills & Utilities";
   if (/salary|payroll|credit memo|refund|reversal/.test(lower) && type !== "expense") return "Income";
