@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
@@ -551,6 +552,7 @@ function AccountsPageContent() {
   const [message, setMessage] = useState("Select a workspace to review accounts.");
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [accountsLoading, setAccountsLoading] = useState(false);
+  const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(Boolean(initialCachedWorkspace));
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importSessionId, setImportSessionId] = useState(0);
@@ -631,6 +633,7 @@ function AccountsPageContent() {
       setAccountRules([]);
       setTransactions([]);
       setAccountsLoading(false);
+      setHasInitialWorkspaceDataLoaded(true);
       return;
     }
 
@@ -650,6 +653,9 @@ function AccountsPageContent() {
         setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current, deletedAccountIdsRef.current));
         setAccountRules(Array.isArray(payload.accountRules) ? payload.accountRules : []);
         setStatementCheckpoints(Array.isArray(payload.statementCheckpoints) ? (payload.statementCheckpoints as StatementCheckpoint[]) : []);
+        if (!options?.silent) {
+          setHasInitialWorkspaceDataLoaded(true);
+        }
       }
 
       if (!options?.silent) {
@@ -733,6 +739,7 @@ function AccountsPageContent() {
       setTransactions([]);
       setStatementCheckpoints([]);
       setAccountsLoading(false);
+      setHasInitialWorkspaceDataLoaded(true);
       return;
     }
 
@@ -743,6 +750,7 @@ function AccountsPageContent() {
       setTransactions(cachedSnapshot.transactions as Transaction[]);
       setStatementCheckpoints(cachedSnapshot.statementCheckpoints as StatementCheckpoint[]);
       setAccountsLoading(false);
+      setHasInitialWorkspaceDataLoaded(true);
       void loadWorkspaceData(selectedWorkspaceId, { silent: true });
       return;
     }
@@ -752,6 +760,7 @@ function AccountsPageContent() {
     setTransactions([]);
     setStatementCheckpoints([]);
     setAccountsLoading(true);
+    setHasInitialWorkspaceDataLoaded(false);
     void loadWorkspaceData(selectedWorkspaceId);
   }, [selectedWorkspaceId]);
 
@@ -1011,8 +1020,13 @@ function AccountsPageContent() {
         tone: "assets",
         rows: visibleAccounts.filter((account) => {
           const effectiveType = getEffectiveAccountType(account);
-          return effectiveType === "bank" || effectiveType === "wallet" || effectiveType === "investment";
+          return effectiveType === "bank" || effectiveType === "investment";
         }),
+      },
+      {
+        title: "Wallets",
+        tone: "assets",
+        rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "wallet"),
       },
       {
         title: "Credit cards",
@@ -1321,6 +1335,10 @@ function AccountsPageContent() {
     exportPdf();
   };
 
+  if (!hasInitialWorkspaceDataLoaded) {
+    return <CloverLoadingScreen label="accounts" />;
+  }
+
   return (
     <CloverShell active="accounts" title="Accounts" showTopbar={false}>
       <div className="accounts-page">
@@ -1344,22 +1362,22 @@ function AccountsPageContent() {
           <section className="accounts-overview-grid">
             <article className="accounts-overview-card glass">
               <p className="eyebrow">Net worth</p>
-              <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.netWorth)}</strong>
+              <strong>{currencyFormatter.format(totals.netWorth)}</strong>
               <span>Assets minus liabilities across the workspace</span>
             </article>
             <article className="accounts-overview-card glass">
               <p className="eyebrow">Spendable</p>
-              <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(spendableAmount)}</strong>
+              <strong>{currencyFormatter.format(spendableAmount)}</strong>
               <span>Cash, wallets, and bank balances you can use now</span>
             </article>
             <article className="accounts-overview-card glass">
               <p className="eyebrow">Assets</p>
-              <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.assets)}</strong>
+              <strong>{currencyFormatter.format(totals.assets)}</strong>
               <span>Cash, savings, and invested balances</span>
             </article>
             <article className="accounts-overview-card glass">
               <p className="eyebrow">Liabilities</p>
-              <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.liabilities)}</strong>
+              <strong>{currencyFormatter.format(totals.liabilities)}</strong>
               <span>Credit cards and other negative balances</span>
             </article>
           </section>
@@ -1384,9 +1402,7 @@ function AccountsPageContent() {
             </div>
 
             <div className="accounts-sections">
-              {accountsLoading ? (
-                <div className="empty-state">Loading accounts...</div>
-              ) : accounts.length === 0 ? (
+              {accounts.length === 0 ? (
                 <div className="empty-state accounts-empty-state">
                   <strong>It's quiet in here.</strong>
                   <p>Add your first account to start seeing balances, history, and helpful review flags.</p>

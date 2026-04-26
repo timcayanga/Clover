@@ -11,7 +11,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     const { importId } = await params;
     const { userId } = await requireAuth();
 
-    const importFile = await fetchImportFileCompat(importId);
+    let importFile = await fetchImportFileCompat(importId);
 
     if (!importFile) {
       return NextResponse.json({ error: "Import not found" }, { status: 404 });
@@ -19,7 +19,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
 
     await assertWorkspaceAccess(userId, importFile.workspaceId as string);
     let parsedRowsCount = Number(importFile.parsedRowsCount ?? 0);
-    const confirmedTransactionsCount = Number(importFile.confirmedTransactionsCount ?? 0);
+    let confirmedTransactionsCount = Number(importFile.confirmedTransactionsCount ?? 0);
     const importAgeMs = Date.now() - importFile.updatedAt.getTime();
     const shouldRecoverStalledImport =
       parsedRowsCount === 0 &&
@@ -43,6 +43,24 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           where: { importFileId: importId },
         })
       : null;
+    const shouldAutoConfirm =
+      importFile.status === "done" &&
+      parsedRowsCount > 0 &&
+      confirmedTransactionsCount === 0 &&
+      !importFile.accountId;
+
+    if (shouldAutoConfirm) {
+      try {
+        const { confirmImportFile } = await import("@/workers/import-processor");
+        await confirmImportFile(importId, null);
+        importFile = (await fetchImportFileCompat(importId)) ?? importFile;
+        parsedRowsCount = Number(importFile.parsedRowsCount ?? parsedRowsCount);
+        confirmedTransactionsCount = Number(importFile.confirmedTransactionsCount ?? confirmedTransactionsCount);
+      } catch {
+        // Let the existing status response continue; the UI can retry confirmation.
+      }
+    }
+
     const confirmationStatus =
       importFile.status === "failed"
         ? "failed"

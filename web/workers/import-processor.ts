@@ -118,7 +118,7 @@ const resolveConfirmationAccount = async (params: {
     accountName?: unknown;
     institution?: unknown;
   }>;
-  accountId: string;
+  accountId?: string | null;
 }) => {
   const workspaceId = String(params.importFile.workspaceId);
   const candidateRow =
@@ -155,10 +155,11 @@ const resolveConfirmationAccount = async (params: {
       ? (params.statementMetadata.accountType as "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other")
       : null;
 
-  const isOptimisticId = params.accountId.startsWith("optimistic-");
-  const directAccount = !isOptimisticId
+  const providedAccountId = typeof params.accountId === "string" && params.accountId.trim() ? params.accountId.trim() : null;
+  const isOptimisticId = providedAccountId ? providedAccountId.startsWith("optimistic-") : false;
+  const directAccount = providedAccountId && !isOptimisticId
     ? await prisma.account.findUnique({
-        where: { id: params.accountId },
+        where: { id: providedAccountId },
       })
     : null;
   if (directAccount) {
@@ -665,7 +666,7 @@ const extractHumanReadableDescription = (rawPayload: Prisma.InputJsonValue | nul
   return null;
 };
 
-export const confirmImportFile = async (importFileId: string, accountId: string) => {
+export const confirmImportFile = async (importFileId: string, accountId?: string | null) => {
   const importFile = await fetchImportFileCompat(importFileId);
 
   if (!importFile) {

@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { getAccountBrand } from "@/lib/account-brand";
+import { deriveReconciledBalance } from "@/lib/account-balance";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { clearWorkspaceCache, normalizeImportedAccountKey } from "@/lib/workspace-cache";
 
@@ -292,6 +294,7 @@ function AccountDetailPageContent() {
   const [message, setMessage] = useState("Loading account history...");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [hasInitialDataLoaded, setHasInitialDataLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -321,6 +324,7 @@ function AccountDetailPageContent() {
               if (!cancelled && !response.ok) {
                 setTransactionsError("Unable to load account transactions.");
                 setTransactionsLoading(false);
+                setHasInitialDataLoaded(true);
               }
               return;
             }
@@ -338,12 +342,14 @@ function AccountDetailPageContent() {
               setTransactionsError(null);
               setTransactionsLoading(false);
               setMessage("");
+              setHasInitialDataLoaded(true);
             }
           })
           .catch(() => {
             if (!cancelled) {
               setTransactionsError("Unable to load account transactions.");
               setTransactionsLoading(false);
+              setHasInitialDataLoaded(true);
             }
           });
 
@@ -363,6 +369,7 @@ function AccountDetailPageContent() {
         if (!cancelled) {
           setMessage(error instanceof Error ? error.message : "Unable to load this account.");
           setTransactionsLoading(false);
+          setHasInitialDataLoaded(true);
         }
       }
     };
@@ -439,7 +446,17 @@ function AccountDetailPageContent() {
   }, [latestCheckpoint]);
 
   const checkpointBalance = useMemo(() => parseAmount(latestCheckpoint?.endingBalance), [latestCheckpoint?.endingBalance]);
-  const currentBalance = parseAmount(account?.balance);
+  const currentBalance = useMemo(
+    () =>
+      parseAmount(
+        deriveReconciledBalance({
+          balance: account?.balance ?? null,
+          transactions,
+          checkpoints: latestCheckpoint ? [latestCheckpoint] : [],
+        })
+      ),
+    [account?.balance, latestCheckpoint, transactions]
+  );
   const checkpointGap =
     latestCheckpoint && Number.isFinite(checkpointBalance) && Number.isFinite(currentBalance)
       ? checkpointBalance - currentBalance
@@ -547,6 +564,10 @@ function AccountDetailPageContent() {
     }
   };
 
+  if (!hasInitialDataLoaded) {
+    return <CloverLoadingScreen label="account details" />;
+  }
+
   return (
     <CloverShell active="accounts" title={account?.name ?? "Account"} kicker="Account history" subtitle="View the full statement history for a single account." showTopbar={false}>
       <section className="panel">
@@ -608,21 +629,13 @@ function AccountDetailPageContent() {
               <h3>All transactions</h3>
             </div>
             <div className="accounts-detail__transactions-actions">
-              <span className="accounts-detail__transactions-count">
-                {transactionsLoading ? "Loading..." : `${visibleTransactions.length} of ${transactionTotalCount} loaded`}
-              </span>
+              <span className="accounts-detail__transactions-count">{`${visibleTransactions.length} of ${transactionTotalCount} loaded`}</span>
               <button className="button button-secondary button-small" type="button" onClick={openTransactionsPage} disabled={!account}>
                 Open in Transactions
               </button>
             </div>
           </div>
-          {transactionsLoading ? (
-            <div className="accounts-detail__transactions-loading">
-              <span />
-              <span />
-              <span />
-            </div>
-          ) : transactionsError ? (
+          {transactionsError ? (
             <p className="panel-muted">{transactionsError}</p>
           ) : visibleTransactions.length > 0 ? (
             <>
