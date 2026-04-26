@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
@@ -297,17 +297,7 @@ export function CloverShell({
               })
             }
           >
-            <span
-              className="sidebar-profile__avatar"
-              aria-hidden="true"
-              style={
-                profileImage
-                  ? ({
-                      "--sidebar-avatar-image": `url("${profileImage}")`,
-                    } as CSSProperties)
-                  : undefined
-              }
-            >
+            <span className="sidebar-profile__avatar" aria-hidden="true">
               {profileImage ? <img src={profileImage} alt="" /> : <span>{profileInitial}</span>}
             </span>
             <span className="sr-only">{displayName}</span>
