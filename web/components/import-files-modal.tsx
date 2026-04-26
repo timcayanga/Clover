@@ -927,13 +927,15 @@ export function ImportFilesModal({
 
     for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
-        const response = await fetch(`/api/imports/${importFileId}/status`);
+        const response = await fetch(`/api/imports/${importFileId}/status`, {
+          cache: "no-store",
+        });
         if (!response.ok) {
           throw new Error("Unable to load import status.");
         }
 
         const payload = await response.json();
-        const importFile = payload.importFile as { status?: string } | undefined;
+        const importFile = payload.importFile as { status?: string; accountId?: string | null } | undefined;
         const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
         const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
 
@@ -948,7 +950,7 @@ export function ImportFilesModal({
           return;
         }
 
-        if (confirmedTransactionsCount > 0) {
+        if (confirmedTransactionsCount > 0 || importFile?.accountId) {
           updateItem(itemId, {
             status: "done",
             confirmationState: "confirmed",
