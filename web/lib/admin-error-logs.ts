@@ -63,6 +63,18 @@ type AdminErrorLogRecord = {
   createdAt: Date;
 };
 
+type AdminErrorLogWhereInput = Record<string, unknown>;
+
+type AdminErrorLogDelegate = {
+  count: (args: { where?: AdminErrorLogWhereInput }) => Promise<number>;
+  findMany: (args: {
+    where?: AdminErrorLogWhereInput;
+    orderBy?: Array<{ occurredAt?: "asc" | "desc"; createdAt?: "asc" | "desc" }>;
+    skip?: number;
+    take?: number;
+  }) => Promise<AdminErrorLogRecord[]>;
+};
+
 function mapLog(log: AdminErrorLogRecord): AdminErrorLogItem {
   return {
     id: log.id,
@@ -93,17 +105,7 @@ export async function getAdminErrorLogs(filters: AdminErrorLogFilters = {}): Pro
   const skip = (page - 1) * pageSize;
   const query = filters.query?.trim() ?? "";
 
-  const appErrorLog = (prisma as typeof prisma & {
-    appErrorLog?: {
-      count: (args: { where?: Prisma.AppErrorLogWhereInput }) => Promise<number>;
-      findMany: (args: {
-        where?: Prisma.AppErrorLogWhereInput;
-        orderBy?: Array<{ occurredAt?: "asc" | "desc"; createdAt?: "asc" | "desc" }>;
-        skip?: number;
-        take?: number;
-      }) => Promise<AdminErrorLogRecord[]>;
-    };
-  }).appErrorLog;
+  const appErrorLog = (prisma as unknown as { appErrorLog?: AdminErrorLogDelegate }).appErrorLog;
 
   if (!appErrorLog) {
     return {
@@ -115,7 +117,7 @@ export async function getAdminErrorLogs(filters: AdminErrorLogFilters = {}): Pro
     };
   }
 
-  const where: Prisma.AppErrorLogWhereInput = query
+  const where: AdminErrorLogWhereInput = query
     ? {
         OR: [
           { message: { contains: query, mode: "insensitive" } },
