@@ -2376,6 +2376,20 @@ const normalizeGcashMerchant = (description: string) => {
   return trimmed;
 };
 
+const stripGcashRecordNoise = (value: string) => {
+  const trimmed = normalizeWhitespace(value);
+  if (!trimmed) {
+    return "";
+  }
+
+  const headerMatch = trimmed.match(/^(.*?STARTING\s+BALANCE\s*[0-9,]+\.\d{2}\s+)(.+)$/i);
+  if (headerMatch?.[2]) {
+    return normalizeWhitespace(headerMatch[2]);
+  }
+
+  return trimmed;
+};
+
 const guessGcashCategoryName = (description: string, type: TransactionType) => {
   const merchant = normalizeGcashMerchant(description);
   if (type === "transfer") {
@@ -2388,14 +2402,14 @@ const guessGcashCategoryName = (description: string, type: TransactionType) => {
 const parseGcashTransactionRecord = (record: string, institution?: string | null) => {
   const normalized = normalizeWhitespace(record);
   const match = normalized.match(
-    /^(?<date>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s+(?<body>.+?)\s+(?<reference>\d{10,})\s+(?<amount>\d[\d,]*\.\d{2})\s+(?<balance>\d[\d,]*\.\d{2})$/
+    /^(?<prefix>.*?)?(?<date>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s+(?<meridian>AM|PM)\s*(?<body>.*?)\s+(?<reference>\d{10,})\s+(?<amount>\d[\d,]*\.\d{2})\s+(?<balance>\d[\d,]*\.\d{2})(?:\s+(?<suffix>.*))?$/
   );
 
   if (!match?.groups) {
     return null;
   }
 
-  const description = normalizeWhitespace(match.groups.body);
+  const description = normalizeWhitespace([match.groups.prefix, match.groups.body, match.groups.suffix].filter(Boolean).join(" "));
   const merchantClean = normalizeGcashMerchant(description);
   const type: TransactionType =
     /^Received GCash from/i.test(description) ||
@@ -2458,6 +2472,7 @@ const parseGcashImportText = (text: string) => {
 
   const records: string[] = [];
   let current: string[] = [];
+  let pendingPrefix: string[] = [];
 
   for (const line of lines) {
     if (/^GCash Transaction History$/i.test(line)) continue;
@@ -2471,16 +2486,24 @@ const parseGcashImportText = (text: string) => {
     if (/^STARTING BALANCE$/i.test(line)) continue;
     if (/^Page\s+\d+\s+of\s+\d+$/i.test(line)) continue;
 
-    if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\b/.test(line)) {
+    const cleanedLine = stripGcashRecordNoise(line);
+    if (!cleanedLine) {
+      continue;
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\b/.test(cleanedLine)) {
       if (current.length > 0) {
         records.push(current.join(" "));
       }
-      current = [line];
+      current = [...pendingPrefix, cleanedLine];
+      pendingPrefix = [];
       continue;
     }
 
     if (current.length > 0) {
-      current.push(line);
+      current.push(cleanedLine);
+    } else {
+      pendingPrefix.push(cleanedLine);
     }
   }
 
