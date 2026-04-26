@@ -50,6 +50,32 @@ export type AppErrorLogListItem = {
   createdAt: string;
 };
 
+type AppErrorLogRecord = {
+  id: string;
+  message: string;
+  name: string | null;
+  stack: string | null;
+  source: string;
+  route: string | null;
+  url: string | null;
+  method: string | null;
+  statusCode: number | null;
+  buildId: string;
+  deploymentId: string | null;
+  environment: string;
+  userAgent: string | null;
+  clerkUserId: string | null;
+  userId: string | null;
+  workspaceId: string | null;
+  metadata: Prisma.JsonValue | null;
+  occurredAt: Date;
+  createdAt: Date;
+};
+
+type AppErrorLogDelegate = {
+  create: (args: { data: Record<string, unknown> }) => Promise<AppErrorLogRecord>;
+};
+
 const normalizeErrorText = (value: unknown, fallback: string) => {
   if (typeof value === "string") {
     const trimmed = value.trim();
@@ -93,7 +119,13 @@ export async function recordAppError(input: AppErrorLogInput) {
         ? new Date(input.occurredAt)
         : new Date();
 
-  return prisma.appErrorLog.create({
+  const appErrorLog = (prisma as unknown as { appErrorLog?: AppErrorLogDelegate }).appErrorLog;
+
+  if (!appErrorLog) {
+    return null;
+  }
+
+  return appErrorLog.create({
     data: {
       message: input.message,
       name: input.name ?? null,
