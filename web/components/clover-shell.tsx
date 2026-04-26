@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
@@ -8,7 +8,17 @@ import { persistSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/w
 import { clearAllWorkspaceCaches, clearLegacyWorkspaceCaches } from "@/lib/workspace-cache";
 
 type CloverShellProps = {
-  active: "dashboard" | "accounts" | "transactions" | "reports" | "insights" | "goals" | "settings" | "profile" | "notifications";
+  active:
+    | "dashboard"
+    | "accounts"
+    | "transactions"
+    | "reports"
+    | "insights"
+    | "goals"
+    | "settings"
+    | "profile"
+    | "notifications"
+    | "admin";
   title: string;
   kicker?: string;
   subtitle?: string;
@@ -287,7 +297,17 @@ export function CloverShell({
               })
             }
           >
-            <span className="sidebar-profile__avatar" aria-hidden="true">
+            <span
+              className="sidebar-profile__avatar"
+              aria-hidden="true"
+              style={
+                profileImage
+                  ? ({
+                      "--sidebar-avatar-image": `url("${profileImage}")`,
+                    } as CSSProperties)
+                  : undefined
+              }
+            >
               {profileImage ? <img src={profileImage} alt="" /> : <span>{profileInitial}</span>}
             </span>
             <span className="sr-only">{displayName}</span>
