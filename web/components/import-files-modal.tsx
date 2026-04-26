@@ -1491,18 +1491,23 @@ export function ImportFilesModal({
   }, [shouldShowUpgradePrompt, workspaceId]);
 
   useEffect(() => {
-    if (!open || busy || !activeProgressItem || activeProgressItem.progressLabel !== "Finalizing import") {
+    if (!open || busy || items.length === 0) {
+      return;
+    }
+
+    const allFinished = items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
+    if (!allFinished) {
       return;
     }
 
     const timeout = window.setTimeout(() => {
       onClose();
-    }, 500);
+    }, 250);
 
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [activeProgressItem?.progressLabel, busy, onClose, open]);
+  }, [busy, items, onClose, open]);
 
   useEffect(() => {
     if (!open || passwordItems.length === 0) {

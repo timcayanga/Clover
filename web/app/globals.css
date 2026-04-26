@@ -9924,7 +9924,7 @@ input.transaction-inline-edit--amount::placeholder {
   box-shadow: var(--shadow-soft);
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .accounts-account-card::before {
