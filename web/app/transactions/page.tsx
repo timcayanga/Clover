@@ -1176,9 +1176,8 @@ function TransactionsPageContent() {
   const [bulkEditForm, setBulkEditForm] = useState<BulkEditForm>(createEmptyBulkEditForm());
   const [manualForm, setManualForm] = useState<ManualTransactionForm>(createEmptyManualForm());
   const [isSaving, setIsSaving] = useState(false);
-  const [isWorkspacesLoaded, setIsWorkspacesLoaded] = useState(false);
-  const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(true);
-  const [hasInitialTransactionsLoaded, setHasInitialTransactionsLoaded] = useState(Boolean(initialCachedWorkspace));
+  const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
+  const [hasInitialTransactionsLoaded, setHasInitialTransactionsLoaded] = useState(false);
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
@@ -1247,18 +1246,14 @@ function TransactionsPageContent() {
   );
 
   const loadWorkspaces = async () => {
-    try {
-      const response = await fetch("/api/workspaces");
-      if (!response.ok) return;
-      const data = await response.json();
-      const items = Array.isArray(data.workspaces) ? data.workspaces : [];
-      setWorkspaces(items);
-      setSelectedWorkspaceId((current) => {
-        return chooseWorkspaceId(items, current);
-      });
-    } finally {
-      setIsWorkspacesLoaded(true);
-    }
+    const response = await fetch("/api/workspaces");
+    if (!response.ok) return;
+    const data = await response.json();
+    const items = Array.isArray(data.workspaces) ? data.workspaces : [];
+    setWorkspaces(items);
+    setSelectedWorkspaceId((current) => {
+      return chooseWorkspaceId(items, current);
+    });
   };
 
   const loadWorkspaceMetadata = async (workspaceId: string, options?: { skipImports?: boolean; background?: boolean }) => {
@@ -3262,8 +3257,7 @@ function TransactionsPageContent() {
   const warningTransactionCount = transactionsSummary.review;
   const hasReviewItems = warningTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
-  const isTableLoading = !selectedWorkspaceId ? !isWorkspacesLoaded : !isWorkspaceDataReady;
-  const shouldShowInitialLoadingScreen = isTableLoading && !hasInitialTransactionsLoaded;
+  const isTableLoading = false;
 
   useEffect(() => {
     if (!selectedWorkspaceId || !isWorkspaceDataReady) {
@@ -3327,7 +3321,7 @@ function TransactionsPageContent() {
     };
   }, []);
 
-  if (shouldShowInitialLoadingScreen) {
+  if (!hasInitialTransactionsLoaded) {
     return <CloverLoadingScreen label="transactions" />;
   }
 
@@ -4769,7 +4763,6 @@ function TransactionsPageContent() {
                                 </span>
                                 <span className="transactions-manual-picker__option-text">
                                   <strong>{account.name}</strong>
-                                  <span>{account.institution ?? account.type}</span>
                                 </span>
                               </button>
                             );
@@ -4815,7 +4808,7 @@ function TransactionsPageContent() {
                                 setManualForm((current) => ({ ...current, categoryId: category.id }));
                                 setManualCategoryMenuOpen(false);
                               }}
-                            >
+                              >
                               <span
                                 className="transaction-category-icon transactions-manual-picker__category-icon"
                                 style={getCategoryIconTone(category.name)}
@@ -4824,7 +4817,6 @@ function TransactionsPageContent() {
                               </span>
                               <span className="transactions-manual-picker__option-text">
                                 <strong>{category.name}</strong>
-                                <span>{category.type}</span>
                               </span>
                             </button>
                           ))}

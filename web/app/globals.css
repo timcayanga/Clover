@@ -9048,9 +9048,9 @@ input.transaction-inline-edit--amount::placeholder {
   max-height: 260px;
   overflow: auto;
   display: grid;
-  gap: 4px;
-  padding: 8px;
-  border-radius: 18px;
+  gap: 2px;
+  padding: 6px;
+  border-radius: 16px;
   border: 1px solid rgba(3, 168, 192, 0.16);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: var(--shadow-soft);
@@ -9061,10 +9061,10 @@ input.transaction-inline-edit--amount::placeholder {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 8px;
+  padding: 6px 8px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   background: transparent;
   color: var(--text);
   text-align: left;
@@ -9081,12 +9081,12 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-picker__option-text {
   display: grid;
-  gap: 2px;
+  gap: 0;
   min-width: 0;
 }
 
 .transactions-manual-picker__option-text strong {
-  font-size: 0.84rem;
+  font-size: 0.8rem;
   letter-spacing: -0.01em;
 }
 
@@ -9097,14 +9097,14 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-picker__category-icon {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   flex: 0 0 auto;
 }
 
 .transactions-manual-picker__category-icon img {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .transactions-manual-picker__brand {
@@ -9112,16 +9112,16 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-picker__brand .accounts-brand-mark {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   border-radius: 999px;
 }
 
 .transactions-manual-picker__brand .accounts-brand-mark__logo,
 .transactions-manual-picker__brand .accounts-brand-mark__fallback,
 .transactions-manual-picker__brand .accounts-brand-mark__logo-fallback {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .transactions-manual-picker__brand .accounts-brand-mark__logo {
