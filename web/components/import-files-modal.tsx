@@ -989,6 +989,8 @@ export function ImportFilesModal({
             accounts.find((account) => account.id === resolvedAccountId)?.type ??
             summaryContext.accountType ??
             null) as UploadInsightsSummary["accountType"];
+          const shouldDeferClientConfirmation =
+            resolvedIdentity.institution === "GCash" || resolvedAccountType === "wallet";
 
           const shouldUseFallbackIdentity = !resolvedIdentity.accountName && !resolvedIdentity.institution && attempt >= 4;
           if (!resolvedIdentity.accountName && !resolvedIdentity.institution && !shouldUseFallbackIdentity) {
@@ -1061,6 +1063,17 @@ export function ImportFilesModal({
           }
           if (!resolvedAccountId) {
             throw new Error("Unable to determine the destination account for this statement.");
+          }
+
+          if (confirmedTransactionsCount === 0 && shouldDeferClientConfirmation) {
+            updateItem(itemId, {
+              status: "importing",
+              progress: Math.max(95, Math.min(98, 94 + attempt * 0.1)),
+              progressLabel: "Finalizing import",
+              targetAccountId: resolvedAccountId,
+            });
+            await sleep(600);
+            continue;
           }
 
           const previewSummary = buildOptimisticUploadSummary(
