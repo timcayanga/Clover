@@ -34,6 +34,16 @@ type MarketHistoryResponse = {
 
 type CurrencyCode = "USD" | "PHP";
 
+type BenchmarkKey = "none" | "sp500" | "nasdaq" | "bitcoin";
+
+type BenchmarkOption = {
+  key: BenchmarkKey;
+  label: string;
+  symbol: string;
+  assetType: MarketAssetType;
+  note: string;
+};
+
 type InvestmentMarketChartProps = {
   investmentAccounts: InvestmentAccount[];
 };
@@ -84,6 +94,13 @@ const buildTicks = (minValue: number, maxValue: number, count = 4) => {
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const BENCHMARK_OPTIONS: BenchmarkOption[] = [
+  { key: "none", label: "None", symbol: "", assetType: "equity", note: "No benchmark comparison" },
+  { key: "sp500", label: "S&P 500", symbol: "SPY", assetType: "equity", note: "US large-cap market proxy" },
+  { key: "nasdaq", label: "Nasdaq 100", symbol: "QQQ", assetType: "equity", note: "US tech-heavy benchmark" },
+  { key: "bitcoin", label: "Bitcoin", symbol: "BTC", assetType: "crypto", note: "Crypto market reference" },
+];
 
 const formatRelativeTime = (timestamp: number) => {
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
@@ -161,6 +178,9 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
   const [rateError, setRateError] = useState<string | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
+  const [benchmarkKey, setBenchmarkKey] = useState<BenchmarkKey>("none");
+  const [benchmarkHistory, setBenchmarkHistory] = useState<MarketHistoryResponse | null>(null);
+  const [benchmarkError, setBenchmarkError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!submittedSymbol && defaultSuggestion) {
@@ -224,6 +244,51 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
   useEffect(() => {
     let cancelled = false;
 
+    const benchmark = BENCHMARK_OPTIONS.find((option) => option.key === benchmarkKey);
+    if (!benchmark || benchmark.key === "none") {
+      setBenchmarkHistory(null);
+      setBenchmarkError(null);
+      return;
+    }
+
+    const loadBenchmark = async () => {
+      try {
+        setBenchmarkHistory(null);
+        setBenchmarkError(null);
+        const response = await fetch(
+          `/api/market-history?symbol=${encodeURIComponent(benchmark.symbol)}&assetType=${encodeURIComponent(benchmark.assetType)}`
+        );
+        const payload = (await response.json()) as MarketHistoryResponse;
+        if (cancelled) {
+          return;
+        }
+
+        if (!response.ok) {
+          setBenchmarkHistory(null);
+          setBenchmarkError(payload.error ?? `Unable to load ${benchmark.label}.`);
+          return;
+        }
+
+        setBenchmarkHistory(payload);
+        setBenchmarkError(null);
+      } catch (fetchError) {
+        if (!cancelled) {
+          setBenchmarkHistory(null);
+          setBenchmarkError(fetchError instanceof Error ? fetchError.message : `Unable to load ${benchmark.label}.`);
+        }
+      }
+    };
+
+    void loadBenchmark();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [benchmarkKey]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     const loadExchangeRate = async () => {
       if (displayCurrency === "USD") {
         setExchangeRate(1);
@@ -274,15 +339,11 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
     [exchangeRate, visiblePoints]
   );
 
-  const lineChart = useMemo(() => buildMarketLinePath(displayPoints, chartWidth, chartHeight, chartPadding), [displayPoints]);
   const currentDisplayPoint = displayPoints[displayPoints.length - 1] ?? null;
   const firstDisplayPoint = displayPoints[0] ?? null;
   const priceChange = currentDisplayPoint && firstDisplayPoint ? currentDisplayPoint.value - firstDisplayPoint.value : null;
   const priceChangePercent =
     currentDisplayPoint && firstDisplayPoint && firstDisplayPoint.value !== 0 ? (priceChange ?? 0) / firstDisplayPoint.value : null;
-  const minDisplayValue = displayPoints.length > 0 ? Math.min(...displayPoints.map((point) => point.value)) : 0;
-  const maxDisplayValue = displayPoints.length > 0 ? Math.max(...displayPoints.map((point) => point.value)) : 0;
-  const yTicks = useMemo(() => buildTicks(minDisplayValue, maxDisplayValue), [maxDisplayValue, minDisplayValue]);
   const xTickIndexes = useMemo(() => {
     if (displayPoints.length <= 1) {
       return [0];
@@ -296,6 +357,53 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
   }, [displayPoints.length]);
 
   const hoveredPoint = hoverIndex === null ? null : displayPoints[hoverIndex] ?? null;
+  const benchmarkOption = BENCHMARK_OPTIONS.find((option) => option.key === benchmarkKey) ?? BENCHMARK_OPTIONS[0];
+  const benchmarkVisiblePoints = useMemo(() => {
+    if (!benchmarkHistory) {
+      return [];
+    }
+
+    return filterMarketHistoryByRange(benchmarkHistory.points, range);
+  }, [benchmarkHistory, range]);
+  const benchmarkScale = useMemo(() => {
+    const benchmarkFirst = benchmarkVisiblePoints[0]?.value;
+    const primaryFirst = visiblePoints[0]?.value;
+
+    if (!benchmarkFirst || !primaryFirst) {
+      return 1;
+    }
+
+    return primaryFirst / benchmarkFirst;
+  }, [benchmarkVisiblePoints, visiblePoints]);
+  const benchmarkDisplayPoints = useMemo(
+    () =>
+      benchmarkVisiblePoints.map((point) => ({
+        ...point,
+        value: point.value * benchmarkScale * exchangeRate,
+      })),
+    [benchmarkScale, benchmarkVisiblePoints, exchangeRate]
+  );
+  const benchmarkIsActive = benchmarkKey !== "none" && benchmarkDisplayPoints.length > 1 && !benchmarkError;
+  const chartPoints = benchmarkIsActive ? [...displayPoints, ...benchmarkDisplayPoints] : displayPoints;
+  const chartBounds = useMemo(() => {
+    if (chartPoints.length === 0) {
+      return null;
+    }
+
+    return {
+      minValue: Math.min(...chartPoints.map((point) => point.value)),
+      maxValue: Math.max(...chartPoints.map((point) => point.value)),
+    };
+  }, [chartPoints]);
+  const yTicks = useMemo(() => buildTicks(chartBounds?.minValue ?? 0, chartBounds?.maxValue ?? 0), [chartBounds]);
+  const lineChart = useMemo(
+    () => buildMarketLinePath(displayPoints, chartWidth, chartHeight, chartPadding, chartBounds ?? undefined),
+    [chartBounds, displayPoints]
+  );
+  const benchmarkLineChart = useMemo(
+    () => buildMarketLinePath(benchmarkDisplayPoints, chartWidth, chartHeight, chartPadding, chartBounds ?? undefined),
+    [benchmarkDisplayPoints, chartBounds]
+  );
 
   const selectSuggestion = (suggestion: (typeof tickerSuggestions)[number]) => {
     setTickerInput(suggestion.symbol);
@@ -344,6 +452,16 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
             <select value={displayCurrency} onChange={(event) => setDisplayCurrency(event.target.value as CurrencyCode)}>
               <option value="USD">USD</option>
               <option value="PHP">PHP</option>
+            </select>
+          </label>
+          <label className="investments-market__currency-select">
+            Benchmark
+            <select value={benchmarkKey} onChange={(event) => setBenchmarkKey(event.target.value as BenchmarkKey)}>
+              {BENCHMARK_OPTIONS.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
           <button
@@ -407,6 +525,8 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
         ))}
       </div>
 
+      {benchmarkError ? <p className="panel-muted">Benchmark unavailable: {benchmarkError}</p> : null}
+
       <div className="insight-chart">
         {loading ? (
           <div className="empty-state">Loading market data...</div>
@@ -443,6 +563,17 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
                   fill="url(#market-chart-fill)"
                 />
                 <path d={lineChart.linePath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                {benchmarkIsActive ? (
+                  <path
+                    d={benchmarkLineChart.linePath}
+                    fill="none"
+                    stroke="rgba(59, 130, 246, 0.95)"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="8 7"
+                  />
+                ) : null}
                 {lineChart.points.map((point) => (
                   <circle key={`${point.date}-${point.value}`} cx={point.x} cy={point.y} r="3.5" fill="white" stroke="var(--accent)" strokeWidth="2" />
                 ))}
@@ -488,6 +619,15 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
                 </div>
               ) : null}
             </div>
+
+            {benchmarkIsActive ? (
+              <div className="investments-market__comparison">
+                <span>
+                  {benchmarkOption.label} scaled to the same starting value. This shows relative movement, not absolute price.
+                </span>
+                <span>{benchmarkOption.note}</span>
+              </div>
+            ) : null}
 
             <div className="market-chart__x-axis">
               {xTickIndexes.map((index) => {

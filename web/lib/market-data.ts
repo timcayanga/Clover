@@ -30,14 +30,15 @@ export const buildMarketLinePath = (
   points: MarketHistoryPoint[],
   chartWidth: number,
   chartHeight: number,
-  chartPadding: number
+  chartPadding: number,
+  bounds?: { minValue: number; maxValue: number }
 ) => {
   if (points.length === 0) {
     return { points: [] as Array<{ x: number; y: number; date: string; value: number }>, linePath: "" };
   }
 
-  const minValue = Math.min(...points.map((point) => point.value));
-  const maxValue = Math.max(...points.map((point) => point.value));
+  const minValue = bounds?.minValue ?? Math.min(...points.map((point) => point.value));
+  const maxValue = bounds?.maxValue ?? Math.max(...points.map((point) => point.value));
   const range = Math.max(maxValue - minValue, 1);
   const xSpan = chartWidth - chartPadding * 2;
   const ySpan = chartHeight - chartPadding * 2;
@@ -66,4 +67,3 @@ export const filterMarketHistoryByRange = (points: MarketHistoryPoint[], range: 
   const filtered = points.filter((point) => new Date(point.date) >= cutoff);
   return filtered.length > 0 ? filtered : points.slice(-Math.min(points.length, 30));
 };
-

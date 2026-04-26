@@ -157,6 +157,62 @@ type InvestmentAllocationRow = InvestmentGroup & {
   share: number;
 };
 
+type InvestmentSortKey = "value_desc" | "value_asc" | "name_asc" | "gain_desc" | "gain_asc" | "updated_desc";
+
+type InvestmentEditDraft = {
+  name: string;
+  institution: string;
+  investmentSubtype: InvestmentSubtype;
+  investmentSymbol: string;
+  investmentQuantity: string;
+  investmentCostBasis: string;
+  investmentPrincipal: string;
+  investmentStartDate: string;
+  investmentMaturityDate: string;
+  investmentInterestRate: string;
+  investmentMaturityValue: string;
+  balance: string;
+};
+
+const INVESTMENT_SORT_OPTIONS: Array<{ key: InvestmentSortKey; label: string }> = [
+  { key: "value_desc", label: "Current value: high to low" },
+  { key: "value_asc", label: "Current value: low to high" },
+  { key: "name_asc", label: "Name: A to Z" },
+  { key: "gain_desc", label: "Gain / loss: high to low" },
+  { key: "gain_asc", label: "Gain / loss: low to high" },
+  { key: "updated_desc", label: "Recently updated" },
+];
+
+const normalizeInvestmentSearchText = (value: string) => value.trim().toLowerCase();
+
+const getInvestmentSearchBlob = (account: Account) =>
+  [
+    account.name,
+    account.institution ?? "",
+    account.investmentSymbol ?? "",
+    account.investmentSubtype ? getInvestmentSubtypeLabel(account.investmentSubtype) : "",
+    account.investmentSubtype ? getInvestmentSubtypeDescription(account.investmentSubtype) : "",
+    getInvestmentHighlights(account).join(" "),
+    account.balance ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+
+const serializeInvestmentEditDraft = (account: Account): InvestmentEditDraft => ({
+  name: account.name,
+  institution: account.institution ?? "",
+  investmentSubtype: account.investmentSubtype ?? "other",
+  investmentSymbol: account.investmentSymbol ?? "",
+  investmentQuantity: account.investmentQuantity ?? "",
+  investmentCostBasis: account.investmentCostBasis ?? "",
+  investmentPrincipal: account.investmentPrincipal ?? "",
+  investmentStartDate: account.investmentStartDate ? account.investmentStartDate.slice(0, 10) : "",
+  investmentMaturityDate: account.investmentMaturityDate ? account.investmentMaturityDate.slice(0, 10) : "",
+  investmentInterestRate: account.investmentInterestRate ?? "",
+  investmentMaturityValue: account.investmentMaturityValue ?? "",
+  balance: account.balance ?? "",
+});
+
 export default function InvestmentsPage() {
   const initialWorkspaceId = readSelectedWorkspaceId();
   const initialCachedWorkspace = getCachedAccountsWorkspace(initialWorkspaceId);
@@ -166,8 +222,14 @@ export default function InvestmentsPage() {
   const [loading, setLoading] = useState(!initialCachedWorkspace);
   const [hasLoaded, setHasLoaded] = useState(Boolean(initialCachedWorkspace));
   const [message, setMessage] = useState("");
+  const [investmentSearch, setInvestmentSearch] = useState("");
+  const [investmentSubtypeFilter, setInvestmentSubtypeFilter] = useState<InvestmentSubtype | "all">("all");
+  const [investmentSortKey, setInvestmentSortKey] = useState<InvestmentSortKey>("value_desc");
   const [addOpen, setAddOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [editingDraft, setEditingDraft] = useState<InvestmentEditDraft | null>(null);
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
   const [manualInvestmentSubtype, setManualInvestmentSubtype] = useState<InvestmentSubtype>("stock");
@@ -251,8 +313,42 @@ export default function InvestmentsPage() {
     [accounts]
   );
 
+  const visibleInvestmentAccounts = useMemo(() => {
+    const search = normalizeInvestmentSearchText(investmentSearch);
+    const filtered = investmentAccounts.filter((account) => {
+      if (investmentSubtypeFilter !== "all" && account.investmentSubtype !== investmentSubtypeFilter) {
+        return false;
+      }
+
+      if (!search) {
+        return true;
+      }
+
+      return getInvestmentSearchBlob(account).includes(search);
+    });
+
+    const sorters: Record<InvestmentSortKey, (left: Account, right: Account) => number> = {
+      value_desc: (left, right) => parseAmount(right.balance) - parseAmount(left.balance) || left.name.localeCompare(right.name),
+      value_asc: (left, right) => parseAmount(left.balance) - parseAmount(right.balance) || left.name.localeCompare(right.name),
+      name_asc: (left, right) => left.name.localeCompare(right.name) || parseAmount(right.balance) - parseAmount(left.balance),
+      gain_desc: (left, right) => {
+        const leftGain = (parseNullableAmount(left.balance) ?? 0) - (parseNullableAmount(left.investmentCostBasis ?? left.investmentPrincipal) ?? 0);
+        const rightGain = (parseNullableAmount(right.balance) ?? 0) - (parseNullableAmount(right.investmentCostBasis ?? right.investmentPrincipal) ?? 0);
+        return rightGain - leftGain || left.name.localeCompare(right.name);
+      },
+      gain_asc: (left, right) => {
+        const leftGain = (parseNullableAmount(left.balance) ?? 0) - (parseNullableAmount(left.investmentCostBasis ?? left.investmentPrincipal) ?? 0);
+        const rightGain = (parseNullableAmount(right.balance) ?? 0) - (parseNullableAmount(right.investmentCostBasis ?? right.investmentPrincipal) ?? 0);
+        return leftGain - rightGain || left.name.localeCompare(right.name);
+      },
+      updated_desc: (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime() || left.name.localeCompare(right.name),
+    };
+
+    return filtered.slice().sort(sorters[investmentSortKey]);
+  }, [investmentAccounts, investmentSearch, investmentSortKey, investmentSubtypeFilter]);
+
   const totals = useMemo(() => {
-    return investmentAccounts.reduce(
+    return visibleInvestmentAccounts.reduce(
       (accumulator, account) => {
         const currentValue = parseNullableAmount(account.balance);
         const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
@@ -269,12 +365,12 @@ export default function InvestmentsPage() {
       },
       { currentValue: 0, purchaseValue: 0, gainLoss: 0 }
     );
-  }, [investmentAccounts]);
+  }, [visibleInvestmentAccounts]);
 
   const investmentGroups = useMemo<InvestmentGroup[]>(() => {
     const groupMap = new Map<string, Account[]>();
 
-    for (const account of investmentAccounts) {
+    for (const account of visibleInvestmentAccounts) {
       const key = account.investmentSubtype ?? "__unclassified__";
       const bucket = groupMap.get(key) ?? [];
       bucket.push(account);
@@ -321,7 +417,7 @@ export default function InvestmentsPage() {
         };
       })
       .filter((group): group is InvestmentGroup => group !== null);
-  }, [investmentAccounts]);
+  }, [visibleInvestmentAccounts]);
 
   const portfolioAllocation = useMemo<InvestmentAllocationRow[]>(() => {
     const totalValue = investmentGroups.reduce((sum, group) => sum + group.currentValue, 0);
@@ -349,6 +445,78 @@ export default function InvestmentsPage() {
     [manualInstitution, manualName]
   );
 
+  const activeInvestmentFilters = Boolean(
+    normalizeInvestmentSearchText(investmentSearch) || investmentSubtypeFilter !== "all" || investmentSortKey !== "value_desc"
+  );
+  const editingAccount = editingAccountId ? visibleInvestmentAccounts.find((account) => account.id === editingAccountId) ?? accounts.find((account) => account.id === editingAccountId) ?? null : null;
+
+  const beginEditingAccount = (account: Account) => {
+    setEditingAccountId(account.id);
+    setEditingDraft(serializeInvestmentEditDraft(account));
+  };
+
+  const cancelEditingAccount = () => {
+    setEditingAccountId(null);
+    setEditingDraft(null);
+  };
+
+  const updateEditingDraft = (key: keyof InvestmentEditDraft, value: string) => {
+    setEditingDraft((current) => (current ? { ...current, [key]: value } : current));
+  };
+
+  const saveEditingAccount = async () => {
+    if (!selectedWorkspaceId || !editingAccountId || !editingDraft || !editingAccount) {
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const isMarket = isMarketInvestmentSubtype(editingDraft.investmentSubtype);
+      const isFixedIncome = isFixedIncomeInvestmentSubtype(editingDraft.investmentSubtype);
+      const response = await fetch(`/api/accounts/${editingAccountId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+          name: editingDraft.name.trim(),
+          institution: editingDraft.institution.trim() || null,
+          investmentSubtype: editingDraft.investmentSubtype,
+          investmentSymbol: isMarket || editingDraft.investmentSubtype === "other" ? editingDraft.investmentSymbol.trim() || null : null,
+          investmentQuantity: isMarket ? parseNullableNumberInput(editingDraft.investmentQuantity) : null,
+          investmentCostBasis:
+            isMarket || editingDraft.investmentSubtype === "other"
+              ? parseNullableNumberInput(editingDraft.investmentCostBasis)
+              : null,
+          investmentPrincipal: isFixedIncome ? parseNullableNumberInput(editingDraft.investmentPrincipal) : null,
+          investmentStartDate: isFixedIncome ? parseNullableDateInput(editingDraft.investmentStartDate) : null,
+          investmentMaturityDate: isFixedIncome ? parseNullableDateInput(editingDraft.investmentMaturityDate) : null,
+          investmentInterestRate: isFixedIncome ? parseNullableNumberInput(editingDraft.investmentInterestRate) : null,
+          investmentMaturityValue: isFixedIncome ? parseNullableNumberInput(editingDraft.investmentMaturityValue) : null,
+          type: "investment",
+          currency: editingAccount.currency,
+          source: editingAccount.source,
+          balance: parseNullableNumberInput(editingDraft.balance),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to update investment.");
+      }
+
+      const payload = await response.json();
+      if (payload.account) {
+        setAccounts((current) => current.map((account) => (account.id === editingAccountId ? (payload.account as Account) : account)));
+      }
+
+      cancelEditingAccount();
+      setMessage("Investment updated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update investment.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const getManualInvestmentFieldValue = (key: string) => {
     if (key === "investmentSymbol") return manualInvestmentSymbol;
     if (key === "investmentQuantity") return manualInvestmentQuantity;
@@ -358,6 +526,22 @@ export default function InvestmentsPage() {
     if (key === "investmentMaturityDate") return manualInvestmentMaturityDate;
     if (key === "investmentInterestRate") return manualInvestmentInterestRate;
     if (key === "investmentMaturityValue") return manualInvestmentMaturityValue;
+    return "";
+  };
+
+  const getEditingFieldValue = (key: string) => {
+    if (!editingDraft) {
+      return "";
+    }
+
+    if (key === "investmentSymbol") return editingDraft.investmentSymbol;
+    if (key === "investmentQuantity") return editingDraft.investmentQuantity;
+    if (key === "investmentCostBasis") return editingDraft.investmentCostBasis;
+    if (key === "investmentPrincipal") return editingDraft.investmentPrincipal;
+    if (key === "investmentStartDate") return editingDraft.investmentStartDate;
+    if (key === "investmentMaturityDate") return editingDraft.investmentMaturityDate;
+    if (key === "investmentInterestRate") return editingDraft.investmentInterestRate;
+    if (key === "investmentMaturityValue") return editingDraft.investmentMaturityValue;
     return "";
   };
 
@@ -462,6 +646,51 @@ export default function InvestmentsPage() {
 
         <InvestmentMarketChart investmentAccounts={investmentAccounts} />
 
+        <section className="investments-filters glass">
+          <label>
+            Search holdings
+            <input
+              value={investmentSearch}
+              onChange={(event) => setInvestmentSearch(event.target.value)}
+              placeholder="Search name, ticker, institution"
+            />
+          </label>
+          <label>
+            Subtype
+            <select value={investmentSubtypeFilter} onChange={(event) => setInvestmentSubtypeFilter(event.target.value as InvestmentSubtype | "all")}>
+              <option value="all">All subtypes</option>
+              {INVESTMENT_SUBTYPES.map((subtype) => (
+                <option key={subtype} value={subtype}>
+                  {getInvestmentSubtypeLabel(subtype)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Sort by
+            <select value={investmentSortKey} onChange={(event) => setInvestmentSortKey(event.target.value as InvestmentSortKey)}>
+              {INVESTMENT_SORT_OPTIONS.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="investments-filters__actions">
+            <button className="button button-secondary button-small" type="button" onClick={() => {
+              setInvestmentSearch("");
+              setInvestmentSubtypeFilter("all");
+              setInvestmentSortKey("value_desc");
+            }} disabled={!activeInvestmentFilters}>
+              Reset filters
+            </button>
+            <span>
+              Showing {visibleInvestmentAccounts.length} of {investmentAccounts.length} investment
+              {investmentAccounts.length === 1 ? "" : "s"}
+            </span>
+          </div>
+        </section>
+
         <section className="accounts-overview-grid">
           <article className="accounts-overview-card glass">
             <p className="eyebrow">Current value</p>
@@ -480,8 +709,8 @@ export default function InvestmentsPage() {
           </article>
           <article className="accounts-overview-card glass">
             <p className="eyebrow">Holdings</p>
-            <strong>{investmentAccounts.length}</strong>
-            <span>Investment accounts in this workspace</span>
+            <strong>{visibleInvestmentAccounts.length}</strong>
+            <span>Visible investment accounts after filters</span>
           </article>
         </section>
 
@@ -554,6 +783,8 @@ export default function InvestmentsPage() {
                       currentValue === null || purchaseValue === null ? null : currentValue - purchaseValue;
                     const returnPercent = getReturnPercent(currentValue, purchaseValue);
                     const highlights = getInvestmentHighlights(account);
+                    const isEditing = editingAccountId === account.id && Boolean(editingDraft);
+                    const editFieldConfigs = isEditing && editingDraft ? getInvestmentFieldConfigs(editingDraft.investmentSubtype) : [];
 
                     return (
                       <article key={account.id} className="accounts-account-card glass">
@@ -568,45 +799,127 @@ export default function InvestmentsPage() {
                               </span>
                             </div>
                           </div>
-                          <Link className="button button-secondary button-small" href={`/accounts/${account.id}`}>
-                            Open account
-                          </Link>
+                          <div className="accounts-account-card__head-actions">
+                            {isEditing ? (
+                              <>
+                                <button className="button button-primary button-small" type="button" onClick={saveEditingAccount} disabled={isUpdating}>
+                                  Save
+                                </button>
+                                <button className="button button-secondary button-small" type="button" onClick={cancelEditingAccount} disabled={isUpdating}>
+                                  Cancel
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button className="button button-secondary button-small" type="button" onClick={() => beginEditingAccount(account)}>
+                                  Edit
+                                </button>
+                                <Link className="button button-secondary button-small" href={`/accounts/${account.id}`}>
+                                  Open
+                                </Link>
+                              </>
+                            )}
+                          </div>
                         </div>
 
                         <div className="accounts-account-card__body">
-                          <div className="accounts-account-card__balance-row">
-                            <div className="accounts-account-card__amount is-asset">
-                              {currentValue === null ? "Not set" : currencyFormatter.format(currentValue)}
+                          {isEditing && editingDraft ? (
+                            <div className="accounts-inline-edit">
+                              <div className="accounts-inline-edit__grid">
+                                <label>
+                                  Name
+                                  <input value={editingDraft.name} onChange={(event) => updateEditingDraft("name", event.target.value)} />
+                                </label>
+                                <label>
+                                  Institution
+                                  <input value={editingDraft.institution} onChange={(event) => updateEditingDraft("institution", event.target.value)} />
+                                </label>
+                                <label>
+                                  Investment subtype
+                                  <select
+                                    value={editingDraft.investmentSubtype}
+                                    onChange={(event) => {
+                                      const nextSubtype = event.target.value as InvestmentSubtype;
+                                      setEditingDraft((current) =>
+                                        current
+                                          ? {
+                                              ...current,
+                                              investmentSubtype: nextSubtype,
+                                            }
+                                          : current
+                                      );
+                                    }}
+                                  >
+                                    {INVESTMENT_SUBTYPES.map((subtype) => (
+                                      <option key={subtype} value={subtype}>
+                                        {getInvestmentSubtypeLabel(subtype)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label>
+                                  Current value / balance
+                                  <input value={editingDraft.balance} onChange={(event) => updateEditingDraft("balance", event.target.value)} inputMode="decimal" />
+                                </label>
+                                {editFieldConfigs.map((field) => (
+                                  <label key={field.key}>
+                                    {field.label}
+                                    {field.type === "date" ? (
+                                      <input
+                                        type="date"
+                                        value={getEditingFieldValue(field.key)}
+                                        onChange={(event) => updateEditingDraft(field.key as keyof InvestmentEditDraft, event.target.value)}
+                                      />
+                                    ) : (
+                                      <input
+                                        value={getEditingFieldValue(field.key)}
+                                        onChange={(event) => updateEditingDraft(field.key as keyof InvestmentEditDraft, event.target.value)}
+                                        inputMode={field.inputMode}
+                                        placeholder={field.placeholder}
+                                      />
+                                    )}
+                                  </label>
+                                ))}
+                              </div>
+                              <p className="panel-muted">Use Save to update the account, or Cancel to discard changes.</p>
                             </div>
-                            <div className="accounts-account-card__balance-meta">
-                              <span className="accounts-account-card__balance-pill is-neutral">
-                                {account.investmentSubtype ? getInvestmentSubtypeLabel(account.investmentSubtype) : "Unclassified"}
-                              </span>
-                            </div>
-                          </div>
+                          ) : (
+                            <>
+                              <div className="accounts-account-card__balance-row">
+                                <div className="accounts-account-card__amount is-asset">
+                                  {currentValue === null ? "Not set" : currencyFormatter.format(currentValue)}
+                                </div>
+                                <div className="accounts-account-card__balance-meta">
+                                  <span className="accounts-account-card__balance-pill is-neutral">
+                                    {account.investmentSubtype ? getInvestmentSubtypeLabel(account.investmentSubtype) : "Unclassified"}
+                                  </span>
+                                </div>
+                              </div>
 
-                          <div className="accounts-account-card__investment-meta">
-                            <span>
-                              {purchaseValue === null
-                                ? "Purchase value not set"
-                                : `${account.investmentCostBasis ? "Purchase value" : "Principal"} ${currencyFormatter.format(purchaseValue)}`}
-                            </span>
-                            <span>
-                              {gainLoss === null
-                                ? "Gain/Loss not set"
-                                : `${gainLoss >= 0 ? "Gain" : "Loss"} ${currencyFormatter.format(Math.abs(gainLoss))}`}
-                            </span>
-                          </div>
+                              <div className="accounts-account-card__investment-meta">
+                                <span>
+                                  {purchaseValue === null
+                                    ? "Purchase value not set"
+                                    : `${account.investmentCostBasis ? "Purchase value" : "Principal"} ${currencyFormatter.format(purchaseValue)}`}
+                                </span>
+                                <span>
+                                  {gainLoss === null
+                                    ? "Gain/Loss not set"
+                                    : `${gainLoss >= 0 ? "Gain" : "Loss"} ${currencyFormatter.format(Math.abs(gainLoss))}`}
+                                </span>
+                              </div>
 
-                          <div className="accounts-account-card__investment-meta">
-                            <span>{highlights[0]}</span>
-                            <span>{highlights[1]}</span>
-                            <span className={returnPercent === null ? "" : returnPercent >= 0 ? "is-positive" : "is-negative"}>
-                              {returnPercent === null
-                                ? "Return not set"
-                                : `Return ${returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(returnPercent))}`}
-                            </span>
-                          </div>
+                              <div className="accounts-account-card__investment-meta">
+                                <span>{highlights[0]}</span>
+                                <span>{highlights[1]}</span>
+                                <span className={returnPercent === null ? "" : returnPercent >= 0 ? "is-positive" : "is-negative"}>
+                                  {returnPercent === null
+                                    ? "Return not set"
+                                    : `Return ${returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(returnPercent))}`}
+                                </span>
+                              </div>
+                            </>
+                          )}
                         </div>
                       </article>
                     );
@@ -614,6 +927,20 @@ export default function InvestmentsPage() {
                 </div>
               </article>
             ))
+          ) : investmentAccounts.length > 0 && activeInvestmentFilters ? (
+            <div className="empty-state">
+              <strong>No investments match these filters.</strong>
+              <p>Try widening the search, changing subtype, or resetting the sort and filters.</p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
+                <button className="button button-primary button-small" type="button" onClick={() => {
+                  setInvestmentSearch("");
+                  setInvestmentSubtypeFilter("all");
+                  setInvestmentSortKey("value_desc");
+                }}>
+                  Reset filters
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="empty-state">
               <strong>No investments yet.</strong>
