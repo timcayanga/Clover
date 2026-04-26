@@ -336,7 +336,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
         setBenchmarkHistory(null);
         setBenchmarkError(null);
         const response = await fetch(
-          `/api/market-history?symbol=${encodeURIComponent(benchmark.symbol)}&assetType=${encodeURIComponent(benchmark.assetType)}&range=${encodeURIComponent(range)}`
+          `/api/market-history?symbol=${encodeURIComponent(benchmark.symbol)}&market=${encodeURIComponent(benchmark.market)}&range=${encodeURIComponent(range)}`
         );
         const payload = (await response.json()) as MarketHistoryResponse;
         if (cancelled) {
