@@ -9523,6 +9523,7 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   gap: 4px;
   min-height: 30px;
+  width: 160px;
   padding: 0 10px;
   border-radius: 999px;
   border: 1px solid var(--stroke);
@@ -9534,7 +9535,7 @@ input.transaction-inline-edit--amount::placeholder {
   border: 0;
   background: transparent;
   width: 100%;
-  min-width: 110px;
+  min-width: 0;
   color: var(--text);
   font: inherit;
   font-size: 11px;
