@@ -10242,16 +10242,18 @@ input.transaction-inline-edit--amount::placeholder {
   box-shadow: var(--shadow-soft);
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
-  overflow: visible;
+  overflow: hidden;
 }
 
 .accounts-account-card::before {
   content: "";
   position: absolute;
   inset: 0 0 auto 0;
-  height: 3px;
+  height: 4px;
   background: var(--brand-accent, transparent);
   opacity: 0.78;
+  border-radius: 16px 16px 0 0;
+  pointer-events: none;
 }
 
 .accounts-account-card:hover,

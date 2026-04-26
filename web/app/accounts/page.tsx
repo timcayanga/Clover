@@ -650,6 +650,7 @@ function AccountsPageContent() {
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
+  const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
   const [deletingAccountIds, setDeletingAccountIds] = useState<string[]>(
     () => getDeletingWorkspaceAccountIds(initialWorkspaceId)
   );
@@ -797,39 +798,6 @@ function AccountsPageContent() {
       router.replace("/accounts");
     }
   }, [router, searchParams]);
-
-  useEffect(() => {
-    if (!importOpen || !pendingImportSummary || accountsLoading) {
-      return;
-    }
-
-    if (pendingImportSummary.optimistic) {
-      return;
-    }
-
-    const targetAccountId = pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
-    if (!targetAccountId) {
-      return;
-    }
-
-    const visibleAccount = accounts.find((account) => account.id === targetAccountId);
-    if (!visibleAccount) {
-      return;
-    }
-
-    if (pendingImportSummary.balance !== null && visibleAccount.balance !== pendingImportSummary.balance) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setImportOpen(false);
-      setPendingImportSummary(null);
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [accounts, accountsLoading, importOpen, pendingImportSummary]);
 
   useEffect(() => {
     if (!selectedWorkspaceId) {
@@ -1242,6 +1210,45 @@ function AccountsPageContent() {
     () => (selectedAccount ? getBalanceContext(selectedAccount) : null),
     [selectedAccount]
   );
+
+  useEffect(() => {
+    if (!importOpen || !pendingImportSummary || accountsLoading || importRefreshInFlight) {
+      return;
+    }
+
+    if (pendingImportSummary.optimistic) {
+      return;
+    }
+
+    const targetAccountId = pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
+    if (!targetAccountId) {
+      return;
+    }
+
+    const visibleAccount = accounts.find((account) => account.id === targetAccountId);
+    if (!visibleAccount) {
+      return;
+    }
+
+    if (pendingImportSummary.balance !== null && visibleAccount.balance !== pendingImportSummary.balance) {
+      return;
+    }
+
+    const importedRows = pendingImportSummary.rowsImported ?? 0;
+    if (importedRows > 0 && selectedAccountTransactions.length < importedRows) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setImportOpen(false);
+      setPendingImportSummary(null);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [accounts, accountsLoading, importOpen, importRefreshInFlight, pendingImportSummary, selectedAccountTransactions.length]);
+
   const manualAccountBrand = useMemo(
     () =>
       getAccountBrand({
@@ -1385,18 +1392,22 @@ function AccountsPageContent() {
   const deleteAccount = async () => {
     if (!selectedWorkspaceId || !selectedAccount) return;
 
+    const accountToDelete = selectedAccount;
     setAccountDeleteBusy(true);
     try {
-      markDeletingWorkspaceAccount(selectedWorkspaceId, selectedAccount.id);
-      deletingAccountIdsRef.current.add(selectedAccount.id);
+      markDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
+      deletingAccountIdsRef.current.add(accountToDelete.id);
       setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
       flushSync(() => {
+        setAccounts((current) => current.filter((account) => account.id !== accountToDelete.id));
+        setTransactions((current) => current.filter((transaction) => transaction.accountId !== accountToDelete.id));
+        setAccountRules((current) => current.filter((rule) => rule.accountId !== accountToDelete.id));
         setDrawerAccountId(null);
         setAccountDeleteConfirmOpen(false);
-        setMessage(`Deleting account "${selectedAccount.name}"...`);
+        setMessage(`Deleting account "${accountToDelete.name}"...`);
       });
 
-      const response = await fetch(`/api/accounts/${selectedAccount.id}`, {
+      const response = await fetch(`/api/accounts/${accountToDelete.id}`, {
         method: "DELETE",
       });
 
@@ -1405,27 +1416,25 @@ function AccountsPageContent() {
         throw new Error(payload?.error ?? "Unable to delete account.");
       }
 
-      deletedAccountIdsRef.current.add(selectedAccount.id);
-      clearDeletingWorkspaceAccount(selectedWorkspaceId, selectedAccount.id);
-      deletingAccountIdsRef.current.delete(selectedAccount.id);
+      deletedAccountIdsRef.current.add(accountToDelete.id);
+      clearDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
+      deletingAccountIdsRef.current.delete(accountToDelete.id);
       setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
-      markDeletedWorkspaceAccount(selectedWorkspaceId, selectedAccount.id);
+      markDeletedWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
       flushSync(() => {
-        setAccounts((current) => current.filter((account) => account.id !== selectedAccount.id));
-        setTransactions((current) => current.filter((transaction) => transaction.accountId !== selectedAccount.id));
-        setAccountRules((current) => current.filter((rule) => rule.accountId !== selectedAccount.id));
         setDrawerAccountId(null);
         setAccountDeleteConfirmOpen(false);
-        setMessage(`Account "${selectedAccount.name}" deleted.`);
+        setMessage(`Account "${accountToDelete.name}" deleted.`);
       });
       clearWorkspaceCache(selectedWorkspaceId);
       workspaceLoadSeqRef.current += 1;
       void loadWorkspaceData(selectedWorkspaceId, { silent: true });
     } catch (error) {
-      clearDeletingWorkspaceAccount(selectedWorkspaceId, selectedAccount.id);
-      deletingAccountIdsRef.current.delete(selectedAccount.id);
+      clearDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
+      deletingAccountIdsRef.current.delete(accountToDelete.id);
       setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
-      setMessage(error instanceof Error ? error.message : "Unable to delete account.");
+      void loadWorkspaceData(selectedWorkspaceId, { silent: true });
+      setMessage(error instanceof Error ? error.message : `Unable to delete account "${accountToDelete.name}".`);
     } finally {
       setAccountDeleteBusy(false);
     }
@@ -2362,9 +2371,6 @@ function AccountsPageContent() {
           const previewTransactions = summary.previewTransactions ?? [];
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution);
-          const hasVisibleMatchingAccount = accounts.some(
-            (account) => normalizeImportedAccountKey(account.name, account.institution) === importedAccountKey
-          );
 
           flushSync(() => {
             setAccountsLoading(false);
@@ -2424,12 +2430,11 @@ function AccountsPageContent() {
           });
 
           if (!summary.optimistic) {
-            if (hasVisibleMatchingAccount) {
-              window.setTimeout(() => {
-                void refreshAll();
-              }, 10_000);
-            } else {
-              void refreshAll();
+            setImportRefreshInFlight(true);
+            try {
+              await refreshAll();
+            } finally {
+              setImportRefreshInFlight(false);
             }
           }
           setMessage("Import complete. Accounts and Transactions are updated.");

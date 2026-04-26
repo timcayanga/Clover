@@ -1206,6 +1206,7 @@ function TransactionsPageContent() {
   const transactionRowRefs = useRef(new Map<string, HTMLElement>());
   const transactionsLoadRequestRef = useRef(0);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
+  const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
   const reviewTransactionParamRef = useRef<string | null>(null);
   const drilldownParamRef = useRef<string | null>(null);
   const [isCompactViewport, setIsCompactViewport] = useState(false);
@@ -3359,7 +3360,7 @@ function TransactionsPageContent() {
   }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary]);
 
   useEffect(() => {
-    if (!importOpen || !pendingImportSummary || !isWorkspaceDataReady) {
+    if (!importOpen || !pendingImportSummary || !isWorkspaceDataReady || importRefreshInFlight) {
       return;
     }
 
@@ -3389,7 +3390,7 @@ function TransactionsPageContent() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [importOpen, isWorkspaceDataReady, pendingImportSummary, transactions]);
+  }, [importOpen, importRefreshInFlight, isWorkspaceDataReady, pendingImportSummary, transactions]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 720px)");
@@ -5279,9 +5280,6 @@ function TransactionsPageContent() {
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
           const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution);
-          const hasVisibleMatchingAccount = accounts.some(
-            (account) => normalizeImportedAccountKey(account.name, account.institution) === importedAccountKey
-          );
 
           setPendingImportSummary(summary);
 
@@ -5340,14 +5338,12 @@ function TransactionsPageContent() {
           }
 
           if (!summary.optimistic) {
-            if (hasVisibleMatchingAccount) {
-              window.setTimeout(() => {
-                void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
-                void loadTransactionsPage(selectedWorkspaceId, { background: true });
-              }, 10_000);
-            } else {
-              void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
-              void loadTransactionsPage(selectedWorkspaceId, { background: true });
+            setImportRefreshInFlight(true);
+            try {
+              await loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
+              await loadTransactionsPage(selectedWorkspaceId, { background: true });
+            } finally {
+              setImportRefreshInFlight(false);
             }
           }
           setMessage("Import complete. Accounts and Transactions are updated.");
