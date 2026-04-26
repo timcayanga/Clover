@@ -8,6 +8,7 @@ import { AccountBrandMark } from "@/components/account-brand-mark";
 import { getAccountBrand } from "@/lib/account-brand";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
+import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   clearWorkspaceCache,
   clearDeletingWorkspaceAccount,
@@ -335,6 +336,12 @@ function AccountDetailPageContent() {
     let cancelled = false;
 
     const load = async () => {
+      const selectedWorkspaceId = readSelectedWorkspaceId();
+      if (getDeletingWorkspaceAccountIds(selectedWorkspaceId ?? "").includes(accountId)) {
+        router.replace("/accounts");
+        return;
+      }
+
       try {
         const accountPromise = fetch(`/api/accounts/${accountId}`);
         const transactionsPromise = fetch(`/api/accounts/${accountId}/transactions?page=1&pageSize=${TRANSACTION_PAGE_SIZE}`);

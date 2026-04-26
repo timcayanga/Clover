@@ -70,12 +70,13 @@ type Account = {
 };
 
 const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account | null => {
-  if (!summary.accountId || !summary.accountName) {
+  const optimisticAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+  if (!optimisticAccountId || !summary.accountName) {
     return null;
   }
 
   return {
-    id: summary.accountId,
+    id: optimisticAccountId,
     name: summary.accountName,
     institution: summary.institution,
     investmentSubtype: null,
@@ -810,6 +811,10 @@ function AccountsPageContent() {
       return;
     }
 
+    deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(selectedWorkspaceId));
+    deletingAccountIdsRef.current = new Set(getDeletingWorkspaceAccountIds(selectedWorkspaceId));
+    setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+
     if (hydrateWorkspaceFromCache(selectedWorkspaceId)) {
       void loadWorkspaceData(selectedWorkspaceId, { silent: true });
       return;
@@ -1212,7 +1217,7 @@ function AccountsPageContent() {
   );
 
   useEffect(() => {
-    if (!importOpen || !pendingImportSummary || accountsLoading || importRefreshInFlight) {
+    if (!importOpen || !pendingImportSummary || accountsLoading) {
       return;
     }
 
@@ -1234,11 +1239,6 @@ function AccountsPageContent() {
       return;
     }
 
-    const importedRows = pendingImportSummary.rowsImported ?? 0;
-    if (importedRows > 0 && selectedAccountTransactions.length < importedRows) {
-      return;
-    }
-
     const timeout = window.setTimeout(() => {
       setImportOpen(false);
       setPendingImportSummary(null);
@@ -1247,7 +1247,7 @@ function AccountsPageContent() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [accounts, accountsLoading, importOpen, importRefreshInFlight, pendingImportSummary, selectedAccountTransactions.length]);
+  }, [accounts, accountsLoading, importOpen, pendingImportSummary]);
 
   const manualAccountBrand = useMemo(
     () =>

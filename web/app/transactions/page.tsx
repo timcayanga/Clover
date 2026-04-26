@@ -51,12 +51,13 @@ type Account = {
 };
 
 const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account | null => {
-  if (!summary.accountId || !summary.accountName) {
+  const optimisticAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+  if (!optimisticAccountId || !summary.accountName) {
     return null;
   }
 
   return {
-    id: summary.accountId,
+    id: optimisticAccountId,
     name: summary.accountName,
     institution: summary.institution,
     type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
@@ -3360,7 +3361,7 @@ function TransactionsPageContent() {
   }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary]);
 
   useEffect(() => {
-    if (!importOpen || !pendingImportSummary || !isWorkspaceDataReady || importRefreshInFlight) {
+    if (!importOpen || !pendingImportSummary || !isWorkspaceDataReady) {
       return;
     }
 
@@ -3373,15 +3374,6 @@ function TransactionsPageContent() {
       return;
     }
 
-    const targetAccount = accounts.find((account) => account.id === targetAccountId) ?? null;
-    const visibleTransactionCount = targetAccount
-      ? transactions.filter((transaction) => accountMatchesTransaction(transaction, targetAccount)).length
-      : transactions.filter((transaction) => transaction.accountId === targetAccountId).length;
-    const importedRows = pendingImportSummary.rowsImported ?? 0;
-    if (importedRows > 0 && visibleTransactionCount < importedRows) {
-      return;
-    }
-
     const timeout = window.setTimeout(() => {
       setImportOpen(false);
       setPendingImportSummary(null);
@@ -3390,7 +3382,7 @@ function TransactionsPageContent() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [importOpen, importRefreshInFlight, isWorkspaceDataReady, pendingImportSummary, transactions]);
+  }, [importOpen, isWorkspaceDataReady, pendingImportSummary]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 720px)");
