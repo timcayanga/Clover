@@ -1425,7 +1425,7 @@ function AccountsPageContent() {
                             type: getEffectiveAccountType(account),
                           });
                           const balanceContext = getBalanceContext(account);
-                          const balanceValue = isLiability ? -Math.abs(value) : value;
+                          const balanceValue = Math.abs(value);
                           return (
                             <article
                               key={account.id}
