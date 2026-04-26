@@ -331,8 +331,7 @@ export const processImportFileText = async (
     (!text.trim() ||
       parsedRows.length === 0 ||
       (mergedMetadata.confidence ?? 0) < 70 ||
-      !mergedMetadata.accountNumber ||
-      !mergedMetadata.endingBalance);
+      !mergedMetadata.accountNumber);
   const pageImages =
     shouldUseVisionFallback
       ? await readImportedPdfPageImages(
