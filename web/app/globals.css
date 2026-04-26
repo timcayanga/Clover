@@ -9519,8 +9519,105 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
 }
 
+.investments-market__footnote span {
+  white-space: nowrap;
+}
+
 .investments-market .insight-chart svg {
   height: 200px;
+}
+
+.investments-allocation {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: var(--shadow-soft);
+}
+
+.investments-allocation__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.investments-allocation__head h5 {
+  margin: 2px 0 0;
+}
+
+.investments-allocation__summary {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+  text-align: right;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.investments-allocation__summary strong {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+}
+
+.investments-allocation__list {
+  display: grid;
+  gap: 12px;
+}
+
+.investments-allocation__row {
+  display: grid;
+  gap: 8px;
+}
+
+.investments-allocation__row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.investments-allocation__row-head > div {
+  display: grid;
+  gap: 2px;
+}
+
+.investments-allocation__row-head strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.investments-allocation__row-head span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.investments-allocation__bar {
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.investments-allocation__bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(3, 168, 192, 0.72), rgba(20, 184, 166, 0.72));
+}
+
+.accounts-account-card__investment-meta span.is-positive {
+  color: #15803d;
+}
+
+.accounts-account-card__investment-meta span.is-negative {
+  color: #b45309;
 }
 
 .insight-chart__label strong.is-positive {

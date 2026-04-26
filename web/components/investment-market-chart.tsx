@@ -51,6 +51,30 @@ const percentFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 2,
 });
 
+const formatRelativeTime = (timestamp: number) => {
+  const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+
+  if (elapsedSeconds < 30) {
+    return "just now";
+  }
+  if (elapsedSeconds < 90) {
+    return "1m ago";
+  }
+
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes}m ago`;
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60);
+  if (elapsedHours < 24) {
+    return `${elapsedHours}h ago`;
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24);
+  return `${elapsedDays}d ago`;
+};
+
 const formatShortDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", {
     month: "short",
@@ -96,6 +120,8 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
   const [history, setHistory] = useState<MarketHistoryResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<number | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
     if (!submittedSymbol && defaultSuggestion) {
@@ -109,6 +135,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
   useEffect(() => {
     if (!submittedSymbol) {
       setHistory(null);
+      setLastUpdatedAt(null);
       return;
     }
 
@@ -117,6 +144,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
     const timer = window.setTimeout(async () => {
       setLoading(true);
       setError(null);
+      setHistory(null);
       try {
         const response = await fetch(
           `/api/market-history?symbol=${encodeURIComponent(submittedSymbol)}&assetType=${encodeURIComponent(submittedAssetType)}`,
@@ -134,6 +162,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
         }
 
         setHistory(payload);
+        setLastUpdatedAt(Date.now());
       } catch (fetchError) {
         if (!cancelled) {
           setHistory(null);
@@ -151,7 +180,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [submittedAssetType, submittedSymbol]);
+  }, [refreshTick, submittedAssetType, submittedSymbol]);
 
   const visiblePoints = useMemo(() => {
     if (!history) {
@@ -188,6 +217,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
           <label>
             Ticker
             <input
+              list="investment-market-symbols"
               value={tickerInput}
               onChange={(event) => setTickerInput(event.target.value.toUpperCase())}
               onBlur={() => {
@@ -218,8 +248,24 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
           >
             Load ticker
           </button>
+          <button
+            className="button button-secondary"
+            type="button"
+            onClick={() => setRefreshTick((value) => value + 1)}
+            disabled={!submittedSymbol || loading}
+          >
+            Refresh
+          </button>
         </div>
       </div>
+
+      <datalist id="investment-market-symbols">
+        {tickerSuggestions.map((suggestion) => (
+          <option key={suggestion.id} value={suggestion.symbol}>
+            {suggestion.name}
+          </option>
+        ))}
+      </datalist>
 
       <div className="investments-market__chips">
         {tickerSuggestions.length > 0 ? (
@@ -316,6 +362,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
             Source: {history.provider === "alpha-vantage" ? "Alpha Vantage" : "Yahoo Finance"}, using{" "}
             {submittedAssetType === "crypto" ? "daily crypto history" : "daily market history"}.
           </span>
+          <span>{lastUpdatedAt ? `Updated ${formatRelativeTime(lastUpdatedAt)}` : "Waiting for first refresh"}</span>
           {isMarketInvestmentSubtype(
             investmentAccounts.find((account) => normalizeMarketSymbol(account.investmentSymbol ?? "") === submittedSymbol)?.investmentSubtype
           ) ? (

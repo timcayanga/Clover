@@ -56,6 +56,11 @@ const currencyFormatter = new Intl.NumberFormat("en-PH", {
   minimumFractionDigits: 2,
 });
 
+const percentFormatter = new Intl.NumberFormat("en-US", {
+  style: "percent",
+  maximumFractionDigits: 2,
+});
+
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
 const parseNullableAmount = (value: string | null | undefined) => {
@@ -129,6 +134,14 @@ const getInvestmentHighlights = (account: Account) => {
   ];
 };
 
+const getReturnPercent = (currentValue: number | null, purchaseValue: number | null) => {
+  if (currentValue === null || purchaseValue === null || purchaseValue === 0) {
+    return null;
+  }
+
+  return (currentValue - purchaseValue) / purchaseValue;
+};
+
 type InvestmentGroup = {
   key: string;
   subtype: InvestmentSubtype | null;
@@ -138,6 +151,10 @@ type InvestmentGroup = {
   currentValue: number;
   purchaseValue: number;
   gainLoss: number;
+};
+
+type InvestmentAllocationRow = InvestmentGroup & {
+  share: number;
 };
 
 export default function InvestmentsPage() {
@@ -306,6 +323,17 @@ export default function InvestmentsPage() {
       .filter((group): group is InvestmentGroup => group !== null);
   }, [investmentAccounts]);
 
+  const portfolioAllocation = useMemo<InvestmentAllocationRow[]>(() => {
+    const totalValue = investmentGroups.reduce((sum, group) => sum + group.currentValue, 0);
+
+    return investmentGroups
+      .map((group) => ({
+        ...group,
+        share: totalValue > 0 ? group.currentValue / totalValue : 0,
+      }))
+      .sort((left, right) => right.currentValue - left.currentValue);
+  }, [investmentGroups]);
+
   const manualInvestmentFieldConfigs = useMemo(
     () => getInvestmentFieldConfigs(manualInvestmentSubtype),
     [manualInvestmentSubtype]
@@ -460,6 +488,47 @@ export default function InvestmentsPage() {
           </article>
         </section>
 
+        <section className="investments-allocation glass">
+          <div className="investments-allocation__head">
+            <div>
+              <p className="eyebrow">Portfolio mix</p>
+              <h5>Allocation by subtype</h5>
+              <p className="panel-muted">A quick view of where the current value of your investments is concentrated.</p>
+            </div>
+            <div className="investments-allocation__summary">
+              <span>Total value</span>
+              <strong>{currencyFormatter.format(totals.currentValue)}</strong>
+            </div>
+          </div>
+
+          {portfolioAllocation.length > 0 ? (
+            <div className="investments-allocation__list">
+              {portfolioAllocation.map((group) => (
+                <div key={group.key} className="investments-allocation__row">
+                  <div className="investments-allocation__row-head">
+                    <div>
+                      <strong>{group.label}</strong>
+                      <span>{group.accounts.length} account{group.accounts.length === 1 ? "" : "s"}</span>
+                    </div>
+                    <div>
+                      <strong>{currencyFormatter.format(group.currentValue)}</strong>
+                      <span>{group.share > 0 ? percentFormatter.format(group.share) : "0%"}</span>
+                    </div>
+                  </div>
+                  <div className="investments-allocation__bar">
+                    <span style={{ width: `${Math.max(group.share * 100, 4)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">
+              <strong>No allocation to show yet.</strong>
+              <p>Add an investment to see how your portfolio is distributed.</p>
+            </div>
+          )}
+        </section>
+
         <section className="accounts-sections" style={{ marginTop: 20 }}>
           {investmentGroups.length > 0 ? (
             investmentGroups.map((group) => (
@@ -486,6 +555,7 @@ export default function InvestmentsPage() {
                     const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
                     const gainLoss =
                       currentValue === null || purchaseValue === null ? null : currentValue - purchaseValue;
+                    const returnPercent = getReturnPercent(currentValue, purchaseValue);
                     const highlights = getInvestmentHighlights(account);
 
                     return (
@@ -534,6 +604,11 @@ export default function InvestmentsPage() {
                           <div className="accounts-account-card__investment-meta">
                             <span>{highlights[0]}</span>
                             <span>{highlights[1]}</span>
+                            <span className={returnPercent === null ? "" : returnPercent >= 0 ? "is-positive" : "is-negative"}>
+                              {returnPercent === null
+                                ? "Return not set"
+                                : `Return ${returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(returnPercent))}`}
+                            </span>
                           </div>
                         </div>
                       </article>
