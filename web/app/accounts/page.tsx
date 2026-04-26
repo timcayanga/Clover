@@ -22,6 +22,15 @@ import { getAccountBrand } from "@/lib/account-brand";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
+import {
+  getInvestmentFieldConfigs,
+  getInvestmentSubtypeDescription,
+  getInvestmentSubtypeLabel,
+  INVESTMENT_SUBTYPES,
+  type InvestmentSubtype,
+  isFixedIncomeInvestmentSubtype,
+  isMarketInvestmentSubtype,
+} from "@/lib/investments";
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
@@ -38,8 +47,15 @@ type Account = {
   id: string;
   name: string;
   institution: string | null;
+  investmentSubtype: InvestmentSubtype | null;
   investmentSymbol: string | null;
+  investmentQuantity: string | null;
   investmentCostBasis: string | null;
+  investmentPrincipal: string | null;
+  investmentStartDate: string | null;
+  investmentMaturityDate: string | null;
+  investmentInterestRate: string | null;
+  investmentMaturityValue: string | null;
   type: "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
   currency: string;
   source: string;
@@ -57,8 +73,15 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     id: summary.accountId,
     name: summary.accountName,
     institution: summary.institution,
+    investmentSubtype: null,
     investmentSymbol: null,
+    investmentQuantity: null,
     investmentCostBasis: null,
+    investmentPrincipal: null,
+    investmentStartDate: null,
+    investmentMaturityDate: null,
+    investmentInterestRate: null,
+    investmentMaturityValue: null,
     type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
     currency: "PHP",
     source: "upload",
@@ -194,6 +217,16 @@ const parseNullableNumberInput = (value: string) => {
 
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseNullableDateInput = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const date = new Date(`${trimmed}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
 const getEffectiveAccountType = (account: Account) => account.type;
@@ -579,14 +612,28 @@ function AccountsPageContent() {
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
+  const [manualInvestmentSubtype, setManualInvestmentSubtype] = useState<InvestmentSubtype>("stock");
   const [manualInvestmentSymbol, setManualInvestmentSymbol] = useState("");
+  const [manualInvestmentQuantity, setManualInvestmentQuantity] = useState("");
   const [manualInvestmentCostBasis, setManualInvestmentCostBasis] = useState("");
+  const [manualInvestmentPrincipal, setManualInvestmentPrincipal] = useState("");
+  const [manualInvestmentStartDate, setManualInvestmentStartDate] = useState("");
+  const [manualInvestmentMaturityDate, setManualInvestmentMaturityDate] = useState("");
+  const [manualInvestmentInterestRate, setManualInvestmentInterestRate] = useState("");
+  const [manualInvestmentMaturityValue, setManualInvestmentMaturityValue] = useState("");
   const [manualBalance, setManualBalance] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [accountEditName, setAccountEditName] = useState("");
   const [accountEditInstitution, setAccountEditInstitution] = useState("");
+  const [accountEditInvestmentSubtype, setAccountEditInvestmentSubtype] = useState<InvestmentSubtype>("stock");
   const [accountEditInvestmentSymbol, setAccountEditInvestmentSymbol] = useState("");
+  const [accountEditInvestmentQuantity, setAccountEditInvestmentQuantity] = useState("");
   const [accountEditInvestmentCostBasis, setAccountEditInvestmentCostBasis] = useState("");
+  const [accountEditInvestmentPrincipal, setAccountEditInvestmentPrincipal] = useState("");
+  const [accountEditInvestmentStartDate, setAccountEditInvestmentStartDate] = useState("");
+  const [accountEditInvestmentMaturityDate, setAccountEditInvestmentMaturityDate] = useState("");
+  const [accountEditInvestmentInterestRate, setAccountEditInvestmentInterestRate] = useState("");
+  const [accountEditInvestmentMaturityValue, setAccountEditInvestmentMaturityValue] = useState("");
   const [accountEditType, setAccountEditType] = useState<Account["type"]>("bank");
   const [accountEditCurrency, setAccountEditCurrency] = useState("PHP");
   const [accountEditBalance, setAccountEditBalance] = useState("");
@@ -1089,8 +1136,15 @@ function AccountsPageContent() {
 
     setAccountEditName(selectedAccount.name);
     setAccountEditInstitution(selectedAccount.institution ?? "");
+    setAccountEditInvestmentSubtype(selectedAccount.investmentSubtype ?? "stock");
     setAccountEditInvestmentSymbol(selectedAccount.investmentSymbol ?? "");
+    setAccountEditInvestmentQuantity(selectedAccount.investmentQuantity ?? "");
     setAccountEditInvestmentCostBasis(selectedAccount.investmentCostBasis ?? "");
+    setAccountEditInvestmentPrincipal(selectedAccount.investmentPrincipal ?? "");
+    setAccountEditInvestmentStartDate(selectedAccount.investmentStartDate ? selectedAccount.investmentStartDate.slice(0, 10) : "");
+    setAccountEditInvestmentMaturityDate(selectedAccount.investmentMaturityDate ? selectedAccount.investmentMaturityDate.slice(0, 10) : "");
+    setAccountEditInvestmentInterestRate(selectedAccount.investmentInterestRate ?? "");
+    setAccountEditInvestmentMaturityValue(selectedAccount.investmentMaturityValue ?? "");
     setAccountEditType(selectedAccount.type);
     setAccountEditCurrency(selectedAccount.currency);
     setAccountEditSource(selectedAccount.source);
@@ -1141,6 +1195,41 @@ function AccountsPageContent() {
     [manualInstitution, manualName, manualType]
   );
 
+  const manualInvestmentFieldConfigs = useMemo(
+    () => getInvestmentFieldConfigs(manualType === "investment" ? manualInvestmentSubtype : null),
+    [manualInvestmentSubtype, manualType]
+  );
+
+  const accountEditInvestmentFieldConfigs = useMemo(
+    () => getInvestmentFieldConfigs(accountEditType === "investment" ? accountEditInvestmentSubtype : null),
+    [accountEditInvestmentSubtype, accountEditType]
+  );
+
+  const getManualInvestmentFieldValue = (key: string) => {
+    if (key === "investmentSymbol") return manualInvestmentSymbol;
+    if (key === "investmentQuantity") return manualInvestmentQuantity;
+    if (key === "investmentCostBasis") return manualInvestmentCostBasis;
+    if (key === "investmentPrincipal") return manualInvestmentPrincipal;
+    if (key === "investmentStartDate") return manualInvestmentStartDate;
+    if (key === "investmentMaturityDate") return manualInvestmentMaturityDate;
+    if (key === "investmentInterestRate") return manualInvestmentInterestRate;
+    if (key === "investmentMaturityValue") return manualInvestmentMaturityValue;
+    return "";
+  };
+
+  const getManualInvestmentFieldLabel = (key: string) => {
+    return manualInvestmentFieldConfigs.find((field) => field.key === key)?.label ?? "Value";
+  };
+
+  const getManualInvestmentPreviewValue = (field: { key: string; inputMode?: "text" | "decimal"; type?: "text" | "date" }) => {
+    const value = getManualInvestmentFieldValue(field.key).trim();
+    if (value) {
+      return value;
+    }
+
+    return field.type === "date" ? "Not set" : "Not set";
+  };
+
   const refreshAll = async () => {
     if (!selectedWorkspaceId) return;
     await loadWorkspaceData(selectedWorkspaceId, { silent: true });
@@ -1180,6 +1269,9 @@ function AccountsPageContent() {
 
     setAccountEditBusy(true);
     try {
+      const editIsInvestment = accountEditType === "investment";
+      const editIsMarket = editIsInvestment && isMarketInvestmentSubtype(accountEditInvestmentSubtype);
+      const editIsFixedIncome = editIsInvestment && isFixedIncomeInvestmentSubtype(accountEditInvestmentSubtype);
       const response = await fetch(`/api/accounts/${selectedAccount.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -1187,9 +1279,23 @@ function AccountsPageContent() {
           workspaceId: selectedWorkspaceId,
           name,
           institution: accountEditInstitution.trim() || null,
-          investmentSymbol: accountEditType === "investment" ? accountEditInvestmentSymbol.trim() || null : null,
+          investmentSubtype: editIsInvestment ? accountEditInvestmentSubtype : null,
+          investmentSymbol:
+            editIsInvestment && (editIsMarket || accountEditInvestmentSubtype === "other")
+              ? accountEditInvestmentSymbol.trim() || null
+              : null,
+          investmentQuantity: editIsMarket ? parseNullableNumberInput(accountEditInvestmentQuantity) : null,
           investmentCostBasis:
-            accountEditType === "investment" ? parseNullableNumberInput(accountEditInvestmentCostBasis) : null,
+            editIsInvestment && (editIsMarket || accountEditInvestmentSubtype === "other")
+              ? parseNullableNumberInput(accountEditInvestmentCostBasis)
+              : editIsFixedIncome
+                ? null
+                : null,
+          investmentPrincipal: editIsFixedIncome ? parseNullableNumberInput(accountEditInvestmentPrincipal) : null,
+          investmentStartDate: editIsFixedIncome ? parseNullableDateInput(accountEditInvestmentStartDate) : null,
+          investmentMaturityDate: editIsFixedIncome ? parseNullableDateInput(accountEditInvestmentMaturityDate) : null,
+          investmentInterestRate: editIsFixedIncome ? parseNullableNumberInput(accountEditInvestmentInterestRate) : null,
+          investmentMaturityValue: editIsFixedIncome ? parseNullableNumberInput(accountEditInvestmentMaturityValue) : null,
           type: accountEditType,
           currency: accountEditCurrency || "PHP",
           source: accountEditSource || selectedAccount.source,
@@ -1268,6 +1374,9 @@ function AccountsPageContent() {
 
     setIsSaving(true);
     try {
+      const manualIsInvestment = manualType === "investment";
+      const manualIsMarket = manualIsInvestment && isMarketInvestmentSubtype(manualInvestmentSubtype);
+      const manualIsFixedIncome = manualIsInvestment && isFixedIncomeInvestmentSubtype(manualInvestmentSubtype);
       const response = await fetch("/api/accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1275,8 +1384,21 @@ function AccountsPageContent() {
           workspaceId: selectedWorkspaceId,
           name,
           institution: manualType === "cash" ? "Cash" : manualInstitution.trim() || null,
-          investmentSymbol: manualType === "investment" ? manualInvestmentSymbol.trim() || null : null,
-          investmentCostBasis: manualType === "investment" ? parseNullableNumberInput(manualInvestmentCostBasis) : null,
+          investmentSubtype: manualIsInvestment ? manualInvestmentSubtype : null,
+          investmentSymbol:
+            manualIsInvestment && (manualIsMarket || manualInvestmentSubtype === "other")
+              ? manualInvestmentSymbol.trim() || null
+              : null,
+          investmentQuantity: manualIsMarket ? parseNullableNumberInput(manualInvestmentQuantity) : null,
+          investmentCostBasis:
+            manualIsInvestment && (manualIsMarket || manualInvestmentSubtype === "other")
+              ? parseNullableNumberInput(manualInvestmentCostBasis)
+              : null,
+          investmentPrincipal: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentPrincipal) : null,
+          investmentStartDate: manualIsFixedIncome ? parseNullableDateInput(manualInvestmentStartDate) : null,
+          investmentMaturityDate: manualIsFixedIncome ? parseNullableDateInput(manualInvestmentMaturityDate) : null,
+          investmentInterestRate: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentInterestRate) : null,
+          investmentMaturityValue: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentMaturityValue) : null,
           type: manualType,
           currency: "PHP",
           source: "manual",
@@ -1294,8 +1416,15 @@ function AccountsPageContent() {
       }
       setManualName("");
       setManualInstitution("");
+      setManualInvestmentSubtype("stock");
       setManualInvestmentSymbol("");
+      setManualInvestmentQuantity("");
       setManualInvestmentCostBasis("");
+      setManualInvestmentPrincipal("");
+      setManualInvestmentStartDate("");
+      setManualInvestmentMaturityDate("");
+      setManualInvestmentInterestRate("");
+      setManualInvestmentMaturityValue("");
       setManualBalance("");
       setManualType("bank");
       setAddOpen(false);
@@ -1669,25 +1798,75 @@ function AccountsPageContent() {
                   </select>
                 </label>
                 {accountEditType === "investment" ? (
-                  <div className="accounts-investment-fields">
+                  <>
                     <label>
-                      Symbol / ticker
-                      <input
-                        value={accountEditInvestmentSymbol}
-                        onChange={(event) => setAccountEditInvestmentSymbol(event.target.value)}
-                        placeholder="Example: FMETF"
-                      />
+                      Investment subtype
+                      <select
+                        value={accountEditInvestmentSubtype}
+                        onChange={(event) => setAccountEditInvestmentSubtype(event.target.value as InvestmentSubtype)}
+                      >
+                        {INVESTMENT_SUBTYPES.map((subtype) => (
+                          <option key={subtype} value={subtype}>
+                            {getInvestmentSubtypeLabel(subtype)}
+                          </option>
+                        ))}
+                      </select>
                     </label>
-                    <label>
-                      Cost basis
-                      <input
-                        value={accountEditInvestmentCostBasis}
-                        onChange={(event) => setAccountEditInvestmentCostBasis(event.target.value)}
-                        inputMode="decimal"
-                        placeholder="0.00"
-                      />
-                    </label>
-                  </div>
+                    <div className="accounts-investment-fields">
+                      {accountEditInvestmentFieldConfigs.map((field) => {
+                        const value =
+                          field.key === "investmentSymbol"
+                            ? accountEditInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? accountEditInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? accountEditInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? accountEditInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? accountEditInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? accountEditInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? accountEditInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? accountEditInvestmentMaturityValue
+                                          : "";
+
+                        const onChange =
+                          field.key === "investmentSymbol"
+                            ? setAccountEditInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? setAccountEditInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? setAccountEditInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? setAccountEditInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? setAccountEditInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? setAccountEditInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? setAccountEditInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? setAccountEditInvestmentMaturityValue
+                                          : setAccountEditInvestmentSymbol;
+
+                        return (
+                          <label key={field.key}>
+                            {field.label}
+                            <input
+                              value={value}
+                              onChange={(event) => onChange(event.target.value)}
+                              placeholder={field.placeholder}
+                              inputMode={field.inputMode}
+                              type={field.type}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
                 ) : null}
                 <label>
                   Balance
@@ -1947,25 +2126,75 @@ function AccountsPageContent() {
                   </select>
                 </label>
                 {manualType === "investment" ? (
-                  <div className="accounts-investment-fields">
+                  <>
                     <label>
-                      Symbol / ticker
-                      <input
-                        value={manualInvestmentSymbol}
-                        onChange={(event) => setManualInvestmentSymbol(event.target.value)}
-                        placeholder="Example: FMETF"
-                      />
+                      Investment subtype
+                      <select
+                        value={manualInvestmentSubtype}
+                        onChange={(event) => setManualInvestmentSubtype(event.target.value as InvestmentSubtype)}
+                      >
+                        {INVESTMENT_SUBTYPES.map((subtype) => (
+                          <option key={subtype} value={subtype}>
+                            {getInvestmentSubtypeLabel(subtype)}
+                          </option>
+                        ))}
+                      </select>
                     </label>
-                    <label>
-                      Cost basis
-                      <input
-                        value={manualInvestmentCostBasis}
-                        onChange={(event) => setManualInvestmentCostBasis(event.target.value)}
-                        inputMode="decimal"
-                        placeholder="0.00"
-                      />
-                    </label>
-                  </div>
+                    <div className="accounts-investment-fields">
+                      {manualInvestmentFieldConfigs.map((field) => {
+                        const value =
+                          field.key === "investmentSymbol"
+                            ? manualInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? manualInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? manualInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? manualInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? manualInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? manualInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? manualInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? manualInvestmentMaturityValue
+                                          : "";
+
+                        const onChange =
+                          field.key === "investmentSymbol"
+                            ? setManualInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? setManualInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? setManualInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? setManualInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? setManualInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? setManualInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? setManualInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? setManualInvestmentMaturityValue
+                                          : setManualInvestmentSymbol;
+
+                        return (
+                          <label key={field.key}>
+                            {field.label}
+                            <input
+                              value={value}
+                              onChange={(event) => onChange(event.target.value)}
+                              placeholder={field.placeholder}
+                              inputMode={field.inputMode}
+                              type={field.type}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
                 ) : null}
                 <label>
                   Balance
@@ -1991,21 +2220,31 @@ function AccountsPageContent() {
                 <strong>{manualName || "Account name"}</strong>
                 <p>
                   {manualAccountBrand.label}
+                  {manualType === "investment" ? ` · ${getInvestmentSubtypeLabel(manualInvestmentSubtype)}` : ""}
                   {manualType !== "cash" && manualInstitution.trim() ? ` · ${manualInstitution.trim()}` : ""}
                 </p>
                 {manualType === "investment" ? (
                   <div className="accounts-add-preview__investment">
                     <span>
-                      Symbol <strong>{manualInvestmentSymbol.trim() || "—"}</strong>
+                      Subtype <strong>{getInvestmentSubtypeLabel(manualInvestmentSubtype)}</strong>
                     </span>
-                    <span>
-                      Cost basis <strong>{manualInvestmentCostBasis.trim() || "0.00"}</strong>
-                    </span>
+                    {manualInvestmentFieldConfigs.map((field) => (
+                      <span key={field.key}>
+                        {getManualInvestmentFieldLabel(field.key)}{" "}
+                        <strong>
+                          {getManualInvestmentPreviewValue(field)}
+                        </strong>
+                      </span>
+                    ))}
                   </div>
                 ) : null}
                 <span>
                   {manualType === "investment"
-                    ? "Symbol and cost basis help track holdings and performance."
+                    ? isFixedIncomeInvestmentSubtype(manualInvestmentSubtype)
+                      ? getInvestmentSubtypeDescription(manualInvestmentSubtype)
+                      : isMarketInvestmentSubtype(manualInvestmentSubtype)
+                        ? "Track the holding like a market position with units and purchase value."
+                        : getInvestmentSubtypeDescription(manualInvestmentSubtype)
                     : "We use the institution to match the right logo and statement rules."}
                 </span>
               </aside>

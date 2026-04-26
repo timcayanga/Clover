@@ -10829,10 +10829,30 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 0.88rem;
 }
 
+.accounts-account-card__investment-meta {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.accounts-account-card__investment-meta span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .accounts-detail__investment {
   display: grid;
   gap: 14px;
   padding: 18px 20px 20px;
+}
+
+.accounts-detail__investment-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
 }
 
 .accounts-detail__investment-grid {

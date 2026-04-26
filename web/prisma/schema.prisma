@@ -176,23 +176,30 @@ model Workspace {
 }
 
 model Account {
-  id                   String                       @id @default(cuid())
-  workspaceId          String
-  name                 String
-  institution          String?
-  investmentSymbol     String?
-  investmentCostBasis  Decimal?                     @db.Decimal(18, 2)
-  type                 AccountType                  @default(bank)
-  currency             String                       @default("PHP")
-  source               String                       @default("upload")
-  balance              Decimal?                     @db.Decimal(18, 2)
-  createdAt            DateTime                     @default(now())
-  updatedAt            DateTime                     @updatedAt
-  workspace            Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  transactions         Transaction[]
-  importFiles          ImportFile[]
-  statementCheckpoints AccountStatementCheckpoint[]
-  accountRules         AccountRule[]
+  id                     String        @id @default(cuid())
+  workspaceId            String
+  name                   String
+  institution            String?
+  investmentSubtype      String?
+  investmentSymbol       String?
+  investmentQuantity     Decimal?      @db.Decimal(18, 8)
+  investmentCostBasis    Decimal?      @db.Decimal(18, 2)
+  investmentPrincipal    Decimal?      @db.Decimal(18, 2)
+  investmentStartDate    DateTime?
+  investmentMaturityDate DateTime?
+  investmentInterestRate Decimal?      @db.Decimal(9, 4)
+  investmentMaturityValue Decimal?     @db.Decimal(18, 2)
+  type                   AccountType   @default(bank)
+  currency               String        @default("PHP")
+  source                 String        @default("upload")
+  balance                Decimal?      @db.Decimal(18, 2)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  workspace              Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transactions           Transaction[]
+  importFiles            ImportFile[]
+  statementCheckpoints   AccountStatementCheckpoint[]
+  accountRules           AccountRule[]
 
   @@index([workspaceId])
 }

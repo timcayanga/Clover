@@ -11,6 +11,7 @@ type CloverShellProps = {
   active:
     | "dashboard"
     | "accounts"
+    | "investments"
     | "transactions"
     | "reports"
     | "insights"
@@ -30,6 +31,7 @@ type CloverShellProps = {
 const navItems = [
   { href: "/dashboard", label: "Dashboard", key: "dashboard" as const },
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
+  { href: "/investments", label: "Investments", key: "investments" as const },
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/reports", label: "Reports", key: "reports" as const },
   { href: "/insights", label: "Insights", key: "insights" as const },
@@ -41,6 +43,7 @@ const mobileNavItems = navItems.slice(0, 4);
 type IconName =
   | "dashboard"
   | "accounts"
+  | "investments"
   | "transactions"
   | "reports"
   | "insights"
@@ -125,6 +128,14 @@ function MenuIcon({ name }: { name: IconName }) {
           <rect x="4" y="5" width="16" height="14" rx="3" />
           <path d="M7 10h10" />
           <path d="M7 14h6" />
+        </svg>
+      );
+    case "investments":
+      return (
+        <svg {...common}>
+          <path d="M4 18h16" />
+          <path d="M6.5 14.5l3-3 2.8 2.8L18 8" />
+          <path d="M14.2 8H18v3.8" />
         </svg>
       );
     case "transactions":

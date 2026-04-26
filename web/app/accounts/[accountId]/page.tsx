@@ -9,14 +9,29 @@ import { getAccountBrand } from "@/lib/account-brand";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { clearWorkspaceCache, markDeletedWorkspaceAccount, normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import {
+  getInvestmentFieldConfigs,
+  getInvestmentSubtypeDescription,
+  getInvestmentSubtypeLabel,
+  type InvestmentSubtype,
+  isFixedIncomeInvestmentSubtype,
+  isMarketInvestmentSubtype,
+} from "@/lib/investments";
 
 type Account = {
   id: string;
   workspaceId: string;
   name: string;
   institution: string | null;
+  investmentSubtype: InvestmentSubtype | null;
   investmentSymbol: string | null;
+  investmentQuantity: string | null;
   investmentCostBasis: string | null;
+  investmentPrincipal: string | null;
+  investmentStartDate: string | null;
+  investmentMaturityDate: string | null;
+  investmentInterestRate: string | null;
+  investmentMaturityValue: string | null;
   type: string;
   currency: string;
   source: string;
@@ -84,6 +99,8 @@ const parseNullableNumber = (value: string | null | undefined) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
+
+const formatNullableDate = (value: string | null | undefined) => (value ? formatDate(value) : "Not set");
 
 const isSpendableAccountType = (value: string) => value === "bank" || value === "wallet" || value === "cash";
 
@@ -437,8 +454,25 @@ function AccountDetailPageContent() {
     [account?.type]
   );
 
+  const investmentSubtype = account?.investmentSubtype ?? null;
   const investmentSymbol = account?.investmentSymbol?.trim() || null;
+  const investmentQuantity = useMemo(() => parseNullableNumber(account?.investmentQuantity), [account?.investmentQuantity]);
   const investmentCostBasis = useMemo(() => parseNullableNumber(account?.investmentCostBasis), [account?.investmentCostBasis]);
+  const investmentPrincipal = useMemo(() => parseNullableNumber(account?.investmentPrincipal), [account?.investmentPrincipal]);
+  const investmentInterestRate = useMemo(() => parseNullableNumber(account?.investmentInterestRate), [account?.investmentInterestRate]);
+  const investmentMaturityValue = useMemo(() => parseNullableNumber(account?.investmentMaturityValue), [account?.investmentMaturityValue]);
+  const investmentStartDate = account?.investmentStartDate ?? null;
+  const investmentMaturityDate = account?.investmentMaturityDate ?? null;
+  const investmentFieldConfigs = useMemo(() => getInvestmentFieldConfigs(investmentSubtype), [investmentSubtype]);
+  const investmentHoldingCategory = isFixedIncomeInvestmentSubtype(investmentSubtype)
+    ? "Fixed income"
+    : isMarketInvestmentSubtype(investmentSubtype)
+      ? "Market-linked holding"
+      : "General investment";
+  const investmentPurchaseValue = useMemo(
+    () => investmentCostBasis ?? (isFixedIncomeInvestmentSubtype(investmentSubtype) ? investmentPrincipal : null),
+    [investmentCostBasis, investmentPrincipal, investmentSubtype]
+  );
 
   const importSummaries = useMemo(
     () => buildImportSummaries(transactions),
@@ -472,12 +506,12 @@ function AccountDetailPageContent() {
     [account?.balance, latestCheckpoint, transactions]
   );
   const investmentGainLoss = useMemo(() => {
-    if (account?.type !== "investment" || investmentCostBasis === null) {
+    if (account?.type !== "investment" || investmentPurchaseValue === null) {
       return null;
     }
 
-    return currentBalance - investmentCostBasis;
-  }, [account?.type, currentBalance, investmentCostBasis]);
+    return currentBalance - investmentPurchaseValue;
+  }, [account?.type, currentBalance, investmentPurchaseValue]);
   const checkpointGap =
     latestCheckpoint && Number.isFinite(checkpointBalance) && Number.isFinite(currentBalance)
       ? checkpointBalance - currentBalance
@@ -646,25 +680,115 @@ function AccountDetailPageContent() {
                 <h3>Holdings snapshot</h3>
               </div>
             </div>
+            <div className="accounts-detail__investment-summary">
+              <div className="status-card">
+                <div className="panel-muted">Subtype</div>
+                <strong>{getInvestmentSubtypeLabel(investmentSubtype)}</strong>
+                <span>{getInvestmentSubtypeDescription(investmentSubtype)}</span>
+              </div>
+              <div className="status-card">
+                <div className="panel-muted">Current value</div>
+                <strong>{currencyFormatter.format(currentBalance)}</strong>
+                <span>{accountBalanceContext.label}</span>
+              </div>
+              <div className="status-card">
+                <div className="panel-muted">Purchase value / principal</div>
+                <strong>{investmentPurchaseValue === null ? "Not set" : currencyFormatter.format(investmentPurchaseValue)}</strong>
+                <span>
+                  {investmentGainLoss === null
+                    ? "Add a purchase value to compare performance."
+                    : investmentGainLoss >= 0
+                      ? "Above purchase value"
+                      : "Below purchase value"}
+                </span>
+              </div>
+              <div className="status-card">
+                <div className="panel-muted">Holding note</div>
+                <strong>{account.institution ?? accountBrand.label}</strong>
+                <span>{investmentHoldingCategory}</span>
+              </div>
+            </div>
             <div className="accounts-detail__investment-grid">
-              <div className="status-card">
-                <div className="panel-muted">Symbol / ticker</div>
-                <strong>{investmentSymbol ?? "Not set"}</strong>
-                <span>{account.institution ?? accountBrand.label}</span>
-              </div>
-              <div className="status-card">
-                <div className="panel-muted">Cost basis</div>
-                <strong>{investmentCostBasis === null ? "Not set" : currencyFormatter.format(investmentCostBasis)}</strong>
-                <span>Historical purchase value</span>
-              </div>
+              {investmentFieldConfigs.map((field) => {
+                const value =
+                  field.key === "investmentSymbol"
+                    ? investmentSymbol
+                    : field.key === "investmentQuantity"
+                      ? investmentQuantity === null
+                        ? null
+                        : String(investmentQuantity)
+                      : field.key === "investmentCostBasis"
+                        ? investmentCostBasis === null
+                          ? null
+                          : String(investmentCostBasis)
+                        : field.key === "investmentPrincipal"
+                          ? investmentPrincipal === null
+                            ? null
+                            : String(investmentPrincipal)
+                          : field.key === "investmentStartDate"
+                            ? investmentStartDate
+                            : field.key === "investmentMaturityDate"
+                              ? investmentMaturityDate
+                              : field.key === "investmentInterestRate"
+                                ? investmentInterestRate === null
+                                  ? null
+                                  : String(investmentInterestRate)
+                                : field.key === "investmentMaturityValue"
+                                  ? investmentMaturityValue === null
+                                    ? null
+                                    : String(investmentMaturityValue)
+                                  : null;
+
+                return (
+                  <div className="status-card" key={field.key}>
+                    <div className="panel-muted">{field.label}</div>
+                    <strong>
+                      {field.type === "date"
+                        ? formatNullableDate(value)
+                        : value === null
+                          ? "Not set"
+                          : field.key === "investmentSymbol"
+                            ? value
+                            : field.key === "investmentQuantity"
+                              ? value
+                              : field.key === "investmentInterestRate"
+                                ? `${value}%`
+                                : currencyFormatter.format(Number(value))}
+                    </strong>
+                    <span>
+                      {field.key === "investmentSymbol"
+                        ? "Identifier for the holding"
+                        : field.key === "investmentQuantity"
+                          ? "Quantity or units owned"
+                          : field.key === "investmentCostBasis"
+                            ? "Historical purchase value"
+                            : field.key === "investmentPrincipal"
+                              ? "Initial principal"
+                              : field.key === "investmentStartDate"
+                                ? "When the holding began"
+                                : field.key === "investmentMaturityDate"
+                                  ? "When the holding matures"
+                                  : field.key === "investmentInterestRate"
+                                    ? "Rate for this product"
+                                    : field.key === "investmentMaturityValue"
+                                      ? "Expected maturity value"
+                                      : "Investment detail"}
+                    </span>
+                  </div>
+                );
+              })}
               <div className="status-card">
                 <div className="panel-muted">Unrealized gain / loss</div>
                 <strong>
-                  {investmentGainLoss === null
-                    ? "Not set"
-                    : currencyFormatter.format(investmentGainLoss)}
+                  {investmentGainLoss === null ? "Not set" : currencyFormatter.format(investmentGainLoss)}
                 </strong>
-                <span>{investmentGainLoss === null ? "Add a cost basis to compare performance." : investmentGainLoss >= 0 ? "Above cost basis" : "Below cost basis"}</span>
+                <span>
+                  {investmentGainLoss === null
+                    ? "Add a purchase value to compare performance."
+                    : investmentGainLoss >= 0
+                      ? "Above purchase value"
+                      : "Below purchase value"}
+                </span>
               </div>
             </div>
           </div>
