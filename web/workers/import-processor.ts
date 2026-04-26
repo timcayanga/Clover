@@ -321,6 +321,8 @@ export const processImportFileText = async (
         : null,
     openingBalance: typeof templateMetadata?.openingBalance === "number" ? templateMetadata.openingBalance : null,
     endingBalance: typeof templateMetadata?.endingBalance === "number" ? templateMetadata.endingBalance : null,
+    paymentDueDate: typeof templateMetadata?.paymentDueDate === "string" ? templateMetadata.paymentDueDate : null,
+    totalAmountDue: typeof templateMetadata?.totalAmountDue === "number" ? templateMetadata.totalAmountDue : null,
     startDate: typeof templateMetadata?.startDate === "string" ? templateMetadata.startDate : null,
     endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
   });
@@ -388,6 +390,8 @@ export const processImportFileText = async (
             : null,
         openingBalance: typeof templateMetadata?.openingBalance === "number" ? templateMetadata.openingBalance : null,
         endingBalance: typeof templateMetadata?.endingBalance === "number" ? templateMetadata.endingBalance : null,
+        paymentDueDate: typeof templateMetadata?.paymentDueDate === "string" ? templateMetadata.paymentDueDate : null,
+        totalAmountDue: typeof templateMetadata?.totalAmountDue === "number" ? templateMetadata.totalAmountDue : null,
         startDate: typeof templateMetadata?.startDate === "string" ? templateMetadata.startDate : null,
         endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
       })

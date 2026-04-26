@@ -81,13 +81,15 @@ const importedStatementSchema = z.object({
   institution: z.string().nullable().optional().default(null),
   institution_raw: z.string().nullable().optional().default(null),
   statement_type: z.string().min(1).optional().default("unknown"),
-    account: z.object({
-      display_name: z.string().nullable().optional().default(null),
-      institution_name: z.string().nullable().optional().default(null),
-      account_number: z.string().nullable().optional().default(null),
-      account_last4: z.string().nullable().optional().default(null),
-      account_type: z.string().nullable().optional().default(null),
-      currency: z.string().nullable().optional().default(null),
+  payment_due_date: z.string().nullable().optional().default(null),
+  total_amount_due: z.number().nullable().optional().default(null),
+  account: z.object({
+    display_name: z.string().nullable().optional().default(null),
+    institution_name: z.string().nullable().optional().default(null),
+    account_number: z.string().nullable().optional().default(null),
+    account_last4: z.string().nullable().optional().default(null),
+    account_type: z.string().nullable().optional().default(null),
+    currency: z.string().nullable().optional().default(null),
     statement_period: z
       .object({
         start: z.string().nullable().optional().default(null),
@@ -157,6 +159,8 @@ const openAIJsonSchema = {
     institution: { type: ["string", "null"] },
     institution_raw: { type: ["string", "null"] },
     statement_type: { type: "string" },
+    payment_due_date: { type: ["string", "null"] },
+    total_amount_due: { type: ["number", "null"] },
     account: {
       type: "object",
       additionalProperties: false,
@@ -296,7 +300,17 @@ const openAIJsonSchema = {
       required: ["merchant_mappings", "code_mappings", "institution_aliases", "edge_cases"],
     },
   },
-  required: ["institution", "institution_raw", "statement_type", "account", "transactions", "quality_checks", "learning_candidates"],
+  required: [
+    "institution",
+    "institution_raw",
+    "statement_type",
+    "payment_due_date",
+    "total_amount_due",
+    "account",
+    "transactions",
+    "quality_checks",
+    "learning_candidates",
+  ],
 } as const;
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -391,6 +405,7 @@ const buildBankInstructionJson = (params: {
       bill_payments: "real_spend",
       purchases: "real_spend",
       opening_balances: "Opening Balance metadata",
+      credit_card_due_fields: "Capture payment due date and total amount due when visible",
     },
     category_rules: {
       allowed_categories: ALLOWED_CATEGORIES,
@@ -634,6 +649,7 @@ const buildOpenAIInputPayload = (params: {
     `Known institution: ${institution ?? "null"}`,
     `Known parser result: ${JSON.stringify(buildDeterministicParserSummary({ detectedMetadata: params.detectedMetadata, parsedRows: params.parsedRows }))}`,
     `Bank-specific instructions: ${JSON.stringify(bankInstructionJson)}`,
+    "For credit card statements, capture payment due date and total amount due whenever the statement shows them.",
     "",
     ...(params.pageImages?.length
       ? [
@@ -664,6 +680,8 @@ const buildFallbackMetadata = (metadata: DetectedStatementMetadata | null): Dete
     accountType: null,
     openingBalance: null,
     endingBalance: null,
+    paymentDueDate: null,
+    totalAmountDue: null,
     startDate: null,
     endDate: null,
     confidence: 0,
@@ -908,7 +926,19 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       institution ??
       null;
     const accountType = normalizeAccountTypeValue(value.account.account_type ?? null, institution, accountNameCandidate, params.detectedMetadata?.accountType ?? "bank");
-    const statementBalance = value.account.statement_balance ?? params.detectedMetadata?.endingBalance ?? null;
+    const paymentDueDate =
+      value.payment_due_date ??
+      value.account.statement_period.end ??
+      params.detectedMetadata?.paymentDueDate ??
+      params.detectedMetadata?.endDate ??
+      null;
+    const totalAmountDue =
+      value.total_amount_due ??
+      params.detectedMetadata?.totalAmountDue ??
+      value.account.statement_balance ??
+      params.detectedMetadata?.endingBalance ??
+      null;
+    const statementBalance = totalAmountDue ?? value.account.statement_balance ?? params.detectedMetadata?.endingBalance ?? null;
     const computedBalance = value.account.computed_balance ?? statementBalance;
     const transactionConfidenceAverage =
       value.transactions.length > 0
@@ -922,6 +952,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       accountType,
       openingBalance: params.detectedMetadata?.openingBalance ?? null,
       endingBalance: statementBalance,
+      paymentDueDate,
+      totalAmountDue,
       startDate: value.account.statement_period.start ?? params.detectedMetadata?.startDate ?? null,
       endDate: value.account.statement_period.end ?? params.detectedMetadata?.endDate ?? null,
       confidence: Math.max(

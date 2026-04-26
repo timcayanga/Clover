@@ -10,6 +10,7 @@ import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getFinancialExperienceProfile, getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
+import { getUpcomingStatementReminders } from "@/lib/statement-reminders";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
 
@@ -487,6 +488,7 @@ async function DashboardStream({
       uploadedAt: true,
     },
   });
+  const remindersPromise = getUpcomingStatementReminders(workspaceSummary.id);
 
   const shouldLoadTransactions = !selectedWorkspaceData || workspaceSummary._count.transactions > 0;
   const transactionsPromise = shouldLoadTransactions
@@ -523,9 +525,10 @@ async function DashboardStream({
       })
     : Promise.resolve([] as DashboardTransaction[]);
 
-  const [latestImport, recentTransactions] = await Promise.all([latestImportPromise, transactionsPromise]);
+  const [latestImport, recentTransactions, reminders] = await Promise.all([latestImportPromise, transactionsPromise, remindersPromise]);
 
   const currentTransactions = recentTransactions as DashboardTransaction[];
+  const nextReminder = reminders[0] ?? null;
   const currentThirtyDayTransactions = currentTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo);
   const previousTransactionsWindow = currentTransactions.filter(
     (transaction) => transaction.date >= sixtyDaysAgo && transaction.date < thirtyDaysAgo
@@ -860,6 +863,32 @@ async function DashboardStream({
             <Link className="pill-link pill-link--inline" href="/dashboard?import=1">
               Import statement
             </Link>
+          </div>
+        </article>
+
+        <article className="dashboard-home__review-strip glass">
+          <div className="dashboard-home__review-copy">
+            <p className="eyebrow">Upcoming card payments</p>
+            <strong>
+              {nextReminder
+                ? `${nextReminder.accountName} due ${formatDate(new Date(nextReminder.paymentDueDate))} for ${formatCurrency(nextReminder.totalAmountDue)}`
+                : "No upcoming card payments"}
+            </strong>
+            <span>
+              {nextReminder
+                ? "Future-dated due reminders are tracked here and in Notifications."
+                : "Statements with past-due dates are intentionally ignored."}
+            </span>
+          </div>
+          <div className="dashboard-home__review-actions">
+            <Link className="button button-primary button-small" href="/notifications">
+              Open reminders
+            </Link>
+            {nextReminder?.accountId ? (
+              <Link className="pill-link pill-link--inline" href={`/accounts/${nextReminder.accountId}`}>
+                Open account
+              </Link>
+            ) : null}
           </div>
         </article>
 

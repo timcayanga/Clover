@@ -25,6 +25,8 @@ export type DetectedStatementMetadata = {
   accountType: ImportedAccountType | null;
   openingBalance: number | null;
   endingBalance: number | null;
+  paymentDueDate?: string | null;
+  totalAmountDue?: number | null;
   startDate: string | null;
   endDate: string | null;
   confidence: number;
@@ -140,8 +142,10 @@ const scoreMetadataConfidence = (metadata: Omit<DetectedStatementMetadata, "conf
   if (metadata.accountType) score += 5;
   if (metadata.startDate) score += 5;
   if (metadata.endDate) score += 5;
+  if (metadata.paymentDueDate) score += 5;
   if (metadata.openingBalance !== null) score += 5;
   if (metadata.endingBalance !== null) score += 5;
+  if (typeof metadata.totalAmountDue === "number") score += 5;
   return Math.min(100, score);
 };
 
@@ -396,6 +400,8 @@ const bpiCreditCardStatementMetadata = (text: string): DetectedStatementMetadata
     accountType: "credit_card",
     openingBalance: previousBalance,
     endingBalance,
+    paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
+    totalAmountDue: endingBalance,
     startDate: statementDate ? statementDate.toISOString() : null,
     endDate: paymentDueDate ? paymentDueDate.toISOString() : statementDate ? statementDate.toISOString() : null,
     confidence: 98,
@@ -522,6 +528,8 @@ const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null =
     accountType: isSavingsStatement ? "bank" : "credit_card",
     openingBalance,
     endingBalance,
+    paymentDueDate: !isSavingsStatement && endDate ? endDate.toISOString() : null,
+    totalAmountDue: !isSavingsStatement ? endingBalance : null,
     startDate: startDate ? startDate.toISOString() : null,
     endDate: endDate ? endDate.toISOString() : null,
     confidence: accountNumber ? 95 : 85,
@@ -933,6 +941,8 @@ const parseAubCardImportText = (text: string) => {
       accountType: "credit_card",
       openingBalance: previousBalance,
       endingBalance,
+      paymentDueDate: paymentDueMatch?.[1] ? parseAubDate(paymentDueMatch[1])?.toISOString() ?? null : null,
+      totalAmountDue: totalAmountDue,
       startDate: statementDateMatch?.[1] ? parseAubDate(statementDateMatch[1])?.toISOString() ?? null : null,
       endDate: paymentDueMatch?.[1] ? parseAubDate(paymentDueMatch[1])?.toISOString() ?? null : null,
       confidence: accountNumber ? 94 : 84,

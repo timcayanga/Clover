@@ -401,8 +401,10 @@ export const detectStatementMetadataFromText = (text: string): StatementMetadata
         accountType ? 5 : 0,
         metadata?.startDate ? 5 : 0,
         metadata?.endDate ? 5 : 0,
-        metadata?.openingBalance !== null ? 5 : 0,
-        metadata?.endingBalance !== null ? 5 : 0,
+        metadata?.paymentDueDate ? 5 : 0,
+        typeof metadata?.openingBalance === "number" ? 5 : 0,
+        typeof metadata?.endingBalance === "number" ? 5 : 0,
+        typeof metadata?.totalAmountDue === "number" ? 5 : 0,
       ].reduce((total, part) => total + part, 0)
     );
 
@@ -413,6 +415,8 @@ export const detectStatementMetadataFromText = (text: string): StatementMetadata
     accountType,
     openingBalance: metadata?.openingBalance ?? null,
     endingBalance: metadata?.endingBalance ?? null,
+    paymentDueDate: metadata?.paymentDueDate ?? null,
+    totalAmountDue: metadata?.totalAmountDue ?? null,
     startDate: metadata?.startDate ?? null,
     endDate: metadata?.endDate ?? null,
     confidence,
@@ -428,6 +432,8 @@ export const mergeStatementMetadataWithTemplate = (
     accountType?: ImportedAccountType | null;
     openingBalance?: number | null;
     endingBalance?: number | null;
+    paymentDueDate?: string | null;
+    totalAmountDue?: number | null;
     startDate?: string | null;
     endDate?: string | null;
   } | null
@@ -448,8 +454,10 @@ export const mergeStatementMetadataWithTemplate = (
       template.accountType ? 5 : 0,
       template.startDate ? 5 : 0,
       template.endDate ? 5 : 0,
+      template.paymentDueDate ? 5 : 0,
       template.openingBalance !== null ? 5 : 0,
       template.endingBalance !== null ? 5 : 0,
+      typeof template.totalAmountDue === "number" ? 5 : 0,
     ].reduce((total, part) => total + part, 0)
   );
 
@@ -472,6 +480,8 @@ export const mergeStatementMetadataWithTemplate = (
         : detected.accountType ?? template.accountType ?? null,
     openingBalance: detected.openingBalance ?? template.openingBalance ?? null,
     endingBalance: detected.endingBalance ?? template.endingBalance ?? null,
+    paymentDueDate: detected.paymentDueDate ?? template.paymentDueDate ?? null,
+    totalAmountDue: detected.totalAmountDue ?? template.totalAmountDue ?? null,
     startDate: detected.startDate ?? template.startDate ?? null,
     endDate: detected.endDate ?? template.endDate ?? null,
     confidence: Math.max(detected.confidence ?? 0, templateIdentityConfidence),
@@ -528,6 +538,8 @@ type StatementMetadataSnapshot = {
   accountType: ImportedAccountType | null;
   openingBalance: number | null;
   endingBalance: number | null;
+  paymentDueDate?: string | null;
+  totalAmountDue?: number | null;
   startDate: string | null;
   endDate: string | null;
   confidence: number;
