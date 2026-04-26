@@ -208,7 +208,7 @@ export function BillingActions({
             </p>
             {renewalDate ? (
               <p className="billing-helper">
-                Your next charge and limits refresh on <strong>{renewalDate}</strong>.
+                Renews on <strong>{renewalDate}</strong>. Limits refresh then.
               </p>
             ) : null}
           </div>

@@ -612,9 +612,9 @@ export function SettingsHub({
                 <div className="settings-plan-usage__value">{currentPlanCard.title}</div>
                 {planTier === "pro" && renewalDate ? (
                   <div className="settings-plan-usage__renewal">
-                    <span>Next charge and limits refresh</span>
+                    <span>Renewal</span>
                     <strong>{renewalDate}</strong>
-                    <p>This is the day Clover restores your Pro limits.</p>
+                    <p>Charge and limits refresh on this date.</p>
                   </div>
                 ) : null}
               </article>
@@ -680,7 +680,7 @@ export function SettingsHub({
 
                         {option.value !== "free" && planTier === "pro" && renewalDate ? (
                           <p className="settings-plan-card__renewal">
-                            Renews and refreshes on <strong>{renewalDate}</strong>
+                            Renews on <strong>{renewalDate}</strong>
                           </p>
                         ) : null}
 
