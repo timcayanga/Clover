@@ -22,6 +22,7 @@ This document captures the GCash parsing rules learned from the training bundles
   - `Transfer from 09173009926 to 09175308181` with a debit means the wallet account is `09173009926`.
   - `Transfer from 09178303926 to 09173009926` with a credit means the wallet account is `09173009926`.
   - Preserve the source and destination phone numbers in the parsed row payload for downstream matching and learning.
+- Some GCash statements span multiple pages and only print the final `0.00` ending balance on the last page; if the deterministic parser only recovers a small fraction of the expected rows, the import pipeline should treat it as incomplete and let the vision fallback inspect more pages.
 - OCR often fuses the date fragment into the merchant text on some exports; the parser should strip leading date noise and trailing amount-looking fragments before simplifying the merchant title.
 - The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable GCash simplifications like `Buy Load`, `Food Panda`, `Grab`, `Lazada`, `GCredit`, `GGives Repayment`, `Transfer to GSave`, and the `Received/Sent GCash` transfer variants.
 

@@ -326,14 +326,20 @@ export const processImportFileText = async (
     accountName: mergedMetadata.accountName,
     accountNumber: mergedMetadata.accountNumber,
   });
+  const gcashSuspiciouslySparse =
+    mergedMetadata.institution === "GCash" &&
+    parsedRows.length > 0 &&
+    parsedRows.length < 50 &&
+    !mergedMetadata.endingBalance;
   const shouldUseVisionFallback =
     importFile.fileType === "application/pdf" &&
     (!text.trim() ||
       parsedRows.length === 0 ||
       (mergedMetadata.confidence ?? 0) < 70 ||
-      !mergedMetadata.accountNumber);
+      !mergedMetadata.accountNumber ||
+      gcashSuspiciouslySparse);
   const pageImages =
-    shouldUseVisionFallback
+      shouldUseVisionFallback
       ? await readImportedPdfPageImages(
           {
             storageKey: String(importFile.storageKey ?? ""),
@@ -341,7 +347,7 @@ export const processImportFileText = async (
             fileName: String(importFile.fileName ?? ""),
           },
           options.password,
-          2
+          gcashSuspiciouslySparse ? 3 : 2
         )
       : null;
   const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
@@ -401,6 +407,7 @@ export const processImportFileText = async (
     Boolean(openAiParsed?.rows.length) &&
     Boolean(openAiParsed?.audit.schemaValidated) &&
     (openAiPrimaryMode ||
+      Boolean(pageImages?.length) ||
       (openAiMetadata
         ? (openAiMetadata?.confidence ?? 0) >= (mergedMetadata.confidence ?? 0)
         : parsedRows.length === 0));
