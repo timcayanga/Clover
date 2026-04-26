@@ -1295,7 +1295,13 @@ function TransactionsPageContent() {
 
   const loadTransactionsPage = async (
     workspaceId: string,
-    options?: { background?: boolean; includeAll?: boolean; pageOverride?: number; pageSizeOverride?: number }
+    options?: {
+      background?: boolean;
+      includeAll?: boolean;
+      pageOverride?: number;
+      pageSizeOverride?: number;
+      summaryMode?: "light" | "full";
+    }
   ) => {
     const requestId = ++transactionsLoadRequestRef.current;
 
@@ -1341,6 +1347,7 @@ function TransactionsPageContent() {
         pageSize: options?.includeAll ? "all" : options?.pageSizeOverride ?? transactionsPageSize,
       }
     );
+    searchParams.set("summaryMode", options?.summaryMode ?? (options?.background ? "full" : "light"));
 
     try {
       const response = await fetch(`/api/transactions?${searchParams.toString()}`);
@@ -1407,6 +1414,16 @@ function TransactionsPageContent() {
       if (!options?.background) {
         setIsWorkspaceDataReady(true);
         setHasInitialTransactionsLoaded(true);
+      }
+
+      if (!options?.background && (options?.summaryMode ?? "light") === "light" && Number(payload.totalCount ?? 0) > 0) {
+        void loadTransactionsPage(workspaceId, {
+          background: true,
+          includeAll: options?.includeAll,
+          pageOverride: options?.pageOverride ?? transactionsPage,
+          pageSizeOverride: options?.pageSizeOverride ?? transactionsPageSize,
+          summaryMode: "full",
+        });
       }
     } catch {
       if (requestId !== transactionsLoadRequestRef.current) {
