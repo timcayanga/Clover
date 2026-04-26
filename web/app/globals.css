@@ -751,9 +751,9 @@ label {
   height: 100%;
   display: block;
   object-fit: cover;
-  object-position: 50% 20%;
+  object-position: 50% 28%;
   border-radius: 0;
-  transform: scale(1.08);
+  transform: scale(1.28);
 }
 
 .sidebar-popover {
