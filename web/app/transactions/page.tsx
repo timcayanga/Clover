@@ -13,12 +13,14 @@ import { flushSync } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
+import { AccountBrandMark } from "@/components/account-brand-mark";
 import {
   analyticsOnceKey,
   capturePostHogClientEvent,
   capturePostHogClientEventOnce,
 } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
+import { getAccountBrand } from "@/lib/account-brand";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
@@ -1159,7 +1161,6 @@ function TransactionsPageContent() {
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
-  const [manualAdvancedOpen, setManualAdvancedOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
@@ -1183,6 +1184,8 @@ function TransactionsPageContent() {
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
+  const [manualAccountMenuOpen, setManualAccountMenuOpen] = useState(false);
+  const [manualCategoryMenuOpen, setManualCategoryMenuOpen] = useState(false);
   const transactionRowRefs = useRef(new Map<string, HTMLElement>());
   const transactionsLoadRequestRef = useRef(0);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
@@ -1200,6 +1203,26 @@ function TransactionsPageContent() {
   const accountKeyById = useMemo(
     () => new Map(accounts.map((account) => [account.id, normalizeImportedAccountKey(account.name, account.institution)] as const)),
     [accounts]
+  );
+  const manualSelectedAccount = useMemo(
+    () => accounts.find((account) => account.id === manualForm.accountId) ?? null,
+    [accounts, manualForm.accountId]
+  );
+  const manualSelectedAccountBrand = useMemo(
+    () =>
+      manualSelectedAccount
+        ? getAccountBrand({
+            name: manualSelectedAccount.name,
+            institution: manualSelectedAccount.institution,
+            type: manualSelectedAccount.type,
+          })
+        : null,
+    [manualSelectedAccount]
+  );
+  const manualSelectedCategoryId = manualForm.categoryId || otherCategoryId;
+  const manualSelectedCategory = useMemo(
+    () => categories.find((category) => category.id === manualSelectedCategoryId) ?? null,
+    [categories, manualSelectedCategoryId]
   );
   const expandedAccountFilters = useMemo(() => {
     if (accountFilters.length === 0) {
@@ -1542,7 +1565,8 @@ function TransactionsPageContent() {
   useEffect(() => {
     if (manualOpen) {
       manualNameInputRef.current?.focus();
-      setManualAdvancedOpen(false);
+      setManualAccountMenuOpen(false);
+      setManualCategoryMenuOpen(false);
     }
   }, [manualOpen]);
 
@@ -2136,7 +2160,8 @@ function TransactionsPageContent() {
     try {
       const accountId = await ensureDefaultAccount(selectedWorkspaceId);
       setManualForm(createEmptyManualForm(accountId, getOtherCategoryId(categories)));
-      setManualAdvancedOpen(false);
+      setManualAccountMenuOpen(false);
+      setManualCategoryMenuOpen(false);
       setManualOpen(true);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to prepare transaction form.");
@@ -4640,8 +4665,8 @@ function TransactionsPageContent() {
             </div>
 
             <form onSubmit={saveManualTransaction}>
-              <div className="form-grid transactions-manual-grid">
-                <label>
+              <div className="manual-form-layout">
+                <label className="manual-form-layout__full">
                   Name
                   <input
                     ref={manualNameInputRef}
@@ -4651,7 +4676,8 @@ function TransactionsPageContent() {
                     required
                   />
                 </label>
-                <div className="transactions-manual-fast-row">
+
+                <div className="manual-form-layout__triple">
                   <label>
                     Date
                     <input
@@ -4689,57 +4715,133 @@ function TransactionsPageContent() {
                   </label>
                 </div>
 
-                <div className="transactions-manual-advanced-toggle">
-                  <button
-                    className="transactions-manual-advanced-toggle__button"
-                    type="button"
-                    onClick={() => setManualAdvancedOpen((current) => !current)}
-                    aria-expanded={manualAdvancedOpen}
-                  >
-                    {manualAdvancedOpen ? "Hide more details" : "More details"}
-                    <span aria-hidden="true">{manualAdvancedOpen ? "−" : "+"}</span>
-                  </button>
+                <div className="manual-form-layout__double">
+                  <div className="transactions-manual-picker">
+                    <span className="transactions-manual-picker__label">Account</span>
+                    <div className="transactions-manual-picker__control">
+                      <button
+                        type="button"
+                        className="transactions-manual-picker__button"
+                        aria-expanded={manualAccountMenuOpen}
+                        onClick={() => {
+                          setManualCategoryMenuOpen(false);
+                          setManualAccountMenuOpen((current) => !current);
+                        }}
+                      >
+                        {manualSelectedAccountBrand ? (
+                          <span className="transactions-manual-picker__brand">
+                            <AccountBrandMark
+                              accountBrand={manualSelectedAccountBrand}
+                              label={manualSelectedAccount?.name ?? "Selected account"}
+                            />
+                          </span>
+                        ) : (
+                          <span className="transactions-manual-picker__fallback">?</span>
+                        )}
+                        <span className="transactions-manual-picker__text">{manualSelectedAccount?.name ?? "Choose account"}</span>
+                        <span className="transactions-manual-picker__chevron" aria-hidden="true">
+                          <ActionIcon name="chevron-down" />
+                        </span>
+                      </button>
+                      {manualAccountMenuOpen ? (
+                        <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose account">
+                          {accounts.map((account) => {
+                            const accountBrand = getAccountBrand({
+                              name: account.name,
+                              institution: account.institution,
+                              type: account.type,
+                            });
+
+                            return (
+                              <button
+                                key={account.id}
+                                type="button"
+                                className={`transactions-manual-picker__option ${
+                                  account.id === manualForm.accountId ? "is-selected" : ""
+                                }`}
+                                onClick={() => {
+                                  setManualForm((current) => ({ ...current, accountId: account.id }));
+                                  setManualAccountMenuOpen(false);
+                                }}
+                              >
+                                <span className="transactions-manual-picker__brand">
+                                  <AccountBrandMark accountBrand={accountBrand} label={account.name} />
+                                </span>
+                                <span className="transactions-manual-picker__option-text">
+                                  <strong>{account.name}</strong>
+                                  <span>{account.institution ?? account.type}</span>
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="transactions-manual-picker">
+                    <span className="transactions-manual-picker__label">Category</span>
+                    <div className="transactions-manual-picker__control">
+                      <button
+                        type="button"
+                        className="transactions-manual-picker__button"
+                        aria-expanded={manualCategoryMenuOpen}
+                        onClick={() => {
+                          setManualAccountMenuOpen(false);
+                          setManualCategoryMenuOpen((current) => !current);
+                        }}
+                      >
+                        <span
+                          className="transaction-category-icon transactions-manual-picker__category-icon"
+                          style={getCategoryIconTone(manualSelectedCategory?.name ?? "Other")}
+                        >
+                          <img src={getCategoryIconSrc(manualSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
+                        </span>
+                        <span className="transactions-manual-picker__text">{manualSelectedCategory?.name ?? "Other"}</span>
+                        <span className="transactions-manual-picker__chevron" aria-hidden="true">
+                          <ActionIcon name="chevron-down" />
+                        </span>
+                      </button>
+                      {manualCategoryMenuOpen ? (
+                        <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose category">
+                          {categories.map((category) => (
+                            <button
+                              key={category.id}
+                              type="button"
+                              className={`transactions-manual-picker__option ${
+                                category.id === manualSelectedCategoryId ? "is-selected" : ""
+                              }`}
+                              onClick={() => {
+                                setManualForm((current) => ({ ...current, categoryId: category.id }));
+                                setManualCategoryMenuOpen(false);
+                              }}
+                            >
+                              <span
+                                className="transaction-category-icon transactions-manual-picker__category-icon"
+                                style={getCategoryIconTone(category.name)}
+                              >
+                                <img src={getCategoryIconSrc(category.name)} alt="" aria-hidden="true" />
+                              </span>
+                              <span className="transactions-manual-picker__option-text">
+                                <strong>{category.name}</strong>
+                                <span>{category.type}</span>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
 
-                {manualAdvancedOpen ? (
-                  <div className="form-grid transactions-manual-advanced">
-                    <label>
-                      Account
-                      <select
-                        value={manualForm.accountId}
-                        onChange={(event) => setManualForm((current) => ({ ...current, accountId: event.target.value }))}
-                      >
-                        <option value="">Choose account</option>
-                        {accounts.map((account) => (
-                          <option key={account.id} value={account.id}>
-                            {account.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Category
-                      <select
-                        value={manualForm.categoryId}
-                        onChange={(event) => setManualForm((current) => ({ ...current, categoryId: event.target.value }))}
-                      >
-                        {categories.map((category) => (
-                          <option key={category.id} value={category.id}>
-                            {category.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="span-2">
-                      Notes
-                      <textarea
-                        value={manualForm.description}
-                        onChange={(event) => setManualForm((current) => ({ ...current, description: event.target.value }))}
-                        placeholder="Optional note or review context"
-                      />
-                    </label>
-                  </div>
-                ) : null}
+                <label className="manual-form-layout__full">
+                  Notes
+                  <textarea
+                    value={manualForm.description}
+                    onChange={(event) => setManualForm((current) => ({ ...current, description: event.target.value }))}
+                    placeholder="Optional note or review context"
+                  />
+                </label>
               </div>
 
               <div className="form-actions">
