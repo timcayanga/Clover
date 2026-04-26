@@ -1474,9 +1474,7 @@ function AccountsPageContent() {
                                         {warning}
                                       </span>
                                     </span>
-                                  ) : (
-                                    <span className="accounts-view-pill">Ready</span>
-                                  )}
+                                  ) : null}
                                   <button
                                     className="button button-secondary button-small accounts-row-button"
                                     type="button"
