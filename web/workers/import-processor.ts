@@ -2,7 +2,7 @@ import type { Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
-import { parseAmountValue, parseImportText } from "@/lib/import-parser";
+import { parseAmountValue, parseDateValue, parseImportText } from "@/lib/import-parser";
 import { readImportedFileText, readImportedPdfPageImages } from "@/lib/import-file-text.server";
 import {
   DATA_ENGINE_VERSION,
@@ -85,6 +85,9 @@ const shouldRouteToReview = (params: { confidence: number; categoryName?: string
 
   return false;
 };
+
+const countRowsWithParseableDates = (rows: Array<{ date?: string | null }>) =>
+  rows.reduce((count, row) => (parseDateValue(row.date ?? null) ? count + 1 : count), 0);
 
 const isTruthyEnvValue = (value?: string | null) => {
   if (!value) {
@@ -332,13 +335,20 @@ export const processImportFileText = async (
     parsedRows.length > 0 &&
     parsedRows.length < 50 &&
     !mergedMetadata.endingBalance;
+  const parsedRowsWithDates = countRowsWithParseableDates(parsedRows);
+  const parsedDateCoverage = parsedRows.length > 0 ? parsedRowsWithDates / parsedRows.length : 0;
+  const suspiciousDateCoverage =
+    importFile.fileType === "application/pdf" && parsedRows.length >= 6 && parsedRowsWithDates === 0
+      ? true
+      : importFile.fileType === "application/pdf" && parsedRows.length >= 10 && parsedDateCoverage < 0.25;
   const shouldUseVisionFallback =
     importFile.fileType === "application/pdf" &&
     (!text.trim() ||
       parsedRows.length === 0 ||
       (mergedMetadata.confidence ?? 0) < 70 ||
       !mergedMetadata.accountNumber ||
-      gcashSuspiciouslySparse);
+      gcashSuspiciouslySparse ||
+      suspiciousDateCoverage);
   const pageImages =
       shouldUseVisionFallback
       ? await readImportedPdfPageImages(
