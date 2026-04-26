@@ -8,7 +8,7 @@ import { AccountBrandMark } from "@/components/account-brand-mark";
 import { getAccountBrand } from "@/lib/account-brand";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
-import { clearWorkspaceCache, normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import { clearWorkspaceCache, markDeletedWorkspaceAccount, normalizeImportedAccountKey } from "@/lib/workspace-cache";
 
 type Account = {
   id: string;
@@ -552,6 +552,7 @@ function AccountDetailPageContent() {
       const payload = (await response.json().catch(() => null)) as { account?: { workspaceId?: string | null } } | null;
       const workspaceId = payload?.account?.workspaceId ?? account?.workspaceId ?? null;
       if (workspaceId) {
+        markDeletedWorkspaceAccount(workspaceId, accountId);
         clearWorkspaceCache(workspaceId);
       }
 

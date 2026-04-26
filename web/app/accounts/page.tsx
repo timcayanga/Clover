@@ -13,7 +13,9 @@ import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   clearWorkspaceCache,
   getCachedAccountsWorkspace,
+  getDeletedWorkspaceAccountIds,
   persistAccountsWorkspaceCache,
+  markDeletedWorkspaceAccount,
   normalizeImportedAccountKey,
 } from "@/lib/workspace-cache";
 import { getAccountBrand } from "@/lib/account-brand";
@@ -529,7 +531,7 @@ function AccountsPageContent() {
   const addRef = useRef<HTMLDivElement>(null);
   const balanceInputRef = useRef<HTMLInputElement>(null);
   const workspaceLoadSeqRef = useRef(0);
-  const deletedAccountIdsRef = useRef(new Set<string>());
+  const deletedAccountIdsRef = useRef(new Set<string>(getDeletedWorkspaceAccountIds(readSelectedWorkspaceId())));
   const initialWorkspaceId = readSelectedWorkspaceId();
   const initialCachedWorkspace = getCachedAccountsWorkspace(initialWorkspaceId);
 
@@ -744,6 +746,7 @@ function AccountsPageContent() {
     }
 
     const cachedSnapshot = getCachedAccountsWorkspace(selectedWorkspaceId);
+    deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(selectedWorkspaceId));
     if (cachedSnapshot) {
       setAccounts(cachedSnapshot.accounts as Account[]);
       setAccountRules(cachedSnapshot.accountRules as AccountRule[]);
@@ -1187,6 +1190,7 @@ function AccountsPageContent() {
       }
 
       deletedAccountIdsRef.current.add(selectedAccount.id);
+      markDeletedWorkspaceAccount(selectedWorkspaceId, selectedAccount.id);
       flushSync(() => {
         setAccounts((current) => current.filter((account) => account.id !== selectedAccount.id));
         setTransactions((current) => current.filter((transaction) => transaction.accountId !== selectedAccount.id));
