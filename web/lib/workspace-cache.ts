@@ -18,6 +18,10 @@ type DeletedAccountsWorkspaceCacheState = {
   snapshots: Record<string, string[]>;
 };
 
+type DeletingAccountsWorkspaceCacheState = {
+  snapshots: Record<string, string[]>;
+};
+
 export type TransactionsWorkspaceCacheSnapshot = {
   workspaceId: string;
   accounts: CachedRecord[];
@@ -47,6 +51,7 @@ export type ImportedWorkspaceTransaction = CachedRecord & {
 export const accountsWorkspaceCacheKey = "clover.accounts.workspace-cache.v1";
 export const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v1";
 export const deletedAccountsWorkspaceCacheKey = "clover.accounts.deleted-account-ids.v1";
+export const deletingAccountsWorkspaceCacheKey = "clover.accounts.deleting-account-ids.v1";
 
 const isCachedRecordArray = (value: unknown): value is CachedRecord[] =>
   Array.isArray(value) && value.every((entry) => entry && typeof entry === "object");
@@ -157,6 +162,22 @@ const readDeletedAccountsWorkspaceCache = (): DeletedAccountsWorkspaceCacheState
   };
 };
 
+const readDeletingAccountsWorkspaceCache = (): DeletingAccountsWorkspaceCacheState | null => {
+  const cache = readJsonCache<DeletingAccountsWorkspaceCacheState>(deletingAccountsWorkspaceCacheKey);
+  if (!cache || typeof cache !== "object") {
+    return null;
+  }
+
+  const snapshots = cache.snapshots && typeof cache.snapshots === "object" ? cache.snapshots : {};
+  return {
+    snapshots: Object.fromEntries(
+      Object.entries(snapshots).filter(([, snapshot]) => {
+        return Array.isArray(snapshot) && snapshot.every((entry) => typeof entry === "string" && entry.trim());
+      })
+    ) as Record<string, string[]>,
+  };
+};
+
 const createImportedAccountCandidates = (account: ImportedWorkspaceAccount) => {
   const ids = new Set<string>([account.id]);
   if (typeof account.optimisticAccountId === "string" && account.optimisticAccountId.trim()) {
@@ -212,6 +233,15 @@ export const getDeletedWorkspaceAccountIds = (workspaceId: string) => {
   return cache?.snapshots[workspaceId] ?? [];
 };
 
+export const getDeletingWorkspaceAccountIds = (workspaceId: string) => {
+  if (!workspaceId) {
+    return [];
+  }
+
+  const cache = readDeletingAccountsWorkspaceCache();
+  return cache?.snapshots[workspaceId] ?? [];
+};
+
 export const markDeletedWorkspaceAccount = (workspaceId: string, accountId: string) => {
   if (!workspaceId || !accountId) {
     return;
@@ -225,6 +255,45 @@ export const markDeletedWorkspaceAccount = (workspaceId: string, accountId: stri
       [workspaceId]: Array.from(nextDeletedIds),
     },
   } satisfies DeletedAccountsWorkspaceCacheState);
+};
+
+export const markDeletingWorkspaceAccount = (workspaceId: string, accountId: string) => {
+  if (!workspaceId || !accountId) {
+    return;
+  }
+
+  const cache = readDeletingAccountsWorkspaceCache();
+  const nextDeletingIds = new Set([...(cache?.snapshots[workspaceId] ?? []), accountId]);
+  writeJsonCache(deletingAccountsWorkspaceCacheKey, {
+    snapshots: {
+      ...(cache?.snapshots ?? {}),
+      [workspaceId]: Array.from(nextDeletingIds),
+    },
+  } satisfies DeletingAccountsWorkspaceCacheState);
+};
+
+export const clearDeletingWorkspaceAccount = (workspaceId: string, accountId: string) => {
+  if (!workspaceId || !accountId) {
+    return;
+  }
+
+  const cache = readDeletingAccountsWorkspaceCache();
+  if (!cache?.snapshots[workspaceId]) {
+    return;
+  }
+
+  const nextDeletingIds = cache.snapshots[workspaceId].filter((id) => id !== accountId);
+  const nextSnapshots = { ...cache.snapshots };
+
+  if (nextDeletingIds.length === 0) {
+    delete nextSnapshots[workspaceId];
+  } else {
+    nextSnapshots[workspaceId] = nextDeletingIds;
+  }
+
+  writeJsonCache(deletingAccountsWorkspaceCacheKey, {
+    snapshots: nextSnapshots,
+  } satisfies DeletingAccountsWorkspaceCacheState);
 };
 
 export const readAccountsWorkspaceCache = (): AccountsWorkspaceCacheState | null => {
@@ -465,8 +534,18 @@ export const clearAllWorkspaceCaches = () => {
     return;
   }
 
-  clearStorageKeys(window.sessionStorage, [accountsWorkspaceCacheKey, transactionsWorkspaceCacheKey, deletedAccountsWorkspaceCacheKey]);
-  clearStorageKeys(window.localStorage, [accountsWorkspaceCacheKey, transactionsWorkspaceCacheKey, deletedAccountsWorkspaceCacheKey]);
+  clearStorageKeys(window.sessionStorage, [
+    accountsWorkspaceCacheKey,
+    transactionsWorkspaceCacheKey,
+    deletedAccountsWorkspaceCacheKey,
+    deletingAccountsWorkspaceCacheKey,
+  ]);
+  clearStorageKeys(window.localStorage, [
+    accountsWorkspaceCacheKey,
+    transactionsWorkspaceCacheKey,
+    deletedAccountsWorkspaceCacheKey,
+    deletingAccountsWorkspaceCacheKey,
+  ]);
 };
 
 export const clearLegacyWorkspaceCaches = () => {
@@ -474,5 +553,10 @@ export const clearLegacyWorkspaceCaches = () => {
     return;
   }
 
-  clearStorageKeys(window.localStorage, [accountsWorkspaceCacheKey, transactionsWorkspaceCacheKey, deletedAccountsWorkspaceCacheKey]);
+  clearStorageKeys(window.localStorage, [
+    accountsWorkspaceCacheKey,
+    transactionsWorkspaceCacheKey,
+    deletedAccountsWorkspaceCacheKey,
+    deletingAccountsWorkspaceCacheKey,
+  ]);
 };

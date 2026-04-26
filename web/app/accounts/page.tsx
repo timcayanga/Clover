@@ -16,8 +16,11 @@ import {
   deletedAccountsWorkspaceCacheKey,
   getCachedAccountsWorkspace,
   getDeletedWorkspaceAccountIds,
+  getDeletingWorkspaceAccountIds,
   persistAccountsWorkspaceCache,
   markDeletedWorkspaceAccount,
+  markDeletingWorkspaceAccount,
+  clearDeletingWorkspaceAccount,
   normalizeImportedAccountKey,
 } from "@/lib/workspace-cache";
 import { getAccountBrand } from "@/lib/account-brand";
@@ -250,7 +253,6 @@ const getAccountTone = (account: Account) => (getEffectiveAccountType(account) =
 const getAccountWarning = (account: Account, duplicateCount: number) => {
   if (duplicateCount > 1) return "Possible duplicate";
   if (account.source === "imported" && !account.institution) return "Needs category";
-  if (account.balance === null) return "Add balance";
   return null;
 };
 
@@ -648,6 +650,10 @@ function AccountsPageContent() {
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
+  const [deletingAccountIds, setDeletingAccountIds] = useState<string[]>(
+    () => getDeletingWorkspaceAccountIds(initialWorkspaceId)
+  );
+  const deletingAccountIdsRef = useRef(new Set<string>(getDeletingWorkspaceAccountIds(initialWorkspaceId)));
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
@@ -676,6 +682,8 @@ function AccountsPageContent() {
       }),
     [accounts, drawerAccountId, drawerStatementCheckpoints, drawerTransactions, transactions]
   );
+
+  const deletingAccountIdsSet = useMemo(() => new Set(deletingAccountIds), [deletingAccountIds]);
 
   const loadWorkspaces = async () => {
     setWorkspacesLoading(true);
@@ -760,6 +768,8 @@ function AccountsPageContent() {
 
     const cachedSnapshot = getCachedAccountsWorkspace(workspaceId);
     deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(workspaceId));
+    deletingAccountIdsRef.current = new Set(getDeletingWorkspaceAccountIds(workspaceId));
+    setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
     if (!cachedSnapshot) {
       return false;
     }
@@ -1291,6 +1301,9 @@ function AccountsPageContent() {
   };
 
   const openAccountDrawer = (account: Account) => {
+    if (deletingAccountIdsSet.has(account.id)) {
+      return;
+    }
     router.push(`/accounts/${account.id}`);
   };
 
@@ -1301,6 +1314,9 @@ function AccountsPageContent() {
 
   const openDrawerForWarning = (account: Account, warning: string) => {
     void warning;
+    if (deletingAccountIdsSet.has(account.id)) {
+      return;
+    }
     router.push(`/accounts/${account.id}`);
   };
 
@@ -1371,6 +1387,15 @@ function AccountsPageContent() {
 
     setAccountDeleteBusy(true);
     try {
+      markDeletingWorkspaceAccount(selectedWorkspaceId, selectedAccount.id);
+      deletingAccountIdsRef.current.add(selectedAccount.id);
+      setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+      flushSync(() => {
+        setDrawerAccountId(null);
+        setAccountDeleteConfirmOpen(false);
+        setMessage(`Deleting account "${selectedAccount.name}"...`);
+      });
+
       const response = await fetch(`/api/accounts/${selectedAccount.id}`, {
         method: "DELETE",
       });
@@ -1381,6 +1406,9 @@ function AccountsPageContent() {
       }
 
       deletedAccountIdsRef.current.add(selectedAccount.id);
+      clearDeletingWorkspaceAccount(selectedWorkspaceId, selectedAccount.id);
+      deletingAccountIdsRef.current.delete(selectedAccount.id);
+      setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
       markDeletedWorkspaceAccount(selectedWorkspaceId, selectedAccount.id);
       flushSync(() => {
         setAccounts((current) => current.filter((account) => account.id !== selectedAccount.id));
@@ -1394,6 +1422,9 @@ function AccountsPageContent() {
       workspaceLoadSeqRef.current += 1;
       void loadWorkspaceData(selectedWorkspaceId, { silent: true });
     } catch (error) {
+      clearDeletingWorkspaceAccount(selectedWorkspaceId, selectedAccount.id);
+      deletingAccountIdsRef.current.delete(selectedAccount.id);
+      setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
       setMessage(error instanceof Error ? error.message : "Unable to delete account.");
     } finally {
       setAccountDeleteBusy(false);
@@ -1656,6 +1687,7 @@ function AccountsPageContent() {
                           const isLiability = getEffectiveAccountType(account) === "credit_card";
                           const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
                           const warning = getAccountWarning(account, duplicateCounts.get(duplicateKey) ?? 0);
+                          const isDeleting = deletingAccountIdsSet.has(account.id);
                           const accountBrand = getAccountBrand({
                             institution: account.institution,
                             name: account.name,
@@ -1674,13 +1706,18 @@ function AccountsPageContent() {
                               role="button"
                               tabIndex={0}
                               aria-label={`Open ${account.name} account`}
-                              onClick={() => openAccountDrawer(account)}
+                              onClick={() => {
+                                if (!isDeleting) {
+                                  openAccountDrawer(account);
+                                }
+                              }}
                               onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
+                                if ((event.key === "Enter" || event.key === " ") && !isDeleting) {
                                   event.preventDefault();
                                   openAccountDrawer(account);
                                 }
                               }}
+                              data-state={isDeleting ? "deleting" : undefined}
                             >
                               <div className="accounts-account-card__head">
                                 <div className="accounts-account-card__brand">
@@ -1733,13 +1770,17 @@ function AccountsPageContent() {
                                     {currencyFormatter.format(balanceValue)}
                                   </div>
                                   <div className="accounts-account-card__balance-meta">
-                                    <span className={`accounts-account-card__balance-pill is-${balanceContext.tone}`}>
-                                      {balanceContext.tone === "good"
-                                        ? "Spendable"
-                                        : balanceContext.tone === "danger"
-                                          ? "Outstanding"
-                                          : "Tracked"}
-                                    </span>
+                                    {isDeleting ? (
+                                      <span className="accounts-account-card__balance-pill is-neutral">Deleting</span>
+                                    ) : (
+                                      <span className={`accounts-account-card__balance-pill is-${balanceContext.tone}`}>
+                                        {balanceContext.tone === "good"
+                                          ? "Spendable"
+                                          : balanceContext.tone === "danger"
+                                            ? "Outstanding"
+                                            : "Tracked"}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -1796,7 +1837,14 @@ function AccountsPageContent() {
               ) : null}
               <div>
                 <span>Status</span>
-                <strong>{getAccountWarning(selectedAccount, duplicateCounts.get(`${selectedAccount.name.trim().toLowerCase()}::${(selectedAccount.institution ?? "").trim().toLowerCase()}`) ?? 0) ?? "Ready"}</strong>
+                <strong>
+                  {deletingAccountIdsSet.has(selectedAccount.id)
+                    ? "Deleting"
+                    : getAccountWarning(
+                        selectedAccount,
+                        duplicateCounts.get(`${selectedAccount.name.trim().toLowerCase()}::${(selectedAccount.institution ?? "").trim().toLowerCase()}`) ?? 0
+                      ) ?? "Ready"}
+                </strong>
               </div>
             </div>
 

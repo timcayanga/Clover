@@ -8,7 +8,14 @@ import { AccountBrandMark } from "@/components/account-brand-mark";
 import { getAccountBrand } from "@/lib/account-brand";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
-import { clearWorkspaceCache, markDeletedWorkspaceAccount, normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import {
+  clearWorkspaceCache,
+  clearDeletingWorkspaceAccount,
+  getDeletingWorkspaceAccountIds,
+  markDeletedWorkspaceAccount,
+  markDeletingWorkspaceAccount,
+  normalizeImportedAccountKey,
+} from "@/lib/workspace-cache";
 import {
   getInvestmentFieldConfigs,
   getInvestmentSubtypeDescription,
@@ -517,6 +524,11 @@ function AccountDetailPageContent() {
       ? checkpointBalance - currentBalance
       : null;
 
+  const deletingAccountIds = useMemo(
+    () => new Set(getDeletingWorkspaceAccountIds(account?.workspaceId ?? "")),
+    [account?.workspaceId]
+  );
+
   const checkpointGapLabel = useMemo(() => {
     if (checkpointGap === null || !latestCheckpoint) {
       return "—";
@@ -587,6 +599,11 @@ function AccountDetailPageContent() {
 
     setDeleteBusy(true);
     try {
+      const workspaceId = account?.workspaceId ?? null;
+      if (workspaceId) {
+        markDeletingWorkspaceAccount(workspaceId, accountId);
+      }
+
       const deleteRequest = fetch(`/api/accounts/${accountId}`, {
         method: "DELETE",
       });
@@ -595,17 +612,25 @@ function AccountDetailPageContent() {
       void deleteRequest
         .then(async (response) => {
           if (!response.ok) {
+            if (workspaceId) {
+              clearDeletingWorkspaceAccount(workspaceId, accountId);
+            }
             return;
           }
 
           const payload = (await response.json().catch(() => null)) as { account?: { workspaceId?: string | null } } | null;
-          const workspaceId = payload?.account?.workspaceId ?? account?.workspaceId ?? null;
-          if (workspaceId) {
-            markDeletedWorkspaceAccount(workspaceId, accountId);
-            clearWorkspaceCache(workspaceId);
+          const resolvedWorkspaceId = payload?.account?.workspaceId ?? workspaceId;
+          if (resolvedWorkspaceId) {
+            clearDeletingWorkspaceAccount(resolvedWorkspaceId, accountId);
+            markDeletedWorkspaceAccount(resolvedWorkspaceId, accountId);
+            clearWorkspaceCache(resolvedWorkspaceId);
           }
         })
-        .catch(() => null);
+        .catch(() => {
+          if (workspaceId) {
+            clearDeletingWorkspaceAccount(workspaceId, accountId);
+          }
+        });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to delete account.");
       setDeleteConfirmOpen(false);
@@ -653,6 +678,13 @@ function AccountDetailPageContent() {
                 <div className="panel-muted">Spendable amount</div>
                 <strong>{currencyFormatter.format(isSpendableAccountType(account.type) ? currentBalance : 0)}</strong>
                 <span>{isSpendableAccountType(account.type) ? "Ready to use now" : "Not immediately spendable"}</span>
+              </div>
+            </div>
+            <div className="status-card">
+              <div>
+                <div className="panel-muted">Status</div>
+                <strong>{deletingAccountIds.has(account.id) ? "Deleting" : "Active"}</strong>
+                <span>{deletingAccountIds.has(account.id) ? "This account is being removed" : "Ready"}</span>
               </div>
             </div>
             <div className="status-card">
