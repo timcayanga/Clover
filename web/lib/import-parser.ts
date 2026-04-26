@@ -2223,6 +2223,11 @@ const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null 
     parseMoney(compact.match(/STARTING\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
     parseMoney(compact.match(/BEGINNING\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
     null;
+  const endingBalance =
+    parseMoney(compact.match(/ENDING\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
+    parseMoney(compact.match(/CLOSING\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
+    parseMoney(compact.match(/BALANCE\s*$|BALANCE\s+([0-9,]+\.\d{2})\s*$/i)?.[1] ?? null) ??
+    null;
 
   return {
     institution: "GCash",
@@ -2230,7 +2235,7 @@ const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null 
     accountName: accountNumber ? `GCash ${accountNumber.slice(-4)}` : "GCash",
     accountType: "wallet",
     openingBalance,
-    endingBalance: null,
+    endingBalance,
     startDate: parseLooseDate(dateRangeMatch?.[1] ?? null)?.toISOString() ?? null,
     endDate: parseLooseDate(dateRangeMatch?.[2] ?? null)?.toISOString() ?? null,
     confidence: accountNumber ? 88 : 74,
