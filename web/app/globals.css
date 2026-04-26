@@ -716,7 +716,7 @@ label {
   width: 44px;
   height: 44px;
   aspect-ratio: 1 / 1;
-  border-radius: 16px;
+  border-radius: 12px;
   border: 1px solid rgba(15, 23, 42, 0.1);
   background: rgba(255, 255, 255, 0.88);
   overflow: hidden;
@@ -740,7 +740,7 @@ label {
   color: var(--accent);
   font-size: 14px;
   font-weight: 600;
-  border-radius: inherit;
+  border-radius: 12px;
   overflow: hidden;
   line-height: 0;
 }
@@ -751,7 +751,7 @@ label {
   display: block;
   object-fit: cover;
   object-position: 50% 24%;
-  border-radius: inherit;
+  border-radius: 0;
   transform: scale(2.05);
 }
 
