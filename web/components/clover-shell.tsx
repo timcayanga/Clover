@@ -31,8 +31,8 @@ type CloverShellProps = {
 const navItems = [
   { href: "/dashboard", label: "Dashboard", key: "dashboard" as const },
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
-  { href: "/investments", label: "Investments", key: "investments" as const },
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
+  { href: "/investments", label: "Investments", key: "investments" as const },
   { href: "/reports", label: "Reports", key: "reports" as const },
   { href: "/insights", label: "Insights", key: "insights" as const },
   { href: "/goals", label: "Goals", key: "goals" as const },

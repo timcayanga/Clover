@@ -144,6 +144,7 @@ export async function POST(request: Request) {
     const investmentMaturityDate = parseNullableDate(body?.investmentMaturityDate);
     const investmentInterestRate = parseNullableDecimal(body?.investmentInterestRate);
     const investmentMaturityValue = parseNullableDecimal(body?.investmentMaturityValue);
+    const balance = parseNullableDecimal(body?.balance);
 
     if (!workspaceId || !name) {
       return NextResponse.json({ error: "workspaceId and name are required" }, { status: 400 });
@@ -182,6 +183,7 @@ export async function POST(request: Request) {
         type,
         currency: body?.currency ? String(body.currency).toUpperCase() : "PHP",
         source: body?.source ? String(body.source) : "upload",
+        balance,
       },
     });
 
