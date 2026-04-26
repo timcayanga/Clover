@@ -1374,7 +1374,6 @@ function AccountsPageContent() {
                   <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search accounts" />
                 </label>
                 <label>
-                  Sort
                   <select value={sortBy} onChange={(event) => setSortBy(event.target.value as AccountSort)}>
                     <option value="updated_desc">Latest updated</option>
                     <option value="name">Name</option>
