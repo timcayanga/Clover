@@ -9427,6 +9427,110 @@ input.transaction-inline-edit--amount::placeholder {
   min-width: 0;
 }
 
+.investments-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 0 4px;
+}
+
+.investments-page__header-copy {
+  display: grid;
+  gap: 4px;
+  max-width: 60ch;
+}
+
+.investments-page__header-copy h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.05em;
+  line-height: 1.08;
+}
+
+.investments-page__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.investments-market {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-soft);
+}
+
+.investments-market__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.investments-market__head h3 {
+  margin-top: 2px;
+}
+
+.investments-market__controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.investments-market__controls label {
+  gap: 6px;
+  min-width: 164px;
+}
+
+.investments-market__controls input,
+.investments-market__controls select {
+  min-height: 38px;
+}
+
+.investments-market__chips,
+.investments-market__range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.investments-market__meta,
+.investments-market__footnote {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.investments-market__footnote {
+  align-items: center;
+}
+
+.investments-market .insight-chart svg {
+  height: 200px;
+}
+
+.insight-chart__label strong.is-positive {
+  color: #15803d;
+}
+
+.insight-chart__label strong.is-negative {
+  color: #b45309;
+}
+
 .accounts-page__headline {
   display: flex;
   align-items: flex-start;

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { InvestmentMarketChart } from "@/components/investment-market-chart";
 import { getAccountBrand } from "@/lib/account-brand";
 import {
   chooseWorkspaceId,
@@ -143,12 +144,11 @@ export default function InvestmentsPage() {
   const initialWorkspaceId = readSelectedWorkspaceId();
   const initialCachedWorkspace = getCachedAccountsWorkspace(initialWorkspaceId);
 
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
   const [accounts, setAccounts] = useState<Account[]>(() => (initialCachedWorkspace?.accounts as Account[]) ?? []);
   const [loading, setLoading] = useState(!initialCachedWorkspace);
   const [hasLoaded, setHasLoaded] = useState(Boolean(initialCachedWorkspace));
-  const [message, setMessage] = useState("Select a workspace to review investments.");
+  const [message, setMessage] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [manualName, setManualName] = useState("");
@@ -174,12 +174,14 @@ export default function InvestmentsPage() {
     const loadWorkspaces = async () => {
       const response = await fetch("/api/workspaces");
       if (!response.ok || cancelled) {
+        if (!cancelled) {
+          setMessage("Unable to load workspaces.");
+        }
         return;
       }
 
       const payload = await response.json();
       const items = Array.isArray(payload.workspaces) ? (payload.workspaces as Workspace[]) : [];
-      setWorkspaces(items);
       setSelectedWorkspaceId((current) => chooseWorkspaceId(items, current));
     };
 
@@ -204,6 +206,9 @@ export default function InvestmentsPage() {
       setLoading(true);
       const response = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`);
       if (!response.ok || cancelled) {
+        if (!cancelled) {
+          setMessage("Unable to load investments.");
+        }
         setLoading(false);
         setHasLoaded(true);
         return;
@@ -223,11 +228,6 @@ export default function InvestmentsPage() {
       cancelled = true;
     };
   }, [selectedWorkspaceId]);
-
-  const selectedWorkspace = useMemo(
-    () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
-    [selectedWorkspaceId, workspaces]
-  );
 
   const investmentAccounts = useMemo(
     () => accounts.filter((account) => account.type === "investment"),
@@ -407,35 +407,36 @@ export default function InvestmentsPage() {
     }
   };
 
-  const addInvestmentActions = (
-    <>
-      <button
-        className="button button-primary button-small"
-        type="button"
-        onClick={() => setAddOpen(true)}
-        disabled={!selectedWorkspaceId}
-      >
-        Add investment
-      </button>
-      <Link className="button button-secondary button-small" href="/accounts">
-        View accounts
-      </Link>
-    </>
-  );
-
   if (!hasLoaded) {
     return <CloverLoadingScreen label="investments" />;
   }
 
   return (
-    <CloverShell
-      active="investments"
-      title="Investments"
-      kicker="Investments"
-      subtitle="Create market holdings, time deposits, and bonds here. Investment accounts added anywhere in Accounts will also appear here automatically."
-      actions={addInvestmentActions}
-    >
+    <CloverShell active="investments" title="Investments" showTopbar={false}>
       <div className="accounts-page">
+        <div className="investments-page__header">
+          <div className="investments-page__header-copy">
+            <p className="eyebrow">Investments</p>
+            <h1>Investments</h1>
+            <p className="accounts-page__subtitle">
+              Create market holdings, time deposits, and bonds here. Anything with type <code>investment</code> shows up here automatically.
+            </p>
+          </div>
+          <div className="investments-page__header-actions">
+            <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
+              Add investment
+            </button>
+            <Link className="button button-secondary button-small" href="/accounts">
+              View accounts
+            </Link>
+          </div>
+        </div>
+
+        {loading ? <p className="panel-muted">Loading investments...</p> : null}
+        {!loading && message ? <p className="panel-muted">{message}</p> : null}
+
+        <InvestmentMarketChart investmentAccounts={investmentAccounts} />
+
         <section className="accounts-overview-grid">
           <article className="accounts-overview-card glass">
             <p className="eyebrow">Current value</p>
@@ -458,17 +459,6 @@ export default function InvestmentsPage() {
             <span>Investment accounts in this workspace</span>
           </article>
         </section>
-
-        <div className="panel-muted" style={{ marginTop: 16 }}>
-          {selectedWorkspace
-            ? `${selectedWorkspace.name} is selected. Investments created from the Accounts page and investments added here are centralized in the same list.`
-            : "Select a workspace to review investments."}
-        </div>
-
-        {loading ? <p className="panel-muted" style={{ marginTop: 12 }}>{message}</p> : null}
-        {!loading && message !== "Select a workspace to review investments." ? (
-          <p className="panel-muted" style={{ marginTop: 12 }}>{message}</p>
-        ) : null}
 
         <section className="accounts-sections" style={{ marginTop: 20 }}>
           {investmentGroups.length > 0 ? (
