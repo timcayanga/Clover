@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
 import { AccountBrandMark } from "@/components/account-brand-mark";
@@ -205,13 +206,15 @@ const serializeInvestmentEditDraft = (account: Account): InvestmentEditDraft => 
 export default function InvestmentsPage() {
   const initialWorkspaceId = readSelectedWorkspaceId();
   const initialCachedWorkspace = getCachedAccountsWorkspace(initialWorkspaceId);
+  const searchParams = useSearchParams();
+  const searchQueryFromUrl = searchParams.get("q") ?? "";
 
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
   const [accounts, setAccounts] = useState<Account[]>(() => (initialCachedWorkspace?.accounts as Account[]) ?? []);
   const [loading, setLoading] = useState(!initialCachedWorkspace);
   const [hasLoaded, setHasLoaded] = useState(Boolean(initialCachedWorkspace));
   const [message, setMessage] = useState("");
-  const [investmentSearch, setInvestmentSearch] = useState("");
+  const [investmentSearch, setInvestmentSearch] = useState(searchQueryFromUrl);
   const [investmentSubtypeFilter, setInvestmentSubtypeFilter] = useState<InvestmentSubtype | "all">("all");
   const [investmentSortKey, setInvestmentSortKey] = useState<InvestmentSortKey>("value_desc");
   const [addOpen, setAddOpen] = useState(false);
@@ -235,6 +238,10 @@ export default function InvestmentsPage() {
   useEffect(() => {
     document.title = "Clover | Investments";
   }, []);
+
+  useEffect(() => {
+    setInvestmentSearch(searchQueryFromUrl);
+  }, [searchQueryFromUrl]);
 
   useEffect(() => {
     let cancelled = false;

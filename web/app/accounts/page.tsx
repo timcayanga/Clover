@@ -572,6 +572,7 @@ export default function AccountsPage() {
 function AccountsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const searchQueryFromUrl = searchParams.get("q") ?? "";
   const addRef = useRef<HTMLDivElement>(null);
   const balanceInputRef = useRef<HTMLInputElement>(null);
   const workspaceLoadSeqRef = useRef(0);
@@ -605,7 +606,7 @@ function AccountsPageContent() {
   const [importOpen, setImportOpen] = useState(false);
   const [importSessionId, setImportSessionId] = useState(0);
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(searchQueryFromUrl);
   const [sortBy, setSortBy] = useState<AccountSort>("updated_desc");
   const [showNeedsReviewOnly, setShowNeedsReviewOnly] = useState(false);
   const [manualType, setManualType] = useState<Account["type"]>("bank");
@@ -656,6 +657,10 @@ function AccountsPageContent() {
     }
   );
   const deletingAccountIdsRef = useRef(new Set<string>(getDeletingWorkspaceAccountIds(initialWorkspaceId)));
+
+  useEffect(() => {
+    setSearchQuery(searchQueryFromUrl);
+  }, [searchQueryFromUrl]);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,

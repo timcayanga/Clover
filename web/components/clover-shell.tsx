@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
-import { persistSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
+import { persistSelectedWorkspaceId, readSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches, clearLegacyWorkspaceCaches } from "@/lib/workspace-cache";
 
 type CloverShellProps = {
@@ -28,6 +28,35 @@ type CloverShellProps = {
   children: ReactNode;
 };
 
+type SidebarSearchAccount = {
+  id: string;
+  name: string;
+  institution: string | null;
+  type: string;
+  balance: string | null;
+  investmentSymbol: string | null;
+  investmentSubtype: string | null;
+};
+
+type SidebarSearchMarket = {
+  symbol: string;
+  market: "ph" | "us";
+  latest: {
+    value: number;
+  };
+  change: number;
+  changePercent: number;
+};
+
+type SidebarSearchResult = {
+  key: string;
+  title: string;
+  detail: string;
+  href: string;
+  icon: IconName;
+  badge?: string;
+};
+
 const avatarBackgrounds = [
   "rgba(3, 168, 192, 0.16)",
   "rgba(3, 168, 192, 0.22)",
@@ -35,6 +64,92 @@ const avatarBackgrounds = [
   "rgba(181, 246, 239, 0.9)",
   "rgba(15, 23, 42, 0.08)",
 ] as const;
+
+const sidebarSearchPages: Array<{
+  key: string;
+  title: string;
+  href: string;
+  icon: IconName;
+  detail: string;
+  terms: string[];
+}> = [
+  {
+    key: "dashboard",
+    title: "Dashboard",
+    href: "/dashboard",
+    icon: "dashboard",
+    detail: "Overview and quick actions.",
+    terms: ["dashboard", "overview", "home", "summary"],
+  },
+  {
+    key: "accounts",
+    title: "Accounts",
+    href: "/accounts",
+    icon: "accounts",
+    detail: "Banks, cash, and investments.",
+    terms: ["accounts", "account", "banks", "bank", "wallet", "cash"],
+  },
+  {
+    key: "transactions",
+    title: "Transactions",
+    href: "/transactions",
+    icon: "transactions",
+    detail: "Search, review, and categorize activity.",
+    terms: ["transactions", "transaction", "activity", "spend", "spending", "review"],
+  },
+  {
+    key: "investments",
+    title: "Investments",
+    href: "/investments",
+    icon: "investments",
+    detail: "Track holdings and market tickers.",
+    terms: ["investments", "investment", "ticker", "tickers", "stock", "stocks", "fund", "bonds"],
+  },
+  {
+    key: "reports",
+    title: "Reports",
+    href: "/reports",
+    icon: "reports",
+    detail: "Cash flow, mix, and summary views.",
+    terms: ["reports", "report", "cash flow", "cashflow", "insights", "trend", "summary"],
+  },
+  {
+    key: "insights",
+    title: "Insights",
+    href: "/insights",
+    icon: "insights",
+    detail: "Goal-aware spending guidance.",
+    terms: ["insights", "insight", "analysis", "trend", "goal"],
+  },
+  {
+    key: "goals",
+    title: "Goals",
+    href: "/goals",
+    icon: "goals",
+    detail: "Save, pay down debt, or track milestones.",
+    terms: ["goals", "goal", "savings", "save", "debt", "milestone"],
+  },
+];
+
+const normalizeSidebarSearch = (value: string) => value.trim().toLowerCase();
+
+const getSidebarSearchBlob = (account: SidebarSearchAccount) =>
+  [
+    account.name,
+    account.institution ?? "",
+    account.type,
+    account.balance ?? "",
+    account.investmentSymbol ?? "",
+    account.investmentSubtype ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+
+const formatSidebarMoney = new Intl.NumberFormat("en-PH", {
+  style: "currency",
+  currency: "PHP",
+  minimumFractionDigits: 2,
+});
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", key: "dashboard" as const },
@@ -221,9 +336,23 @@ export function CloverShell({
   const { user } = useUser();
   const { signOut } = useClerk();
   const pathname = usePathname();
+  const router = useRouter();
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const searchWrapRef = useRef<HTMLDivElement | null>(null);
+  const searchResultsRef = useRef<HTMLDivElement | null>(null);
+  const profileButtonRef = useRef<HTMLButtonElement | null>(null);
+  const profilePopoverRef = useRef<HTMLDivElement | null>(null);
+  const notificationsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const notificationsPopoverRef = useRef<HTMLDivElement | null>(null);
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchWorkspaceId, setSearchWorkspaceId] = useState(() => readSelectedWorkspaceId());
+  const [searchAccounts, setSearchAccounts] = useState<SidebarSearchAccount[]>([]);
+  const [searchPlanTier, setSearchPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
+  const [searchTicker, setSearchTicker] = useState<SidebarSearchMarket | null>(null);
+  const [searchTickerLoading, setSearchTickerLoading] = useState(false);
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
   const profileImage = user?.imageUrl ?? null;
@@ -235,31 +364,318 @@ export function CloverShell({
   useEffect(() => {
     setIsSidebarOpen(false);
     syncSelectedWorkspaceCookie();
+    setSearchWorkspaceId(readSelectedWorkspaceId());
     clearLegacyWorkspaceCaches();
-    const handlePointerDown = (event: MouseEvent) => {
+    const handlePointerDown = (event: PointerEvent | MouseEvent) => {
       if (!shellRef.current || event.target instanceof Node === false) {
         return;
       }
 
-      if (!shellRef.current.contains(event.target)) {
+      const target = event.target;
+
+      if (isSearchOpen && searchWrapRef.current && !searchWrapRef.current.contains(target) && !searchResultsRef.current?.contains(target)) {
+        setIsSearchOpen(false);
+      }
+
+      if (
+        openMenu === "profile" &&
+        !profileButtonRef.current?.contains(target) &&
+        !profilePopoverRef.current?.contains(target)
+      ) {
         setOpenMenu(null);
+      }
+
+      if (
+        openMenu === "notifications" &&
+        !notificationsButtonRef.current?.contains(target) &&
+        !notificationsPopoverRef.current?.contains(target)
+      ) {
+        setOpenMenu(null);
+      }
+
+      if (!shellRef.current.contains(target)) {
+        setOpenMenu(null);
+        setIsSearchOpen(false);
       }
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpenMenu(null);
+        setIsSearchOpen(false);
       }
     };
 
-    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("mousedown", handlePointerDown, true);
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("mousedown", handlePointerDown, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [pathname]);
+  }, [pathname, isSearchOpen, openMenu]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCurrentUser = async () => {
+      try {
+        const response = await fetch("/api/me");
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const payload = await response.json();
+        setSearchPlanTier(payload?.user?.planTier === "pro" ? "pro" : "free");
+      } catch {
+        if (!cancelled) {
+          setSearchPlanTier("free");
+        }
+      }
+    };
+
+    void loadCurrentUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshSearchWorkspace = async () => {
+      const nextWorkspaceId = readSelectedWorkspaceId();
+      if (nextWorkspaceId === searchWorkspaceId) {
+        return;
+      }
+
+      setSearchWorkspaceId(nextWorkspaceId);
+    };
+
+    void refreshSearchWorkspace();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== "clover.selected-workspace-id.v1") {
+        return;
+      }
+
+      const nextWorkspaceId = readSelectedWorkspaceId();
+      if (!cancelled) {
+        setSearchWorkspaceId(nextWorkspaceId);
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [searchWorkspaceId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSearchAccounts = async () => {
+      if (!searchWorkspaceId) {
+        setSearchAccounts([]);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(searchWorkspaceId)}`);
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const payload = await response.json();
+        const items = Array.isArray(payload.accounts) ? (payload.accounts as SidebarSearchAccount[]) : [];
+        if (!cancelled) {
+          setSearchAccounts(items);
+        }
+      } catch {
+        if (!cancelled) {
+          setSearchAccounts([]);
+        }
+      }
+    };
+
+    void loadSearchAccounts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchWorkspaceId]);
+
+  const normalizedSearchQuery = normalizeSidebarSearch(searchQuery);
+  const shouldShowSearchResults = isSearchOpen || normalizedSearchQuery.length > 0;
+  const pageSearchResults = useMemo<SidebarSearchResult[]>(() => {
+    const matches = normalizedSearchQuery
+      ? sidebarSearchPages.filter((entry) => {
+          const haystack = [entry.title, entry.detail, ...entry.terms].join(" ").toLowerCase();
+          return haystack.includes(normalizedSearchQuery);
+        })
+      : sidebarSearchPages;
+
+    return matches.slice(0, normalizedSearchQuery ? 6 : 5).map((entry) => ({
+      key: `page:${entry.key}`,
+      title: entry.title,
+      detail: entry.detail,
+      href: entry.href,
+      icon: entry.icon,
+    }));
+  }, [normalizedSearchQuery]);
+
+  const accountSearchResults = useMemo<SidebarSearchResult[]>(() => {
+    if (!normalizedSearchQuery) {
+      return [];
+    }
+
+    return searchAccounts
+      .filter((account) => getSidebarSearchBlob(account).includes(normalizedSearchQuery))
+      .sort((left, right) => {
+        const leftExact = getSidebarSearchBlob(left).startsWith(normalizedSearchQuery);
+        const rightExact = getSidebarSearchBlob(right).startsWith(normalizedSearchQuery);
+        if (leftExact !== rightExact) {
+          return leftExact ? -1 : 1;
+        }
+
+        return left.name.localeCompare(right.name);
+      })
+      .slice(0, 6)
+      .map((account) => ({
+        key: `account:${account.id}`,
+        title: account.name,
+        detail:
+          account.institution ||
+          (account.type === "investment"
+            ? [account.investmentSubtype, account.investmentSymbol].filter(Boolean).join(" ") || "Investment account"
+            : "Account"),
+        href: `/accounts?q=${encodeURIComponent(searchQuery.trim())}`,
+        icon: account.type === "investment" ? "investments" : "accounts",
+        badge: account.balance && account.balance !== "0" ? `PHP ${Number(account.balance).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined,
+      }));
+  }, [normalizedSearchQuery, searchAccounts, searchQuery]);
+
+  const shouldShowTickerLookup = useMemo(() => {
+    if (!normalizedSearchQuery || searchPlanTier !== "pro" || accountSearchResults.length > 0) {
+      return false;
+    }
+
+    return /^[a-z0-9.\-]{2,10}$/i.test(searchQuery.trim());
+  }, [accountSearchResults.length, normalizedSearchQuery, searchPlanTier, searchQuery]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTicker = () => {
+      if (!shouldShowTickerLookup) {
+        setSearchTicker(null);
+        setSearchTickerLoading(false);
+        return;
+      }
+
+      setSearchTickerLoading(true);
+      const symbol = searchQuery.trim().toUpperCase();
+      const handle = window.setTimeout(async () => {
+        try {
+          const response = await fetch(`/api/market-history?symbol=${encodeURIComponent(symbol)}&market=ph&range=1Y`);
+          if (!response.ok || cancelled) {
+            return;
+          }
+
+          const payload = (await response.json()) as Partial<SidebarSearchMarket> & { error?: string };
+          if (payload && typeof payload.symbol === "string" && payload.latest && typeof payload.latest.value === "number") {
+            setSearchTicker({
+              symbol: payload.symbol,
+              market: payload.market === "us" ? "us" : "ph",
+              latest: { value: payload.latest.value },
+              change: typeof payload.change === "number" ? payload.change : 0,
+              changePercent: typeof payload.changePercent === "number" ? payload.changePercent : 0,
+            });
+          } else {
+            setSearchTicker(null);
+          }
+        } catch {
+          if (!cancelled) {
+            setSearchTicker(null);
+          }
+        } finally {
+          if (!cancelled) {
+            setSearchTickerLoading(false);
+          }
+        }
+      }, 180);
+
+      return () => {
+        window.clearTimeout(handle);
+      };
+    };
+
+    const cleanup = loadTicker();
+
+    return () => {
+      cancelled = true;
+      if (typeof cleanup === "function") {
+        cleanup();
+      }
+    };
+  }, [searchQuery, shouldShowTickerLookup]);
+
+  const tickerSearchResult = useMemo<SidebarSearchResult | null>(() => {
+    if (!searchTicker) {
+      return null;
+    }
+
+    return {
+      key: `ticker:${searchTicker.symbol}:${searchTicker.market}`,
+      title: `${searchTicker.symbol} ticker`,
+      detail:
+        searchTicker.market === "ph"
+          ? `PH market • ${formatSidebarMoney.format(searchTicker.latest.value)}`
+          : `US market • ${formatSidebarMoney.format(searchTicker.latest.value)}`,
+      href: `/investments?q=${encodeURIComponent(searchTicker.symbol)}`,
+      icon: "investments",
+      badge:
+        searchTicker.change === 0
+          ? "Flat"
+          : `${searchTicker.change > 0 ? "+" : ""}${searchTicker.changePercent.toFixed(2)}%`,
+    };
+  }, [searchTicker]);
+
+  const searchResults = useMemo(() => {
+    if (!normalizedSearchQuery) {
+      return {
+        pages: pageSearchResults,
+        accounts: [],
+        ticker: null,
+        hasAnyResults: pageSearchResults.length > 0,
+      };
+    }
+
+    const ticker = tickerSearchResult && shouldShowTickerLookup ? tickerSearchResult : null;
+    const hasAnyResults = pageSearchResults.length > 0 || accountSearchResults.length > 0 || Boolean(ticker);
+    return {
+      pages: pageSearchResults,
+      accounts: accountSearchResults,
+      ticker,
+      hasAnyResults,
+    };
+  }, [accountSearchResults, normalizedSearchQuery, pageSearchResults, shouldShowTickerLookup, tickerSearchResult]);
+
+  const navigateSearchResult = (href: string) => {
+    setIsSearchOpen(false);
+    setSearchQuery("");
+    router.push(href);
+  };
+
+  const firstSearchHref =
+    accountSearchResults[0]?.href ??
+    searchResults.ticker?.href ??
+    pageSearchResults[0]?.href ??
+    "/dashboard";
 
   const notificationCount = notifications.length;
   const handleSignOut = () => {
@@ -288,10 +704,107 @@ export function CloverShell({
           </Link>
         </div>
 
-        <label className="sidebar-search" htmlFor="sidebar-search">
-          <span className="sr-only">Search</span>
-          <input id="sidebar-search" type="search" placeholder="Search" />
-        </label>
+        <div className="sidebar-search-wrap" ref={searchWrapRef}>
+          <label className="sidebar-search" htmlFor="sidebar-search">
+            <span className="sr-only">Search Clover</span>
+            <input
+              id="sidebar-search"
+              type="search"
+              placeholder="Search Clover"
+              value={searchQuery}
+              onFocus={() => setIsSearchOpen(true)}
+              onChange={(event) => {
+                setSearchQuery(event.target.value);
+                setIsSearchOpen(true);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  navigateSearchResult(firstSearchHref);
+                }
+              }}
+            />
+          </label>
+
+          {shouldShowSearchResults ? (
+            <div className="sidebar-search-results" ref={searchResultsRef}>
+              {searchTickerLoading ? (
+                <div className="sidebar-search-results__empty">Searching Clover...</div>
+              ) : searchResults.hasAnyResults ? (
+                <>
+                  {searchResults.pages.length > 0 ? (
+                    <div className="sidebar-search-results__group">
+                      <div className="sidebar-search-results__label">Pages</div>
+                      {searchResults.pages.map((result) => (
+                        <button
+                          key={result.key}
+                          type="button"
+                          className="sidebar-search-results__item"
+                          onClick={() => navigateSearchResult(result.href)}
+                        >
+                          <span className="sidebar-search-results__icon" aria-hidden="true">
+                            <MenuIcon name={result.icon} />
+                          </span>
+                          <span className="sidebar-search-results__copy">
+                            <strong>{result.title}</strong>
+                            <span>{result.detail}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {searchResults.accounts.length > 0 ? (
+                    <div className="sidebar-search-results__group">
+                      <div className="sidebar-search-results__label">Accounts</div>
+                      {searchResults.accounts.map((result) => (
+                        <button
+                          key={result.key}
+                          type="button"
+                          className="sidebar-search-results__item"
+                          onClick={() => navigateSearchResult(result.href)}
+                        >
+                          <span className="sidebar-search-results__icon" aria-hidden="true">
+                            <MenuIcon name={result.icon} />
+                          </span>
+                          <span className="sidebar-search-results__copy">
+                            <strong>{result.title}</strong>
+                            <span>{result.detail}</span>
+                          </span>
+                          {result.badge ? <span className="sidebar-search-results__badge">{result.badge}</span> : null}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {searchResults.ticker ? (
+                    <div className="sidebar-search-results__group">
+                      <div className="sidebar-search-results__label">Markets</div>
+                      <button
+                        type="button"
+                        className="sidebar-search-results__item"
+                        onClick={() => navigateSearchResult(searchResults.ticker!.href)}
+                      >
+                        <span className="sidebar-search-results__icon" aria-hidden="true">
+                          <MenuIcon name="investments" />
+                        </span>
+                        <span className="sidebar-search-results__copy">
+                          <strong>{searchResults.ticker.title}</strong>
+                          <span>{searchResults.ticker.detail}</span>
+                        </span>
+                        {searchResults.ticker.badge ? <span className="sidebar-search-results__badge">{searchResults.ticker.badge}</span> : null}
+                      </button>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <div className="sidebar-search-results__empty">
+                  No matches yet. Try an account, page, or ticker.
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
 
         <nav className="sidebar-nav" aria-label="Primary" id="primary-navigation">
           {navItems.map((item) => (
@@ -312,6 +825,7 @@ export function CloverShell({
 
         <div className="sidebar-footer">
           <button
+            ref={profileButtonRef}
             className={`sidebar-profile${profileImage ? " sidebar-profile--photo" : ""}${isProfileActive || isProfileMenuOpen ? " is-active" : ""}`}
             type="button"
             aria-label={`Open ${displayName} profile menu`}
@@ -337,6 +851,7 @@ export function CloverShell({
             <span className="sr-only">{displayName}</span>
           </button>
           <button
+            ref={notificationsButtonRef}
             className={`sidebar-icon-button ${isNotificationsActive ? "is-active" : ""}`}
             type="button"
             aria-label={`Open notifications${notificationCount ? ` (${notificationCount})` : ""}`}
@@ -348,7 +863,7 @@ export function CloverShell({
           </button>
 
           {isProfileMenuOpen ? (
-            <div className="sidebar-popover sidebar-popover--profile" role="menu" aria-label="Profile menu">
+            <div ref={profilePopoverRef} className="sidebar-popover sidebar-popover--profile" role="menu" aria-label="Profile menu">
               <div className="sidebar-popover__head">
                 <span className="sidebar-popover__title">{displayName}</span>
               </div>
@@ -380,7 +895,7 @@ export function CloverShell({
           ) : null}
 
           {isNotificationsActive ? (
-            <div className="sidebar-popover sidebar-popover--notifications" role="menu" aria-label="Notifications">
+            <div ref={notificationsPopoverRef} className="sidebar-popover sidebar-popover--notifications" role="menu" aria-label="Notifications">
               <div className="sidebar-popover__head">
                 <span className="sidebar-popover__title">Notifications</span>
                 <span className="sidebar-popover__subtitle">
