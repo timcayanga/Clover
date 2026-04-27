@@ -363,6 +363,37 @@ const guessStatementIdentity = (fileName: string) => {
   return null;
 };
 
+const resolveStatementIdentityFromMetadata = (metadata: unknown) => {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const source = metadata as Record<string, unknown>;
+  const accountName = typeof source.accountName === "string" && source.accountName.trim() ? source.accountName.trim() : null;
+  const institution = typeof source.institution === "string" && source.institution.trim() ? source.institution.trim() : null;
+
+  if (!accountName && !institution) {
+    return null;
+  }
+
+  const rawAccountType = typeof source.accountType === "string" ? source.accountType.trim() : "";
+  const accountType =
+    rawAccountType === "bank" ||
+    rawAccountType === "wallet" ||
+    rawAccountType === "credit_card" ||
+    rawAccountType === "cash" ||
+    rawAccountType === "investment" ||
+    rawAccountType === "other"
+      ? rawAccountType
+      : inferAccountTypeFromStatement(institution, accountName, "bank");
+
+  return {
+    accountName,
+    institution,
+    accountType,
+  };
+};
+
 const isSpecificOptimisticAccountName = (accountName?: string | null) => {
   if (!accountName) {
     return false;
@@ -1318,6 +1349,18 @@ export function ImportFilesModal({
       }
 
       const processPayload = await processResponse.json().catch(() => ({}));
+      const payloadIdentity = resolveStatementIdentityFromMetadata(processPayload?.metadata);
+      const statementIdentity =
+        payloadIdentity ??
+        (guessedIdentity
+          ? {
+              ...guessedIdentity,
+              accountType: inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank"),
+            }
+          : null);
+      const statementAccountType =
+        statementIdentity?.accountType ??
+        inferAccountTypeFromStatement(statementIdentity?.institution, statementIdentity?.accountName, "bank");
       if (processPayload?.duplicate) {
         const duplicateMessage = formatDuplicateImportMessage(item.file.name, guessedIdentity?.accountName ?? null);
         updateItem(itemId, {
@@ -1338,29 +1381,38 @@ export function ImportFilesModal({
         file_type: fileTypeLabel(item.file),
         file_size_bytes: item.file.size,
         transaction_count: Number(processPayload?.imported ?? 0) || undefined,
-        institution: guessedIdentity?.institution ?? null,
+        institution: statementIdentity?.institution ?? null,
       });
 
       if (processPayload?.queued) {
-        const optimisticAccountId = canUseOptimisticGuess ? item.optimisticAccountId ?? null : null;
+        const hasStatementIdentity = Boolean(statementIdentity?.accountName && statementIdentity?.institution);
+        const optimisticAccountId = hasStatementIdentity
+          ? await ensureTargetAccountId(
+              statementIdentity?.accountName ?? null,
+              statementIdentity?.institution ?? null,
+              statementAccountType
+            )
+          : canUseOptimisticGuess
+            ? item.optimisticAccountId ?? null
+            : null;
         const previewTransactions =
-          optimisticAccountId && guessedIdentity?.accountName
+          optimisticAccountId && statementIdentity?.accountName
             ? await loadOptimisticPreviewTransactions(
                 importFileId,
                 optimisticAccountId,
-                guessedIdentity.accountName,
-                guessedIdentity?.institution ?? null
+                statementIdentity.accountName,
+                statementIdentity?.institution ?? null
               )
             : [];
-        const optimisticSummary = canUseOptimisticGuess
+        const optimisticSummary = hasStatementIdentity
           ? buildOptimisticUploadSummary(
               item.file.name,
               0,
               optimisticAccountId,
-              guessedIdentity?.accountName ?? null,
-              guessedIdentity?.institution ?? null,
-              inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank"),
-              item.optimisticAccountId,
+              statementIdentity?.accountName ?? null,
+              statementIdentity?.institution ?? null,
+              statementAccountType,
+              optimisticAccountId,
               null,
               previewTransactions
             )
@@ -1370,7 +1422,7 @@ export function ImportFilesModal({
           targetAccountId: optimisticAccountId,
           confirmationState: "staged",
           progress: 92,
-          progressLabel: canUseOptimisticGuess ? "Queued for background processing" : "Waiting for account details",
+          progressLabel: hasStatementIdentity || canUseOptimisticGuess ? "Queued for background processing" : "Waiting for account details",
           status: "importing",
         });
         if (optimisticSummary) {
@@ -1381,12 +1433,10 @@ export function ImportFilesModal({
         void monitorQueuedImportAndConfirm(itemId, importFileId, optimisticAccountId, {
           fileName: item.file.name,
           fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
-          accountName: canUseOptimisticGuess ? guessedIdentity?.accountName ?? null : null,
-          institution: canUseOptimisticGuess ? guessedIdentity?.institution ?? null : null,
-          accountType: canUseOptimisticGuess
-            ? inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank")
-            : null,
-          optimisticAccountId: canUseOptimisticGuess ? item.optimisticAccountId : null,
+          accountName: statementIdentity?.accountName ?? null,
+          institution: statementIdentity?.institution ?? null,
+          accountType: statementIdentity?.accountType ?? null,
+          optimisticAccountId: hasStatementIdentity ? optimisticAccountId : canUseOptimisticGuess ? item.optimisticAccountId : null,
           password: item.password.trim() || undefined,
           previewTransactions,
         });
@@ -1398,34 +1448,34 @@ export function ImportFilesModal({
         };
       }
 
-      const targetAccountId: string | null = guessedIdentity && canUseOptimisticGuess
+      const targetAccountId: string | null = statementIdentity
         ? await ensureTargetAccountId(
-            guessedIdentity.accountName ?? null,
-            guessedIdentity.institution ?? null,
-            inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank")
+            statementIdentity.accountName ?? null,
+            statementIdentity.institution ?? null,
+            statementAccountType
           )
         : null;
 
       const previewTransactions =
-        canUseOptimisticGuess && targetAccountId && guessedIdentity?.accountName
+        targetAccountId && statementIdentity?.accountName
           ? await loadOptimisticPreviewTransactions(
               importFileId,
               targetAccountId,
-              guessedIdentity.accountName,
-              guessedIdentity?.institution ?? null
+              statementIdentity.accountName,
+              statementIdentity?.institution ?? null
             )
           : [];
       const optimisticPreviewSummary =
-        canUseOptimisticGuess && targetAccountId
+        targetAccountId
           ? ({
               ...buildOptimisticUploadSummary(
                 item.file.name,
                 Number(processPayload?.imported ?? 0) || 0,
                 targetAccountId,
-                guessedIdentity?.accountName ?? null,
-                guessedIdentity?.institution ?? null,
-                inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank"),
-                item.optimisticAccountId,
+                statementIdentity?.accountName ?? null,
+                statementIdentity?.institution ?? null,
+                statementAccountType,
+                targetAccountId,
                 null,
                 previewTransactions
               ),
@@ -1438,7 +1488,7 @@ export function ImportFilesModal({
         targetAccountId,
         confirmationState: "staged",
         progress: 92,
-        progressLabel: canUseOptimisticGuess ? "Finalizing in background" : "Waiting for account details",
+        progressLabel: targetAccountId ? "Finalizing in background" : "Waiting for account details",
       });
 
       if (optimisticPreviewSummary) {
@@ -1446,13 +1496,13 @@ export function ImportFilesModal({
         void onImported(optimisticPreviewSummary);
       }
 
-      if (canUseOptimisticGuess) {
+      if (targetAccountId) {
         void confirmItemImport(itemId, importFileId, targetAccountId, {
           fileName: item.file.name,
-          accountName: guessedIdentity?.accountName ?? null,
-          institution: guessedIdentity?.institution ?? null,
-          accountType: inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank"),
-          optimisticAccountId: item.optimisticAccountId,
+          accountName: statementIdentity?.accountName ?? null,
+          institution: statementIdentity?.institution ?? null,
+          accountType: statementIdentity?.accountType ?? statementAccountType,
+          optimisticAccountId: targetAccountId,
           previewTransactions,
         }).then((result) => {
           if (result.summary) {
@@ -1464,9 +1514,9 @@ export function ImportFilesModal({
         void monitorQueuedImportAndConfirm(itemId, importFileId, null, {
           fileName: item.file.name,
           fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
-          accountName: null,
-          institution: null,
-          accountType: null,
+          accountName: statementIdentity?.accountName ?? null,
+          institution: statementIdentity?.institution ?? null,
+          accountType: statementIdentity?.accountType ?? null,
           optimisticAccountId: null,
           password: item.password.trim() || undefined,
         });
