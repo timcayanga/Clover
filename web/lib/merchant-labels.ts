@@ -1388,9 +1388,31 @@ export const simplifyMerchantText = (value: string, institution?: string | null)
 export const summarizeMerchantText = (value: string, institution?: string | null) => {
   const simplified = simplifyMerchantText(value, institution);
   const compact = simplified.replace(/[^a-z0-9]+/gi, "").toLowerCase();
+  const rawLower = normalizeWhitespace(value).toLowerCase();
 
   if (!simplified) {
     return simplified;
+  }
+
+  if (institution === "Metrobank") {
+    if (/interbank\s+fund\s+transfer\s+credit\s+received\s+from\s+other\s+bank/i.test(rawLower)) {
+      return "Incoming Interbank Transfer";
+    }
+    if (/interbank\s+fund\s+transfer\s+debit\s+send\s+to\s+other\s+bank/i.test(rawLower)) {
+      return "Outgoing Interbank Transfer";
+    }
+    if (/interbank\s+service\s+charge/i.test(rawLower)) {
+      return "Interbank Service Charge";
+    }
+    if (/cash\/?check\s+deposit/i.test(rawLower)) {
+      return "Cash/Check Deposit";
+    }
+    if (/bills?\s+payment\s+to\s+metrobank\s+credit\s+card/i.test(rawLower)) {
+      return "Metrobank Credit Card Payment";
+    }
+    if (/bills?\s+payment\s+to\s+bankard\/rcbc/i.test(rawLower)) {
+      return "Bankard/RCBC Credit Card Payment";
+    }
   }
 
   if (compact.includes("fundtransfer")) {

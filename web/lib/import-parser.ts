@@ -438,8 +438,11 @@ const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null =
   const normalized = text.replace(/\u00a0/g, " ");
   const compact = normalizeWhitespace(normalized);
   const isSavingsStatement = /(ACCOUNT\s+TYPE\s*CAV0?1|TOTAL\s+CREDITS|TOTAL\s+DEBITS|BALANCE\s+LAST\s+STATEMENT|BALANCE\s+THIS\s+STATEMENT)/i.test(compact);
-  const isCreditCardStatement = /\bRCBC\b|\bRCBC BANKARD\b|\bBANKARD\b/i.test(compact);
-  if (!/\bRCBC\b|\bRCBC BANKARD\b|\bBANKARD\b/i.test(compact)) {
+  const hasRcbcBrand = /\bRCBC\b|\bRCBC BANKARD\b|\bBANKARD\b/i.test(compact);
+  const hasCreditCardShell =
+    /PREVIOUS\s+BALANCE|TOTAL\s+BALANCE\s+DUE|CARDHOLDER\s+PAYMENT\s+DUE\s+DATE|PAYMENT\s+DUE\s+DATE|MINIMUM\s+AMOUNT\s+DUE|CREDIT\s+LIMIT|CURRENT\s+BALANCE|NEW\s+BALANCE|STATEMENT\s+DATE\s+PAYMENT\s+DUE\s+DATE/i.test(compact);
+  const isCreditCardStatement = hasRcbcBrand && hasCreditCardShell;
+  if (!hasRcbcBrand) {
     return null;
   }
   if (!isSavingsStatement && !isCreditCardStatement) {
@@ -1853,7 +1856,7 @@ const parseBdoDate = (
 const bdoStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = normalizeBdoText(text);
   const compact = normalizeWhitespace(normalized);
-  if (!/\bBDO\b|\bBANCO\s+DE\s+ORO\b/i.test(compact) && !/ACCOUNT\s+(?:NBR|NO\.?|NUMBER|SUMMARY)/i.test(compact)) {
+  if (!/\bBDO\b|\bBANCO\s+DE\s+ORO\b/i.test(compact)) {
     return null;
   }
 
@@ -2192,7 +2195,7 @@ const parseBdoSavingsImportText = (text: string) => {
 const metrobankSavingsStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
   const compact = normalized.replace(/\s+/g, " ");
-  if (!/\b(METROBANK|METROPOLITAN BANK)\b/i.test(compact) || !/ACCOUNT\s+TYPE\s*:\s*SAVINGS/i.test(compact)) {
+  if (!/\b(METROBANK|METROPOLITAN BANK)\b/i.test(compact) || !/ACCOUNT\s+TYPE\s*:\s*(?:SAVINGS|RETAIL)/i.test(compact)) {
     return null;
   }
 
@@ -2250,6 +2253,7 @@ const isMetrobankSavingsBoilerplateLine = (line: string) => {
   const compact = normalizeWhitespace(line);
   return (
     /^STATEMENT\s+OF\s+ACCOUNT$/i.test(compact) ||
+    /^DATES?\s+COVERED\s*:/i.test(compact) ||
     /^PAGE\s+\d+\s+of\s+\d+$/i.test(compact) ||
     /^ACCOUNT\s+NAME\s*:/i.test(compact) ||
     /^ACCOUNT\s+NUMBER\s*:/i.test(compact) ||
@@ -2281,6 +2285,9 @@ const isMetrobankSavingsBoilerplateLine = (line: string) => {
 const guessMetrobankSavingsCategoryName = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
   if (/svchg|fee|charge|tax/.test(lower)) return "Financial";
+  if (/bills?\s+payment|card payment|payment to metrobank credit card|payment to bdo credit card|payment to bankard\/rcbc/i.test(lower)) {
+    return "Transfers";
+  }
   if (/cr ibft|wa cr|cash deposit|deposit|received|credit/.test(lower)) return "Transfers";
   if (/db ibft|wa db|wdl|withdrawal|debit/.test(lower)) return "Transfers";
   return guessCategoryName(description, type);
@@ -2311,6 +2318,8 @@ const parseMetrobankSavingsTransactionLine = (
   let type: TransactionType = "expense";
   if (/svchg|fee|charge|tax/.test(descriptionLower)) {
     type = "expense";
+  } else if (/bills?\s+payment|card payment|payment to metrobank credit card|payment to bdo credit card|payment to bankard\/rcbc/i.test(descriptionLower)) {
+    type = "transfer";
   } else if (/cr ibft|wa cr|cash deposit|deposit|received|credit/.test(descriptionLower)) {
     type = "income";
   } else if (/db ibft|wa db|wdl|withdrawal|debit/.test(descriptionLower)) {
@@ -2347,7 +2356,7 @@ const parseMetrobankSavingsImportText = (text: string) => {
   }
 
   const lines = normalizedText.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
-  const headerIndex = lines.findIndex((line) => /DATE\s+DESCRIPTION\s+DEBIT\s+CREDIT\s+BALANCE/i.test(line));
+  const headerIndex = lines.findIndex((line) => /DATE\s+DESCRIPTION\s+(?:CHECK\s+)?DEBIT\s+CREDIT\s+BALANCE/i.test(line));
   if (headerIndex < 0) {
     return null;
   }

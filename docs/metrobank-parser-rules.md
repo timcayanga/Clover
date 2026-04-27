@@ -12,8 +12,9 @@ This document captures the Metrobank parsing rules learned from the synthetic tr
 ## Savings Statement Rules
 
 - Use running balance as a first-class field.
-- Treat Metrobank savings statements with `DATE DESCRIPTION DEBIT CREDIT BALANCE` as the canonical savings shape.
-- Prefer the Metrobank savings detector over generic RCBC savings logic when the statement has Metrobank branding and account-type savings metadata.
+- Treat Metrobank savings statements with `DATE DESCRIPTION DEBIT CREDIT BALANCE` or `DATE DESCRIPTION CHECK DEBIT CREDIT BALANCE` as the canonical savings shape.
+- Prefer the Metrobank savings detector over generic RCBC savings logic when the statement has Metrobank branding and account-type savings or retail metadata.
+- Do not let `BANKARD/RCBC` text inside a Metrobank transfer description override the Metrobank detector.
 - Keep salary credits as `Income`.
 - Keep `Fund Transfer` rows as `Transfers`.
 - Keep `InstaPay Fee` as `Financial`.
