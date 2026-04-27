@@ -1006,7 +1006,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       rawPayload: (row.rawPayload ?? {}) as Prisma.InputJsonValue,
       normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
       learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
-      date: row.date instanceof Date ? row.date : row.date ? new Date(String(row.date)) : new Date(),
+      date:
+        (row.date instanceof Date && !Number.isNaN(row.date.getTime())
+          ? row.date
+          : parseDateValue(typeof row.date === "string" ? row.date : null)) ?? new Date(),
       amount: parseAmountValue(coerceAmountToString(row.amount)) ?? 0,
       currency: "PHP",
       type: (rowType ?? "expense") as TransactionType,

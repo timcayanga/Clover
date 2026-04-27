@@ -2185,6 +2185,176 @@ const parseBdoSavingsImportText = (text: string) => {
   };
 };
 
+const metrobankCreditCardStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+  const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  if (!/\b(METROBANK|METROPOLITAN BANK)\b/i.test(normalized) || !/(TOTAL\s+AMOUNT\s+DUE|PAYMENT\s+DUE\s+DATE|CREDIT\s+CARD\s+ACCOUNT\s+NUMBER)/i.test(normalized)) {
+    return null;
+  }
+
+  const lines = normalized
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+
+  const accountLine =
+    lines.find((line) => /CREDIT\s+CARD\s+ACCOUNT\s+NUMBER/i.test(line)) ??
+    lines.find((line) => /ACCOUNT\s+NUMBER/i.test(line)) ??
+    normalized;
+  const accountNumber =
+    accountLine.match(/(?:CREDIT\s+CARD\s+ACCOUNT\s+NUMBER|ACCOUNT\s+NUMBER)\s*[:\-]?\s*([0-9\s-]{8,})/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+    detectAccountNumberFromText(normalized);
+  const accountName = formatSimpleBankAccountName("Metrobank", accountNumber);
+
+  const paymentDueDate =
+    parseDateValue(normalized.match(/PAYMENT\s+DUE\s+DATE\s*:\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i)?.[1] ?? null) ??
+    parseDateValue(normalized.match(/PAYMENT\s+DUE\s+DATE\s*:\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})/i)?.[1] ?? null) ??
+    parseDateValue(normalized.match(/PAYMENT\s+DUE\s+DATE\s*[:\-]?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i)?.[1] ?? null) ??
+    parseDateValue(normalized.match(/PAYMENT\s+DUE\s+DATE\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})/i)?.[1] ?? null);
+  const totalAmountDue =
+    parseMoney(normalized.match(/TOTAL\s+AMOUNT\s+DUE\s*:\s*(?:PHP\s*)?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(normalized.match(/TOTAL\s+AMOUNT\s+DUE\s*[:\-]?\s*(?:PHP\s*)?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(normalized.match(/AMOUNT\s+DUE\s*[:\-]?\s*(?:PHP\s*)?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+  const previousBalance =
+    parseMoney(normalized.match(/PREVIOUS\s+BALANCE\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(normalized.match(/PREVIOUS\s+STATEMENT\s+BALANCE.*?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+
+  return {
+    institution: "Metrobank",
+    accountNumber,
+    accountName,
+    accountType: "credit_card",
+    openingBalance: previousBalance,
+    endingBalance: totalAmountDue,
+    paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
+    totalAmountDue,
+    startDate: paymentDueDate ? new Date(Date.UTC(paymentDueDate.getUTCFullYear() - 1, paymentDueDate.getUTCMonth(), 1, 12)).toISOString() : null,
+    endDate: paymentDueDate ? paymentDueDate.toISOString() : null,
+    confidence: accountNumber && paymentDueDate && totalAmountDue !== null ? 95 : 86,
+  };
+};
+
+const guessMetrobankCreditCategoryName = (description: string, type: TransactionType) => {
+  const lower = description.toLowerCase();
+  if (/cash payment|payment\s*-\s*thank\s+you|card payment/.test(lower) || type === "transfer") return "Transfers";
+  if (/mercury\s+drug|pharmacy|medical|hospital|clinic|doctor/.test(lower)) return "Health & Wellness";
+  if (/puregold|robinsons\s+spmkt|supermarket|grocery|market/.test(lower)) return "Food & Dining";
+  if (/ateneo|school|college|university|education|tuition|course/.test(lower)) return "Education";
+  if (/rae\s+auto|auto\s+electrical|car repair|automotive|mechanic|motor/.test(lower)) return "Transport";
+  if (/office\s*365|google\s+one|subscription|software|saas|cloud/.test(lower)) return "Business";
+  return guessCategoryName(description, type);
+};
+
+const parseMetrobankCreditCardTransactionLine = (
+  line: string,
+  state: {
+    year: number;
+    accountName: string;
+    institution: string | null;
+    paymentDueDate: string | null;
+    totalAmountDue: number | null;
+  }
+) => {
+  const normalized = normalizeWhitespace(line);
+  const match = normalized.match(/(?:^|\s)(\d{1,2}\/\d{1,2})\s+(\d{1,2}\/\d{1,2})\s+(.+?)\s+([0-9][0-9,]*\.\d{2})(C?)\b/i);
+
+  if (!match) {
+    return null;
+  }
+
+  const saleDateToken = match[1];
+  const postDateToken = match[2];
+  const description = normalizeWhitespace(match[3]);
+  const amount = parseMoney(match[4]);
+  if (amount === null || !description) {
+    return null;
+  }
+
+  const [saleMonth, saleDay] = saleDateToken.split("/").map(Number);
+  const [postMonth, postDay] = postDateToken.split("/").map(Number);
+  const year = Number.isFinite(state.year) ? state.year : new Date().getUTCFullYear();
+  const saleDate = new Date(Date.UTC(year, saleMonth - 1, saleDay, 12));
+  const postDate = new Date(Date.UTC(year, postMonth - 1, postDay, 12));
+  const descriptionLower = description.toLowerCase();
+  let type: TransactionType = "expense";
+
+  if (/cash payment|payment\s*-\s*thank\s+you|card payment/.test(descriptionLower)) {
+    type = "transfer";
+  } else if (/refund|reversal|credit memo|cashback|cash back/.test(descriptionLower)) {
+    type = "income";
+  } else if (/finance\s+charge|late\s+payment\s+fee|annual\s+fee|service\s+fee|interest/.test(descriptionLower)) {
+    type = "expense";
+  }
+
+  return {
+    date: postDate.toISOString().slice(0, 10),
+    amount: Math.abs(amount).toFixed(2),
+    merchantRaw: humanizeMerchantText(description),
+    merchantClean: summarizeMerchantText(description, state.institution),
+    description,
+    categoryName: guessMetrobankCreditCategoryName(description, type),
+    accountName: state.accountName,
+    institution: state.institution ?? undefined,
+    type,
+    rawPayload: {
+      bank: "Metrobank",
+      kind: "credit_card_transaction",
+      accountName: state.accountName,
+      paymentDueDate: state.paymentDueDate,
+      totalAmountDue: state.totalAmountDue,
+      saleDate: saleDate.toISOString().slice(0, 10),
+      postDate: postDate.toISOString().slice(0, 10),
+      amountText: match[4],
+      line: normalized,
+      notes: /cash payment|payment\s*-\s*thank\s+you|card payment/i.test(descriptionLower) ? "Statement payment credit" : null,
+    },
+  } satisfies ParsedImportRow;
+};
+
+const parseMetrobankCreditCardImportText = (text: string) => {
+  const metadata = metrobankCreditCardStatementMetadata(text);
+  if (!metadata) {
+    return null;
+  }
+
+  const dueDate = metadata.paymentDueDate ? new Date(metadata.paymentDueDate) : null;
+  const statementYear = dueDate ? (dueDate.getUTCMonth() <= 1 ? dueDate.getUTCFullYear() - 1 : dueDate.getUTCFullYear()) : new Date().getUTCFullYear();
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+
+  const rows: ParsedImportRow[] = [];
+  for (const line of lines) {
+    if (/\d{1,2}\/\d{1,2}\s+\d{1,2}\/\d{1,2}\s+.+?\s+[0-9][0-9,]*\.\d{2}/.test(line)) {
+      const parsed = parseMetrobankCreditCardTransactionLine(line, {
+        year: statementYear,
+        accountName: metadata.accountName ?? formatSimpleBankAccountName("Metrobank", metadata.accountNumber),
+        institution: metadata.institution ?? "Metrobank",
+        paymentDueDate: metadata.paymentDueDate ?? null,
+        totalAmountDue: metadata.totalAmountDue ?? null,
+      });
+      if (parsed) {
+        rows.push(parsed);
+      }
+    }
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const endingBalance = metadata.totalAmountDue ?? getTrailingBalanceFromParsedRows(rows);
+
+  return {
+    metadata: {
+      ...metadata,
+      endingBalance,
+    },
+    rows,
+  };
+};
+
 const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = text.replace(/\u00a0/g, " ");
   const compact = normalizeWhitespace(normalized);
@@ -3450,6 +3620,11 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     return bdoParsed.metadata;
   }
 
+  const metrobankParsed = parseMetrobankCreditCardImportText(text);
+  if (metrobankParsed) {
+    return metrobankParsed.metadata;
+  }
+
   const normalized = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
   const institution = detectInstitutionFromText(normalized);
   const accountNumber = detectAccountNumberFromText(normalized);
@@ -3660,6 +3835,11 @@ export const parseImportText = (
   const bdoParsed = parseBdoSavingsImportText(text);
   if (bdoParsed) {
     return bdoParsed.rows;
+  }
+
+  const metrobankParsed = parseMetrobankCreditCardImportText(text);
+  if (metrobankParsed) {
+    return metrobankParsed.rows;
   }
 
   const unionbankParsed = parseUnionBankImportText(text);

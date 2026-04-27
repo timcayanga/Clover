@@ -554,6 +554,26 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
   ],
   Metrobank: [
     {
+      patterns: [/mercury\s+drug/i],
+      replacement: "Mercury Drug",
+    },
+    {
+      patterns: [/puregold/i],
+      replacement: "Puregold",
+    },
+    {
+      patterns: [/ateneo\s+de\s+manila/i],
+      replacement: "Ateneo de Manila",
+    },
+    {
+      patterns: [/rae\s+auto\s+electrical/i],
+      replacement: "RAE Auto Electrical",
+    },
+    {
+      patterns: [/qps\s+robinsons\s+spmkt/i, /robinsons\s+spmkt/i],
+      replacement: "Robinsons Supermarket",
+    },
+    {
       patterns: [/interbank\s+fund\s+transfer/i],
       replacement: "Interbank Fund Transfer",
     },
