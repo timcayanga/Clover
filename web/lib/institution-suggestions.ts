@@ -8,6 +8,7 @@ export type InstitutionSuggestion = {
   description: string;
   aliases: string[];
   popularity: number;
+  supportsInvestments?: boolean;
 };
 
 export type InstitutionSuggestionGroup = {
@@ -32,6 +33,7 @@ const BANK_SUGGESTIONS: InstitutionSuggestion[] = [
     description: "Bank of the Philippine Islands",
     aliases: withAliases(["bank of the philippine islands", "bpi savings", "bpi bank"]),
     popularity: 100,
+    supportsInvestments: true,
   },
   {
     label: "BDO",
@@ -39,6 +41,7 @@ const BANK_SUGGESTIONS: InstitutionSuggestion[] = [
     description: "Banco de Oro",
     aliases: withAliases(["banco de oro", "bdo savings", "bdo bank"]),
     popularity: 99,
+    supportsInvestments: true,
   },
   {
     label: "Metrobank",
@@ -46,6 +49,7 @@ const BANK_SUGGESTIONS: InstitutionSuggestion[] = [
     description: "Metropolitan Bank & Trust Company",
     aliases: withAliases(["metropolitan bank", "metro bank"]),
     popularity: 96,
+    supportsInvestments: true,
   },
   {
     label: "UnionBank",
@@ -53,6 +57,7 @@ const BANK_SUGGESTIONS: InstitutionSuggestion[] = [
     description: "Union Bank of the Philippines",
     aliases: withAliases(["union bank", "unionbank of the philippines"]),
     popularity: 95,
+    supportsInvestments: true,
   },
   {
     label: "Security Bank",
@@ -60,6 +65,7 @@ const BANK_SUGGESTIONS: InstitutionSuggestion[] = [
     description: "Security Bank Corporation",
     aliases: withAliases(["securitybank"]),
     popularity: 94,
+    supportsInvestments: true,
   },
   {
     label: "RCBC",
@@ -67,6 +73,7 @@ const BANK_SUGGESTIONS: InstitutionSuggestion[] = [
     description: "Rizal Commercial Banking Corporation",
     aliases: withAliases(["rizal commercial banking corporation"]),
     popularity: 93,
+    supportsInvestments: true,
   },
   {
     label: "EastWest",
@@ -74,6 +81,7 @@ const BANK_SUGGESTIONS: InstitutionSuggestion[] = [
     description: "East West Banking Corporation",
     aliases: withAliases(["east west", "eastwest bank"]),
     popularity: 92,
+    supportsInvestments: true,
   },
   {
     label: "Chinabank",
@@ -81,6 +89,7 @@ const BANK_SUGGESTIONS: InstitutionSuggestion[] = [
     description: "China Banking Corporation",
     aliases: withAliases(["china bank", "china banking corporation", "chinese bank"]),
     popularity: 91,
+    supportsInvestments: true,
   },
   {
     label: "AUB",
@@ -88,6 +97,7 @@ const BANK_SUGGESTIONS: InstitutionSuggestion[] = [
     description: "Asia United Bank",
     aliases: withAliases(["asia united bank"]),
     popularity: 88,
+    supportsInvestments: true,
   },
   {
     label: "PNB",
@@ -95,6 +105,7 @@ const BANK_SUGGESTIONS: InstitutionSuggestion[] = [
     description: "Philippine National Bank",
     aliases: withAliases(["philippine national bank"]),
     popularity: 87,
+    supportsInvestments: true,
   },
   {
     label: "LandBank",
@@ -102,6 +113,7 @@ const BANK_SUGGESTIONS: InstitutionSuggestion[] = [
     description: "Land Bank of the Philippines",
     aliases: withAliases(["land bank", "landbank of the philippines"]),
     popularity: 86,
+    supportsInvestments: true,
   },
   {
     label: "CIMB",
@@ -116,6 +128,7 @@ const BANK_SUGGESTIONS: InstitutionSuggestion[] = [
     description: "Bank of Commerce",
     aliases: withAliases(["bankcom", "bank of com", "bank of commerce philippines"]),
     popularity: 84,
+    supportsInvestments: true,
   },
 ];
 
@@ -263,6 +276,7 @@ const PLATFORM_SUGGESTIONS: InstitutionSuggestion[] = [
 ];
 
 const ALL_SUGGESTIONS = [...BANK_SUGGESTIONS, ...PLATFORM_SUGGESTIONS];
+const INVESTMENT_BANK_SUGGESTIONS = BANK_SUGGESTIONS.filter((suggestion) => suggestion.supportsInvestments);
 
 const matchesQuery = (suggestion: InstitutionSuggestion, query: string) => {
   if (!query) {
@@ -275,7 +289,7 @@ const matchesQuery = (suggestion: InstitutionSuggestion, query: string) => {
 
 const scoreSuggestion = (suggestion: InstitutionSuggestion, query: string) => {
   if (!query) {
-    return suggestion.popularity;
+    return suggestion.popularity + (suggestion.supportsInvestments ? 40 : 0);
   }
 
   const normalizedLabel = normalize(suggestion.label);
@@ -294,10 +308,10 @@ const scoreSuggestion = (suggestion: InstitutionSuggestion, query: string) => {
   }
 
   if (haystack.includes(` ${query}`) || haystack.includes(query)) {
-    return suggestion.popularity + 400;
+    return suggestion.popularity + 400 + (suggestion.supportsInvestments ? 60 : 0);
   }
 
-  return suggestion.popularity;
+  return suggestion.popularity + (suggestion.supportsInvestments ? 60 : 0);
 };
 
 const sortSuggestions = (suggestions: InstitutionSuggestion[], query: string) =>
@@ -325,11 +339,15 @@ const accountEmptyGroups = (): InstitutionSuggestionGroup[] => [
 
 const investmentEmptyGroups = (): InstitutionSuggestionGroup[] => [
   {
-    title: "Popular platforms",
+    title: "Bank investment providers",
+    items: INVESTMENT_BANK_SUGGESTIONS.slice(0, 8),
+  },
+  {
+    title: "Popular investment platforms",
     items: PLATFORM_SUGGESTIONS.slice(0, 8),
   },
   {
-    title: "Popular banks",
+    title: "Other banks",
     items: BANK_SUGGESTIONS.slice(0, 8),
   },
 ];

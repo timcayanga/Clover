@@ -18,7 +18,7 @@ type InstitutionAutocompleteProps = {
 
 const getSuggestionBadge = (suggestion: InstitutionSuggestion) => {
   if (suggestion.category === "bank") {
-    return "Bank";
+    return suggestion.supportsInvestments ? "Bank + invest" : "Bank";
   }
 
   if (suggestion.category === "wallet") {
