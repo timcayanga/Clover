@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
 import { getAccountBrand } from "@/lib/account-brand";
 import {
@@ -982,14 +983,14 @@ export default function InvestmentsPage() {
                   Name
                   <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: COL UITF Growth Fund" />
                 </label>
-                <label>
-                  Institution
-                  <input
-                    value={manualInstitution}
-                    onChange={(event) => setManualInstitution(event.target.value)}
-                    placeholder="Example: COL Financial"
-                  />
-                </label>
+                <InstitutionAutocomplete
+                  label="Institution"
+                  value={manualInstitution}
+                  onChange={setManualInstitution}
+                  placeholder="Example: COL Financial"
+                  variant="investment"
+                  helperText="Choose the broker, bank, wallet, or platform behind this investment."
+                />
                 <label>
                   Investment subtype
                   <select value={manualInvestmentSubtype} onChange={(event) => setManualInvestmentSubtype(event.target.value as InvestmentSubtype)}>

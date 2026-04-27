@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
@@ -2211,14 +2212,14 @@ function AccountsPageContent() {
                   Name
                   <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: BDO Savings" />
                 </label>
-                <label>
-                  Institution
-                  <input
-                    value={manualInstitution}
-                    onChange={(event) => setManualInstitution(event.target.value)}
-                    placeholder={manualType === "investment" ? "Example: COL Financial" : "Example: BDO"}
-                  />
-                </label>
+                <InstitutionAutocomplete
+                  label="Institution"
+                  value={manualInstitution}
+                  onChange={setManualInstitution}
+                  placeholder={manualType === "investment" ? "Example: COL Financial" : "Example: BDO"}
+                  variant={manualType === "investment" ? "investment" : "account"}
+                  helperText="Pick the institution that best matches the logo or platform users will recognize."
+                />
                 <label>
                   Type
                   <select value={manualType} onChange={(event) => setManualType(event.target.value as Account["type"])}>
