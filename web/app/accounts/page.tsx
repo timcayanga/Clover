@@ -1603,23 +1603,19 @@ function AccountsPageContent() {
           <section className="accounts-overview-grid">
             <article className="accounts-overview-card glass">
               <p className="eyebrow">Net worth</p>
-              <strong>{currencyFormatter.format(totals.netWorth)}</strong>
-              <span>Assets minus liabilities across the workspace</span>
+              <strong className="accounts-overview-card__amount is-neutral">{currencyFormatter.format(totals.netWorth)}</strong>
             </article>
             <article className="accounts-overview-card glass">
               <p className="eyebrow">Spendable</p>
-              <strong>{currencyFormatter.format(spendableAmount)}</strong>
-              <span>Cash, wallets, and bank balances you can use now</span>
+              <strong className="accounts-overview-card__amount is-good">{currencyFormatter.format(spendableAmount)}</strong>
             </article>
             <article className="accounts-overview-card glass">
               <p className="eyebrow">Assets</p>
-              <strong>{currencyFormatter.format(totals.assets)}</strong>
-              <span>Cash, savings, and invested balances</span>
+              <strong className="accounts-overview-card__amount is-good">{currencyFormatter.format(totals.assets)}</strong>
             </article>
             <article className="accounts-overview-card glass">
               <p className="eyebrow">Liabilities</p>
-              <strong>{currencyFormatter.format(totals.liabilities)}</strong>
-              <span>Credit cards and other negative balances</span>
+              <strong className="accounts-overview-card__amount is-danger">{currencyFormatter.format(totals.liabilities)}</strong>
             </article>
           </section>
         </div>
@@ -1711,10 +1707,13 @@ function AccountsPageContent() {
                                   <AccountBrandMark accountBrand={accountBrand} label={account.name} />
                                   <div>
                                     <strong>{account.name}</strong>
+                                    <span>
+                                      {accountBrand.label}
+                                      {account.institution && account.institution !== accountBrand.label ? ` · ${account.institution}` : ""}
+                                    </span>
                                   </div>
                                 </div>
                                 <div className="accounts-account-card__actions">
-                                  {isDeleting ? <span className="accounts-account-card__state is-deleting">Deleting</span> : null}
                                   {warning ? (
                                     <span className="accounts-warning-wrap">
                                       <button
@@ -1749,8 +1748,19 @@ function AccountsPageContent() {
                               </div>
 
                               <div className="accounts-account-card__body">
-                                <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
-                                  {currencyFormatter.format(balanceValue)}
+                                <div className="accounts-account-card__balance-row">
+                                  <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
+                                    {currencyFormatter.format(balanceValue)}
+                                  </div>
+                                  <div className="accounts-account-card__balance-meta">
+                                    {isDeleting ? (
+                                      <span className="accounts-account-card__balance-pill is-neutral">Deleting</span>
+                                    ) : (
+                                      <span className={`accounts-account-card__balance-pill is-${isLiability ? "danger" : "good"}`}>
+                                        {isLiability ? "Outstanding" : "Spendable"}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             </article>

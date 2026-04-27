@@ -10091,12 +10091,15 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-overview-card {
   display: grid;
-  gap: 3px;
-  padding: 10px 12px 11px;
+  place-items: center;
+  gap: 6px;
+  min-height: 120px;
+  padding: 14px 12px;
   border-radius: 18px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow-soft);
+  text-align: center;
 }
 
 .accounts-overview-card .eyebrow {
@@ -10104,11 +10107,23 @@ input.transaction-inline-edit--amount::placeholder {
   letter-spacing: 0.16em;
 }
 
-.accounts-overview-card strong {
-  font-size: 18px;
+.accounts-overview-card__amount {
+  font-size: 1.55rem;
   font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1.1;
+}
+
+.accounts-overview-card__amount.is-good {
+  color: var(--good);
+}
+
+.accounts-overview-card__amount.is-danger {
+  color: var(--bad);
+}
+
+.accounts-overview-card__amount.is-neutral {
+  color: var(--ink);
 }
 
 .accounts-list-controls {
@@ -10407,37 +10422,14 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-account-card__body {
   display: grid;
-  place-items: center;
-  min-height: 48px;
-}
-
-.accounts-account-card__state {
-  display: inline-flex;
-  align-items: center;
-  min-height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.26);
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--muted);
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.accounts-account-card__state.is-deleting {
-  border-color: rgba(245, 158, 11, 0.24);
-  background: rgba(245, 158, 11, 0.12);
-  color: #92400e;
+  gap: 5px;
 }
 
 .accounts-account-card__amount {
-  font-size: 1.24rem;
+  font-size: 1.1rem;
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 1;
-  text-align: center;
 }
 
 .accounts-account-card__amount.is-asset {
@@ -10454,6 +10446,39 @@ input.transaction-inline-edit--amount::placeholder {
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
+}
+
+.accounts-account-card__balance-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: none;
+}
+
+.accounts-account-card__balance-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--muted);
+}
+
+.accounts-account-card__balance-pill.is-good {
+  color: #166534;
+  background: rgba(22, 163, 74, 0.08);
+  border-color: rgba(22, 163, 74, 0.18);
+}
+
+.accounts-account-card__balance-pill.is-danger {
+  color: var(--bad);
+  background: rgba(198, 79, 110, 0.08);
+  border-color: rgba(198, 79, 110, 0.18);
 }
 
 .accounts-brand-mark {
