@@ -19,7 +19,6 @@ import {
 } from "@/lib/workspace-cache";
 import {
   getInvestmentFieldConfigs,
-  getInvestmentSubtypeDescription,
   getInvestmentSubtypeLabel,
   type InvestmentSubtype,
   isFixedIncomeInvestmentSubtype,
@@ -213,19 +212,6 @@ const getCategoryIconTone = (categoryName: string | null | undefined) => {
     default:
       return { backgroundColor: "rgba(148, 163, 184, 0.14)", borderColor: "rgba(148, 163, 184, 0.24)" };
   }
-};
-
-const getBalanceContext = (accountType: string) => {
-  if (accountType === "credit_card") {
-    return { label: "Outstanding balance", tone: "danger" as const };
-  }
-  if (accountType === "investment") {
-    return { label: "Held balance", tone: "neutral" as const };
-  }
-  if (isSpendableAccountType(accountType)) {
-    return { label: "Spendable amount", tone: "good" as const };
-  }
-  return { label: "Current balance", tone: "neutral" as const };
 };
 
 const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined) => {
@@ -477,11 +463,6 @@ function AccountDetailPageContent() {
     [latestCheckpoint]
   );
 
-  const accountBalanceContext = useMemo(
-    () => getBalanceContext(account?.type ?? ""),
-    [account?.type]
-  );
-
   const investmentSubtype = account?.investmentSubtype ?? null;
   const investmentSymbol = account?.investmentSymbol?.trim() || null;
   const investmentQuantity = useMemo(() => parseNullableNumber(account?.investmentQuantity), [account?.investmentQuantity]);
@@ -492,11 +473,6 @@ function AccountDetailPageContent() {
   const investmentStartDate = account?.investmentStartDate ?? null;
   const investmentMaturityDate = account?.investmentMaturityDate ?? null;
   const investmentFieldConfigs = useMemo(() => getInvestmentFieldConfigs(investmentSubtype), [investmentSubtype]);
-  const investmentHoldingCategory = isFixedIncomeInvestmentSubtype(investmentSubtype)
-    ? "Fixed income"
-    : isMarketInvestmentSubtype(investmentSubtype)
-      ? "Market-linked holding"
-      : "General investment";
   const investmentPurchaseValue = useMemo(
     () => investmentCostBasis ?? (isFixedIncomeInvestmentSubtype(investmentSubtype) ? investmentPrincipal : null),
     [investmentCostBasis, investmentPrincipal, investmentSubtype]
@@ -701,35 +677,24 @@ function AccountDetailPageContent() {
               <div>
                 <div className="panel-muted">Current balance</div>
                 <strong>{currencyFormatter.format(currentBalance)}</strong>
-                <span>{accountBalanceContext.label}</span>
               </div>
             </div>
             <div className="status-card">
               <div>
                 <div className="panel-muted">Spendable amount</div>
                 <strong>{currencyFormatter.format(isSpendableAccountType(account.type) ? currentBalance : 0)}</strong>
-                <span>{isSpendableAccountType(account.type) ? "Ready to use now" : "Not immediately spendable"}</span>
               </div>
             </div>
             <div className="status-card">
               <div>
                 <div className="panel-muted">Status</div>
                 <strong>{deletingAccountIds.has(account.id) ? "Deleting" : "Active"}</strong>
-                <span>{deletingAccountIds.has(account.id) ? "This account is being removed" : "Ready"}</span>
               </div>
             </div>
             <div className="status-card">
               <div>
                 <div className="panel-muted">Account type</div>
                 <strong>{formatAccountType(account.type)}</strong>
-                <span>{accountBrand.label}</span>
-              </div>
-            </div>
-            <div className="status-card">
-              <div>
-                <div className="panel-muted">Institution</div>
-                <strong>{account.institution ?? accountBrand.label}</strong>
-                <span>{account.source === "manual" ? "Manual" : "Imported"} · Updated {formatDate(account.updatedAt)}</span>
               </div>
             </div>
           </div>
@@ -747,28 +712,18 @@ function AccountDetailPageContent() {
               <div className="status-card">
                 <div className="panel-muted">Subtype</div>
                 <strong>{getInvestmentSubtypeLabel(investmentSubtype)}</strong>
-                <span>{getInvestmentSubtypeDescription(investmentSubtype)}</span>
               </div>
               <div className="status-card">
                 <div className="panel-muted">Current value</div>
                 <strong>{currencyFormatter.format(currentBalance)}</strong>
-                <span>{accountBalanceContext.label}</span>
               </div>
               <div className="status-card">
                 <div className="panel-muted">Purchase value / principal</div>
                 <strong>{investmentPurchaseValue === null ? "Not set" : currencyFormatter.format(investmentPurchaseValue)}</strong>
-                <span>
-                  {investmentGainLoss === null
-                    ? "Add a purchase value to compare performance."
-                    : investmentGainLoss >= 0
-                      ? "Above purchase value"
-                      : "Below purchase value"}
-                </span>
               </div>
               <div className="status-card">
                 <div className="panel-muted">Holding note</div>
                 <strong>{account.institution ?? accountBrand.label}</strong>
-                <span>{investmentHoldingCategory}</span>
               </div>
             </div>
             <div className="accounts-detail__investment-grid">
