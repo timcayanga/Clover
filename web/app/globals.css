@@ -1442,6 +1442,7 @@ label {
 }
 
 .content-body {
+  flex: 1;
   display: grid;
   gap: 16px;
   min-width: 0;
