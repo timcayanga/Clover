@@ -3361,7 +3361,7 @@ function TransactionsPageContent() {
   }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary]);
 
   useEffect(() => {
-    if (!importOpen || !pendingImportSummary || pendingImportSummary.optimistic) {
+    if (!importOpen || !pendingImportSummary) {
       return;
     }
 

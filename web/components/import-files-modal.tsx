@@ -911,6 +911,7 @@ export function ImportFilesModal({
     }
   ) => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    let seededFallbackSummary = false;
 
     for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
@@ -1017,12 +1018,48 @@ export function ImportFilesModal({
           }
 
           if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
-          updateItem(itemId, {
-            status: "importing",
-            progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
-            progressLabel: "Waiting for statement identity",
-            targetAccountId: accountId,
-          });
+            if (parsedRowsCount > 0 && !seededFallbackSummary) {
+              const fallbackAccountId = accountId && !accountId.startsWith("optimistic-")
+                ? accountId
+                : await ensureTargetAccountId(summaryContext.fallbackAccountName, null, null);
+              const fallbackPreviewTransactions =
+                summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
+                  ? summaryContext.previewTransactions
+                  : await loadOptimisticPreviewTransactions(
+                      importFileId,
+                      fallbackAccountId,
+                      summaryContext.fallbackAccountName,
+                      null
+                    ).catch(() => []);
+              const fallbackSummary = buildOptimisticUploadSummary(
+                summaryContext.fileName,
+                0,
+                fallbackAccountId,
+                summaryContext.fallbackAccountName,
+                null,
+                null,
+                summaryContext.optimisticAccountId,
+                toBalanceString(statementCheckpoint?.endingBalance),
+                fallbackPreviewTransactions
+              );
+
+              seededFallbackSummary = true;
+              updateItem(itemId, {
+                status: "importing",
+                progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
+                progressLabel: "Waiting for statement identity",
+                targetAccountId: fallbackAccountId,
+              });
+              seedImportedWorkspaceCaches(workspaceId, fallbackSummary);
+              void onImported(fallbackSummary);
+            } else {
+              updateItem(itemId, {
+                status: "importing",
+                progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
+                progressLabel: "Waiting for statement identity",
+                targetAccountId: accountId,
+              });
+            }
             await sleep(parsedRowsCount > 0 ? 300 : 600);
             continue;
           }

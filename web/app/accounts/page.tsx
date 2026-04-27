@@ -1204,7 +1204,7 @@ function AccountsPageContent() {
     [selectedAccountTransactions]
   );
   useEffect(() => {
-    if (!importOpen || !pendingImportSummary || pendingImportSummary.optimistic) {
+    if (!importOpen || !pendingImportSummary) {
       return;
     }
 
