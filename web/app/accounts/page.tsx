@@ -1223,7 +1223,7 @@ function AccountsPageContent() {
   );
 
   useEffect(() => {
-    if (!importOpen || !pendingImportSummary || pendingImportSummary.optimistic || importRefreshInFlight) {
+    if (!importOpen || !pendingImportSummary || pendingImportSummary.optimistic) {
       return;
     }
 
@@ -1237,10 +1237,6 @@ function AccountsPageContent() {
       return;
     }
 
-    if (pendingImportSummary.balance !== null && visibleAccount.balance !== pendingImportSummary.balance) {
-      return;
-    }
-
     const timeout = window.setTimeout(() => {
       setImportOpen(false);
       setPendingImportSummary(null);
@@ -1249,7 +1245,7 @@ function AccountsPageContent() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [accounts, importOpen, importRefreshInFlight, pendingImportSummary]);
+  }, [accounts, importOpen, pendingImportSummary]);
 
   const manualAccountBrand = useMemo(
     () =>
