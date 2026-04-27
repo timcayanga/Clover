@@ -464,23 +464,6 @@ const friendlyImportProgressLabel = (label: string, fileName?: string | null) =>
   }
 };
 
-const friendlyImportStatusLabel = (statusLabel: string) => {
-  switch (statusLabel) {
-    case "Uploading":
-      return "Bringing it in";
-    case "Parsing":
-      return "Reading it";
-    case "Working":
-      return "Clover is on it";
-    case "Queued":
-      return "Waiting";
-    case "Already imported":
-      return "Already in Clover";
-    default:
-      return statusLabel;
-  }
-};
-
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
 export function ImportFilesModal({
@@ -1745,19 +1728,6 @@ export function ImportFilesModal({
                 ? "Done"
                 : "Queued",
             activeProgressItem?.file.name ?? null
-          )
-        }
-        statusLabel={
-          friendlyImportStatusLabel(
-            activeProgressItem
-              ? activeProgressItem.status === "importing"
-                ? "Uploading"
-                : busy
-                  ? "Uploading"
-                  : "Parsing"
-              : busy
-                ? "Working"
-                : "Queued"
           )
         }
         onClose={onClose}
