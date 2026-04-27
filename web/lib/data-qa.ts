@@ -171,7 +171,7 @@ const summarizeFileSpeed = (params: { totalMs?: number; rowCount: number; fileTy
 
 const loadDataQaGuidanceSnapshot = async (): Promise<DataQaGuidanceSnapshot> => {
   try {
-    const configs = await prismaAny.dataQaConfig?.findMany({
+    const configs = (await prismaAny.dataQaConfig?.findMany({
       where: {
         key: { in: [...DATA_QA_CONFIG_KEYS] },
       },
@@ -179,9 +179,9 @@ const loadDataQaGuidanceSnapshot = async (): Promise<DataQaGuidanceSnapshot> => 
         key: true,
         body: true,
       },
-    });
+    })) as Array<{ key: string; body: string | null }> | undefined;
 
-    const byKey = new Map((configs ?? []).map((config: { key: string; body: string | null }) => [config.key, config.body] as const));
+    const byKey: Map<string, string | null> = new Map((configs ?? []).map((config) => [config.key, config.body] as const));
 
     return {
       cloverOutputSpec: byKey.get("clover_output_spec") ?? DEFAULT_DATA_QA_GUIDANCE.clover_output_spec,
