@@ -10713,9 +10713,8 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-detail__transaction-list {
   display: grid;
   gap: 2px;
-  max-height: 760px;
-  overflow: auto;
-  scrollbar-gutter: stable;
+  max-height: none;
+  overflow: visible;
 }
 
 .accounts-detail__transaction-header,
