@@ -549,16 +549,19 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
   const trendColor = trendIsPositive ? "var(--good)" : "var(--bad)";
   const trendFillTop = trendIsPositive ? "rgba(34, 197, 94, 0.24)" : "rgba(239, 68, 68, 0.24)";
   const trendFillBottom = trendIsPositive ? "rgba(34, 197, 94, 0.03)" : "rgba(239, 68, 68, 0.03)";
+  const benchmarkComparisonLabel = benchmarkIsActive
+    ? `${benchmarkOption.label} is normalized to the selected start value for relative movement comparison.`
+    : chartSubtitle;
+  const benchmarkFooterLabel = benchmarkIsActive ? benchmarkOption.note : chartSubtitle;
 
   return (
     <section className="investments-market glass">
       <div className="investments-market__head">
         <div>
           <p className="eyebrow">Market tracker</p>
-          <h3>Track a ticker</h3>
         </div>
         <form
-          className="investments-market__controls"
+          className="investments-market__controls investments-market__controls--compact"
           onSubmit={(event) => {
             event.preventDefault();
             submitTicker();
@@ -596,13 +599,13 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
                     className="investments-market__suggestion"
                     type="button"
                     onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => {
-                    setTickerInput(suggestion.symbol);
-                    setSelectedMarket(suggestion.market);
-                    setDisplayCurrency(suggestion.market === "ph" ? "PHP" : "USD");
-                    submitTicker(suggestion.symbol, suggestion.market);
-                  }}
-                >
+                    onClick={() => {
+                      setTickerInput(suggestion.symbol);
+                      setSelectedMarket(suggestion.market);
+                      setDisplayCurrency(suggestion.market === "ph" ? "PHP" : "USD");
+                      submitTicker(suggestion.symbol, suggestion.market);
+                    }}
+                  >
                     <strong>{suggestion.symbol}</strong>
                     <span>{suggestion.name}</span>
                   </button>
@@ -615,6 +618,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
             Market
             <select
               value={selectedMarket}
+              className="investments-market__select investments-market__select--compact"
               onChange={(event) => {
                 const nextMarket = event.target.value as MarketKey;
                 setSelectedMarket(nextMarket);
@@ -630,7 +634,11 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
 
           <label className="investments-market__currency-select">
             Currency
-            <select value={displayCurrency} onChange={(event) => setDisplayCurrency(event.target.value as CurrencyCode)}>
+            <select
+              className="investments-market__select investments-market__select--compact"
+              value={displayCurrency}
+              onChange={(event) => setDisplayCurrency(event.target.value as CurrencyCode)}
+            >
               <option value="USD">USD</option>
               <option value="PHP">PHP</option>
             </select>
@@ -638,7 +646,11 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
 
           <label className="investments-market__currency-select">
             Benchmark
-            <select value={benchmarkKey} onChange={(event) => setBenchmarkKey(event.target.value as BenchmarkKey)}>
+            <select
+              className="investments-market__select investments-market__select--compact"
+              value={benchmarkKey}
+              onChange={(event) => setBenchmarkKey(event.target.value as BenchmarkKey)}
+            >
               {BENCHMARK_OPTIONS.map((option) => (
                 <option key={option.key} value={option.key}>
                   {option.label}
@@ -649,11 +661,11 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
         </form>
       </div>
 
-      <div className="investments-market__range">
+      <div className="investments-market__range investments-market__range--compact">
         {MARKET_RANGES.map((option) => (
           <button
             key={option.key}
-            className={`button button-small ${range === option.key ? "button-primary" : "button-secondary"}`}
+            className={`button button-small investments-market__range-button ${range === option.key ? "button-primary" : "button-secondary"}`}
             type="button"
             onClick={() => setRange(option.key)}
           >
@@ -793,9 +805,9 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
 
             <div className="investments-market__comparison">
               <span>
-                {benchmarkIsActive ? `${benchmarkOption.label} scaled to the same starting value.` : `${submittedMarketLabel} market`}
+                {benchmarkComparisonLabel}
               </span>
-              <span>{benchmarkIsActive ? benchmarkOption.note : chartSubtitle}</span>
+              <span>{benchmarkFooterLabel}</span>
             </div>
 
             <div className="market-chart__x-axis">

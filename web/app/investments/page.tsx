@@ -692,22 +692,18 @@ export default function InvestmentsPage() {
           <article className="accounts-overview-card glass">
             <p className="eyebrow">Current value</p>
             <strong>{currencyFormatter.format(totals.currentValue)}</strong>
-            <span>Estimated value across every investment account</span>
           </article>
           <article className="accounts-overview-card glass">
             <p className="eyebrow">Purchase value</p>
             <strong>{currencyFormatter.format(totals.purchaseValue)}</strong>
-            <span>Cost basis or principal where available</span>
           </article>
           <article className="accounts-overview-card glass">
             <p className="eyebrow">Gain / loss</p>
             <strong>{currencyFormatter.format(totals.gainLoss)}</strong>
-            <span>Current value minus purchase value</span>
           </article>
           <article className="accounts-overview-card glass">
             <p className="eyebrow">Holdings</p>
             <strong>{visibleInvestmentAccounts.length}</strong>
-            <span>Visible investment accounts after filters</span>
           </article>
         </section>
 
