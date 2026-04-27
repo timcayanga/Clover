@@ -1,6 +1,7 @@
 import type { Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
+import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/data-qa";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { parseAmountValue, parseDateValue, parseImportText } from "@/lib/import-parser";
 import { readImportedFileText, readImportedPdfPageImages } from "@/lib/import-file-text.server";
@@ -267,8 +268,9 @@ const buildTransactionInsertRecord = (params: {
 
 export const processImportFileText = async (
   importFileId: string,
-  options: { text?: string; password?: string; actorUserId?: string | null } = {}
+  options: { text?: string; password?: string; actorUserId?: string | null; qaSource?: DataQaSource } = {}
 ): Promise<ProcessImportResult> => {
+  const startedAt = Date.now();
   const importFile = await fetchImportFileCompat(importFileId);
 
   if (!importFile) {
@@ -360,7 +362,8 @@ export const processImportFileText = async (
             fileName: String(importFile.fileName ?? ""),
           },
           options.password,
-          gcashSuspiciouslySparse ? 3 : 2
+          !text.trim() ? 4 : gcashSuspiciouslySparse ? 3 : 2,
+          !text.trim() ? 1.6 : gcashSuspiciouslySparse ? 1.35 : 1.1
         )
       : null;
   const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
@@ -553,6 +556,34 @@ export const processImportFileText = async (
     status: "done",
   });
 
+  try {
+    await recordDataQaRun({
+      workspaceId: String(importFile.workspaceId),
+      importFileId,
+      source: options.qaSource ?? "import_processing",
+      fileName: String(importFile.fileName ?? "imported-file"),
+      fileType: String(importFile.fileType ?? "unknown"),
+      parserVersion: DATA_ENGINE_VERSION,
+      parsedRows: rows as unknown as DataQaParsedRow[],
+      metadata: resolvedMetadata,
+      timings: {
+        totalMs: Date.now() - startedAt,
+        parsingMs: Date.now() - startedAt,
+        usedVisionFallback: Boolean(pageImages?.length),
+        usedOpenAiFallback: Boolean(useOpenAiParse),
+        usedDeterministicParser: !useOpenAiParse,
+        pageCount: pageImages?.length ?? 0,
+      },
+      duplicate: false,
+      actorUserId: options.actorUserId ?? null,
+    });
+  } catch (error) {
+    console.warn("Data QA recording failed after import processing", {
+      importFileId,
+      error,
+    });
+  }
+
   return { imported: rows.length, duplicate: false, metadata: resolvedMetadata, insightSummary: undefined, accountBalance: undefined };
 };
 
@@ -681,6 +712,7 @@ const extractHumanReadableDescription = (rawPayload: Prisma.InputJsonValue | nul
 };
 
 export const confirmImportFile = async (importFileId: string, accountId?: string | null) => {
+  const startedAt = Date.now();
   const importFile = await fetchImportFileCompat(importFileId);
 
   if (!importFile) {
@@ -1102,6 +1134,70 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   void Promise.allSettled(trainingSignalJobs);
 
   const insightSummary = buildImportInsightSummary(transactions);
+
+  try {
+    await recordDataQaRun({
+      workspaceId: String(importFile.workspaceId),
+      importFileId,
+      accountId: resolvedAccountId,
+      source: "import_confirmation",
+      fileName: String(importFile.fileName ?? "imported-file"),
+      fileType: String(importFile.fileType ?? "unknown"),
+      parserVersion: DATA_ENGINE_VERSION,
+      parsedRows: parsedRows as unknown as DataQaParsedRow[],
+      metadata: {
+        institution:
+          typeof statementRow?.institution === "string" ? statementRow.institution : null,
+        accountNumber:
+          typeof statementMetadata?.accountNumber === "string" ? statementMetadata.accountNumber : null,
+        accountName:
+          typeof statementRow?.accountName === "string" ? statementRow.accountName : null,
+        accountType: typeof account.type === "string" ? account.type : null,
+        openingBalance:
+          statementCheckpointRecord?.openingBalance !== null && statementCheckpointRecord?.openingBalance !== undefined
+            ? Number(statementCheckpointRecord.openingBalance)
+            : null,
+        endingBalance:
+          statementCheckpointRecord?.endingBalance !== null && statementCheckpointRecord?.endingBalance !== undefined
+            ? Number(statementCheckpointRecord.endingBalance)
+            : null,
+        paymentDueDate: null,
+        totalAmountDue: null,
+        startDate: statementCheckpointRecord?.statementStartDate?.toISOString() ?? null,
+        endDate: statementCheckpointRecord?.statementEndDate?.toISOString() ?? null,
+        confidence: statementConfidence,
+      },
+      account: {
+        id: resolvedAccountId,
+        name: account.name,
+        institution: account.institution,
+        type: account.type,
+        balance: reconciledAccountBalance,
+      },
+      checkpoint: statementCheckpointRecord
+        ? {
+            statementStartDate: statementCheckpointRecord.statementStartDate,
+            statementEndDate: statementCheckpointRecord.statementEndDate,
+            openingBalance: statementCheckpointRecord.openingBalance?.toString() ?? null,
+            endingBalance: statementCheckpointRecord.endingBalance?.toString() ?? null,
+            status: statementCheckpointRecord.status,
+            rowCount: statementCheckpointRecord.rowCount,
+          }
+        : null,
+      timings: {
+        totalMs: Date.now() - startedAt,
+        parsingMs: 0,
+        usedDeterministicParser: true,
+      },
+      duplicate: false,
+      actorUserId: null,
+    });
+  } catch (error) {
+    console.warn("Data QA recording failed after import confirmation", {
+      importFileId,
+      error,
+    });
+  }
 
   return { imported: transactions.length, insightSummary, accountBalance: reconciledAccountBalance };
 });

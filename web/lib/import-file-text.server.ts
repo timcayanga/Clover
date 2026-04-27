@@ -368,7 +368,8 @@ export const readUploadedFilePdfPageImages = async (file: File | ImportFileLike,
 export const readImportedPdfPageImages = async (
   params: { storageKey: string; fileType: string; fileName: string },
   password?: string,
-  maxPages = 2
+  maxPages = 2,
+  scale = 1.1
 ) => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
   if (!lowerName.endsWith(".pdf") && !/pdf/.test(lowerName)) {
@@ -376,7 +377,7 @@ export const readImportedPdfPageImages = async (
   }
 
   const bytes = await downloadImportObject(params.storageKey);
-  return renderPdfPageImagesFromBytes(bytes, password, maxPages);
+  return renderPdfPageImagesFromBytes(bytes, password, maxPages, scale);
 };
 
 export default {

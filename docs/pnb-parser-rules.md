@@ -68,6 +68,7 @@ This document captures the PNB parsing rules learned from the synthetic training
 - `PHILIPPINE NATIONAL BANK` statements with `Statement Period`, `Date Description Debit (PHP) Credit (PHP) Balance (PHP)`, and month/day rows should also parse as savings ledgers.
 - For that simpler shape, ignore `Starting Balance`, `Total Credits`, `Total Debits`, `Ending Balance`, and the system-generated footer note.
 - Treat `GCash Top-up` as a transfer, `Online Transfer` as a transfer, and keep bill-payment rows under `Bills & Utilities`.
+- For low-quality multi-page scans, the vision fallback may need multiple pages to recover the complete ledger. When the text layer is empty, inspect beyond page one so the final balance and later-page transactions are not missed.
 
 ## Notes Handling
 
