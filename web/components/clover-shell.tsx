@@ -28,6 +28,14 @@ type CloverShellProps = {
   children: ReactNode;
 };
 
+const avatarBackgrounds = [
+  "rgba(3, 168, 192, 0.16)",
+  "rgba(3, 168, 192, 0.22)",
+  "rgba(104, 220, 177, 0.22)",
+  "rgba(181, 246, 239, 0.9)",
+  "rgba(15, 23, 42, 0.08)",
+] as const;
+
 const navItems = [
   { href: "/dashboard", label: "Dashboard", key: "dashboard" as const },
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
@@ -173,6 +181,16 @@ function MenuIcon({ name }: { name: IconName }) {
   }
 }
 
+function hashString(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash;
+}
+
 const notifications = [
   {
     title: "Import finished",
@@ -209,6 +227,7 @@ export function CloverShell({
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
   const profileImage = user?.imageUrl ?? null;
+  const profileBackground = avatarBackgrounds[hashString(displayName) % avatarBackgrounds.length];
   const isProfileActive = active === "profile" || pathname.startsWith("/profile");
   const isNotificationsActive = openMenu === "notifications";
   const isProfileMenuOpen = openMenu === "profile";
@@ -293,7 +312,7 @@ export function CloverShell({
 
         <div className="sidebar-footer">
           <button
-            className={`sidebar-profile ${isProfileActive || isProfileMenuOpen ? "is-active" : ""}`}
+            className={`sidebar-profile${profileImage ? " sidebar-profile--photo" : ""}${isProfileActive || isProfileMenuOpen ? " is-active" : ""}`}
             type="button"
             aria-label={`Open ${displayName} profile menu`}
             aria-expanded={isProfileMenuOpen}
@@ -308,9 +327,13 @@ export function CloverShell({
               })
             }
           >
-            <span className="sidebar-profile__avatar" aria-hidden="true">
-              {profileImage ? <img src={profileImage} alt="" /> : <span>{profileInitial}</span>}
-            </span>
+            {profileImage ? (
+              <img className="sidebar-profile__photo" src={profileImage} alt="" aria-hidden="true" />
+            ) : (
+              <span className="sidebar-profile__avatar" aria-hidden="true" style={{ backgroundColor: profileBackground }}>
+                <span>{profileInitial}</span>
+              </span>
+            )}
             <span className="sr-only">{displayName}</span>
           </button>
           <button
