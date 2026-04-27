@@ -111,6 +111,27 @@ const fileTypeLabel = (file: File) => {
   return "File";
 };
 
+const isPdfImportFile = (file: File | string) =>
+  typeof file === "string" ? /\.pdf$/i.test(file) : file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
+const lowQualityImportWarning = (fileName: string) =>
+  `${fileName} looks too blurry for Clover to read. Please upload a clearer image or a higher-resolution PDF.`;
+
+const isLowQualityImportFailure = (file: File | string, errorMessage: string) =>
+  isPdfImportFile(file) &&
+  /Unable to process import|Unable to parse this file|No parsed rows available|Import parsing failed in the background|Unable to confirm this import\.|Timed out waiting for trusted statement identity\./i.test(
+    errorMessage
+  );
+
+const formatImportFailureMessage = (file: File | string, errorMessage: string) => {
+  if (isLowQualityImportFailure(file, errorMessage)) {
+    const fileName = typeof file === "string" ? file : file.name;
+    return lowQualityImportWarning(fileName || "This file");
+  }
+
+  return errorMessage;
+};
+
 const normalizeStatementAccountName = (name: string, institution?: string | null) => {
   const trimmed = name.trim();
   const normalizedInstitution = (institution ?? "").trim();
@@ -921,10 +942,11 @@ export function ImportFilesModal({
 
       if (!confirmResponse.ok) {
         const payload = await confirmResponse.json().catch(() => ({}));
+        const confirmError = formatImportFailureMessage(summaryContext.fileName, payload.error || "Unable to confirm this import.");
         updateItem(itemId, {
           status: "error",
           confirmationState: "staged",
-        error: payload.error || "Unable to confirm this import.",
+          error: confirmError,
         progress: 0,
         progressLabel: "Confirmation failed",
       });
@@ -1026,7 +1048,7 @@ export function ImportFilesModal({
           updateItem(itemId, {
             status: "error",
             confirmationState: "staged",
-            error: "Import parsing failed in the background.",
+            error: formatImportFailureMessage(summaryContext.fileName, "Import parsing failed in the background."),
             progress: 0,
             progressLabel: "Import failed",
           });
@@ -1667,10 +1689,14 @@ export function ImportFilesModal({
         error_stage: "process",
         error_code: error instanceof Error ? error.message : "unknown_error",
       });
+      const processError = formatImportFailureMessage(
+        item.file,
+        error instanceof Error ? error.message : `Unable to import ${item.file.name}.`
+      );
       updateItem(itemId, {
         status: "error",
         confirmationState: item.importFileId ? "staged" : "none",
-        error: error instanceof Error ? error.message : `Unable to import ${item.file.name}.`,
+        error: processError,
         progress: 0,
         progressLabel: "Error",
       });
@@ -2185,6 +2211,11 @@ export function ImportFilesModal({
                         <span>Source: {qaRun.source}</span>
                         <span>Parser: {qaRun.parserVersion ?? "unknown"}</span>
                         <span>Time: {qaRun.totalDurationMs ?? 0} ms</span>
+                      </div>
+                      <div className="accounts-import-qa__actions">
+                        <Link className="button button-secondary button-small" href={`/admin/data-qa/${qaRun.id}`} prefetch={false}>
+                          Open full page
+                        </Link>
                       </div>
                       {qaRun.findings.length > 0 ? (
                         <ul className="accounts-import-qa__findings">
