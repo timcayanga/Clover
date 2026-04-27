@@ -259,20 +259,6 @@ const getAccountWarning = (account: Account, duplicateCount: number) => {
   return null;
 };
 
-const getBalanceContext = (account: Account) => {
-  const type = getEffectiveAccountType(account);
-  if (type === "credit_card") {
-    return { label: "Outstanding balance", tone: "danger" as const };
-  }
-  if (type === "investment") {
-    return { label: "Held balance", tone: "neutral" as const };
-  }
-  if (type === "cash" || type === "wallet" || type === "bank") {
-    return { label: "Spendable amount", tone: "good" as const };
-  }
-  return { label: "Current balance", tone: "neutral" as const };
-};
-
 const isSpendableAccountType = (type: Account["type"]) => type === "bank" || type === "wallet" || type === "cash";
 
 const getSpendableBalance = (account: Account) => (isSpendableAccountType(getEffectiveAccountType(account)) ? parseAmount(account.balance) : 0);
@@ -1217,11 +1203,6 @@ function AccountsPageContent() {
     () => buildImportSummaries(selectedAccountTransactions),
     [selectedAccountTransactions]
   );
-  const selectedAccountBalanceContext = useMemo(
-    () => (selectedAccount ? getBalanceContext(selectedAccount) : null),
-    [selectedAccount]
-  );
-
   useEffect(() => {
     if (!importOpen || !pendingImportSummary || pendingImportSummary.optimistic) {
       return;
@@ -1700,7 +1681,6 @@ function AccountsPageContent() {
                             name: account.name,
                             type: getEffectiveAccountType(account),
                           });
-                          const balanceContext = getBalanceContext(account);
                           const balanceValue = Math.abs(value);
                           return (
                             <article
@@ -1731,13 +1711,10 @@ function AccountsPageContent() {
                                   <AccountBrandMark accountBrand={accountBrand} label={account.name} />
                                   <div>
                                     <strong>{account.name}</strong>
-                                    <span>
-                                      {accountBrand.label}
-                                      {account.institution && account.institution !== accountBrand.label ? ` · ${account.institution}` : ""}
-                                    </span>
                                   </div>
                                 </div>
                                 <div className="accounts-account-card__actions">
+                                  {isDeleting ? <span className="accounts-account-card__state is-deleting">Deleting</span> : null}
                                   {warning ? (
                                     <span className="accounts-warning-wrap">
                                       <button
@@ -1772,23 +1749,8 @@ function AccountsPageContent() {
                               </div>
 
                               <div className="accounts-account-card__body">
-                                <div className="accounts-account-card__balance-row">
-                                  <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
-                                    {currencyFormatter.format(balanceValue)}
-                                  </div>
-                                  <div className="accounts-account-card__balance-meta">
-                                    {isDeleting ? (
-                                      <span className="accounts-account-card__balance-pill is-neutral">Deleting</span>
-                                    ) : (
-                                      <span className={`accounts-account-card__balance-pill is-${balanceContext.tone}`}>
-                                        {balanceContext.tone === "good"
-                                          ? "Spendable"
-                                          : balanceContext.tone === "danger"
-                                            ? "Outstanding"
-                                            : "Tracked"}
-                                      </span>
-                                    )}
-                                  </div>
+                                <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
+                                  {currencyFormatter.format(balanceValue)}
                                 </div>
                               </div>
                             </article>
@@ -1856,7 +1818,7 @@ function AccountsPageContent() {
             </div>
 
             <div className="accounts-drawer__guide">
-              <strong>{selectedAccountBalanceContext?.label ?? "Balance guide"}</strong>
+              <strong>Balance guide</strong>
               <p>
                 Current balance is the number on this account now. Spendable amount is the cash-like portion you can use right away.
                 Net worth is tracked at the workspace level.
