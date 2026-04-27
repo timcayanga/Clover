@@ -12,6 +12,7 @@ import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   clearWorkspaceCache,
   clearDeletingWorkspaceAccount,
+  getDeletedWorkspaceAccountIds,
   getDeletingWorkspaceAccountIds,
   markDeletedWorkspaceAccount,
   markDeletingWorkspaceAccount,
@@ -337,7 +338,11 @@ function AccountDetailPageContent() {
 
     const load = async () => {
       const selectedWorkspaceId = readSelectedWorkspaceId();
-      if (getDeletingWorkspaceAccountIds(selectedWorkspaceId ?? "").includes(accountId)) {
+      const activeWorkspaceId = selectedWorkspaceId ?? "";
+      if (
+        getDeletingWorkspaceAccountIds(activeWorkspaceId).includes(accountId) ||
+        getDeletedWorkspaceAccountIds(activeWorkspaceId).includes(accountId)
+      ) {
         router.replace("/accounts");
         return;
       }
@@ -355,6 +360,9 @@ function AccountDetailPageContent() {
         const accountPayload = await accountResponse.json();
         const nextAccount = accountPayload.account as Account | undefined;
         if (!nextAccount || cancelled) {
+          if (getDeletedWorkspaceAccountIds(selectedWorkspaceId ?? "").includes(accountId)) {
+            router.replace("/accounts");
+          }
           return;
         }
 

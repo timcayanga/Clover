@@ -775,10 +775,23 @@ function AccountsPageContent() {
       return false;
     }
 
-    setAccounts(cachedSnapshot.accounts as Account[]);
+    const filteredAccounts = (cachedSnapshot.accounts as Account[]).filter(
+      (account) => !deletedAccountIdsRef.current.has(account.id) && !deletingAccountIdsRef.current.has(account.id)
+    );
+    const filteredTransactions = (cachedSnapshot.transactions as Transaction[]).filter(
+      (transaction) =>
+        !deletedAccountIdsRef.current.has(transaction.accountId) && !deletingAccountIdsRef.current.has(transaction.accountId)
+    );
+    const filteredCheckpoints = (cachedSnapshot.statementCheckpoints as StatementCheckpoint[]).filter(
+      (checkpoint) =>
+        !checkpoint.accountId ||
+        (!deletedAccountIdsRef.current.has(checkpoint.accountId) && !deletingAccountIdsRef.current.has(checkpoint.accountId))
+    );
+
+    setAccounts(filteredAccounts);
     setAccountRules(cachedSnapshot.accountRules as AccountRule[]);
-    setTransactions(cachedSnapshot.transactions as Transaction[]);
-    setStatementCheckpoints(cachedSnapshot.statementCheckpoints as StatementCheckpoint[]);
+    setTransactions(filteredTransactions);
+    setStatementCheckpoints(filteredCheckpoints);
     setAccountsLoading(false);
     setHasInitialWorkspaceDataLoaded(true);
     return true;
@@ -940,6 +953,29 @@ function AccountsPageContent() {
       cancelled = true;
     };
   }, [drawerAccountId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    const deletingIds = new Set(getDeletingWorkspaceAccountIds(selectedWorkspaceId));
+    const deletedIds = new Set(getDeletedWorkspaceAccountIds(selectedWorkspaceId));
+    if (deletingIds.size === 0 && deletedIds.size === 0) {
+      return;
+    }
+
+    setAccounts((current) => current.filter((account) => !deletedIds.has(account.id) && !deletingIds.has(account.id)));
+    setTransactions((current) =>
+      current.filter((transaction) => !deletedIds.has(transaction.accountId) && !deletingIds.has(transaction.accountId))
+    );
+    setStatementCheckpoints((current) =>
+      current.filter(
+        (checkpoint) =>
+          !checkpoint.accountId || (!deletedIds.has(checkpoint.accountId) && !deletingIds.has(checkpoint.accountId))
+      )
+    );
+  }, [selectedWorkspaceId]);
 
   useEffect(() => {
     if (!drawerAccountId) {

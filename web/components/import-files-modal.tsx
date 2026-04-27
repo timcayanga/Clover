@@ -68,6 +68,31 @@ type ImportProcessResult = {
   summary: UploadInsightsSummary | null;
 };
 
+type QaFinding = {
+  code: string;
+  severity: "info" | "warning" | "critical";
+  field: string | null;
+  message: string;
+  suggestion: string | null;
+  confidence: number;
+};
+
+type QaRunSummary = {
+  id: string;
+  score: number;
+  source: string;
+  status: string;
+  findingCount: number;
+  criticalCount: number;
+  parserVersion: string | null;
+  totalDurationMs: number | null;
+  parserDurationMs: number | null;
+  feedbackPayload: {
+    metrics?: Record<string, unknown>;
+  } | null;
+  findings: QaFinding[];
+};
+
 const isPasswordError = (error: unknown) => {
   if (!error || typeof error !== "object") return false;
   const name = "name" in error ? String((error as { name?: unknown }).name ?? "") : "";
@@ -528,6 +553,10 @@ export function ImportFilesModal({
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [monthlyUploadLimit, setMonthlyUploadLimit] = useState(10);
   const [limitReached, setLimitReached] = useState(false);
+  const [qaRunsByItemId, setQaRunsByItemId] = useState<Record<string, QaRunSummary | null>>({});
+  const [qaLoadingByItemId, setQaLoadingByItemId] = useState<Record<string, boolean>>({});
+  const [qaErrorByItemId, setQaErrorByItemId] = useState<Record<string, string | null>>({});
+  const autoLoadedQaIdsRef = useRef(new Set<string>());
   const upgradePromptTrackedRef = useRef(false);
 
   useEffect(() => {
@@ -540,6 +569,10 @@ export function ImportFilesModal({
       setPlanTier("unknown");
       setMonthlyUploadLimit(10);
       setLimitReached(false);
+      setQaRunsByItemId({});
+      setQaLoadingByItemId({});
+      setQaErrorByItemId({});
+      autoLoadedQaIdsRef.current.clear();
       upgradePromptTrackedRef.current = false;
       accountIdByKeyRef.current.clear();
       setMessage("Upload CSV or PDF files to import transactions and balances.");
@@ -640,6 +673,27 @@ export function ImportFilesModal({
     accountIdByKeyRef.current.set(accountKey(name, institution), accountId);
     return accountId;
   };
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const nextItem = items.find(
+      (item) =>
+        Boolean(item.importFileId) &&
+        !autoLoadedQaIdsRef.current.has(item.id) &&
+        !qaLoadingByItemId[item.id] &&
+        (item.status === "importing" || item.status === "done" || item.confirmationState !== "none")
+    );
+
+    if (!nextItem) {
+      return;
+    }
+
+    autoLoadedQaIdsRef.current.add(nextItem.id);
+    void loadQaRun(nextItem.id).catch(() => null);
+  }, [items, loadQaRun, open, qaLoadingByItemId]);
 
   const syncStatementAccountIdentity = async (
     accountId: string,
@@ -1282,6 +1336,67 @@ export function ImportFilesModal({
     setItems((current) => current.filter((item) => item.id !== id));
   };
 
+  async function loadQaRun(itemId: string, forceRerun = false) {
+    const item = items.find((entry) => entry.id === itemId);
+    if (!item?.importFileId) {
+      setQaErrorByItemId((current) => ({ ...current, [itemId]: "No import file is available for this row." }));
+      return;
+    }
+
+    setQaLoadingByItemId((current) => ({ ...current, [itemId]: true }));
+    setQaErrorByItemId((current) => ({ ...current, [itemId]: null }));
+
+    try {
+      const response = await fetch(`/api/imports/${item.importFileId}/qa`, {
+        method: forceRerun ? "POST" : "GET",
+        headers: forceRerun ? { "Content-Type": "application/json" } : undefined,
+        body: forceRerun ? JSON.stringify({ source: "replay" }) : undefined,
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "Unable to load QA results.");
+      }
+
+      const payload = await response.json();
+      const run = payload?.run ?? payload?.run?.run ?? null;
+      const findings = Array.isArray(run?.findings) ? run.findings : [];
+
+      setQaRunsByItemId((current) => ({
+        ...current,
+        [itemId]: run
+          ? {
+              id: String(run.id ?? crypto.randomUUID()),
+              score: Number(run.score ?? 0),
+              source: String(run.source ?? "unknown"),
+              status: String(run.status ?? "completed"),
+              findingCount: Number(run.findingCount ?? findings.length),
+              criticalCount: Number(run.criticalCount ?? 0),
+              parserVersion: run.parserVersion ? String(run.parserVersion) : null,
+              totalDurationMs: run.totalDurationMs === null || run.totalDurationMs === undefined ? null : Number(run.totalDurationMs),
+              parserDurationMs: run.parserDurationMs === null || run.parserDurationMs === undefined ? null : Number(run.parserDurationMs),
+              feedbackPayload: run.feedbackPayload ?? null,
+              findings: findings.map((finding: QaFinding) => ({
+                code: String(finding.code ?? "unknown"),
+                severity: finding.severity === "critical" || finding.severity === "warning" ? finding.severity : "info",
+                field: finding.field ?? null,
+                message: String(finding.message ?? ""),
+                suggestion: finding.suggestion ?? null,
+                confidence: Number(finding.confidence ?? 0),
+              })),
+            }
+          : null,
+      }));
+    } catch (error) {
+      setQaErrorByItemId((current) => ({
+        ...current,
+        [itemId]: error instanceof Error ? error.message : "Unable to load QA results.",
+      }));
+    } finally {
+      setQaLoadingByItemId((current) => ({ ...current, [itemId]: false }));
+    }
+  }
+
   const processFile = async (itemId: string): Promise<ImportProcessResult> => {
     const item = items.find((entry) => entry.id === itemId);
     if (!item) return { status: "error", importedRows: null, summary: null };
@@ -1405,17 +1520,20 @@ export function ImportFilesModal({
               )
             : [];
         const optimisticSummary = hasStatementIdentity
-          ? buildOptimisticUploadSummary(
-              item.file.name,
-              0,
-              optimisticAccountId,
-              statementIdentity?.accountName ?? null,
-              statementIdentity?.institution ?? null,
-              statementAccountType,
-              optimisticAccountId,
-              null,
-              previewTransactions
-            )
+          ? ({
+              ...buildOptimisticUploadSummary(
+                item.file.name,
+                0,
+                optimisticAccountId,
+                statementIdentity?.accountName ?? null,
+                statementIdentity?.institution ?? null,
+                statementAccountType,
+                optimisticAccountId,
+                null,
+                previewTransactions
+              ),
+              optimistic: false,
+            } satisfies UploadInsightsSummary)
           : null;
         updateItem(itemId, {
           importFileId,
@@ -1930,6 +2048,9 @@ export function ImportFilesModal({
           {items.length > 0 ? (
             items.map((item) => {
               const isPasswordLocked = item.status === "needs_password";
+              const qaRun = qaRunsByItemId[item.id];
+              const qaLoading = Boolean(qaLoadingByItemId[item.id]);
+              const qaError = qaErrorByItemId[item.id];
 
               return (
                 <article key={item.id} className={`accounts-import-file accounts-import-file--${item.status}`}>
@@ -1989,43 +2110,99 @@ export function ImportFilesModal({
                           : `Imported ${item.importedRows ?? 0} row${item.importedRows === 1 ? "" : "s"}`
                         : item.confirmationState === "staged"
                           ? "Parsed and ready for confirmation"
-                        : item.status === "importing"
-                          ? "Importing into the selected account..."
-                          : item.status === "parsing"
-                            ? "Parsing locally..."
-                            : item.status === "needs_password"
-                              ? "Waiting for password"
-                              : "Queued"}
+                          : item.status === "importing"
+                            ? "Importing into the selected account..."
+                            : item.status === "parsing"
+                              ? "Parsing locally..."
+                              : item.status === "needs_password"
+                                ? "Waiting for password"
+                                : "Queued"}
                     </span>
-                    {item.status === "error" && item.importFileId ? (
-                      <button
-                        className="button button-primary button-small"
-                        type="button"
-                        onClick={() => void handleReplayConfirm(item.id)}
-                        disabled={busy}
-                      >
-                        Retry confirmation
-                      </button>
-                    ) : item.status === "error" ? (
-                      <button
-                        className="button button-secondary button-small"
-                        type="button"
-                        onClick={() => void processFile(item.id)}
-                        disabled={busy || !selectedAccountId}
-                      >
-                        Retry import
-                      </button>
-                    ) : item.confirmationState === "staged" && item.importFileId ? (
-                      <button
-                        className="button button-primary button-small"
-                        type="button"
-                        onClick={() => void handleReplayConfirm(item.id)}
-                        disabled={busy}
-                      >
-                        Confirm now
-                      </button>
-                    ) : null}
+                    <div className="accounts-import-file__actions">
+                      {item.importFileId ? (
+                        <>
+                          <button
+                            className="button button-secondary button-small"
+                            type="button"
+                            onClick={() => void loadQaRun(item.id)}
+                            disabled={busy || qaLoading}
+                          >
+                            {qaLoading ? "Loading QA..." : "Load QA"}
+                          </button>
+                          <button
+                            className="button button-secondary button-small"
+                            type="button"
+                            onClick={() => void loadQaRun(item.id, true)}
+                            disabled={busy || qaLoading}
+                          >
+                            Re-run QA
+                          </button>
+                        </>
+                      ) : null}
+                      {item.status === "error" && item.importFileId ? (
+                        <button
+                          className="button button-primary button-small"
+                          type="button"
+                          onClick={() => void handleReplayConfirm(item.id)}
+                          disabled={busy}
+                        >
+                          Retry confirmation
+                        </button>
+                      ) : item.status === "error" ? (
+                        <button
+                          className="button button-secondary button-small"
+                          type="button"
+                          onClick={() => void processFile(item.id)}
+                          disabled={busy || !selectedAccountId}
+                        >
+                          Retry import
+                        </button>
+                      ) : item.confirmationState === "staged" && item.importFileId ? (
+                        <button
+                          className="button button-primary button-small"
+                          type="button"
+                          onClick={() => void handleReplayConfirm(item.id)}
+                          disabled={busy}
+                        >
+                          Confirm now
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
+
+                  {qaError ? <p className="accounts-import-file__error">{qaError}</p> : null}
+                  {qaRun ? (
+                    <div className="accounts-import-qa">
+                      <div className="accounts-import-qa__summary">
+                        <strong>Data QA</strong>
+                        <span>Score {qaRun.score}/100</span>
+                        <span>{qaRun.findingCount} finding{qaRun.findingCount === 1 ? "" : "s"}</span>
+                        <span>{qaRun.criticalCount} critical</span>
+                      </div>
+                      <div className="accounts-import-qa__meta">
+                        <span>Source: {qaRun.source}</span>
+                        <span>Parser: {qaRun.parserVersion ?? "unknown"}</span>
+                        <span>Time: {qaRun.totalDurationMs ?? 0} ms</span>
+                      </div>
+                      {qaRun.findings.length > 0 ? (
+                        <ul className="accounts-import-qa__findings">
+                          {qaRun.findings.slice(0, 4).map((finding) => (
+                            <li key={`${finding.code}-${finding.field ?? "field"}`} className={`accounts-import-qa__finding is-${finding.severity}`}>
+                              <strong>{finding.code}</strong>
+                              <span>{finding.message}</span>
+                              {finding.suggestion ? <small>{finding.suggestion}</small> : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="accounts-import-qa__empty">No findings were reported for this run.</p>
+                      )}
+                    </div>
+                  ) : qaLoading ? (
+                    <div className="accounts-import-qa">
+                      <p className="accounts-import-qa__empty">Loading QA results...</p>
+                    </div>
+                  ) : null}
                 </article>
               );
             })
