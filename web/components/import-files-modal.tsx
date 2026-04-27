@@ -36,6 +36,7 @@ type ImportFilesModalProps = {
   accounts: AccountOption[];
   accountRules?: AccountRule[];
   defaultAccountId?: string | null;
+  showQaTools?: boolean;
   onClose: () => void;
   onImported: (summary: UploadInsightsSummary) => Promise<void> | void;
 };
@@ -536,6 +537,7 @@ export function ImportFilesModal({
   accounts,
   accountRules = [],
   defaultAccountId,
+  showQaTools = false,
   onClose,
   onImported,
 }: ImportFilesModalProps) {
@@ -607,7 +609,7 @@ export function ImportFilesModal({
   }, [accounts, defaultAccountId, open]);
 
   useEffect(() => {
-    if (!open) {
+    if (!open || !showQaTools) {
       return;
     }
 
@@ -693,7 +695,7 @@ export function ImportFilesModal({
 
     autoLoadedQaIdsRef.current.add(nextItem.id);
     void loadQaRun(nextItem.id).catch(() => null);
-  }, [items, loadQaRun, open, qaLoadingByItemId]);
+  }, [items, loadQaRun, open, qaLoadingByItemId, showQaTools]);
 
   const syncStatementAccountIdentity = async (
     accountId: string,
@@ -2119,7 +2121,7 @@ export function ImportFilesModal({
                                 : "Queued"}
                     </span>
                     <div className="accounts-import-file__actions">
-                      {item.importFileId ? (
+                      {showQaTools && item.importFileId ? (
                         <>
                           <button
                             className="button button-secondary button-small"
@@ -2170,8 +2172,8 @@ export function ImportFilesModal({
                     </div>
                   </div>
 
-                  {qaError ? <p className="accounts-import-file__error">{qaError}</p> : null}
-                  {qaRun ? (
+                  {showQaTools && qaError ? <p className="accounts-import-file__error">{qaError}</p> : null}
+                  {showQaTools && qaRun ? (
                     <div className="accounts-import-qa">
                       <div className="accounts-import-qa__summary">
                         <strong>Data QA</strong>
@@ -2198,7 +2200,7 @@ export function ImportFilesModal({
                         <p className="accounts-import-qa__empty">No findings were reported for this run.</p>
                       )}
                     </div>
-                  ) : qaLoading ? (
+                  ) : showQaTools && qaLoading ? (
                     <div className="accounts-import-qa">
                       <p className="accounts-import-qa__empty">Loading QA results...</p>
                     </div>
