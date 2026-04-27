@@ -99,6 +99,9 @@ const formatDate = (value: string) =>
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
+const normalizeAccountBalance = (type: Account["type"] | null | undefined, value: number) =>
+  type === "credit_card" ? -Math.abs(value) : Math.abs(value);
+
 const parseNullableNumber = (value: string | null | undefined) => {
   if (value === null || value === undefined || value === "") {
     return null;
@@ -513,17 +516,23 @@ function AccountDetailPageContent() {
     return getCheckpointSummary(latestCheckpoint).label;
   }, [latestCheckpoint]);
 
-  const checkpointBalance = useMemo(() => parseAmount(latestCheckpoint?.endingBalance), [latestCheckpoint?.endingBalance]);
+  const checkpointBalance = useMemo(
+    () => normalizeAccountBalance(account?.type ?? null, parseAmount(latestCheckpoint?.endingBalance)),
+    [account?.type, latestCheckpoint?.endingBalance]
+  );
   const currentBalance = useMemo(
     () =>
-      parseAmount(
-        deriveReconciledBalance({
-          balance: account?.balance ?? null,
-          transactions,
-          checkpoints: latestCheckpoint ? [latestCheckpoint] : [],
-        })
+      normalizeAccountBalance(
+        account?.type ?? null,
+        parseAmount(
+          deriveReconciledBalance({
+            balance: account?.balance ?? null,
+            transactions,
+            checkpoints: latestCheckpoint ? [latestCheckpoint] : [],
+          })
+        )
       ),
-    [account?.balance, latestCheckpoint, transactions]
+    [account?.balance, account?.type, latestCheckpoint, transactions]
   );
   const accountDetailValueCard = useMemo(() => {
     if (!account) {

@@ -217,6 +217,9 @@ const formatDate = (value: string) =>
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
+const normalizeAccountBalance = (type: Account["type"], value: number) =>
+  type === "credit_card" ? -Math.abs(value) : Math.abs(value);
+
 const parseNullableNumberInput = (value: string) => {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -261,7 +264,8 @@ const getAccountWarning = (account: Account, duplicateCount: number) => {
 
 const isSpendableAccountType = (type: Account["type"]) => type === "bank" || type === "wallet" || type === "cash";
 
-const getSpendableBalance = (account: Account) => (isSpendableAccountType(getEffectiveAccountType(account)) ? parseAmount(account.balance) : 0);
+const getSpendableBalance = (account: Account) =>
+  (isSpendableAccountType(getEffectiveAccountType(account)) ? normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(account.balance)) : 0);
 
 const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined) => {
   if (!checkpoint) {
@@ -671,11 +675,12 @@ function AccountsPageContent() {
           transactions: accountTransactions,
           checkpoints: accountCheckpoints,
         });
+        const normalizedBalance = normalizeAccountBalance(effectiveType, parseAmount(reconciledBalance ?? account.balance));
 
         return {
           ...account,
           type: effectiveType,
-          balance: reconciledBalance ?? account.balance,
+          balance: String(normalizedBalance),
         };
       }),
     [accounts, drawerAccountId, drawerStatementCheckpoints, drawerTransactions, transactions]
@@ -1155,9 +1160,7 @@ function AccountsPageContent() {
   const totals = useMemo(() => {
     return reconciledAccounts.reduce(
       (accumulator, account) => {
-        const rawValue = parseAmount(account.balance);
-        const isLiability = getEffectiveAccountType(account) === "credit_card";
-        const signedValue = isLiability ? -Math.abs(rawValue) : rawValue;
+        const signedValue = normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(account.balance));
         if (signedValue >= 0) {
           accumulator.assets += signedValue;
         } else {
@@ -1211,7 +1214,7 @@ function AccountsPageContent() {
       .map((group) => ({
         ...group,
         total: group.rows.reduce(
-          (sum, account) => sum + (getEffectiveAccountType(account) === "credit_card" ? -Math.abs(parseAmount(account.balance)) : parseAmount(account.balance)),
+          (sum, account) => sum + normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(account.balance)),
           0
         ),
       }))
