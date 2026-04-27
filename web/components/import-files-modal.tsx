@@ -352,6 +352,14 @@ const guessStatementIdentity = (fileName: string) => {
     return { accountName: "BPI", institution: "BPI" };
   }
 
+  if (lowerName.includes("metrobank") || lowerName.includes("mb-online") || lowerName.includes("msoa")) {
+    const match = lowerName.match(/(\d{4})(?=[^\d]*$)/) ?? lowerName.match(/(\d{4})/);
+    return {
+      accountName: match ? `Metrobank ${match[1]}` : "Metrobank",
+      institution: "Metrobank",
+    };
+  }
+
   return null;
 };
 
@@ -1407,6 +1415,23 @@ export function ImportFilesModal({
               guessedIdentity?.institution ?? null
             )
           : [];
+      const optimisticPreviewSummary =
+        canUseOptimisticGuess && targetAccountId
+          ? ({
+              ...buildOptimisticUploadSummary(
+                item.file.name,
+                Number(processPayload?.imported ?? 0) || 0,
+                targetAccountId,
+                guessedIdentity?.accountName ?? null,
+                guessedIdentity?.institution ?? null,
+                inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank"),
+                item.optimisticAccountId,
+                null,
+                previewTransactions
+              ),
+              optimistic: false,
+            } satisfies UploadInsightsSummary)
+          : null;
 
       updateItem(itemId, {
         importFileId,
@@ -1415,6 +1440,11 @@ export function ImportFilesModal({
         progress: 92,
         progressLabel: canUseOptimisticGuess ? "Finalizing in background" : "Waiting for account details",
       });
+
+      if (optimisticPreviewSummary) {
+        seedImportedWorkspaceCaches(workspaceId, optimisticPreviewSummary);
+        void onImported(optimisticPreviewSummary);
+      }
 
       if (canUseOptimisticGuess) {
         void confirmItemImport(itemId, importFileId, targetAccountId, {
@@ -1442,23 +1472,11 @@ export function ImportFilesModal({
         });
       }
 
-      return {
-        status: "staged",
-        importedRows: Number(processPayload?.imported ?? 0) || null,
-        summary: canUseOptimisticGuess
-        ? buildOptimisticUploadSummary(
-            item.file.name,
-            Number(processPayload?.imported ?? 0) || 0,
-            targetAccountId,
-            guessedIdentity?.accountName ?? null,
-            guessedIdentity?.institution ?? null,
-            inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank"),
-            item.optimisticAccountId,
-            null,
-            previewTransactions
-          )
-          : null,
-      };
+        return {
+          status: "staged",
+          importedRows: Number(processPayload?.imported ?? 0) || null,
+          summary: optimisticPreviewSummary,
+        };
     } catch (error) {
       if (isPasswordError(error)) {
         const needsPasswordMessage = item.password.trim()
