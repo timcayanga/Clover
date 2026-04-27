@@ -86,6 +86,7 @@ export type DataQaRunInput = {
 };
 
 const DATA_QA_CONFIG_KEYS = ["clover_output_spec", "qa_instructions"] as const;
+const prismaAny = prisma as typeof prisma & Record<string, any>;
 
 const DEFAULT_DATA_QA_GUIDANCE = {
   clover_output_spec:
@@ -170,7 +171,7 @@ const summarizeFileSpeed = (params: { totalMs?: number; rowCount: number; fileTy
 
 const loadDataQaGuidanceSnapshot = async (): Promise<DataQaGuidanceSnapshot> => {
   try {
-    const configs = await prisma.dataQaConfig.findMany({
+    const configs = await prismaAny.dataQaConfig?.findMany({
       where: {
         key: { in: [...DATA_QA_CONFIG_KEYS] },
       },
@@ -180,7 +181,7 @@ const loadDataQaGuidanceSnapshot = async (): Promise<DataQaGuidanceSnapshot> => 
       },
     });
 
-    const byKey = new Map(configs.map((config) => [config.key, config.body] as const));
+    const byKey = new Map((configs ?? []).map((config: { key: string; body: string | null }) => [config.key, config.body] as const));
 
     return {
       cloverOutputSpec: byKey.get("clover_output_spec") ?? DEFAULT_DATA_QA_GUIDANCE.clover_output_spec,
@@ -552,7 +553,7 @@ export const recordDataQaRun = async (input: DataQaRunInput) => {
   const criticalCount = evaluation.findings.filter((finding) => finding.severity === "critical").length;
   const guidanceSnapshot = await loadDataQaGuidanceSnapshot();
 
-  const run = await prisma.dataQaRun.create({
+  const run = await prismaAny.dataQaRun?.create({
     data: {
       workspaceId: input.workspaceId,
       importFileId: input.importFileId ?? null,
@@ -572,8 +573,8 @@ export const recordDataQaRun = async (input: DataQaRunInput) => {
     },
   });
 
-  if (evaluation.findings.length > 0) {
-    await prisma.dataQaFinding.createMany({
+  if (evaluation.findings.length > 0 && run) {
+    await prismaAny.dataQaFinding?.createMany({
       data: evaluation.findings.map((finding) => ({
         workspaceId: input.workspaceId,
         dataQaRunId: run.id,
@@ -592,7 +593,7 @@ export const recordDataQaRun = async (input: DataQaRunInput) => {
     });
   }
 
-  if (input.actorUserId) {
+  if (input.actorUserId && run) {
     await prisma.auditLog.create({
       data: {
         workspaceId: input.workspaceId,
