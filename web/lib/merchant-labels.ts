@@ -798,6 +798,10 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Incoming Remittance",
     },
     {
+      patterns: [/received\s+from/i, /received\s+payment/i],
+      replacement: "Incoming Transfer",
+    },
+    {
       patterns: [/dm[_\s-]?intra[_\s-]?xfr\s+transfer/i, /intra[_\s-]?bank\s+transfer/i],
       replacement: "Intra-Bank Transfer",
     },

@@ -2857,6 +2857,7 @@ const guessPnbSavingsCategoryName = (description: string, type: TransactionType,
   const lower = description.toLowerCase();
   if (/fee|charge|withhold|tax/.test(lower)) return "Financial";
   if (/bill|payment|water|meralco/.test(lower)) return "Bills & Utilities";
+  if (/received\s+from|incoming\s+transfer|inward\s+transfer|cash\s*in/.test(lower)) return "Transfers";
   if (/interest|salary|payroll|remittance|deposit|cash\s*deposit|check\s*dep|check\s*deposit|check[_\s-]?batch|ccd/.test(lower)) {
     return "Income";
   }
@@ -2872,6 +2873,7 @@ const guessPnbSavingsType = (description: string, balanceDelta: number | null): 
   const lower = description.toLowerCase();
   if (/fee|charge|withhold|tax/.test(lower)) return "expense";
   if (/bill|payment|water|meralco/.test(lower)) return "expense";
+  if (/received\s+from|incoming\s+transfer|inward\s+transfer|cash\s*in/.test(lower)) return "transfer";
   if (/interest|salary|payroll|remittance|deposit|cash\s*deposit|check\s*dep|check\s*deposit|check[_\s-]?batch|ccd/.test(lower)) {
     return "income";
   }
