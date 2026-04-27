@@ -599,11 +599,11 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     },
     {
       patterns: [/wa\s+cr/i],
-      replacement: "Wallet Credit",
+      replacement: "Incoming Transfer",
     },
     {
       patterns: [/wa\s+db/i],
-      replacement: "Wallet Debit",
+      replacement: "Outgoing Transfer",
     },
     {
       patterns: [/cash\/?check\s+deposit/i],

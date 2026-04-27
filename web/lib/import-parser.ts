@@ -439,6 +439,9 @@ const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null =
   const compact = normalizeWhitespace(normalized);
   const isSavingsStatement = /(ACCOUNT\s+TYPE\s*CAV0?1|TOTAL\s+CREDITS|TOTAL\s+DEBITS|BALANCE\s+LAST\s+STATEMENT|BALANCE\s+THIS\s+STATEMENT)/i.test(compact);
   const isCreditCardStatement = /\bRCBC\b|\bRCBC BANKARD\b|\bBANKARD\b/i.test(compact);
+  if (!/\bRCBC\b|\bRCBC BANKARD\b|\bBANKARD\b/i.test(compact)) {
+    return null;
+  }
   if (!isSavingsStatement && !isCreditCardStatement) {
     return null;
   }
@@ -2186,6 +2189,204 @@ const parseBdoSavingsImportText = (text: string) => {
   };
 };
 
+const metrobankSavingsStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+  const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const compact = normalized.replace(/\s+/g, " ");
+  if (!/\b(METROBANK|METROPOLITAN BANK)\b/i.test(compact) || !/ACCOUNT\s+TYPE\s*:\s*SAVINGS/i.test(compact)) {
+    return null;
+  }
+
+  const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const accountLine = lines.find((line) => /ACCOUNT\s+NUMBER/i.test(line)) ?? normalized;
+  const accountNumber =
+    accountLine.match(/ACCOUNT\s+NUMBER\s*[:\-]?\s*([0-9\s-]{8,})/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+    detectAccountNumberFromText(normalized);
+  const accountName = formatSimpleBankAccountName("Metrobank", accountNumber);
+
+  const dateCoveredLine = lines.find((line) => /DATE\s+COVERED/i.test(line)) ?? null;
+  const periodMatch = dateCoveredLine?.match(/DATE\s+COVERED\s*:\s*([A-Za-z]+)\s+(\d{4})\s*-\s*([A-Za-z]+)\s+(\d{4})/i);
+  const monthIndexByName: Record<string, number> = {
+    january: 0,
+    february: 1,
+    march: 2,
+    april: 3,
+    may: 4,
+    june: 5,
+    july: 6,
+    august: 7,
+    september: 8,
+    october: 9,
+    november: 10,
+    december: 11,
+  };
+
+  const startDate = periodMatch
+    ? new Date(Date.UTC(Number(periodMatch[2]), monthIndexByName[periodMatch[1].toLowerCase()] ?? 0, 1, 12))
+    : null;
+  const endDate = periodMatch
+    ? new Date(Date.UTC(Number(periodMatch[4]), (monthIndexByName[periodMatch[3].toLowerCase()] ?? 0) + 1, 0, 12))
+    : null;
+  const openingBalance =
+    parseMoney(normalized.match(/BALANCE\s+LAST\s+STATEMENT\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(normalized.match(/PREVIOUS\s+BALANCE\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+  const endingBalance =
+    parseMoney(normalized.match(/BALANCE\s+THIS\s+STATEMENT\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(normalized.match(/ENDING\s+BALANCE\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+
+  return {
+    institution: "Metrobank",
+    accountNumber,
+    accountName,
+    accountType: "bank",
+    openingBalance,
+    endingBalance,
+    startDate: startDate ? startDate.toISOString() : null,
+    endDate: endDate ? endDate.toISOString() : null,
+    confidence: accountNumber && endingBalance !== null ? 95 : 86,
+  };
+};
+
+const isMetrobankSavingsBoilerplateLine = (line: string) => {
+  const compact = normalizeWhitespace(line);
+  return (
+    /^STATEMENT\s+OF\s+ACCOUNT$/i.test(compact) ||
+    /^PAGE\s+\d+\s+of\s+\d+$/i.test(compact) ||
+    /^ACCOUNT\s+NAME\s*:/i.test(compact) ||
+    /^ACCOUNT\s+NUMBER\s*:/i.test(compact) ||
+    /^ACCOUNT\s+BRANCH\s*:/i.test(compact) ||
+    /^CURRENCY\s*:/i.test(compact) ||
+    /^ACCOUNT\s+TYPE\s*:/i.test(compact) ||
+    /^DATE\s+COVERED\s*:/i.test(compact) ||
+    /^ADDRESS\s*:/i.test(compact) ||
+    /^BRGY\b/i.test(compact) ||
+    /^REMINDER:?$/i.test(compact) ||
+    /^PLEASE\s+CAREFULLY\s+CHECK/i.test(compact) ||
+    /^IF\s+YOU\s+NOTICE\s+ANY\s+DISCREPANCY/i.test(compact) ||
+    /^YOU\s+FULLY\s+ACCEPT\s+THE\s+RISKS/i.test(compact) ||
+    /^BALANCE\s+LAST\s+STATEMENT\s*$/i.test(compact) ||
+    /^BALANCE\s+THIS\s+STATEMENT\s*$/i.test(compact) ||
+    /^DATE\s+DESCRIPTION\s+DEBIT\s+CREDIT\s+BALANCE$/i.test(compact) ||
+    /^TOTAL\s+DEBIT/i.test(compact) ||
+    /^TOTAL\s+CREDIT/i.test(compact) ||
+    /^CONNECT\s+WITH\s+US$/i.test(compact) ||
+    /^FOR\s+INQUIRIES,/i.test(compact) ||
+    /^REGULATED\s+BY\s+BANGKO\s+SENTRAL/i.test(compact) ||
+    /^DEPOSITS\s+ARE\s+INSURED\s+BY\s+PDIC/i.test(compact) ||
+    /^PURSUANT\s+TO\s+THE\s+DEPOSIT\s+TERMS/i.test(compact) ||
+    /^STM\b/i.test(compact) ||
+    /^ACCOUNT\s+BRANCH\b/i.test(compact)
+  );
+};
+
+const guessMetrobankSavingsCategoryName = (description: string, type: TransactionType) => {
+  const lower = description.toLowerCase();
+  if (/svchg|fee|charge|tax/.test(lower)) return "Financial";
+  if (/cr ibft|wa cr|cash deposit|deposit|received|credit/.test(lower)) return "Transfers";
+  if (/db ibft|wa db|wdl|withdrawal|debit/.test(lower)) return "Transfers";
+  return guessCategoryName(description, type);
+};
+
+const parseMetrobankSavingsTransactionLine = (
+  line: string,
+  state: {
+    accountName: string;
+    institution: string | null;
+  }
+) => {
+  const normalized = normalizeWhitespace(line);
+  const match = normalized.match(/^(\d{2}\/\d{2}\/\d{4})\s+(.+?)\s+([0-9][0-9,]*\.\d{2})(?:\s+([0-9][0-9,]*\.\d{2}))?$/i);
+  if (!match) {
+    return null;
+  }
+
+  const date = parseDateValue(match[1]);
+  const description = normalizeWhitespace(match[2]);
+  const amount = parseMoney(match[3]);
+  const balance = parseMoney(match[4] ?? null);
+  if (!date || amount === null || !description) {
+    return null;
+  }
+
+  const descriptionLower = description.toLowerCase();
+  let type: TransactionType = "expense";
+  if (/svchg|fee|charge|tax/.test(descriptionLower)) {
+    type = "expense";
+  } else if (/cr ibft|wa cr|cash deposit|deposit|received|credit/.test(descriptionLower)) {
+    type = "income";
+  } else if (/db ibft|wa db|wdl|withdrawal|debit/.test(descriptionLower)) {
+    type = "transfer";
+  }
+
+  return {
+    date: date.toISOString().slice(0, 10),
+    amount: amount.toFixed(2),
+    merchantRaw: humanizeMerchantText(description),
+    merchantClean: summarizeMerchantText(description, state.institution ?? "Metrobank"),
+    description,
+    categoryName: guessMetrobankSavingsCategoryName(description, type),
+    accountName: state.accountName,
+    institution: state.institution ?? undefined,
+    type,
+    rawPayload: {
+      bank: "Metrobank",
+      kind: "savings_transaction",
+      accountName: state.accountName,
+      transactionCode: description,
+      amountText: amount.toFixed(2),
+      balanceText: balance !== null ? balance.toFixed(2) : null,
+      line: normalized,
+    },
+  } satisfies ParsedImportRow;
+};
+
+const parseMetrobankSavingsImportText = (text: string) => {
+  const normalizedText = text.replace(/\u00a0/g, " ");
+  const metadata = metrobankSavingsStatementMetadata(normalizedText);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = normalizedText.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const headerIndex = lines.findIndex((line) => /DATE\s+DESCRIPTION\s+DEBIT\s+CREDIT\s+BALANCE/i.test(line));
+  if (headerIndex < 0) {
+    return null;
+  }
+
+  const rows: ParsedImportRow[] = [];
+  for (const line of lines.slice(headerIndex + 1)) {
+    if (isMetrobankSavingsBoilerplateLine(line)) {
+      continue;
+    }
+
+    const parsed = parseMetrobankSavingsTransactionLine(line, {
+      accountName: metadata.accountName ?? "Metrobank",
+      institution: metadata.institution ?? "Metrobank",
+    });
+
+    if (parsed) {
+      rows.push(parsed);
+    }
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const endingBalance =
+    metadata.endingBalance ??
+    getTrailingBalanceFromParsedRows(rows) ??
+    parseMoney((rows.at(-1)?.rawPayload as Record<string, unknown> | undefined)?.balanceText as string | null);
+
+  return {
+    metadata: {
+      ...metadata,
+      endingBalance,
+      confidence: Math.min(100, metadata.confidence + 4),
+    },
+    rows,
+  };
+};
+
 const metrobankCreditCardStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
   if (!/\b(METROBANK|METROPOLITAN BANK)\b/i.test(normalized) || !/(TOTAL\s+AMOUNT\s+DUE|PAYMENT\s+DUE\s+DATE|CREDIT\s+CARD\s+ACCOUNT\s+NUMBER)/i.test(normalized)) {
@@ -3596,6 +3797,11 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     return aubSavingsMetadata.metadata;
   }
 
+  const metrobankSavingsMetadata = parseMetrobankSavingsImportText(text);
+  if (metrobankSavingsMetadata) {
+    return metrobankSavingsMetadata.metadata;
+  }
+
   const metrobankMetadata = parseMetrobankCreditCardImportText(text);
   if (metrobankMetadata) {
     return metrobankMetadata.metadata;
@@ -3826,6 +4032,11 @@ export const parseImportText = (
   const aubSavingsParsed = parseAubSavingsImportText(text);
   if (aubSavingsParsed) {
     return aubSavingsParsed.rows;
+  }
+
+  const metrobankSavingsParsed = parseMetrobankSavingsImportText(text);
+  if (metrobankSavingsParsed) {
+    return metrobankSavingsParsed.rows;
   }
 
   const metrobankParsed = parseMetrobankCreditCardImportText(text);

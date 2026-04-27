@@ -12,6 +12,8 @@ This document captures the Metrobank parsing rules learned from the synthetic tr
 ## Savings Statement Rules
 
 - Use running balance as a first-class field.
+- Treat Metrobank savings statements with `DATE DESCRIPTION DEBIT CREDIT BALANCE` as the canonical savings shape.
+- Prefer the Metrobank savings detector over generic RCBC savings logic when the statement has Metrobank branding and account-type savings metadata.
 - Keep salary credits as `Income`.
 - Keep `Fund Transfer` rows as `Transfers`.
 - Keep `InstaPay Fee` as `Financial`.
@@ -20,6 +22,7 @@ This document captures the Metrobank parsing rules learned from the synthetic tr
 - Preserve `Interest Earned` and `Tax Withheld` separately.
 - Treat `Investment Sweep` as a special transfer-like mapping.
 - Keep `Cash Payment - Thank You - MB` and bill payments to other cards as transfer-like settlement rows.
+- Keep `WA CR` as `Incoming Transfer`, `WA DB` as `Outgoing Transfer`, `ET CR IBFT` as `Incoming Interbank Transfer`, `ET DB IBFT` as `Outgoing Interbank Transfer`, `ET WDL` as `ATM Withdrawal`, and Metrobank service-charge rows as `Financial`.
 
 ## Credit Card Rules
 
