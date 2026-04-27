@@ -794,6 +794,14 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Fund Transfer",
     },
     {
+      patterns: [/cm[_\s-]?inward[_\s-]?r\s+remittance/i, /inward\s+remittance/i],
+      replacement: "Incoming Remittance",
+    },
+    {
+      patterns: [/dm[_\s-]?intra[_\s-]?xfr\s+transfer/i, /intra[_\s-]?bank\s+transfer/i],
+      replacement: "Intra-Bank Transfer",
+    },
+    {
       patterns: [/transfer\s+to\s+gcash/i],
       replacement: "Transfer to GCash",
     },
@@ -822,6 +830,14 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Month-End Sweep",
     },
     {
+      patterns: [/check[_\s-]?dep(?:osit)?/i, /check\s+deposit/i],
+      replacement: "Check Deposit",
+    },
+    {
+      patterns: [/cash[_\s-]?deposit/i],
+      replacement: "Cash Deposit",
+    },
+    {
       patterns: [/adjustment\s+reversal/i],
       replacement: "Adjustment Reversal",
     },
@@ -844,6 +860,14 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     {
       patterns: [/openai\s+chatgpt\s+subscription/i],
       replacement: "OpenAI ChatGPT Subscription",
+    },
+    {
+      patterns: [/chk[_\s-]?batch\s+local/i, /ccd\s+\d+\s+_?chk[_\s-]?batch\s+local/i],
+      replacement: "Check Batch Local",
+    },
+    {
+      patterns: [/emit[_\s-]?intl\s+transaction/i],
+      replacement: "International Transaction",
     },
     {
       patterns: [/lazada/i],

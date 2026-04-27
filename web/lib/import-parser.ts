@@ -228,6 +228,7 @@ const institutionPatterns: Array<{ name: string; pattern: RegExp }> = [
   { name: "UnionBank", pattern: /\bUNIONBANK\b/i },
   { name: "Landbank", pattern: /\bLANDBANK\b/i },
   { name: "Chinabank", pattern: /\bCHINABANK\b/i },
+  { name: "PNB", pattern: /\b(PNB|PHILIPPINE\s+NATIONAL\s+BANK)\b/i },
   { name: "Maya", pattern: /\bMAYA\b/i },
   { name: "GCash", pattern: /\bGCASH\b/i },
   { name: "Wise", pattern: /\bWISE\b/i },
@@ -2770,6 +2771,288 @@ const parseMetrobankCreditCardImportText = (text: string) => {
   };
 };
 
+const pnbStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+  const normalized = text.replace(/\u00a0/g, " ");
+  const compact = normalizeWhitespace(normalized);
+  if (!/STATEMENT\s+OF\s+ACCOUNT\s+REPORT/i.test(compact) || !/ACCOUNT\s+NUMBER/i.test(compact) || !/PERIOD\s+COVERED/i.test(compact)) {
+    return null;
+  }
+
+  const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const accountLine = lines.find((line) => /ACCOUNT\s+NUMBER/i.test(line)) ?? normalized;
+  const accountNumber =
+    accountLine.match(/ACCOUNT\s+NUMBER\s*[:\-]?\s*([0-9\s-]{6,})/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+    detectAccountNumberFromText(normalized);
+  const accountName = formatSimpleBankAccountName("PNB", accountNumber);
+
+  const periodLine = lines.find((line) => /PERIOD\s+COVERED/i.test(line)) ?? null;
+  const periodMatch =
+    periodLine?.match(/FROM\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+TO\s+(\d{1,2}\/\d{1,2}\/\d{4})/i) ??
+    periodLine?.match(/(\d{1,2}\/\d{1,2}\/\d{4}).*?(\d{1,2}\/\d{1,2}\/\d{4})/i);
+  const startDate = periodMatch ? parseDateValue(periodMatch[1]) : null;
+  const endDate = periodMatch ? parseDateValue(periodMatch[2]) : null;
+
+  return {
+    institution: "PNB",
+    accountNumber,
+    accountName,
+    accountType: "bank",
+    openingBalance: null,
+    endingBalance: null,
+    startDate: startDate ? startDate.toISOString() : null,
+    endDate: endDate ? endDate.toISOString() : null,
+    confidence: accountNumber && startDate && endDate ? 94 : accountNumber ? 86 : 72,
+  };
+};
+
+const isPnbBoilerplateLine = (line: string) => {
+  const compact = normalizeWhitespace(line);
+  return (
+    /^STATEMENT\s+OF\s+ACCOUNT\s+REPORT$/i.test(compact) ||
+    /^BURKLEY\s+&\s+AQUINO\s+LAW\s+OFFICE$/i.test(compact) ||
+    /^REQUESTED\s+DATE:/i.test(compact) ||
+    /^PRINTED\s+BY:/i.test(compact) ||
+    /^ACCOUNT\s+NAME:/i.test(compact) ||
+    /^PREFERRED\s+NICKNAME:/i.test(compact) ||
+    /^ACCOUNT\s+NUMBER:/i.test(compact) ||
+    /^CURRENCY:/i.test(compact) ||
+    /^PERIOD\s+COVERED:/i.test(compact) ||
+    /^SBA\s+REFERENCE/i.test(compact) ||
+    /^DATE\s+CHECK\/SEQ\.\s+NO\.\s+WITHDRAWALS\s+DEPOSITS\s+RUNNING\s+BALANCE$/i.test(compact) ||
+    /^NO\.\s+BRANCH\s+CODE\s+DESCRIPTION$/i.test(compact) ||
+    /^NO\.$/i.test(compact) ||
+    /^BRANCH\s+CODE\s+DESCRIPTION$/i.test(compact) ||
+    /^ACCOUNT\s+DATA$/i.test(compact) ||
+    /^BALANCE\s+DATA$/i.test(compact) ||
+    /^ACTIVITY\/INTEREST\s+DATA$/i.test(compact) ||
+    /^PAGE\s+\d+/i.test(compact)
+  );
+};
+
+const isPnbTransactionStartLine = (line: string) => /^\d{1,2}\/\d{1,2}\/\d{4}\b/.test(normalizeWhitespace(line));
+
+const cleanupPnbDescription = (value: string) =>
+  normalizeWhitespace(
+    decompactOcrText(value)
+      .replace(/\b\d{1,2}\/\d{1,2}\/\d{4}\b/g, " ")
+      .replace(/-?\d[\d,]*\.\d{2}/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+
+const guessPnbSavingsCategoryName = (description: string, type: TransactionType, balanceDelta: number | null) => {
+  const lower = description.toLowerCase();
+  if (/fee|charge|withhold|tax/.test(lower)) return "Financial";
+  if (/interest|salary|payroll|remittance|deposit|cash\s*deposit|check\s*dep|check\s*deposit|check[_\s-]?batch|ccd/.test(lower)) {
+    return "Income";
+  }
+  if (/transfer|atm|withdrawal|w\/d|sweep/.test(lower)) return "Transfers";
+  if (balanceDelta !== null) {
+    if (balanceDelta > 0) return "Income";
+    if (balanceDelta < 0) return "Transfers";
+  }
+  return guessCategoryName(description, type);
+};
+
+const guessPnbSavingsType = (description: string, balanceDelta: number | null): TransactionType => {
+  const lower = description.toLowerCase();
+  if (/fee|charge|withhold|tax/.test(lower)) return "expense";
+  if (/interest|salary|payroll|remittance|deposit|cash\s*deposit|check\s*dep|check\s*deposit|check[_\s-]?batch|ccd/.test(lower)) {
+    return "income";
+  }
+  if (/transfer|atm|withdrawal|w\/d|sweep/.test(lower)) return "transfer";
+  if (balanceDelta !== null) {
+    return balanceDelta > 0 ? "income" : "transfer";
+  }
+  return "expense";
+};
+
+const parsePnbSavingsTransactionBlock = (
+  blockLines: string[],
+  metadata: DetectedStatementMetadata,
+  balanceDelta: number | null
+): ParsedImportRow | null => {
+  const normalizedLines = blockLines.map((line) => normalizeWhitespace(decompactOcrText(line))).filter(Boolean);
+  if (normalizedLines.length === 0) {
+    return null;
+  }
+
+  const blockText = normalizedLines.join(" ");
+  const dateLine = normalizedLines.find((line) => isPnbTransactionStartLine(line)) ?? normalizedLines.at(-1) ?? "";
+  const dateToken = dateLine.match(/^(\d{1,2}\/\d{1,2}\/\d{4})/)?.[1] ?? null;
+  const date = parseDateValue(dateToken);
+  if (!date) {
+    return null;
+  }
+
+  const moneyValues = Array.from(blockText.matchAll(/-?\d[\d,]*\.\d{2}/g))
+    .map((match) => parseMoney(match[0]))
+    .filter((value): value is number => value !== null);
+  if (moneyValues.length < 2) {
+    return null;
+  }
+
+  const amountValue = Math.abs(moneyValues.at(-2) ?? moneyValues[0]);
+  const balanceValue = Math.abs(moneyValues.at(-1) ?? amountValue);
+  const cleanedDescription = cleanupPnbDescription(
+    blockText.replace(dateToken ?? "", " ").replace(/-?\d[\d,]*\.\d{2}/g, " ")
+  );
+  const notes = normalizedLines.length > 1 ? normalizedLines.slice(0, -1).join(" • ") : null;
+  const type = guessPnbSavingsType(cleanedDescription, balanceDelta);
+  const categoryName = guessPnbSavingsCategoryName(cleanedDescription, type, balanceDelta);
+
+  return {
+    date: date.toISOString().slice(0, 10),
+    amount: amountValue.toFixed(2),
+    merchantRaw: humanizeMerchantText(cleanedDescription),
+    merchantClean: summarizeMerchantText(cleanedDescription, metadata.institution ?? "PNB"),
+    description: cleanedDescription,
+    categoryName,
+    accountName: metadata.accountName ?? "PNB",
+    institution: metadata.institution ?? undefined,
+    type,
+    rawPayload: {
+      bank: "PNB",
+      line: blockText,
+      amountValues: moneyValues.map((value) => value.toFixed(2)),
+      amountText: amountValue.toFixed(2),
+      balanceText: balanceValue.toFixed(2),
+      notes,
+    },
+  } satisfies ParsedImportRow;
+};
+
+const parsePnbImportText = (text: string) => {
+  const normalizedText = text.replace(/\u00a0/g, " ");
+  const metadata = pnbStatementMetadata(normalizedText);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = normalizedText.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const headerIndex = lines.findIndex(
+    (line) =>
+      /DATE\s+CHECK\/SEQ\.\s+NO\.\s+WITHDRAWALS\s+DEPOSITS\s+RUNNING\s+BALANCE/i.test(line) ||
+      /NEGOTIATING\s+TRANSACTION/i.test(line)
+  );
+  if (headerIndex < 0) {
+    return null;
+  }
+
+  const transactionLines = lines.slice(headerIndex + 1);
+  const blocks: string[][] = [];
+  let current: string[] = [];
+
+  for (const line of transactionLines) {
+    if (isPnbTransactionStartLine(line)) {
+      if (current.length > 0) {
+        blocks.push(current);
+      }
+      current = [line];
+      continue;
+    }
+
+    if (isPnbBoilerplateLine(line)) {
+      continue;
+    }
+
+    if (current.length > 0) {
+      current.push(line);
+    }
+  }
+
+  if (current.length > 0) {
+    blocks.push(current);
+  }
+
+  const interimRows = blocks
+    .map((block) => {
+      const normalizedLines = block.map((line) => normalizeWhitespace(decompactOcrText(line))).filter(Boolean);
+      if (normalizedLines.length === 0) {
+        return null;
+      }
+
+      const blockText = normalizedLines.join(" ");
+      const dateLine = normalizedLines.find((line) => isPnbTransactionStartLine(line)) ?? normalizedLines.at(-1) ?? "";
+      const dateToken = dateLine.match(/^(\d{1,2}\/\d{1,2}\/\d{4})/)?.[1] ?? null;
+      const date = parseDateValue(dateToken);
+      if (!date) {
+        return null;
+      }
+
+      const moneyValues = Array.from(blockText.matchAll(/-?\d[\d,]*\.\d{2}/g))
+        .map((match) => parseMoney(match[0]))
+        .filter((value): value is number => value !== null);
+      if (moneyValues.length < 2) {
+        return null;
+      }
+
+      const amountValue = Math.abs(moneyValues.at(-2) ?? moneyValues[0]);
+      const balanceValue = Math.abs(moneyValues.at(-1) ?? amountValue);
+      const cleanedDescription = cleanupPnbDescription(
+        blockText.replace(dateToken ?? "", " ").replace(/-?\d[\d,]*\.\d{2}/g, " ")
+      );
+      const notes = normalizedLines.length > 1 ? normalizedLines.slice(0, -1).join(" • ") : null;
+      return {
+        date: date.toISOString().slice(0, 10),
+        amount: amountValue,
+        balance: balanceValue,
+        description: cleanedDescription,
+        notes,
+        line: blockText,
+      };
+    })
+    .filter(Boolean) as Array<{
+    date: string;
+    amount: number;
+    balance: number;
+    description: string;
+    notes: string | null;
+    line: string;
+  }>;
+
+  if (interimRows.length === 0) {
+    return null;
+  }
+
+  const rows = interimRows.map((row, index) => {
+    const nextBalance = interimRows[index + 1]?.balance ?? null;
+    const balanceDelta = nextBalance !== null ? row.balance - nextBalance : null;
+    const type = guessPnbSavingsType(row.description, balanceDelta);
+    const categoryName = guessPnbSavingsCategoryName(row.description, type, balanceDelta);
+    return {
+      date: row.date,
+      amount: row.amount.toFixed(2),
+      merchantRaw: humanizeMerchantText(row.description),
+      merchantClean: summarizeMerchantText(row.description, metadata.institution ?? "PNB"),
+      description: row.description,
+      categoryName,
+      accountName: metadata.accountName ?? "PNB",
+      institution: metadata.institution ?? undefined,
+      type,
+      rawPayload: {
+        bank: "PNB",
+        line: row.line,
+        amountText: row.amount.toFixed(2),
+        balanceText: row.balance.toFixed(2),
+        notes: row.notes,
+      },
+    } satisfies ParsedImportRow;
+  });
+
+  const endingBalance = rows.length > 0 ? parseMoney((rows[0].rawPayload as Record<string, unknown> | undefined)?.balanceText as string | null) : null;
+
+  return {
+    metadata: {
+      ...metadata,
+      openingBalance: metadata.openingBalance ?? null,
+      endingBalance: endingBalance ?? metadata.endingBalance ?? null,
+      confidence: Math.min(100, metadata.confidence + (rows.length >= 6 ? 4 : 2)),
+    },
+    rows,
+  };
+};
+
 const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = text.replace(/\u00a0/g, " ");
   const compact = normalizeWhitespace(normalized);
@@ -4030,6 +4313,11 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     return unionbankMetadata;
   }
 
+  const pnbParsed = parsePnbImportText(text);
+  if (pnbParsed) {
+    return pnbParsed.metadata;
+  }
+
   const bpiCreditMetadata = bpiCreditCardStatementMetadata(text);
   if (bpiCreditMetadata) {
     return bpiCreditMetadata;
@@ -4285,6 +4573,11 @@ export const parseImportText = (
   const bpiCreditParsed = parseBpiCreditCardImportText(text);
   if (bpiCreditParsed) {
     return bpiCreditParsed.rows;
+  }
+
+  const pnbParsed = parsePnbImportText(text);
+  if (pnbParsed) {
+    return pnbParsed.rows;
   }
 
   const bpiParsed = parseBpiImportText(text);
