@@ -65,6 +65,9 @@ This document captures the PNB parsing rules learned from the synthetic training
 - Preserve the line-wrapped branch / negotiating / transaction fragments that appear before the dated row.
 - Use the dated row's running balance as the strongest balance signal, and prefer the newest row's balance as the statement ending balance.
 - Skip the report header, request metadata, and branch / office boilerplate so they do not become fake transactions.
+- `PHILIPPINE NATIONAL BANK` statements with `Statement Period`, `Date Description Debit (PHP) Credit (PHP) Balance (PHP)`, and month/day rows should also parse as savings ledgers.
+- For that simpler shape, ignore `Starting Balance`, `Total Credits`, `Total Debits`, `Ending Balance`, and the system-generated footer note.
+- Treat `GCash Top-up` as a transfer, `Online Transfer` as a transfer, and keep bill-payment rows under `Bills & Utilities`.
 
 ## Notes Handling
 

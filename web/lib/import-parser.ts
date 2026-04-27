@@ -2774,7 +2774,14 @@ const parseMetrobankCreditCardImportText = (text: string) => {
 const pnbStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = text.replace(/\u00a0/g, " ");
   const compact = normalizeWhitespace(normalized);
-  if (!/STATEMENT\s+OF\s+ACCOUNT\s+REPORT/i.test(compact) || !/ACCOUNT\s+NUMBER/i.test(compact) || !/PERIOD\s+COVERED/i.test(compact)) {
+  const hasReportShape = /STATEMENT\s+OF\s+ACCOUNT\s+REPORT/i.test(compact) && /PERIOD\s+COVERED/i.test(compact);
+  const hasSimpleLedgerShape =
+    /\bPHILIPPINE\s+NATIONAL\s+BANK\b/i.test(compact) &&
+    /STATEMENT\s+PERIOD/i.test(compact) &&
+    /DATE\s+DESCRIPTION\s+DEBIT/i.test(compact) &&
+    /BALANCE\s*\(PHP\)/i.test(compact);
+
+  if (!/ACCOUNT\s+NUMBER/i.test(compact) || (!hasReportShape && !hasSimpleLedgerShape)) {
     return null;
   }
 
@@ -2785,8 +2792,11 @@ const pnbStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     detectAccountNumberFromText(normalized);
   const accountName = formatSimpleBankAccountName("PNB", accountNumber);
 
-  const periodLine = lines.find((line) => /PERIOD\s+COVERED/i.test(line)) ?? null;
+  const periodLine = lines.find((line) => /STATEMENT\s+PERIOD/i.test(line) || /PERIOD\s+COVERED/i.test(line)) ?? null;
   const periodMatch =
+    periodLine?.match(/STATEMENT\s+PERIOD\s*[:\-]?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})\s*[-–—]\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i) ??
+    periodLine?.match(/PERIOD\s+COVERED\s*[:\-]?\s*(?:CUSTOM\s+DATE\s+RANGE\s+)?FROM\s+([A-Za-z]+\s+\d{1,2},?\s+\d{4})\s+TO\s+([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i) ??
+    periodLine?.match(/FROM\s+([A-Za-z]+\s+\d{1,2},?\s+\d{4})\s+TO\s+([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i) ??
     periodLine?.match(/FROM\s+(\d{1,2}\/\d{1,2}\/\d{4})\s+TO\s+(\d{1,2}\/\d{1,2}\/\d{4})/i) ??
     periodLine?.match(/(\d{1,2}\/\d{1,2}\/\d{4}).*?(\d{1,2}\/\d{1,2}\/\d{4})/i);
   const startDate = periodMatch ? parseDateValue(periodMatch[1]) : null;
@@ -2809,6 +2819,7 @@ const isPnbBoilerplateLine = (line: string) => {
   const compact = normalizeWhitespace(line);
   return (
     /^STATEMENT\s+OF\s+ACCOUNT\s+REPORT$/i.test(compact) ||
+    /^PHILIPPINE\s+NATIONAL\s+BANK$/i.test(compact) ||
     /^BURKLEY\s+&\s+AQUINO\s+LAW\s+OFFICE$/i.test(compact) ||
     /^REQUESTED\s+DATE:/i.test(compact) ||
     /^PRINTED\s+BY:/i.test(compact) ||
@@ -2817,8 +2828,10 @@ const isPnbBoilerplateLine = (line: string) => {
     /^ACCOUNT\s+NUMBER:/i.test(compact) ||
     /^CURRENCY:/i.test(compact) ||
     /^PERIOD\s+COVERED:/i.test(compact) ||
+    /^STATEMENT\s+PERIOD:/i.test(compact) ||
     /^SBA\s+REFERENCE/i.test(compact) ||
     /^DATE\s+CHECK\/SEQ\.\s+NO\.\s+WITHDRAWALS\s+DEPOSITS\s+RUNNING\s+BALANCE$/i.test(compact) ||
+    /^DATE\s+DESCRIPTION\s+DEBIT\s*\(PHP\)\s+CREDIT\s*\(PHP\)\s+BALANCE\s*\(PHP\)$/i.test(compact) ||
     /^NO\.\s+BRANCH\s+CODE\s+DESCRIPTION$/i.test(compact) ||
     /^NO\.$/i.test(compact) ||
     /^BRANCH\s+CODE\s+DESCRIPTION$/i.test(compact) ||
@@ -2843,10 +2856,11 @@ const cleanupPnbDescription = (value: string) =>
 const guessPnbSavingsCategoryName = (description: string, type: TransactionType, balanceDelta: number | null) => {
   const lower = description.toLowerCase();
   if (/fee|charge|withhold|tax/.test(lower)) return "Financial";
+  if (/bill|payment|water|meralco/.test(lower)) return "Bills & Utilities";
   if (/interest|salary|payroll|remittance|deposit|cash\s*deposit|check\s*dep|check\s*deposit|check[_\s-]?batch|ccd/.test(lower)) {
     return "Income";
   }
-  if (/transfer|atm|withdrawal|w\/d|sweep/.test(lower)) return "Transfers";
+  if (/transfer|atm|withdrawal|w\/d|sweep|gcash\s*top-?up/.test(lower)) return "Transfers";
   if (balanceDelta !== null) {
     if (balanceDelta > 0) return "Income";
     if (balanceDelta < 0) return "Transfers";
@@ -2857,10 +2871,11 @@ const guessPnbSavingsCategoryName = (description: string, type: TransactionType,
 const guessPnbSavingsType = (description: string, balanceDelta: number | null): TransactionType => {
   const lower = description.toLowerCase();
   if (/fee|charge|withhold|tax/.test(lower)) return "expense";
+  if (/bill|payment|water|meralco/.test(lower)) return "expense";
   if (/interest|salary|payroll|remittance|deposit|cash\s*deposit|check\s*dep|check\s*deposit|check[_\s-]?batch|ccd/.test(lower)) {
     return "income";
   }
-  if (/transfer|atm|withdrawal|w\/d|sweep/.test(lower)) return "transfer";
+  if (/transfer|atm|withdrawal|w\/d|sweep|gcash\s*top-?up/.test(lower)) return "transfer";
   if (balanceDelta !== null) {
     return balanceDelta > 0 ? "income" : "transfer";
   }
@@ -2930,6 +2945,94 @@ const parsePnbImportText = (text: string) => {
   }
 
   const lines = normalizedText.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const simpleRows: ParsedImportRow[] = [];
+  const simpleRowPattern =
+    /^(?<month>[A-Za-z]{3,9})\s+(?<day>\d{1,2})\s+(?<description>.+?)\s+(?<debit>-|[0-9][0-9,]*\.\d{2})\s+(?<credit>-|[0-9][0-9,]*\.\d{2})\s+(?<balance>[0-9][0-9,]*\.\d{2})$/i;
+  const yearHint =
+    metadata.endDate ? new Date(metadata.endDate).getUTCFullYear() : metadata.startDate ? new Date(metadata.startDate).getUTCFullYear() : new Date().getUTCFullYear();
+
+  for (const line of lines) {
+    const compactLine = normalizeWhitespace(decompactOcrText(line)).replace(/\b[nN]\b/g, " ");
+    if (
+      !compactLine ||
+      /^Starting\s+Balance:/i.test(compactLine) ||
+      /^Total\s+(Credits|Debits):/i.test(compactLine) ||
+      /^Ending\s+Balance:/i.test(compactLine) ||
+      /^This\s+is\s+a\s+system-generated\s+statement/i.test(compactLine)
+    ) {
+      continue;
+    }
+
+    const rowMatch = compactLine.match(simpleRowPattern);
+    if (!rowMatch?.groups) {
+      continue;
+    }
+
+    const monthIndex = monthIndexByAbbr[rowMatch.groups.month.slice(0, 3).toUpperCase()];
+    if (monthIndex === undefined) {
+      continue;
+    }
+
+    const date = new Date(Date.UTC(yearHint, monthIndex, Number(rowMatch.groups.day), 12));
+    const debit = parseMoney(rowMatch.groups.debit);
+    const credit = parseMoney(rowMatch.groups.credit);
+    const amountValue = Math.abs(debit ?? credit ?? 0);
+    const balanceValue = parseMoney(rowMatch.groups.balance);
+    if (!Number.isFinite(amountValue) || amountValue === 0 || balanceValue === null) {
+      continue;
+    }
+
+      const description = normalizeWhitespace(rowMatch.groups.description).replace(/\s+/g, " ").trim();
+    const type: TransactionType =
+      /salary|credit|received|deposit|cash\s*deposit|remittance/i.test(description)
+        ? "income"
+        : /transfer|atm|withdrawal|sweep|gcash\s*top-?up/i.test(description)
+          ? "transfer"
+        : /bill|payment|fee|charge|tax|withhold/i.test(description)
+          ? "expense"
+            : debit && !credit
+              ? "expense"
+              : "income";
+    const categoryName = guessPnbSavingsCategoryName(description, type, null);
+
+    simpleRows.push({
+      date: date.toISOString().slice(0, 10),
+      amount: amountValue.toFixed(2),
+      merchantRaw: humanizeMerchantText(description),
+      merchantClean: summarizeMerchantText(description, metadata.institution ?? "PNB"),
+      description,
+      categoryName,
+      accountName: metadata.accountName ?? "PNB",
+      institution: metadata.institution ?? undefined,
+      type,
+      rawPayload: {
+        bank: "PNB",
+        line: compactLine,
+        amountText: amountValue.toFixed(2),
+        balanceText: balanceValue.toFixed(2),
+        notes: null,
+      },
+    });
+  }
+
+  if (simpleRows.length > 0) {
+    return {
+      metadata: {
+        ...metadata,
+        endingBalance: parseMoney((simpleRows.at(-1)?.rawPayload as Record<string, unknown> | undefined)?.balanceText as string | null) ?? metadata.endingBalance ?? null,
+        confidence: Math.min(100, metadata.confidence + (simpleRows.length >= 6 ? 4 : 2)),
+      },
+      rows: simpleRows,
+    };
+  }
+
+  const simpleHeaderIndex = lines.findIndex(
+    (line) => /^DATE\s+DESCRIPTION\s+DEBIT\s*\(PHP\)\s+CREDIT\s*\(PHP\)\s+BALANCE\s*\(PHP\)$/i.test(line)
+  );
+  if (simpleHeaderIndex >= 0) {
+    return null;
+  }
+
   const headerIndex = lines.findIndex(
     (line) =>
       /DATE\s+CHECK\/SEQ\.\s+NO\.\s+WITHDRAWALS\s+DEPOSITS\s+RUNNING\s+BALANCE/i.test(line) ||

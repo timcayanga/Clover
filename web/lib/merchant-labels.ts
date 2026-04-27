@@ -806,6 +806,14 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Transfer to GCash",
     },
     {
+      patterns: [/gcash\s+top-?up/i],
+      replacement: "GCash Top-up",
+    },
+    {
+      patterns: [/online\s+transfer\s+to/i],
+      replacement: "Online Transfer",
+    },
+    {
       patterns: [/transfer\s+to\s+maya/i],
       replacement: "Transfer to Maya",
     },
