@@ -2356,7 +2356,7 @@ const parseMetrobankSavingsImportText = (text: string) => {
   }
 
   const lines = normalizedText.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
-  const headerIndex = lines.findIndex((line) => /DATE\s+DESCRIPTION\s+(?:CHECK\s+)?DEBIT\s+CREDIT\s+BALANCE/i.test(line));
+  const headerIndex = lines.findIndex((line) => /DATE\s+DESCRIPTION\s+(?:CHECK\s+NO\s+|CHECK\s+)?DEBIT\s+CREDIT\s+BALANCE/i.test(line));
   if (headerIndex < 0) {
     return null;
   }
