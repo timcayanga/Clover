@@ -100,18 +100,6 @@ const formatDate = (value: string) =>
     year: "numeric",
   });
 
-const formatInvestmentFieldValue = (field: { key: string; inputMode?: "text" | "decimal"; type?: "text" | "date" }, value: string) => {
-  if (!value) {
-    return "Not set";
-  }
-
-  if (field.type === "date") {
-    return formatDate(value);
-  }
-
-  return value;
-};
-
 const getInvestmentHighlights = (account: Account) => {
   const subtype = account.investmentSubtype;
 
@@ -433,16 +421,6 @@ export default function InvestmentsPage() {
     [manualInvestmentSubtype]
   );
 
-  const manualAccountBrand = useMemo(
-    () =>
-      getAccountBrand({
-        institution: manualInstitution,
-        name: manualName,
-        type: "investment",
-      }),
-    [manualInstitution, manualName]
-  );
-
   const activeInvestmentFilters = Boolean(
     normalizeInvestmentSearchText(investmentSearch) || investmentSubtypeFilter !== "all" || investmentSortKey !== "value_desc"
   );
@@ -552,7 +530,7 @@ export default function InvestmentsPage() {
 
     const name = manualName.trim();
     if (!name) {
-      setMessage("Investment name is required.");
+      setMessage("Asset code / ticker is required.");
       return;
     }
 
@@ -968,9 +946,6 @@ export default function InvestmentsPage() {
               <div>
                 <p className="eyebrow">Investments</p>
                 <h4 id="add-investment-title">Add an investment</h4>
-                <p className="modal-copy">
-                  Track a market holding, fixed income product, or another investment account in one place.
-                </p>
               </div>
               <button className="icon-button" type="button" onClick={() => setAddOpen(false)} aria-label="Close add investment">
                 ×
@@ -980,8 +955,11 @@ export default function InvestmentsPage() {
             <div className="accounts-add-grid">
               <form className="accounts-manual-form" onSubmit={createManualInvestment}>
                 <label>
-                  Name
-                  <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: COL UITF Growth Fund" />
+                  Asset code / ticker
+                  <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: BPI or FMETF" />
+                  <span className="field-help">
+                    Use the symbol, fund code, or short holding label here. The institution stays separate as the platform or broker.
+                  </span>
                 </label>
                 <InstitutionAutocomplete
                   label="Institution"
@@ -1009,6 +987,7 @@ export default function InvestmentsPage() {
                     inputMode="decimal"
                     placeholder="0.00"
                   />
+                  <span className="field-help">This is the current total value of the holding, not the amount you paid to buy it.</span>
                 </label>
 
                 {manualInvestmentSubtype ? (
@@ -1044,6 +1023,11 @@ export default function InvestmentsPage() {
                             inputMode={field.inputMode}
                             type={field.type}
                           />
+                          {field.key === "investmentCostBasis" ? (
+                            <span className="field-help">
+                              Enter the total purchase value for this holding. If you bought the same asset at different times, use the combined total or create separate lots.
+                            </span>
+                          ) : null}
                         </label>
                       );
                     })}
@@ -1054,34 +1038,6 @@ export default function InvestmentsPage() {
                   {isSaving ? "Saving..." : "Create investment"}
                 </button>
               </form>
-
-              <aside className="accounts-add-preview glass" aria-label="Investment preview">
-                <div className="accounts-add-preview__head">
-                  <p className="eyebrow">Live preview</p>
-                  <AccountBrandMark accountBrand={manualAccountBrand} label={manualName || manualInstitution || "Investment"} />
-                </div>
-                <strong>{manualName || "Investment name"}</strong>
-                <p>
-                  {manualAccountBrand.label}
-                  {manualInvestmentSubtype ? ` · ${getInvestmentSubtypeLabel(manualInvestmentSubtype)}` : ""}
-                  {manualInstitution.trim() ? ` · ${manualInstitution.trim()}` : ""}
-                </p>
-                <div className="accounts-add-preview__investment">
-                  <span>
-                    Current value <strong>{manualBalance.trim() || "Not set"}</strong>
-                  </span>
-                  {manualInvestmentFieldConfigs.map((field) => (
-                    <span key={field.key}>
-                      {field.label} <strong>{formatInvestmentFieldValue(field, getManualInvestmentFieldValue(field.key).trim())}</strong>
-                    </span>
-                  ))}
-                </div>
-                <span>
-                  {manualInvestmentSubtype
-                    ? getInvestmentSubtypeDescription(manualInvestmentSubtype)
-                    : "Choose a subtype to tailor the fields Clover asks for."}
-                </span>
-              </aside>
             </div>
           </section>
         </div>

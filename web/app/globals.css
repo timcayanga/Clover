@@ -11374,11 +11374,13 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-add-modal {
   width: min(720px, calc(100vw - 28px));
+  max-height: calc(100dvh - 28px);
+  overflow: auto;
 }
 
 .accounts-add-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 250px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
   align-items: start;
 }
@@ -11387,6 +11389,10 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   gap: 12px;
   max-width: 100%;
+}
+
+.accounts-manual-form > label {
+  gap: 6px;
 }
 
 .institution-autocomplete {
@@ -11490,61 +11496,10 @@ input.transaction-inline-edit--amount::placeholder {
   justify-self: start;
 }
 
-.accounts-add-preview {
-  display: grid;
-  gap: 12px;
-  align-content: start;
-  padding: 16px 18px;
-  border-radius: 22px;
-  border: 1px solid rgba(3, 168, 192, 0.12);
-  background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.14), transparent 42%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(245, 251, 252, 0.96));
-}
-
-.accounts-add-preview__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.accounts-add-preview strong {
-  font-size: 1.15rem;
-  line-height: 1.2;
-}
-
-.accounts-add-preview p {
+.field-help {
   color: var(--muted);
-}
-
-.accounts-add-preview span {
-  color: var(--muted-2);
-  font-size: 0.9rem;
+  font-size: 12px;
   line-height: 1.45;
-}
-
-.accounts-add-preview__investment {
-  display: grid;
-  gap: 6px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(3, 168, 192, 0.12);
-  background: rgba(255, 255, 255, 0.76);
-}
-
-.accounts-add-preview__investment span {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--muted);
-  font-size: 0.84rem;
-}
-
-.accounts-add-preview__investment strong {
-  color: var(--ink);
-  font-size: 0.88rem;
 }
 
 .accounts-account-card__investment-meta {
