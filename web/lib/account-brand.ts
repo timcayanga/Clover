@@ -79,8 +79,8 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     match: /\b(METROBANK|METROPOLITAN BANK)\b/i,
     brand: makeBrand({
       label: "Metrobank",
-      logoSrc: philippinesLogoPath("metrobank.png"),
-      logoSrcs: [philippinesLogoPath("metrobank.png")],
+      logoSrc: philippinesLogoPath("metrobank.png?v=20260427"),
+      logoSrcs: [philippinesLogoPath("metrobank.png?v=20260427")],
       fallbackIconSrc: bankIcon,
       accent: "#00539B",
       background: "linear-gradient(135deg, rgba(0, 83, 155, 0.18), rgba(0, 83, 155, 0.08))",
