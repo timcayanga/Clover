@@ -573,6 +573,8 @@ function AccountsPageContent() {
   const workspaceLoadSeqRef = useRef(0);
   const deletedAccountIdsRef = useRef(new Set<string>(getDeletedWorkspaceAccountIds(readSelectedWorkspaceId())));
   const initialWorkspaceId = readSelectedWorkspaceId();
+  const deletingAccountIdFromQuery = searchParams.get("deletingAccountId");
+  const deletingWorkspaceIdFromQuery = searchParams.get("deletingWorkspaceId");
   const initialCachedWorkspace = getCachedAccountsWorkspace(initialWorkspaceId);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -641,7 +643,13 @@ function AccountsPageContent() {
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
   const [deletingAccountIds, setDeletingAccountIds] = useState<string[]>(
-    () => getDeletingWorkspaceAccountIds(initialWorkspaceId)
+    () => {
+      const ids = new Set(getDeletingWorkspaceAccountIds(deletingWorkspaceIdFromQuery ?? initialWorkspaceId));
+      if (deletingAccountIdFromQuery) {
+        ids.add(deletingAccountIdFromQuery);
+      }
+      return Array.from(ids);
+    }
   );
   const deletingAccountIdsRef = useRef(new Set<string>(getDeletingWorkspaceAccountIds(initialWorkspaceId)));
 
@@ -792,6 +800,28 @@ function AccountsPageContent() {
   }, [router, searchParams]);
 
   useEffect(() => {
+    const deletingAccountId = searchParams.get("deletingAccountId");
+    if (!deletingAccountId) {
+      return;
+    }
+
+    const activeWorkspaceId = searchParams.get("deletingWorkspaceId") ?? readSelectedWorkspaceId() ?? selectedWorkspaceId;
+    if (!activeWorkspaceId) {
+      return;
+    }
+
+    markDeletingWorkspaceAccount(activeWorkspaceId, deletingAccountId);
+    deletingAccountIdsRef.current.add(deletingAccountId);
+    setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+
+    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    nextSearchParams.delete("deletingAccountId");
+    nextSearchParams.delete("deletingWorkspaceId");
+    const nextQuery = nextSearchParams.toString();
+    router.replace(nextQuery ? `/accounts?${nextQuery}` : "/accounts");
+  }, [router, searchParams, selectedWorkspaceId]);
+
+  useEffect(() => {
     if (!selectedWorkspaceId) {
       setAccounts([]);
       setAccountRules([]);
@@ -804,6 +834,12 @@ function AccountsPageContent() {
 
     deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(selectedWorkspaceId));
     deletingAccountIdsRef.current = new Set(getDeletingWorkspaceAccountIds(selectedWorkspaceId));
+    if (
+      deletingAccountIdFromQuery &&
+      (!deletingWorkspaceIdFromQuery || deletingWorkspaceIdFromQuery === selectedWorkspaceId)
+    ) {
+      deletingAccountIdsRef.current.add(deletingAccountIdFromQuery);
+    }
     setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
 
     if (hydrateWorkspaceFromCache(selectedWorkspaceId)) {

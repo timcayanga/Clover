@@ -531,9 +531,10 @@ function AccountDetailPageContent() {
       ? checkpointBalance - currentBalance
       : null;
 
+  const selectedWorkspaceId = readSelectedWorkspaceId();
   const deletingAccountIds = useMemo(
-    () => new Set(getDeletingWorkspaceAccountIds(account?.workspaceId ?? "")),
-    [account?.workspaceId]
+    () => new Set(getDeletingWorkspaceAccountIds(account?.workspaceId ?? selectedWorkspaceId ?? "")),
+    [account?.workspaceId, selectedWorkspaceId]
   );
 
   const checkpointGapLabel = useMemo(() => {
@@ -606,7 +607,7 @@ function AccountDetailPageContent() {
 
     setDeleteBusy(true);
     try {
-      const workspaceId = account?.workspaceId ?? null;
+      const workspaceId = account?.workspaceId ?? selectedWorkspaceId ?? readSelectedWorkspaceId() ?? null;
       if (workspaceId) {
         markDeletingWorkspaceAccount(workspaceId, accountId);
       }
@@ -615,7 +616,13 @@ function AccountDetailPageContent() {
         method: "DELETE",
       });
 
-      router.replace("/accounts");
+      const deleteRedirectSearchParams = new URLSearchParams();
+      deleteRedirectSearchParams.set("deletingAccountId", accountId);
+      if (workspaceId) {
+        deleteRedirectSearchParams.set("deletingWorkspaceId", workspaceId);
+      }
+
+      router.replace(`/accounts?${deleteRedirectSearchParams.toString()}`);
       void deleteRequest
         .then(async (response) => {
           if (!response.ok) {
