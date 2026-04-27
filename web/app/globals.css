@@ -10519,10 +10519,33 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 14px;
 }
 
+.accounts-detail__panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.accounts-detail__panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 4px;
+  background: linear-gradient(90deg, var(--account-accent), var(--account-accent-faint), transparent 88%);
+  pointer-events: none;
+}
+
 .accounts-detail__summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+
+.accounts-detail__summary .status-card,
+.accounts-detail__investment-summary .status-card,
+.accounts-detail__reconciliation-grid .status-card,
+.accounts-detail__transactions .status-card,
+.accounts-detail__imports .status-card {
+  border: 1px solid var(--account-accent-soft);
+  box-shadow: inset 0 3px 0 var(--account-accent);
 }
 
 .accounts-detail__summary .status-card > div {
@@ -10544,8 +10567,8 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-detail__reconciliation {
   padding: 18px;
   border-radius: 22px;
-  border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--account-accent-soft);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), var(--account-accent-faint));
   box-shadow: var(--shadow-soft);
   display: grid;
   gap: 14px;
@@ -10575,7 +10598,7 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 12px;
   padding: 14px;
   border-radius: 20px;
-  border: 1px solid var(--stroke);
+  border: 1px solid var(--account-accent-soft);
   background: rgba(247, 249, 250, 0.92);
 }
 
@@ -10594,8 +10617,8 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 12px;
   padding: 18px;
   border-radius: 22px;
-  border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--account-accent-soft);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), var(--account-accent-faint));
   box-shadow: var(--shadow-soft);
 }
 
@@ -10629,8 +10652,8 @@ input.transaction-inline-edit--amount::placeholder {
   margin-top: 20px;
   padding: 18px;
   border-radius: 22px;
-  border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--account-accent-soft);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), var(--account-accent-faint));
   box-shadow: var(--shadow-soft);
 }
 
@@ -11520,6 +11543,9 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   gap: 14px;
   padding: 18px 20px 20px;
+  border: 1px solid var(--account-accent-soft);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), var(--account-accent-faint));
+  box-shadow: var(--shadow-soft);
 }
 
 .accounts-detail__investment-summary {

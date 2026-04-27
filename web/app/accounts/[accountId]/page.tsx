@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
@@ -106,6 +106,20 @@ const parseNullableNumber = (value: string | null | undefined) => {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
+};
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const normalized = hex.trim().replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) {
+    return `rgba(14, 165, 183, ${alpha})`;
+  }
+
+  const parsed = Number.parseInt(normalized, 16);
+  const red = (parsed >> 16) & 255;
+  const green = (parsed >> 8) & 255;
+  const blue = parsed & 255;
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 };
 
 const formatNullableDate = (value: string | null | undefined) => (value ? formatDate(value) : "Not set");
@@ -503,6 +517,16 @@ function AccountDetailPageContent() {
     [account?.institution, account?.name, account?.type]
   );
 
+  const accountBrandStyles = useMemo(
+    () =>
+      ({
+        "--account-accent": accountBrand.accent,
+        "--account-accent-soft": hexToRgba(accountBrand.accent, 0.18),
+        "--account-accent-faint": hexToRgba(accountBrand.accent, 0.08),
+      }) as CSSProperties,
+    [accountBrand.accent]
+  );
+
   const checkpointStatus = useMemo(() => {
     return getCheckpointSummary(latestCheckpoint).label;
   }, [latestCheckpoint]);
@@ -652,7 +676,7 @@ function AccountDetailPageContent() {
 
   return (
     <CloverShell active="accounts" title={account?.name ?? "Account"} kicker="Account history" subtitle="View the full statement history for a single account." showTopbar={false}>
-      <section className="panel">
+      <section className="panel accounts-detail__panel" style={accountBrandStyles}>
         <div className="accounts-detail__header">
           <div className="accounts-detail__headline">
             {account ? <AccountBrandMark accountBrand={accountBrand} label={account.name} /> : null}
