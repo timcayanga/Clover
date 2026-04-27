@@ -124,8 +124,6 @@ const hexToRgba = (hex: string, alpha: number) => {
 
 const formatNullableDate = (value: string | null | undefined) => (value ? formatDate(value) : "Not set");
 
-const isSpendableAccountType = (value: string) => value === "bank" || value === "wallet" || value === "cash";
-
 const getCategoryIconSrc = (categoryName: string | null | undefined) => {
   switch ((categoryName ?? "").trim().toLowerCase()) {
     case "income":
@@ -527,6 +525,40 @@ function AccountDetailPageContent() {
       ),
     [account?.balance, latestCheckpoint, transactions]
   );
+  const accountDetailValueCard = useMemo(() => {
+    if (!account) {
+      return {
+        label: "Spendable amount",
+        value: currentBalance,
+      };
+    }
+
+    if (account.type === "credit_card") {
+      return {
+        label: "Outstanding balance",
+        value: Math.abs(currentBalance),
+      };
+    }
+
+    if (account.type === "investment") {
+      if (isFixedIncomeInvestmentSubtype(investmentSubtype)) {
+        return {
+          label: investmentMaturityValue !== null ? "Maturity value" : "Principal",
+          value: investmentMaturityValue ?? investmentPrincipal ?? currentBalance,
+        };
+      }
+
+      return {
+        label: "Current value",
+        value: currentBalance,
+      };
+    }
+
+    return {
+      label: "Spendable amount",
+      value: currentBalance,
+    };
+  }, [account, currentBalance, investmentMaturityValue, investmentPrincipal, investmentSubtype]);
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {
       return null;
@@ -696,8 +728,8 @@ function AccountDetailPageContent() {
             </div>
             <div className="status-card">
               <div>
-                <div className="panel-muted">Spendable amount</div>
-                <strong>{currencyFormatter.format(isSpendableAccountType(account.type) ? currentBalance : 0)}</strong>
+                <div className="panel-muted">{accountDetailValueCard.label}</div>
+                <strong>{currencyFormatter.format(accountDetailValueCard.value)}</strong>
               </div>
             </div>
             <div className="status-card">
