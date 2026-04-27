@@ -710,6 +710,7 @@ label {
 .sidebar-profile {
   appearance: none;
   border: 0;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -12410,6 +12411,42 @@ input.transaction-inline-edit--amount::placeholder {
   word-break: break-word;
 }
 
+.admin-data-qa__sample-panel {
+  gap: 16px;
+}
+
+.admin-data-qa__sample-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-data-qa__sample-card {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(245, 248, 250, 0.88);
+  border: 1px solid rgba(219, 227, 232, 0.82);
+}
+
+.admin-data-qa__sample-card span {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.admin-data-qa__sample-card strong {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.admin-data-qa__sample-card small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .admin-data-qa-run-page__actions {
   display: flex;
   flex-wrap: wrap;
@@ -16813,7 +16850,8 @@ input.transaction-inline-edit--amount::placeholder {
   .settings-data-grid,
   .settings-data-delete,
   .settings-plan-grid,
-  .settings-plan-usage {
+  .settings-plan-usage,
+  .admin-data-qa__sample-grid {
     grid-template-columns: 1fr;
   }
 }
