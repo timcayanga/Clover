@@ -10092,10 +10092,10 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-overview-card {
   display: grid;
   place-items: center;
-  gap: 6px;
-  min-height: 120px;
-  padding: 14px 12px;
-  border-radius: 18px;
+  gap: 4px;
+  min-height: 92px;
+  padding: 10px 12px 11px;
+  border-radius: 16px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow-soft);
@@ -10103,13 +10103,15 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-overview-card .eyebrow {
-  font-size: 0.68rem;
-  letter-spacing: 0.16em;
+  font-size: 0.64rem;
+  letter-spacing: 0.18em;
+  font-weight: 800;
+  color: var(--ink);
 }
 
 .accounts-overview-card__amount {
-  font-size: 1.55rem;
-  font-weight: 600;
+  font-size: 1.46rem;
+  font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.1;
 }
