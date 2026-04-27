@@ -10561,7 +10561,8 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-detail__panel {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
+  padding-bottom: 28px;
 }
 
 .accounts-detail__panel::before {
