@@ -13,6 +13,9 @@ This document captures the Metrobank parsing rules learned from the synthetic tr
 
 - Use running balance as a first-class field.
 - Treat Metrobank savings statements with `DATE DESCRIPTION DEBIT CREDIT BALANCE`, `DATE DESCRIPTION CHECK DEBIT CREDIT BALANCE`, or `DATE DESCRIPTION CHECK NO DEBIT CREDIT BALANCE` as the canonical savings shape.
+- Treat Metrobank certificate-style savings statements that repeat `STATEMENT DATE`, `ACCOUNT NUMBER ... BALANCE`, and month/day transaction lines as savings ledgers too.
+- In certificate-style savings statements, ignore branch/city/footer boilerplate, statement banners, `NEW RATE`, `RATE`, `YTD INTEREST`, `YEAR-TO-DATE FEDERAL TAX WITHHELD`, `GRAND TOTAL`, and `TOTAL CURRENT/SAVINGS` summary lines.
+- Preserve the month/day transaction rows and anchor them to the statement year shown near the `STATEMENT DATE` heading.
 - Prefer the Metrobank savings detector over generic RCBC savings logic when the statement has Metrobank branding and account-type savings or retail metadata.
 - Do not let `BANKARD/RCBC` text inside a Metrobank transfer description override the Metrobank detector.
 - Keep salary credits as `Income`.
