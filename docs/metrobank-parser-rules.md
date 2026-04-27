@@ -29,8 +29,10 @@ This document captures the Metrobank parsing rules learned from the synthetic tr
 - Keep `OpenAI ChatGPT Subscription` as `Business` for this user.
 - Capture `Payment Due Date` and `Total Amount Due` from the statement footer when present.
 - Use the payment due date to infer the statement year for Metrobank credit-card rows when the row dates only show month/day.
+- When the statement prints both a generic `Account Number` and a card-specific `Credit Card Account Number`, prefer the card-specific suffix for account identity.
 - Treat `Cash Payment - Thank You - MB ATM` as a transfer/payment row.
 - Keep `Mercury Drug` as `Health & Wellness`, `Puregold` and supermarket rows as `Food & Dining`, `Ateneo de Manila` as `Education`, and `RAE Auto Electrical` as `Transport`.
+- Keep `Finance Charges` as a normalized merchant label and classify it as `Financial`.
 
 ## Review Gating
 

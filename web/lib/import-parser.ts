@@ -437,7 +437,9 @@ const parseRcbcDate = (value?: string | null) => {
 const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = text.replace(/\u00a0/g, " ");
   const compact = normalizeWhitespace(normalized);
-  if (!/\bRCBC\b|\bRCBC BANKARD\b|\bBANKARD\b|\bVISA PLATINUM\b|\bVISA GOLD\b|\bVISA CLASSIC\b|\bMASTERCARD\b/i.test(compact)) {
+  const isSavingsStatement = /(ACCOUNT\s+TYPE\s*CAV0?1|TOTAL\s+CREDITS|TOTAL\s+DEBITS|BALANCE\s+LAST\s+STATEMENT|BALANCE\s+THIS\s+STATEMENT)/i.test(compact);
+  const isCreditCardStatement = /\bRCBC\b|\bRCBC BANKARD\b|\bBANKARD\b/i.test(compact);
+  if (!isSavingsStatement && !isCreditCardStatement) {
     return null;
   }
 
@@ -452,7 +454,6 @@ const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null =
   const savingsPeriodMatch = normalized.match(
     /STATEMENT\s+PERIOD\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+(?:TO|THRU|THROUGH)\s+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})/i
   );
-  const isSavingsStatement = /(ACCOUNT\s+TYPE\s*CAV0?1|TOTAL\s+CREDITS|TOTAL\s+DEBITS|BALANCE\s+LAST\s+STATEMENT|BALANCE\s+THIS\s+STATEMENT)/i.test(compact);
   const startDate = isSavingsStatement
     ? parseRcbcSavingsDate(savingsPeriodMatch?.[1] ?? null, new Date().getUTCFullYear())
     : (() => {
@@ -2200,7 +2201,11 @@ const metrobankCreditCardStatementMetadata = (text: string): DetectedStatementMe
     lines.find((line) => /CREDIT\s+CARD\s+ACCOUNT\s+NUMBER/i.test(line)) ??
     lines.find((line) => /ACCOUNT\s+NUMBER/i.test(line)) ??
     normalized;
+  const cardAccountSuffix =
+    accountLine.match(/(?:CREDIT\s+CARD\s+ACCOUNT\s+NUMBER|CARD\s+ACCOUNT\s+NUMBER)\s*[:\-]?\s*.*?(\d{4})\b/i)?.[1] ??
+    null;
   const accountNumber =
+    cardAccountSuffix ??
     accountLine.match(/(?:CREDIT\s+CARD\s+ACCOUNT\s+NUMBER|ACCOUNT\s+NUMBER)\s*[:\-]?\s*([0-9\s-]{8,})/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
     detectAccountNumberFromText(normalized);
   const accountName = formatSimpleBankAccountName("Metrobank", accountNumber);
@@ -2241,6 +2246,7 @@ const guessMetrobankCreditCategoryName = (description: string, type: Transaction
   if (/ateneo|school|college|university|education|tuition|course/.test(lower)) return "Education";
   if (/rae\s+auto|auto\s+electrical|car repair|automotive|mechanic|motor/.test(lower)) return "Transport";
   if (/office\s*365|google\s+one|subscription|software|saas|cloud/.test(lower)) return "Business";
+  if (/finance\s+charge|finance\s+charges|late\s+payment\s+fee|annual\s+fee|service\s+fee|interest/.test(lower)) return "Financial";
   return guessCategoryName(description, type);
 };
 
@@ -3590,6 +3596,11 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     return aubSavingsMetadata.metadata;
   }
 
+  const metrobankMetadata = parseMetrobankCreditCardImportText(text);
+  if (metrobankMetadata) {
+    return metrobankMetadata.metadata;
+  }
+
   const rcbcMetadata = rcbcStatementMetadata(text);
   if (rcbcMetadata) {
     return rcbcMetadata;
@@ -3618,11 +3629,6 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
   const bdoParsed = parseBdoSavingsImportText(text);
   if (bdoParsed) {
     return bdoParsed.metadata;
-  }
-
-  const metrobankParsed = parseMetrobankCreditCardImportText(text);
-  if (metrobankParsed) {
-    return metrobankParsed.metadata;
   }
 
   const normalized = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -3822,6 +3828,11 @@ export const parseImportText = (
     return aubSavingsParsed.rows;
   }
 
+  const metrobankParsed = parseMetrobankCreditCardImportText(text);
+  if (metrobankParsed) {
+    return metrobankParsed.rows;
+  }
+
   const rcbcSavingsParsed = parseRcbcSavingsImportText(text);
   if (rcbcSavingsParsed) {
     return rcbcSavingsParsed.rows;
@@ -3835,11 +3846,6 @@ export const parseImportText = (
   const bdoParsed = parseBdoSavingsImportText(text);
   if (bdoParsed) {
     return bdoParsed.rows;
-  }
-
-  const metrobankParsed = parseMetrobankCreditCardImportText(text);
-  if (metrobankParsed) {
-    return metrobankParsed.rows;
   }
 
   const unionbankParsed = parseUnionBankImportText(text);

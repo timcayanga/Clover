@@ -574,6 +574,10 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Robinsons Supermarket",
     },
     {
+      patterns: [/finance\s+charges?/i],
+      replacement: "Finance Charges",
+    },
+    {
       patterns: [/interbank\s+fund\s+transfer/i],
       replacement: "Interbank Fund Transfer",
     },
