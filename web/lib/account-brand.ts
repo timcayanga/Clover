@@ -81,8 +81,8 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       label: "Metrobank",
       logoSrcs: philippinesLogoWithVariants("metrobank"),
       fallbackIconSrc: bankIcon,
-      accent: "#6D4BC3",
-      background: "linear-gradient(135deg, rgba(93, 80, 200, 0.18), rgba(73, 109, 226, 0.08))",
+      accent: "#00539B",
+      background: "linear-gradient(135deg, rgba(0, 83, 155, 0.18), rgba(0, 83, 155, 0.08))",
     }),
   },
   {
@@ -133,6 +133,16 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       fallbackIconSrc: bankIcon,
       accent: "#D61F26",
       background: "linear-gradient(135deg, rgba(214, 31, 38, 0.16), rgba(214, 31, 38, 0.06))",
+    }),
+  },
+  {
+    match: /\bAB CAPITAL SECURITIES\b|\bAB CAPITAL\b/i,
+    brand: makeBrand({
+      label: "AB Capital Securities",
+      logoSrcs: philippinesLogoWithVariants("ab capital securities"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#0F4C81",
+      background: "linear-gradient(135deg, rgba(15, 76, 129, 0.18), rgba(15, 76, 129, 0.06))",
     }),
   },
   {
@@ -268,6 +278,26 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
+    match: /\bAL AMANAH\b/i,
+    brand: makeBrand({
+      label: "Al Amanah",
+      logoSrcs: philippinesLogoWithVariants("al amanah"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0F7B3A",
+      background: "linear-gradient(135deg, rgba(15, 123, 58, 0.18), rgba(15, 123, 58, 0.06))",
+    }),
+  },
+  {
+    match: /\bANZ\b|\bANZ BANK\b/i,
+    brand: makeBrand({
+      label: "ANZ Bank",
+      logoSrcs: philippinesLogoWithVariants("anz bank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0052CC",
+      background: "linear-gradient(135deg, rgba(0, 82, 204, 0.18), rgba(0, 82, 204, 0.06))",
+    }),
+  },
+  {
     match: /\bPNB\b/i,
     brand: makeBrand({
       label: "PNB",
@@ -288,6 +318,26 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
+    match: /\bDRAGONFI\b/i,
+    brand: makeBrand({
+      label: "DragonFi",
+      logoSrcs: philippinesLogoWithVariants("dragonfi"),
+      fallbackIconSrc: investmentIcon,
+      accent: "#6D28D9",
+      background: "linear-gradient(135deg, rgba(109, 40, 217, 0.18), rgba(109, 40, 217, 0.06))",
+    }),
+  },
+  {
+    match: /\bDRAGONPAY\b/i,
+    brand: makeBrand({
+      label: "Dragonpay",
+      logoSrcs: philippinesLogoWithVariants("dragonpay"),
+      fallbackIconSrc: walletIcon,
+      accent: "#0EA5A8",
+      background: "linear-gradient(135deg, rgba(14, 165, 168, 0.18), rgba(14, 165, 168, 0.06))",
+    }),
+  },
+  {
     match: /\bGO?TYME\b/i,
     brand: makeBrand({
       label: "GoTyme",
@@ -305,6 +355,26 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       fallbackIconSrc: bankIcon,
       accent: "#00703C",
       background: "linear-gradient(135deg, rgba(0, 112, 60, 0.16), rgba(0, 112, 60, 0.06))",
+    }),
+  },
+  {
+    match: /\bPHILIPPINE VETERANS BANK\b|\bPVB\b/i,
+    brand: makeBrand({
+      label: "Philippine Veterans Bank",
+      logoSrcs: philippinesLogoWithVariants("philippine veterans bank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#0B6E4F",
+      background: "linear-gradient(135deg, rgba(11, 110, 79, 0.18), rgba(11, 110, 79, 0.06))",
+    }),
+  },
+  {
+    match: /\bSTERLING BANK\b/i,
+    brand: makeBrand({
+      label: "Sterling Bank",
+      logoSrcs: philippinesLogoWithVariants("sterling bank"),
+      fallbackIconSrc: bankIcon,
+      accent: "#1D4ED8",
+      background: "linear-gradient(135deg, rgba(29, 78, 216, 0.18), rgba(29, 78, 216, 0.06))",
     }),
   },
   {
@@ -335,6 +405,26 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       fallbackIconSrc: walletIcon,
       accent: "#003087",
       background: "linear-gradient(135deg, rgba(0, 48, 135, 0.16), rgba(0, 48, 135, 0.06))",
+    }),
+  },
+  {
+    match: /\bPAYMONGO\b/i,
+    brand: makeBrand({
+      label: "PayMongo",
+      logoSrcs: philippinesLogoWithVariants("paymongo"),
+      fallbackIconSrc: walletIcon,
+      accent: "#4338CA",
+      background: "linear-gradient(135deg, rgba(67, 56, 202, 0.16), rgba(67, 56, 202, 0.06))",
+    }),
+  },
+  {
+    match: /\bCLIQQ\b/i,
+    brand: makeBrand({
+      label: "CLIQQ",
+      logoSrcs: philippinesLogoWithVariants("cliqq"),
+      fallbackIconSrc: walletIcon,
+      accent: "#F97316",
+      background: "linear-gradient(135deg, rgba(249, 115, 22, 0.16), rgba(249, 115, 22, 0.06))",
     }),
   },
   {
