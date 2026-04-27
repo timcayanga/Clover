@@ -9802,9 +9802,23 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: stretch;
 }
 
+.market-chart__canvas--embed {
+  grid-template-columns: 1fr;
+}
+
 .market-chart__plot {
   position: relative;
   min-width: 0;
+}
+
+.market-chart__embed {
+  display: block;
+  width: 100%;
+  min-height: 360px;
+  border: 0;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.12);
 }
 
 .market-chart__tooltip {
@@ -9882,8 +9896,16 @@ input.transaction-inline-edit--amount::placeholder {
     grid-template-columns: var(--market-axis-width) minmax(0, 1fr);
   }
 
+  .market-chart__canvas--embed {
+    grid-template-columns: 1fr;
+  }
+
   .market-chart__x-axis {
     margin-left: calc(var(--market-axis-width) + 12px);
+  }
+
+  .market-chart__embed {
+    min-height: 300px;
   }
 }
 

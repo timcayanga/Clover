@@ -194,6 +194,38 @@ const BENCHMARK_OPTIONS: BenchmarkOption[] = [
   { key: "bitcoin", label: "Bitcoin", symbol: "BTC", market: "crypto", note: "Crypto market reference" },
 ];
 
+const PH_LIVE_RANGE_INTERVALS: Record<Extract<MarketRange, "1D" | "5D">, string> = {
+  "1D": "15",
+  "5D": "15",
+};
+
+const buildPhTradingViewUrl = (symbol: string, range: Extract<MarketRange, "1D" | "5D">) => {
+  const tradingViewSymbol = `PSE:${normalizeMarketSymbol(symbol)}`;
+  const url = new URL("https://s.tradingview.com/pse/widgetembed/");
+  url.searchParams.set("frameElementId", `investments-ph-${tradingViewSymbol.replace(/[^a-z0-9]/gi, "").toLowerCase()}`);
+  url.searchParams.set("symbol", tradingViewSymbol);
+  url.searchParams.set("interval", PH_LIVE_RANGE_INTERVALS[range]);
+  url.searchParams.set("hidelegend", "1");
+  url.searchParams.set("symboledit", "0");
+  url.searchParams.set("saveimage", "0");
+  url.searchParams.set("toolbarbg", "f1f3f6");
+  url.searchParams.set("studies", "[]");
+  url.searchParams.set("widgetbarwidth", "250");
+  url.searchParams.set("theme", "light");
+  url.searchParams.set("style", "3");
+  url.searchParams.set("timezone", "Asia/Taipei");
+  url.searchParams.set("studies_overrides", "{}");
+  url.searchParams.set("overrides", "{}");
+  url.searchParams.set("enabled_features", JSON.stringify(["esdonwidget"]));
+  url.searchParams.set("disabled_features", "[]");
+  url.searchParams.set("locale", "en");
+  url.searchParams.set("utm_source", "clover");
+  url.searchParams.set("utm_medium", "widget");
+  url.searchParams.set("utm_campaign", "chart");
+  url.searchParams.set("utm_term", tradingViewSymbol);
+  return url.toString();
+};
+
 const formatRelativeTime = (timestamp: number) => {
   const elapsedSeconds = Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
 
@@ -473,6 +505,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
   const hoveredPoint = hoverIndex === null ? null : displayPoints[hoverIndex] ?? null;
   const benchmarkOption = BENCHMARK_OPTIONS.find((option) => option.key === benchmarkKey) ?? BENCHMARK_OPTIONS[0];
   const benchmarkSourceCurrency = benchmarkHistory?.currency ?? "USD";
+  const usePhLiveChart = submittedMarket === "ph" && (range === "1D" || range === "5D");
   const benchmarkVisiblePoints = useMemo(() => {
     if (!benchmarkHistory) {
       return [];
@@ -499,7 +532,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
       })),
     [benchmarkScale, benchmarkVisiblePoints, benchmarkSourceCurrency, displayCurrency, exchangeRate]
   );
-  const benchmarkIsActive = benchmarkKey !== "none" && benchmarkDisplayPoints.length > 1 && !benchmarkError;
+  const benchmarkIsActive = !usePhLiveChart && benchmarkKey !== "none" && benchmarkDisplayPoints.length > 1 && !benchmarkError;
   const chartPoints = benchmarkIsActive ? [...displayPoints, ...benchmarkDisplayPoints] : displayPoints;
   const chartBounds = useMemo(() => {
     if (chartPoints.length === 0) {
@@ -536,7 +569,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
     sourceCurrency === displayCurrency
       ? `Prices are shown in ${displayCurrency}.`
       : `Converted from ${sourceCurrency} using the latest FX rate.`;
-  const chartError = rateError ?? error;
+  const chartError = usePhLiveChart ? rateError : rateError ?? error;
   const sourceLabel =
     history?.provider === "stockanalysis"
       ? "StockAnalysis.com"
@@ -549,10 +582,17 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
   const trendColor = trendIsPositive ? "var(--good)" : "var(--bad)";
   const trendFillTop = trendIsPositive ? "rgba(34, 197, 94, 0.24)" : "rgba(239, 68, 68, 0.24)";
   const trendFillBottom = trendIsPositive ? "rgba(34, 197, 94, 0.03)" : "rgba(239, 68, 68, 0.03)";
-  const benchmarkComparisonLabel = benchmarkIsActive
+  const benchmarkComparisonLabel = usePhLiveChart
+    ? "Philippine charts use a live TradingView embed for intraday movement."
+    : benchmarkIsActive
     ? `${benchmarkOption.label} is normalized to the selected start value for relative movement comparison.`
     : chartSubtitle;
-  const benchmarkFooterLabel = benchmarkIsActive ? benchmarkOption.note : chartSubtitle;
+  const benchmarkFooterLabel = usePhLiveChart ? "Hover the embedded chart for exact time, price, and volume." : benchmarkIsActive ? benchmarkOption.note : chartSubtitle;
+  const phTradingViewUrl = useMemo(
+    () => (usePhLiveChart ? buildPhTradingViewUrl(submittedSymbol, range as Extract<MarketRange, "1D" | "5D">) : null),
+    [range, submittedSymbol, usePhLiveChart]
+  );
+  const chartIsLoading = loading && !usePhLiveChart;
 
   return (
     <section className="investments-market glass">
@@ -637,6 +677,7 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
             <select
               className="investments-market__select investments-market__select--compact"
               value={displayCurrency}
+              disabled={usePhLiveChart}
               onChange={(event) => setDisplayCurrency(event.target.value as CurrencyCode)}
             >
               <option value="USD">USD</option>
@@ -644,14 +685,15 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
             </select>
           </label>
 
-          <label className="investments-market__currency-select">
-            Benchmark
-            <select
-              className="investments-market__select investments-market__select--compact"
-              value={benchmarkKey}
-              onChange={(event) => setBenchmarkKey(event.target.value as BenchmarkKey)}
-            >
-              {BENCHMARK_OPTIONS.map((option) => (
+            <label className="investments-market__currency-select">
+              Benchmark
+              <select
+                className="investments-market__select investments-market__select--compact"
+                value={benchmarkKey}
+                disabled={usePhLiveChart}
+                onChange={(event) => setBenchmarkKey(event.target.value as BenchmarkKey)}
+              >
+                {BENCHMARK_OPTIONS.map((option) => (
                 <option key={option.key} value={option.key}>
                   {option.label}
                 </option>
@@ -674,16 +716,53 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
         ))}
       </div>
 
-      {benchmarkError ? <p className="panel-muted">Benchmark unavailable: {benchmarkError}</p> : null}
+      {!usePhLiveChart && benchmarkError ? <p className="panel-muted">Benchmark unavailable: {benchmarkError}</p> : null}
 
       <div className="insight-chart">
-        {loading ? (
+        {chartIsLoading ? (
           <div className="empty-state">Loading market data...</div>
         ) : chartError ? (
           <div className="empty-state">
             <strong>Unable to load market data.</strong>
             <p>{chartError}</p>
           </div>
+        ) : usePhLiveChart && phTradingViewUrl ? (
+          <>
+            <div className="market-chart__canvas market-chart__canvas--embed">
+              <iframe
+                key={phTradingViewUrl}
+                className="market-chart__embed"
+                src={phTradingViewUrl}
+                title={`${submittedSymbol} live PH chart`}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            </div>
+
+            <div className="investments-market__comparison">
+              <span>PSEConnect provides a delayed intraday chart for Philippine-listed equities.</span>
+              <span>Hover the chart to inspect time, price, and volume.</span>
+            </div>
+
+            <div className="insight-chart__labels">
+              <div className="insight-chart__label">
+                <span>Latest</span>
+                <strong>{formatAmount(currentDisplayPoint?.value ?? 0)}</strong>
+              </div>
+              <div className="insight-chart__label">
+                <span>Change</span>
+                <strong className={priceChange !== null && priceChange >= 0 ? "is-positive" : "is-negative"}>
+                  {priceChange === null ? "Not enough data" : `${priceChange >= 0 ? "+" : "-"}${formatAmount(Math.abs(priceChange))}`}
+                </strong>
+              </div>
+              <div className="insight-chart__label">
+                <span>Range change</span>
+                <strong className={priceChangePercent !== null && priceChangePercent >= 0 ? "is-positive" : "is-negative"}>
+                  {priceChangePercent === null ? "Not enough data" : `${priceChangePercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(priceChangePercent))}`}
+                </strong>
+              </div>
+            </div>
+          </>
         ) : displayPoints.length > 1 ? (
           <>
             <div className="market-chart__canvas">
