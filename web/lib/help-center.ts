@@ -36,6 +36,16 @@ export type HelpSection = {
   links: HelpLink[];
 };
 
+export type HelpSearchResult = {
+  kind: "section" | "article";
+  title: string;
+  summary: string;
+  href: string;
+  sectionSlug: string;
+  sectionTitle: string;
+  articleSlug?: string;
+};
+
 const createArticle = (
   slug: string,
   title: string,
@@ -1631,6 +1641,105 @@ export const findHelpSectionArticle = (sectionSlug: string, articleSlug: string)
 
 export const getPopularHelpSearchPhrases = (limit = 8) =>
   helpSections.flatMap((section) => section.searchPhrases).slice(0, limit);
+
+const normalizeHelpSearchQuery = (query: string) => query.trim().toLowerCase();
+
+const scoreHelpMatch = (query: string, value: string) => {
+  if (!value) {
+    return 0;
+  }
+
+  const normalizedValue = value.toLowerCase();
+
+  if (normalizedValue === query) {
+    return 100;
+  }
+
+  if (normalizedValue.startsWith(query)) {
+    return 90;
+  }
+
+  if (normalizedValue.includes(query)) {
+    return 70;
+  }
+
+  return 0;
+};
+
+export const getHelpSearchResults = (query: string, limit = 6): HelpSearchResult[] => {
+  const normalizedQuery = normalizeHelpSearchQuery(query);
+
+  if (!normalizedQuery) {
+    return [];
+  }
+
+  const results: Array<HelpSearchResult & { score: number }> = [];
+
+  for (const section of helpSections) {
+    const sectionScore = Math.max(
+      scoreHelpMatch(normalizedQuery, section.title),
+      scoreHelpMatch(normalizedQuery, section.summary),
+      ...section.keywords.map((value) => scoreHelpMatch(normalizedQuery, value)),
+      ...section.searchPhrases.map((value) => scoreHelpMatch(normalizedQuery, value)),
+      ...section.highlights.map((value) => scoreHelpMatch(normalizedQuery, value)),
+      ...section.questions.flatMap((question) => [
+        scoreHelpMatch(normalizedQuery, question.question),
+        scoreHelpMatch(normalizedQuery, question.answer),
+      ]),
+      ...section.links.flatMap((link) => [
+        scoreHelpMatch(normalizedQuery, link.label),
+        scoreHelpMatch(normalizedQuery, link.description),
+      ])
+    );
+
+    if (sectionScore > 0) {
+      results.push({
+        kind: "section",
+        title: section.title,
+        summary: section.summary,
+        href: getHelpSectionHref(section.slug),
+        sectionSlug: section.slug,
+        sectionTitle: section.title,
+        score: sectionScore,
+      });
+    }
+
+    for (const article of section.articles) {
+      const articleScore = Math.max(
+        scoreHelpMatch(normalizedQuery, article.title),
+        scoreHelpMatch(normalizedQuery, article.summary),
+        ...article.keywords.map((value) => scoreHelpMatch(normalizedQuery, value)),
+        ...article.steps.map((value) => scoreHelpMatch(normalizedQuery, value)),
+        ...article.questions.flatMap((question) => [
+          scoreHelpMatch(normalizedQuery, question.question),
+          scoreHelpMatch(normalizedQuery, question.answer),
+        ]),
+        ...article.links.flatMap((link) => [
+          scoreHelpMatch(normalizedQuery, link.label),
+          scoreHelpMatch(normalizedQuery, link.description),
+        ])
+      );
+
+      if (articleScore > 0) {
+        results.push({
+          kind: "article",
+          title: article.title,
+          summary: article.summary,
+          href: getHelpArticleHref(section.slug, article.slug),
+          sectionSlug: section.slug,
+          sectionTitle: section.title,
+          articleSlug: article.slug,
+          score: articleScore,
+        });
+      }
+    }
+  }
+
+  return results
+    .sort((left, right) => right.score - left.score || left.kind.localeCompare(right.kind) || left.title.localeCompare(right.title))
+    .slice(0, limit)
+    .map(({ score: _score, ...result }) => result);
+};
 
 export const isHelpSection = (slug: string): slug is HelpSection["slug"] => helpSectionMap.has(slug);
 
