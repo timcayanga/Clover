@@ -64,6 +64,7 @@ type OpenAIExtractedTransaction = {
 type OpenAIParsedAccount = {
   display_name: string | null;
   institution_name: string | null;
+  account_number: string | null;
   account_last4: string | null;
   account_type: string | null;
   currency: string | null;
@@ -80,9 +81,12 @@ const importedStatementSchema = z.object({
   institution: z.string().nullable().optional().default(null),
   institution_raw: z.string().nullable().optional().default(null),
   statement_type: z.string().min(1).optional().default("unknown"),
+  payment_due_date: z.string().nullable().optional().default(null),
+  total_amount_due: z.number().nullable().optional().default(null),
   account: z.object({
     display_name: z.string().nullable().optional().default(null),
     institution_name: z.string().nullable().optional().default(null),
+    account_number: z.string().nullable().optional().default(null),
     account_last4: z.string().nullable().optional().default(null),
     account_type: z.string().nullable().optional().default(null),
     currency: z.string().nullable().optional().default(null),
@@ -155,12 +159,15 @@ const openAIJsonSchema = {
     institution: { type: ["string", "null"] },
     institution_raw: { type: ["string", "null"] },
     statement_type: { type: "string" },
+    payment_due_date: { type: ["string", "null"] },
+    total_amount_due: { type: ["number", "null"] },
     account: {
       type: "object",
       additionalProperties: false,
       properties: {
         display_name: { type: ["string", "null"] },
         institution_name: { type: ["string", "null"] },
+        account_number: { type: ["string", "null"] },
         account_last4: { type: ["string", "null"] },
         account_type: { type: ["string", "null"] },
         currency: { type: ["string", "null"] },
@@ -180,6 +187,7 @@ const openAIJsonSchema = {
       required: [
         "display_name",
         "institution_name",
+        "account_number",
         "account_last4",
         "account_type",
         "currency",
@@ -292,7 +300,17 @@ const openAIJsonSchema = {
       required: ["merchant_mappings", "code_mappings", "institution_aliases", "edge_cases"],
     },
   },
-  required: ["institution", "institution_raw", "statement_type", "account", "transactions", "quality_checks", "learning_candidates"],
+  required: [
+    "institution",
+    "institution_raw",
+    "statement_type",
+    "payment_due_date",
+    "total_amount_due",
+    "account",
+    "transactions",
+    "quality_checks",
+    "learning_candidates",
+  ],
 } as const;
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -387,6 +405,7 @@ const buildBankInstructionJson = (params: {
       bill_payments: "real_spend",
       purchases: "real_spend",
       opening_balances: "Opening Balance metadata",
+      credit_card_due_fields: "Capture payment due date and total amount due when visible",
     },
     category_rules: {
       allowed_categories: ALLOWED_CATEGORIES,
@@ -422,7 +441,12 @@ const buildBankInstructionJson = (params: {
     return {
       ...base,
       institution: "AUB",
-      notes: ["AUB statements may split rows across lines; preserve merchant text and join broken OCR text conservatively."],
+      notes: [
+        "AUB statements may split rows across lines; preserve merchant text and join broken OCR text conservatively.",
+        "For scanned AUB pages, the full account number is usually printed near the top under an 'Account Number' heading and may include hyphens. Keep every digit group; do not truncate it to the last 4 digits if the full number is visible.",
+        "Prefer the final explicit ending balance or closing balance near the bottom of the last page, even if earlier pages show a different running balance.",
+        "Do not stop after the first page; capture transaction rows from every page.",
+      ],
     };
   }
 
@@ -454,7 +478,10 @@ const buildBankInstructionJson = (params: {
     return {
       ...base,
       institution: "UnionBank",
-      notes: ["UnionBank statements should keep the account label simple and preserve the trailing account digits when visible."],
+      notes: [
+        "UnionBank statements should keep the account label simple and preserve the trailing account digits when visible.",
+        "If the statement shows a full account number, return it in account.account_number with all digits preserved. Use account.account_last4 only as a display fallback.",
+      ],
     };
   }
 
@@ -582,6 +609,10 @@ const responseLooksUseful = (metadata: DetectedStatementMetadata | null, rows: P
     return confidence < 90 || !hasStrongIdentity;
   }
 
+  if (rows.length <= 2 && confidence < 80) {
+    return true;
+  }
+
   return confidence < 75 && (!hasStrongIdentity || fileNameLike);
 };
 
@@ -618,7 +649,17 @@ const buildOpenAIInputPayload = (params: {
     `Known institution: ${institution ?? "null"}`,
     `Known parser result: ${JSON.stringify(buildDeterministicParserSummary({ detectedMetadata: params.detectedMetadata, parsedRows: params.parsedRows }))}`,
     `Bank-specific instructions: ${JSON.stringify(bankInstructionJson)}`,
+    "For credit card statements, capture payment due date and total amount due whenever the statement shows them.",
     "",
+    ...(params.pageImages?.length
+      ? [
+          "This is a scanned or image-heavy PDF. The text layer may be empty or incomplete.",
+          "Read the page images directly and extract every transaction row from the visible statement pages.",
+          "If the statement spans multiple pages, use all provided pages and anchor the final balance from the last page footer when present.",
+          "Use the account number and balance shown in the page image, not any earlier summary-like number unless it is the final ending balance.",
+          "",
+        ]
+      : []),
     "Extracted text:",
     params.text,
     "",
@@ -640,6 +681,8 @@ const buildFallbackMetadata = (metadata: DetectedStatementMetadata | null): Dete
     accountType: null,
     openingBalance: null,
     endingBalance: null,
+    paymentDueDate: null,
+    totalAmountDue: null,
     startDate: null,
     endDate: null,
     confidence: 0,
@@ -704,7 +747,9 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     pageImages: params.pageImages ?? null,
   });
 
-  const pageImagesToSend = (params.pageImages ?? []).slice(0, 2);
+  const pageImagesInput = params.pageImages ?? [];
+  const pageImageLimit = params.text.trim().length === 0 ? 4 : 2;
+  const pageImagesToSend = pageImagesInput.slice(0, Math.min(pageImageLimit, pageImagesInput.length));
   const textModel = (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL?.trim() || "gpt-4.1";
   const imageModel =
     (env as { OPENAI_IMPORT_PARSER_IMAGE_MODEL?: string }).OPENAI_IMPORT_PARSER_IMAGE_MODEL?.trim() || "gpt-4.1-mini";
@@ -733,7 +778,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
         body: JSON.stringify({
           model: selectedModel,
           temperature: 0,
-          max_output_tokens: 4_000,
+          max_output_tokens:
+            pageImages.length > 0 ? (params.text.trim().length === 0 ? 4_000 : 2_500) : 4_000,
           input: [
             {
               role: "system",
@@ -776,7 +822,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   };
 
   try {
-    const primaryTimeoutMs = model === imageModel ? 15_000 : 30_000;
+    const primaryTimeoutMs = model === imageModel ? (params.text.trim().length === 0 ? 90_000 : 60_000) : 45_000;
     let response = await callOpenAI(model, pageImagesToSend, primaryTimeoutMs);
 
     if (!response || !response.ok) {
@@ -803,7 +849,7 @@ export const parseImportTextWithOpenAIFallback = async (params: {
             imageCount: pageImagesToSend.length,
           });
         }
-        response = await callOpenAI(textModel, pageImagesToSend.slice(0, 1), 30_000);
+        response = await callOpenAI(textModel, pageImagesToSend.slice(0, 1), params.text.trim().length === 0 ? 60_000 : 45_000);
       }
 
       if (!response || !response.ok) {
@@ -867,8 +913,16 @@ export const parseImportTextWithOpenAIFallback = async (params: {
     const value = validation.data;
     const institution = simplifyInstitutionName(value.institution ?? value.account.institution_name ?? params.detectedMetadata?.institution ?? null);
     const institutionRaw = normalizeWhitespace(String(value.institution_raw ?? value.institution ?? institution ?? params.detectedMetadata?.institution ?? "")).trim() || null;
-    const accountLast4 = value.account.account_last4?.replace(/\D/g, "").slice(-4) ?? params.detectedMetadata?.accountNumber?.slice(-4) ?? null;
-    const accountNumber = accountLast4 ?? params.detectedMetadata?.accountNumber ?? null;
+    const accountNumberFull =
+      value.account.account_number?.replace(/\D/g, "").slice(0, 32) ??
+      params.detectedMetadata?.accountNumber?.replace(/\D/g, "").slice(0, 32) ??
+      null;
+    const accountLast4 =
+      value.account.account_last4?.replace(/\D/g, "").slice(-4) ??
+      accountNumberFull?.slice(-4) ??
+      params.detectedMetadata?.accountNumber?.slice(-4) ??
+      null;
+    const accountNumber = accountNumberFull ?? accountLast4 ?? params.detectedMetadata?.accountNumber ?? null;
     const accountNameCandidate =
       simplifyAccountLabel(value.account.display_name ?? null) ??
       (institution && accountLast4 ? `${institution} ${accountLast4}` : null) ??
@@ -876,7 +930,19 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       institution ??
       null;
     const accountType = normalizeAccountTypeValue(value.account.account_type ?? null, institution, accountNameCandidate, params.detectedMetadata?.accountType ?? "bank");
-    const statementBalance = value.account.statement_balance ?? params.detectedMetadata?.endingBalance ?? null;
+    const paymentDueDate =
+      value.payment_due_date ??
+      value.account.statement_period.end ??
+      params.detectedMetadata?.paymentDueDate ??
+      params.detectedMetadata?.endDate ??
+      null;
+    const totalAmountDue =
+      value.total_amount_due ??
+      params.detectedMetadata?.totalAmountDue ??
+      value.account.statement_balance ??
+      params.detectedMetadata?.endingBalance ??
+      null;
+    const statementBalance = totalAmountDue ?? value.account.statement_balance ?? params.detectedMetadata?.endingBalance ?? null;
     const computedBalance = value.account.computed_balance ?? statementBalance;
     const transactionConfidenceAverage =
       value.transactions.length > 0
@@ -890,6 +956,8 @@ export const parseImportTextWithOpenAIFallback = async (params: {
       accountType,
       openingBalance: params.detectedMetadata?.openingBalance ?? null,
       endingBalance: statementBalance,
+      paymentDueDate,
+      totalAmountDue,
       startDate: value.account.statement_period.start ?? params.detectedMetadata?.startDate ?? null,
       endDate: value.account.statement_period.end ?? params.detectedMetadata?.endDate ?? null,
       confidence: Math.max(

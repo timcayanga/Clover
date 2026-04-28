@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import type { AnalyticsEventName } from "@/lib/analytics";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
+import { formatTransactionDirectionLabel } from "@/lib/transaction-directions";
 
 type ReviewAccount = {
   id: string;
@@ -135,8 +136,8 @@ const getReviewSignals = (transaction: ReviewTransaction): ReviewSignal[] => {
 
   if (transaction.transferConfidence >= 50 || transaction.isTransfer) {
     items.push({
-      label: "Possible transfer",
-      detail: "This looks like a transfer, so it needs a human check before it counts as spending.",
+      label: "Possible movement",
+      detail: "This looks like a movement between accounts, so it needs a human check before it counts as spending.",
       tone: confidenceTone(transaction.transferConfidence),
     });
   }
@@ -202,7 +203,7 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
   const categorySignalLabel = current ? "Category confidence" : "Category";
   const accountSignalLabel = current ? (current.accountMatchConfidence < 70 ? "Account mismatch" : "Account match") : "Account";
   const duplicateSignalLabel = current ? "Duplicate risk" : "Duplicate";
-  const transferSignalLabel = current ? "Transfer risk" : "Transfer";
+  const transferSignalLabel = current ? "Movement risk" : "Movement";
 
   useEffect(() => {
     setItems(transactions);
@@ -646,7 +647,7 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
             </div>
             <div>
               <span className="review-workbench__meta-label">Type</span>
-              <strong>{current.type === "income" ? "Credit" : current.type === "transfer" ? "Transfer" : "Debit"}</strong>
+              <strong>{formatTransactionDirectionLabel(current.type, current.amount)}</strong>
             </div>
           </div>
 

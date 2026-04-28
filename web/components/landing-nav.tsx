@@ -16,8 +16,9 @@ function MenuIcon() {
 
 export function LandingNav() {
   const pathname = usePathname();
+  const currentPathname = pathname ?? "";
   const [isScrolled, setIsScrolled] = useState(false);
-  const [featuresOpen, setFeaturesOpen] = useState(pathname.startsWith("/features"));
+  const [featuresOpen, setFeaturesOpen] = useState(currentPathname.startsWith("/features"));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -34,9 +35,9 @@ export function LandingNav() {
   }, []);
 
   useEffect(() => {
-    setFeaturesOpen(pathname.startsWith("/features"));
+    setFeaturesOpen(currentPathname.startsWith("/features"));
     setMobileMenuOpen(false);
-  }, [pathname]);
+  }, [currentPathname]);
 
   useEffect(() => {
     document.body.style.overflow = mobileMenuOpen ? "hidden" : "";
@@ -45,7 +46,7 @@ export function LandingNav() {
     };
   }, [mobileMenuOpen]);
 
-  const isFeaturesRoute = pathname.startsWith("/features");
+  const isFeaturesRoute = currentPathname.startsWith("/features");
   const navClassName = `landing-nav landing-nav--sticky ${isScrolled ? "landing-nav--scrolled" : ""}`.trim();
 
   return (
@@ -90,16 +91,16 @@ export function LandingNav() {
               </div>
             ) : null}
           </div>
-          <Link className="landing-nav__link" href="/pricing" prefetch={false} aria-current={pathname === "/pricing" ? "page" : undefined}>
+          <Link className="landing-nav__link" href="/pricing" prefetch={false} aria-current={currentPathname === "/pricing" ? "page" : undefined}>
             Pricing
           </Link>
-          <Link className="landing-nav__link" href="/help" prefetch={false} aria-current={pathname === "/help" ? "page" : undefined}>
+          <Link className="landing-nav__link" href="/help" prefetch={false} aria-current={currentPathname === "/help" ? "page" : undefined}>
             Help
           </Link>
         </div>
 
         <div className="landing-nav__desktop-actions">
-          <Link className="landing-nav__link" href="/sign-in" prefetch={false} aria-current={pathname === "/sign-in" ? "page" : undefined}>
+          <Link className="landing-nav__link" href="/sign-in" prefetch={false} aria-current={currentPathname === "/sign-in" ? "page" : undefined}>
             Log in
           </Link>
           <Link className="button button-primary landing-nav__button" href="/sign-up" prefetch={false}>

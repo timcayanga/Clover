@@ -169,6 +169,26 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
   ],
   UnionBank: [
     {
+      patterns: [/office\s*365/i],
+      replacement: "Office 365",
+    },
+    {
+      patterns: [/google\s+one/i],
+      replacement: "Google One",
+    },
+    {
+      patterns: [/discord\s+nitro/i],
+      replacement: "Discord Nitro",
+    },
+    {
+      patterns: [/foodpanda\s+ph/i, /food\s*panda\s+ph/i, /foodpanda/i],
+      replacement: "Foodpanda PH",
+    },
+    {
+      patterns: [/mlbb\s+\d+\s*di/i, /mlbb\s+pass/i, /\bmlbb\b/i],
+      replacement: "MLBB Top Up",
+    },
+    {
       patterns: [/bills?\s*payment/i, /billspayment/i],
       replacement: "Bills Payment",
     },
@@ -363,6 +383,48 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Outgoing Transfer",
     },
   ],
+  RCBC: [
+    {
+      patterns: [/\bthe\s+sm\s+store\b.*\bsm\s+fairview\b/i, /\bsm\s+fairview\b/i],
+      replacement: "SM Store - SM Fairview",
+    },
+    {
+      patterns: [/\bthe\s+sm\s+store\b.*\bsm\s+grand\s+caloocan\b/i, /\bsm\s+grand\s+caloocan\b/i],
+      replacement: "SM Store - SM Grand Caloocan",
+    },
+    {
+      patterns: [/\bbayad\s+online\b.*\bpasig\b/i, /\bbayad\s+online\b/i],
+      replacement: "Bayad Online",
+    },
+    {
+      patterns: [/\bsec\s+pasay\b/i],
+      replacement: "SEC Pasay PH",
+    },
+    {
+      patterns: [/cash\s+payment/i],
+      replacement: "Cash Payment",
+    },
+    {
+      patterns: [/payment\s+to\s+card/i],
+      replacement: "Card Payment",
+    },
+    {
+      patterns: [/card\s+payment/i],
+      replacement: "Card Payment",
+    },
+    {
+      patterns: [/cash\s+advance/i],
+      replacement: "Cash Advance",
+    },
+    {
+      patterns: [/interest\s+charge/i, /finance\s+charge/i, /late\s+charge/i],
+      replacement: "Finance Charge",
+    },
+    {
+      patterns: [/cash\s+payment\s*-\s*thank\s+you/i],
+      replacement: "Cash Payment",
+    },
+  ],
   Maya: [
     {
       patterns: [/interest\s+applied\s*\(at\s*3\.5%\s*p\.a\.\)/i, /interest\s+applied/i],
@@ -492,6 +554,30 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
   ],
   Metrobank: [
     {
+      patterns: [/mercury\s+drug/i],
+      replacement: "Mercury Drug",
+    },
+    {
+      patterns: [/puregold/i],
+      replacement: "Puregold",
+    },
+    {
+      patterns: [/ateneo\s+de\s+manila/i],
+      replacement: "Ateneo de Manila",
+    },
+    {
+      patterns: [/rae\s+auto\s+electrical/i],
+      replacement: "RAE Auto Electrical",
+    },
+    {
+      patterns: [/qps\s+robinsons\s+spmkt/i, /robinsons\s+spmkt/i],
+      replacement: "Robinsons Supermarket",
+    },
+    {
+      patterns: [/finance\s+charges?/i],
+      replacement: "Finance Charges",
+    },
+    {
       patterns: [/interbank\s+fund\s+transfer/i],
       replacement: "Interbank Fund Transfer",
     },
@@ -513,11 +599,11 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     },
     {
       patterns: [/wa\s+cr/i],
-      replacement: "Wallet Credit",
+      replacement: "Incoming Transfer",
     },
     {
       patterns: [/wa\s+db/i],
-      replacement: "Wallet Debit",
+      replacement: "Outgoing Transfer",
     },
     {
       patterns: [/cash\/?check\s+deposit/i],
@@ -708,8 +794,28 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Fund Transfer",
     },
     {
+      patterns: [/cm[_\s-]?inward[_\s-]?r\s+remittance/i, /inward\s+remittance/i],
+      replacement: "Incoming Remittance",
+    },
+    {
+      patterns: [/received\s+from/i, /received\s+payment/i],
+      replacement: "Incoming Transfer",
+    },
+    {
+      patterns: [/dm[_\s-]?intra[_\s-]?xfr\s+transfer/i, /intra[_\s-]?bank\s+transfer/i],
+      replacement: "Intra-Bank Transfer",
+    },
+    {
       patterns: [/transfer\s+to\s+gcash/i],
       replacement: "Transfer to GCash",
+    },
+    {
+      patterns: [/gcash\s+top-?up/i],
+      replacement: "GCash Top-up",
+    },
+    {
+      patterns: [/online\s+transfer\s+to/i],
+      replacement: "Online Transfer",
     },
     {
       patterns: [/transfer\s+to\s+maya/i],
@@ -736,6 +842,14 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Month-End Sweep",
     },
     {
+      patterns: [/check[_\s-]?dep(?:osit)?/i, /check\s+deposit/i],
+      replacement: "Check Deposit",
+    },
+    {
+      patterns: [/cash[_\s-]?deposit/i],
+      replacement: "Cash Deposit",
+    },
+    {
       patterns: [/adjustment\s+reversal/i],
       replacement: "Adjustment Reversal",
     },
@@ -758,6 +872,14 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     {
       patterns: [/openai\s+chatgpt\s+subscription/i],
       replacement: "OpenAI ChatGPT Subscription",
+    },
+    {
+      patterns: [/chk[_\s-]?batch\s+local/i, /ccd\s+\d+\s+_?chk[_\s-]?batch\s+local/i],
+      replacement: "Check Batch Local",
+    },
+    {
+      patterns: [/emit[_\s-]?intl\s+transaction/i],
+      replacement: "International Transaction",
     },
     {
       patterns: [/lazada/i],
@@ -1302,9 +1424,31 @@ export const simplifyMerchantText = (value: string, institution?: string | null)
 export const summarizeMerchantText = (value: string, institution?: string | null) => {
   const simplified = simplifyMerchantText(value, institution);
   const compact = simplified.replace(/[^a-z0-9]+/gi, "").toLowerCase();
+  const rawLower = normalizeWhitespace(value).toLowerCase();
 
   if (!simplified) {
     return simplified;
+  }
+
+  if (institution === "Metrobank") {
+    if (/interbank\s+fund\s+transfer\s+credit\s+received\s+from\s+other\s+bank/i.test(rawLower)) {
+      return "Incoming Interbank Transfer";
+    }
+    if (/interbank\s+fund\s+transfer\s+debit\s+send\s+to\s+other\s+bank/i.test(rawLower)) {
+      return "Outgoing Interbank Transfer";
+    }
+    if (/interbank\s+service\s+charge/i.test(rawLower)) {
+      return "Interbank Service Charge";
+    }
+    if (/cash\/?check\s+deposit/i.test(rawLower)) {
+      return "Cash/Check Deposit";
+    }
+    if (/bills?\s+payment\s+to\s+metrobank\s+credit\s+card/i.test(rawLower)) {
+      return "Metrobank Credit Card Payment";
+    }
+    if (/bills?\s+payment\s+to\s+bankard\/rcbc/i.test(rawLower)) {
+      return "Bankard/RCBC Credit Card Payment";
+    }
   }
 
   if (compact.includes("fundtransfer")) {

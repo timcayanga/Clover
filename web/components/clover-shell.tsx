@@ -1,45 +1,198 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
-import { persistSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
+import { persistSelectedWorkspaceId, readSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches, clearLegacyWorkspaceCaches } from "@/lib/workspace-cache";
 
 type CloverShellProps = {
-  active: "dashboard" | "accounts" | "transactions" | "reports" | "insights" | "goals" | "settings" | "profile" | "notifications";
+  active:
+    | "dashboard"
+    | "accounts"
+    | "investments"
+    | "transactions"
+    | "reports"
+    | "insights"
+    | "goals"
+    | "settings"
+    | "profile"
+    | "notifications"
+    | "admin";
   title: string;
   kicker?: string;
   subtitle?: string;
   actions?: ReactNode;
   showTopbar?: boolean;
+  hideCompactBarCopyOnMobile?: boolean;
   children: ReactNode;
 };
+
+type SidebarSearchAccount = {
+  id: string;
+  name: string;
+  institution: string | null;
+  type: string;
+  balance: string | null;
+  investmentSymbol: string | null;
+  investmentSubtype: string | null;
+};
+
+type SidebarSearchMarket = {
+  symbol: string;
+  market: "ph" | "us";
+  latest: {
+    value: number;
+  };
+  change: number;
+  changePercent: number;
+};
+
+type SidebarSearchResult = {
+  key: string;
+  title: string;
+  detail: string;
+  href: string;
+  icon: IconName;
+  badge?: string;
+};
+
+const avatarBackgrounds = [
+  "rgba(3, 168, 192, 0.16)",
+  "rgba(3, 168, 192, 0.22)",
+  "rgba(104, 220, 177, 0.22)",
+  "rgba(181, 246, 239, 0.9)",
+  "rgba(15, 23, 42, 0.08)",
+] as const;
+
+const sidebarSearchPages: Array<{
+  key: string;
+  title: string;
+  href: string;
+  icon: IconName;
+  detail: string;
+  terms: string[];
+}> = [
+  {
+    key: "dashboard",
+    title: "Dashboard",
+    href: "/dashboard",
+    icon: "dashboard",
+    detail: "Overview and quick actions.",
+    terms: ["dashboard", "overview", "home", "summary"],
+  },
+  {
+    key: "accounts",
+    title: "Accounts",
+    href: "/accounts",
+    icon: "accounts",
+    detail: "Banks, cash, and investments.",
+    terms: ["accounts", "account", "banks", "bank", "wallet", "cash"],
+  },
+  {
+    key: "transactions",
+    title: "Transactions",
+    href: "/transactions",
+    icon: "transactions",
+    detail: "Search, review, and categorize activity.",
+    terms: ["transactions", "transaction", "activity", "spend", "spending", "review"],
+  },
+  {
+    key: "investments",
+    title: "Investments",
+    href: "/investments",
+    icon: "investments",
+    detail: "Track holdings and market tickers.",
+    terms: ["investments", "investment", "ticker", "tickers", "stock", "stocks", "fund", "bonds"],
+  },
+  {
+    key: "reports",
+    title: "Reports",
+    href: "/reports",
+    icon: "reports",
+    detail: "Cash flow, mix, and summary views.",
+    terms: ["reports", "report", "cash flow", "cashflow", "insights", "trend", "summary"],
+  },
+  {
+    key: "insights",
+    title: "Insights",
+    href: "/insights",
+    icon: "insights",
+    detail: "Goal-aware spending guidance.",
+    terms: ["insights", "insight", "analysis", "trend", "goal"],
+  },
+  {
+    key: "goals",
+    title: "Goals",
+    href: "/goals",
+    icon: "goals",
+    detail: "Save, pay down debt, or track milestones.",
+    terms: ["goals", "goal", "savings", "save", "debt", "milestone"],
+  },
+  {
+    key: "help",
+    title: "Help",
+    href: "/help",
+    icon: "help",
+    detail: "Guides for setup, pricing, safety, and storage.",
+    terms: ["help", "support", "guide", "setup", "pricing", "security", "storage"],
+  },
+  {
+    key: "inquiries",
+    title: "Inquiries",
+    href: "/admin/inquiries",
+    icon: "help",
+    detail: "Customer messages and support requests.",
+    terms: ["inquiries", "contact us", "support inbox", "customer messages", "questions", "concerns"],
+  },
+];
+
+const normalizeSidebarSearch = (value: string) => value.trim().toLowerCase();
+
+const getSidebarSearchBlob = (account: SidebarSearchAccount) =>
+  [
+    account.name,
+    account.institution ?? "",
+    account.type,
+    account.balance ?? "",
+    account.investmentSymbol ?? "",
+    account.investmentSubtype ?? "",
+  ]
+    .join(" ")
+    .toLowerCase();
+
+const formatSidebarMoney = new Intl.NumberFormat("en-PH", {
+  style: "currency",
+  currency: "PHP",
+  minimumFractionDigits: 2,
+});
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", key: "dashboard" as const },
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
+  { href: "/investments", label: "Investments", key: "investments" as const },
   { href: "/reports", label: "Reports", key: "reports" as const },
   { href: "/insights", label: "Insights", key: "insights" as const },
   { href: "/goals", label: "Goals", key: "goals" as const },
 ];
 
-const mobileNavItems = navItems.slice(0, 4);
-
 type IconName =
   | "dashboard"
   | "accounts"
+  | "investments"
   | "transactions"
   | "reports"
   | "insights"
   | "goals"
+  | "menu"
   | "search"
   | "more"
   | "notifications"
   | "profile"
   | "settings"
+  | "help"
   | "sign-out";
 
 function MenuIcon({ name }: { name: IconName }) {
@@ -69,6 +222,14 @@ function MenuIcon({ name }: { name: IconName }) {
         <svg {...common}>
           <circle cx="11" cy="11" r="6" />
           <path d="m20 20-4.2-4.2" />
+        </svg>
+      );
+    case "menu":
+      return (
+        <svg {...common}>
+          <path d="M4 7h16" />
+          <path d="M4 12h16" />
+          <path d="M4 17h16" />
         </svg>
       );
     case "more":
@@ -101,6 +262,14 @@ function MenuIcon({ name }: { name: IconName }) {
           <path d="M19.4 13a7.8 7.8 0 0 0 .1-2l2-1.2-1.9-3.2-2.3.7a8.1 8.1 0 0 0-1.7-1l-.3-2.4H10l-.3 2.4a8.1 8.1 0 0 0-1.7 1l-2.3-.7-1.9 3.2 2 1.2a7.8 7.8 0 0 0 0 2l-2 1.2 1.9 3.2 2.3-.7a8.1 8.1 0 0 0 1.7 1l.3 2.4h4.1l.3-2.4a8.1 8.1 0 0 0 1.7-1l2.3.7 1.9-3.2-2-1.2Z" />
         </svg>
       );
+    case "help":
+      return (
+        <svg {...common}>
+          <path d="M9.5 9a2.5 2.5 0 1 1 4 2c-.9.6-1.5 1.2-1.5 2.5" />
+          <path d="M12 17h.01" />
+          <circle cx="12" cy="12" r="8.5" />
+        </svg>
+      );
     case "sign-out":
       return (
         <svg {...common}>
@@ -117,6 +286,14 @@ function MenuIcon({ name }: { name: IconName }) {
           <path d="M7 14h6" />
         </svg>
       );
+    case "investments":
+      return (
+        <svg {...common}>
+          <path d="M4 18h16" />
+          <path d="M6.5 14.5l3-3 2.8 2.8L18 8" />
+          <path d="M14.2 8H18v3.8" />
+        </svg>
+      );
     case "transactions":
       return (
         <svg {...common}>
@@ -131,9 +308,10 @@ function MenuIcon({ name }: { name: IconName }) {
     case "reports":
       return (
         <svg {...common}>
-          <path d="M12 12V4a8 8 0 1 1-8 8h8Z" />
-          <path d="M13.5 4.2A8 8 0 0 1 20 10.8h-6.5Z" />
-          <path d="M4 12a8 8 0 0 1 6.5-7.8V12Z" />
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 12V4" />
+          <path d="M12 12l6.9 4" />
+          <path d="M12 12l-6.9 4" />
         </svg>
       );
     case "insights":
@@ -150,6 +328,16 @@ function MenuIcon({ name }: { name: IconName }) {
         </svg>
       );
   }
+}
+
+function hashString(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash;
 }
 
 const notifications = [
@@ -177,49 +365,352 @@ export function CloverShell({
   subtitle,
   actions,
   showTopbar = true,
+  hideCompactBarCopyOnMobile = false,
   children,
 }: CloverShellProps) {
   const { user } = useUser();
   const { signOut } = useClerk();
   const pathname = usePathname();
+  const router = useRouter();
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const searchWrapRef = useRef<HTMLDivElement | null>(null);
+  const searchResultsRef = useRef<HTMLDivElement | null>(null);
+  const profileButtonRef = useRef<HTMLButtonElement | null>(null);
+  const profilePopoverRef = useRef<HTMLDivElement | null>(null);
+  const notificationsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const notificationsPopoverRef = useRef<HTMLDivElement | null>(null);
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchWorkspaceId, setSearchWorkspaceId] = useState(() => readSelectedWorkspaceId());
+  const [searchAccounts, setSearchAccounts] = useState<SidebarSearchAccount[]>([]);
+  const [searchPlanTier, setSearchPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
+  const [searchTicker, setSearchTicker] = useState<SidebarSearchMarket | null>(null);
+  const [searchTickerLoading, setSearchTickerLoading] = useState(false);
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
   const profileImage = user?.imageUrl ?? null;
-  const isProfileActive = active === "profile" || pathname.startsWith("/profile");
+  const profileBackground = avatarBackgrounds[hashString(displayName) % avatarBackgrounds.length];
+  const isProfileActive = active === "profile" || pathname?.startsWith("/profile");
   const isNotificationsActive = openMenu === "notifications";
   const isProfileMenuOpen = openMenu === "profile";
 
   useEffect(() => {
     setIsSidebarOpen(false);
     syncSelectedWorkspaceCookie();
+    setSearchWorkspaceId(readSelectedWorkspaceId());
     clearLegacyWorkspaceCaches();
-    const handlePointerDown = (event: MouseEvent) => {
+    const handlePointerDown = (event: PointerEvent | MouseEvent) => {
       if (!shellRef.current || event.target instanceof Node === false) {
         return;
       }
 
-      if (!shellRef.current.contains(event.target)) {
+      const target = event.target;
+
+      if (isSearchOpen && searchWrapRef.current && !searchWrapRef.current.contains(target) && !searchResultsRef.current?.contains(target)) {
+        setIsSearchOpen(false);
+      }
+
+      if (
+        openMenu === "profile" &&
+        !profileButtonRef.current?.contains(target) &&
+        !profilePopoverRef.current?.contains(target)
+      ) {
         setOpenMenu(null);
+      }
+
+      if (
+        openMenu === "notifications" &&
+        !notificationsButtonRef.current?.contains(target) &&
+        !notificationsPopoverRef.current?.contains(target)
+      ) {
+        setOpenMenu(null);
+      }
+
+      if (!shellRef.current.contains(target)) {
+        setOpenMenu(null);
+        setIsSearchOpen(false);
       }
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setOpenMenu(null);
+        setIsSearchOpen(false);
       }
     };
 
-    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("mousedown", handlePointerDown, true);
     document.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("mousedown", handlePointerDown, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [pathname]);
+  }, [pathname, isSearchOpen, openMenu]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCurrentUser = async () => {
+      try {
+        const response = await fetch("/api/me");
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const payload = await response.json();
+        setSearchPlanTier(payload?.user?.planTier === "pro" ? "pro" : "free");
+      } catch {
+        if (!cancelled) {
+          setSearchPlanTier("free");
+        }
+      }
+    };
+
+    void loadCurrentUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshSearchWorkspace = async () => {
+      const nextWorkspaceId = readSelectedWorkspaceId();
+      if (nextWorkspaceId === searchWorkspaceId) {
+        return;
+      }
+
+      setSearchWorkspaceId(nextWorkspaceId);
+    };
+
+    void refreshSearchWorkspace();
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== "clover.selected-workspace-id.v1") {
+        return;
+      }
+
+      const nextWorkspaceId = readSelectedWorkspaceId();
+      if (!cancelled) {
+        setSearchWorkspaceId(nextWorkspaceId);
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [searchWorkspaceId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSearchAccounts = async () => {
+      if (!searchWorkspaceId) {
+        setSearchAccounts([]);
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(searchWorkspaceId)}`);
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const payload = await response.json();
+        const items = Array.isArray(payload.accounts) ? (payload.accounts as SidebarSearchAccount[]) : [];
+        if (!cancelled) {
+          setSearchAccounts(items);
+        }
+      } catch {
+        if (!cancelled) {
+          setSearchAccounts([]);
+        }
+      }
+    };
+
+    void loadSearchAccounts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [searchWorkspaceId]);
+
+  const normalizedSearchQuery = normalizeSidebarSearch(searchQuery);
+  const shouldShowSearchResults = isSearchOpen || normalizedSearchQuery.length > 0;
+  const pageSearchResults = useMemo<SidebarSearchResult[]>(() => {
+    const matches = normalizedSearchQuery
+      ? sidebarSearchPages.filter((entry) => {
+          const haystack = [entry.title, entry.detail, ...entry.terms].join(" ").toLowerCase();
+          return haystack.includes(normalizedSearchQuery);
+        })
+      : sidebarSearchPages;
+
+    return matches.slice(0, normalizedSearchQuery ? 6 : 5).map((entry) => ({
+      key: `page:${entry.key}`,
+      title: entry.title,
+      detail: entry.detail,
+      href: entry.href,
+      icon: entry.icon,
+    }));
+  }, [normalizedSearchQuery]);
+
+  const accountSearchResults = useMemo<SidebarSearchResult[]>(() => {
+    if (!normalizedSearchQuery) {
+      return [];
+    }
+
+    return searchAccounts
+      .filter((account) => getSidebarSearchBlob(account).includes(normalizedSearchQuery))
+      .sort((left, right) => {
+        const leftExact = getSidebarSearchBlob(left).startsWith(normalizedSearchQuery);
+        const rightExact = getSidebarSearchBlob(right).startsWith(normalizedSearchQuery);
+        if (leftExact !== rightExact) {
+          return leftExact ? -1 : 1;
+        }
+
+        return left.name.localeCompare(right.name);
+      })
+      .slice(0, 6)
+      .map((account) => ({
+        key: `account:${account.id}`,
+        title: account.name,
+        detail:
+          account.institution ||
+          (account.type === "investment"
+            ? [account.investmentSubtype, account.investmentSymbol].filter(Boolean).join(" ") || "Investment account"
+            : "Account"),
+        href: `/accounts?q=${encodeURIComponent(searchQuery.trim())}`,
+        icon: account.type === "investment" ? "investments" : "accounts",
+        badge: account.balance && account.balance !== "0" ? `PHP ${Number(account.balance).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined,
+      }));
+  }, [normalizedSearchQuery, searchAccounts, searchQuery]);
+
+  const shouldShowTickerLookup = useMemo(() => {
+    if (!normalizedSearchQuery || searchPlanTier !== "pro" || accountSearchResults.length > 0) {
+      return false;
+    }
+
+    return /^[a-z0-9.\-]{2,10}$/i.test(searchQuery.trim());
+  }, [accountSearchResults.length, normalizedSearchQuery, searchPlanTier, searchQuery]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTicker = () => {
+      if (!shouldShowTickerLookup) {
+        setSearchTicker(null);
+        setSearchTickerLoading(false);
+        return;
+      }
+
+      setSearchTickerLoading(true);
+      const symbol = searchQuery.trim().toUpperCase();
+      const handle = window.setTimeout(async () => {
+        try {
+          const response = await fetch(`/api/market-history?symbol=${encodeURIComponent(symbol)}&market=ph&range=1Y`);
+          if (!response.ok || cancelled) {
+            return;
+          }
+
+          const payload = (await response.json()) as Partial<SidebarSearchMarket> & { error?: string };
+          if (payload && typeof payload.symbol === "string" && payload.latest && typeof payload.latest.value === "number") {
+            setSearchTicker({
+              symbol: payload.symbol,
+              market: payload.market === "us" ? "us" : "ph",
+              latest: { value: payload.latest.value },
+              change: typeof payload.change === "number" ? payload.change : 0,
+              changePercent: typeof payload.changePercent === "number" ? payload.changePercent : 0,
+            });
+          } else {
+            setSearchTicker(null);
+          }
+        } catch {
+          if (!cancelled) {
+            setSearchTicker(null);
+          }
+        } finally {
+          if (!cancelled) {
+            setSearchTickerLoading(false);
+          }
+        }
+      }, 180);
+
+      return () => {
+        window.clearTimeout(handle);
+      };
+    };
+
+    const cleanup = loadTicker();
+
+    return () => {
+      cancelled = true;
+      if (typeof cleanup === "function") {
+        cleanup();
+      }
+    };
+  }, [searchQuery, shouldShowTickerLookup]);
+
+  const tickerSearchResult = useMemo<SidebarSearchResult | null>(() => {
+    if (!searchTicker) {
+      return null;
+    }
+
+    return {
+      key: `ticker:${searchTicker.symbol}:${searchTicker.market}`,
+      title: `${searchTicker.symbol} ticker`,
+      detail:
+        searchTicker.market === "ph"
+          ? `PH market • ${formatSidebarMoney.format(searchTicker.latest.value)}`
+          : `US market • ${formatSidebarMoney.format(searchTicker.latest.value)}`,
+      href: `/investments?q=${encodeURIComponent(searchTicker.symbol)}`,
+      icon: "investments",
+      badge:
+        searchTicker.change === 0
+          ? "Flat"
+          : `${searchTicker.change > 0 ? "+" : ""}${searchTicker.changePercent.toFixed(2)}%`,
+    };
+  }, [searchTicker]);
+
+  const searchResults = useMemo(() => {
+    if (!normalizedSearchQuery) {
+      return {
+        pages: pageSearchResults,
+        accounts: [],
+        ticker: null,
+        hasAnyResults: pageSearchResults.length > 0,
+      };
+    }
+
+    const ticker = tickerSearchResult && shouldShowTickerLookup ? tickerSearchResult : null;
+    const hasAnyResults = pageSearchResults.length > 0 || accountSearchResults.length > 0 || Boolean(ticker);
+    return {
+      pages: pageSearchResults,
+      accounts: accountSearchResults,
+      ticker,
+      hasAnyResults,
+    };
+  }, [accountSearchResults, normalizedSearchQuery, pageSearchResults, shouldShowTickerLookup, tickerSearchResult]);
+
+  const navigateSearchResult = (href: string) => {
+    setIsSearchOpen(false);
+    setSearchQuery("");
+    router.push(href);
+  };
+
+  const firstSearchHref =
+    accountSearchResults[0]?.href ??
+    searchResults.ticker?.href ??
+    pageSearchResults[0]?.href ??
+    "/dashboard";
 
   const notificationCount = notifications.length;
   const handleSignOut = () => {
@@ -241,17 +732,133 @@ export function CloverShell({
         onClick={() => setIsSidebarOpen(false)}
       />
       <aside className="sidebar" aria-label="Primary">
-        <div className="sidebar-brand">
-          <Link className="sidebar-brand-link" href="/dashboard" aria-label="Go to dashboard" prefetch={false}>
-            <img className="brand-mark brand-mark--sidebar" src="/clover-mark.svg" alt="" aria-hidden="true" />
-            <img className="brand-wordmark brand-wordmark--sidebar" src="/clover-name-teal.svg" alt="Clover" />
+        <div className="sidebar-header">
+          <Link
+            href="/dashboard"
+            aria-label="Clover home"
+            prefetch={false}
+            className="sidebar-brand-link sidebar-brand-link--centered"
+          >
+            <img src="/clover-mark.svg" alt="" aria-hidden="true" className="sidebar-brand-link__mark" />
+            <img src="/clover-name-teal.svg" alt="Clover" className="sidebar-brand-link__wordmark" />
           </Link>
         </div>
 
-        <label className="sidebar-search" htmlFor="sidebar-search">
-          <span className="sr-only">Search</span>
-          <input id="sidebar-search" type="search" placeholder="Search" />
-        </label>
+        <div className="sidebar-search-wrap" ref={searchWrapRef}>
+          <button
+            className="sidebar-search-trigger"
+            type="button"
+            aria-label={isSearchOpen ? "Close search" : "Open search"}
+            aria-expanded={isSearchOpen}
+            aria-controls="sidebar-search-panel"
+            onClick={() => setIsSearchOpen((current) => !current)}
+          >
+            <MenuIcon name="search" />
+          </button>
+
+          {shouldShowSearchResults ? (
+            <div className="sidebar-search-panel" id="sidebar-search-panel">
+              <label className="sidebar-search" htmlFor="sidebar-search">
+                <span className="sr-only">Search Clover</span>
+                <input
+                  id="sidebar-search"
+                  type="search"
+                  placeholder="Search Clover"
+                  value={searchQuery}
+                  autoComplete="off"
+                  onFocus={() => setIsSearchOpen(true)}
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value);
+                    setIsSearchOpen(true);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      navigateSearchResult(firstSearchHref);
+                    }
+                  }}
+                />
+              </label>
+
+              <div className="sidebar-search-results" ref={searchResultsRef}>
+                {searchTickerLoading ? (
+                  <div className="sidebar-search-results__empty">Searching Clover...</div>
+                ) : searchResults.hasAnyResults ? (
+                  <>
+                    {searchResults.pages.length > 0 ? (
+                      <div className="sidebar-search-results__group">
+                        <div className="sidebar-search-results__label">Pages</div>
+                        {searchResults.pages.map((result) => (
+                          <button
+                            key={result.key}
+                            type="button"
+                            className="sidebar-search-results__item"
+                            onClick={() => navigateSearchResult(result.href)}
+                          >
+                            <span className="sidebar-search-results__icon" aria-hidden="true">
+                              <MenuIcon name={result.icon} />
+                            </span>
+                            <span className="sidebar-search-results__copy">
+                              <strong>{result.title}</strong>
+                              <span>{result.detail}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {searchResults.accounts.length > 0 ? (
+                      <div className="sidebar-search-results__group">
+                        <div className="sidebar-search-results__label">Accounts</div>
+                        {searchResults.accounts.map((result) => (
+                          <button
+                            key={result.key}
+                            type="button"
+                            className="sidebar-search-results__item"
+                            onClick={() => navigateSearchResult(result.href)}
+                          >
+                            <span className="sidebar-search-results__icon" aria-hidden="true">
+                              <MenuIcon name={result.icon} />
+                            </span>
+                            <span className="sidebar-search-results__copy">
+                              <strong>{result.title}</strong>
+                              <span>{result.detail}</span>
+                            </span>
+                            {result.badge ? <span className="sidebar-search-results__badge">{result.badge}</span> : null}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {searchResults.ticker ? (
+                      <div className="sidebar-search-results__group">
+                        <div className="sidebar-search-results__label">Markets</div>
+                        <button
+                          type="button"
+                          className="sidebar-search-results__item"
+                          onClick={() => navigateSearchResult(searchResults.ticker!.href)}
+                        >
+                          <span className="sidebar-search-results__icon" aria-hidden="true">
+                            <MenuIcon name="investments" />
+                          </span>
+                          <span className="sidebar-search-results__copy">
+                            <strong>{searchResults.ticker.title}</strong>
+                            <span>{searchResults.ticker.detail}</span>
+                          </span>
+                          {searchResults.ticker.badge ? <span className="sidebar-search-results__badge">{searchResults.ticker.badge}</span> : null}
+                        </button>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="sidebar-search-results__empty">
+                    No matches yet. Try an account, page, or ticker.
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         <nav className="sidebar-nav" aria-label="Primary" id="primary-navigation">
           {navItems.map((item) => (
@@ -272,7 +879,8 @@ export function CloverShell({
 
         <div className="sidebar-footer">
           <button
-            className={`sidebar-profile ${isProfileActive || isProfileMenuOpen ? "is-active" : ""}`}
+            ref={profileButtonRef}
+            className={`sidebar-profile${profileImage ? " sidebar-profile--photo" : ""}${isProfileActive || isProfileMenuOpen ? " is-active" : ""}`}
             type="button"
             aria-label={`Open ${displayName} profile menu`}
             aria-expanded={isProfileMenuOpen}
@@ -287,12 +895,17 @@ export function CloverShell({
               })
             }
           >
-            <span className="sidebar-profile__avatar" aria-hidden="true">
-              {profileImage ? <img src={profileImage} alt="" /> : <span>{profileInitial}</span>}
-            </span>
+            {profileImage ? (
+              <img className="sidebar-profile__photo" src={profileImage} alt="" aria-hidden="true" />
+            ) : (
+              <span className="sidebar-profile__avatar" aria-hidden="true" style={{ backgroundColor: profileBackground }}>
+                <span>{profileInitial}</span>
+              </span>
+            )}
             <span className="sr-only">{displayName}</span>
           </button>
           <button
+            ref={notificationsButtonRef}
             className={`sidebar-icon-button ${isNotificationsActive ? "is-active" : ""}`}
             type="button"
             aria-label={`Open notifications${notificationCount ? ` (${notificationCount})` : ""}`}
@@ -304,7 +917,7 @@ export function CloverShell({
           </button>
 
           {isProfileMenuOpen ? (
-            <div className="sidebar-popover sidebar-popover--profile" role="menu" aria-label="Profile menu">
+            <div ref={profilePopoverRef} className="sidebar-popover sidebar-popover--profile" role="menu" aria-label="Profile menu">
               <div className="sidebar-popover__head">
                 <span className="sidebar-popover__title">{displayName}</span>
               </div>
@@ -319,6 +932,17 @@ export function CloverShell({
                     <MenuIcon name="settings" />
                   </span>
                   <span>Settings</span>
+                </Link>
+                <Link
+                  className="sidebar-popover__link sidebar-popover__link--bare"
+                  role="menuitem"
+                  href={pathname ? `/help?returnTo=${encodeURIComponent(pathname)}` : "/help"}
+                  onClick={() => setOpenMenu(null)}
+                >
+                  <span className="sidebar-popover__link-icon" aria-hidden="true">
+                    <MenuIcon name="help" />
+                  </span>
+                  <span>Help</span>
                 </Link>
                 <button
                   className="sidebar-popover__link sidebar-popover__button sidebar-popover__button--danger sidebar-popover__link--bare"
@@ -336,7 +960,7 @@ export function CloverShell({
           ) : null}
 
           {isNotificationsActive ? (
-            <div className="sidebar-popover sidebar-popover--notifications" role="menu" aria-label="Notifications">
+            <div ref={notificationsPopoverRef} className="sidebar-popover sidebar-popover--notifications" role="menu" aria-label="Notifications">
               <div className="sidebar-popover__head">
                 <span className="sidebar-popover__title">Notifications</span>
                 <span className="sidebar-popover__subtitle">
@@ -362,6 +986,28 @@ export function CloverShell({
       </aside>
 
       <main className="content">
+        {!showTopbar ? (
+          <div className="shell-compact-bar glass">
+            <button
+              className="shell-menu-button"
+              type="button"
+              aria-label="Open menu"
+              aria-expanded={isSidebarOpen}
+              aria-controls="primary-navigation"
+              onClick={() => {
+                setOpenMenu(null);
+                setIsSidebarOpen((current) => !current);
+              }}
+            >
+              <MenuIcon name="menu" />
+            </button>
+            <div className={`shell-compact-bar__copy ${hideCompactBarCopyOnMobile ? "shell-compact-bar__copy--hide-mobile" : ""}`}>
+              {kicker ? <p className="eyebrow">{kicker}</p> : null}
+              <h1>{title}</h1>
+              {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
+            </div>
+          </div>
+        ) : null}
         {showTopbar ? (
           <header className="topbar glass">
             <div>
@@ -369,45 +1015,27 @@ export function CloverShell({
               <h1>{title}</h1>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
             </div>
-            <div className="topbar-actions">{actions}</div>
+            <div className="topbar-actions">
+              <button
+                className="shell-menu-button"
+                type="button"
+                aria-label="Open menu"
+                aria-expanded={isSidebarOpen}
+                aria-controls="primary-navigation"
+                onClick={() => {
+                  setOpenMenu(null);
+                  setIsSidebarOpen((current) => !current);
+                }}
+              >
+                <MenuIcon name="menu" />
+              </button>
+              {actions}
+            </div>
           </header>
         ) : null}
 
         <div className="content-body">{children}</div>
       </main>
-
-      <nav className="mobile-nav glass" aria-label="Quick navigation">
-        {mobileNavItems.map((item) => (
-          <Link
-            key={item.key}
-            className={`mobile-nav__item ${active === item.key ? "is-active" : ""}`}
-            href={item.href}
-            aria-current={active === item.key ? "page" : undefined}
-            prefetch={false}
-          >
-            <span className="mobile-nav__icon" aria-hidden="true">
-              <MenuIcon name={item.key} />
-            </span>
-            <span className="mobile-nav__label">{item.label}</span>
-          </Link>
-        ))}
-        <button
-          className="mobile-nav__item mobile-nav__item--button"
-          type="button"
-          aria-label="Open more navigation"
-          aria-expanded={isSidebarOpen}
-          aria-controls="primary-navigation"
-          onClick={() => {
-            setOpenMenu(null);
-            setIsSidebarOpen(true);
-          }}
-        >
-          <span className="mobile-nav__icon" aria-hidden="true">
-            <MenuIcon name="more" />
-          </span>
-          <span className="mobile-nav__label">More</span>
-        </button>
-      </nav>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export const wipeLocalUserData = async (clerkUserId: string) => {
@@ -15,10 +16,17 @@ export const wipeLocalUserData = async (clerkUserId: string) => {
       where: { userId: user.id },
     });
 
+    await tx.goalSetting.deleteMany({
+      where: { userId: user.id },
+    });
+
     await tx.user.update({
       where: { id: user.id },
       data: {
         primaryGoal: null,
+        goalTargetAmount: null,
+        goalTargetSource: null,
+        goalPlan: Prisma.DbNull,
         dataWipedAt: new Date(),
       },
     });

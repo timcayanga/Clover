@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
@@ -21,12 +22,6 @@ const currencyFormatter = new Intl.NumberFormat("en-PH", {
   style: "currency",
   currency: "PHP",
   minimumFractionDigits: 2,
-});
-
-const dateFormatter = new Intl.DateTimeFormat("en-PH", {
-  month: "short",
-  day: "2-digit",
-  year: "numeric",
 });
 
 const relativeTimeFormatter = new Intl.RelativeTimeFormat("en-PH", {
@@ -115,8 +110,6 @@ const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
 
 const formatSignedCurrency = (value: number) => `${value < 0 ? "-" : ""}${currencyFormatter.format(Math.abs(value))}`;
-
-const formatDate = (value: Date) => dateFormatter.format(value);
 
 const formatRelativeDate = (value: Date, now = new Date()) => {
   const diffMinutes = Math.round((value.getTime() - now.getTime()) / 60000);
@@ -567,8 +560,6 @@ async function DashboardStream({
   );
   const confidenceLabel = confidenceScore >= 85 ? "High confidence" : confidenceScore >= 70 ? "Good confidence" : "Watch closely";
   const latestImportLabel = latestImport ? `${latestImport.fileName} · ${latestImport.status} · ${formatRelativeDate(latestImport.uploadedAt)}` : null;
-  const currentPositionValue = linkedBalanceTotal !== 0 ? linkedBalanceTotal : currentSummary.net;
-  const currentPositionLabel = accountsWithBalance.length > 0 ? (trackedBalanceCurrency === "mixed" ? "Mixed balances" : "Tracked balance") : "Net position";
   const topCategories = Array.from(currentSummary.current.expenseCategories.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
@@ -599,14 +590,6 @@ async function DashboardStream({
   const goalAction = goalProgress.nextAction;
   const goalProgressLabel = goalProgress.progressPercent === null ? "Set a target" : `${Math.round(goalProgress.progressPercent)}%`;
   const topDriver = currentSummary.topCategory?.[0] ?? "No clear driver yet";
-  const topDriverAmount = currentSummary.topCategory?.[1] ?? 0;
-  const insightTrend = currentSummary.biggestMover?.name ?? recurringItem?.name ?? "Patterns are still forming";
-  const insightTrendCopy =
-    currentSummary.biggestMover && currentSummary.biggestMover.previousAmount > 0
-      ? `${formatSignedCurrency(currentSummary.biggestMover.delta)} versus the prior period`
-      : recurringItem
-        ? `${recurringItem.count} repeats over the last 90 days`
-        : "More activity will sharpen the insight";
   const reviewAttentionText =
     reviewAttentionCount > 0
       ? `${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} need review`
@@ -647,31 +630,33 @@ async function DashboardStream({
         <article className="dashboard-home__hero glass">
           <div className="dashboard-home__copy">
             <div className="dashboard-home__kicker-row">
-              <span className="pill pill-accent">Goals</span>
-              <span className="pill pill-subtle">Reports</span>
-              <span className="pill pill-subtle">Insights</span>
+              <span className="pill pill-accent">Overview</span>
+              <span className="pill pill-subtle">Goal</span>
+              <span className="pill pill-subtle">Month</span>
+              <span className="pill pill-subtle">Pattern</span>
               <span className="pill pill-subtle">{workspaceSummary.name}</span>
               {latestImport ? <span className="pill pill-subtle">{formatRelativeDate(latestImport.uploadedAt)}</span> : null}
             </div>
 
-            <h3>{goalKey ? "How close are you to your goal?" : "Your finances at a glance, with the important patterns up front."}</h3>
-            <p>{goalProgress.coachCopy}</p>
+            <h3>{user.financialExperience === "beginner" ? "Your money, in one simple view." : goalKey ? "How close are you to your goal?" : "Your finances at a glance."}</h3>
+            <p>
+              {user.financialExperience === "beginner"
+                ? "The cards below show your goal, your month, and the biggest pattern. The small review note stays tucked away until you need it."
+                : goalProgress.coachCopy}
+            </p>
 
             <div className="dashboard-home__hero-metrics">
               <div className="dashboard-home__mini-card">
-                <span>Goal pace</span>
+                <span>Goal</span>
                 <strong>{goalProgressLabel}</strong>
-                <small>{goalProgress.bandLabel}</small>
+                <small>{goalSummaryLabel}</small>
               </div>
               <div className="dashboard-home__mini-card">
-                <span>{currentPositionLabel}</span>
-                <strong>{formatSignedCurrency(currentPositionValue)}</strong>
-                <small>{currentSummary.net >= 0 ? "Positive cash flow" : "Negative cash flow"}</small>
-              </div>
-              <div className="dashboard-home__mini-card">
-                <span>Signal quality</span>
-                <strong>{confidenceLabel}</strong>
-                <small>{reviewCoverageText}</small>
+                <span>This month</span>
+                <strong>{reportNetLabel}</strong>
+                <small>
+                  {reportIncomeLabel} in · {reportExpenseLabel} out
+                </small>
               </div>
             </div>
           </div>
@@ -690,23 +675,14 @@ async function DashboardStream({
             </div>
             <div className="dashboard-home__hero-visual-grid">
               <div className="dashboard-home__mini-card">
-                <span>Goals</span>
+                <span>Goal next</span>
                 <strong>{goalSummaryLabel}</strong>
                 <small>{goalAction}</small>
               </div>
               <div className="dashboard-home__mini-card">
-                <span>Reports</span>
+                <span>Month</span>
                 <strong>{reportNetLabel}</strong>
-                <small>
-                  {reportIncomeLabel} in, {reportExpenseLabel} out
-                </small>
-              </div>
-              <div className="dashboard-home__mini-card">
-                <span>Insights</span>
-                <strong>{topDriver}</strong>
-                <small>
-                  {insightTrend} · {insightTrendCopy} · {formatCurrency(topDriverAmount)} this period
-                </small>
+                <small>{reportDirectionLabel}</small>
               </div>
             </div>
           </div>
@@ -717,7 +693,7 @@ async function DashboardStream({
             <div className="dashboard-home__summary-card-head">
               <div>
                 <p className="eyebrow">Goals</p>
-                <h4>{goalKey ? `How close are you to ${goalProgress.bandLabel.toLowerCase()}?` : "Set a goal to make this dashboard more useful"}</h4>
+                <h4>{goalKey ? "How close are you to your goal?" : "Set a goal to make this dashboard more useful"}</h4>
               </div>
               <span className="dashboard-visual-pill">{goalProgressLabel}</span>
             </div>
@@ -799,11 +775,18 @@ async function DashboardStream({
             <div className="dashboard-home__summary-card-head">
               <div>
                 <p className="eyebrow">Insights</p>
-                <h4>What is driving the month</h4>
+                <h4>What stands out</h4>
               </div>
               <span className="dashboard-visual-pill">{confidenceLabel}</span>
             </div>
             <div className="dashboard-home__summary-card-body">
+              <div className="dashboard-home__mini-card dashboard-home__mini-card--stacked">
+                <span>Biggest pattern</span>
+                <strong>{topDriver}</strong>
+                <small>
+                  {formatCurrency(currentSummary.topCategory?.[1] ?? 0)} this month
+                </small>
+              </div>
               <div className="dashboard-home__insight-bars">
                 {topCategories.length > 0 ? (
                   topCategories.map((category, index) => (
@@ -837,7 +820,7 @@ async function DashboardStream({
                   </small>
                 </div>
                 <div className="dashboard-home__mini-card">
-                  <span>Signal quality</span>
+                  <span>Trust</span>
                   <strong>{Math.round(confidenceScore)}%</strong>
                   <small>{reviewCoverageText}</small>
                 </div>
@@ -848,16 +831,13 @@ async function DashboardStream({
 
         <article className="dashboard-home__review-strip glass">
           <div className="dashboard-home__review-copy">
-            <p className="eyebrow">Review, if needed</p>
+            <p className="eyebrow">Small follow-up</p>
             <strong>{reviewAttentionText}</strong>
-            <span>{latestImportLabel ?? "Import a statement to populate the dashboard with live data."}</span>
+            <span>{reviewCoverageText}</span>
           </div>
           <div className="dashboard-home__review-actions">
-            <Link className="button button-primary button-small" href="/review">
-              Open review
-            </Link>
-            <Link className="pill-link pill-link--inline" href="/dashboard?import=1">
-              Import statement
+            <Link className="button button-primary button-small" href={reviewAttentionCount > 0 ? "/review" : "/goals"}>
+              {reviewAttentionCount > 0 ? "Open review" : "See goal"}
             </Link>
           </div>
         </article>
@@ -878,7 +858,7 @@ async function DashboardStream({
   );
 }
 
-export default async function DashboardPage({
+async function DashboardPageStream({
   searchParams,
 }: {
   searchParams?: Promise<{ import?: string }>;
@@ -899,6 +879,7 @@ export default async function DashboardPage({
       title="Your finances at a glance"
       subtitle={experienceProfile.dashboardSubtitle}
       showTopbar={false}
+      hideCompactBarCopyOnMobile
       actions={
         <Link className="pill-link" href="/goals">
           Open goals
@@ -909,5 +890,17 @@ export default async function DashboardPage({
         <DashboardStream user={user} resolvedSearchParams={resolvedSearchParams} />
       </Suspense>
     </CloverShell>
+  );
+}
+
+export default function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ import?: string }>;
+}) {
+  return (
+    <Suspense fallback={<CloverLoadingScreen label="dashboard" />}>
+      <DashboardPageStream searchParams={searchParams} />
+    </Suspense>
   );
 }

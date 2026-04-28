@@ -46,6 +46,8 @@ This document captures the RCBC credit-card parsing rules learned from the April
 - If the parser cannot find a real amount, mark the row invalid instead of storing `0.00`.
 - If the account number is inferred from footer text instead of the card identifier, override it with the correct last 4 digits.
 - Rows like `Cash Payment`, `OpenAI ChatGPT Subscription`, `Grab`, `Lazada`, `Airbnb`, `Klook`, `Cebu Pacific`, `Din Tai Fung`, `Petron`, and `Apple` should use the learned merchant/category rules rather than defaulting to `Other`.
+- RCBC retail and payment descriptors like `THE SM STORE-SM FAIRVIEW 03/03`, `SM STORE-SM GRAND CALOOCAN PH`, and `BAYAD ONLINE PASIG PH` should simplify to readable merchant names and categorize as `Shopping` or `Bills & Utilities` when the merchant is clear.
+- If the merchant only looks like a location code or a vague descriptor such as `SEC PASAY PH`, keep it readable but conservative until a stronger merchant rule is learned.
 
 ## Review Gating
 

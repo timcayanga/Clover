@@ -1,15 +1,25 @@
 import { Worker } from "bullmq";
 import { getRedisConnection } from "@/lib/import-queue";
+import { updateImportFileCompat } from "@/lib/data-engine";
 import { processImportFileText } from "@/workers/import-processor";
-import { prisma } from "@/lib/prisma";
+import { summarizeErrorForLog } from "@/lib/security-logging";
 
 const connection = getRedisConnection();
 
 const worker = new Worker(
   "import-processing",
   async (job) => {
-    const { importFileId, password } = job.data;
-    return processImportFileText(importFileId, { password });
+    const { importFileId, password, allowDuplicateStatement, bankName } = job.data;
+    return processImportFileText(importFileId, {
+      password,
+      allowDuplicateStatement,
+      qaSource: "import_processing",
+      statementMetadataOverride: bankName
+        ? {
+            institution: bankName,
+          }
+        : null,
+    });
   },
   {
     connection,
@@ -22,12 +32,17 @@ worker.on("completed", (job) => {
 });
 
 worker.on("failed", async (job, error) => {
-  console.error(`Import job failed: ${job?.id}`, error);
+  console.error("Import job failed", { jobId: job?.id ?? null, error: summarizeErrorForLog(error) });
   const importFileId = job?.data?.importFileId;
   if (importFileId) {
-    await prisma.importFile.update({
-      where: { id: importFileId },
-      data: { status: "failed" },
+    const errorMessage =
+      error instanceof Error && error.message.trim().length > 0
+        ? error.message
+        : "Import failed. Waiting for the recovery loop to retry this file.";
+    await updateImportFileCompat(importFileId, {
+      status: "failed",
+      processingPhase: "failed",
+      processingMessage: errorMessage,
     });
   }
 });

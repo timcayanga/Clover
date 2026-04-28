@@ -11,7 +11,9 @@
     "worker:imports": "tsx workers/imports-worker.ts",
     "db:seed": "tsx prisma/seed.ts",
     "qa:parsers": "tsx scripts/parser-regression.ts",
-    "qa:training-signals": "tsx scripts/training-signal-dedupe.ts"
+    "qa:training-signals": "tsx scripts/training-signal-dedupe.ts",
+    "qa:training-signals-db": "tsx scripts/record-training-signal-regression.ts",
+    "qa:data-loop": "tsx scripts/data-qa-regression.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.844.0",

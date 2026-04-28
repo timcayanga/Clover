@@ -7,6 +7,7 @@ This document captures the PNB parsing rules learned from the synthetic training
 - Applies to Philippine National Bank savings and Mastercard statement PDFs.
 - Treat deposit-account and credit-card statements as different statement shapes.
 - Preserve raw imports, normalized rows, and learned rules separately.
+- Bank-specific title normalization is backed by `web/lib/merchant-labels.ts`.
 
 ## Savings Statement Rules
 
@@ -55,6 +56,19 @@ This document captures the PNB parsing rules learned from the synthetic training
 - Prefer deterministic parsing from the statement text before any AI fallback.
 - Keep raw statement data, parsed rows, and normalized transactions separate.
 - Preserve bank-specific transfer, fee, sweep, and adjustment wording instead of collapsing it into generic spend.
+- The PNB simplifier registry covers `Fund Transfer`, `Transfer to GCash`, `Transfer to Maya`, `Transfer from Maya`, `ATM Withdrawal`, `Transfer Fee`, `Meralco`, `Month-End Sweep`, `Adjustment Reversal`, `Tax Withheld`, `Interest Earned`, `Salary Credit`, `Cash Payment`, `OpenAI ChatGPT Subscription`, `Lazada`, `Airbnb`, `Cebu Pacific`, `Klook`, `Qantas`, `Din Tai Fung`, `Apple`, and `Grab`.
+
+## Statement Shape Learned
+
+- `STATEMENT OF ACCOUNT REPORT` statements should parse as savings ledgers when they include `Account Number`, `Currency`, and `Period Covered`.
+- Treat the transaction table as a descending running-balance ledger.
+- Preserve the line-wrapped branch / negotiating / transaction fragments that appear before the dated row.
+- Use the dated row's running balance as the strongest balance signal, and prefer the newest row's balance as the statement ending balance.
+- Skip the report header, request metadata, and branch / office boilerplate so they do not become fake transactions.
+- `PHILIPPINE NATIONAL BANK` statements with `Statement Period`, `Date Description Debit (PHP) Credit (PHP) Balance (PHP)`, and month/day rows should also parse as savings ledgers.
+- For that simpler shape, ignore `Starting Balance`, `Total Credits`, `Total Debits`, `Ending Balance`, and the system-generated footer note.
+- Treat `GCash Top-up` as a transfer, `Online Transfer` as a transfer, and keep bill-payment rows under `Bills & Utilities`.
+- For low-quality multi-page scans, the vision fallback may need multiple pages to recover the complete ledger. When the text layer is empty, inspect beyond page one so the final balance and later-page transactions are not missed.
 
 ## Notes Handling
 

@@ -3,6 +3,7 @@ import type { AccountType, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   detectStatementMetadata,
+  type DetectedStatementMetadata,
   type ImportedAccountType,
   inferAccountTypeFromStatement,
   parseAmountValue,
@@ -10,6 +11,7 @@ import {
   type ParsedImportRow,
 } from "@/lib/import-parser";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
+import { toInternalTransactionType } from "@/lib/transaction-directions";
 
 export const DATA_ENGINE_VERSION = "v2";
 
@@ -18,6 +20,7 @@ type TrainingSignalRow = {
   categoryName: string | null;
   merchantKey: string;
   merchantTokens: string[];
+  type: TransactionType;
   source: string;
   confidence: number;
 };
@@ -287,6 +290,14 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
   const lower = merchantText.toLowerCase();
   const compact = normalizeWhitespace(merchantText).replace(/\s+/g, "").toLowerCase();
 
+  if (/office\s*365|google\s+one/.test(lower) || /office365|googleone/.test(compact)) {
+    return "Business";
+  }
+
+  if (/discord\s+nitro|mlbb\s+top\s+up|mlbbtopup|foodpanda\s+ph|foodpanda/.test(lower) || /discordnitro|mlbbtopup|foodpandaph/.test(compact)) {
+    return /foodpanda/.test(lower) || /foodpandaph/.test(compact) ? "Food & Dining" : "Shopping";
+  }
+
   if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) {
     return "Financial";
   }
@@ -295,8 +306,37 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Transfers";
   }
 
+  if (
+    /repayment|cash\s+payment|transfer\s+to\s+wallet|credit\s+drawdown/.test(lower) ||
+    /repayment|cashpayment|transfertowallet|creditdrawdown/.test(compact)
+  ) {
+    return "Transfers";
+  }
+
+  if (
+    /service\s+fee|penalty\s+fee|late\s+penalty|documentary\s+stamp\s+tax|\bdst\b/.test(lower) ||
+    /servicefee|penaltyfee|latepenalty|documentarystamptax|\bdst\b/.test(compact)
+  ) {
+    return "Financial";
+  }
+
   return null;
 };
+
+const HARDCODED_EXACT_MERCHANT_KEYS = new Set([
+  "deposit",
+  "withdrawal",
+  "atm withdrawal",
+  "transfer fee",
+  "base interest",
+  "boost interest",
+  "tax withheld",
+  "repayment",
+  "credit drawdown",
+  "service fee",
+  "penalty fee",
+  "documentary stamp tax",
+]);
 
 export const normalizeMerchantText = (value?: string | null) =>
   normalizeWhitespace(String(value ?? ""))
@@ -366,11 +406,17 @@ export const detectInstitutionFromText = (text: string | null | undefined) => {
 export const detectAccountNumber = (text: string | null | undefined) => {
   const normalized = normalizeWhitespace(String(text ?? ""));
   const labeledAccountSection =
-    normalized.match(/\b(?:ACCOUNT\s*(?:NO|NUMBER|#)?|ACCT\s*(?:NO|NUMBER|#)?|A\/C\s*(?:NO|NUMBER|#)?|CARD\s*(?:NO|NUMBER|#)?|NO)\s*[:\-]?\s*([0-9\s-]{6,})/i)?.[1] ??
+    normalized.match(
+      /\b(?:ACCOUNT\s*(?:NO|NUMBER|#)?|ACCT\s*(?:NO|NUMBER|#)?|A\/C\s*(?:NO|NUMBER|#)?|CARD\s*(?:NO|NUMBER|#)?|NO)\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i
+    )?.[1] ??
     "";
-  const trailingDigits = normalized.match(/\b\d{4}[-\s]?\d{4}[-\s]?\d{2,4}\b/)?.[0] ?? "";
-  const accountSection = labeledAccountSection || trailingDigits;
-  const accountNumber = accountSection.replace(/\D/g, "").slice(0, 16) || null;
+  const trailingDigits =
+    normalized
+      .match(/\b(?:\d[\d\s-]{10,}\d)\b/g)
+      ?.map((candidate) => candidate.replace(/\D/g, ""))
+      .filter((candidate) => candidate.length >= 8 && candidate.length <= 16)
+      .sort((left, right) => right.length - left.length)[0] ?? "";
+  const accountNumber = (labeledAccountSection || trailingDigits).replace(/\D/g, "").slice(0, 16) || null;
   return accountNumber;
 };
 
@@ -393,8 +439,10 @@ export const detectStatementMetadataFromText = (text: string): StatementMetadata
         accountType ? 5 : 0,
         metadata?.startDate ? 5 : 0,
         metadata?.endDate ? 5 : 0,
-        metadata?.openingBalance !== null ? 5 : 0,
-        metadata?.endingBalance !== null ? 5 : 0,
+        metadata?.paymentDueDate ? 5 : 0,
+        typeof metadata?.openingBalance === "number" ? 5 : 0,
+        typeof metadata?.endingBalance === "number" ? 5 : 0,
+        typeof metadata?.totalAmountDue === "number" ? 5 : 0,
       ].reduce((total, part) => total + part, 0)
     );
 
@@ -405,6 +453,8 @@ export const detectStatementMetadataFromText = (text: string): StatementMetadata
     accountType,
     openingBalance: metadata?.openingBalance ?? null,
     endingBalance: metadata?.endingBalance ?? null,
+    paymentDueDate: metadata?.paymentDueDate ?? null,
+    totalAmountDue: metadata?.totalAmountDue ?? null,
     startDate: metadata?.startDate ?? null,
     endDate: metadata?.endDate ?? null,
     confidence,
@@ -420,6 +470,8 @@ export const mergeStatementMetadataWithTemplate = (
     accountType?: ImportedAccountType | null;
     openingBalance?: number | null;
     endingBalance?: number | null;
+    paymentDueDate?: string | null;
+    totalAmountDue?: number | null;
     startDate?: string | null;
     endDate?: string | null;
   } | null
@@ -428,7 +480,9 @@ export const mergeStatementMetadataWithTemplate = (
     return detected;
   }
 
-  const preferTemplateIdentity = (detected.confidence ?? 0) < 80;
+  const detectedHasStrongIdentity = Boolean(detected.institution || detected.accountNumber || detected.accountName);
+  const detectedHasAccountNumber = Boolean(detected.accountNumber);
+  const preferTemplateIdentity = (detected.confidence ?? 0) < 80 && !detectedHasAccountNumber && !detectedHasStrongIdentity;
   const templateIdentityConfidence = Math.min(
     100,
     [
@@ -438,8 +492,10 @@ export const mergeStatementMetadataWithTemplate = (
       template.accountType ? 5 : 0,
       template.startDate ? 5 : 0,
       template.endDate ? 5 : 0,
+      template.paymentDueDate ? 5 : 0,
       template.openingBalance !== null ? 5 : 0,
       template.endingBalance !== null ? 5 : 0,
+      typeof template.totalAmountDue === "number" ? 5 : 0,
     ].reduce((total, part) => total + part, 0)
   );
 
@@ -462,6 +518,8 @@ export const mergeStatementMetadataWithTemplate = (
         : detected.accountType ?? template.accountType ?? null,
     openingBalance: detected.openingBalance ?? template.openingBalance ?? null,
     endingBalance: detected.endingBalance ?? template.endingBalance ?? null,
+    paymentDueDate: detected.paymentDueDate ?? template.paymentDueDate ?? null,
+    totalAmountDue: detected.totalAmountDue ?? template.totalAmountDue ?? null,
     startDate: detected.startDate ?? template.startDate ?? null,
     endDate: detected.endDate ?? template.endDate ?? null,
     confidence: Math.max(detected.confidence ?? 0, templateIdentityConfidence),
@@ -518,6 +576,8 @@ type StatementMetadataSnapshot = {
   accountType: ImportedAccountType | null;
   openingBalance: number | null;
   endingBalance: number | null;
+  paymentDueDate?: string | null;
+  totalAmountDue?: number | null;
   startDate: string | null;
   endDate: string | null;
   confidence: number;
@@ -709,6 +769,7 @@ export const getCompatibleAccountRuleColumns = async () => {
 };
 
 export const buildImportFileInsertData = async (params: {
+  id?: string;
   workspaceId: string;
   accountId?: string | null;
   fileName: string;
@@ -719,7 +780,7 @@ export const buildImportFileInsertData = async (params: {
   const columns = new Set(await getCompatibleImportFileColumns());
   const record: Record<string, unknown> = {};
 
-  if (columns.has("id")) record.id = crypto.randomUUID();
+  if (columns.has("id")) record.id = params.id ?? crypto.randomUUID();
   if (columns.has("workspaceId")) record.workspaceId = params.workspaceId;
   if (columns.has("accountId")) record.accountId = params.accountId ?? null;
   if (columns.has("fileName")) record.fileName = params.fileName;
@@ -738,6 +799,7 @@ export const buildImportFileInsertData = async (params: {
 };
 
 export const insertImportFileCompat = async (params: {
+  id?: string;
   workspaceId: string;
   accountId?: string | null;
   fileName: string;
@@ -757,6 +819,11 @@ export const insertImportFileCompat = async (params: {
     `INSERT INTO "ImportFile" (${columns.map((column) => `"${column}"`).join(", ")}) VALUES (${placeholders})`,
     ...values
   );
+
+  if (typeof record.id === "string") {
+    const inserted = await fetchImportFileCompat(record.id);
+    return inserted ?? record;
+  }
 
   return record;
 };
@@ -793,6 +860,23 @@ export const listImportFilesCompat = async (workspaceId: string): Promise<any[]>
     `SELECT ${selectColumns} FROM "ImportFile" WHERE "workspaceId" = $1${orderBy}`,
     workspaceId
   );
+};
+
+export const listAllImportFilesCompat = async (limit?: number): Promise<any[]> => {
+  const columns = await getCompatibleImportFileColumns();
+  if (columns.length === 0) {
+    return [];
+  }
+
+  const selectColumns = columns.map((column) => `"${column}"`).join(", ");
+  const orderBy = columns.includes("uploadedAt")
+    ? ' ORDER BY "uploadedAt" DESC'
+    : columns.includes("createdAt")
+      ? ' ORDER BY "createdAt" DESC'
+      : ' ORDER BY "id" DESC';
+  const limitClause = Number.isFinite(limit ?? NaN) ? ` LIMIT ${Math.max(1, Number(limit))}` : "";
+
+  return prisma.$queryRawUnsafe<any[]>(`SELECT ${selectColumns} FROM "ImportFile"${orderBy}${limitClause}`);
 };
 
 export const updateImportFileCompat = async (
@@ -1388,15 +1472,6 @@ export const classifyMerchant = (params: {
   const tokens = tokenizeMerchant(params.merchantText);
   const normalizedMerchant = normalizeMerchantText(params.merchantText);
   const hardcodedOverride = getHardcodedCategoryOverride(params.merchantText);
-  if (hardcodedOverride) {
-    return {
-      categoryName: hardcodedOverride,
-      confidence: 99,
-      categoryReason: "hardcoded-override",
-      merchantKey: normalizedMerchant,
-      merchantTokens: tokens,
-    };
-  }
   const heuristicCategory = params.categoryName?.trim() || guessCategoryFallback(params.merchantText, params.type);
 
   let bestRule: MerchantRuleRow | null = null;
@@ -1415,12 +1490,15 @@ export const classifyMerchant = (params: {
   if (bestRule && bestRuleScore >= 20) {
     const learnedCategory = bestRule.categoryName ?? heuristicCategory;
     const exact = bestRule.merchantKey === normalizedMerchant;
+    const learnedType = params.trainingSignals.find((signal) => signal.merchantKey === normalizedMerchant)?.type ?? params.type;
     return {
       categoryName: learnedCategory,
       confidence: Math.min(99, Math.round(Math.max(78, bestRuleScore))),
       categoryReason: exact ? "rule-exact" : "rule-pattern",
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
+      normalizedName: bestRule.normalizedName || summarizeMerchantText(params.merchantText),
+      preferredType: learnedType,
     };
   }
 
@@ -1432,25 +1510,53 @@ export const classifyMerchant = (params: {
     }
   }
 
-  if (!bestSignal || bestScore < 18) {
+  if (bestSignal && bestScore >= 18) {
+    const learnedCategory = bestSignal.categoryName ?? heuristicCategory;
+    const confidence = Math.min(99, Math.round(Math.max(68, bestScore)));
+
     return {
-      categoryName: heuristicCategory,
-      confidence: heuristicCategory === "Other" ? 35 : 62,
-      categoryReason: heuristicCategory === "Other" ? "heuristic-other" : "heuristic-rule",
+      categoryName: learnedCategory,
+      confidence,
+      categoryReason: bestSignal.merchantKey === normalizedMerchant ? "learned-exact" : "learned-pattern",
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
+      normalizedName: summarizeMerchantText(params.merchantText),
+      preferredType: bestSignal.type ?? params.type,
     };
   }
 
-  const learnedCategory = bestSignal.categoryName ?? heuristicCategory;
-  const confidence = Math.min(99, Math.round(Math.max(68, bestScore)));
+  if (HARDCODED_EXACT_MERCHANT_KEYS.has(normalizedMerchant)) {
+    return {
+      categoryName: heuristicCategory,
+      confidence: 99,
+      categoryReason: "hardcoded-exact",
+      merchantKey: normalizedMerchant,
+      merchantTokens: tokens,
+      normalizedName: summarizeMerchantText(params.merchantText),
+      preferredType: params.type,
+    };
+  }
+
+  if (hardcodedOverride) {
+    return {
+      categoryName: hardcodedOverride,
+      confidence: 99,
+      categoryReason: "hardcoded-override",
+      merchantKey: normalizedMerchant,
+      merchantTokens: tokens,
+      normalizedName: summarizeMerchantText(params.merchantText),
+      preferredType: params.type,
+    };
+  }
 
   return {
-    categoryName: learnedCategory,
-    confidence,
-    categoryReason: bestSignal.merchantKey === normalizedMerchant ? "learned-exact" : "learned-pattern",
+    categoryName: heuristicCategory,
+    confidence: heuristicCategory === "Other" ? 35 : 62,
+    categoryReason: heuristicCategory === "Other" ? "heuristic-other" : "heuristic-rule",
     merchantKey: normalizedMerchant,
     merchantTokens: tokens,
+    normalizedName: summarizeMerchantText(params.merchantText),
+    preferredType: params.type,
   };
 };
 
@@ -1465,6 +1571,7 @@ export const loadTrainingSignals = async (workspaceId: string) => {
     categoryName: string | null;
     merchantKey: string;
     merchantTokens: Prisma.JsonValue | null;
+    type: TransactionType;
     source: string;
     confidence: number;
     category: { name: string };
@@ -1480,9 +1587,11 @@ export const loadTrainingSignals = async (workspaceId: string) => {
       take: 500,
     });
   } catch (error) {
-    if (!isMissingDatabaseRelationError(error, "TrainingSignal")) {
+    if (!isMissingDatabaseRelationError(error, "TrainingSignal") && !isMissingDatabaseColumnError(error)) {
       throw error;
     }
+
+    return [];
   }
 
   return signals.map((signal) => ({
@@ -1490,6 +1599,7 @@ export const loadTrainingSignals = async (workspaceId: string) => {
     categoryName: signal.category.name,
     merchantKey: signal.merchantKey,
     merchantTokens: Array.isArray(signal.merchantTokens) ? signal.merchantTokens.filter((token): token is string => typeof token === "string") : [],
+    type: signal.type,
     source: signal.source,
     confidence: signal.confidence,
   }));
@@ -1547,6 +1657,7 @@ export const recordTrainingSignal = async (params: {
   importFileId?: string | null;
   transactionId?: string | null;
   merchantText: string;
+  normalizedName?: string | null;
   categoryId: string;
   categoryName?: string | null;
   type: TransactionType;
@@ -1556,7 +1667,7 @@ export const recordTrainingSignal = async (params: {
 }) => {
   const merchantKey = normalizeMerchantText(params.merchantText);
   const merchantTokens = tokenizeMerchant(params.merchantText);
-  const normalizedMerchantLabel = summarizeMerchantText(params.merchantText);
+  const normalizedMerchantLabel = params.normalizedName?.trim() || summarizeMerchantText(params.merchantText);
   const dedupeKey = buildTrainingSignalDedupeKey({
     source: params.source,
     transactionId: params.transactionId ?? null,
@@ -1568,6 +1679,10 @@ export const recordTrainingSignal = async (params: {
 
   const columns = await getCompatibleTrainingSignalColumns();
   if (columns.length === 0) {
+    return null;
+  }
+
+  if (!columns.includes("dedupeKey")) {
     return null;
   }
 
@@ -1586,31 +1701,27 @@ export const recordTrainingSignal = async (params: {
     notes: params.notes ?? null,
   };
 
-  const signal = columns.includes("dedupeKey")
-    ? await prisma.trainingSignal.upsert({
-        where: {
-          workspaceId_dedupeKey: {
-            workspaceId: params.workspaceId,
-            dedupeKey,
-          },
-        },
-        create: signalData,
-        update: {
-          importFileId: params.importFileId ?? null,
-          transactionId: params.transactionId ?? null,
-          source: params.source,
-          merchantKey,
-          merchantTokens: merchantTokens as Prisma.InputJsonValue,
-          categoryId: params.categoryId,
-          categoryName: params.categoryName ?? null,
-          type: params.type,
-          confidence: params.confidence ?? 100,
-          notes: params.notes ?? null,
-        },
-      })
-    : await prisma.trainingSignal.create({
-        data: signalData,
-      });
+  const signal = await prisma.trainingSignal.upsert({
+    where: {
+      workspaceId_dedupeKey: {
+        workspaceId: params.workspaceId,
+        dedupeKey,
+      },
+    },
+    create: signalData,
+    update: {
+      importFileId: params.importFileId ?? null,
+      transactionId: params.transactionId ?? null,
+      source: params.source,
+      merchantKey,
+      merchantTokens: merchantTokens as Prisma.InputJsonValue,
+      categoryId: params.categoryId,
+      categoryName: params.categoryName ?? null,
+      type: params.type,
+      confidence: params.confidence ?? 100,
+      notes: params.notes ?? null,
+    },
+  });
 
   const category = await prisma.category.findUnique({
     where: { id: params.categoryId },
@@ -1629,6 +1740,312 @@ export const recordTrainingSignal = async (params: {
   }
 
   return signal;
+};
+
+type DataQaReviewEntry = {
+  correct?: boolean;
+  feedback?: string;
+  output?: unknown;
+};
+
+type DataQaReviewTransactionEntry = DataQaReviewEntry & {
+  output?: {
+    transactionName?: string | null;
+    normalizedName?: string | null;
+    date?: string | null;
+    category?: string | null;
+    type?: string | null;
+    amount?: string | null;
+  } | null;
+};
+
+type DataQaReviewPayload = {
+  bank?: DataQaReviewEntry;
+  accountNumber?: DataQaReviewEntry;
+  accountType?: DataQaReviewEntry;
+  accountBalance?: DataQaReviewEntry;
+  transactionCount?: DataQaReviewEntry;
+  transactions?: DataQaReviewTransactionEntry[];
+  additionalTransactions?: DataQaReviewTransactionEntry[];
+  manualFeedback?: string | null;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const normalizeReviewText = (value: unknown) => normalizeWhitespace(String(value ?? ""));
+
+const readReviewString = (value: unknown, key: string) => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const next = value[key];
+  return typeof next === "string" && next.trim() ? next.trim() : null;
+};
+
+const readReviewBoolean = (value: unknown, key: string) => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return Boolean(value[key]);
+};
+
+const readReviewOutputText = (value: unknown) => {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const next = value.output;
+  if (typeof next === "string" && next.trim()) {
+    return next.trim();
+  }
+
+  if (isRecord(next)) {
+    const candidate = next.output ?? next.value ?? next.text ?? next.accountNumber ?? next.bank ?? next.amount;
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+    if (typeof candidate === "number" && Number.isFinite(candidate)) {
+      return String(candidate);
+    }
+  }
+
+  return null;
+};
+
+const normalizeImportedAccountType = (value: unknown): AccountType => {
+  const normalized = normalizeReviewText(value).toLowerCase();
+
+  if (normalized === "wallet" || normalized === "credit_card" || normalized === "cash" || normalized === "investment" || normalized === "other") {
+    return normalized;
+  }
+
+  return "bank";
+};
+
+const normalizeTransactionType = (value: unknown, amount?: unknown): TransactionType => toInternalTransactionType(value, amount);
+
+export const applyDataQaReviewLearning = async (params: {
+  workspaceId: string;
+  importFileId?: string | null;
+  accountId?: string | null;
+  fileName: string;
+  fileType: string;
+  metadata: DetectedStatementMetadata;
+  parsedRows: Array<Record<string, unknown>>;
+  fieldReviewPayload?: Prisma.JsonValue | null;
+  manualFeedback?: string | null;
+  actorUserId?: string | null;
+  statementFingerprint?: string | null;
+  statementMetadataOverride?: Partial<DetectedStatementMetadata> | null;
+}) => {
+  const review = isRecord(params.fieldReviewPayload) ? (params.fieldReviewPayload as DataQaReviewPayload) : {};
+  const effectiveMetadata = {
+    ...params.metadata,
+    ...(params.statementMetadataOverride ?? {}),
+  } as DetectedStatementMetadata;
+  const bankName = readReviewOutputText(review.bank) ?? normalizeReviewText(effectiveMetadata.institution);
+  const accountName = normalizeReviewText(effectiveMetadata.accountName || effectiveMetadata.institution || params.fileName);
+  const accountNumber = readReviewOutputText(review.accountNumber) ?? normalizeReviewText(effectiveMetadata.accountNumber);
+  const accountType = normalizeImportedAccountType(readReviewOutputText(review.accountType) ?? effectiveMetadata.accountType ?? "bank");
+  const accountBalance = readReviewOutputText(review.accountBalance);
+  const reviewSeed = [
+    `bank:${bankName}`,
+    `account:${accountName}`,
+    `account_number:${accountNumber}`,
+    `account_type:${accountType}`,
+    `opening_balance:${effectiveMetadata.openingBalance ?? ""}`,
+    `ending_balance:${effectiveMetadata.endingBalance ?? ""}`,
+    `rows:${params.parsedRows.length}`,
+    ...params.parsedRows.slice(0, 12).map((row, index) => {
+      const record = isRecord(row) ? row : {};
+      return [
+        `row:${index + 1}`,
+        normalizeReviewText(record.merchantClean ?? record.merchantRaw ?? record.description ?? record.name),
+        normalizeReviewText(record.categoryName ?? record.category ?? record.normalizedCategory),
+        normalizeReviewText(record.date ?? record.transactionDate ?? record.postedDate ?? record.statementDate),
+        normalizeReviewText(record.amount ?? record.value ?? record.total),
+      ]
+        .filter((part) => part.length > 0)
+        .join("|");
+    }),
+  ]
+    .filter((part) => part.length > 0)
+    .join("\n");
+
+  const fingerprintMetadata: DetectedStatementMetadata = {
+    institution: bankName || (effectiveMetadata.institution ?? null),
+    accountNumber: accountNumber || (effectiveMetadata.accountNumber ?? null),
+    accountName: effectiveMetadata.accountName ?? null,
+    accountType: accountType,
+    openingBalance: effectiveMetadata.openingBalance ?? null,
+    endingBalance: accountBalance ? parseAmountValue(accountBalance) ?? effectiveMetadata.endingBalance ?? null : effectiveMetadata.endingBalance ?? null,
+    paymentDueDate: effectiveMetadata.paymentDueDate ?? null,
+    totalAmountDue: effectiveMetadata.totalAmountDue ?? null,
+    startDate: effectiveMetadata.startDate ?? null,
+    endDate: effectiveMetadata.endDate ?? null,
+    confidence: effectiveMetadata.confidence ?? 0,
+  };
+
+  const statementTemplate = await upsertStatementTemplate({
+    workspaceId: params.workspaceId,
+    fingerprint:
+      params.statementFingerprint ??
+      buildStatementFingerprint(reviewSeed, fingerprintMetadata, params.fileName, params.fileType),
+    metadata: fingerprintMetadata,
+    fileType: params.fileType,
+    parserConfig: {
+      source: "data_qa_review",
+      rowCount: params.parsedRows.length,
+      importFileId: params.importFileId ?? null,
+      accountId: params.accountId ?? null,
+      manualFeedback: Boolean(params.manualFeedback?.trim()),
+      correctedFields: {
+        bank: readReviewBoolean(review.bank, "correct"),
+        accountNumber: readReviewBoolean(review.accountNumber, "correct"),
+        accountType: readReviewBoolean(review.accountType, "correct"),
+        accountBalance: readReviewBoolean(review.accountBalance, "correct"),
+        transactionCount: readReviewBoolean(review.transactionCount, "correct"),
+        transactionRows: Array.isArray(review.transactions) ? review.transactions.filter((entry) => readReviewBoolean(entry, "correct")).length : 0,
+      },
+    } as Prisma.InputJsonValue,
+  });
+
+  const accountRule = await upsertAccountRule({
+    workspaceId: params.workspaceId,
+    accountId: params.accountId ?? null,
+    accountName,
+    institution: bankName || null,
+    accountType,
+    source: "data_qa_review",
+    confidence: readReviewBoolean(review.bank, "correct") || readReviewBoolean(review.accountNumber, "correct") || readReviewBoolean(review.accountType, "correct") ? 100 : 85,
+  });
+
+  const categories = await prisma.category.findMany({
+    where: { workspaceId: params.workspaceId },
+    select: {
+      id: true,
+      name: true,
+    },
+  });
+  const categoriesByName = new Map(categories.map((category) => [normalizeMerchantText(category.name), category] as const));
+
+  const trainingSignals: Array<Promise<unknown>> = [];
+  const transactionReviews = Array.isArray(review.transactions) ? review.transactions : [];
+
+  for (let index = 0; index < Math.min(transactionReviews.length, params.parsedRows.length); index += 1) {
+    const reviewRow = transactionReviews[index];
+    if (!readReviewBoolean(reviewRow, "correct")) {
+      continue;
+    }
+
+    const parsedRow = params.parsedRows[index];
+    const parsedRecord = isRecord(parsedRow) ? parsedRow : {};
+    const parsedMerchantText = normalizeReviewText(parsedRecord.merchantRaw ?? parsedRecord.description ?? parsedRecord.name ?? parsedRecord.merchantClean);
+    const parsedNormalizedText = normalizeReviewText(parsedRecord.merchantClean ?? parsedRecord.normalizedName ?? parsedRecord.normalizedMerchant ?? parsedRecord.merchantRaw);
+    const categoryName =
+      readReviewString(reviewRow.output, "category") ??
+      normalizeReviewText(parsedRecord.categoryName ?? parsedRecord.category ?? parsedRecord.normalizedCategory);
+    const category = categoriesByName.get(normalizeMerchantText(categoryName)) ?? null;
+    const merchantText =
+      parsedMerchantText ||
+      readReviewString(reviewRow.output, "transactionName") ||
+      readReviewString(reviewRow.output, "normalizedName") ||
+      normalizeReviewText(parsedRecord.merchantClean ?? parsedRecord.merchantRaw ?? parsedRecord.description ?? parsedRecord.name);
+    const normalizedName =
+      readReviewString(reviewRow.output, "normalizedName") ??
+      readReviewString(reviewRow.output, "transactionName") ??
+      (parsedNormalizedText || parsedMerchantText);
+    const type = normalizeTransactionType(
+      readReviewString(reviewRow.output, "type") ?? parsedRecord.type ?? parsedRecord.transactionType ?? "expense",
+      parsedRecord.amount ?? parsedRecord.value ?? parsedRecord.total
+    );
+
+    if (!category || !merchantText) {
+      continue;
+    }
+
+    trainingSignals.push(
+      recordTrainingSignal({
+        workspaceId: params.workspaceId,
+        importFileId: params.importFileId ?? null,
+        merchantText,
+        normalizedName,
+        categoryId: category.id,
+        categoryName: category.name,
+        type,
+        source: "manual_recategorization",
+        confidence: readReviewString(reviewRow, "feedback") ? 90 : 100,
+        notes:
+          readReviewString(reviewRow, "feedback") ??
+          "Confirmed through Data QA review.",
+      })
+    );
+  }
+
+  const additionalTransactions = Array.isArray(review.additionalTransactions) ? review.additionalTransactions : [];
+  for (const reviewRow of additionalTransactions) {
+    const output = isRecord(reviewRow) && isRecord(reviewRow.output) ? reviewRow.output : null;
+    const categoryName =
+      readReviewString(output, "category") ??
+      normalizeReviewText((output as Record<string, unknown> | null)?.category);
+    const category = categoriesByName.get(normalizeMerchantText(categoryName)) ?? null;
+    const merchantText =
+      readReviewString(output, "transactionName") ??
+      readReviewString(output, "normalizedName") ??
+      "";
+    const type = normalizeTransactionType(readReviewString(output, "type") ?? "expense", output && isRecord(output) ? output.amount : null);
+
+    if (!category || !merchantText) {
+      continue;
+    }
+
+    trainingSignals.push(
+      recordTrainingSignal({
+        workspaceId: params.workspaceId,
+        importFileId: params.importFileId ?? null,
+        merchantText,
+        categoryId: category.id,
+        categoryName: category.name,
+        type,
+        source: "manual_transaction_creation",
+        confidence: readReviewBoolean(reviewRow, "correct") ? 100 : 90,
+        notes:
+          readReviewString(reviewRow, "feedback") ??
+          "Added manually from Data QA because the parser missed this transaction.",
+      })
+    );
+  }
+
+  await Promise.allSettled(trainingSignals);
+
+  if (params.actorUserId) {
+    await prisma.auditLog.create({
+      data: {
+        workspaceId: params.workspaceId,
+        actorUserId: params.actorUserId,
+        action: "data_qa.feedback_learning_applied",
+        entity: "DataQaRun",
+        entityId: params.importFileId ?? statementTemplate?.id ?? null,
+        metadata: {
+          importFileId: params.importFileId ?? null,
+          accountId: params.accountId ?? null,
+          statementTemplateId: statementTemplate?.id ?? null,
+          accountRuleId: accountRule?.id ?? null,
+          manualFeedback: Boolean(params.manualFeedback?.trim()),
+          transactionSignals: trainingSignals.length,
+        },
+      },
+    });
+  }
+
+  return {
+    statementTemplateId: statementTemplate?.id ?? null,
+    accountRuleId: accountRule?.id ?? null,
+    transactionSignals: trainingSignals.length,
+  };
 };
 
 export const enrichParsedRowsWithTraining = async (params: {
@@ -1663,18 +2080,18 @@ export const enrichParsedRowsWithTraining = async (params: {
 
   return params.rows.map((row) => {
     const rowWithInstitution = row as ParsedImportRow & { institution?: string | null };
-    const merchantText = row.merchantClean || row.merchantRaw || row.description || "";
-    const merchantClean = summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
+    const merchantText = row.merchantRaw || row.description || row.merchantClean || "";
     const accountMatch = findBestAccountRule(row.accountName ?? null, rowWithInstitution.institution ?? null, accountRules);
     const learned = classifyMerchant({
-      merchantText: merchantClean,
+      merchantText,
       type: row.type ?? "expense",
       categoryName: row.categoryName ?? null,
       merchantRules,
       trainingSignals,
     });
-
-    const categoryName = learned.categoryName || row.categoryName || defaultCategoryForType(row.type ?? "expense");
+    const nextType = learned.preferredType ?? row.type ?? "expense";
+    const merchantClean = learned.normalizedName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
+    const categoryName = learned.categoryName || row.categoryName || defaultCategoryForType(nextType);
     const accountName = row.accountName ?? null;
     const effectiveConfidence = Math.max(0, Math.min(100, Math.min(learned.confidence, statementConfidence)));
     const learnedRuleIdsApplied = [
@@ -1694,7 +2111,7 @@ export const enrichParsedRowsWithTraining = async (params: {
         effectiveConfidence,
         categoryName,
         categoryReason: learned.categoryReason,
-        rowType: row.type,
+        rowType: nextType,
       })
         ? "pending_review"
         : "suggested",
@@ -1702,12 +2119,12 @@ export const enrichParsedRowsWithTraining = async (params: {
       categoryConfidence: effectiveConfidence,
       accountMatchConfidence: accountMatch ? Math.min(99, Math.round(Math.min(Math.max(70, accountMatch.score), statementConfidence))) : 0,
       duplicateConfidence: 0,
-      transferConfidence: row.type === "transfer" ? 100 : 0,
+      transferConfidence: nextType === "transfer" ? 100 : 0,
       learnedRuleIdsApplied,
       normalizedPayload: {
         merchantClean: merchantClean || null,
         categoryName,
-        type: row.type ?? "expense",
+        type: nextType,
         accountName: accountMatch?.rule.accountName ?? accountName ?? null,
         institution: row.institution ?? accountMatch?.rule.institution ?? null,
       } as Prisma.InputJsonValue,
@@ -1722,8 +2139,11 @@ export const enrichParsedRowsWithTraining = async (params: {
           accountRuleKey: accountMatch?.rule.ruleKey ?? null,
           accountRuleConfidence: accountMatch ? Math.round(accountMatch.score) : null,
           statementConfidence,
+          normalizedName: merchantClean || null,
+          preferredType: nextType,
         },
       },
+      type: nextType,
     } satisfies EnrichedParsedImportRow;
   });
 };

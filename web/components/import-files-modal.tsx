@@ -6,13 +6,15 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ImportPasswordModal } from "@/components/import-password-modal";
+import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import { capturePostHogClientEvent, capturePostHogClientEventOnce, analyticsOnceKey } from "@/components/posthog-analytics";
 import { formatDuplicateImportMessage } from "@/lib/import-duplicate-message";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { postFileWithProgress } from "@/lib/import-file-post";
-import { MAX_IMPORT_FILE_SIZE, isSupportedImportFile } from "@/lib/import-file-validation";
+import { validateImportFile } from "@/lib/import-file-validation";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import { syncImportedWorkspaceAccountCaches, syncImportedWorkspaceTransactionCaches } from "@/lib/workspace-cache";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 
@@ -36,6 +38,7 @@ type ImportFilesModalProps = {
   accounts: AccountOption[];
   accountRules?: AccountRule[];
   defaultAccountId?: string | null;
+  showQaTools?: boolean;
   onClose: () => void;
   onImported: (summary: UploadInsightsSummary) => Promise<void> | void;
 };
@@ -68,6 +71,50 @@ type ImportProcessResult = {
   summary: UploadInsightsSummary | null;
 };
 
+type QaFinding = {
+  code: string;
+  severity: "info" | "warning" | "critical";
+  field: string | null;
+  message: string;
+  suggestion: string | null;
+  confidence: number;
+};
+
+type QaRunSummary = {
+  id: string;
+  score: number;
+  source: string;
+  status: string;
+  findingCount: number;
+  criticalCount: number;
+  parserVersion: string | null;
+  totalDurationMs: number | null;
+  parserDurationMs: number | null;
+  feedbackPayload: {
+    metrics?: Record<string, unknown>;
+  } | null;
+  findings: QaFinding[];
+};
+
+type ImportStatusPayload = {
+  importFile?: {
+    status?: string;
+    accountId?: string | null;
+    processingPhase?: string | null;
+    processingMessage?: string | null;
+    processingAttempt?: number | null;
+    processingTargetScore?: number | null;
+    processingCurrentScore?: number | null;
+  };
+  parsedRowsCount?: number;
+  confirmedTransactionsCount?: number;
+  confirmationStatus?: string;
+  statementCheckpoint?: {
+    sourceMetadata?: Record<string, unknown> | null;
+    endingBalance?: string | null;
+  } | null;
+};
+
 const isPasswordError = (error: unknown) => {
   if (!error || typeof error !== "object") return false;
   const name = "name" in error ? String((error as { name?: unknown }).name ?? "") : "";
@@ -76,7 +123,6 @@ const isPasswordError = (error: unknown) => {
 };
 
 const fileKey = (file: File) => `${file.name}:${file.size}:${file.lastModified}`;
-const MAX_IMPORT_FILES = 10;
 
 const fileTypeLabel = (file: File) => {
   const lowerName = file.name.toLowerCase();
@@ -84,6 +130,27 @@ const fileTypeLabel = (file: File) => {
   if (lowerName.endsWith(".csv")) return "CSV";
   if (lowerName.endsWith(".tsv")) return "TSV";
   return "File";
+};
+
+const isPdfImportFile = (file: File | string) =>
+  typeof file === "string" ? /\.pdf$/i.test(file) : file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+
+const lowQualityImportWarning = (fileName: string) =>
+  `${fileName} looks too blurry for Clover to read. Please upload a clearer image or a higher-resolution PDF.`;
+
+const isLowQualityImportFailure = (file: File | string, errorMessage: string) =>
+  isPdfImportFile(file) &&
+  /Unable to process import|Unable to parse this file|No parsed rows available|Import parsing failed in the background|Unable to confirm this import\.|Timed out waiting for trusted statement identity\./i.test(
+    errorMessage
+  );
+
+const formatImportFailureMessage = (file: File | string, errorMessage: string) => {
+  if (isLowQualityImportFailure(file, errorMessage)) {
+    const fileName = typeof file === "string" ? file : file.name;
+    return lowQualityImportWarning(fileName || "This file");
+  }
+
+  return errorMessage;
 };
 
 const normalizeStatementAccountName = (name: string, institution?: string | null) => {
@@ -353,7 +420,46 @@ const guessStatementIdentity = (fileName: string) => {
     return { accountName: "BPI", institution: "BPI" };
   }
 
+  if (lowerName.includes("metrobank") || lowerName.includes("mb-online") || lowerName.includes("msoa")) {
+    const match = lowerName.match(/(\d{4})(?=[^\d]*$)/) ?? lowerName.match(/(\d{4})/);
+    return {
+      accountName: match ? `Metrobank ${match[1]}` : "Metrobank",
+      institution: "Metrobank",
+    };
+  }
+
   return null;
+};
+
+const resolveStatementIdentityFromMetadata = (metadata: unknown) => {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return null;
+  }
+
+  const source = metadata as Record<string, unknown>;
+  const accountName = typeof source.accountName === "string" && source.accountName.trim() ? source.accountName.trim() : null;
+  const institution = typeof source.institution === "string" && source.institution.trim() ? source.institution.trim() : null;
+
+  if (!accountName && !institution) {
+    return null;
+  }
+
+  const rawAccountType = typeof source.accountType === "string" ? source.accountType.trim() : "";
+  const accountType =
+    rawAccountType === "bank" ||
+    rawAccountType === "wallet" ||
+    rawAccountType === "credit_card" ||
+    rawAccountType === "cash" ||
+    rawAccountType === "investment" ||
+    rawAccountType === "other"
+      ? rawAccountType
+      : inferAccountTypeFromStatement(institution, accountName, "bank");
+
+  return {
+    accountName,
+    institution,
+    accountType,
+  };
 };
 
 const isSpecificOptimisticAccountName = (accountName?: string | null) => {
@@ -465,23 +571,6 @@ const friendlyImportProgressLabel = (label: string, fileName?: string | null) =>
   }
 };
 
-const friendlyImportStatusLabel = (statusLabel: string) => {
-  switch (statusLabel) {
-    case "Uploading":
-      return "Bringing it in";
-    case "Parsing":
-      return "Reading it";
-    case "Working":
-      return "Clover is on it";
-    case "Queued":
-      return "Waiting";
-    case "Already imported":
-      return "Already in Clover";
-    default:
-      return statusLabel;
-  }
-};
-
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
 export function ImportFilesModal({
@@ -490,6 +579,7 @@ export function ImportFilesModal({
   accounts,
   accountRules = [],
   defaultAccountId,
+  showQaTools = false,
   onClose,
   onImported,
 }: ImportFilesModalProps) {
@@ -502,10 +592,15 @@ export function ImportFilesModal({
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("Upload CSV or PDF files to import transactions and balances.");
+  const [validationNotice, setValidationNotice] = useState<string | null>(null);
   const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
-  const [limitReached, setLimitReached] = useState(false);
-  const upgradePromptTrackedRef = useRef(false);
+  const [monthlyUploadLimit, setMonthlyUploadLimit] = useState(10);
+  const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
+  const [qaRunsByItemId, setQaRunsByItemId] = useState<Record<string, QaRunSummary | null>>({});
+  const [qaLoadingByItemId, setQaLoadingByItemId] = useState<Record<string, boolean>>({});
+  const [qaErrorByItemId, setQaErrorByItemId] = useState<Record<string, string | null>>({});
+  const autoLoadedQaIdsRef = useRef(new Set<string>());
 
   useEffect(() => {
     if (!open) {
@@ -515,10 +610,15 @@ export function ImportFilesModal({
       setSelectedAccountId("");
       setSelectedPasswordItemId(null);
       setPlanTier("unknown");
-      setLimitReached(false);
-      upgradePromptTrackedRef.current = false;
+      setMonthlyUploadLimit(10);
+      setPlanLimitNudge(null);
+      setQaRunsByItemId({});
+      setQaLoadingByItemId({});
+      setQaErrorByItemId({});
+      autoLoadedQaIdsRef.current.clear();
       accountIdByKeyRef.current.clear();
       setMessage("Upload CSV or PDF files to import transactions and balances.");
+      setValidationNotice(null);
       return;
     }
 
@@ -545,6 +645,7 @@ export function ImportFilesModal({
       return defaultAccountId ?? accounts[0]?.id ?? "";
     });
     setMessage("Upload CSV or PDF files to import transactions and balances.");
+    setValidationNotice(null);
   }, [accounts, defaultAccountId, open]);
 
   useEffect(() => {
@@ -563,8 +664,10 @@ export function ImportFilesModal({
 
         const payload = await response.json();
         const nextPlanTier = payload?.user?.planTier === "pro" ? "pro" : "free";
+        const nextMonthlyUploadLimit = Number(payload?.user?.monthlyUploadLimit ?? 10);
         if (!cancelled) {
           setPlanTier(nextPlanTier);
+          setMonthlyUploadLimit(Number.isFinite(nextMonthlyUploadLimit) && nextMonthlyUploadLimit >= 0 ? nextMonthlyUploadLimit : 10);
         }
       } catch {
         if (!cancelled) {
@@ -579,6 +682,16 @@ export function ImportFilesModal({
       cancelled = true;
     };
   }, [open]);
+
+  const showPlanLimitNudge = (payload: PlanLimitPayload) => {
+    setPlanLimitNudge(payload);
+    capturePostHogClientEvent("plan_limit_reached", {
+      limit_type: payload.limitType,
+      limit_value: payload.limitValue,
+      plan_tier: payload.planTier,
+      workspace_id: workspaceId || null,
+    });
+  };
 
   const createStatementAccount = async (
     name: string,
@@ -612,6 +725,27 @@ export function ImportFilesModal({
     accountIdByKeyRef.current.set(accountKey(name, institution), accountId);
     return accountId;
   };
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const nextItem = items.find(
+      (item) =>
+        Boolean(item.importFileId) &&
+        !autoLoadedQaIdsRef.current.has(item.id) &&
+        !qaLoadingByItemId[item.id] &&
+        (item.status === "importing" || item.status === "done" || item.confirmationState !== "none")
+    );
+
+    if (!nextItem) {
+      return;
+    }
+
+    autoLoadedQaIdsRef.current.add(nextItem.id);
+    void loadQaRun(nextItem.id).catch(() => null);
+  }, [items, loadQaRun, open, qaLoadingByItemId, showQaTools]);
 
   const syncStatementAccountIdentity = async (
     accountId: string,
@@ -654,22 +788,30 @@ export function ImportFilesModal({
     if (nextFiles.length === 0) return;
 
     let feedbackMessage = "";
-    setItems((current) => {
-      const existing = new Set(current.map((item) => fileKey(item.file)));
-      const availableSlots = Math.max(0, MAX_IMPORT_FILES - current.length);
-      let skippedTooLarge = 0;
-      let skippedUnsupported = 0;
+    let validationMessage = "";
+      setItems((current) => {
+        const existing = new Set(current.map((item) => fileKey(item.file)));
+        const fileQueueLimit = Math.max(0, monthlyUploadLimit);
+        const availableSlots = Math.max(0, fileQueueLimit - current.length);
       let skippedTooMany = 0;
       let additionsCount = 0;
+      const validationIssues: string[] = [];
 
       const additions = nextFiles.flatMap((file) => {
-        if (file.size > MAX_IMPORT_FILE_SIZE) {
-          skippedTooLarge += 1;
-          return [];
-        }
+        const validationError = validateImportFile({
+          fileName: file.name,
+          fileSize: file.size,
+          contentType: file.type,
+        });
 
-        if (!isSupportedImportFile(file.name, file.type)) {
-          skippedUnsupported += 1;
+        if (validationError) {
+          if (validationError === "Import files must be 2 MB or smaller.") {
+            validationIssues.push(`${file.name} is larger than 2 MB.`);
+          } else if (validationError === "Only PDF, CSV, and TSV files are supported.") {
+            validationIssues.push(`${file.name} has an invalid file extension.`);
+          } else {
+            validationIssues.push(`${file.name} could not be added.`);
+          }
           return [];
         }
 
@@ -737,20 +879,22 @@ export function ImportFilesModal({
         ];
       });
 
-      if (skippedTooLarge > 0 && skippedTooMany > 0) {
-        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooLarge} over 2 MB and ${skippedTooMany} over the 10-file limit.`;
-      } else if (skippedTooLarge > 0) {
-        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooLarge} file${skippedTooLarge === 1 ? "" : "s"} over 2 MB.`;
-      } else if (skippedUnsupported > 0) {
-        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedUnsupported} unsupported file${skippedUnsupported === 1 ? "" : "s"}.`;
+      if (validationIssues.length > 0 && additions.length > 0) {
+        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"} to the queue.`;
+      } else if (validationIssues.length > 0 || skippedTooMany > 0) {
+        feedbackMessage = "No files were added.";
+      }
+
+      if (validationIssues.length > 0 && skippedTooMany > 0) {
+        validationMessage = `Warning: ${validationIssues.join(" ")} Clover also skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the ${monthlyUploadLimit}-file limit.`;
+      } else if (validationIssues.length > 0) {
+        validationMessage = `Warning: ${validationIssues.join(" ")}`;
       } else if (skippedTooMany > 0) {
-        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the 10-file limit.`;
-        setLimitReached(true);
-        capturePostHogClientEvent("plan_limit_reached", {
-          limit_type: "upload_file_count",
-          current_usage: current.length + additionsCount,
-          limit_value: 10,
-          workspace_id: workspaceId || null,
+        feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the ${monthlyUploadLimit}-file limit.`;
+        showPlanLimitNudge({
+          planTier,
+          limitType: "upload_limit",
+          limitValue: monthlyUploadLimit,
         });
       } else if (additions.length > 0) {
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"} to the queue.`;
@@ -768,6 +912,8 @@ export function ImportFilesModal({
     if (feedbackMessage) {
       setMessage(feedbackMessage);
     }
+
+    setValidationNotice(validationMessage || null);
   };
 
   const updateItem = (id: string, patch: Partial<QueuedFile>) => {
@@ -823,10 +969,15 @@ export function ImportFilesModal({
 
       if (!confirmResponse.ok) {
         const payload = await confirmResponse.json().catch(() => ({}));
+        const limitPayload = parsePlanLimitPayload(payload) ?? parsePlanLimitMessage(String(payload.error ?? ""), planTier);
+        if (limitPayload) {
+          showPlanLimitNudge(limitPayload);
+        }
+        const confirmError = formatImportFailureMessage(summaryContext.fileName, payload.error || "Unable to confirm this import.");
         updateItem(itemId, {
           status: "error",
           confirmationState: "staged",
-        error: payload.error || "Unable to confirm this import.",
+          error: confirmError,
         progress: 0,
         progressLabel: "Confirmation failed",
       });
@@ -908,31 +1059,57 @@ export function ImportFilesModal({
     }
   ) => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    let seededFallbackSummary = false;
 
     for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
-        const response = await fetch(`/api/imports/${importFileId}/status`);
+        const response = await fetch(`/api/imports/${importFileId}/status`, {
+          cache: "no-store",
+        });
         if (!response.ok) {
           throw new Error("Unable to load import status.");
         }
 
-        const payload = await response.json();
-        const importFile = payload.importFile as { status?: string } | undefined;
+        const payload = (await response.json()) as ImportStatusPayload;
+        const importFile = payload.importFile;
         const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
         const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
+        const processingPhase = typeof importFile?.processingPhase === "string" ? importFile.processingPhase : null;
+        const processingMessage = typeof importFile?.processingMessage === "string" ? importFile.processingMessage : null;
 
         if (importFile?.status === "failed") {
+          const limitPayload = parsePlanLimitMessage(processingMessage, planTier);
+          if (limitPayload) {
+            showPlanLimitNudge(limitPayload);
+          }
           updateItem(itemId, {
             status: "error",
             confirmationState: "staged",
-            error: "Import parsing failed in the background.",
+            error: formatImportFailureMessage(
+              summaryContext.fileName,
+              processingMessage || "Import parsing failed in the background."
+            ),
             progress: 0,
             progressLabel: "Import failed",
           });
           return;
         }
 
-        if (confirmedTransactionsCount > 0) {
+        if (importFile?.status === "processing" && processingPhase) {
+          updateItem(itemId, {
+            status: "importing",
+            progress: Math.max(90, Math.min(98, 90 + Number(importFile.processingAttempt ?? 0))),
+            progressLabel:
+              processingMessage ??
+              (processingPhase === "auto_rerunning"
+                ? `Auto-rerun ${Number(importFile.processingAttempt ?? 0)}/${Number(importFile.processingTargetScore ?? 95)} in progress`
+                : "Parsing in background"),
+          });
+          await sleep(600);
+          continue;
+        }
+
+        if (confirmedTransactionsCount > 0 || importFile?.accountId) {
           updateItem(itemId, {
             status: "done",
             confirmationState: "confirmed",
@@ -973,6 +1150,8 @@ export function ImportFilesModal({
             accounts.find((account) => account.id === resolvedAccountId)?.type ??
             summaryContext.accountType ??
             null) as UploadInsightsSummary["accountType"];
+          const shouldDeferClientConfirmation =
+            resolvedIdentity.institution === "GCash" || resolvedAccountType === "wallet";
 
           const shouldUseFallbackIdentity = !resolvedIdentity.accountName && !resolvedIdentity.institution && attempt >= 4;
           if (!resolvedIdentity.accountName && !resolvedIdentity.institution && !shouldUseFallbackIdentity) {
@@ -1010,12 +1189,48 @@ export function ImportFilesModal({
           }
 
           if (!resolvedIdentity.accountName && !resolvedIdentity.institution) {
-          updateItem(itemId, {
-            status: "importing",
-            progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
-            progressLabel: "Waiting for statement identity",
-            targetAccountId: accountId,
-          });
+            if (parsedRowsCount > 0 && !seededFallbackSummary) {
+              const fallbackAccountId = accountId && !accountId.startsWith("optimistic-")
+                ? accountId
+                : await ensureTargetAccountId(summaryContext.fallbackAccountName, null, null);
+              const fallbackPreviewTransactions =
+                summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
+                  ? summaryContext.previewTransactions
+                  : await loadOptimisticPreviewTransactions(
+                      importFileId,
+                      fallbackAccountId,
+                      summaryContext.fallbackAccountName,
+                      null
+                    ).catch(() => []);
+              const fallbackSummary = buildOptimisticUploadSummary(
+                summaryContext.fileName,
+                0,
+                fallbackAccountId,
+                summaryContext.fallbackAccountName,
+                null,
+                null,
+                summaryContext.optimisticAccountId,
+                toBalanceString(statementCheckpoint?.endingBalance),
+                fallbackPreviewTransactions
+              );
+
+              seededFallbackSummary = true;
+              updateItem(itemId, {
+                status: "importing",
+                progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
+                progressLabel: "Waiting for statement identity",
+                targetAccountId: fallbackAccountId,
+              });
+              seedImportedWorkspaceCaches(workspaceId, fallbackSummary);
+              void onImported(fallbackSummary);
+            } else {
+              updateItem(itemId, {
+                status: "importing",
+                progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
+                progressLabel: "Waiting for statement identity",
+                targetAccountId: accountId,
+              });
+            }
             await sleep(parsedRowsCount > 0 ? 300 : 600);
             continue;
           }
@@ -1045,6 +1260,17 @@ export function ImportFilesModal({
           }
           if (!resolvedAccountId) {
             throw new Error("Unable to determine the destination account for this statement.");
+          }
+
+          if (confirmedTransactionsCount === 0 && shouldDeferClientConfirmation) {
+            updateItem(itemId, {
+              status: "importing",
+              progress: Math.max(95, Math.min(98, 94 + attempt * 0.1)),
+              progressLabel: "Finalizing import",
+              targetAccountId: resolvedAccountId,
+            });
+            await sleep(600);
+            continue;
           }
 
           const previewSummary = buildOptimisticUploadSummary(
@@ -1088,6 +1314,10 @@ export function ImportFilesModal({
           targetAccountId: accountId,
         });
       } catch (error) {
+        const limitPayload = parsePlanLimitMessage(error instanceof Error ? error.message : null, planTier);
+        if (limitPayload) {
+          showPlanLimitNudge(limitPayload);
+        }
         updateItem(itemId, {
           status: "error",
           confirmationState: "staged",
@@ -1188,6 +1418,67 @@ export function ImportFilesModal({
     setItems((current) => current.filter((item) => item.id !== id));
   };
 
+  async function loadQaRun(itemId: string, forceRerun = false) {
+    const item = items.find((entry) => entry.id === itemId);
+    if (!item?.importFileId) {
+      setQaErrorByItemId((current) => ({ ...current, [itemId]: "No import file is available for this row." }));
+      return;
+    }
+
+    setQaLoadingByItemId((current) => ({ ...current, [itemId]: true }));
+    setQaErrorByItemId((current) => ({ ...current, [itemId]: null }));
+
+    try {
+      const response = await fetch(`/api/imports/${item.importFileId}/qa`, {
+        method: forceRerun ? "POST" : "GET",
+        headers: forceRerun ? { "Content-Type": "application/json" } : undefined,
+        body: forceRerun ? JSON.stringify({ source: "replay" }) : undefined,
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "Unable to load QA results.");
+      }
+
+      const payload = await response.json();
+      const run = payload?.run ?? payload?.run?.run ?? null;
+      const findings = Array.isArray(run?.findings) ? run.findings : [];
+
+      setQaRunsByItemId((current) => ({
+        ...current,
+        [itemId]: run
+          ? {
+              id: String(run.id ?? crypto.randomUUID()),
+              score: Number(run.score ?? 0),
+              source: String(run.source ?? "unknown"),
+              status: String(run.status ?? "completed"),
+              findingCount: Number(run.findingCount ?? findings.length),
+              criticalCount: Number(run.criticalCount ?? 0),
+              parserVersion: run.parserVersion ? String(run.parserVersion) : null,
+              totalDurationMs: run.totalDurationMs === null || run.totalDurationMs === undefined ? null : Number(run.totalDurationMs),
+              parserDurationMs: run.parserDurationMs === null || run.parserDurationMs === undefined ? null : Number(run.parserDurationMs),
+              feedbackPayload: run.feedbackPayload ?? null,
+              findings: findings.map((finding: QaFinding) => ({
+                code: String(finding.code ?? "unknown"),
+                severity: finding.severity === "critical" || finding.severity === "warning" ? finding.severity : "info",
+                field: finding.field ?? null,
+                message: String(finding.message ?? ""),
+                suggestion: finding.suggestion ?? null,
+                confidence: Number(finding.confidence ?? 0),
+              })),
+            }
+          : null,
+      }));
+    } catch (error) {
+      setQaErrorByItemId((current) => ({
+        ...current,
+        [itemId]: error instanceof Error ? error.message : "Unable to load QA results.",
+      }));
+    } finally {
+      setQaLoadingByItemId((current) => ({ ...current, [itemId]: false }));
+    }
+  }
+
   const processFile = async (itemId: string): Promise<ImportProcessResult> => {
     const item = items.find((entry) => entry.id === itemId);
     if (!item) return { status: "error", importedRows: null, summary: null };
@@ -1247,6 +1538,10 @@ export function ImportFilesModal({
 
       if (!processResponse.ok) {
         const payload = await processResponse.json().catch(() => ({}));
+        const limitPayload = parsePlanLimitPayload(payload) ?? parsePlanLimitMessage(String(payload.error ?? ""), planTier);
+        if (limitPayload) {
+          showPlanLimitNudge(limitPayload);
+        }
         capturePostHogClientEvent("file_upload_failed", {
           error_stage: "upload",
           error_code: String(payload.error ?? "unknown"),
@@ -1255,6 +1550,18 @@ export function ImportFilesModal({
       }
 
       const processPayload = await processResponse.json().catch(() => ({}));
+      const payloadIdentity = resolveStatementIdentityFromMetadata(processPayload?.metadata);
+      const statementIdentity =
+        payloadIdentity ??
+        (guessedIdentity
+          ? {
+              ...guessedIdentity,
+              accountType: inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank"),
+            }
+          : null);
+      const statementAccountType =
+        statementIdentity?.accountType ??
+        inferAccountTypeFromStatement(statementIdentity?.institution, statementIdentity?.accountName, "bank");
       if (processPayload?.duplicate) {
         const duplicateMessage = formatDuplicateImportMessage(item.file.name, guessedIdentity?.accountName ?? null);
         updateItem(itemId, {
@@ -1275,39 +1582,51 @@ export function ImportFilesModal({
         file_type: fileTypeLabel(item.file),
         file_size_bytes: item.file.size,
         transaction_count: Number(processPayload?.imported ?? 0) || undefined,
-        institution: guessedIdentity?.institution ?? null,
+        institution: statementIdentity?.institution ?? null,
       });
 
       if (processPayload?.queued) {
-        const optimisticAccountId = canUseOptimisticGuess ? item.optimisticAccountId ?? null : null;
+        const hasStatementIdentity = Boolean(statementIdentity?.accountName && statementIdentity?.institution);
+        const optimisticAccountId = hasStatementIdentity
+          ? await ensureTargetAccountId(
+              statementIdentity?.accountName ?? null,
+              statementIdentity?.institution ?? null,
+              statementAccountType
+            )
+          : canUseOptimisticGuess
+            ? item.optimisticAccountId ?? null
+            : null;
         const previewTransactions =
-          optimisticAccountId && guessedIdentity?.accountName
+          optimisticAccountId && statementIdentity?.accountName
             ? await loadOptimisticPreviewTransactions(
                 importFileId,
                 optimisticAccountId,
-                guessedIdentity.accountName,
-                guessedIdentity?.institution ?? null
+                statementIdentity.accountName,
+                statementIdentity?.institution ?? null
               )
             : [];
-        const optimisticSummary = canUseOptimisticGuess
-          ? buildOptimisticUploadSummary(
-              item.file.name,
-              0,
-              optimisticAccountId,
-              guessedIdentity?.accountName ?? null,
-              guessedIdentity?.institution ?? null,
-              inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank"),
-              item.optimisticAccountId,
-              null,
-              previewTransactions
-            )
+        const optimisticSummary = hasStatementIdentity
+          ? ({
+              ...buildOptimisticUploadSummary(
+                item.file.name,
+                0,
+                optimisticAccountId,
+                statementIdentity?.accountName ?? null,
+                statementIdentity?.institution ?? null,
+                statementAccountType,
+                optimisticAccountId,
+                null,
+                previewTransactions
+              ),
+              optimistic: false,
+            } satisfies UploadInsightsSummary)
           : null;
         updateItem(itemId, {
           importFileId,
           targetAccountId: optimisticAccountId,
           confirmationState: "staged",
           progress: 92,
-          progressLabel: canUseOptimisticGuess ? "Queued for background processing" : "Waiting for account details",
+          progressLabel: hasStatementIdentity || canUseOptimisticGuess ? "Queued for background processing" : "Waiting for account details",
           status: "importing",
         });
         if (optimisticSummary) {
@@ -1318,12 +1637,10 @@ export function ImportFilesModal({
         void monitorQueuedImportAndConfirm(itemId, importFileId, optimisticAccountId, {
           fileName: item.file.name,
           fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
-          accountName: canUseOptimisticGuess ? guessedIdentity?.accountName ?? null : null,
-          institution: canUseOptimisticGuess ? guessedIdentity?.institution ?? null : null,
-          accountType: canUseOptimisticGuess
-            ? inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank")
-            : null,
-          optimisticAccountId: canUseOptimisticGuess ? item.optimisticAccountId : null,
+          accountName: statementIdentity?.accountName ?? null,
+          institution: statementIdentity?.institution ?? null,
+          accountType: statementIdentity?.accountType ?? null,
+          optimisticAccountId: hasStatementIdentity ? optimisticAccountId : canUseOptimisticGuess ? item.optimisticAccountId : null,
           password: item.password.trim() || undefined,
           previewTransactions,
         });
@@ -1335,39 +1652,61 @@ export function ImportFilesModal({
         };
       }
 
-      const targetAccountId: string | null = guessedIdentity && canUseOptimisticGuess
+      const targetAccountId: string | null = statementIdentity
         ? await ensureTargetAccountId(
-            guessedIdentity.accountName ?? null,
-            guessedIdentity.institution ?? null,
-            inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank")
+            statementIdentity.accountName ?? null,
+            statementIdentity.institution ?? null,
+            statementAccountType
           )
         : null;
 
       const previewTransactions =
-        canUseOptimisticGuess && targetAccountId && guessedIdentity?.accountName
+        targetAccountId && statementIdentity?.accountName
           ? await loadOptimisticPreviewTransactions(
               importFileId,
               targetAccountId,
-              guessedIdentity.accountName,
-              guessedIdentity?.institution ?? null
+              statementIdentity.accountName,
+              statementIdentity?.institution ?? null
             )
           : [];
+      const optimisticPreviewSummary =
+        targetAccountId
+          ? ({
+              ...buildOptimisticUploadSummary(
+                item.file.name,
+                Number(processPayload?.imported ?? 0) || 0,
+                targetAccountId,
+                statementIdentity?.accountName ?? null,
+                statementIdentity?.institution ?? null,
+                statementAccountType,
+                targetAccountId,
+                null,
+                previewTransactions
+              ),
+              optimistic: false,
+            } satisfies UploadInsightsSummary)
+          : null;
 
       updateItem(itemId, {
         importFileId,
         targetAccountId,
         confirmationState: "staged",
         progress: 92,
-        progressLabel: canUseOptimisticGuess ? "Finalizing in background" : "Waiting for account details",
+        progressLabel: targetAccountId ? "Finalizing in background" : "Waiting for account details",
       });
 
-      if (canUseOptimisticGuess) {
+      if (optimisticPreviewSummary) {
+        seedImportedWorkspaceCaches(workspaceId, optimisticPreviewSummary);
+        void onImported(optimisticPreviewSummary);
+      }
+
+      if (targetAccountId) {
         void confirmItemImport(itemId, importFileId, targetAccountId, {
           fileName: item.file.name,
-          accountName: guessedIdentity?.accountName ?? null,
-          institution: guessedIdentity?.institution ?? null,
-          accountType: inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank"),
-          optimisticAccountId: item.optimisticAccountId,
+          accountName: statementIdentity?.accountName ?? null,
+          institution: statementIdentity?.institution ?? null,
+          accountType: statementIdentity?.accountType ?? statementAccountType,
+          optimisticAccountId: targetAccountId,
           previewTransactions,
         }).then((result) => {
           if (result.summary) {
@@ -1379,31 +1718,19 @@ export function ImportFilesModal({
         void monitorQueuedImportAndConfirm(itemId, importFileId, null, {
           fileName: item.file.name,
           fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
-          accountName: null,
-          institution: null,
-          accountType: null,
+          accountName: statementIdentity?.accountName ?? null,
+          institution: statementIdentity?.institution ?? null,
+          accountType: statementIdentity?.accountType ?? null,
           optimisticAccountId: null,
           password: item.password.trim() || undefined,
         });
       }
 
-      return {
-        status: "staged",
-        importedRows: Number(processPayload?.imported ?? 0) || null,
-        summary: canUseOptimisticGuess
-        ? buildOptimisticUploadSummary(
-            item.file.name,
-            Number(processPayload?.imported ?? 0) || 0,
-            targetAccountId,
-            guessedIdentity?.accountName ?? null,
-            guessedIdentity?.institution ?? null,
-            inferAccountTypeFromStatement(guessedIdentity?.institution, guessedIdentity?.accountName, "bank"),
-            item.optimisticAccountId,
-            null,
-            previewTransactions
-          )
-          : null,
-      };
+        return {
+          status: "staged",
+          importedRows: Number(processPayload?.imported ?? 0) || null,
+          summary: optimisticPreviewSummary,
+        };
     } catch (error) {
       if (isPasswordError(error)) {
         const needsPasswordMessage = item.password.trim()
@@ -1424,10 +1751,14 @@ export function ImportFilesModal({
         error_stage: "process",
         error_code: error instanceof Error ? error.message : "unknown_error",
       });
+      const processError = formatImportFailureMessage(
+        item.file,
+        error instanceof Error ? error.message : `Unable to import ${item.file.name}.`
+      );
       updateItem(itemId, {
         status: "error",
         confirmationState: item.importFileId ? "staged" : "none",
-        error: error instanceof Error ? error.message : `Unable to import ${item.file.name}.`,
+        error: processError,
         progress: 0,
         progressLabel: "Error",
       });
@@ -1445,34 +1776,29 @@ export function ImportFilesModal({
   const overallProgress = items.length > 0
     ? ((completedFileCount + (activeProgressItem ? activeProgressItem.progress / 100 : 0)) / items.length) * 100
     : 0;
-  const shouldShowUpgradePrompt = planTier === "free" && limitReached;
-
-  useEffect(() => {
-    if (!shouldShowUpgradePrompt || upgradePromptTrackedRef.current) {
-      return;
-    }
-
-    upgradePromptTrackedRef.current = true;
-    capturePostHogClientEvent("upgrade_prompt_viewed", {
-      prompt_source: "import_limit",
-      workspace_id: workspaceId || null,
-    });
-  }, [shouldShowUpgradePrompt, workspaceId]);
-
-  useEffect(() => {
-    if (!open || busy || !activeProgressItem || activeProgressItem.progressLabel !== "Finalizing import") {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      onClose();
-    }, 500);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [activeProgressItem?.progressLabel, busy, onClose, open]);
-
+  const hasImportIssue = items.some((item) => item.status === "error" || item.status === "needs_password") || Boolean(validationNotice);
+  const showImportHelp = hasImportIssue || items.some((item) => item.confirmationState === "staged");
+  const importHelpTitle = items.some((item) => item.status === "needs_password")
+    ? "Password needed"
+    : items.some((item) => item.status === "error")
+      ? "What to do next"
+      : "If Clover needs a hand";
+  const importHelpItems = items.some((item) => item.status === "needs_password")
+    ? [
+        "Enter the password for the statement, then unlock the file.",
+        "If the password still fails, re-upload the original PDF and try again.",
+      ]
+    : items.some((item) => item.status === "error")
+      ? [
+          "Try uploading the original PDF or CSV again, one file at a time.",
+          "If Clover says the file is not confident enough, add the transactions manually in Transactions.",
+          "If the statement imported but still looks off, check the Review queue before confirming anything.",
+        ]
+      : [
+          "If Clover stops on a file, upload the original statement again and keep the browser tab open.",
+          "For low-confidence statements, use Transactions to add anything Clover missed manually.",
+          "If the import looks wrong but still completes, check Review before confirming changes.",
+        ];
   useEffect(() => {
     if (!open || passwordItems.length === 0) {
       setSelectedPasswordItemId(null);
@@ -1488,6 +1814,7 @@ export function ImportFilesModal({
     if (busy) return;
 
     setBusy(true);
+    setValidationNotice(null);
     setMessage("Clover is lining up your statements...");
     capturePostHogClientEventOnce(
       "first_import_started",
@@ -1685,7 +2012,8 @@ export function ImportFilesModal({
     return null;
   }
 
-  const showCompactProgress = busy || Boolean(activeItem);
+  const hasCompletedBatch = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
+  const showCompactProgress = busy || Boolean(activeItem) || hasCompletedBatch;
 
   const modalContent = activePasswordItem ? (
       <ImportPasswordModal
@@ -1722,19 +2050,6 @@ export function ImportFilesModal({
                 ? "Done"
                 : "Queued",
             activeProgressItem?.file.name ?? null
-          )
-        }
-        statusLabel={
-          friendlyImportStatusLabel(
-            activeProgressItem
-              ? activeProgressItem.status === "importing"
-                ? "Uploading"
-                : busy
-                  ? "Uploading"
-                  : "Parsing"
-              : busy
-                ? "Working"
-                : "Queued"
           )
         }
         onClose={onClose}
@@ -1802,27 +2117,28 @@ export function ImportFilesModal({
         </div>
 
         <div className="accounts-import-footer-copy">
-          <p>{message}</p>
+          {validationNotice ? <p className="accounts-import-footer-copy__warning">{validationNotice}</p> : null}
+          <p className="accounts-import-footer-copy__status">{message}</p>
           <p>Accepted files: CSV and PDF. Password-protected files are supported.</p>
           <p>We upload the file first, then parse it on the server so the workflow stays responsive.</p>
         </div>
 
-        {shouldShowUpgradePrompt ? (
-          <aside className="import-limit-cta glass">
-            <div className="import-limit-cta__copy">
-              <p className="eyebrow">Free limit reached</p>
-              <strong>Upgrade to Pro for more import room.</strong>
-              <p>
-                Free users can queue up to 10 statement files at a time. Pro is the path for heavier importing and later premium limits.
-              </p>
-            </div>
-            <div className="import-limit-cta__actions">
-              <Link className="button button-primary button-small" href="/pricing">
-                View pricing
+        {showImportHelp ? (
+          <aside className="accounts-import-help glass">
+            <p className="eyebrow">{importHelpTitle}</p>
+            <strong>Clover will try again, but you can keep moving.</strong>
+            <ul className="accounts-import-help__list">
+              {importHelpItems.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <div className="accounts-import-help__actions">
+              <Link className="button button-secondary button-small" href="/transactions?manual=1">
+                Add transactions manually
               </Link>
-              <button className="button button-secondary button-small" type="button" onClick={() => setLimitReached(false)}>
-                Dismiss
-              </button>
+              <Link className="button button-secondary button-small" href="/review">
+                Open review
+              </Link>
             </div>
           </aside>
         ) : null}
@@ -1831,6 +2147,9 @@ export function ImportFilesModal({
           {items.length > 0 ? (
             items.map((item) => {
               const isPasswordLocked = item.status === "needs_password";
+              const qaRun = qaRunsByItemId[item.id];
+              const qaLoading = Boolean(qaLoadingByItemId[item.id]);
+              const qaError = qaErrorByItemId[item.id];
 
               return (
                 <article key={item.id} className={`accounts-import-file accounts-import-file--${item.status}`}>
@@ -1890,49 +2209,108 @@ export function ImportFilesModal({
                           : `Imported ${item.importedRows ?? 0} row${item.importedRows === 1 ? "" : "s"}`
                         : item.confirmationState === "staged"
                           ? "Parsed and ready for confirmation"
-                        : item.status === "importing"
-                          ? "Importing into the selected account..."
-                          : item.status === "parsing"
-                            ? "Parsing locally..."
-                            : item.status === "needs_password"
-                              ? "Waiting for password"
-                              : "Queued"}
+                          : item.status === "importing"
+                            ? "Importing into the selected account..."
+                            : item.status === "parsing"
+                              ? "Parsing locally..."
+                              : item.status === "needs_password"
+                                ? "Waiting for password"
+                                : "Queued"}
                     </span>
-                    {item.status === "error" && item.importFileId ? (
-                      <button
-                        className="button button-primary button-small"
-                        type="button"
-                        onClick={() => void handleReplayConfirm(item.id)}
-                        disabled={busy}
-                      >
-                        Retry confirmation
-                      </button>
-                    ) : item.status === "error" ? (
-                      <button
-                        className="button button-secondary button-small"
-                        type="button"
-                        onClick={() => void processFile(item.id)}
-                        disabled={busy || !selectedAccountId}
-                      >
-                        Retry import
-                      </button>
-                    ) : item.confirmationState === "staged" && item.importFileId ? (
-                      <button
-                        className="button button-primary button-small"
-                        type="button"
-                        onClick={() => void handleReplayConfirm(item.id)}
-                        disabled={busy}
-                      >
-                        Confirm now
-                      </button>
-                    ) : null}
+                    <div className="accounts-import-file__actions">
+                      {showQaTools && item.importFileId ? (
+                        <>
+                          <button
+                            className="button button-secondary button-small"
+                            type="button"
+                            onClick={() => void loadQaRun(item.id)}
+                            disabled={busy || qaLoading}
+                          >
+                            {qaLoading ? "Loading QA..." : "Load QA"}
+                          </button>
+                          <button
+                            className="button button-secondary button-small"
+                            type="button"
+                            onClick={() => void loadQaRun(item.id, true)}
+                            disabled={busy || qaLoading}
+                          >
+                            Re-run QA
+                          </button>
+                        </>
+                      ) : null}
+                      {item.status === "error" && item.importFileId ? (
+                        <button
+                          className="button button-primary button-small"
+                          type="button"
+                          onClick={() => void handleReplayConfirm(item.id)}
+                          disabled={busy}
+                        >
+                          Retry confirmation
+                        </button>
+                      ) : item.status === "error" ? (
+                        <button
+                          className="button button-secondary button-small"
+                          type="button"
+                          onClick={() => void processFile(item.id)}
+                          disabled={busy || !selectedAccountId}
+                        >
+                          Retry import
+                        </button>
+                      ) : item.confirmationState === "staged" && item.importFileId ? (
+                        <button
+                          className="button button-primary button-small"
+                          type="button"
+                          onClick={() => void handleReplayConfirm(item.id)}
+                          disabled={busy}
+                        >
+                          Confirm now
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
+
+                  {showQaTools && qaError ? <p className="accounts-import-file__error">{qaError}</p> : null}
+                  {showQaTools && qaRun ? (
+                    <div className="accounts-import-qa">
+                      <div className="accounts-import-qa__summary">
+                        <strong>Data QA</strong>
+                        <span>Score {qaRun.score}/100</span>
+                        <span>{qaRun.findingCount} finding{qaRun.findingCount === 1 ? "" : "s"}</span>
+                        <span>{qaRun.criticalCount} critical</span>
+                      </div>
+                      <div className="accounts-import-qa__meta">
+                        <span>Source: {qaRun.source}</span>
+                        <span>Parser: {qaRun.parserVersion ?? "unknown"}</span>
+                        <span>Time: {qaRun.totalDurationMs ?? 0} ms</span>
+                      </div>
+                      <div className="accounts-import-qa__actions">
+                        <Link className="button button-secondary button-small" href={`/admin/data-qa/${qaRun.id}`} prefetch={false}>
+                          Open full page
+                        </Link>
+                      </div>
+                      {qaRun.findings.length > 0 ? (
+                        <ul className="accounts-import-qa__findings">
+                          {qaRun.findings.slice(0, 4).map((finding) => (
+                            <li key={`${finding.code}-${finding.field ?? "field"}`} className={`accounts-import-qa__finding is-${finding.severity}`}>
+                              <strong>{finding.code}</strong>
+                              <span>{finding.message}</span>
+                              {finding.suggestion ? <small>{finding.suggestion}</small> : null}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="accounts-import-qa__empty">No findings were reported for this run.</p>
+                      )}
+                    </div>
+                  ) : showQaTools && qaLoading ? (
+                    <div className="accounts-import-qa">
+                      <p className="accounts-import-qa__empty">Loading QA results...</p>
+                    </div>
+                  ) : null}
                 </article>
               );
             })
-          ) : (
-            <div className="empty-state">No files added yet.</div>
-          )}
+          ) : null}
         </div>
 
         <div className="form-actions">
@@ -1947,5 +2325,11 @@ export function ImportFilesModal({
     </div>
   );
 
-  return createPortal(modalContent, portalTarget);
+  return createPortal(
+    <>
+      {modalContent}
+      <PlanLimitNudge payload={planLimitNudge} onDismiss={() => setPlanLimitNudge(null)} />
+    </>,
+    portalTarget
+  );
 }

@@ -109,19 +109,60 @@ class SimpleImageData {
 
 class SimplePath2D {
   constructor(_path?: string | SimplePath2D) {}
+
+  moveTo(_x: number, _y: number) {}
+
+  lineTo(_x: number, _y: number) {}
+
+  bezierCurveTo(_cp1x: number, _cp1y: number, _cp2x: number, _cp2y: number, _x: number, _y: number) {}
+
+  quadraticCurveTo(_cpx: number, _cpy: number, _x: number, _y: number) {}
+
+  closePath() {}
+
+  rect(_x: number, _y: number, _width: number, _height: number) {}
+
+  arc(_x: number, _y: number, _radius: number, _startAngle: number, _endAngle: number, _counterclockwise?: boolean) {}
+
+  arcTo(_x1: number, _y1: number, _x2: number, _y2: number, _radius: number) {}
+
+  ellipse(
+    _x: number,
+    _y: number,
+    _radiusX: number,
+    _radiusY: number,
+    _rotation: number,
+    _startAngle: number,
+    _endAngle: number,
+    _counterclockwise?: boolean
+  ) {}
+
+  addPath(_path: SimplePath2D, _transform?: DOMMatrixInit) {}
 }
 
 const ensurePdfJsPolyfills = () => {
+  let canvasModule: { DOMMatrix?: typeof DOMMatrix; ImageData?: typeof ImageData; Path2D?: typeof Path2D } | null = null;
+  try {
+    const requireFn = eval("require") as NodeRequire;
+    canvasModule = requireFn("@napi-rs/canvas") as {
+      DOMMatrix?: typeof DOMMatrix;
+      ImageData?: typeof ImageData;
+      Path2D?: typeof Path2D;
+    };
+  } catch {
+    canvasModule = null;
+  }
+
   if (typeof globalThis.DOMMatrix === "undefined") {
-    (globalThis as any).DOMMatrix = SimpleDOMMatrix;
+    (globalThis as any).DOMMatrix = canvasModule?.DOMMatrix ?? SimpleDOMMatrix;
   }
 
   if (typeof globalThis.ImageData === "undefined") {
-    (globalThis as any).ImageData = SimpleImageData;
+    (globalThis as any).ImageData = canvasModule?.ImageData ?? SimpleImageData;
   }
 
   if (typeof globalThis.Path2D === "undefined") {
-    (globalThis as any).Path2D = SimplePath2D;
+    (globalThis as any).Path2D = canvasModule?.Path2D ?? SimplePath2D;
   }
 };
 
@@ -240,8 +281,8 @@ const loadCreateCanvas = async () => {
   return canvasModule.createCanvas;
 };
 
-const renderPdfPageImagesFromBytes = async (data: Uint8Array, password?: string, maxPages = 2, scale = 0.7) => {
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+const renderPdfPageImagesFromBytes = async (data: Uint8Array, password?: string, maxPages = 2, scale = 1.1) => {
+  const pdfjs = await loadPdfJs();
   const createCanvas = await loadCreateCanvas();
   const standardFontDataUrl = getPdfJsStandardFontDataUrl();
   const options = password ? { data, password, standardFontDataUrl } : { data, standardFontDataUrl };
@@ -327,7 +368,8 @@ export const readUploadedFilePdfPageImages = async (file: File | ImportFileLike,
 export const readImportedPdfPageImages = async (
   params: { storageKey: string; fileType: string; fileName: string },
   password?: string,
-  maxPages = 2
+  maxPages = 2,
+  scale = 1.1
 ) => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
   if (!lowerName.endsWith(".pdf") && !/pdf/.test(lowerName)) {
@@ -335,7 +377,7 @@ export const readImportedPdfPageImages = async (
   }
 
   const bytes = await downloadImportObject(params.storageKey);
-  return renderPdfPageImagesFromBytes(bytes, password, maxPages);
+  return renderPdfPageImagesFromBytes(bytes, password, maxPages, scale);
 };
 
 export default {

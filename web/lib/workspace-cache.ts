@@ -146,6 +146,38 @@ const clearStorageKeys = (storage: Storage | null, keys: string[]) => {
   }
 };
 
+const readDeletedAccountsWorkspaceCache = (): DeletedAccountsWorkspaceCacheState | null => {
+  const cache = readJsonCache<DeletedAccountsWorkspaceCacheState>(deletedAccountsWorkspaceCacheKey);
+  if (!cache || typeof cache !== "object") {
+    return null;
+  }
+
+  const snapshots = cache.snapshots && typeof cache.snapshots === "object" ? cache.snapshots : {};
+  return {
+    snapshots: Object.fromEntries(
+      Object.entries(snapshots).filter(([, snapshot]) => {
+        return Array.isArray(snapshot) && snapshot.every((entry) => typeof entry === "string" && entry.trim());
+      })
+    ) as Record<string, string[]>,
+  };
+};
+
+const readDeletingAccountsWorkspaceCache = (): DeletingAccountsWorkspaceCacheState | null => {
+  const cache = readJsonCache<DeletingAccountsWorkspaceCacheState>(deletingAccountsWorkspaceCacheKey);
+  if (!cache || typeof cache !== "object") {
+    return null;
+  }
+
+  const snapshots = cache.snapshots && typeof cache.snapshots === "object" ? cache.snapshots : {};
+  return {
+    snapshots: Object.fromEntries(
+      Object.entries(snapshots).filter(([, snapshot]) => {
+        return Array.isArray(snapshot) && snapshot.every((entry) => typeof entry === "string" && entry.trim());
+      })
+    ) as Record<string, string[]>,
+  };
+};
+
 const createImportedAccountCandidates = (account: ImportedWorkspaceAccount) => {
   const ids = new Set<string>([account.id]);
   if (typeof account.optimisticAccountId === "string" && account.optimisticAccountId.trim()) {
@@ -191,38 +223,6 @@ export const mergeImportedWorkspaceTransactions = <T extends CachedRecord>(
   items: T[],
   transactions: ImportedWorkspaceTransaction[]
 ) => mergeImportedTransactions(items, transactions);
-
-const readDeletedAccountsWorkspaceCache = (): DeletedAccountsWorkspaceCacheState | null => {
-  const cache = readJsonCache<DeletedAccountsWorkspaceCacheState>(deletedAccountsWorkspaceCacheKey);
-  if (!cache || typeof cache !== "object") {
-    return null;
-  }
-
-  const snapshots = cache.snapshots && typeof cache.snapshots === "object" ? cache.snapshots : {};
-  return {
-    snapshots: Object.fromEntries(
-      Object.entries(snapshots).filter(([, snapshot]) => {
-        return Array.isArray(snapshot) && snapshot.every((entry) => typeof entry === "string" && entry.trim());
-      })
-    ) as Record<string, string[]>,
-  };
-};
-
-const readDeletingAccountsWorkspaceCache = (): DeletingAccountsWorkspaceCacheState | null => {
-  const cache = readJsonCache<DeletingAccountsWorkspaceCacheState>(deletingAccountsWorkspaceCacheKey);
-  if (!cache || typeof cache !== "object") {
-    return null;
-  }
-
-  const snapshots = cache.snapshots && typeof cache.snapshots === "object" ? cache.snapshots : {};
-  return {
-    snapshots: Object.fromEntries(
-      Object.entries(snapshots).filter(([, snapshot]) => {
-        return Array.isArray(snapshot) && snapshot.every((entry) => typeof entry === "string" && entry.trim());
-      })
-    ) as Record<string, string[]>,
-  };
-};
 
 export const getDeletedWorkspaceAccountIds = (workspaceId: string) => {
   if (!workspaceId) {
@@ -534,8 +534,18 @@ export const clearAllWorkspaceCaches = () => {
     return;
   }
 
-  clearStorageKeys(window.sessionStorage, [accountsWorkspaceCacheKey, transactionsWorkspaceCacheKey]);
-  clearStorageKeys(window.localStorage, [accountsWorkspaceCacheKey, transactionsWorkspaceCacheKey]);
+  clearStorageKeys(window.sessionStorage, [
+    accountsWorkspaceCacheKey,
+    transactionsWorkspaceCacheKey,
+    deletedAccountsWorkspaceCacheKey,
+    deletingAccountsWorkspaceCacheKey,
+  ]);
+  clearStorageKeys(window.localStorage, [
+    accountsWorkspaceCacheKey,
+    transactionsWorkspaceCacheKey,
+    deletedAccountsWorkspaceCacheKey,
+    deletingAccountsWorkspaceCacheKey,
+  ]);
 };
 
 export const clearLegacyWorkspaceCaches = () => {
@@ -543,5 +553,10 @@ export const clearLegacyWorkspaceCaches = () => {
     return;
   }
 
-  clearStorageKeys(window.localStorage, [accountsWorkspaceCacheKey, transactionsWorkspaceCacheKey]);
+  clearStorageKeys(window.localStorage, [
+    accountsWorkspaceCacheKey,
+    transactionsWorkspaceCacheKey,
+    deletedAccountsWorkspaceCacheKey,
+    deletingAccountsWorkspaceCacheKey,
+  ]);
 };

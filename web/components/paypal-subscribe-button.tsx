@@ -6,7 +6,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 declare global {
   interface Window {
     paypal?: {
+      FUNDING?: {
+        PAYPAL: string;
+        CARD: string;
+      };
       Buttons: (config: {
+        fundingSource?: string;
         style?: {
           layout?: "vertical" | "horizontal";
           color?: "gold" | "blue" | "silver" | "white" | "black";
@@ -28,20 +33,24 @@ type PayPalSubscribeButtonProps = {
   clientId: string;
   planId: string;
   customId: string;
+  buyerCountry?: string | null;
   className?: string;
   disabled?: boolean;
   onApproved?: () => void;
   onCancelled?: () => void;
+  fundingSource?: "paypal" | "card";
 };
 
 export function PayPalSubscribeButton({
   clientId,
   planId,
   customId,
+  buyerCountry,
   className,
   disabled = false,
   onApproved,
   onCancelled,
+  fundingSource = "paypal",
 }: PayPalSubscribeButtonProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const instanceRef = useRef<{ close?: () => void } | null>(null);
@@ -61,8 +70,17 @@ export function PayPalSubscribeButton({
       intent: "subscription",
     });
 
+    if (fundingSource === "card") {
+      params.set("enable-funding", "card");
+      params.set("disable-funding", "paypal");
+    }
+
+    if (buyerCountry) {
+      params.set("buyer-country", buyerCountry);
+    }
+
     return `https://www.paypal.com/sdk/js?${params.toString()}`;
-  }, [clientId]);
+  }, [buyerCountry, clientId, fundingSource]);
 
   useEffect(() => {
     if (!scriptReady || disabled || !containerRef.current || !window.paypal) {
@@ -86,12 +104,13 @@ export function PayPalSubscribeButton({
       containerRef.current.innerHTML = "";
 
       const buttons = window.paypal?.Buttons({
+        fundingSource: fundingSource === "card" ? window.paypal?.FUNDING?.CARD : window.paypal?.FUNDING?.PAYPAL,
         style: {
           layout: "vertical",
           color: "white",
           shape: "pill",
-          label: "paypal",
-          height: 45,
+          label: fundingSource === "card" ? "pay" : "subscribe",
+          height: fundingSource === "card" ? 40 : 45,
         },
         createSubscription: (_data, actions) =>
           actions.subscription.create({
@@ -146,7 +165,7 @@ export function PayPalSubscribeButton({
         containerRef.current.innerHTML = "";
       }
     };
-  }, [customId, disabled, onApproved, onCancelled, planId, scriptReady]);
+  }, [customId, disabled, fundingSource, onApproved, onCancelled, planId, scriptReady]);
 
   return (
     <div className={className}>

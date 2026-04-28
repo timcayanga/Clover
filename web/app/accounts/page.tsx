@@ -5,20 +5,43 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { InfoTooltip } from "@/components/info-tooltip";
+import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
+import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   clearWorkspaceCache,
+  accountsWorkspaceCacheKey,
+  deletedAccountsWorkspaceCacheKey,
   getCachedAccountsWorkspace,
+  getDeletedWorkspaceAccountIds,
+  getDeletingWorkspaceAccountIds,
   persistAccountsWorkspaceCache,
+  markDeletedWorkspaceAccount,
+  markDeletingWorkspaceAccount,
+  clearDeletingWorkspaceAccount,
   normalizeImportedAccountKey,
+  deletingAccountsWorkspaceCacheKey,
 } from "@/lib/workspace-cache";
 import { getAccountBrand } from "@/lib/account-brand";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
+import {
+  getInvestmentFieldConfigs,
+  getInvestmentSubtypeDescription,
+  getInvestmentSubtypeLabel,
+  INVESTMENT_SUBTYPES,
+  type InvestmentSubtype,
+  isFixedIncomeInvestmentSubtype,
+  isMarketInvestmentSubtype,
+} from "@/lib/investments";
+import type { UserLimits } from "@/lib/user-limits";
+import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
@@ -35,6 +58,15 @@ type Account = {
   id: string;
   name: string;
   institution: string | null;
+  investmentSubtype: InvestmentSubtype | null;
+  investmentSymbol: string | null;
+  investmentQuantity: string | null;
+  investmentCostBasis: string | null;
+  investmentPrincipal: string | null;
+  investmentStartDate: string | null;
+  investmentMaturityDate: string | null;
+  investmentInterestRate: string | null;
+  investmentMaturityValue: string | null;
   type: "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
   currency: string;
   source: string;
@@ -44,14 +76,24 @@ type Account = {
 };
 
 const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account | null => {
-  if (!summary.accountId || !summary.accountName) {
+  const optimisticAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+  if (!optimisticAccountId || !summary.accountName) {
     return null;
   }
 
   return {
-    id: summary.accountId,
+    id: optimisticAccountId,
     name: summary.accountName,
     institution: summary.institution,
+    investmentSubtype: null,
+    investmentSymbol: null,
+    investmentQuantity: null,
+    investmentCostBasis: null,
+    investmentPrincipal: null,
+    investmentStartDate: null,
+    investmentMaturityDate: null,
+    investmentInterestRate: null,
+    investmentMaturityValue: null,
     type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
     currency: "PHP",
     source: "upload",
@@ -71,6 +113,11 @@ const mergeImportedPreviewTransactions = (
 
   return mergeImportedWorkspaceTransactions(currentTransactions, previewTransactions);
 };
+
+const transactionMatchesAccount = (transaction: Transaction, account: Account) =>
+  transaction.accountId === account.id ||
+  normalizeImportedAccountKey(transaction.accountName ?? null, account.institution) ===
+    normalizeImportedAccountKey(account.name, account.institution);
 
 const mergeAccountsWithOptimisticImports = (
   fetchedAccounts: Account[],
@@ -125,6 +172,7 @@ type AccountRule = {
 type Transaction = {
   id: string;
   accountId: string;
+  accountName?: string;
   amount: string;
   type: "income" | "expense" | "transfer";
   date: string;
@@ -156,7 +204,6 @@ type StatementCheckpoint = {
   } | null;
 };
 
-type SummaryMode = "totals" | "percent";
 type AccountSort = "name" | "balance_desc" | "updated_desc";
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
@@ -173,6 +220,29 @@ const formatDate = (value: string) =>
   });
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
+
+const normalizeAccountBalance = (type: Account["type"], value: number) =>
+  type === "credit_card" ? -Math.abs(value) : Math.abs(value);
+
+const parseNullableNumberInput = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseNullableDateInput = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const date = new Date(`${trimmed}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
 
 const getEffectiveAccountType = (account: Account) => account.type;
 
@@ -193,27 +263,23 @@ const getAccountTone = (account: Account) => (getEffectiveAccountType(account) =
 const getAccountWarning = (account: Account, duplicateCount: number) => {
   if (duplicateCount > 1) return "Possible duplicate";
   if (account.source === "imported" && !account.institution) return "Needs category";
-  if (account.balance === null) return "Add balance";
   return null;
-};
-
-const getBalanceContext = (account: Account) => {
-  const type = getEffectiveAccountType(account);
-  if (type === "credit_card") {
-    return { label: "Outstanding balance", tone: "danger" as const };
-  }
-  if (type === "investment") {
-    return { label: "Held balance", tone: "neutral" as const };
-  }
-  if (type === "cash" || type === "wallet" || type === "bank") {
-    return { label: "Spendable amount", tone: "good" as const };
-  }
-  return { label: "Current balance", tone: "neutral" as const };
 };
 
 const isSpendableAccountType = (type: Account["type"]) => type === "bank" || type === "wallet" || type === "cash";
 
-const getSpendableBalance = (account: Account) => (isSpendableAccountType(getEffectiveAccountType(account)) ? parseAmount(account.balance) : 0);
+const getSpendableBalance = (account: Account) =>
+  (isSpendableAccountType(getEffectiveAccountType(account)) ? normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(account.balance)) : 0);
+
+const ACCOUNTS_PAGE_GUIDE =
+  "Accounts shows where your money lives right now. Use Transactions for money movement and Investments for longer-term holdings.";
+
+const ACCOUNTS_OVERVIEW_COPY = {
+  netWorth: "Everything you own minus everything you owe across this workspace.",
+  spendable: "Cash-like money you can use now across bank accounts, wallets, and cash.",
+  assets: "Positive-value accounts such as banks, wallets, cash, and investments.",
+  liabilities: "Amounts you owe, like credit cards and other negative-balance accounts.",
+} as const;
 
 const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined) => {
   if (!checkpoint) {
@@ -520,11 +586,14 @@ export default function AccountsPage() {
 function AccountsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const searchQueryFromUrl = searchParams?.get("q") ?? "";
   const addRef = useRef<HTMLDivElement>(null);
   const balanceInputRef = useRef<HTMLInputElement>(null);
   const workspaceLoadSeqRef = useRef(0);
-  const deletedAccountIdsRef = useRef(new Set<string>());
+  const deletedAccountIdsRef = useRef(new Set<string>(getDeletedWorkspaceAccountIds(readSelectedWorkspaceId())));
   const initialWorkspaceId = readSelectedWorkspaceId();
+  const deletingAccountIdFromQuery = searchParams?.get("deletingAccountId");
+  const deletingWorkspaceIdFromQuery = searchParams?.get("deletingWorkspaceId");
   const initialCachedWorkspace = getCachedAccountsWorkspace(initialWorkspaceId);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -546,21 +615,42 @@ function AccountsPageContent() {
   const [message, setMessage] = useState("Select a workspace to review accounts.");
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [accountsLoading, setAccountsLoading] = useState(false);
+  const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(Boolean(initialCachedWorkspace));
+  const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
+  const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
+  const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importSessionId, setImportSessionId] = useState(0);
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(searchQueryFromUrl);
   const [sortBy, setSortBy] = useState<AccountSort>("updated_desc");
   const [showNeedsReviewOnly, setShowNeedsReviewOnly] = useState(false);
-  const [summaryMode, setSummaryMode] = useState<SummaryMode>("totals");
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
+  const [manualInvestmentSubtype, setManualInvestmentSubtype] = useState<InvestmentSubtype>("stock");
+  const [manualInvestmentSymbol, setManualInvestmentSymbol] = useState("");
+  const [manualInvestmentQuantity, setManualInvestmentQuantity] = useState("");
+  const [manualInvestmentCostBasis, setManualInvestmentCostBasis] = useState("");
+  const [manualInvestmentPrincipal, setManualInvestmentPrincipal] = useState("");
+  const [manualInvestmentStartDate, setManualInvestmentStartDate] = useState("");
+  const [manualInvestmentMaturityDate, setManualInvestmentMaturityDate] = useState("");
+  const [manualInvestmentInterestRate, setManualInvestmentInterestRate] = useState("");
+  const [manualInvestmentMaturityValue, setManualInvestmentMaturityValue] = useState("");
   const [manualBalance, setManualBalance] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [accountEditName, setAccountEditName] = useState("");
   const [accountEditInstitution, setAccountEditInstitution] = useState("");
+  const [accountEditInvestmentSubtype, setAccountEditInvestmentSubtype] = useState<InvestmentSubtype>("stock");
+  const [accountEditInvestmentSymbol, setAccountEditInvestmentSymbol] = useState("");
+  const [accountEditInvestmentQuantity, setAccountEditInvestmentQuantity] = useState("");
+  const [accountEditInvestmentCostBasis, setAccountEditInvestmentCostBasis] = useState("");
+  const [accountEditInvestmentPrincipal, setAccountEditInvestmentPrincipal] = useState("");
+  const [accountEditInvestmentStartDate, setAccountEditInvestmentStartDate] = useState("");
+  const [accountEditInvestmentMaturityDate, setAccountEditInvestmentMaturityDate] = useState("");
+  const [accountEditInvestmentInterestRate, setAccountEditInvestmentInterestRate] = useState("");
+  const [accountEditInvestmentMaturityValue, setAccountEditInvestmentMaturityValue] = useState("");
   const [accountEditType, setAccountEditType] = useState<Account["type"]>("bank");
   const [accountEditCurrency, setAccountEditCurrency] = useState("PHP");
   const [accountEditBalance, setAccountEditBalance] = useState("");
@@ -573,16 +663,71 @@ function AccountsPageContent() {
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
+  const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
+  const [deletingAccountIds, setDeletingAccountIds] = useState<string[]>(
+    () => {
+      const ids = new Set(getDeletingWorkspaceAccountIds(deletingWorkspaceIdFromQuery ?? initialWorkspaceId));
+      if (deletingAccountIdFromQuery) {
+        ids.add(deletingAccountIdFromQuery);
+      }
+      return Array.from(ids);
+    }
+  );
+  const deletingAccountIdsRef = useRef(new Set<string>(getDeletingWorkspaceAccountIds(initialWorkspaceId)));
+
+  useEffect(() => {
+    setSearchQuery(searchQueryFromUrl);
+  }, [searchQueryFromUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPlan = async () => {
+      const response = await fetch("/api/me");
+      if (!response.ok || cancelled) {
+        return;
+      }
+
+      const payload = await response.json();
+      const nextPlanTier = payload?.user?.planTier === "pro" ? "pro" : "free";
+      const nextLimits = payload?.user
+        ? {
+            accountLimit: Number(payload.user.accountLimit ?? 5),
+            monthlyUploadLimit: Number(payload.user.monthlyUploadLimit ?? 10),
+            transactionLimit:
+              payload.user.transactionLimit === null || payload.user.transactionLimit === undefined
+                ? null
+                : Number(payload.user.transactionLimit),
+          }
+        : null;
+
+      setPlanTier(nextPlanTier);
+      setPlanLimits(nextLimits);
+    };
+
+    void loadPlan();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
     [selectedWorkspaceId, workspaces]
   );
+  const nonCashAccountCount = useMemo(() => accounts.filter((account) => account.type !== "cash").length, [accounts]);
+
+  const showPlanLimitNudge = (payload: PlanLimitPayload) => {
+    setPlanLimitNudge(payload);
+  };
 
   const reconciledAccounts = useMemo(
     () =>
       accounts.map((account) => {
-        const accountTransactions = drawerAccountId === account.id ? drawerTransactions : transactions.filter((transaction) => transaction.accountId === account.id);
+        const accountTransactions = drawerAccountId === account.id
+          ? drawerTransactions
+          : transactions.filter((transaction) => transactionMatchesAccount(transaction, account));
         const accountCheckpoints = drawerAccountId === account.id ? drawerStatementCheckpoints : [];
         const effectiveType = getEffectiveAccountType(account);
         const reconciledBalance = deriveReconciledBalance({
@@ -590,14 +735,20 @@ function AccountsPageContent() {
           transactions: accountTransactions,
           checkpoints: accountCheckpoints,
         });
+        const normalizedBalance = normalizeAccountBalance(effectiveType, parseAmount(reconciledBalance ?? account.balance));
 
         return {
           ...account,
           type: effectiveType,
-          balance: reconciledBalance ?? account.balance,
+          balance: String(normalizedBalance),
         };
       }),
     [accounts, drawerAccountId, drawerStatementCheckpoints, drawerTransactions, transactions]
+  );
+
+  const deletingAccountIdsSet = useMemo(
+    () => new Set([...deletingAccountIds, ...getDeletingWorkspaceAccountIds(selectedWorkspaceId)]),
+    [deletingAccountIds, selectedWorkspaceId]
   );
 
   const loadWorkspaces = async () => {
@@ -625,6 +776,7 @@ function AccountsPageContent() {
       setAccountRules([]);
       setTransactions([]);
       setAccountsLoading(false);
+      setHasInitialWorkspaceDataLoaded(true);
       return;
     }
 
@@ -644,6 +796,14 @@ function AccountsPageContent() {
         setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current, deletedAccountIdsRef.current));
         setAccountRules(Array.isArray(payload.accountRules) ? payload.accountRules : []);
         setStatementCheckpoints(Array.isArray(payload.statementCheckpoints) ? (payload.statementCheckpoints as StatementCheckpoint[]) : []);
+      } else {
+        if (!options?.silent) {
+          setMessage("Unable to load accounts for this workspace.");
+        }
+      }
+
+      if (!options?.silent) {
+        setHasInitialWorkspaceDataLoaded(true);
       }
 
       if (!options?.silent) {
@@ -672,6 +832,41 @@ function AccountsPageContent() {
     }
   };
 
+  const hydrateWorkspaceFromCache = (workspaceId: string) => {
+    if (!workspaceId) {
+      return false;
+    }
+
+    const cachedSnapshot = getCachedAccountsWorkspace(workspaceId);
+    deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(workspaceId));
+    deletingAccountIdsRef.current = new Set(getDeletingWorkspaceAccountIds(workspaceId));
+    setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+    if (!cachedSnapshot) {
+      return false;
+    }
+
+    const filteredAccounts = (cachedSnapshot.accounts as Account[]).filter(
+      (account) => !deletedAccountIdsRef.current.has(account.id) && !deletingAccountIdsRef.current.has(account.id)
+    );
+    const filteredTransactions = (cachedSnapshot.transactions as Transaction[]).filter(
+      (transaction) =>
+        !deletedAccountIdsRef.current.has(transaction.accountId) && !deletingAccountIdsRef.current.has(transaction.accountId)
+    );
+    const filteredCheckpoints = (cachedSnapshot.statementCheckpoints as StatementCheckpoint[]).filter(
+      (checkpoint) =>
+        !checkpoint.accountId ||
+        (!deletedAccountIdsRef.current.has(checkpoint.accountId) && !deletingAccountIdsRef.current.has(checkpoint.accountId))
+    );
+
+    setAccounts(filteredAccounts);
+    setAccountRules(cachedSnapshot.accountRules as AccountRule[]);
+    setTransactions(filteredTransactions);
+    setStatementCheckpoints(filteredCheckpoints);
+    setAccountsLoading(false);
+    setHasInitialWorkspaceDataLoaded(true);
+    return true;
+  };
+
   useEffect(() => {
     void loadWorkspaces();
   }, []);
@@ -681,44 +876,33 @@ function AccountsPageContent() {
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
-    if (searchParams.get("import") === "1") {
+    if (searchParams?.get("import") === "1") {
       setImportOpen(true);
       router.replace("/accounts");
     }
   }, [router, searchParams]);
 
   useEffect(() => {
-    if (!importOpen || !pendingImportSummary || accountsLoading) {
+    const deletingAccountId = searchParams?.get("deletingAccountId");
+    if (!deletingAccountId) {
       return;
     }
 
-    if (pendingImportSummary.optimistic) {
+    const activeWorkspaceId = searchParams?.get("deletingWorkspaceId") ?? readSelectedWorkspaceId() ?? selectedWorkspaceId;
+    if (!activeWorkspaceId) {
       return;
     }
 
-    const targetAccountId = pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
-    if (!targetAccountId) {
-      return;
-    }
+    markDeletingWorkspaceAccount(activeWorkspaceId, deletingAccountId);
+    deletingAccountIdsRef.current.add(deletingAccountId);
+    setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
 
-    const visibleAccount = accounts.find((account) => account.id === targetAccountId);
-    if (!visibleAccount) {
-      return;
-    }
-
-    if (pendingImportSummary.balance !== null && visibleAccount.balance !== pendingImportSummary.balance) {
-      return;
-    }
-
-    const timeout = window.setTimeout(() => {
-      setImportOpen(false);
-      setPendingImportSummary(null);
-    }, 250);
-
-    return () => {
-      window.clearTimeout(timeout);
-    };
-  }, [accounts, accountsLoading, importOpen, pendingImportSummary]);
+    const nextSearchParams = new URLSearchParams(searchParams?.toString() ?? "");
+    nextSearchParams.delete("deletingAccountId");
+    nextSearchParams.delete("deletingWorkspaceId");
+    const nextQuery = nextSearchParams.toString();
+    router.replace(nextQuery ? `/accounts?${nextQuery}` : "/accounts");
+  }, [router, searchParams, selectedWorkspaceId]);
 
   useEffect(() => {
     if (!selectedWorkspaceId) {
@@ -727,16 +911,21 @@ function AccountsPageContent() {
       setTransactions([]);
       setStatementCheckpoints([]);
       setAccountsLoading(false);
+      setHasInitialWorkspaceDataLoaded(true);
       return;
     }
 
-    const cachedSnapshot = getCachedAccountsWorkspace(selectedWorkspaceId);
-    if (cachedSnapshot) {
-      setAccounts(cachedSnapshot.accounts as Account[]);
-      setAccountRules(cachedSnapshot.accountRules as AccountRule[]);
-      setTransactions(cachedSnapshot.transactions as Transaction[]);
-      setStatementCheckpoints(cachedSnapshot.statementCheckpoints as StatementCheckpoint[]);
-      setAccountsLoading(false);
+    deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(selectedWorkspaceId));
+    deletingAccountIdsRef.current = new Set(getDeletingWorkspaceAccountIds(selectedWorkspaceId));
+    if (
+      deletingAccountIdFromQuery &&
+      (!deletingWorkspaceIdFromQuery || deletingWorkspaceIdFromQuery === selectedWorkspaceId)
+    ) {
+      deletingAccountIdsRef.current.add(deletingAccountIdFromQuery);
+    }
+    setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+
+    if (hydrateWorkspaceFromCache(selectedWorkspaceId)) {
       void loadWorkspaceData(selectedWorkspaceId, { silent: true });
       return;
     }
@@ -746,8 +935,43 @@ function AccountsPageContent() {
     setTransactions([]);
     setStatementCheckpoints([]);
     setAccountsLoading(true);
+    setHasInitialWorkspaceDataLoaded(false);
     void loadWorkspaceData(selectedWorkspaceId);
   }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || typeof window === "undefined") {
+      return;
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.storageArea !== window.localStorage) {
+        return;
+      }
+
+      if (
+        event.key !== accountsWorkspaceCacheKey &&
+        event.key !== deletedAccountsWorkspaceCacheKey &&
+        event.key !== deletingAccountsWorkspaceCacheKey &&
+        event.key !== "clover.selected-workspace-id.v1"
+      ) {
+        return;
+      }
+
+      const activeWorkspaceId = readSelectedWorkspaceId() || selectedWorkspaceId;
+      if (!activeWorkspaceId || activeWorkspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      if (!hydrateWorkspaceFromCache(activeWorkspaceId)) {
+        setAccountsLoading(true);
+        void loadWorkspaceData(activeWorkspaceId);
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [loadWorkspaceData, selectedWorkspaceId]);
 
   useEffect(() => {
     if (!selectedWorkspaceId || accountsLoading) {
@@ -801,12 +1025,40 @@ function AccountsPageContent() {
   }, [drawerAccountId]);
 
   useEffect(() => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    const deletingIds = new Set(getDeletingWorkspaceAccountIds(selectedWorkspaceId));
+    const deletedIds = new Set(getDeletedWorkspaceAccountIds(selectedWorkspaceId));
+    if (deletingIds.size === 0 && deletedIds.size === 0) {
+      return;
+    }
+
+    setAccounts((current) => current.filter((account) => !deletedIds.has(account.id) && !deletingIds.has(account.id)));
+    setTransactions((current) =>
+      current.filter((transaction) => !deletedIds.has(transaction.accountId) && !deletingIds.has(transaction.accountId))
+    );
+    setStatementCheckpoints((current) =>
+      current.filter(
+        (checkpoint) =>
+          !checkpoint.accountId || (!deletedIds.has(checkpoint.accountId) && !deletingIds.has(checkpoint.accountId))
+      )
+    );
+  }, [selectedWorkspaceId]);
+
+  useEffect(() => {
     if (!drawerAccountId) {
       return;
     }
 
-    setDrawerTransactions(transactions.filter((transaction) => transaction.accountId === drawerAccountId));
-  }, [drawerAccountId, transactions]);
+    const account = reconciledAccounts.find((entry) => entry.id === drawerAccountId) ?? null;
+    if (!account) {
+      return;
+    }
+
+    setDrawerTransactions(transactions.filter((transaction) => transactionMatchesAccount(transaction, account)));
+  }, [drawerAccountId, reconciledAccounts, transactions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -973,9 +1225,7 @@ function AccountsPageContent() {
   const totals = useMemo(() => {
     return reconciledAccounts.reduce(
       (accumulator, account) => {
-        const rawValue = parseAmount(account.balance);
-        const isLiability = getEffectiveAccountType(account) === "credit_card";
-        const signedValue = isLiability ? -Math.abs(rawValue) : rawValue;
+        const signedValue = normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(account.balance));
         if (signedValue >= 0) {
           accumulator.assets += signedValue;
         } else {
@@ -1000,8 +1250,13 @@ function AccountsPageContent() {
         tone: "assets",
         rows: visibleAccounts.filter((account) => {
           const effectiveType = getEffectiveAccountType(account);
-          return effectiveType === "bank" || effectiveType === "wallet" || effectiveType === "investment";
+          return effectiveType === "bank" || effectiveType === "investment";
         }),
+      },
+      {
+        title: "Wallets",
+        tone: "assets",
+        rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "wallet"),
       },
       {
         title: "Credit cards",
@@ -1024,7 +1279,7 @@ function AccountsPageContent() {
       .map((group) => ({
         ...group,
         total: group.rows.reduce(
-          (sum, account) => sum + (getEffectiveAccountType(account) === "credit_card" ? -Math.abs(parseAmount(account.balance)) : parseAmount(account.balance)),
+          (sum, account) => sum + normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(account.balance)),
           0
         ),
       }))
@@ -1036,6 +1291,30 @@ function AccountsPageContent() {
     [drawerAccountId, reconciledAccounts]
   );
 
+  useEffect(() => {
+    if (!selectedAccount) {
+      return;
+    }
+
+    setAccountEditName(selectedAccount.name);
+    setAccountEditInstitution(selectedAccount.institution ?? "");
+    setAccountEditInvestmentSubtype(selectedAccount.investmentSubtype ?? "stock");
+    setAccountEditInvestmentSymbol(selectedAccount.investmentSymbol ?? "");
+    setAccountEditInvestmentQuantity(selectedAccount.investmentQuantity ?? "");
+    setAccountEditInvestmentCostBasis(selectedAccount.investmentCostBasis ?? "");
+    setAccountEditInvestmentPrincipal(selectedAccount.investmentPrincipal ?? "");
+    setAccountEditInvestmentStartDate(selectedAccount.investmentStartDate ? selectedAccount.investmentStartDate.slice(0, 10) : "");
+    setAccountEditInvestmentMaturityDate(selectedAccount.investmentMaturityDate ? selectedAccount.investmentMaturityDate.slice(0, 10) : "");
+    setAccountEditInvestmentInterestRate(selectedAccount.investmentInterestRate ?? "");
+    setAccountEditInvestmentMaturityValue(selectedAccount.investmentMaturityValue ?? "");
+    setAccountEditType(selectedAccount.type);
+    setAccountEditCurrency(selectedAccount.currency);
+    setAccountEditSource(selectedAccount.source);
+    setAccountEditBalance(selectedAccount.balance ?? "");
+    setBalanceDraft(selectedAccount.balance ?? "");
+    setAccountDeleteConfirmOpen(false);
+  }, [selectedAccount]);
+
   const selectedAccountTransactions = useMemo(
     () =>
       selectedAccount
@@ -1043,16 +1322,6 @@ function AccountsPageContent() {
         : [],
     [selectedAccount, drawerTransactions]
   );
-
-  const needsReviewCount = useMemo(() => {
-    return reconciledAccounts.filter((account) => {
-      const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
-      const duplicate = (duplicateCounts.get(duplicateKey) ?? 0) > 1;
-      const missingInstitution = account.source === "imported" && !account.institution;
-      const missingBalance = account.balance === null;
-      return duplicate || missingInstitution || missingBalance;
-    }).length;
-  }, [duplicateCounts, reconciledAccounts]);
 
   const accountHistoryEntries = useMemo(() => {
     if (!selectedAccount) return [];
@@ -1074,10 +1343,31 @@ function AccountsPageContent() {
     () => buildImportSummaries(selectedAccountTransactions),
     [selectedAccountTransactions]
   );
-  const selectedAccountBalanceContext = useMemo(
-    () => (selectedAccount ? getBalanceContext(selectedAccount) : null),
-    [selectedAccount]
-  );
+  useEffect(() => {
+    if (!importOpen || !pendingImportSummary || pendingImportSummary.optimistic) {
+      return;
+    }
+
+    const targetAccountId = pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
+    if (!targetAccountId) {
+      return;
+    }
+
+    const visibleAccount = accounts.find((account) => account.id === targetAccountId);
+    if (!visibleAccount) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setImportOpen(false);
+      setPendingImportSummary(null);
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [accounts, importOpen, pendingImportSummary]);
+
   const manualAccountBrand = useMemo(
     () =>
       getAccountBrand({
@@ -1088,13 +1378,72 @@ function AccountsPageContent() {
     [manualInstitution, manualName, manualType]
   );
 
+  const manualInvestmentFieldConfigs = useMemo(
+    () => getInvestmentFieldConfigs(manualType === "investment" ? manualInvestmentSubtype : null),
+    [manualInvestmentSubtype, manualType]
+  );
+
+  const accountEditInvestmentFieldConfigs = useMemo(
+    () => getInvestmentFieldConfigs(accountEditType === "investment" ? accountEditInvestmentSubtype : null),
+    [accountEditInvestmentSubtype, accountEditType]
+  );
+
+  const getManualInvestmentFieldValue = (key: string) => {
+    if (key === "investmentSymbol") return manualInvestmentSymbol;
+    if (key === "investmentQuantity") return manualInvestmentQuantity;
+    if (key === "investmentCostBasis") return manualInvestmentCostBasis;
+    if (key === "investmentPrincipal") return manualInvestmentPrincipal;
+    if (key === "investmentStartDate") return manualInvestmentStartDate;
+    if (key === "investmentMaturityDate") return manualInvestmentMaturityDate;
+    if (key === "investmentInterestRate") return manualInvestmentInterestRate;
+    if (key === "investmentMaturityValue") return manualInvestmentMaturityValue;
+    return "";
+  };
+
+  const getManualInvestmentFieldLabel = (key: string) => {
+    return manualInvestmentFieldConfigs.find((field) => field.key === key)?.label ?? "Value";
+  };
+
+  const getManualInvestmentPreviewValue = (field: { key: string; inputMode?: "text" | "decimal"; type?: "text" | "date" }) => {
+    const value = getManualInvestmentFieldValue(field.key).trim();
+    if (value) {
+      return value;
+    }
+
+    return field.type === "date" ? "Not set" : "Not set";
+  };
+
   const refreshAll = async () => {
     if (!selectedWorkspaceId) return;
     await loadWorkspaceData(selectedWorkspaceId, { silent: true });
     setMessage(`Workspace "${selectedWorkspace?.name ?? "selected"}" refreshed.`);
   };
 
+  const openAddAccount = () => {
+    if (planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
+      showPlanLimitNudge({
+        planTier,
+        limitType: "account_limit",
+        limitValue: planLimits.accountLimit,
+      });
+      setMessage("You’ve reached the current account limit for this plan.");
+      return;
+    }
+
+    setAddOpen(true);
+  };
+
   const openImportFiles = () => {
+    if (planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
+      showPlanLimitNudge({
+        planTier,
+        limitType: "account_limit",
+        limitValue: planLimits.accountLimit,
+      });
+      setMessage("You’ve reached the current account limit for this plan.");
+      return;
+    }
+
     setPendingImportSummary(null);
     setAddOpen(false);
     setImportSessionId((current) => current + 1);
@@ -1102,17 +1451,10 @@ function AccountsPageContent() {
   };
 
   const openAccountDrawer = (account: Account) => {
-    setDrawerAccountId(account.id);
-    setDrawerTransactions(transactions.filter((transaction) => transaction.accountId === account.id));
-    setAccountDeleteConfirmOpen(false);
-    setDrawerNotice(null);
-    setAccountEditName(account.name);
-    setAccountEditInstitution(account.institution ?? "");
-    setAccountEditType(getEffectiveAccountType(account));
-    setAccountEditCurrency(account.currency);
-    setAccountEditBalance(account.balance?.toString() ?? "");
-    setAccountEditSource(account.source);
-    setBalanceDraft(account.balance?.toString() ?? "");
+    if (deletingAccountIdsSet.has(account.id)) {
+      return;
+    }
+    router.push(`/accounts/${account.id}`);
   };
 
   const openFullAccountPage = () => {
@@ -1121,8 +1463,11 @@ function AccountsPageContent() {
   };
 
   const openDrawerForWarning = (account: Account, warning: string) => {
-    openAccountDrawer(account);
-    setDrawerNotice(warning);
+    void warning;
+    if (deletingAccountIdsSet.has(account.id)) {
+      return;
+    }
+    router.push(`/accounts/${account.id}`);
   };
 
   const saveAccountChanges = async (event?: FormEvent<HTMLFormElement>) => {
@@ -1137,6 +1482,9 @@ function AccountsPageContent() {
 
     setAccountEditBusy(true);
     try {
+      const editIsInvestment = accountEditType === "investment";
+      const editIsMarket = editIsInvestment && isMarketInvestmentSubtype(accountEditInvestmentSubtype);
+      const editIsFixedIncome = editIsInvestment && isFixedIncomeInvestmentSubtype(accountEditInvestmentSubtype);
       const response = await fetch(`/api/accounts/${selectedAccount.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -1144,6 +1492,23 @@ function AccountsPageContent() {
           workspaceId: selectedWorkspaceId,
           name,
           institution: accountEditInstitution.trim() || null,
+          investmentSubtype: editIsInvestment ? accountEditInvestmentSubtype : null,
+          investmentSymbol:
+            editIsInvestment && (editIsMarket || accountEditInvestmentSubtype === "other")
+              ? accountEditInvestmentSymbol.trim() || null
+              : null,
+          investmentQuantity: editIsMarket ? parseNullableNumberInput(accountEditInvestmentQuantity) : null,
+          investmentCostBasis:
+            editIsInvestment && (editIsMarket || accountEditInvestmentSubtype === "other")
+              ? parseNullableNumberInput(accountEditInvestmentCostBasis)
+              : editIsFixedIncome
+                ? null
+                : null,
+          investmentPrincipal: editIsFixedIncome ? parseNullableNumberInput(accountEditInvestmentPrincipal) : null,
+          investmentStartDate: editIsFixedIncome ? parseNullableDateInput(accountEditInvestmentStartDate) : null,
+          investmentMaturityDate: editIsFixedIncome ? parseNullableDateInput(accountEditInvestmentMaturityDate) : null,
+          investmentInterestRate: editIsFixedIncome ? parseNullableNumberInput(accountEditInvestmentInterestRate) : null,
+          investmentMaturityValue: editIsFixedIncome ? parseNullableNumberInput(accountEditInvestmentMaturityValue) : null,
           type: accountEditType,
           currency: accountEditCurrency || "PHP",
           source: accountEditSource || selectedAccount.source,
@@ -1170,9 +1535,22 @@ function AccountsPageContent() {
   const deleteAccount = async () => {
     if (!selectedWorkspaceId || !selectedAccount) return;
 
+    const accountToDelete = selectedAccount;
     setAccountDeleteBusy(true);
     try {
-      const response = await fetch(`/api/accounts/${selectedAccount.id}`, {
+      markDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
+      deletingAccountIdsRef.current.add(accountToDelete.id);
+      setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+      flushSync(() => {
+        setAccounts((current) => current.filter((account) => account.id !== accountToDelete.id));
+        setTransactions((current) => current.filter((transaction) => transaction.accountId !== accountToDelete.id));
+        setAccountRules((current) => current.filter((rule) => rule.accountId !== accountToDelete.id));
+        setDrawerAccountId(null);
+        setAccountDeleteConfirmOpen(false);
+        setMessage(`Deleting account "${accountToDelete.name}"...`);
+      });
+
+      const response = await fetch(`/api/accounts/${accountToDelete.id}`, {
         method: "DELETE",
       });
 
@@ -1181,20 +1559,25 @@ function AccountsPageContent() {
         throw new Error(payload?.error ?? "Unable to delete account.");
       }
 
-      deletedAccountIdsRef.current.add(selectedAccount.id);
+      deletedAccountIdsRef.current.add(accountToDelete.id);
+      clearDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
+      deletingAccountIdsRef.current.delete(accountToDelete.id);
+      setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+      markDeletedWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
       flushSync(() => {
-        setAccounts((current) => current.filter((account) => account.id !== selectedAccount.id));
-        setTransactions((current) => current.filter((transaction) => transaction.accountId !== selectedAccount.id));
-        setAccountRules((current) => current.filter((rule) => rule.accountId !== selectedAccount.id));
         setDrawerAccountId(null);
         setAccountDeleteConfirmOpen(false);
-        setMessage(`Account "${selectedAccount.name}" deleted.`);
+        setMessage(`Account "${accountToDelete.name}" deleted.`);
       });
       clearWorkspaceCache(selectedWorkspaceId);
       workspaceLoadSeqRef.current += 1;
       void loadWorkspaceData(selectedWorkspaceId, { silent: true });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to delete account.");
+      clearDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
+      deletingAccountIdsRef.current.delete(accountToDelete.id);
+      setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+      void loadWorkspaceData(selectedWorkspaceId, { silent: true });
+      setMessage(error instanceof Error ? error.message : `Unable to delete account "${accountToDelete.name}".`);
     } finally {
       setAccountDeleteBusy(false);
     }
@@ -1221,6 +1604,9 @@ function AccountsPageContent() {
 
     setIsSaving(true);
     try {
+      const manualIsInvestment = manualType === "investment";
+      const manualIsMarket = manualIsInvestment && isMarketInvestmentSubtype(manualInvestmentSubtype);
+      const manualIsFixedIncome = manualIsInvestment && isFixedIncomeInvestmentSubtype(manualInvestmentSubtype);
       const response = await fetch("/api/accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1228,6 +1614,21 @@ function AccountsPageContent() {
           workspaceId: selectedWorkspaceId,
           name,
           institution: manualType === "cash" ? "Cash" : manualInstitution.trim() || null,
+          investmentSubtype: manualIsInvestment ? manualInvestmentSubtype : null,
+          investmentSymbol:
+            manualIsInvestment && (manualIsMarket || manualInvestmentSubtype === "other")
+              ? manualInvestmentSymbol.trim() || null
+              : null,
+          investmentQuantity: manualIsMarket ? parseNullableNumberInput(manualInvestmentQuantity) : null,
+          investmentCostBasis:
+            manualIsInvestment && (manualIsMarket || manualInvestmentSubtype === "other")
+              ? parseNullableNumberInput(manualInvestmentCostBasis)
+              : null,
+          investmentPrincipal: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentPrincipal) : null,
+          investmentStartDate: manualIsFixedIncome ? parseNullableDateInput(manualInvestmentStartDate) : null,
+          investmentMaturityDate: manualIsFixedIncome ? parseNullableDateInput(manualInvestmentMaturityDate) : null,
+          investmentInterestRate: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentInterestRate) : null,
+          investmentMaturityValue: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentMaturityValue) : null,
           type: manualType,
           currency: "PHP",
           source: "manual",
@@ -1236,7 +1637,12 @@ function AccountsPageContent() {
       });
 
       if (!response.ok) {
-        throw new Error("Unable to create account.");
+        const payload = await response.json().catch(() => null);
+        const limitPayload = parsePlanLimitPayload(payload);
+        if (limitPayload) {
+          showPlanLimitNudge(limitPayload);
+        }
+        throw new Error(payload?.error ?? "Unable to create account.");
       }
 
       const data = await response.json();
@@ -1245,6 +1651,15 @@ function AccountsPageContent() {
       }
       setManualName("");
       setManualInstitution("");
+      setManualInvestmentSubtype("stock");
+      setManualInvestmentSymbol("");
+      setManualInvestmentQuantity("");
+      setManualInvestmentCostBasis("");
+      setManualInvestmentPrincipal("");
+      setManualInvestmentStartDate("");
+      setManualInvestmentMaturityDate("");
+      setManualInvestmentInterestRate("");
+      setManualInvestmentMaturityValue("");
       setManualBalance("");
       setManualType("bank");
       setAddOpen(false);
@@ -1330,16 +1745,23 @@ function AccountsPageContent() {
     exportPdf();
   };
 
+  if (!hasInitialWorkspaceDataLoaded) {
+    return <CloverLoadingScreen label="accounts" />;
+  }
+
   return (
     <CloverShell active="accounts" title="Accounts" showTopbar={false}>
       <div className="accounts-page">
         <div className="accounts-page__sticky">
           <div className="accounts-page__headline">
             <div className="accounts-page__headline-copy">
-              <h1>Accounts</h1>
+              <h1>
+                Accounts
+                <InfoTooltip title="How Accounts works" label={ACCOUNTS_PAGE_GUIDE} />
+              </h1>
             </div>
             <div className="accounts-page__headline-actions">
-              <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={() => setAddOpen(true)}>
+              <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
                 <ActionIcon name="plus" />
                 <span>Add account</span>
               </button>
@@ -1352,24 +1774,32 @@ function AccountsPageContent() {
 
           <section className="accounts-overview-grid">
             <article className="accounts-overview-card glass">
-              <p className="eyebrow">Net worth</p>
-              <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.netWorth)}</strong>
-              <span>Assets minus liabilities across the workspace</span>
+              <p className="eyebrow">
+                Net worth
+                <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.netWorth} />
+              </p>
+              <strong className="accounts-overview-card__amount is-neutral">{currencyFormatter.format(totals.netWorth)}</strong>
             </article>
             <article className="accounts-overview-card glass">
-              <p className="eyebrow">Spendable</p>
-              <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(spendableAmount)}</strong>
-              <span>Cash, wallets, and bank balances you can use now</span>
+              <p className="eyebrow">
+                Spendable
+                <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.spendable} />
+              </p>
+              <strong className="accounts-overview-card__amount is-good">{currencyFormatter.format(spendableAmount)}</strong>
             </article>
             <article className="accounts-overview-card glass">
-              <p className="eyebrow">Assets</p>
-              <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.assets)}</strong>
-              <span>Cash, savings, and invested balances</span>
+              <p className="eyebrow">
+                Assets
+                <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.assets} />
+              </p>
+              <strong className="accounts-overview-card__amount is-good">{currencyFormatter.format(totals.assets)}</strong>
             </article>
             <article className="accounts-overview-card glass">
-              <p className="eyebrow">Liabilities</p>
-              <strong>{accountsLoading ? "Loading..." : currencyFormatter.format(totals.liabilities)}</strong>
-              <span>Credit cards and other negative balances</span>
+              <p className="eyebrow">
+                Liabilities
+                <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.liabilities} />
+              </p>
+              <strong className="accounts-overview-card__amount is-danger">{currencyFormatter.format(totals.liabilities)}</strong>
             </article>
           </section>
         </div>
@@ -1383,7 +1813,6 @@ function AccountsPageContent() {
                   <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search accounts" />
                 </label>
                 <label>
-                  Sort
                   <select value={sortBy} onChange={(event) => setSortBy(event.target.value as AccountSort)}>
                     <option value="updated_desc">Latest updated</option>
                     <option value="name">Name</option>
@@ -1394,14 +1823,12 @@ function AccountsPageContent() {
             </div>
 
             <div className="accounts-sections">
-              {accountsLoading ? (
-                <div className="empty-state">Loading accounts...</div>
-              ) : accounts.length === 0 ? (
+              {accounts.length === 0 ? (
                 <div className="empty-state accounts-empty-state">
                   <strong>It's quiet in here.</strong>
                   <p>Add your first account to start seeing balances, history, and helpful review flags.</p>
                   <div className="accounts-empty-state__actions">
-                    <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)}>
+                    <button className="button button-primary button-small" type="button" onClick={openAddAccount}>
                       Add account
                     </button>
                     <button className="button button-secondary button-small" type="button" onClick={openImportFiles}>
@@ -1428,19 +1855,13 @@ function AccountsPageContent() {
                           const isLiability = getEffectiveAccountType(account) === "credit_card";
                           const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
                           const warning = getAccountWarning(account, duplicateCounts.get(duplicateKey) ?? 0);
+                          const isDeleting = deletingAccountIdsSet.has(account.id);
                           const accountBrand = getAccountBrand({
                             institution: account.institution,
                             name: account.name,
                             type: getEffectiveAccountType(account),
                           });
-                          const checkpoint =
-                            latestCheckpoints.checkpointsByAccountId.get(account.id) ??
-                            latestCheckpoints.checkpointsByAccountKey.get(normalizeImportedAccountKey(account.name, account.institution)) ??
-                            null;
-                          const checkpointSummary = getCheckpointSummary(checkpoint);
-                          const balanceContext = getBalanceContext(account);
-                          const balanceValue = isLiability ? -Math.abs(value) : value;
-                          const sourceLabel = account.source === "manual" ? "Manual" : "Imported";
+                          const balanceValue = Math.abs(value);
                           return (
                             <article
                               key={account.id}
@@ -1452,13 +1873,18 @@ function AccountsPageContent() {
                               role="button"
                               tabIndex={0}
                               aria-label={`Open ${account.name} account`}
-                              onClick={() => openAccountDrawer(account)}
+                              onClick={() => {
+                                if (!isDeleting) {
+                                  openAccountDrawer(account);
+                                }
+                              }}
                               onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
+                                if ((event.key === "Enter" || event.key === " ") && !isDeleting) {
                                   event.preventDefault();
                                   openAccountDrawer(account);
                                 }
                               }}
+                              data-state={isDeleting ? "deleting" : undefined}
                             >
                               <div className="accounts-account-card__head">
                                 <div className="accounts-account-card__brand">
@@ -1490,9 +1916,7 @@ function AccountsPageContent() {
                                         {warning}
                                       </span>
                                     </span>
-                                  ) : (
-                                    <span className="accounts-view-pill">Ready</span>
-                                  )}
+                                  ) : null}
                                   <button
                                     className="button button-secondary button-small accounts-row-button"
                                     type="button"
@@ -1508,35 +1932,18 @@ function AccountsPageContent() {
                               </div>
 
                               <div className="accounts-account-card__body">
-                                <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
-                                  {currencyFormatter.format(balanceValue)}
-                                </div>
-                                <div className="accounts-account-card__balance-meta">
-                                  <span>{balanceContext.label}</span>
-                                  <span className={`accounts-account-card__balance-pill is-${balanceContext.tone}`}>
-                                    {balanceContext.tone === "good"
-                                      ? "Spendable"
-                                      : balanceContext.tone === "danger"
-                                        ? "Outstanding"
-                                        : "Tracked"}
-                                  </span>
-                                </div>
-                                <div className="accounts-account-card__copy">
-                                  <span className={`accounts-type-tag ${getAccountTone(account) === "liability" ? "is-liability" : ""}`}>
-                                    {getAccountDisplayType(account)}
-                                  </span>
-                                  <span>{sourceLabel}</span>
-                                  <span>{formatDate(account.updatedAt)}</span>
-                                </div>
-                                <div className="accounts-account-card__trust">
-                                  <div className={`accounts-checkpoint-badge is-${checkpointSummary.tone}`}>
-                                    <span className="accounts-checkpoint-badge__icon">
-                                      <ActionIcon name={checkpointSummary.icon} />
-                                    </span>
-                                    <div>
-                                      <strong>{checkpointSummary.label}</strong>
-                                      <span>{checkpointSummary.detail}</span>
-                                    </div>
+                                <div className="accounts-account-card__balance-row">
+                                  <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
+                                    {currencyFormatter.format(balanceValue)}
+                                  </div>
+                                  <div className="accounts-account-card__balance-meta">
+                                    {isDeleting ? (
+                                      <span className="accounts-account-card__balance-pill is-neutral">Deleting</span>
+                                    ) : (
+                                      <span className={`accounts-account-card__balance-pill is-${isLiability ? "danger" : "good"}`}>
+                                        {isLiability ? "Outstanding" : "Spendable"}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -1559,110 +1966,6 @@ function AccountsPageContent() {
             </div>
           </div>
 
-          <aside className="accounts-summary-column glass">
-            <div className="accounts-summary-column__head">
-              <div>
-                <p className="eyebrow">Summary</p>
-                <h4>Assets vs liabilities</h4>
-              </div>
-              <div className="accounts-summary-tabs">
-                <button
-                  type="button"
-                  className={summaryMode === "totals" ? "is-active" : ""}
-                  onClick={() => setSummaryMode("totals")}
-                >
-                  Totals
-                </button>
-                <button
-                  type="button"
-                  className={summaryMode === "percent" ? "is-active" : ""}
-                  onClick={() => setSummaryMode("percent")}
-                >
-                  Percent
-                </button>
-              </div>
-            </div>
-
-            {summaryMode === "totals" ? (
-              <div className="accounts-summary-list">
-                <div className="accounts-summary-item">
-                  <span>Assets</span>
-                  <strong>{currencyFormatter.format(totals.assets)}</strong>
-                </div>
-                <div className="accounts-summary-bar">
-                  <span style={{ width: `${Math.max((totals.assets / Math.max(totals.assets + totals.liabilities, 1)) * 100, 12)}%` }} />
-                </div>
-                <div className="accounts-summary-item">
-                  <span>Liabilities</span>
-                  <strong>{currencyFormatter.format(totals.liabilities)}</strong>
-                </div>
-                <div className="accounts-summary-bar accounts-summary-bar--liability">
-                  <span style={{ width: `${Math.max((totals.liabilities / Math.max(totals.assets + totals.liabilities, 1)) * 100, 12)}%` }} />
-                </div>
-                <div className="accounts-summary-item">
-                  <span>Needs review</span>
-                  <strong>{needsReviewCount}</strong>
-                </div>
-              </div>
-            ) : (
-              <div className="accounts-summary-list">
-                <div className="accounts-summary-item">
-                  <span>Assets share</span>
-                  <strong>{Math.round((totals.assets / Math.max(totals.assets + totals.liabilities, 1)) * 100)}%</strong>
-                </div>
-                <div className="accounts-summary-item">
-                  <span>Liabilities share</span>
-                  <strong>{Math.round((totals.liabilities / Math.max(totals.assets + totals.liabilities, 1)) * 100)}%</strong>
-                </div>
-                <div className="accounts-summary-item">
-                  <span>Net worth</span>
-                  <strong>{currencyFormatter.format(totals.netWorth)}</strong>
-                </div>
-              </div>
-            )}
-
-            <div className="accounts-summary-guide">
-              <strong>Balance guide</strong>
-              <p>
-                Current balance is the number on each account card. Spendable amount is the cash-like balance you can use now.
-                Net worth is assets minus liabilities across the workspace.
-              </p>
-            </div>
-
-            <div className="accounts-summary-group">
-              <p className="eyebrow">Import shortcuts</p>
-              <div className="accounts-summary-actions">
-                <button className="button button-secondary button-small accounts-summary-download" type="button" onClick={openImportFiles}>
-                  <ActionIcon name="upload" />
-                  <span>Import files</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="accounts-summary-actions" ref={downloadMenuRef}>
-              <button
-                className="button button-secondary button-small accounts-summary-download"
-                type="button"
-                onClick={() => setDownloadMenuOpen((current) => !current)}
-                aria-haspopup="menu"
-                aria-expanded={downloadMenuOpen}
-              >
-                <ActionIcon name="download" />
-                <span>Download</span>
-                <ActionIcon name="chevron-down" />
-              </button>
-              {downloadMenuOpen ? (
-                <div className="accounts-summary-dropdown" role="menu" aria-label="Download options">
-                  <button type="button" role="menuitem" onClick={() => downloadSummary("csv")}>
-                    Download CSV
-                  </button>
-                  <button type="button" role="menuitem" onClick={() => downloadSummary("pdf")}>
-                    Download PDF
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          </aside>
         </section>
       </div>
 
@@ -1697,12 +2000,19 @@ function AccountsPageContent() {
               ) : null}
               <div>
                 <span>Status</span>
-                <strong>{getAccountWarning(selectedAccount, duplicateCounts.get(`${selectedAccount.name.trim().toLowerCase()}::${(selectedAccount.institution ?? "").trim().toLowerCase()}`) ?? 0) ?? "Ready"}</strong>
+                <strong>
+                  {deletingAccountIdsSet.has(selectedAccount.id)
+                    ? "Deleting"
+                    : getAccountWarning(
+                        selectedAccount,
+                        duplicateCounts.get(`${selectedAccount.name.trim().toLowerCase()}::${(selectedAccount.institution ?? "").trim().toLowerCase()}`) ?? 0
+                      ) ?? "Ready"}
+                </strong>
               </div>
             </div>
 
             <div className="accounts-drawer__guide">
-              <strong>{selectedAccountBalanceContext?.label ?? "Balance guide"}</strong>
+              <strong>Balance guide</strong>
               <p>
                 Current balance is the number on this account now. Spendable amount is the cash-like portion you can use right away.
                 Net worth is tracked at the workspace level.
@@ -1728,7 +2038,11 @@ function AccountsPageContent() {
                 </label>
                 <label>
                   Institution
-                  <input value={accountEditInstitution} onChange={(event) => setAccountEditInstitution(event.target.value)} placeholder="Bank or wallet name" />
+                  <input
+                    value={accountEditInstitution}
+                    onChange={(event) => setAccountEditInstitution(event.target.value)}
+                    placeholder={accountEditType === "investment" ? "Broker or platform" : "Bank or wallet name"}
+                  />
                 </label>
                 <label>
                   Type
@@ -1741,6 +2055,77 @@ function AccountsPageContent() {
                     <option value="other">Other</option>
                   </select>
                 </label>
+                {accountEditType === "investment" ? (
+                  <>
+                    <label>
+                      Investment subtype
+                      <select
+                        value={accountEditInvestmentSubtype}
+                        onChange={(event) => setAccountEditInvestmentSubtype(event.target.value as InvestmentSubtype)}
+                      >
+                        {INVESTMENT_SUBTYPES.map((subtype) => (
+                          <option key={subtype} value={subtype}>
+                            {getInvestmentSubtypeLabel(subtype)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="accounts-investment-fields">
+                      {accountEditInvestmentFieldConfigs.map((field) => {
+                        const value =
+                          field.key === "investmentSymbol"
+                            ? accountEditInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? accountEditInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? accountEditInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? accountEditInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? accountEditInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? accountEditInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? accountEditInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? accountEditInvestmentMaturityValue
+                                          : "";
+
+                        const onChange =
+                          field.key === "investmentSymbol"
+                            ? setAccountEditInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? setAccountEditInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? setAccountEditInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? setAccountEditInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? setAccountEditInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? setAccountEditInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? setAccountEditInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? setAccountEditInvestmentMaturityValue
+                                          : setAccountEditInvestmentSymbol;
+
+                        return (
+                          <label key={field.key}>
+                            {field.label}
+                            <input
+                              value={value}
+                              onChange={(event) => onChange(event.target.value)}
+                              placeholder={field.placeholder}
+                              inputMode={field.inputMode}
+                              type={field.type}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : null}
                 <label>
                   Balance
                   <input value={accountEditBalance} onChange={(event) => setAccountEditBalance(event.target.value)} inputMode="decimal" placeholder="0.00" />
@@ -1979,14 +2364,14 @@ function AccountsPageContent() {
                   Name
                   <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: BDO Savings" />
                 </label>
-                <label>
-                  Institution
-                  <input
-                    value={manualInstitution}
-                    onChange={(event) => setManualInstitution(event.target.value)}
-                    placeholder="Example: BDO"
-                  />
-                </label>
+                <InstitutionAutocomplete
+                  label="Institution"
+                  value={manualInstitution}
+                  onChange={setManualInstitution}
+                  placeholder={manualType === "investment" ? "Example: COL Financial" : "Example: BDO"}
+                  variant={manualType === "investment" ? "investment" : "account"}
+                  helperText="Pick the institution that best matches the logo or platform users will recognize."
+                />
                 <label>
                   Type
                   <select value={manualType} onChange={(event) => setManualType(event.target.value as Account["type"])}>
@@ -1998,6 +2383,77 @@ function AccountsPageContent() {
                     <option value="other">Other</option>
                   </select>
                 </label>
+                {manualType === "investment" ? (
+                  <>
+                    <label>
+                      Investment subtype
+                      <select
+                        value={manualInvestmentSubtype}
+                        onChange={(event) => setManualInvestmentSubtype(event.target.value as InvestmentSubtype)}
+                      >
+                        {INVESTMENT_SUBTYPES.map((subtype) => (
+                          <option key={subtype} value={subtype}>
+                            {getInvestmentSubtypeLabel(subtype)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="accounts-investment-fields">
+                      {manualInvestmentFieldConfigs.map((field) => {
+                        const value =
+                          field.key === "investmentSymbol"
+                            ? manualInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? manualInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? manualInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? manualInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? manualInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? manualInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? manualInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? manualInvestmentMaturityValue
+                                          : "";
+
+                        const onChange =
+                          field.key === "investmentSymbol"
+                            ? setManualInvestmentSymbol
+                            : field.key === "investmentQuantity"
+                              ? setManualInvestmentQuantity
+                              : field.key === "investmentCostBasis"
+                                ? setManualInvestmentCostBasis
+                                : field.key === "investmentPrincipal"
+                                  ? setManualInvestmentPrincipal
+                                  : field.key === "investmentStartDate"
+                                    ? setManualInvestmentStartDate
+                                    : field.key === "investmentMaturityDate"
+                                      ? setManualInvestmentMaturityDate
+                                      : field.key === "investmentInterestRate"
+                                        ? setManualInvestmentInterestRate
+                                        : field.key === "investmentMaturityValue"
+                                          ? setManualInvestmentMaturityValue
+                                          : setManualInvestmentSymbol;
+
+                        return (
+                          <label key={field.key}>
+                            {field.label}
+                            <input
+                              value={value}
+                              onChange={(event) => onChange(event.target.value)}
+                              placeholder={field.placeholder}
+                              inputMode={field.inputMode}
+                              type={field.type}
+                            />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </>
+                ) : null}
                 <label>
                   Balance
                   <input
@@ -2022,14 +2478,40 @@ function AccountsPageContent() {
                 <strong>{manualName || "Account name"}</strong>
                 <p>
                   {manualAccountBrand.label}
+                  {manualType === "investment" ? ` · ${getInvestmentSubtypeLabel(manualInvestmentSubtype)}` : ""}
                   {manualType !== "cash" && manualInstitution.trim() ? ` · ${manualInstitution.trim()}` : ""}
                 </p>
-                <span>We use the institution to match the right logo and statement rules.</span>
+                {manualType === "investment" ? (
+                  <div className="accounts-add-preview__investment">
+                    <span>
+                      Subtype <strong>{getInvestmentSubtypeLabel(manualInvestmentSubtype)}</strong>
+                    </span>
+                    {manualInvestmentFieldConfigs.map((field) => (
+                      <span key={field.key}>
+                        {getManualInvestmentFieldLabel(field.key)}{" "}
+                        <strong>
+                          {getManualInvestmentPreviewValue(field)}
+                        </strong>
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                <span>
+                  {manualType === "investment"
+                    ? isFixedIncomeInvestmentSubtype(manualInvestmentSubtype)
+                      ? getInvestmentSubtypeDescription(manualInvestmentSubtype)
+                      : isMarketInvestmentSubtype(manualInvestmentSubtype)
+                        ? "Track the holding like a market position with units and purchase value."
+                        : getInvestmentSubtypeDescription(manualInvestmentSubtype)
+                    : "We use the institution to match the right logo and statement rules."}
+                </span>
               </aside>
             </div>
           </section>
         </div>
       ) : null}
+
+      <PlanLimitNudge payload={planLimitNudge} onDismiss={() => setPlanLimitNudge(null)} />
 
       <ImportFilesModal
         key={importSessionId}
@@ -2103,7 +2585,14 @@ function AccountsPageContent() {
             }
           });
 
-          void refreshAll();
+          if (!summary.optimistic) {
+            setImportRefreshInFlight(true);
+            try {
+              await refreshAll();
+            } finally {
+              setImportRefreshInFlight(false);
+            }
+          }
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />

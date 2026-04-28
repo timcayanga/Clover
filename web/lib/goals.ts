@@ -22,6 +22,18 @@ export type GoalMilestone = {
   threshold: number;
 };
 
+export type GoalTargetMode = "amount" | "percent";
+export type GoalTargetCadence = "monthly" | "annual";
+
+export type GoalPlan = {
+  goalKey: GoalKey;
+  targetMode: GoalTargetMode;
+  cadence: GoalTargetCadence;
+  targetAmount: number | null;
+  targetPercent: number | null;
+  purpose: string | null;
+};
+
 export type GoalPlaybook = GoalDefinition & {
   heroLead: string;
   heroSupport: string;
@@ -34,6 +46,7 @@ export type GoalPlaybook = GoalDefinition & {
 export type GoalProgressContext = {
   goalKey: GoalKey | null;
   targetAmount: number | null;
+  goalPlan?: GoalPlan | null;
   currentNet: number;
   currentSpend: number;
   monthlyIncome: number | null;
@@ -41,6 +54,10 @@ export type GoalProgressContext = {
   previousSavingsRate: number | null;
   spendDelta: number | null;
   recurringShare: number;
+  investmentValue?: number | null;
+  investmentGainLoss?: number | null;
+  investmentFlow?: number | null;
+  investmentHoldings?: number | null;
 };
 
 export type GoalProgressSnapshot = {
@@ -102,10 +119,10 @@ const FINANCIAL_EXPERIENCE_PROFILES: Record<FinancialExperienceLevel, FinancialE
     title: "Start simple",
     onboardingLead: "We’ll keep the setup light and explain the first useful step clearly.",
     onboardingSupport: "Choose the level that feels closest. Clover will keep the next screens beginner-friendly.",
-    goalsLead: "Pick a lane, set a number, and let Clover explain the next step in plain language.",
-    goalsSupport: "We’ll keep the coaching simple, with one clear move at a time and less jargon.",
-    goalsShellSubtitle: "A calm, step-by-step view of your goal with simple guidance and a place to set the number.",
-    dashboardSubtitle: "See your goal pace, report trend, and key insight at a glance without the jargon.",
+    goalsLead: "Start here. Pick one lane, set one number, and let Clover explain the next step in plain language.",
+    goalsSupport: "One goal at a time, one clear move at a time, and less jargon.",
+    goalsShellSubtitle: "A calm, step-by-step view of one goal with simple guidance and a place to set the number.",
+    dashboardSubtitle: "See your goal, your month, and the biggest pattern in one simple glance.",
     emptyStateTitle: "Import files to see Clover turn statements into a clear picture.",
     emptyStateCopy:
       "Start with a statement and Clover will build the dashboard, explain the review queue, and help you understand the month one step at a time. You can add an account or enter transactions manually if that suits you better.",
@@ -120,7 +137,7 @@ const FINANCIAL_EXPERIENCE_PROFILES: Record<FinancialExperienceLevel, FinancialE
     goalsLead: "Set the lane and the number, then let Clover keep the month honest.",
     goalsSupport: "You’ll get a clearer mix of coaching, progress, and pattern tracking.",
     goalsShellSubtitle: "A visual goal view with the target, progress, and next step kept easy to scan.",
-    dashboardSubtitle: "A quick visual summary of goals, reports, and insights with the small follow-up items tucked away.",
+    dashboardSubtitle: "A clear summary of your goal, month, and biggest pattern.",
     emptyStateTitle: "Import files to wake up the dashboard.",
     emptyStateCopy:
       "Upload a statement to populate balances, review items, trends, and goal progress. You can also connect an account or enter transactions manually if that is your preferred starting point.",
@@ -135,7 +152,7 @@ const FINANCIAL_EXPERIENCE_PROFILES: Record<FinancialExperienceLevel, FinancialE
     goalsLead: "Set the target and let the numbers do the talking.",
     goalsSupport: "You’ll see tighter summaries, quicker scans, and less explanatory copy.",
     goalsShellSubtitle: "A concise goal view with the target, pace, and trend signals front and center.",
-    dashboardSubtitle: "See the goal pace, report trend, and main insight signals in one quick glance.",
+    dashboardSubtitle: "See your goal, month, and main pattern in one quick glance.",
     emptyStateTitle: "Import files to load the numbers fast.",
     emptyStateCopy:
       "Start with a statement if you want Clover to populate the dashboard, review queue, and goal signals immediately. You can still add an account or enter transactions manually if needed.",
@@ -233,6 +250,100 @@ export const goalProgressLabels: Record<GoalKey, string> = {
   track_spending: "Still available in the budget",
   build_emergency_fund: "Set aside so far this month",
   invest_better: "Ready to invest this month",
+};
+
+export const goalTargetModeLabels: Record<GoalTargetMode, string> = {
+  amount: "Amount",
+  percent: "Percent of salary",
+};
+
+export const goalTargetCadenceLabels: Record<GoalTargetCadence, string> = {
+  monthly: "Monthly",
+  annual: "Annual",
+};
+
+export const goalPurposeSuggestions: Record<GoalKey, string[]> = {
+  save_more: ["Emergency fund", "Car fund", "Phone upgrade", "House fund"],
+  pay_down_debt: ["Credit card", "Personal loan", "Car loan", "School loan"],
+  track_spending: ["Groceries", "Dining out", "Shopping", "All expenses"],
+  build_emergency_fund: ["Rainy day fund", "Job safety buffer", "Family support", "Unexpected repairs"],
+  invest_better: ["Retirement", "House fund", "Long-term growth", "Education"],
+};
+
+export const normalizeGoalPlan = (
+  value: unknown,
+  fallbackGoalKey: GoalKey | null = null,
+  fallbackTargetAmount: number | null = null
+): GoalPlan | null => {
+  if (!value || typeof value !== "object") {
+    return fallbackGoalKey
+      ? {
+          goalKey: fallbackGoalKey,
+          targetMode: "amount",
+          cadence: "monthly",
+          targetAmount: fallbackTargetAmount,
+          targetPercent: null,
+          purpose: null,
+        }
+      : null;
+  }
+
+  const plan = value as Partial<GoalPlan> & { purpose?: unknown; targetPercent?: unknown; targetAmount?: unknown; cadence?: unknown; targetMode?: unknown; goalKey?: unknown };
+  const goalKey = GOAL_OPTIONS.find((goal) => goal.value === plan.goalKey)?.value ?? fallbackGoalKey;
+  if (!goalKey) {
+    return null;
+  }
+
+  const targetMode = plan.targetMode === "percent" ? "percent" : "amount";
+  const cadence = plan.cadence === "annual" ? "annual" : "monthly";
+  const targetAmount = typeof plan.targetAmount === "number" && Number.isFinite(plan.targetAmount) ? Math.max(0, plan.targetAmount) : fallbackTargetAmount;
+  const targetPercent = typeof plan.targetPercent === "number" && Number.isFinite(plan.targetPercent) ? Math.max(0, plan.targetPercent) : null;
+  const purpose = typeof plan.purpose === "string" ? plan.purpose.trim() || null : null;
+
+  return {
+    goalKey,
+    targetMode,
+    cadence,
+    targetAmount,
+    targetPercent,
+    purpose,
+  };
+};
+
+export const getGoalPlanSummary = (plan: GoalPlan | null, monthlyIncome: number | null) => {
+  if (!plan) {
+    return null;
+  }
+
+  const goal = getGoalDefinition(plan.goalKey);
+  const cadenceLabel = goalTargetCadenceLabels[plan.cadence].toLowerCase();
+  const targetModeLabel = goalTargetModeLabels[plan.targetMode].toLowerCase();
+  const purposeText = plan.purpose ? ` for ${plan.purpose}` : "";
+
+  if (plan.targetMode === "percent" && plan.targetPercent !== null) {
+    const resolvedMonthly = monthlyIncome !== null ? monthlyIncome * (plan.targetPercent / 100) : null;
+    return {
+      title: `${goal.title} ${plan.targetPercent}% of salary`,
+      detail:
+        resolvedMonthly !== null
+          ? `Aim to set aside ${formatCompactCurrency(resolvedMonthly)} per month${purposeText}.`
+          : `Aim to set aside ${plan.targetPercent}% of salary each month${purposeText}.`,
+      subtitle: `${goalTargetModeLabels.percent} · ${goalTargetCadenceLabels[plan.cadence]}`,
+      targetAmount: resolvedMonthly,
+    };
+  }
+
+  const amount = plan.targetAmount ?? null;
+  const monthlyEquivalent = amount !== null && plan.cadence === "annual" ? amount / 12 : amount;
+  return {
+    title: `${goal.title} ${cadenceLabel}`,
+    detail:
+      amount !== null
+        ? `Aim to move ${formatCompactCurrency(amount)} ${cadenceLabel === "annual" ? "each year" : "each month"}${purposeText}.`
+        : `Set a clear ${targetModeLabel} target${purposeText}.`,
+    subtitle: `${goalTargetModeLabels[plan.targetMode]} · ${goalTargetCadenceLabels[plan.cadence]}`,
+    targetAmount: monthlyEquivalent,
+  };
 };
 
 export const getGoalDefinition = (goalKey: string | null) =>
@@ -356,6 +467,7 @@ export const getGoalProgressLabel = (goalKey: GoalKey | null) =>
 export const getGoalProgressSnapshot = ({
   goalKey,
   targetAmount,
+  goalPlan,
   currentNet,
   currentSpend,
   monthlyIncome,
@@ -363,13 +475,35 @@ export const getGoalProgressSnapshot = ({
   previousSavingsRate,
   spendDelta,
   recurringShare,
+  investmentValue,
+  investmentGainLoss,
+  investmentFlow,
+  investmentHoldings,
 }: GoalProgressContext): GoalProgressSnapshot => {
-  const baseTarget = targetAmount !== null && Number.isFinite(targetAmount) ? Math.max(0, targetAmount) : null;
+  const planTargetAmount =
+    goalPlan?.targetMode === "percent" && monthlyIncome !== null && goalPlan.targetPercent !== null
+      ? monthlyIncome * (goalPlan.targetPercent / 100)
+      : goalPlan?.targetAmount !== null && goalPlan?.targetAmount !== undefined
+        ? goalPlan.cadence === "annual"
+          ? Number(goalPlan.targetAmount) / 12
+          : Number(goalPlan.targetAmount)
+        : null;
+  const baseTarget =
+    targetAmount !== null && Number.isFinite(targetAmount)
+      ? Math.max(0, targetAmount)
+      : planTargetAmount !== null && Number.isFinite(planTargetAmount)
+        ? Math.max(0, planTargetAmount)
+        : null;
   const netSurplus = Math.max(0, currentNet);
   const savingsBase = netSurplus;
   const behaviorIsImproving = currentSavingsRate !== null && previousSavingsRate !== null ? currentSavingsRate > previousSavingsRate : false;
   const spendingIsRising = spendDelta !== null ? spendDelta > 0 : false;
   const recurringPressure = recurringShare > 0.25;
+  const investmentBase = investmentFlow !== null && investmentFlow !== undefined ? Math.max(0, investmentFlow) : null;
+  const investmentContext = investmentValue !== null && investmentValue !== undefined ? Math.max(0, investmentValue) : null;
+  const holdingsCount = investmentHoldings ?? 0;
+  const planPurpose = goalPlan?.purpose ? ` for ${goalPlan.purpose}` : "";
+  const planCadenceLabel = goalPlan ? `${goalTargetCadenceLabels[goalPlan.cadence].toLowerCase()} ` : "";
 
   if (!goalKey || baseTarget === null) {
     return {
@@ -419,7 +553,12 @@ export const getGoalProgressSnapshot = ({
     };
   }
 
-  const currentAmount = goalKey === "pay_down_debt" ? netSurplus : savingsBase;
+  const currentAmount =
+    goalKey === "invest_better" && investmentBase !== null
+      ? investmentBase
+      : goalKey === "pay_down_debt"
+        ? netSurplus
+        : savingsBase;
   const progressPercent = baseTarget > 0 ? clamp((currentAmount / baseTarget) * 100, 0, 100) : null;
   const remainingAmount = Math.max(0, baseTarget - currentAmount);
   const achieved = currentAmount >= baseTarget;
@@ -445,6 +584,7 @@ export const getGoalProgressSnapshot = ({
             ? "warning"
             : "negative"
       : "neutral";
+  const investmentGainLossValue = typeof investmentGainLoss === "number" ? investmentGainLoss : null;
 
   return {
     label:
@@ -462,7 +602,9 @@ export const getGoalProgressSnapshot = ({
           ? "Debt runway"
           : goalKey === "build_emergency_fund"
             ? "Emergency buffer"
-            : "Investable surplus",
+            : investmentBase !== null
+              ? "Invested this month"
+              : "Investable surplus",
     currentAmount,
     targetAmount: baseTarget,
     progressPercent,
@@ -485,7 +627,7 @@ export const getGoalProgressSnapshot = ({
             : spendingIsRising
               ? "Spending is crowding the payoff plan. Pull one flexible category back and send the difference to debt."
               : "This is the money you can point at principal before it gets absorbed elsewhere."
-          : goalKey === "build_emergency_fund"
+        : goalKey === "build_emergency_fund"
             ? achieved
               ? behaviorIsImproving
                 ? "Your emergency fund target is covered and your saving rhythm is holding steady."
@@ -494,10 +636,12 @@ export const getGoalProgressSnapshot = ({
                 ? "Recurring spending is squeezing the reserve transfer. Protect the transfer first, then reset one subscription."
                 : "You are building resilience one consistent transfer at a time."
             : achieved
-              ? "You have a clean surplus to invest. Keep the habit steady."
+              ? investmentContext !== null
+                ? `You already have ${formatCompactCurrency(investmentContext)} invested${investmentGainLossValue !== null ? ` and ${investmentGainLossValue >= 0 ? "gained" : "lost"} ${formatCompactCurrency(Math.abs(investmentGainLossValue))}` : ""}. Keep building the base${planPurpose}.`
+                : `You have a clean surplus to invest${planPurpose}. Keep the habit steady.`
               : spendingIsRising
-                ? "Spending pressure is reducing the investing runway. Cut one flexible category before month-end."
-                : "You are protecting the investing runway by keeping the month tidy.",
+                ? `Spending pressure is reducing the investing runway${planPurpose}. Cut one flexible category before month-end.`
+                : `You are protecting the investing runway${planPurpose} by keeping the month tidy.`,
     nextAction:
       goalKey === "save_more"
         ? achieved
@@ -518,7 +662,9 @@ export const getGoalProgressSnapshot = ({
               ? "Trim one fixed cost first, then refill the buffer automatically."
               : "Automate the reserve transfer so the goal stays boring and steady."
         : achieved
-          ? "Keep the surplus clean and move the investable amount on schedule."
+          ? investmentBase !== null
+            ? `Keep the investment habit steady${planPurpose}; you have ${holdingsCount} holding${holdingsCount === 1 ? "" : "s"} working for you now.`
+            : `Keep the surplus clean and move the investable amount ${planCadenceLabel}on schedule.`
           : spendingIsRising
             ? "Reduce one flexible spend category and protect the investing window."
             : "Keep cash flow calm so the next investable dollar survives the month.",

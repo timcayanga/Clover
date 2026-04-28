@@ -3,6 +3,7 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
@@ -12,7 +13,8 @@ import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
-import { getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
+import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
+import { recordAppError } from "@/lib/error-logs";
 import { Suspense } from "react";
 
 const ReportsReviewQueue = nextDynamic(() => import("@/components/reports-review-queue").then((module) => module.ReportsReviewQueue), {
@@ -240,23 +242,6 @@ async function ReportsStream({
   });
   const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
   const isPro = user.planTier === "pro";
-  const freePlanReports = [
-    "Cash flow",
-    "Spending by category",
-    "Recurring payments",
-    "Top merchants",
-    "Monthly summary",
-    "Review queue",
-    "Data health",
-  ] as const;
-  const proPlanReports = [
-    "What changed / why / what next",
-    "Goal lens",
-    "Attention strip",
-    "Decision lens",
-    "Account health detail",
-    "Comparison modes",
-  ] as const;
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
@@ -283,10 +268,17 @@ async function ReportsStream({
     const starterWorkspace = await ensureStarterWorkspace(user);
     const starterWorkspaceId = starterWorkspace?.id;
     if (!starterWorkspaceId) {
-      console.error("Reports starter workspace could not be resolved", {
-        clerkUserId: user.clerkUserId,
+      await recordAppError({
+        message: "Reports starter workspace could not be resolved",
+        name: "ReportsWorkspaceError",
+        source: "reports-page",
+        route: "/reports",
         userId: user.id,
-      });
+        clerkUserId: user.clerkUserId,
+        metadata: {
+          selectedWorkspaceCookieId,
+        },
+      }).catch(() => null);
       redirect("/dashboard");
     }
     const starterWorkspaceData = await prisma.workspace.findUnique({
@@ -294,11 +286,17 @@ async function ReportsStream({
       select: { id: true },
     });
     if (!starterWorkspaceData?.id) {
-      console.error("Reports starter workspace lookup failed", {
-        clerkUserId: user.clerkUserId,
+      await recordAppError({
+        message: "Reports starter workspace lookup failed",
+        name: "ReportsWorkspaceError",
+        source: "reports-page",
+        route: "/reports",
         userId: user.id,
-        starterWorkspaceId,
-      });
+        clerkUserId: user.clerkUserId,
+        metadata: {
+          starterWorkspaceId,
+        },
+      }).catch(() => null);
       redirect("/dashboard");
     }
     selectedWorkspaceId = starterWorkspaceData.id;
@@ -753,6 +751,8 @@ async function ReportsStream({
     const goalKey = user.primaryGoal?.trim() ?? null;
     const goalLabel = goalKey ? goalLabels[goalKey] ?? goalKey : null;
     const goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
+    const currentGoalPlan = normalizeGoalPlan(user.goalPlan, goalKey as GoalKey | null, goalTargetAmount);
+    const goalPlanSummary = getGoalPlanSummary(currentGoalPlan, currentSummary.income > 0 ? currentSummary.income : null);
 
     const merchantSpend = new Map<
       string,
@@ -866,6 +866,7 @@ async function ReportsStream({
     const goalProgress = getGoalProgressSnapshot({
       goalKey: goalKey as GoalKey | null,
       targetAmount: goalTargetAmount,
+      goalPlan: currentGoalPlan,
       currentNet,
       currentSpend,
       monthlyIncome: currentSummary.income > 0 ? currentSummary.income : null,
@@ -1000,7 +1001,7 @@ async function ReportsStream({
 
     const goalSummary = goalLabel
       ? goalTargetAmount !== null
-        ? `${goalLabel} is ${goalProgress.progressPercent === null ? "set" : `${Math.round(goalProgress.progressPercent)}% complete`}. ${goalProgress.nextAction}`
+        ? `${goalLabel} is ${goalProgress.progressPercent === null ? "set" : `${Math.round(goalProgress.progressPercent)}% complete`}. ${goalPlanSummary?.detail ?? goalProgress.nextAction}`
         : currentNet >= 0
           ? `Your ${goalLabel.toLowerCase()} goal has room to move forward because the last ${rangeWindowText} ended positive.`
           : `Your ${goalLabel.toLowerCase()} goal needs a tighter spending pattern or higher income to move faster.`
@@ -1199,65 +1200,7 @@ async function ReportsStream({
           </div>
         ) : null}
 
-        {isPro ? (
-          <>
-            <section className="reports-hero">
-              <div className="reports-hero__copy glass">
-                <span className="pill pill-accent">Decision-ready reports</span>
-                <h3>A clearer view of your money, with the numbers that matter most.</h3>
-                <p>
-                  Every report is grounded in the transactions you uploaded, then sharpened with comparisons, labels, and
-                  actions that point to the next useful step.
-                </p>
-                <div className="hero-actions">
-                  <Link className="button button-primary" href={nextStep.href}>
-                    {nextStep.label}
-                  </Link>
-                  <Link className="button button-secondary" href="/transactions">
-                    Open transactions
-                  </Link>
-                  <Link className="button button-secondary" href="/settings">
-                    Review settings
-                  </Link>
-                </div>
-              </div>
-
-              <article className="reports-next glass">
-                <p className="eyebrow">Goal lens</p>
-                <h4>{goalNextStep.title}</h4>
-                <p>{goalSummary}</p>
-                <div className="reports-next__meta">
-                  <span>{goalLabel ?? "No primary goal set"}</span>
-                  <span>{savingsRate === null ? "Savings rate unavailable" : `${formatPercent(savingsRate * 100)} savings rate`}</span>
-                </div>
-                <Link className="button button-primary button-pill" href={goalNextStep.href}>
-                  {goalNextStep.label}
-                </Link>
-                <div className="reports-next__meta">
-                  <span>
-                    {actionableCount} item{actionableCount === 1 ? "" : "s"} need attention
-                  </span>
-                  <span>{accountCount} account{accountCount === 1 ? "" : "s"}</span>
-                </div>
-              </article>
-            </section>
-
-            <section className="reports-attention-strip">
-              {attentionItems.map((item) => (
-                <article key={item.title} className="reports-attention-card glass">
-                  <span className="eyebrow">Attention</span>
-                  <h4>{item.title}</h4>
-                  <p>{item.body}</p>
-                  <Link className="pill-link pill-link--inline" href={item.href}>
-                    {item.label}
-                  </Link>
-                </article>
-              ))}
-            </section>
-          </>
-        ) : null}
-
-        <section className="reports-range-switch glass">
+    <section className="reports-range-switch glass">
           <div className="reports-range-switch__copy">
             <span className="eyebrow">Range</span>
             <p>{selectedRangeLabel}</p>
@@ -1274,171 +1217,168 @@ async function ReportsStream({
           </div>
         </section>
 
-        {isPro ? (
-          <section className="reports-ai-grid">
-            <article className="report-ai-card report-ai-card--featured glass">
-              <p className="eyebrow">What changed</p>
-              <h3>{aiHeadline}</h3>
-              <p>{aiSummary}</p>
-              <div className="report-ai-card__actions">
-                <Link className="button button-primary button-pill" href={buildTransactionsHref({ month: currentMonthBucket.key })}>
-                  Open cash flow
-                </Link>
-                <Link className="button button-secondary button-pill" href="/transactions">
-                  Open transactions
-                </Link>
-              </div>
-            </article>
-
-            <article className="report-ai-card glass">
-              <div className="report-card__head">
-                <div>
-                  <h4>Why it changed</h4>
-                </div>
-              </div>
-              <div className="report-ai-signal-grid">
-                {aiSignals.map((signal) => (
-                  <div key={signal.label} className={`report-ai-signal report-ai-signal--${signal.tone}`}>
-                    <span>{signal.label}</span>
-                    <strong>{signal.value}</strong>
-                    <small>{signal.detail}</small>
-                  </div>
-                ))}
-              </div>
-            </article>
-
-            <article className="report-ai-card glass">
-              <div className="report-card__head">
-                <div>
-                  <h4>What to do next</h4>
-                </div>
-              </div>
-              <div className="report-list">
-                {aiActions.map((action) => (
-                  <div key={action.title} className="report-list__item report-list__item--compact">
-                    <div className="report-list__meta">
-                      <strong>{action.title}</strong>
-                      <span>{action.body}</span>
-                    </div>
-                    <Link className="pill-link pill-link--inline" href={action.href}>
-                      {action.label}
-                    </Link>
-                  </div>
-                ))}
-              </div>
-            </article>
-          </section>
-        ) : null}
-
-        <section className="reports-summary-grid">
-          <article className="metric compact glass">
-            <span>Net cash flow</span>
-            <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
-            <small>
-              {currentNet >= 0 ? "Positive" : "Negative"} over the last {rangeWindowText} ·{" "}
-              {previousNet === 0 ? "No prior baseline" : `${currentNet >= previousNet ? "above" : "below"} the prior period`}
-            </small>
+        <section className="reports-summary-grid reports-summary-grid--highlights">
+          <article className="metric compact metric--highlight glass">
+            <span>Income</span>
+            <strong>{formatCurrency(currentSummary.income)}</strong>
           </article>
-          <article className="metric compact glass">
+          <article className="metric compact metric--highlight glass">
+            <span>Expenses</span>
+            <strong>{formatCurrency(currentSummary.expense)}</strong>
+          </article>
+          <article className="metric compact metric--highlight glass">
+            <span>Net income</span>
+            <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
+          </article>
+          <article className="metric compact metric--highlight glass">
             <span>Savings rate</span>
             <strong>{savingsRate === null ? "N/A" : formatPercent(savingsRate * 100)}</strong>
-            <small>
-              {goalLabel ? `${goalLabel} is the lens here` : "Add a goal to track progress against"}
-            </small>
-          </article>
-          <article className="metric compact glass">
-            <span>Top category</span>
-            <strong>{topCategories[0]?.[0] ?? "N/A"}</strong>
-            <small>
-              {topCategoryShare === null ? "No spending data yet" : `${formatPercent(topCategoryShare * 100)} of total spend`}
-            </small>
-          </article>
-          <article className="metric compact glass">
-            <span>Needs review</span>
-            <strong>{uncategorizedTransactions.length + possibleDuplicateGroups.length}</strong>
-            <small>
-              {uncategorizedTransactions.length} uncategorized · {possibleDuplicateGroups.length} duplicate set
-              {possibleDuplicateGroups.length === 1 ? "" : "s"}
-            </small>
           </article>
         </section>
+
+        {isPro ? (
+          <>
+            <section className="reports-brief-grid">
+              <article className="report-ai-card report-ai-card--compact glass">
+                <p className="eyebrow">What changed</p>
+                <h3>{aiHeadline}</h3>
+                <p>{aiSummary}</p>
+                <div className="report-ai-card__actions">
+                  <Link className="button button-primary button-pill" href={buildTransactionsHref({ month: currentMonthBucket.key })}>
+                    Open cash flow
+                  </Link>
+                </div>
+              </article>
+
+              <article className="report-ai-card report-ai-card--compact glass">
+                <p className="eyebrow">Why it changed</p>
+                <div className="report-ai-signal-grid report-ai-signal-grid--compact">
+                  {aiSignals.slice(0, 3).map((signal) => (
+                    <div key={signal.label} className={`report-ai-signal report-ai-signal--${signal.tone}`}>
+                      <span>{signal.label}</span>
+                      <strong>{signal.value}</strong>
+                      <small>{signal.detail}</small>
+                    </div>
+                  ))}
+                </div>
+              </article>
+
+              <article className="report-ai-card report-ai-card--compact glass">
+                <p className="eyebrow">What to do next</p>
+                <div className="report-list">
+                  {aiActions.map((action) => (
+                    <div key={action.title} className="report-list__item report-list__item--compact">
+                      <div className="report-list__meta">
+                        <strong>{action.title}</strong>
+                        <span>{action.body}</span>
+                      </div>
+                      <Link className="pill-link pill-link--inline" href={action.href}>
+                        {action.label}
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              </article>
+            </section>
+
+            <article className="reports-next glass">
+              <p className="eyebrow">Goal lens</p>
+              <h4>{goalNextStep.title}</h4>
+              <p>{goalSummary}</p>
+              <div className="reports-next__meta">
+                <span>{goalLabel ?? "No primary goal set"}</span>
+                <span>{savingsRate === null ? "Savings rate unavailable" : `${formatPercent(savingsRate * 100)} savings rate`}</span>
+              </div>
+              <Link className="button button-primary button-pill" href={goalNextStep.href}>
+                {goalNextStep.label}
+              </Link>
+              <div className="reports-next__meta">
+                <span>
+                  {actionableCount} item{actionableCount === 1 ? "" : "s"} need attention
+                </span>
+                <span>{accountCount} account{accountCount === 1 ? "" : "s"}</span>
+              </div>
+            </article>
+
+            <section className="reports-attention-strip">
+              {attentionItems.map((item) => (
+                <article key={item.title} className="reports-attention-card glass">
+                  <span className="eyebrow">Things to check</span>
+                  <h4>{item.title}</h4>
+                  <p>{item.body}</p>
+                  <Link className="pill-link pill-link--inline" href={item.href}>
+                    {item.label}
+                  </Link>
+                </article>
+              ))}
+            </section>
+
+            <article className="reports-decision-lens glass">
+              <div>
+                <p className="eyebrow">Next best action</p>
+                <h4>{nextStep.title}</h4>
+                <p>{nextStep.body}</p>
+              </div>
+              <Link className="button button-primary button-pill" href={nextStep.href}>
+                {nextStep.label}
+              </Link>
+            </article>
+          </>
+        ) : null}
 
         <section className="reports-grid reports-grid--primary">
           <article className="report-card glass report-card--wide">
             <div className="report-card__head">
               <div>
-                <h4>Cash flow</h4>
+                <h4>Where your money went</h4>
               </div>
               <div className="report-card__stat">
-                <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
-                <span>
-                  {currentSummary.income > 0 ? `${formatCurrency(currentSummary.income)} in` : "No income"}
-                  {" · "}
-                  {currentSummary.expense > 0 ? `${formatCurrency(currentSummary.expense)} out` : "No spending"}
-                </span>
+                <strong>{formatCurrency(currentSummary.income)}</strong>
+                <span>how spending is split across categories</span>
               </div>
             </div>
 
-            <div className="report-insight-grid">
-              <div className="report-insight">
-                <span>Current period</span>
-                <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
-                <small>
-                  {incomeDelta === null ? "No previous baseline" : `${formatPercent(incomeDelta)} vs the prior ${rangeWindowText}`}
-                </small>
+            <div className="report-flow-map">
+              <div className="report-flow-map__source">
+                <span>Total income</span>
+                <strong>{formatCurrency(currentSummary.income)}</strong>
+                <small>{formatCurrency(currentSpend)} routed to spending categories</small>
               </div>
-              <div className="report-insight">
-                <span>Previous period</span>
-                <strong className={previousNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(previousNet)}</strong>
-                <small>
-                  {previousNet === 0 ? "No prior benchmark" : `${previousNet >= 0 ? "Positive" : "Negative"} cash flow`}
-                </small>
-              </div>
-            </div>
-
-            <div className="report-subsection">
-              <p className="eyebrow">Why it changed</p>
-              <div className="report-list">
-                <div className="report-list__item">
-                  <div className="report-list__meta">
-                    <strong>Spending</strong>
-                    <span>{spendDelta === null ? "No prior comparison period" : `${formatPercent(spendDelta)} vs the previous ${rangeWindowText}`}</span>
-                  </div>
-                </div>
-                <div className="report-list__item">
-                  <div className="report-list__meta">
-                    <strong>Income</strong>
-                    <span>{incomeDelta === null ? "No prior comparison period" : `${formatPercent(incomeDelta)} vs the previous ${rangeWindowText}`}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="report-chart">
-              <svg viewBox={`0 0 ${reportChartWidth} ${reportChartHeight}`} className="report-chart__svg" role="img" aria-label="Cash flow line chart">
-                <defs>
-                  <linearGradient id="report-cash-flow-gradient" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="rgba(14,165,233,0.26)" />
-                    <stop offset="100%" stopColor="rgba(14,165,233,0.03)" />
-                  </linearGradient>
-                </defs>
-                <path
-                  d={`${reportCashFlowPath} L ${reportCashFlowPoints[reportCashFlowPoints.length - 1].x.toFixed(1)} ${reportChartHeight - reportChartPadding} L ${reportCashFlowPoints[0].x.toFixed(1)} ${reportChartHeight - reportChartPadding} Z`}
-                  fill="url(#report-cash-flow-gradient)"
-                />
-                <path d={reportCashFlowPath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                {reportCashFlowPoints.map((point) => (
-                  <circle key={point.key} cx={point.x} cy={point.y} r="5.5" fill="white" stroke="var(--accent)" strokeWidth="3" />
-                ))}
-              </svg>
-
-              <div className="report-chart__labels">
-                {reportCashFlowPoints.map((point) => (
-                  <Link key={point.key} href={buildTransactionsHref({ month: point.key })} className="report-chart__label report-list__item--link">
-                    <span>{point.label}</span>
-                    <strong>{formatCurrency(point.net)}</strong>
-                  </Link>
-                ))}
+              <div className="report-flow-map__rows">
+                {reportCategorySegments.length > 0 ? (
+                  <>
+                    {reportCategorySegments.map((segment) => (
+                      <Link
+                        key={segment.categoryName}
+                        href={buildTransactionsHref({ category: segment.categoryName })}
+                        className="report-flow-map__row report-list__item--link"
+                      >
+                        <div className="report-flow-map__meta">
+                          <strong>{segment.categoryName}</strong>
+                          <span>{formatCurrency(segment.amount)}</span>
+                        </div>
+                        <div className="report-flow-map__bar" aria-hidden="true">
+                          <span style={{ width: `${Math.max(segment.share * 100, 8)}%`, background: segment.color }} />
+                        </div>
+                        <strong className="report-flow-map__share">{formatPercent(segment.share * 100)}</strong>
+                      </Link>
+                    ))}
+                    {currentOtherSpend > 0 ? (
+                      <div className="report-flow-map__row report-flow-map__row--other">
+                        <div className="report-flow-map__meta">
+                          <strong>Other spend</strong>
+                          <span>{formatCurrency(currentOtherSpend)}</span>
+                        </div>
+                        <div className="report-flow-map__bar" aria-hidden="true">
+                          <span style={{ width: `${Math.max((currentOtherSpend / Math.max(currentSpend, 1)) * 100, 8)}%`, background: "var(--border-subtle)" }} />
+                        </div>
+                        <strong className="report-flow-map__share">{formatPercent((currentOtherSpend / Math.max(currentSpend, 1)) * 100)}</strong>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="empty-state">Add categorized spending and Clover will show where income is flowing.</div>
+                )}
               </div>
             </div>
           </article>
@@ -1538,7 +1478,7 @@ async function ReportsStream({
           <article className="report-card glass">
             <div className="report-card__head">
               <div>
-                <h4>Recurring payments</h4>
+                <h4>Repeat charges</h4>
               </div>
               <div className="report-card__stat">
                 <strong>{recurringMerchants.length}</strong>
@@ -1594,7 +1534,7 @@ async function ReportsStream({
           <article className="report-card glass">
             <div className="report-card__head">
               <div>
-                <h4>Top merchants</h4>
+                <h4>Top spenders</h4>
               </div>
               <div className="report-card__stat">
                 <strong>{topMerchants.length}</strong>
@@ -1632,7 +1572,7 @@ async function ReportsStream({
           <article className="report-card glass">
             <div className="report-card__head">
               <div>
-                <h4>Monthly summary</h4>
+                <h4>This month</h4>
               </div>
               <div className="report-card__stat">
                 <strong className={currentMonthBucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentMonthBucket.net)}</strong>
@@ -1672,175 +1612,34 @@ async function ReportsStream({
           </article>
         </section>
 
-        <section className="reports-grid reports-grid--secondary">
-          <article className="report-card glass report-card--balanced">
-            <ReportsReviewQueue items={reportReviewQueueItems} />
-          </article>
-
-          <article className="report-card glass report-card--balanced">
-            <div className="report-card__head">
-              <div>
-                <h4>Data health</h4>
-              </div>
-              <div className="report-card__stat">
-                <strong>{Math.round(confidenceScore)}%</strong>
-                <span>{confidenceLabel} · {activeAccountCount} account{activeAccountCount === 1 ? "" : "s"} with balances</span>
-              </div>
-            </div>
-
-            <div className="report-subsection">
-              <p className="eyebrow">Trust panel</p>
-              <div className="report-list">
-                <div className="report-list__item">
-                  <div className="report-list__meta">
-                    <strong>{confidenceLabel}</strong>
-                    <span>{confidenceCopy}</span>
-                  </div>
-                  <div className="report-tags">
-                    <span className="pill pill-subtle">{Math.round(confidenceScore)}%</span>
-                    <span className="pill pill-subtle">{importStatusCounts.failed + importStatusCounts.processing} flags</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="report-insight-grid">
-              <div className="report-insight">
-                <span>Imported rows</span>
-                <strong>{importedTransactions}</strong>
-                <small>{formatCurrency(importedAmount)} total</small>
-              </div>
-              <div className="report-insight">
-                <span>Manual rows</span>
-                <strong>{manualTransactions}</strong>
-                <small>{formatCurrency(manualAmount)} total</small>
-              </div>
-              <div className="report-insight">
-                <span>Tracked balance</span>
-                <strong>{formatCurrency(totalAccountBalance)}</strong>
-                <small>
-                  {isPro
-                    ? accountConcentrationShare === null
-                      ? "Balance coverage pending"
-                      : `${formatPercent(accountConcentrationShare * 100)} in the largest account`
-                    : "Balance summary only on Free"}
-                </small>
-              </div>
-              <div className="report-insight">
-                <span>Review load</span>
-                <strong>{currentReviewCount}</strong>
-                <small>{currentReviewCount} unresolved item{currentReviewCount === 1 ? "" : "s"}</small>
-              </div>
-            </div>
-
-            {isPro ? (
-              <div className="report-subsection">
-                <p className="eyebrow">Decision lens</p>
-                <div className="report-list">
-                  <div className="report-list__item">
-                    <div className="report-list__meta">
-                      <strong>{goalLabel ?? "No goal set yet"}</strong>
-                      <span>{goalSummary}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="report-subsection">
-                <p className="eyebrow">Pro preview</p>
-                <div className="empty-state">
-                  Pro adds the goal lens so Reports can explain whether cash flow and spending are helping your target.
-                </div>
-              </div>
-            )}
-
-            {isPro ? (
-              <div className="report-subsection">
-                <p className="eyebrow">Account health</p>
-                <div className="report-list">
-                  {workspaceAccountSummaries.length > 0 ? (
-                    workspaceAccountSummaries.map((account) => (
-                      <div key={account.id} className="report-list__item">
-                        <div className="report-list__meta">
-                          <strong>{account.name}</strong>
-                          <span>
-                            {account.balance === null ? "No balance recorded" : `${formatCurrency(Number(account.balance))} · ${account.type}`}
-                          </span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="empty-state">No account balances available yet. Add account snapshots so Clover can show the live balance picture.</div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <div className="report-subsection">
-                <p className="eyebrow">Pro preview</p>
-                <div className="empty-state">
-                  Pro adds account concentration and account-level health detail so you can see which balances are carrying the most weight.
-                </div>
-              </div>
-            )}
-          </article>
-        </section>
-
         {!isPro ? (
-          <section className="reports-plan-split glass">
-            <div className="reports-plan-split__intro">
-              <p className="eyebrow">Plan split</p>
-              <h3>Keep the essentials on Free. Add the explanation layer on Pro.</h3>
-              <p>
-                Free stays focused on the reports that help users scan, review, and clean up. Pro adds the analytical layer that
-                turns the same data into clear next steps.
-              </p>
-            </div>
-            <div className="reports-plan-split__grid">
-              <article className="reports-plan-card reports-plan-card--active">
-                <div className="reports-plan-card__head">
-                  <p className="eyebrow">Free plan</p>
-                  <h4>Reports users can scan at a glance.</h4>
-                  <p>Operational reporting for cash flow, spending, cleanup, and recurring costs.</p>
-                </div>
-                <ul className="reports-plan-card__list">
-                  {freePlanReports.map((report) => (
-                    <li key={report}>{report}</li>
-                  ))}
-                </ul>
-              </article>
-
-              <article className="reports-plan-card reports-plan-card--pro">
-                <div className="reports-plan-card__head">
-                  <p className="eyebrow">Pro plan</p>
-                  <h4>Reports that explain what changed and what to do next.</h4>
-                  <p>Decision support for goal progress, account health, and the context behind spending shifts.</p>
-                </div>
-                <ul className="reports-plan-card__list">
-                  {proPlanReports.map((report) => (
-                    <li key={report}>{report}</li>
-                  ))}
-                </ul>
-              </article>
-            </div>
-            <div className="reports-plan-split__actions">
-              <Link className="button button-primary button-pill" href="/pricing">
-                Upgrade to Pro
-              </Link>
-              <Link className="button button-secondary button-pill" href="/settings">
-                Review billing
-              </Link>
-            </div>
-          </section>
+          <div className="reports-footer-upsell">
+            <p>
+              Want a little more context and room to explore? <Link href="/pricing">Upgrade to Pro</Link> to unlock more charts,
+              deeper comparisons, and extra analysis when you need it.
+            </p>
+          </div>
         ) : null}
+
       </>
     );
   } catch (error) {
-    console.error("Reports page failed to load", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorDigest =
       error && typeof error === "object" && "digest" in error && typeof (error as { digest?: unknown }).digest === "string"
         ? (error as { digest: string }).digest
         : "";
+
+    await recordAppError({
+      message: errorMessage,
+      name: error instanceof Error ? error.name : "Error",
+      stack: error instanceof Error ? error.stack ?? null : null,
+      source: "reports-page",
+      route: "/reports",
+      metadata: {
+        digest: errorDigest || null,
+      },
+    }).catch(() => null);
 
     return (
       <>
@@ -1863,7 +1662,7 @@ async function ReportsStream({
   }
 }
 
-export default async function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
+async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
@@ -1893,5 +1692,13 @@ export default async function ReportsPage({ searchParams }: { searchParams?: Pro
         <ReportsStream active="reports" searchParams={resolvedSearchParams} />
       </Suspense>
     </CloverShell>
+  );
+}
+
+export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
+  return (
+    <Suspense fallback={<CloverLoadingScreen label="reports" />}>
+      <ReportsPageStream searchParams={searchParams} />
+    </Suspense>
   );
 }

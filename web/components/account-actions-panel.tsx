@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useClerk } from "@clerk/nextjs";
 import { persistSelectedWorkspaceId } from "@/lib/workspace-selection";
+import { clearAllWorkspaceCaches } from "@/lib/workspace-cache";
 
 type AccountActionsPanelProps = {
   isGuest?: boolean;
@@ -73,6 +74,7 @@ export function AccountActionsPanel({ isGuest = false }: AccountActionsPanelProp
 
   const clearWorkspaceSelection = () => {
     persistSelectedWorkspaceId("");
+    clearAllWorkspaceCaches();
   };
 
   const handleSignOut = () => {

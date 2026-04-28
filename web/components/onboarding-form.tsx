@@ -236,24 +236,31 @@ export function OnboardingForm({
             ))}
           </div>
 
-          <div className="onboarding-actions">
-            <button
-              className="button button-primary"
-              type="button"
-              disabled={isPending || experience === null}
-              onClick={() => {
-                setStep("goals");
-                setMessage(selectedExperienceProfile.goalsSupport);
-              }}
-            >
-              Continue
-            </button>
+          <div className="onboarding-actions onboarding-actions--single">
+            <div className="onboarding-actions__group onboarding-actions__group--primary">
+              <button
+                className="button button-primary"
+                type="button"
+                disabled={isPending || experience === null}
+                onClick={() => {
+                  setStep("goals");
+                  setMessage(selectedExperienceProfile.goalsSupport);
+                }}
+              >
+                Continue
+              </button>
+            </div>
           </div>
         </>
       ) : step === "goals" ? (
         <>
-          <h3>Welcome to Clover</h3>
-          <p className="onboarding-card__copy">{selectedExperienceProfile.goalsLead}</p>
+          <h3>Start here</h3>
+          <p className="onboarding-card__copy">
+            {selectedExperienceProfile.goalsLead ?? "One goal at a time. Pick the one thing you want Clover to coach first."}
+          </p>
+          <p className="onboarding-card__copy onboarding-card__copy--subtle">
+            Start with one main goal. You can add the others later from the Goals page.
+          </p>
 
           <div className="onboarding-grid" role="list" aria-label="Financial goals">
             {GOALS.map((option) => (
@@ -307,41 +314,47 @@ export function OnboardingForm({
                   ? "We’ll use your first selected goal as the main target for now. You can add the others on the Goals page."
                   : "You can leave this blank and set it later on the Goals page."}
               </small>
-            </label>
+          </label>
           ) : null}
 
           <div className="onboarding-actions">
-            <button
-              className="button button-primary"
-              type="button"
-              disabled={isPending || goals.length === 0}
-              onClick={() => {
-                setStep("start");
-                setMessage(selectedExperienceProfile.actionStripCopy);
-              }}
-            >
-              Continue
-            </button>
-            <button className="button button-secondary" type="button" disabled={isPending} onClick={skipForNow}>
-              Skip for now
-            </button>
-            <button
-              className="button button-secondary"
-              type="button"
-              disabled={isPending}
-              onClick={() => {
-                setStep("experience");
-                setMessage(selectedExperienceDefinition.description);
-              }}
-            >
-              Back
-            </button>
+            <div className="onboarding-actions__group onboarding-actions__group--secondary">
+              <button
+                className="button button-secondary"
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  setStep("experience");
+                  setMessage(selectedExperienceDefinition.description);
+                }}
+              >
+                Back
+              </button>
+              <button className="button button-secondary" type="button" disabled={isPending} onClick={skipForNow}>
+                Skip for now
+              </button>
+            </div>
+            <div className="onboarding-actions__group onboarding-actions__group--primary">
+              <button
+                className="button button-primary"
+                type="button"
+                disabled={isPending || goals.length === 0}
+                onClick={() => {
+                  setStep("start");
+                  setMessage(selectedExperienceProfile.actionStripCopy);
+                }}
+              >
+                Continue
+              </button>
+            </div>
           </div>
         </>
       ) : (
         <>
           <h3>Choose your first move</h3>
-          <p className="onboarding-card__copy">{selectedExperienceProfile.actionStripCopy}</p>
+          <p className="onboarding-card__copy">
+            {selectedExperienceProfile.actionStripCopy ?? "One goal at a time. Start with the simplest move that feels useful."}
+          </p>
 
           <div className="onboarding-grid onboarding-grid--start" role="list" aria-label="Getting started options">
             {START_OPTIONS.map((option) => (
@@ -368,20 +381,23 @@ export function OnboardingForm({
           </div>
 
           <div className="onboarding-actions">
-            <button
-              className="button button-secondary"
-              type="button"
-              disabled={isPending}
-              onClick={() => {
-                setStep("goals");
-                setMessage(selectedExperienceProfile.goalsSupport);
-              }}
-            >
-              Back
-            </button>
-            <button className="button button-secondary" type="button" disabled={isPending} onClick={skipForNow}>
-              Skip for now
-            </button>
+            <div className="onboarding-actions__group onboarding-actions__group--secondary">
+              <button
+                className="button button-secondary"
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  setStep("goals");
+                  setMessage(selectedExperienceProfile.goalsSupport);
+                }}
+              >
+                Back
+              </button>
+              <button className="button button-secondary" type="button" disabled={isPending} onClick={skipForNow}>
+                Skip for now
+              </button>
+            </div>
+            <div className="onboarding-actions__group onboarding-actions__group--primary" aria-hidden="true" />
           </div>
         </>
       )}

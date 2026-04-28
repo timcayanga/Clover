@@ -13,19 +13,25 @@ import { flushSync } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
+import { AccountBrandMark } from "@/components/account-brand-mark";
+import { PlanLimitNudge } from "@/components/plan-limit-nudge";
+import { PlanTierBanner } from "@/components/plan-tier-banner";
 import {
   analyticsOnceKey,
   capturePostHogClientEvent,
   capturePostHogClientEventOnce,
 } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
+import { getAccountBrand } from "@/lib/account-brand";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
-import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
+import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import type { UserLimits } from "@/lib/user-limits";
+import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
@@ -49,12 +55,13 @@ type Account = {
 };
 
 const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account | null => {
-  if (!summary.accountId || !summary.accountName) {
+  const optimisticAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
+  if (!optimisticAccountId || !summary.accountName) {
     return null;
   }
 
   return {
-    id: summary.accountId,
+    id: optimisticAccountId,
     name: summary.accountName,
     institution: summary.institution,
     type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
@@ -110,6 +117,11 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
 
   return [...optimisticAccounts, ...mergedFetchedAccounts];
 };
+
+const accountMatchesTransaction = (transaction: Transaction, account: Account) =>
+  transaction.accountId === account.id ||
+  normalizeImportedAccountKey(transaction.accountName, account.institution) ===
+    normalizeImportedAccountKey(account.name, account.institution);
 
 type Category = {
   id: string;
@@ -297,11 +309,11 @@ const getCategoryIconSrc = (categoryName: string | null | undefined) => {
     case "education":
       return "/category-icons/education.svg";
     case "financial":
-      return "/category-icons/financial.svg";
+      return "/category-icons/financial.png";
     case "gifts & donations":
       return "/category-icons/gift.svg";
     case "business":
-      return "/category-icons/business.svg";
+      return "/category-icons/business.png";
     case "transfers":
       return "/category-icons/transfer.svg";
     case "other":
@@ -599,9 +611,8 @@ const createEmptyBulkEditForm = (): BulkEditForm => ({
 
 const normalizeFilterValue = (value: string) => value.trim().toLowerCase();
 
-const readSearchParamValues = (searchParams: ReturnType<typeof useSearchParams>, key: string) =>
-  searchParams
-    .getAll(key)
+const readSearchParamValues = (searchParams: { getAll: (key: string) => string[] } | null, key: string) =>
+  (searchParams?.getAll(key) ?? [])
     .flatMap((entry) => splitMerchantFilters(entry))
     .map((entry) => entry.trim())
     .filter(Boolean);
@@ -623,6 +634,18 @@ const splitMerchantFilters = (value: string) =>
     .map((entry) => entry.trim())
     .filter(Boolean);
 
+const getLocalStorage = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+};
+
 const getSessionStorage = () => {
   if (typeof window === "undefined") {
     return null;
@@ -636,43 +659,46 @@ const getSessionStorage = () => {
 };
 
 const readTransactionsWorkspaceCache = (): TransactionsWorkspaceCacheState | null => {
-  const storage = getSessionStorage();
-  if (!storage) {
-    return null;
-  }
-
-  const stored = storage.getItem(transactionsWorkspaceCacheKey);
-  if (!stored) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(stored) as Partial<TransactionsWorkspaceCacheState>;
-    if (!parsed || typeof parsed !== "object") {
+  const readFromStorage = (storage: Storage | null): TransactionsWorkspaceCacheState | null => {
+    if (!storage) {
       return null;
     }
 
-    const selectedWorkspaceId = typeof parsed.selectedWorkspaceId === "string" ? parsed.selectedWorkspaceId : "";
-    const snapshots = parsed.snapshots && typeof parsed.snapshots === "object" ? parsed.snapshots : {};
-    return {
-      selectedWorkspaceId,
-      snapshots: Object.fromEntries(
-        Object.entries(snapshots).filter(([, snapshot]) => {
-          return (
-            snapshot &&
-            typeof snapshot === "object" &&
-            typeof snapshot.workspaceId === "string" &&
-            Array.isArray(snapshot.accounts) &&
-            Array.isArray(snapshot.categories) &&
-            Array.isArray(snapshot.transactions) &&
-            Array.isArray(snapshot.imports)
-          );
-        })
-      ) as Record<string, TransactionsWorkspaceCacheSnapshot>,
-    };
-  } catch {
-    return null;
-  }
+    const stored = storage.getItem(transactionsWorkspaceCacheKey);
+    if (!stored) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(stored) as Partial<TransactionsWorkspaceCacheState>;
+      if (!parsed || typeof parsed !== "object") {
+        return null;
+      }
+
+      const selectedWorkspaceId = typeof parsed.selectedWorkspaceId === "string" ? parsed.selectedWorkspaceId : "";
+      const snapshots = parsed.snapshots && typeof parsed.snapshots === "object" ? parsed.snapshots : {};
+      return {
+        selectedWorkspaceId,
+        snapshots: Object.fromEntries(
+          Object.entries(snapshots).filter(([, snapshot]) => {
+            return (
+              snapshot &&
+              typeof snapshot === "object" &&
+              typeof snapshot.workspaceId === "string" &&
+              Array.isArray(snapshot.accounts) &&
+              Array.isArray(snapshot.categories) &&
+              Array.isArray(snapshot.transactions) &&
+              Array.isArray(snapshot.imports)
+            );
+          })
+        ) as Record<string, TransactionsWorkspaceCacheSnapshot>,
+      };
+    } catch {
+      return null;
+    }
+  };
+
+  return readFromStorage(getLocalStorage()) ?? readFromStorage(getSessionStorage());
 };
 
 const getCachedTransactionsWorkspace = (workspaceId: string): TransactionsWorkspaceCacheSnapshot | null => {
@@ -688,8 +714,9 @@ const persistTransactionsWorkspaceCache = (
   workspaceId: string,
   snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">
 ) => {
-  const storage = getSessionStorage();
-  if (!storage || !workspaceId) {
+  const localStorageRef = getLocalStorage();
+  const sessionStorageRef = getSessionStorage();
+  if ((!localStorageRef && !sessionStorageRef) || !workspaceId) {
     return;
   }
 
@@ -708,7 +735,9 @@ const persistTransactionsWorkspaceCache = (
     },
   };
 
-  storage.setItem(transactionsWorkspaceCacheKey, JSON.stringify(nextState));
+  const serialized = JSON.stringify(nextState);
+  localStorageRef?.setItem(transactionsWorkspaceCacheKey, serialized);
+  sessionStorageRef?.setItem(transactionsWorkspaceCacheKey, serialized);
 };
 
 const looksLikeJsonBlob = (value: string) => {
@@ -884,7 +913,19 @@ const toolbarAddStyle = {
 function ActionIcon({
   name,
 }: {
-  name: "plus" | "chevron-down" | "chevron-right" | "undo" | "redo" | "search" | "calendar" | "filters" | "summary" | "save" | "download";
+  name:
+    | "plus"
+    | "chevron-down"
+    | "chevron-right"
+    | "undo"
+    | "redo"
+    | "search"
+    | "calendar"
+    | "filters"
+    | "summary"
+    | "save"
+    | "download"
+    | "more";
 }) {
   const common = {
     width: 14,
@@ -979,6 +1020,14 @@ function ActionIcon({
           <path d="M12 4v10" />
           <path d="m8 10 4 4 4-4" />
           <path d="M5 19h14" />
+        </svg>
+      );
+    case "more":
+      return (
+        <svg {...common}>
+          <circle cx="6" cy="12" r="1.4" />
+          <circle cx="12" cy="12" r="1.4" />
+          <circle cx="18" cy="12" r="1.4" />
         </svg>
       );
     default:
@@ -1100,10 +1149,12 @@ export default function TransactionsPage() {
 
 function TransactionsPageContent() {
   const searchParams = useSearchParams();
+  const urlSearchParams = useMemo(() => searchParams ?? new URLSearchParams(), [searchParams]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const manualNameInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const initialWorkspaceId = readSelectedWorkspaceId();
   const initialCachedWorkspace = getCachedTransactionsWorkspace(initialWorkspaceId);
@@ -1152,9 +1203,9 @@ function TransactionsPageContent() {
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
-  const [manualAdvancedOpen, setManualAdvancedOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
   const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
@@ -1170,46 +1221,89 @@ function TransactionsPageContent() {
   const [bulkEditForm, setBulkEditForm] = useState<BulkEditForm>(createEmptyBulkEditForm());
   const [manualForm, setManualForm] = useState<ManualTransactionForm>(createEmptyManualForm());
   const [isSaving, setIsSaving] = useState(false);
-  const [isWorkspacesLoaded, setIsWorkspacesLoaded] = useState(false);
-  const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(true);
-  const [hasInitialTransactionsLoaded, setHasInitialTransactionsLoaded] = useState(Boolean(initialCachedWorkspace));
+  const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
+  const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
+  const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
+  const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
+  const [hasInitialTransactionsLoaded, setHasInitialTransactionsLoaded] = useState(false);
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
+  const [manualAccountMenuOpen, setManualAccountMenuOpen] = useState(false);
+  const [manualCategoryMenuOpen, setManualCategoryMenuOpen] = useState(false);
   const transactionRowRefs = useRef(new Map<string, HTMLElement>());
   const transactionsLoadRequestRef = useRef(0);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
+  const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
   const reviewTransactionParamRef = useRef<string | null>(null);
   const drilldownParamRef = useRef<string | null>(null);
   const [isCompactViewport, setIsCompactViewport] = useState(false);
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
+  const workspaceTransactionCount = transactions.length;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
   const accountInstitutionById = useMemo(
     () => new Map(accounts.map((account) => [account.id, account.institution ?? null] as const)),
     [accounts]
   );
   const accountNameById = useMemo(() => new Map(accounts.map((account) => [account.id, account.name] as const)), [accounts]);
+  const accountKeyById = useMemo(
+    () => new Map(accounts.map((account) => [account.id, normalizeImportedAccountKey(account.name, account.institution)] as const)),
+    [accounts]
+  );
+  const manualSelectedAccount = useMemo(
+    () => accounts.find((account) => account.id === manualForm.accountId) ?? null,
+    [accounts, manualForm.accountId]
+  );
+  const manualSelectedAccountBrand = useMemo(
+    () =>
+      manualSelectedAccount
+        ? getAccountBrand({
+            name: manualSelectedAccount.name,
+            institution: manualSelectedAccount.institution,
+            type: manualSelectedAccount.type,
+          })
+        : null,
+    [manualSelectedAccount]
+  );
+  const manualSelectedCategoryId = manualForm.categoryId || otherCategoryId;
+  const manualSelectedCategory = useMemo(
+    () => categories.find((category) => category.id === manualSelectedCategoryId) ?? null,
+    [categories, manualSelectedCategoryId]
+  );
+  const expandedAccountFilters = useMemo(() => {
+    if (accountFilters.length === 0) {
+      return accountFilters;
+    }
+
+    const selectedKeys = new Set(
+      accountFilters.map((accountId) => accountKeyById.get(accountId)).filter((value): value is string => Boolean(value))
+    );
+
+    if (selectedKeys.size === 0) {
+      return accountFilters;
+    }
+
+    return accounts
+      .filter((account) => selectedKeys.has(normalizeImportedAccountKey(account.name, account.institution)))
+      .map((account) => account.id);
+  }, [accountFilters, accountKeyById, accounts]);
   const categoryNameById = useMemo(
     () => new Map(categories.map((category) => [category.id, category.name] as const)),
     [categories]
   );
 
   const loadWorkspaces = async () => {
-    try {
-      const response = await fetch("/api/workspaces");
-      if (!response.ok) return;
-      const data = await response.json();
-      const items = Array.isArray(data.workspaces) ? data.workspaces : [];
-      setWorkspaces(items);
-      setSelectedWorkspaceId((current) => {
-        return chooseWorkspaceId(items, current);
-      });
-    } finally {
-      setIsWorkspacesLoaded(true);
-    }
+    const response = await fetch("/api/workspaces");
+    if (!response.ok) return;
+    const data = await response.json();
+    const items = Array.isArray(data.workspaces) ? data.workspaces : [];
+    setWorkspaces(items);
+    setSelectedWorkspaceId((current) => {
+      return chooseWorkspaceId(items, current);
+    });
   };
 
   const loadWorkspaceMetadata = async (workspaceId: string, options?: { skipImports?: boolean; background?: boolean }) => {
@@ -1251,7 +1345,13 @@ function TransactionsPageContent() {
 
   const loadTransactionsPage = async (
     workspaceId: string,
-    options?: { background?: boolean; includeAll?: boolean; pageOverride?: number; pageSizeOverride?: number }
+    options?: {
+      background?: boolean;
+      includeAll?: boolean;
+      pageOverride?: number;
+      pageSizeOverride?: number;
+      summaryMode?: "light" | "full";
+    }
   ) => {
     const requestId = ++transactionsLoadRequestRef.current;
 
@@ -1281,13 +1381,13 @@ function TransactionsPageContent() {
 
     const searchParams = buildTransactionQuerySearchParams(
       workspaceId,
-      {
-        query,
-        categoryIds: categoryFilters,
-        accountIds: accountFilters,
-        typeFilters,
-        merchantFilters,
-        dateFilterMode,
+        {
+          query,
+          categoryIds: categoryFilters,
+          accountIds: expandedAccountFilters,
+          typeFilters,
+          merchantFilters,
+          dateFilterMode,
         dateFilterAnchor,
         customStart,
         customEnd,
@@ -1297,9 +1397,10 @@ function TransactionsPageContent() {
         pageSize: options?.includeAll ? "all" : options?.pageSizeOverride ?? transactionsPageSize,
       }
     );
+    searchParams.set("summaryMode", options?.summaryMode ?? (options?.background ? "full" : "light"));
 
     try {
-      const response = await fetch(`/api/transactions?${searchParams.toString()}`);
+      const response = await fetch(`/api/transactions?${searchParams?.toString() ?? ""}`);
       if (!response.ok) {
         throw new Error("Unable to load transactions.");
       }
@@ -1364,6 +1465,16 @@ function TransactionsPageContent() {
         setIsWorkspaceDataReady(true);
         setHasInitialTransactionsLoaded(true);
       }
+
+      if (!options?.background && (options?.summaryMode ?? "light") === "light" && Number(payload.totalCount ?? 0) > 0) {
+        void loadTransactionsPage(workspaceId, {
+          background: true,
+          includeAll: options?.includeAll,
+          pageOverride: options?.pageOverride ?? transactionsPage,
+          pageSizeOverride: options?.pageSizeOverride ?? transactionsPageSize,
+          summaryMode: "full",
+        });
+      }
     } catch {
       if (requestId !== transactionsLoadRequestRef.current) {
         return;
@@ -1377,8 +1488,75 @@ function TransactionsPageContent() {
     }
   };
 
+  const hydrateWorkspaceFromCache = (workspaceId: string) => {
+    if (!workspaceId) {
+      return false;
+    }
+
+    const cachedSnapshot = getCachedTransactionsWorkspace(workspaceId);
+    if (!cachedSnapshot) {
+      return false;
+    }
+
+    setAccounts(cachedSnapshot.accounts);
+    setCategories(cachedSnapshot.categories);
+    setTransactions(cachedSnapshot.transactions);
+    setImports(cachedSnapshot.imports);
+    setTransactionsSummary(
+      cachedSnapshot.summary ?? {
+        totalCount: cachedSnapshot.totalCount ?? cachedSnapshot.transactions.length,
+        income: 0,
+        spending: 0,
+        transfers: 0,
+        review: 0,
+        topCategory: null,
+        topAccount: null,
+        firstTransactionDate: null,
+        lastTransactionDate: null,
+        firstReviewTransaction: null,
+        firstReviewTransactionIndex: null,
+      }
+    );
+    setIsWorkspaceDataReady(true);
+    setHasInitialTransactionsLoaded(true);
+    return true;
+  };
+
   useEffect(() => {
     void loadWorkspaces();
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPlan = async () => {
+      const response = await fetch("/api/me");
+      if (!response.ok || cancelled) {
+        return;
+      }
+
+      const payload = await response.json();
+      const nextPlanTier = payload?.user?.planTier === "pro" ? "pro" : "free";
+      const nextLimits = payload?.user
+        ? {
+            accountLimit: Number(payload.user.accountLimit ?? 5),
+            monthlyUploadLimit: Number(payload.user.monthlyUploadLimit ?? 10),
+            transactionLimit:
+              payload.user.transactionLimit === null || payload.user.transactionLimit === undefined
+                ? null
+                : Number(payload.user.transactionLimit),
+          }
+        : null;
+
+      setPlanTier(nextPlanTier);
+      setPlanLimits(nextLimits);
+    };
+
+    void loadPlan();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -1415,27 +1593,7 @@ function TransactionsPageContent() {
       return;
     }
 
-    const cachedSnapshot = getCachedTransactionsWorkspace(selectedWorkspaceId);
-    if (cachedSnapshot) {
-      setAccounts(cachedSnapshot.accounts);
-      setCategories(cachedSnapshot.categories);
-      setTransactions(cachedSnapshot.transactions);
-      setImports(cachedSnapshot.imports);
-      setTransactionsSummary(
-        cachedSnapshot.summary ?? {
-          totalCount: cachedSnapshot.totalCount ?? cachedSnapshot.transactions.length,
-          income: 0,
-          spending: 0,
-          transfers: 0,
-          review: 0,
-          topCategory: null,
-          topAccount: null,
-          firstTransactionDate: null,
-          lastTransactionDate: null,
-          firstReviewTransaction: null,
-          firstReviewTransactionIndex: null,
-        }
-      );
+    if (hydrateWorkspaceFromCache(selectedWorkspaceId)) {
       setIsWorkspaceDataReady(true);
       setHasInitialTransactionsLoaded(true);
       void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
@@ -1450,6 +1608,39 @@ function TransactionsPageContent() {
     setHasInitialTransactionsLoaded(false);
     void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true });
   }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    if (!selectedWorkspaceId || typeof window === "undefined") {
+      return;
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.storageArea !== window.localStorage) {
+        return;
+      }
+
+      if (
+        event.key !== transactionsWorkspaceCacheKey &&
+        event.key !== selectedWorkspaceKey
+      ) {
+        return;
+      }
+
+      const activeWorkspaceId = readSelectedWorkspaceId() || selectedWorkspaceId;
+      if (!activeWorkspaceId || activeWorkspaceId !== selectedWorkspaceId) {
+        return;
+      }
+
+      if (!hydrateWorkspaceFromCache(activeWorkspaceId)) {
+        setIsWorkspaceDataReady(false);
+        void loadWorkspaceMetadata(activeWorkspaceId, { skipImports: true, background: true });
+        void loadTransactionsPage(activeWorkspaceId, { background: true });
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [loadTransactionsPage, loadWorkspaceMetadata, selectedWorkspaceId]);
 
   useEffect(() => {
     if (!selectedWorkspaceId) {
@@ -1473,7 +1664,7 @@ function TransactionsPageContent() {
   ]);
 
   useEffect(() => {
-    if (!addMenuOpen && !downloadMenuOpen) {
+    if (!addMenuOpen && !downloadMenuOpen && !moreMenuOpen) {
       return;
     }
 
@@ -1483,18 +1674,24 @@ function TransactionsPageContent() {
         return;
       }
 
-      if (addMenuRef.current?.contains(target) || downloadMenuRef.current?.contains(target)) {
+      if (
+        addMenuRef.current?.contains(target) ||
+        downloadMenuRef.current?.contains(target) ||
+        moreMenuRef.current?.contains(target)
+      ) {
         return;
       }
 
       setAddMenuOpen(false);
       setDownloadMenuOpen(false);
+      setMoreMenuOpen(false);
     };
 
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         setAddMenuOpen(false);
         setDownloadMenuOpen(false);
+        setMoreMenuOpen(false);
         setImportOpen(false);
       }
     };
@@ -1505,7 +1702,7 @@ function TransactionsPageContent() {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [addMenuOpen, downloadMenuOpen]);
+  }, [addMenuOpen, downloadMenuOpen, moreMenuOpen]);
 
   useEffect(() => {
     if (filterOpen) {
@@ -1516,12 +1713,13 @@ function TransactionsPageContent() {
   useEffect(() => {
     if (manualOpen) {
       manualNameInputRef.current?.focus();
-      setManualAdvancedOpen(false);
+      setManualAccountMenuOpen(false);
+      setManualCategoryMenuOpen(false);
     }
   }, [manualOpen]);
 
   useEffect(() => {
-    const reviewTransactionId = searchParams.get("review");
+    const reviewTransactionId = urlSearchParams.get("review");
     if (!reviewTransactionId || !isWorkspaceDataReady || !transactions.length) {
       return;
     }
@@ -1540,21 +1738,30 @@ function TransactionsPageContent() {
     const nextUrl = new URL(window.location.href);
     nextUrl.searchParams.delete("review");
     window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
-  }, [isWorkspaceDataReady, searchParams, transactions]);
+  }, [isWorkspaceDataReady, searchParams, transactions, urlSearchParams]);
 
   const closeToolbarMenus = () => {
     setAddMenuOpen(false);
     setDownloadMenuOpen(false);
+    setMoreMenuOpen(false);
   };
 
   const openAddMenu = () => {
     setDownloadMenuOpen(false);
+    setMoreMenuOpen(false);
     setAddMenuOpen((current) => !current);
   };
 
   const openDownloadMenu = () => {
     setAddMenuOpen(false);
+    setMoreMenuOpen(false);
     setDownloadMenuOpen((current) => !current);
+  };
+
+  const openMoreMenu = () => {
+    setAddMenuOpen(false);
+    setDownloadMenuOpen(false);
+    setMoreMenuOpen((current) => !current);
   };
 
   const openImportFiles = () => {
@@ -1564,18 +1771,18 @@ function TransactionsPageContent() {
   };
 
   useEffect(() => {
-    if (searchParams.get("import") === "1") {
+    if (urlSearchParams.get("import") === "1") {
       setImportOpen(true);
       window.history.replaceState({}, "", "/transactions");
     }
-  }, [searchParams]);
+  }, [urlSearchParams]);
 
   useEffect(() => {
-    if (searchParams.get("manual") === "1") {
+    if (urlSearchParams.get("manual") === "1") {
       setManualOpen(true);
       window.history.replaceState({}, "", "/transactions");
     }
-  }, [searchParams]);
+  }, [urlSearchParams]);
 
   useEffect(() => {
     if (!isWorkspaceDataReady) {
@@ -1583,22 +1790,22 @@ function TransactionsPageContent() {
     }
 
     const drilldownSignature = [
-      searchParams.get("q") ?? "",
-      searchParams.get("month") ?? "",
-      searchParams.get("merchant") ?? "",
-      searchParams.get("category") ?? "",
-      searchParams.get("account") ?? "",
+      urlSearchParams.get("q") ?? "",
+      urlSearchParams.get("month") ?? "",
+      urlSearchParams.get("merchant") ?? "",
+      urlSearchParams.get("category") ?? "",
+      urlSearchParams.get("account") ?? "",
     ].join("|");
 
     if (drilldownParamRef.current === drilldownSignature) {
       return;
     }
 
-    const q = searchParams.get("q") ?? "";
-    const month = searchParams.get("month") ?? "";
-    const merchants = readSearchParamValues(searchParams, "merchant");
-    const categoriesFromUrl = readSearchParamValues(searchParams, "category");
-    const accountsFromUrl = readSearchParamValues(searchParams, "account");
+    const q = urlSearchParams.get("q") ?? "";
+    const month = urlSearchParams.get("month") ?? "";
+    const merchants = readSearchParamValues(urlSearchParams, "merchant");
+    const categoriesFromUrl = readSearchParamValues(urlSearchParams, "category");
+    const accountsFromUrl = readSearchParamValues(urlSearchParams, "account");
 
     const hasDrilldownParams = Boolean(q || month || merchants.length > 0 || categoriesFromUrl.length > 0 || accountsFromUrl.length > 0);
 
@@ -1741,12 +1948,12 @@ function TransactionsPageContent() {
     }
 
     count += categoryFilters.length;
-    count += accountFilters.length;
+    count += expandedAccountFilters.length;
     count += typeFilters.length;
     count += merchantFilters.length;
 
     return count;
-  }, [accountFilters.length, categoryFilters.length, dateFilterMode, merchantFilters.length, query, typeFilters.length]);
+  }, [accountFilters.length, categoryFilters.length, dateFilterMode, expandedAccountFilters.length, merchantFilters.length, query, typeFilters.length]);
 
   const activeFilterChips = useMemo(
     () => [
@@ -2107,10 +2314,21 @@ function TransactionsPageContent() {
       return;
     }
 
+    if (planLimits?.transactionLimit != null && workspaceTransactionCount >= planLimits.transactionLimit) {
+      setPlanLimitNudge({
+        planTier,
+        limitType: "transaction_limit",
+        limitValue: planLimits.transactionLimit,
+      });
+      setMessage("You’ve reached the current transaction limit for this plan.");
+      return;
+    }
+
     try {
       const accountId = await ensureDefaultAccount(selectedWorkspaceId);
       setManualForm(createEmptyManualForm(accountId, getOtherCategoryId(categories)));
-      setManualAdvancedOpen(false);
+      setManualAccountMenuOpen(false);
+      setManualCategoryMenuOpen(false);
       setManualOpen(true);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to prepare transaction form.");
@@ -2261,7 +2479,12 @@ function TransactionsPageContent() {
       });
 
       if (!response.ok) {
-        throw new Error("Unable to create transaction.");
+        const payload = await response.json().catch(() => null);
+        const limitPayload = parsePlanLimitPayload(payload);
+        if (limitPayload) {
+          setPlanLimitNudge(limitPayload);
+        }
+        throw new Error(payload?.error ?? "Unable to create transaction.");
       }
 
       const payload = await response.json();
@@ -2973,7 +3196,7 @@ function TransactionsPageContent() {
       }
     );
 
-    const response = await fetch(`/api/transactions?${searchParams.toString()}`);
+    const response = await fetch(`/api/transactions?${searchParams?.toString() ?? ""}`);
     if (!response.ok) {
       throw new Error("Unable to export transactions.");
     }
@@ -3211,8 +3434,8 @@ function TransactionsPageContent() {
   const warningTransactionCount = transactionsSummary.review;
   const hasReviewItems = warningTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
-  const isTableLoading = !selectedWorkspaceId ? !isWorkspacesLoaded : !isWorkspaceDataReady;
-  const shouldShowInitialLoadingScreen = isTableLoading && !hasInitialTransactionsLoaded;
+  const isTableLoading = false;
+  const hasActiveFilters = activeFilterChips.length > 0;
 
   useEffect(() => {
     if (!selectedWorkspaceId || !isWorkspaceDataReady) {
@@ -3232,22 +3455,12 @@ function TransactionsPageContent() {
   }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary]);
 
   useEffect(() => {
-    if (!importOpen || !pendingImportSummary || !isWorkspaceDataReady) {
-      return;
-    }
-
-    if (pendingImportSummary.optimistic) {
+    if (!importOpen || !pendingImportSummary || pendingImportSummary.optimistic) {
       return;
     }
 
     const targetAccountId = pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
     if (!targetAccountId) {
-      return;
-    }
-
-    const visibleTransactionCount = transactions.filter((transaction) => transaction.accountId === targetAccountId).length;
-    const importedRows = pendingImportSummary.rowsImported ?? 0;
-    if (importedRows > 0 && visibleTransactionCount < importedRows) {
       return;
     }
 
@@ -3259,7 +3472,7 @@ function TransactionsPageContent() {
     return () => {
       window.clearTimeout(timeout);
     };
-  }, [importOpen, isWorkspaceDataReady, pendingImportSummary, transactions]);
+  }, [importOpen, pendingImportSummary, accounts, transactions]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(max-width: 720px)");
@@ -3273,12 +3486,22 @@ function TransactionsPageContent() {
     };
   }, []);
 
-  if (shouldShowInitialLoadingScreen) {
+  if (!hasInitialTransactionsLoaded) {
     return <CloverLoadingScreen label="transactions" />;
   }
 
   return (
     <CloverShell active="transactions" title="Transactions" showTopbar={false}>
+      <PlanTierBanner
+        planTier={planTier}
+        label="Manual tracking and limits"
+        limits={planLimits}
+        ctaHref={planTier === "free" ? "/pricing" : "/settings#billing"}
+        ctaLabel={planTier === "free" ? "See Pro pricing" : "Manage billing"}
+        secondaryHref="/accounts"
+        secondaryLabel="Open accounts"
+        className="transactions-plan-banner"
+      />
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`}>
         <div className="glass table-panel table-panel--full transactions-table-panel transactions-main-panel">
           <div className="transactions-topbar">
@@ -3327,19 +3550,86 @@ function TransactionsPageContent() {
                   <span>Filters</span>
                   {activeFilterCount > 0 ? <span className="transactions-filter-count-badge">{activeFilterCount}</span> : null}
                 </button>
-                <button
-                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-summary-toggle-button"
-                  style={toolbarChipStyle}
-                  type="button"
-                  aria-pressed={summaryOpen}
-                  onClick={() => setSummaryOpen((current) => !current)}
-                  title="Summary"
-                  aria-label="Summary"
-                >
-                  <span className="button-icon" aria-hidden="true">
-                    <ActionIcon name="summary" />
-                  </span>
-                </button>
+                <div className="transactions-more-menu" id="transactions-more-menu" ref={moreMenuRef}>
+                  <button
+                    className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-more-menu__toggle"
+                    style={toolbarChipStyle}
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={moreMenuOpen}
+                    onClick={openMoreMenu}
+                    title="More actions"
+                    aria-label="More actions"
+                  >
+                    <span className="button-icon" aria-hidden="true">
+                      <ActionIcon name="more" />
+                    </span>
+                  </button>
+                  <div className="transactions-more-menu__panel" hidden={!moreMenuOpen}>
+                    <button
+                      className="transactions-more-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        setSummaryOpen((current) => !current);
+                      }}
+                    >
+                      {summaryOpen ? "Hide summary" : "Show summary"}
+                    </button>
+                    <button
+                      className="transactions-more-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        void undoLastChange();
+                      }}
+                      disabled={!undoStack.length || isSaving || isApplyingHistory}
+                    >
+                      Undo
+                    </button>
+                    <button
+                      className="transactions-more-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        void redoLastChange();
+                      }}
+                      disabled={!redoStack.length || isSaving || isApplyingHistory}
+                    >
+                      Redo
+                    </button>
+                    <button
+                      className="transactions-more-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        saveView();
+                      }}
+                    >
+                      Save view
+                    </button>
+                    <button
+                      className="transactions-more-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        downloadCsv();
+                      }}
+                    >
+                      Export CSV
+                    </button>
+                    <button
+                      className="transactions-more-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        downloadPdf();
+                      }}
+                    >
+                      Export PDF
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -3509,7 +3799,12 @@ function TransactionsPageContent() {
                   </div>
                 </>
               ) : (
-                <span className="transactions-context-strip__label">Filters</span>
+                <div className="transactions-context-strip__intro">
+                  <span className="transactions-context-strip__label">Start here</span>
+                  <p className="transactions-context-strip__note">
+                    Add a transaction or import files, then use Filters to narrow the list.
+                  </p>
+                </div>
               )}
             </div>
           </div>
@@ -4611,8 +4906,8 @@ function TransactionsPageContent() {
             </div>
 
             <form onSubmit={saveManualTransaction}>
-              <div className="form-grid transactions-manual-grid">
-                <label>
+              <div className="manual-form-layout">
+                <label className="manual-form-layout__full">
                   Name
                   <input
                     ref={manualNameInputRef}
@@ -4622,7 +4917,8 @@ function TransactionsPageContent() {
                     required
                   />
                 </label>
-                <div className="transactions-manual-fast-row">
+
+                <div className="manual-form-layout__triple">
                   <label>
                     Date
                     <input
@@ -4660,57 +4956,131 @@ function TransactionsPageContent() {
                   </label>
                 </div>
 
-                <div className="transactions-manual-advanced-toggle">
-                  <button
-                    className="transactions-manual-advanced-toggle__button"
-                    type="button"
-                    onClick={() => setManualAdvancedOpen((current) => !current)}
-                    aria-expanded={manualAdvancedOpen}
-                  >
-                    {manualAdvancedOpen ? "Hide more details" : "More details"}
-                    <span aria-hidden="true">{manualAdvancedOpen ? "−" : "+"}</span>
-                  </button>
+                <div className="manual-form-layout__double">
+                  <div className="transactions-manual-picker">
+                    <span className="transactions-manual-picker__label">Account</span>
+                    <div className="transactions-manual-picker__control">
+                      <button
+                        type="button"
+                        className="transactions-manual-picker__button"
+                        aria-expanded={manualAccountMenuOpen}
+                        onClick={() => {
+                          setManualCategoryMenuOpen(false);
+                          setManualAccountMenuOpen((current) => !current);
+                        }}
+                      >
+                        {manualSelectedAccountBrand ? (
+                          <span className="transactions-manual-picker__brand">
+                            <AccountBrandMark
+                              accountBrand={manualSelectedAccountBrand}
+                              label={manualSelectedAccount?.name ?? "Selected account"}
+                            />
+                          </span>
+                        ) : (
+                          <span className="transactions-manual-picker__fallback">?</span>
+                        )}
+                        <span className="transactions-manual-picker__text">{manualSelectedAccount?.name ?? "Choose account"}</span>
+                        <span className="transactions-manual-picker__chevron" aria-hidden="true">
+                          <ActionIcon name="chevron-down" />
+                        </span>
+                      </button>
+                      {manualAccountMenuOpen ? (
+                        <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose account">
+                          {accounts.map((account) => {
+                            const accountBrand = getAccountBrand({
+                              name: account.name,
+                              institution: account.institution,
+                              type: account.type,
+                            });
+
+                            return (
+                              <button
+                                key={account.id}
+                                type="button"
+                                className={`transactions-manual-picker__option ${
+                                  account.id === manualForm.accountId ? "is-selected" : ""
+                                }`}
+                                onClick={() => {
+                                  setManualForm((current) => ({ ...current, accountId: account.id }));
+                                  setManualAccountMenuOpen(false);
+                                }}
+                              >
+                                <span className="transactions-manual-picker__brand">
+                                  <AccountBrandMark accountBrand={accountBrand} label={account.name} />
+                                </span>
+                                <span className="transactions-manual-picker__option-text">
+                                  <strong>{account.name}</strong>
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="transactions-manual-picker">
+                    <span className="transactions-manual-picker__label">Category</span>
+                    <div className="transactions-manual-picker__control">
+                      <button
+                        type="button"
+                        className="transactions-manual-picker__button"
+                        aria-expanded={manualCategoryMenuOpen}
+                        onClick={() => {
+                          setManualAccountMenuOpen(false);
+                          setManualCategoryMenuOpen((current) => !current);
+                        }}
+                      >
+                        <span
+                          className="transaction-category-icon transactions-manual-picker__category-icon"
+                          style={getCategoryIconTone(manualSelectedCategory?.name ?? "Other")}
+                        >
+                          <img src={getCategoryIconSrc(manualSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
+                        </span>
+                        <span className="transactions-manual-picker__text">{manualSelectedCategory?.name ?? "Other"}</span>
+                        <span className="transactions-manual-picker__chevron" aria-hidden="true">
+                          <ActionIcon name="chevron-down" />
+                        </span>
+                      </button>
+                      {manualCategoryMenuOpen ? (
+                        <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose category">
+                          {categories.map((category) => (
+                            <button
+                              key={category.id}
+                              type="button"
+                              className={`transactions-manual-picker__option ${
+                                category.id === manualSelectedCategoryId ? "is-selected" : ""
+                              }`}
+                              onClick={() => {
+                                setManualForm((current) => ({ ...current, categoryId: category.id }));
+                                setManualCategoryMenuOpen(false);
+                              }}
+                              >
+                              <span
+                                className="transaction-category-icon transactions-manual-picker__category-icon"
+                                style={getCategoryIconTone(category.name)}
+                              >
+                                <img src={getCategoryIconSrc(category.name)} alt="" aria-hidden="true" />
+                              </span>
+                              <span className="transactions-manual-picker__option-text">
+                                <strong>{category.name}</strong>
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
 
-                {manualAdvancedOpen ? (
-                  <div className="form-grid transactions-manual-advanced">
-                    <label>
-                      Account
-                      <select
-                        value={manualForm.accountId}
-                        onChange={(event) => setManualForm((current) => ({ ...current, accountId: event.target.value }))}
-                      >
-                        <option value="">Choose account</option>
-                        {accounts.map((account) => (
-                          <option key={account.id} value={account.id}>
-                            {account.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label>
-                      Category
-                      <select
-                        value={manualForm.categoryId}
-                        onChange={(event) => setManualForm((current) => ({ ...current, categoryId: event.target.value }))}
-                      >
-                        {categories.map((category) => (
-                          <option key={category.id} value={category.id}>
-                            {category.name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="span-2">
-                      Notes
-                      <textarea
-                        value={manualForm.description}
-                        onChange={(event) => setManualForm((current) => ({ ...current, description: event.target.value }))}
-                        placeholder="Optional note or review context"
-                      />
-                    </label>
-                  </div>
-                ) : null}
+                <label className="manual-form-layout__full">
+                  Notes
+                  <textarea
+                    value={manualForm.description}
+                    onChange={(event) => setManualForm((current) => ({ ...current, description: event.target.value }))}
+                    placeholder="Optional note or review context"
+                  />
+                </label>
               </div>
 
               <div className="form-actions">
@@ -5131,11 +5501,19 @@ function TransactionsPageContent() {
             return;
           }
 
-          void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
-          void loadTransactionsPage(selectedWorkspaceId, { background: true });
+          if (!summary.optimistic) {
+            setImportRefreshInFlight(true);
+            try {
+              await loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
+              await loadTransactionsPage(selectedWorkspaceId, { background: true });
+            } finally {
+              setImportRefreshInFlight(false);
+            }
+          }
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />
+      <PlanLimitNudge payload={planLimitNudge} onDismiss={() => setPlanLimitNudge(null)} />
     </CloverShell>
   );
 }

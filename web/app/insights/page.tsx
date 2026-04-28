@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+import { Suspense } from "react";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
@@ -8,7 +10,13 @@ import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
-import { getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
+import { listImportFilesCompat } from "@/lib/data-engine";
+import {
+  getInvestmentSubtypeLabel,
+  isFixedIncomeInvestmentSubtype,
+  isMarketInvestmentSubtype,
+} from "@/lib/investments";
+import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +65,20 @@ type MonthBucket = {
   net: number;
 };
 
+type WorkspaceAccount = {
+  name: string;
+  type: string;
+  balance: number | null;
+  investmentSubtype: string | null;
+  investmentSymbol: string | null;
+  investmentCostBasis: number | null;
+  investmentPrincipal: number | null;
+  investmentStartDate: Date | null;
+  investmentMaturityDate: Date | null;
+  investmentInterestRate: number | null;
+  investmentMaturityValue: number | null;
+};
+
 const goalLabels: Record<string, string> = {
   save_more: "Save more",
   pay_down_debt: "Pay down debt",
@@ -90,6 +112,23 @@ const getCategoryGlyph = (categoryName: string) => {
   return "•";
 };
 
+const getInvestmentGlyph = (subtype: string | null | undefined) => {
+  const normalized = subtype?.trim().toLowerCase() ?? "";
+  if (normalized === "crypto") return "₿";
+  if (normalized === "bond" || normalized === "time_deposit") return "🏦";
+  if (normalized === "reit") return "🏢";
+  if (
+    normalized === "stock" ||
+    normalized === "etf" ||
+    normalized === "mutual_fund" ||
+    normalized === "money_market_fund" ||
+    normalized === "uitf"
+  ) {
+    return "↗";
+  }
+  return "•";
+};
+
 const getMonthBuckets = (anchor: Date) => {
   const buckets: MonthBucket[] = [];
   for (let offset = 5; offset >= 0; offset -= 1) {
@@ -105,14 +144,13 @@ const getMonthBuckets = (anchor: Date) => {
   return buckets;
 };
 
-export default async function InsightsPage() {
+async function InsightsPageStream() {
   const now = new Date();
   let currentWindowTransactionsRaw: InsightTransaction[] = [];
   let previousWindowTransactionsRaw: InsightTransaction[] = [];
   let ninetyDayTransactions: InsightTransaction[] = [];
   let sixMonthTransactions: Array<Pick<InsightTransaction, "date" | "amount" | "type">> = [];
-  let workspaceAccounts: Array<{ name: string; balance: number | null }> = [];
-  let importFiles: Array<{ status: "processing" | "done" | "failed" | "deleted" }> = [];
+  let workspaceAccounts: WorkspaceAccount[] = [];
   let selectedGoalValue: string | null = null;
   let goalTargetAmount: number | null = null;
   let isFreshResetWorkspace = false;
@@ -124,14 +162,10 @@ export default async function InsightsPage() {
   if (!hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
-
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
   const workspaceInclude = {
     accounts: true,
-    importFiles: {
-      orderBy: { uploadedAt: "desc" },
-    },
   } as const;
 
   const selectedWorkspace =
@@ -166,6 +200,8 @@ export default async function InsightsPage() {
   if (!resolvedWorkspace) {
     redirect("/dashboard");
   }
+
+  const workspaceImportFiles = await listImportFilesCompat(resolvedWorkspace.id);
 
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -269,12 +305,20 @@ export default async function InsightsPage() {
   sixMonthTransactions = sixMonthTransactionsQuery as Array<Pick<InsightTransaction, "date" | "amount" | "type">>;
   workspaceAccounts = resolvedWorkspace.accounts.map((account) => ({
     name: account.name,
+    type: account.type,
     balance: account.balance === null ? null : Number(account.balance),
+    investmentSubtype: account.investmentSubtype,
+    investmentSymbol: account.investmentSymbol,
+    investmentCostBasis: account.investmentCostBasis === null ? null : Number(account.investmentCostBasis),
+    investmentPrincipal: account.investmentPrincipal === null ? null : Number(account.investmentPrincipal),
+    investmentStartDate: account.investmentStartDate,
+    investmentMaturityDate: account.investmentMaturityDate,
+    investmentInterestRate: account.investmentInterestRate === null ? null : Number(account.investmentInterestRate),
+    investmentMaturityValue: account.investmentMaturityValue === null ? null : Number(account.investmentMaturityValue),
   }));
-  importFiles = resolvedWorkspace.importFiles;
   selectedGoalValue = user.primaryGoal?.trim() ?? null;
   goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
-  isFreshResetWorkspace = user.dataWipedAt !== null && resolvedWorkspace.accounts.length <= 1 && resolvedWorkspace.importFiles.length === 0;
+  isFreshResetWorkspace = user.dataWipedAt !== null && resolvedWorkspace.accounts.length <= 1 && workspaceImportFiles.length === 0;
 
   const reportType = "insights";
   const workspaceId = resolvedWorkspace.id;
@@ -283,7 +327,8 @@ export default async function InsightsPage() {
   const ninetyDayInsightTransactions = ninetyDayTransactions;
   const sixMonthInsightTransactions = sixMonthTransactions as InsightTransaction[];
   const selectedGoal = selectedGoalValue;
-  const isEmptyWorkspace = workspaceAccounts.length <= 1 && importFiles.length === 0 && currentWindowTransactions.length === 0;
+  const isPro = user.planTier === "pro";
+  const isEmptyWorkspace = workspaceAccounts.length <= 1 && workspaceImportFiles.length === 0 && currentWindowTransactions.length === 0;
 
   const currentSummary = currentWindowTransactions.reduce(
     (accumulator, transaction) => {
@@ -359,6 +404,82 @@ export default async function InsightsPage() {
     .filter((account) => account.balance !== null)
     .reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
   const activeAccountCount = workspaceAccounts.filter((account) => account.balance !== null).length;
+  const investmentAccounts = workspaceAccounts.filter((account) => account.type === "investment");
+  const investmentCurrentValue = investmentAccounts.reduce((sum, account) => sum + Math.max(0, account.balance ?? 0), 0);
+  const investmentPurchaseValue = investmentAccounts.reduce((sum, account) => {
+    const baseValue = account.investmentCostBasis ?? account.investmentPrincipal;
+    return sum + Math.max(0, baseValue ?? 0);
+  }, 0);
+  const investmentGainLoss = investmentCurrentValue - investmentPurchaseValue;
+  const investmentReturnPercent = investmentPurchaseValue > 0 ? investmentGainLoss / investmentPurchaseValue : null;
+  const investmentPortfolioShare = totalAccountBalance > 0 ? investmentCurrentValue / totalAccountBalance : null;
+  const investmentMarketValue = investmentAccounts
+    .filter((account) => isMarketInvestmentSubtype(account.investmentSubtype))
+    .reduce((sum, account) => sum + Math.max(0, account.balance ?? 0), 0);
+  const investmentFixedIncomeValue = investmentAccounts
+    .filter((account) => isFixedIncomeInvestmentSubtype(account.investmentSubtype))
+    .reduce((sum, account) => sum + Math.max(0, account.balance ?? 0), 0);
+  const ninetyDaysFromNow = new Date(now);
+  ninetyDaysFromNow.setDate(ninetyDaysFromNow.getDate() + 90);
+  const investmentUpcomingMaturities = investmentAccounts.filter(
+    (account) =>
+      account.investmentMaturityDate !== null &&
+      account.investmentMaturityDate >= now &&
+      account.investmentMaturityDate <= ninetyDaysFromNow
+  );
+  const investmentCoverageIssues = investmentAccounts.filter((account) => {
+    const isMarket = isMarketInvestmentSubtype(account.investmentSubtype);
+    const isFixedIncome = isFixedIncomeInvestmentSubtype(account.investmentSubtype);
+    const hasCurrentValue = account.balance !== null;
+    const hasBaseValue = (account.investmentCostBasis ?? account.investmentPrincipal) !== null;
+    const hasSymbol = !isMarket || Boolean(account.investmentSymbol?.trim());
+    const hasMaturity = !isFixedIncome || account.investmentMaturityDate !== null;
+    return !hasCurrentValue || !hasBaseValue || !hasSymbol || !hasMaturity;
+  });
+  const investmentValuedAccountCount = investmentAccounts.filter((account) => account.balance !== null).length;
+  const investmentMix = new Map<
+    string,
+    {
+      key: string;
+      label: string;
+      amount: number;
+      count: number;
+      icon: string;
+    }
+  >();
+  investmentAccounts.forEach((account) => {
+    const key = account.investmentSubtype ?? "other";
+    const amount = Math.max(0, account.balance ?? account.investmentCostBasis ?? account.investmentPrincipal ?? 0);
+    const existing = investmentMix.get(key) ?? {
+      key,
+      label: account.investmentSubtype ? getInvestmentSubtypeLabel(account.investmentSubtype) : "Unclassified",
+      amount: 0,
+      count: 0,
+      icon: getInvestmentGlyph(account.investmentSubtype),
+    };
+    existing.amount += amount;
+    existing.count += 1;
+    investmentMix.set(key, existing);
+  });
+  const investmentMixRows = Array.from(investmentMix.values())
+    .map((row) => ({
+      ...row,
+      share: investmentCurrentValue > 0 ? row.amount / investmentCurrentValue : 0,
+    }))
+    .sort((left, right) => right.amount - left.amount);
+  const investmentTopHolding = investmentAccounts.slice().sort((left, right) => (right.balance ?? 0) - (left.balance ?? 0))[0] ?? null;
+  const investmentTopHoldingShare =
+    investmentTopHolding !== null && investmentCurrentValue > 0 && investmentTopHolding.balance !== null
+      ? Number(investmentTopHolding.balance) / investmentCurrentValue
+      : null;
+  const investmentSummaryLine =
+    isPro && investmentAccounts.length > 0
+      ? `Investments total ${formatCurrency(investmentCurrentValue)} across ${investmentAccounts.length} holdings${
+          investmentMarketValue > 0 || investmentFixedIncomeValue > 0
+            ? `, with ${formatCurrency(investmentMarketValue)} in market holdings and ${formatCurrency(investmentFixedIncomeValue)} in fixed income.`
+            : "."
+        }`
+      : null;
 
   const uncategorizedTransactions = currentWindowTransactions.filter(
     (transaction) => !transaction.category?.name || !transaction.merchantClean
@@ -385,7 +506,7 @@ export default async function InsightsPage() {
     .sort((a, b) => b.length - a.length)
     .slice(0, 3);
 
-  const importStatusCounts = importFiles.reduce(
+  const importStatusCounts = workspaceImportFiles.reduce(
     (counts, file) => {
       counts[file.status] += 1;
       return counts;
@@ -407,6 +528,8 @@ export default async function InsightsPage() {
   const spendDelta = previousSpend > 0 ? ((currentSpend - previousSpend) / previousSpend) * 100 : null;
   const incomeDelta =
     previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
+  const currentGoalPlan = normalizeGoalPlan(user.goalPlan, selectedGoalValue as GoalKey | null, goalTargetAmount);
+  const goalPlanSummary = getGoalPlanSummary(currentGoalPlan, currentSummary.income > 0 ? currentSummary.income : null);
 
   const topCategories = Array.from(currentSummary.expenseCategories.entries())
     .sort((a, b) => b[1] - a[1])
@@ -498,6 +621,7 @@ export default async function InsightsPage() {
   const goalProgress = getGoalProgressSnapshot({
     goalKey: selectedGoalValue as GoalKey | null,
     targetAmount: goalTargetAmount,
+    goalPlan: currentGoalPlan,
     currentNet,
     currentSpend,
     monthlyIncome: currentSummary.income > 0 ? currentSummary.income : null,
@@ -519,12 +643,12 @@ export default async function InsightsPage() {
           : `${headlineDriver} is the main pressure point, even while you are on track for ${goalLabel.toLowerCase()}.`
         : `${headlineDriver} is the biggest spend area this month.`
       : currentNet >= 0
-        ? "Cash flow is positive, but the page needs more recent activity before the drivers are obvious."
-        : "Cash flow is negative, and the page needs more recent activity before the drivers are obvious.";
+        ? "Cash flow looks positive, but the driver is still unclear."
+        : "Cash flow looks negative, but the driver is still unclear.";
 
   const aiSummary =
     spendDelta === null || incomeDelta === null
-      ? "Recent activity is enough to guide the page, but one comparison window is still thin."
+      ? "More activity will sharpen the next insight."
       : [
           currentNet >= 0
             ? `Net cash flow is positive at ${formatSignedCurrency(currentNet)}.`
@@ -536,7 +660,14 @@ export default async function InsightsPage() {
         ]
           .filter((line): line is string => line !== null)
           .join(" ");
-  const primarySnapshotItems = [
+  const aiSummaryWithInvestments = investmentSummaryLine ? `${aiSummary} ${investmentSummaryLine}` : aiSummary;
+  const primarySnapshotItems: Array<{
+    label: string;
+    value: string;
+    note: string;
+    tone: "positive" | "negative" | "neutral";
+    suffix?: string;
+  }> = [
     {
       label: "Net position",
       value: formatSignedCurrency(currentNet),
@@ -548,7 +679,7 @@ export default async function InsightsPage() {
       value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
       note:
         goalLabel !== null && goalTargetAmount !== null
-          ? `${goalProgress.bandLabel} · ${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}`
+          ? `${goalProgress.bandLabel} · ${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}${goalPlanSummary?.subtitle ? ` · ${goalPlanSummary.subtitle}` : ""}`
           : goalLabel ?? "No primary goal set yet",
       tone: currentSavingsRate !== null && currentSavingsRate >= 0.2 ? "positive" : "neutral",
     },
@@ -557,13 +688,6 @@ export default async function InsightsPage() {
       value: headlineDriver,
       note: `${formatCurrency(headlineDriverAmount)}${headlineDriverShare === null ? "" : ` · ${formatPercent(headlineDriverShare)}`}`,
       tone: "neutral",
-    },
-    {
-      label: "Signal quality",
-      value: Math.round(confidenceScore).toString(),
-      note: confidenceLabel,
-      tone: confidenceScore >= 85 ? "positive" : confidenceScore >= 70 ? "neutral" : "negative",
-      suffix: "%",
     },
   ];
 
@@ -589,11 +713,13 @@ export default async function InsightsPage() {
       body:
         goalLabel && goalTargetAmount !== null
           ? `Use ${goalProgress.nextAction} The current band is ${goalProgress.bandLabel.toLowerCase()}.`
+          : goalLabel === "Invest better" && investmentAccounts.length > 0
+            ? "Open the portfolio and decide which holdings should grow or rebalance."
           : goalLabel
             ? `Use ${goalLabel.toLowerCase()} as the benchmark for this month.`
             : "A goal turns trends into a direction.",
-      href: "/goals",
-      label: goalLabel ? "Open goal" : "Set goal",
+      href: goalLabel === "Invest better" && investmentAccounts.length > 0 ? "/investments" : "/goals",
+      label: goalLabel === "Invest better" && investmentAccounts.length > 0 ? "Open investments" : goalLabel ? "Open goal" : "Set goal",
     },
   ];
 
@@ -670,6 +796,11 @@ export default async function InsightsPage() {
       icon: "🎯",
     },
   ];
+  const visibleDriverInsightCards = isPro ? driverInsightCards : driverInsightCards.slice(0, 2);
+  const visibleRecurringInsightCards = isPro ? recurringInsightCards : recurringInsightCards.slice(0, 2);
+  const visibleBehaviorInsightCards = isPro ? behaviorInsightCards : behaviorInsightCards.slice(0, 2);
+
+  const showInvestmentSection = isPro && investmentAccounts.length > 0;
 
   const chartWidth = 520;
   const chartHeight = 150;
@@ -705,7 +836,7 @@ export default async function InsightsPage() {
     <CloverShell
       active="insights"
       title="A clearer view of what your money is doing."
-      subtitle="Decision-ready insight from real transactions, recurring patterns, and month-over-month comparisons."
+      subtitle="A simple summary of cash flow, patterns, and next steps."
       showTopbar={false}
     >
       <PostHogEvent
@@ -778,17 +909,15 @@ export default async function InsightsPage() {
       <section className="insights-story">
         <article className="insights-snapshot insights-snapshot--hero glass">
           <div className="insights-snapshot__copy">
-            <div className="insights-snapshot__header">
-              <span className="pill pill-accent">Decision brief</span>
-            </div>
             <h3>{aiHeadline}</h3>
-            <p>{aiSummary}</p>
+            <p>{aiSummaryWithInvestments}</p>
             <div className="insights-snapshot__summary">
               <span className={`pill ${currentNet >= 0 ? "pill-good" : "pill-danger"}`}>
                 {currentNet >= 0 ? "On track" : "Needs attention"}
               </span>
               <span>{currentWindowTransactions.length} transactions reviewed</span>
               <span>{goalLabel ?? "No primary goal set yet"}</span>
+              {showInvestmentSection ? <span>{investmentAccounts.length} investment holdings</span> : null}
             </div>
           </div>
 
@@ -823,6 +952,227 @@ export default async function InsightsPage() {
             ))}
           </div>
         </article>
+
+        {showInvestmentSection ? (
+          <article className="insight-panel glass">
+            <div className="insight-panel__head">
+              <div>
+                <p className="eyebrow">Investments</p>
+                <h4>Portfolio at a glance</h4>
+                <span className="insight-panel__hint">Pulled from investment accounts in this workspace.</span>
+              </div>
+              <div className="insight-panel__stat">
+                <strong className={investmentGainLoss >= 0 ? "positive" : "negative"}>{formatSignedCurrency(investmentGainLoss)}</strong>
+                <span>{investmentGainLoss >= 0 ? "Unrealized gain" : "Unrealized loss"}</span>
+              </div>
+            </div>
+
+            <div className="insight-signal-grid">
+              <div className="insight-signal">
+                <span>Current value</span>
+                <strong>{formatCurrency(investmentCurrentValue)}</strong>
+                <small>{investmentPortfolioShare === null ? "Of tracked assets" : `${formatPercent(investmentPortfolioShare * 100)} of tracked assets`}</small>
+              </div>
+              <div className="insight-signal">
+                <span>Cost basis</span>
+                <strong>{formatCurrency(investmentPurchaseValue)}</strong>
+                <small>{investmentAccounts.length} holdings tracked</small>
+              </div>
+              <div className="insight-signal">
+                <span>Gain / loss</span>
+                <strong className={investmentGainLoss >= 0 ? "positive" : "negative"}>{formatSignedCurrency(investmentGainLoss)}</strong>
+                <small>{investmentReturnPercent === null ? "No return baseline" : `${formatPercent(investmentReturnPercent * 100)} since purchase`}</small>
+              </div>
+              <div className="insight-signal">
+                <span>Due within 90 days</span>
+                <strong>{investmentUpcomingMaturities.length}</strong>
+                <small>
+                  {investmentFixedIncomeValue === 0
+                    ? "No fixed-income balance yet"
+                    : `${formatCurrency(investmentFixedIncomeValue)} in fixed-income holdings`}
+                </small>
+              </div>
+            </div>
+
+            <div className="insight-donut">
+              <div className="insight-donut__chart" role="img" aria-label="Investment allocation donut chart">
+                <svg viewBox="0 0 240 240">
+                  <defs>
+                    <linearGradient id="investment-donut-gradient" x1="0" x2="1" y1="0" y2="1">
+                      <stop offset="0%" stopColor="rgba(3,168,192,0.28)" />
+                      <stop offset="100%" stopColor="rgba(3,168,192,0.82)" />
+                    </linearGradient>
+                  </defs>
+                  <circle cx="120" cy="120" r="82" className="insight-donut__track" />
+                  {investmentMixRows.length > 0
+                    ? (() => {
+                        let offset = 0;
+                        return investmentMixRows.map((row, index) => {
+                          const share = investmentCurrentValue > 0 ? row.amount / investmentCurrentValue : 0;
+                          const circumference = 2 * Math.PI * 82;
+                          const dashLength = share * circumference;
+                          const colors = [
+                            "url(#investment-donut-gradient)",
+                            "var(--accent-light)",
+                            "rgba(37, 99, 235, 0.76)",
+                            "rgba(16, 185, 129, 0.76)",
+                            "rgba(245, 158, 11, 0.78)",
+                          ];
+                          const segment = (
+                            <circle
+                              key={row.key}
+                              cx="120"
+                              cy="120"
+                              r="82"
+                              className="insight-donut__segment"
+                              style={{
+                                stroke: colors[index % colors.length],
+                                strokeDasharray: `${dashLength} ${circumference}`,
+                                strokeDashoffset: -offset,
+                              }}
+                            />
+                          );
+                          offset += dashLength;
+                          return segment;
+                        });
+                      })()
+                    : null}
+                </svg>
+                <div className="insight-donut__center">
+                  <strong>{formatCurrency(investmentCurrentValue)}</strong>
+                  <span>Portfolio value</span>
+                </div>
+              </div>
+
+              <div className="insight-donut__legend">
+                {investmentMixRows.length > 0 ? (
+                  investmentMixRows.map((row) => (
+                    <Link key={row.key} href="/investments" className="insight-donut__item insight-donut__item--link">
+                      <span className="insight-donut__icon" aria-hidden="true">
+                        {row.icon}
+                      </span>
+                      <div className="insight-donut__meta">
+                        <strong>{row.label}</strong>
+                        <span>
+                          {formatCurrency(row.amount)} · {formatPercent(row.share * 100)}
+                        </span>
+                      </div>
+                    </Link>
+                  ))
+                ) : (
+                  <div className="empty-state">Add current values to see how the portfolio is distributed.</div>
+                )}
+                <div className="insight-donut__item">
+                  <span className="insight-donut__icon" aria-hidden="true">
+                    •
+                  </span>
+                  <div className="insight-donut__meta">
+                    <strong>Valued holdings</strong>
+                    <span>
+                      {investmentValuedAccountCount} of {investmentAccounts.length}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="insight-pattern-grid">
+              <div className="insight-pattern-card">
+                <p className="eyebrow">Portfolio mix</p>
+                <div className="insight-list">
+                  {investmentMixRows.length > 0 ? (
+                    investmentMixRows.slice(0, 3).map((row) => (
+                      <Link key={row.key} href="/investments" className="insight-list__item insight-list__item--link">
+                        <strong>
+                          <span className="insight-list__icon" aria-hidden="true">
+                            {row.icon}
+                          </span>
+                          {row.label}
+                        </strong>
+                        <span>
+                          {formatCurrency(row.amount)} · {formatPercent(row.share * 100)} of portfolio
+                        </span>
+                        <span className="insight-list__callout">
+                          So what: this slice shows where the portfolio is most concentrated.
+                        </span>
+                        <span className="insight-list__callout">
+                          Next step: open Investments and decide if this weight should stay or be rebalanced.
+                        </span>
+                      </Link>
+                    ))
+                  ) : (
+                    <div className="empty-state">Add current values to see how the portfolio is distributed.</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="insight-pattern-card">
+                <p className="eyebrow">What to watch</p>
+                <div className="insight-list">
+                  <div className="insight-list__item">
+                    <strong>
+                      <span className="insight-list__icon" aria-hidden="true">
+                        🎯
+                      </span>
+                      Concentration
+                    </strong>
+                    <span>
+                      {investmentTopHolding !== null && investmentTopHolding.balance !== null
+                        ? `${investmentTopHolding.name} is ${formatPercent((investmentTopHoldingShare ?? 0) * 100)} of the portfolio.`
+                        : "No holding is valued yet, so concentration is still unclear."}
+                    </span>
+                    <span className="insight-list__callout">
+                      So what: one holding may be carrying too much of the portfolio's weight.
+                    </span>
+                    <span className="insight-list__callout">
+                      Next step: review the biggest holding and decide whether it deserves its current share.
+                    </span>
+                  </div>
+
+                  <div className="insight-list__item">
+                    <strong>
+                      <span className="insight-list__icon" aria-hidden="true">
+                        🗓
+                      </span>
+                      Maturities
+                    </strong>
+                    <span>
+                      {investmentUpcomingMaturities.length > 0
+                        ? `${investmentUpcomingMaturities.length} fixed-income holding${investmentUpcomingMaturities.length === 1 ? "" : "s"} mature in the next 90 days.`
+                        : "No fixed-income maturities are coming due in the next 90 days."}
+                    </span>
+                    <span className="insight-list__callout">
+                      So what: the portfolio may need a rollover or redeployment plan soon.
+                    </span>
+                    <span className="insight-list__callout">
+                      Next step: review maturity dates and decide whether to reinvest or hold cash.
+                    </span>
+                  </div>
+
+                  <div className="insight-list__item">
+                    <strong>
+                      <span className="insight-list__icon" aria-hidden="true">
+                        🧼
+                      </span>
+                      Coverage
+                    </strong>
+                    <span>
+                      {investmentCoverageIssues.length > 0
+                        ? `${investmentCoverageIssues.length} holding${investmentCoverageIssues.length === 1 ? "" : "s"} still need value, symbol, or date details.`
+                        : "Every investment has enough detail for a cleaner portfolio snapshot."}
+                    </span>
+                    <span className="insight-list__callout">
+                      So what: incomplete investment data can blur the portfolio readout.
+                    </span>
+                    <span className="insight-list__callout">
+                      Next step: open Investments and fill in the missing fields.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+        ) : null}
 
         <article className="insight-panel insight-panel--feature glass">
           <div className="insight-panel__head">
@@ -993,8 +1343,8 @@ export default async function InsightsPage() {
           </div>
 
           <div className="insight-list">
-            {driverInsightCards.length > 0 ? (
-              driverInsightCards.map((driver) => (
+            {visibleDriverInsightCards.length > 0 ? (
+              visibleDriverInsightCards.map((driver) => (
                 <Link key={driver.categoryName} href={driver.href} className="insight-list__item insight-list__item--link">
                   <strong>
                     <span className="insight-list__icon" aria-hidden="true">
@@ -1017,8 +1367,12 @@ export default async function InsightsPage() {
           <div className="insight-panel__head">
             <div>
               <p className="eyebrow">Patterns to watch</p>
-              <h4>Recurring costs and habits</h4>
-              <span className="insight-panel__hint">Fixed costs and behavior signals linked back to transactions.</span>
+              <h4>{isPro ? "Recurring costs and habits" : "A few patterns to watch"}</h4>
+              <span className="insight-panel__hint">
+                {isPro
+                  ? "Fixed costs, behavior signals, and data quality linked back to transactions."
+                  : "Begin with the simplest patterns that are easiest to act on."}
+              </span>
             </div>
             <div className="insight-panel__stat">
               <strong>{formatCurrency(recurringSavingsPotential)}</strong>
@@ -1030,8 +1384,8 @@ export default async function InsightsPage() {
             <div className="insight-pattern-card">
               <p className="eyebrow">Recurring costs</p>
               <div className="insight-list">
-                {recurringInsightCards.length > 0 ? (
-                  recurringInsightCards.map((merchant) => (
+                {visibleRecurringInsightCards.length > 0 ? (
+                  visibleRecurringInsightCards.map((merchant) => (
                     <Link key={merchant.label} href={merchant.href} className="insight-list__item insight-list__item--link">
                       <strong>
                         <span className="insight-list__icon" aria-hidden="true">
@@ -1059,7 +1413,7 @@ export default async function InsightsPage() {
             <div className="insight-pattern-card">
               <p className="eyebrow">Behavioral patterns</p>
               <div className="insight-list">
-                {behaviorInsightCards.map((item) => (
+                {visibleBehaviorInsightCards.map((item) => (
                   <Link key={item.title} href={item.href} className="insight-list__item insight-list__item--link">
                     <strong>
                       <span className="insight-list__icon" aria-hidden="true">
@@ -1076,7 +1430,21 @@ export default async function InsightsPage() {
             </div>
           </div>
         </article>
+
+        {!isPro ? (
+          <p className="insights-free-note">
+            Want more charts, investment context, and deeper analysis? Pro unlocks a fuller picture when you are ready for it.
+          </p>
+        ) : null}
       </section>
     </CloverShell>
+  );
+}
+
+export default function InsightsPage() {
+  return (
+    <Suspense fallback={<CloverLoadingScreen label="insights" />}>
+      <InsightsPageStream />
+    </Suspense>
   );
 }

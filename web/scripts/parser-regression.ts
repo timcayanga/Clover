@@ -108,7 +108,7 @@ const fixtures: Fixture[] = [
     label: "RCBC Savings Sample",
     relativePath: "Samples/RCBC/879866459-Statement.pdf",
     institution: "RCBC",
-    accountName: "RCBC Savings 5080",
+    accountName: "RCBC 5080",
     accountNumber: "7591325080",
     accountType: "bank",
     minRows: 20,
@@ -335,7 +335,9 @@ const main = async () => {
       accountNumber: metadata.accountNumber,
     });
     const trailingBalance = parser.getTrailingBalanceFromParsedRows(rows);
-    const accountType = inferAccountTypeFromStatement(metadata.institution, metadata.accountName, "bank");
+    const accountType =
+      (metadata as { accountType?: ImportedAccountType | null }).accountType ??
+      inferAccountTypeFromStatement(metadata.institution, metadata.accountName, "bank");
 
     const errors: string[] = [];
 

@@ -1,0 +1,4 @@
+ALTER TABLE "DataQaRun"
+ADD COLUMN IF NOT EXISTS "fieldReviewPayload" JSONB,
+ADD COLUMN IF NOT EXISTS "fieldReviewUpdatedAt" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "fieldReviewAuthorId" TEXT;

@@ -1,11 +1,14 @@
-import { Prisma, type TransactionType } from "@prisma/client";
+import type { Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
+import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/data-qa";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
-import { parseAmountValue, parseImportText } from "@/lib/import-parser";
+import { countNonCashAccounts, getWorkspaceOwnerLimits } from "@/lib/plan-access";
+import { parseAmountValue, parseDateValue, parseImportText } from "@/lib/import-parser";
 import { readImportedFileText, readImportedPdfPageImages } from "@/lib/import-file-text.server";
 import {
   DATA_ENGINE_VERSION,
+  applyDataQaReviewLearning,
   buildParsedTransactionInsertData,
   buildStatementFingerprint,
   detectStatementMetadataFromText,
@@ -26,8 +29,6 @@ import {
 } from "@/lib/data-engine";
 import { getTrailingBalanceFromParsedRows, inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { parseImportTextWithOpenAIFallback } from "@/lib/openai-import-parser";
-
-type JsonValue = Prisma.InputJsonValue;
 
 type ImportInsightSummary = {
   incomeTotal: number;
@@ -88,6 +89,9 @@ const shouldRouteToReview = (params: { confidence: number; categoryName?: string
   return false;
 };
 
+const countRowsWithParseableDates = (rows: Array<{ date?: string | null }>) =>
+  rows.reduce((count, row) => (parseDateValue(row.date ?? null) ? count + 1 : count), 0);
+
 const isTruthyEnvValue = (value?: string | null) => {
   if (!value) {
     return false;
@@ -108,6 +112,155 @@ const chunkArray = <T,>(items: T[], size: number) => {
   return chunks;
 };
 
+const AUTO_REPARSE_SCORE_TARGET = 95;
+const AUTO_REPARSE_MAX_ATTEMPTS = 12;
+const AUTO_REPARSE_PLATEAU_WINDOW = 3;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const readParsedRowText = (row: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+  return "";
+};
+
+const buildAutoRerunPayload = (params: {
+  latestScore: number;
+  findings: Array<{
+    code: string;
+    severity: string;
+    field: string | null;
+    message: string;
+    suggestion: string | null;
+  }>;
+  parsedRows: Array<Record<string, unknown>>;
+  metadata: ReturnType<typeof detectStatementMetadataFromText>;
+  statementCheckpoint: {
+    openingBalance: string | null;
+    endingBalance: string | null;
+  } | null;
+  importAccount: {
+    institution: string | null;
+    type: string | null;
+    name: string | null;
+    balance: string | null;
+  } | null;
+}) => {
+  const bankName = params.metadata.institution ?? params.importAccount?.institution ?? "Unknown";
+  const accountNumber = params.metadata.accountNumber ?? null;
+  const accountType = params.metadata.accountType ?? params.importAccount?.type ?? "bank";
+  const endingBalance =
+    params.metadata.endingBalance ??
+    (typeof params.statementCheckpoint?.endingBalance === "string" ? Number(params.statementCheckpoint.endingBalance) : null) ??
+    (typeof params.importAccount?.balance === "string" ? Number(params.importAccount.balance) : null);
+  const openingBalance =
+    params.metadata.openingBalance ??
+    (typeof params.statementCheckpoint?.openingBalance === "string" ? Number(params.statementCheckpoint.openingBalance) : null);
+
+  const manualFeedbackLines = [
+    "Automatic QA feedback generated from low-confidence findings.",
+    `Latest QA score: ${params.latestScore}. Target score: ${AUTO_REPARSE_SCORE_TARGET}.`,
+    ...params.findings.map((finding) => `- ${finding.code}: ${finding.message}${finding.suggestion ? ` Suggestion: ${finding.suggestion}` : ""}`),
+  ];
+
+  const transactions = params.parsedRows.slice(0, 100).map((row) => {
+    const rowConfidence =
+      typeof row.confidence === "number"
+        ? row.confidence
+        : typeof row.parserConfidence === "number"
+          ? row.parserConfidence
+          : 100;
+    const transactionName = readParsedRowText(row, ["merchantClean", "merchantRaw", "description", "name"]);
+    const normalizedName = readParsedRowText(row, ["merchantClean", "normalizedName", "normalizedMerchant"]);
+    const date = readParsedRowText(row, ["date", "transactionDate", "postedDate", "statementDate"]);
+    const category = readParsedRowText(row, ["categoryName", "category", "normalizedCategory"]);
+    const type = readParsedRowText(row, ["type", "transactionType"]) || "expense";
+    const amount = readParsedRowText(row, ["amount", "value", "total"]);
+    const boilerplate = /statement\s+coverage\s+period|account\s+details|account\s+summary|page\s+\d+|nothing\s+follows|fees?\s+and\s+charges/i.test(
+      [transactionName, normalizedName, date, category, type, amount].join(" ")
+    );
+
+    return {
+      correct: !boilerplate && Boolean(transactionName && date && amount) && rowConfidence >= 80,
+      feedback:
+        !boilerplate && Boolean(transactionName && date && amount)
+          ? ""
+          : "Automatic QA flagged this row for review because it looks incomplete or like boilerplate.",
+      output: {
+        transactionName,
+        normalizedName,
+        date,
+        category,
+        type,
+        amount,
+      },
+    };
+  });
+
+  return {
+    manualFeedback: manualFeedbackLines.join("\n"),
+    fieldReviewPayload: {
+      bank: {
+        correct: Boolean(bankName && bankName !== "Unknown"),
+        feedback: bankName && bankName !== "Unknown" ? "" : "Bank name still needs confirmation.",
+        output: { value: bankName },
+      },
+      accountNumber: {
+        correct: Boolean(accountNumber),
+        feedback: accountNumber ? "" : "Account number still needs confirmation.",
+        output: { value: accountNumber ?? "" },
+      },
+      accountType: {
+        correct: Boolean(accountType),
+        feedback: accountType ? "" : "Account type still needs confirmation.",
+        output: { value: accountType },
+      },
+      accountBalance: {
+        correct: Boolean(endingBalance !== null || openingBalance !== null),
+        feedback: endingBalance !== null || openingBalance !== null ? "" : "Statement balance still needs confirmation.",
+        output: { value: endingBalance !== null ? String(endingBalance) : openingBalance !== null ? String(openingBalance) : "" },
+      },
+      transactionCount: {
+        correct: params.parsedRows.length > 0,
+        feedback: params.parsedRows.length > 0 ? "" : "Transaction count could not be validated.",
+        output: { value: String(params.parsedRows.length) },
+      },
+      transactions,
+      additionalTransactions: [],
+      deletedTransactions: [],
+    },
+  };
+};
+
+const readAutoRerunValue = (entry: unknown) => {
+  if (!isRecord(entry)) {
+    return null;
+  }
+
+  const output = entry.output;
+  if (!isRecord(output)) {
+    return null;
+  }
+
+  const candidate = output.value ?? output.output ?? output.text ?? output.accountNumber ?? output.bank;
+  if (typeof candidate === "string" && candidate.trim()) {
+    return candidate.trim();
+  }
+  if (typeof candidate === "number" && Number.isFinite(candidate)) {
+    return String(candidate);
+  }
+
+  return null;
+};
+
 const resolveConfirmationAccount = async (params: {
   importFile: { workspaceId: unknown; fileName?: unknown };
   statementMetadata?: {
@@ -120,7 +273,10 @@ const resolveConfirmationAccount = async (params: {
     accountName?: unknown;
     institution?: unknown;
   }>;
-  accountId: string;
+  accountId?: string | null;
+  planLimits?: {
+    accountLimit: number;
+  } | null;
 }) => {
   const workspaceId = String(params.importFile.workspaceId);
   const candidateRow =
@@ -157,10 +313,11 @@ const resolveConfirmationAccount = async (params: {
       ? (params.statementMetadata.accountType as "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other")
       : null;
 
-  const isOptimisticId = params.accountId.startsWith("optimistic-");
-  const directAccount = !isOptimisticId
+  const providedAccountId = typeof params.accountId === "string" && params.accountId.trim() ? params.accountId.trim() : null;
+  const isOptimisticId = providedAccountId ? providedAccountId.startsWith("optimistic-") : false;
+  const directAccount = providedAccountId && !isOptimisticId
     ? await prisma.account.findUnique({
-        where: { id: params.accountId },
+        where: { id: providedAccountId },
       })
     : null;
   if (directAccount) {
@@ -183,6 +340,16 @@ const resolveConfirmationAccount = async (params: {
   }
 
   if (inferredAccountName || inferredAccountNumber) {
+    const nonCashAccountCount = countNonCashAccounts(workspaceAccounts);
+    const inferredType =
+      inferredAccountType ?? inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank");
+
+    if (params.planLimits?.accountLimit != null && inferredType !== "cash" && nonCashAccountCount >= params.planLimits.accountLimit) {
+      throw new Error(
+        `Free plan includes up to ${params.planLimits.accountLimit} non-cash accounts. Upgrade to Pro to add more accounts from imports.`
+      );
+    }
+
     return prisma.account.create({
       data: {
         workspaceId,
@@ -190,7 +357,7 @@ const resolveConfirmationAccount = async (params: {
           inferredAccountName ??
           (inferredInstitution && inferredAccountNumber ? `${inferredInstitution} ${inferredAccountNumber.slice(-4)}` : String(params.importFile.fileName ?? "Imported account").replace(/\.[^.]+$/, "").trim()),
         institution: inferredInstitution,
-        type: inferredAccountType ?? inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank"),
+        type: inferredType,
         currency: "PHP",
         source: "upload",
       },
@@ -211,9 +378,9 @@ const buildTransactionInsertRecord = (params: {
   accountMatchConfidence?: number;
   duplicateConfidence?: number;
   transferConfidence?: number;
-  rawPayload?: JsonValue | null;
-  normalizedPayload?: JsonValue | null;
-  learnedRuleIdsApplied?: JsonValue | null;
+  rawPayload?: Prisma.InputJsonValue | null;
+  normalizedPayload?: Prisma.InputJsonValue | null;
+  learnedRuleIdsApplied?: Prisma.InputJsonValue | null;
   date: Date;
   amount: string | number;
   currency: string;
@@ -265,8 +432,30 @@ const buildTransactionInsertRecord = (params: {
 
 export const processImportFileText = async (
   importFileId: string,
-  options: { text?: string; password?: string; actorUserId?: string | null } = {}
+  options: {
+    text?: string;
+    password?: string;
+    actorUserId?: string | null;
+    qaSource?: DataQaSource;
+    allowDuplicateStatement?: boolean;
+    autoRerunAttempt?: number;
+    statementMetadataOverride?: Partial<{
+      institution: string | null;
+      accountNumber: string | null;
+      accountName: string | null;
+      accountType: string | null;
+      openingBalance: number | null;
+      endingBalance: number | null;
+      paymentDueDate: string | null;
+      totalAmountDue: number | null;
+      startDate: string | null;
+      endDate: string | null;
+    }> | null;
+  } = {}
 ): Promise<ProcessImportResult> => {
+  const startedAt = Date.now();
+  const autoRerunAttempt = Number(options.autoRerunAttempt ?? 0);
+  const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   const importFile = await fetchImportFileCompat(importFileId);
 
   if (!importFile) {
@@ -275,6 +464,14 @@ export const processImportFileText = async (
 
   await updateImportFileCompat(importFileId, {
     status: "processing",
+    processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "parsing",
+    processingAttempt: autoRerunAttempt,
+    processingTargetScore: autoRerunEnabled ? AUTO_REPARSE_SCORE_TARGET : null,
+    processingCurrentScore: null,
+    processingMessage:
+      autoRerunAttempt > 0
+        ? `Auto-rerun ${autoRerunAttempt}/${AUTO_REPARSE_MAX_ATTEMPTS} running...`
+        : "Parsing file...",
   });
 
   let text = options.text ?? "";
@@ -293,18 +490,6 @@ export const processImportFileText = async (
       options.password
     );
   }
-
-  const pageImages = !text.trim() && importFile.fileType === "application/pdf"
-    ? await readImportedPdfPageImages(
-        {
-          storageKey: String(importFile.storageKey ?? ""),
-          fileType: String(importFile.fileType ?? ""),
-          fileName: String(importFile.fileName ?? ""),
-        },
-        options.password,
-        2
-      )
-    : null;
 
   const metadata = detectStatementMetadataFromText(text);
   const statementFingerprint = buildStatementFingerprint(text, metadata, importFile.fileName, importFile.fileType);
@@ -331,21 +516,68 @@ export const processImportFileText = async (
         : null,
     openingBalance: typeof templateMetadata?.openingBalance === "number" ? templateMetadata.openingBalance : null,
     endingBalance: typeof templateMetadata?.endingBalance === "number" ? templateMetadata.endingBalance : null,
+    paymentDueDate: typeof templateMetadata?.paymentDueDate === "string" ? templateMetadata.paymentDueDate : null,
+    totalAmountDue: typeof templateMetadata?.totalAmountDue === "number" ? templateMetadata.totalAmountDue : null,
     startDate: typeof templateMetadata?.startDate === "string" ? templateMetadata.startDate : null,
     endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
   });
+  const metadataOverride = options.statementMetadataOverride ?? {};
+  const metadataForParse = {
+    ...mergedMetadata,
+    ...Object.fromEntries(Object.entries(metadataOverride).filter(([, value]) => value !== undefined)),
+  } as typeof mergedMetadata;
 
   const parsedRows = parseImportText(text, importFile.fileName, importFile.fileType, {
-    institution: mergedMetadata.institution,
-    accountName: mergedMetadata.accountName,
-    accountNumber: mergedMetadata.accountNumber,
+    institution: metadataForParse.institution,
+    accountName: metadataForParse.accountName,
+    accountNumber: metadataForParse.accountNumber,
   });
+  const gcashSuspiciouslySparse =
+    metadataForParse.institution === "GCash" &&
+    parsedRows.length > 0 &&
+    parsedRows.length < 50 &&
+    !metadataForParse.endingBalance;
+  const parsedRowsWithDates = countRowsWithParseableDates(parsedRows);
+  const parsedDateCoverage = parsedRows.length > 0 ? parsedRowsWithDates / parsedRows.length : 0;
+  const suspiciousDateCoverage =
+    importFile.fileType === "application/pdf" && parsedRows.length >= 6 && parsedRowsWithDates === 0
+      ? true
+      : importFile.fileType === "application/pdf" && parsedRows.length >= 10 && parsedDateCoverage < 0.25;
+  const shouldUseVisionFallback =
+    importFile.fileType === "application/pdf" &&
+    (!text.trim() ||
+      parsedRows.length === 0 ||
+      (metadataForParse.confidence ?? 0) < 70 ||
+      !metadataForParse.accountNumber ||
+      gcashSuspiciouslySparse ||
+      suspiciousDateCoverage);
+  let pageImages: Awaited<ReturnType<typeof readImportedPdfPageImages>> | null = null;
+  if (shouldUseVisionFallback) {
+    try {
+      pageImages = await readImportedPdfPageImages(
+        {
+          storageKey: String(importFile.storageKey ?? ""),
+          fileType: String(importFile.fileType ?? ""),
+          fileName: String(importFile.fileName ?? ""),
+        },
+        options.password,
+        !text.trim() ? 4 : gcashSuspiciouslySparse ? 3 : 2,
+        !text.trim() ? 1.6 : gcashSuspiciouslySparse ? 1.35 : 1.1
+      );
+    } catch (error) {
+      console.warn("Unable to render PDF page images for fallback; continuing without them", {
+        importFileId,
+        error,
+      });
+      pageImages = null;
+    }
+  }
   const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
   const openAiParsed = await parseImportTextWithOpenAIFallback({
     text,
     fileName: String(importFile.fileName ?? ""),
     fileType: String(importFile.fileType ?? ""),
-    detectedMetadata: mergedMetadata,
+      detectedMetadata: metadataForParse,
     parsedRows,
     pageImages,
     preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
@@ -367,6 +599,8 @@ export const processImportFileText = async (
             : null,
         openingBalance: typeof templateMetadata?.openingBalance === "number" ? templateMetadata.openingBalance : null,
         endingBalance: typeof templateMetadata?.endingBalance === "number" ? templateMetadata.endingBalance : null,
+        paymentDueDate: typeof templateMetadata?.paymentDueDate === "string" ? templateMetadata.paymentDueDate : null,
+        totalAmountDue: typeof templateMetadata?.totalAmountDue === "number" ? templateMetadata.totalAmountDue : null,
         startDate: typeof templateMetadata?.startDate === "string" ? templateMetadata.startDate : null,
         endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
       })
@@ -397,11 +631,12 @@ export const processImportFileText = async (
     Boolean(openAiParsed?.rows.length) &&
     Boolean(openAiParsed?.audit.schemaValidated) &&
     (openAiPrimaryMode ||
+      Boolean(pageImages?.length) ||
       (openAiMetadata
-        ? (openAiMetadata?.confidence ?? 0) >= (mergedMetadata.confidence ?? 0)
+        ? (openAiMetadata?.confidence ?? 0) >= (metadataForParse.confidence ?? 0)
         : parsedRows.length === 0));
   const effectiveRows = useOpenAiParse && openAiParsed ? openAiParsed.rows : parsedRows;
-  const effectiveMetadataSource = useOpenAiParse && openAiMetadata ? openAiMetadata : mergedMetadata;
+  const effectiveMetadataSource = useOpenAiParse && openAiMetadata ? openAiMetadata : metadataForParse;
   const parsedEndingBalance = getTrailingBalanceFromParsedRows(effectiveRows);
   const resolvedMetadata = {
     ...effectiveMetadataSource,
@@ -412,40 +647,27 @@ export const processImportFileText = async (
     statementFingerprint,
     importFileId,
   });
-  if (duplicateImportFileId) {
+  if (duplicateImportFileId && !options.allowDuplicateStatement) {
     await updateImportFileCompat(importFileId, {
       status: "done",
     });
     return { imported: 0, duplicate: true, metadata: resolvedMetadata };
   }
-  const template = await upsertStatementTemplate({
-    workspaceId: importFile.workspaceId,
-    fingerprint: statementFingerprint,
-    metadata: resolvedMetadata,
-    fileType: importFile.fileType,
-    parserConfig: {
-      accountType: resolvedMetadata.accountType ?? inferAccountTypeFromStatement(resolvedMetadata.institution, resolvedMetadata.accountName, "bank"),
-      rowCount: effectiveRows.length,
-      firstMerchant:
-        typeof effectiveRows[0]?.merchantClean === "string"
-          ? effectiveRows[0]?.merchantClean
-          : typeof effectiveRows[0]?.merchantRaw === "string"
-            ? effectiveRows[0]?.merchantRaw
-            : null,
-      lastMerchant:
-        typeof effectiveRows.at(-1)?.merchantClean === "string"
-          ? effectiveRows.at(-1)?.merchantClean
-          : typeof effectiveRows.at(-1)?.merchantRaw === "string"
-            ? effectiveRows.at(-1)?.merchantRaw
-            : null,
-    } as Prisma.InputJsonValue,
-  });
-
-  const rows = await enrichParsedRowsWithTraining({
-    workspaceId: importFile.workspaceId,
-    rows: effectiveRows,
-    statementConfidence: resolvedMetadata.confidence ?? 0,
-  });
+  let rows: Awaited<ReturnType<typeof enrichParsedRowsWithTraining>> = effectiveRows as Awaited<
+    ReturnType<typeof enrichParsedRowsWithTraining>
+  >;
+  try {
+    rows = await enrichParsedRowsWithTraining({
+      workspaceId: importFile.workspaceId,
+      rows: effectiveRows,
+      statementConfidence: resolvedMetadata.confidence ?? 0,
+    });
+  } catch (error) {
+    console.warn("Import training enrichment failed; continuing with parsed rows", {
+      importFileId,
+      error,
+    });
+  }
 
   if (await hasCompatibleTable("ParsedTransaction")) {
     await prisma.parsedTransaction.deleteMany({
@@ -458,7 +680,7 @@ export const processImportFileText = async (
     workspaceId: importFile.workspaceId,
     rows,
     metadata: resolvedMetadata,
-    statementFingerprint: template?.fingerprint ?? statementFingerprint,
+    statementFingerprint,
   });
   await insertParsedTransactionsCompat({
     importFileId,
@@ -468,39 +690,244 @@ export const processImportFileText = async (
     parsedRowsCount: rows.length,
   });
 
-  if (await hasCompatibleTable("AccountStatementCheckpoint")) {
-    const metadataStartDate = metadata.startDate ? new Date(metadata.startDate) : null;
-    const metadataEndDate = resolvedMetadata.endDate ? new Date(resolvedMetadata.endDate) : null;
-    await prisma.accountStatementCheckpoint.upsert({
-      where: { importFileId },
-      update: {
-        workspaceId: importFile.workspaceId,
-        statementStartDate: metadataStartDate,
-        statementEndDate: metadataEndDate,
-        openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
-        endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
-        status: "pending",
-        mismatchReason: null,
-        sourceMetadata: resolvedMetadata as any,
+  let template: Awaited<ReturnType<typeof upsertStatementTemplate>> | null = null;
+  try {
+    template = await upsertStatementTemplate({
+      workspaceId: importFile.workspaceId,
+      fingerprint: statementFingerprint,
+      metadata: resolvedMetadata,
+      fileType: importFile.fileType,
+      parserConfig: {
+        accountType: resolvedMetadata.accountType ?? inferAccountTypeFromStatement(resolvedMetadata.institution, resolvedMetadata.accountName, "bank"),
         rowCount: rows.length,
-      },
-      create: {
-        workspaceId: importFile.workspaceId,
-        importFileId,
-        statementStartDate: metadataStartDate,
-        statementEndDate: metadataEndDate,
-        openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
-        endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
-        status: "pending",
-        sourceMetadata: resolvedMetadata as any,
-        rowCount: rows.length,
-      },
+        firstMerchant:
+          typeof rows[0]?.merchantClean === "string"
+            ? rows[0]?.merchantClean
+            : typeof rows[0]?.merchantRaw === "string"
+              ? rows[0]?.merchantRaw
+              : null,
+        lastMerchant:
+          typeof rows.at(-1)?.merchantClean === "string"
+            ? rows.at(-1)?.merchantClean
+            : typeof rows.at(-1)?.merchantRaw === "string"
+              ? rows.at(-1)?.merchantRaw
+              : null,
+      } as Prisma.InputJsonValue,
+    });
+  } catch (error) {
+    console.warn("Statement template upsert failed; continuing import", {
+      importFileId,
+      error,
     });
   }
 
-  await updateImportFileCompat(importFileId, {
-    status: "done",
-  });
+  if (await hasCompatibleTable("AccountStatementCheckpoint")) {
+    try {
+      const metadataStartDate = metadata.startDate ? new Date(metadata.startDate) : null;
+      const metadataEndDate = resolvedMetadata.endDate ? new Date(resolvedMetadata.endDate) : null;
+      await prisma.accountStatementCheckpoint.upsert({
+        where: { importFileId },
+        update: {
+          workspaceId: importFile.workspaceId,
+          statementStartDate: metadataStartDate,
+          statementEndDate: metadataEndDate,
+          openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
+          endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
+          status: "pending",
+          mismatchReason: null,
+          sourceMetadata: resolvedMetadata as Prisma.InputJsonValue,
+          rowCount: rows.length,
+        },
+        create: {
+          workspaceId: importFile.workspaceId,
+          importFileId,
+          statementStartDate: metadataStartDate,
+          statementEndDate: metadataEndDate,
+          openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
+          endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
+          status: "pending",
+          sourceMetadata: resolvedMetadata as Prisma.InputJsonValue,
+          rowCount: rows.length,
+        },
+      });
+    } catch (error) {
+      console.warn("Statement checkpoint upsert failed; continuing import", {
+        importFileId,
+        error,
+      });
+    }
+  }
+
+  try {
+    const qaRunResult = await recordDataQaRun({
+      workspaceId: String(importFile.workspaceId),
+      importFileId,
+      source: options.qaSource ?? "import_processing",
+      fileName: String(importFile.fileName ?? "imported-file"),
+      fileType: String(importFile.fileType ?? "unknown"),
+      parserVersion: DATA_ENGINE_VERSION,
+      parsedRows: rows as unknown as DataQaParsedRow[],
+      metadata: resolvedMetadata,
+      timings: {
+        totalMs: Date.now() - startedAt,
+        parsingMs: Date.now() - startedAt,
+        usedVisionFallback: Boolean(pageImages?.length),
+        usedOpenAiFallback: Boolean(useOpenAiParse),
+        usedDeterministicParser: !useOpenAiParse,
+        pageCount: pageImages?.length ?? 0,
+      },
+      duplicate: false,
+      actorUserId: options.actorUserId ?? null,
+    });
+
+    const recentRuns = importFileId
+      ? await prisma.dataQaRun.findMany({
+          where: {
+            importFileId,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: AUTO_REPARSE_PLATEAU_WINDOW,
+          select: {
+            score: true,
+            findingCount: true,
+          },
+        })
+      : [];
+
+    const plateaued =
+      recentRuns.length >= AUTO_REPARSE_PLATEAU_WINDOW &&
+      recentRuns.every(
+        (run) => run.score === qaRunResult.evaluation.score && run.findingCount === qaRunResult.evaluation.findings.length
+      );
+
+    const shouldAutoRerun =
+      autoRerunEnabled &&
+      !plateaued &&
+      qaRunResult.evaluation.score < AUTO_REPARSE_SCORE_TARGET &&
+      autoRerunAttempt < AUTO_REPARSE_MAX_ATTEMPTS;
+
+    if (shouldAutoRerun) {
+      const autoRerunPayload = buildAutoRerunPayload({
+        latestScore: qaRunResult.evaluation.score,
+        findings: qaRunResult.evaluation.findings.map((finding) => ({
+          code: finding.code,
+          severity: finding.severity,
+          field: finding.field ?? null,
+          message: finding.message,
+          suggestion: finding.suggestion ?? null,
+        })),
+        parsedRows: rows as unknown as Array<Record<string, unknown>>,
+        metadata: resolvedMetadata,
+        statementCheckpoint: {
+          openingBalance:
+            resolvedMetadata.openingBalance !== null && resolvedMetadata.openingBalance !== undefined
+              ? String(resolvedMetadata.openingBalance)
+              : null,
+          endingBalance:
+            resolvedMetadata.endingBalance !== null && resolvedMetadata.endingBalance !== undefined
+              ? String(resolvedMetadata.endingBalance)
+              : null,
+        },
+        importAccount: importFile.account
+          ? {
+              institution: importFile.account.institution ?? null,
+              type: importFile.account.type ?? null,
+              name: importFile.account.name ?? null,
+              balance: importFile.account.balance?.toString() ?? null,
+            }
+          : null,
+      });
+
+      await updateImportFileCompat(importFileId, {
+        status: "processing",
+        processingPhase: "auto_rerunning",
+        processingAttempt: autoRerunAttempt + 1,
+        processingTargetScore: AUTO_REPARSE_SCORE_TARGET,
+        processingCurrentScore: qaRunResult.evaluation.score,
+        processingMessage: `Auto-rerun ${autoRerunAttempt + 1}/${AUTO_REPARSE_MAX_ATTEMPTS} queued. Current score ${qaRunResult.evaluation.score}.`,
+      });
+
+      await applyDataQaReviewLearning({
+        workspaceId: String(importFile.workspaceId),
+        importFileId,
+        accountId: importFile.account?.id ?? null,
+        fileName: String(importFile.fileName ?? "imported-file"),
+        fileType: String(importFile.fileType ?? "unknown"),
+        metadata: resolvedMetadata,
+        parsedRows: rows as unknown as Array<Record<string, unknown>>,
+        fieldReviewPayload: autoRerunPayload.fieldReviewPayload as unknown as Prisma.JsonValue,
+        manualFeedback: autoRerunPayload.manualFeedback,
+        actorUserId: options.actorUserId ?? null,
+        statementFingerprint,
+        statementMetadataOverride: resolvedMetadata,
+      }).catch((error) => {
+        console.warn("Automatic QA learning failed before rerun", {
+          importFileId,
+          error,
+        });
+      });
+
+      const nextStatementMetadataOverride = {
+        ...resolvedMetadata,
+        institution: readAutoRerunValue(autoRerunPayload.fieldReviewPayload.bank) ?? resolvedMetadata.institution ?? null,
+        accountNumber: readAutoRerunValue(autoRerunPayload.fieldReviewPayload.accountNumber) ?? resolvedMetadata.accountNumber ?? null,
+        accountType:
+          (readAutoRerunValue(autoRerunPayload.fieldReviewPayload.accountType) as typeof resolvedMetadata.accountType | null) ??
+          resolvedMetadata.accountType ??
+          null,
+        openingBalance:
+          (() => {
+            const value = readAutoRerunValue(autoRerunPayload.fieldReviewPayload.accountBalance);
+            if (!value) {
+              return resolvedMetadata.openingBalance ?? null;
+            }
+            const parsed = Number(value.replace(/[^0-9.-]/g, ""));
+            return Number.isFinite(parsed) ? parsed : resolvedMetadata.openingBalance ?? null;
+          })(),
+        endingBalance:
+          (() => {
+            const value = readAutoRerunValue(autoRerunPayload.fieldReviewPayload.accountBalance);
+            if (!value) {
+              return resolvedMetadata.endingBalance ?? null;
+            }
+            const parsed = Number(value.replace(/[^0-9.-]/g, ""));
+            return Number.isFinite(parsed) ? parsed : resolvedMetadata.endingBalance ?? null;
+          })(),
+      };
+
+      return processImportFileText(importFileId, {
+        ...options,
+        autoRerunAttempt: autoRerunAttempt + 1,
+        statementMetadataOverride: nextStatementMetadataOverride,
+      });
+    }
+
+    await updateImportFileCompat(importFileId, {
+      status: qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET ? "done" : "failed",
+      processingPhase:
+        qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET
+          ? "complete"
+          : plateaued
+            ? "plateaued"
+            : "needs_retry",
+      processingCurrentScore: qaRunResult.evaluation.score,
+      processingMessage:
+        qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET
+          ? autoRerunEnabled && autoRerunAttempt > 0
+            ? `Auto-rerun ${autoRerunAttempt}/${AUTO_REPARSE_MAX_ATTEMPTS} complete. Final score ${qaRunResult.evaluation.score}.`
+            : null
+          : plateaued
+            ? `Automatic reruns plateaued at score ${qaRunResult.evaluation.score}. Manual parser fixes are needed before rerunning again.`
+            : `Automatic reruns stopped below the ${AUTO_REPARSE_SCORE_TARGET} target. Latest score ${qaRunResult.evaluation.score}.`,
+    });
+  } catch (error) {
+    console.warn("Data QA recording failed after import processing", {
+      importFileId,
+      error,
+    });
+  }
 
   return { imported: rows.length, duplicate: false, metadata: resolvedMetadata, insightSummary: undefined, accountBalance: undefined };
 };
@@ -594,7 +1021,7 @@ const looksLikeJsonBlob = (value: string) => {
   }
 };
 
-const extractHumanReadableDescription = (rawPayload: JsonValue | null | undefined) => {
+const extractHumanReadableDescription = (rawPayload: Prisma.InputJsonValue | null | undefined) => {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
     return null;
   }
@@ -629,17 +1056,31 @@ const extractHumanReadableDescription = (rawPayload: JsonValue | null | undefine
   return null;
 };
 
-export const confirmImportFile = async (importFileId: string, accountId: string) => {
-  const parsedRows: Array<Record<string, unknown>> = await fetchParsedTransactionRows(importFileId);
-
-  if (parsedRows.length === 0) {
-    throw new Error("No parsed rows available");
-  }
-
+export const confirmImportFile = async (importFileId: string, accountId?: string | null) => {
+  const startedAt = Date.now();
   const importFile = await fetchImportFileCompat(importFileId);
 
   if (!importFile) {
     throw new Error("Import file not found");
+  }
+
+  const planLimits = await getWorkspaceOwnerLimits(String(importFile.workspaceId));
+
+  let parsedRows: Array<Record<string, unknown>> = await fetchParsedTransactionRows(importFileId);
+  if (parsedRows.length === 0) {
+    try {
+      await processImportFileText(importFileId, { actorUserId: null });
+      parsedRows = await fetchParsedTransactionRows(importFileId);
+    } catch (error) {
+      console.warn("Unable to recover parsed rows before confirmation", {
+        importFileId,
+        error,
+      });
+    }
+  }
+
+  if (parsedRows.length === 0) {
+    throw new Error("No parsed rows available");
   }
 
   const statementCheckpointRecord = (await hasCompatibleTable("AccountStatementCheckpoint"))
@@ -668,6 +1109,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     },
     parsedRows,
     accountId,
+    planLimits: planLimits ? { accountLimit: planLimits.accountLimit } : null,
   });
   if (!account) {
     throw new Error("Account not found");
@@ -896,12 +1338,12 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     });
   }
 
-  const existingCategories = await tx.category.findMany({
-    where: { workspaceId: importFile.workspaceId },
-  });
+    const existingCategories = await tx.category.findMany({
+      where: { workspaceId: importFile.workspaceId },
+    });
   const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
 
-  for (const row of parsedRows) {
+    for (const row of parsedRows) {
     const rowType =
       row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : undefined;
     const rowConfidence = typeof row.confidence === "number" ? row.confidence : 0;
@@ -910,8 +1352,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
     const rowAccountMatchConfidence = typeof row.accountMatchConfidence === "number" ? row.accountMatchConfidence : 100;
     const rowDuplicateConfidence = typeof row.duplicateConfidence === "number" ? row.duplicateConfidence : 0;
     const rowTransferConfidence = typeof row.transferConfidence === "number" ? row.transferConfidence : rowType === "transfer" ? 100 : 0;
-    const categoryName: string =
-      (typeof row.categoryName === "string" && row.categoryName) || defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense");
+    const categoryName = (typeof row.categoryName === "string" && row.categoryName) || defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense");
     let categoryId = categoryByName.get(categoryName.toLowerCase());
 
     if (!categoryId) {
@@ -924,7 +1365,7 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       });
 
       categoryId = created.id;
-      categoryByName.set(categoryName.toLowerCase(), categoryId as string);
+      categoryByName.set(categoryName.toLowerCase(), categoryId);
     }
 
     const merchantText =
@@ -942,10 +1383,13 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
       accountMatchConfidence: rowAccountMatchConfidence,
       duplicateConfidence: rowDuplicateConfidence,
       transferConfidence: rowTransferConfidence,
-      rawPayload: (row.rawPayload ?? {}) as JsonValue,
-      normalizedPayload: (row.normalizedPayload ?? {}) as JsonValue,
-      learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as JsonValue,
-      date: row.date instanceof Date ? row.date : row.date ? new Date(String(row.date)) : new Date(),
+      rawPayload: (row.rawPayload ?? {}) as Prisma.InputJsonValue,
+      normalizedPayload: (row.normalizedPayload ?? {}) as Prisma.InputJsonValue,
+      learnedRuleIdsApplied: (row.learnedRuleIdsApplied ?? []) as Prisma.InputJsonValue,
+      date:
+        (row.date instanceof Date && !Number.isNaN(row.date.getTime())
+          ? row.date
+          : parseDateValue(typeof row.date === "string" ? row.date : null)) ?? new Date(),
       amount: parseAmountValue(coerceAmountToString(row.amount)) ?? 0,
       currency: "PHP",
       type: (rowType ?? "expense") as TransactionType,
@@ -967,21 +1411,34 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
         merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
         description: extractHumanReadableDescription(row.rawPayload ?? null),
         categoryName,
-        rawPayload: (row.rawPayload ?? {}) as JsonValue,
+        rawPayload: (row.rawPayload ?? {}) as Prisma.InputJsonValue,
       },
       trainingSignal: {
         merchantText,
-        categoryId: categoryId as string,
+        categoryId,
         categoryName,
         type: rowType ?? "expense",
         confidence: typeof row.confidence === "number" ? row.confidence : 100,
         notes: typeof row.categoryReason === "string" ? row.categoryReason : null,
       },
-    });
-  }
+      });
+    }
 
-  for (const batch of chunkArray(preparedTransactions, 25)) {
-    await tx.transaction.createMany({
+    if (planLimits?.transactionLimit != null) {
+      const existingTransactionCount = await tx.transaction.count({
+        where: { workspaceId: String(importFile.workspaceId) },
+      });
+      const projectedTransactionCount = existingTransactionCount + preparedTransactions.length + (openingBalanceInserted ? 1 : 0);
+
+      if (projectedTransactionCount > planLimits.transactionLimit) {
+        throw new Error(
+          `Free plan includes up to ${planLimits.transactionLimit.toLocaleString()} transaction rows. Upgrade to Pro to import more rows.`
+        );
+      }
+    }
+
+    for (const batch of chunkArray(preparedTransactions, 25)) {
+      await tx.transaction.createMany({
       data: batch.map((entry) => entry.insertRow as any),
     });
   }
@@ -1038,6 +1495,70 @@ export const confirmImportFile = async (importFileId: string, accountId: string)
   void Promise.allSettled(trainingSignalJobs);
 
   const insightSummary = buildImportInsightSummary(transactions);
+
+  try {
+    await recordDataQaRun({
+      workspaceId: String(importFile.workspaceId),
+      importFileId,
+      accountId: resolvedAccountId,
+      source: "import_confirmation",
+      fileName: String(importFile.fileName ?? "imported-file"),
+      fileType: String(importFile.fileType ?? "unknown"),
+      parserVersion: DATA_ENGINE_VERSION,
+      parsedRows: parsedRows as unknown as DataQaParsedRow[],
+      metadata: {
+        institution:
+          typeof statementRow?.institution === "string" ? statementRow.institution : null,
+        accountNumber:
+          typeof statementMetadata?.accountNumber === "string" ? statementMetadata.accountNumber : null,
+        accountName:
+          typeof statementRow?.accountName === "string" ? statementRow.accountName : null,
+        accountType: typeof account.type === "string" ? account.type : null,
+        openingBalance:
+          statementCheckpointRecord?.openingBalance !== null && statementCheckpointRecord?.openingBalance !== undefined
+            ? Number(statementCheckpointRecord.openingBalance)
+            : null,
+        endingBalance:
+          statementCheckpointRecord?.endingBalance !== null && statementCheckpointRecord?.endingBalance !== undefined
+            ? Number(statementCheckpointRecord.endingBalance)
+            : null,
+        paymentDueDate: null,
+        totalAmountDue: null,
+        startDate: statementCheckpointRecord?.statementStartDate?.toISOString() ?? null,
+        endDate: statementCheckpointRecord?.statementEndDate?.toISOString() ?? null,
+        confidence: statementConfidence,
+      },
+      account: {
+        id: resolvedAccountId,
+        name: account.name,
+        institution: account.institution,
+        type: account.type,
+        balance: reconciledAccountBalance,
+      },
+      checkpoint: statementCheckpointRecord
+        ? {
+            statementStartDate: statementCheckpointRecord.statementStartDate,
+            statementEndDate: statementCheckpointRecord.statementEndDate,
+            openingBalance: statementCheckpointRecord.openingBalance?.toString() ?? null,
+            endingBalance: statementCheckpointRecord.endingBalance?.toString() ?? null,
+            status: statementCheckpointRecord.status,
+            rowCount: statementCheckpointRecord.rowCount,
+          }
+        : null,
+      timings: {
+        totalMs: Date.now() - startedAt,
+        parsingMs: 0,
+        usedDeterministicParser: true,
+      },
+      duplicate: false,
+      actorUserId: null,
+    });
+  } catch (error) {
+    console.warn("Data QA recording failed after import confirmation", {
+      importFileId,
+      error,
+    });
+  }
 
   return { imported: transactions.length, insightSummary, accountBalance: reconciledAccountBalance };
 });

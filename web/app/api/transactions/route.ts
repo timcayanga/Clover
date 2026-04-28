@@ -6,6 +6,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { recordTrainingSignal } from "@/lib/data-engine";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { countWorkspaceTransactions } from "@/lib/plan-access";
+import { getOrCreateCurrentUser } from "@/lib/user-context";
+import { getEffectiveUserLimits } from "@/lib/user-limits";
 import {
   buildTransactionQueryWhere,
   parseTransactionQueryFilters,
@@ -175,8 +178,152 @@ export async function GET(request: Request) {
     const where = buildTransactionQueryWhere(workspaceId, filters);
     const pageSizeParam = searchParams.get("pageSize");
     const includeAll = pageSizeParam === "all";
+    const summaryMode = searchParams.get("summaryMode") === "light" ? "light" : "full";
     const requestedPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const requestedPageSize = includeAll ? null : Math.max(1, Number(pageSizeParam ?? "25") || 25);
+
+    const totalCount = await prisma.transaction.count({ where });
+    if (totalCount === 0) {
+      return NextResponse.json({
+        transactions: [],
+        page: 1,
+        pageSize: includeAll ? 0 : requestedPageSize ?? 25,
+        totalCount: 0,
+        summary: {
+          totalCount: 0,
+          income: 0,
+          spending: 0,
+          transfers: 0,
+          review: 0,
+          topCategory: null,
+          topAccount: null,
+          firstTransactionDate: null,
+          lastTransactionDate: null,
+          firstReviewTransaction: null,
+          firstReviewTransactionIndex: null,
+        },
+      });
+    }
+
+    if (summaryMode === "light") {
+      const pageStart = (requestedPage - 1) * (requestedPageSize ?? 25);
+      const [pageRows, duplicateRows] = await Promise.all([
+        prisma.transaction.findMany({
+          where,
+          select: {
+            id: true,
+            accountId: true,
+            date: true,
+            amount: true,
+            type: true,
+            merchantRaw: true,
+            merchantClean: true,
+            categoryId: true,
+            reviewStatus: true,
+            parserConfidence: true,
+            categoryConfidence: true,
+            accountMatchConfidence: true,
+            duplicateConfidence: true,
+            transferConfidence: true,
+            currency: true,
+            description: true,
+            category: {
+              select: {
+                name: true,
+              },
+            },
+            account: {
+              select: {
+                name: true,
+              },
+            },
+            createdAt: true,
+            isTransfer: true,
+            isExcluded: true,
+          },
+          orderBy: { date: "desc" },
+          skip: pageStart,
+          take: includeAll ? totalCount : requestedPageSize ?? 25,
+        }),
+        prisma.transaction.findMany({
+          where: {
+            ...where,
+            OR: [
+              { reviewStatus: { notIn: ["confirmed", "rejected", "duplicate_skipped"] } },
+              { categoryId: null },
+              { isExcluded: true },
+            ],
+          },
+          select: {
+            date: true,
+            amount: true,
+            merchantRaw: true,
+            merchantClean: true,
+          },
+          orderBy: { date: "desc" },
+          take: 250,
+        }),
+      ]);
+
+      const duplicateCounts = new Map<string, number>();
+      for (const transaction of duplicateRows) {
+        const signature = [
+          transaction.date.toISOString().slice(0, 10),
+          Number(transaction.amount).toFixed(2),
+          normalizeTransactionKey(transaction.merchantClean ?? transaction.merchantRaw),
+        ].join("|");
+
+        duplicateCounts.set(signature, (duplicateCounts.get(signature) ?? 0) + 1);
+      }
+
+      const transactions = pageRows.map((transaction) =>
+        mapTransactionRow({
+          id: transaction.id,
+          workspaceId,
+          accountId: transaction.accountId,
+          account: transaction.account,
+          categoryId: transaction.categoryId,
+          category: transaction.category,
+          reviewStatus: transaction.reviewStatus,
+          parserConfidence: transaction.parserConfidence,
+          categoryConfidence: transaction.categoryConfidence,
+          accountMatchConfidence: transaction.accountMatchConfidence,
+          duplicateConfidence: transaction.duplicateConfidence,
+          transferConfidence: transaction.transferConfidence,
+          date: transaction.date,
+          amount: transaction.amount,
+          currency: transaction.currency,
+          type: transaction.type,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          description: transaction.description,
+          isTransfer: transaction.isTransfer,
+          isExcluded: transaction.isExcluded,
+          createdAt: transaction.createdAt,
+          warningReason: getTransactionWarningReason(transaction, duplicateCounts),
+        })
+      );
+
+      return NextResponse.json({
+        transactions,
+        page: includeAll ? 1 : requestedPage,
+        pageSize: includeAll ? totalCount : requestedPageSize ?? 25,
+        totalCount,
+        summary: {
+          totalCount,
+          income: 0,
+          spending: 0,
+          transfers: 0,
+          review: 0,
+          topCategory: null,
+          topAccount: null,
+          firstTransactionDate: null,
+          lastTransactionDate: null,
+          firstReviewTransaction: null,
+          firstReviewTransactionIndex: null,
+        },
+      });
+    }
 
     const summaryRows = await prisma.transaction.findMany({
       where,
@@ -303,9 +450,9 @@ export async function GET(request: Request) {
       transactions: pageTransactions,
       page: includeAll ? 1 : requestedPage,
       pageSize: includeAll ? summaryState.totalCount : requestedPageSize ?? 25,
-      totalCount: summaryState.totalCount,
+      totalCount,
       summary: {
-        totalCount: summaryState.totalCount,
+        totalCount,
         income: summaryState.income,
         spending: summaryState.spending,
         transfers: summaryState.transfers,
@@ -329,6 +476,24 @@ export async function POST(request: Request) {
     const payload = transactionSchema.parse(await request.json());
 
     await assertWorkspaceAccess(userId, payload.workspaceId);
+    const user = await getOrCreateCurrentUser(userId);
+    const effectiveLimits = getEffectiveUserLimits(user);
+    const transactionCount = await countWorkspaceTransactions(payload.workspaceId);
+
+    if (effectiveLimits.transactionLimit !== null && transactionCount >= effectiveLimits.transactionLimit) {
+      const isFreePlan = user.planTier === "free";
+      return NextResponse.json(
+        {
+          error: isFreePlan
+            ? `Free includes up to ${effectiveLimits.transactionLimit.toLocaleString()} transaction rows. Upgrade to Pro for more history.`
+            : `You’ve reached the current ${effectiveLimits.transactionLimit.toLocaleString()}-row transaction limit on Pro. Manage billing if you need more room.`,
+          planTier: user.planTier,
+          limitType: "transaction_limit",
+          limitValue: effectiveLimits.transactionLimit,
+        },
+        { status: 403 }
+      );
+    }
 
     const resolvedCategoryId =
       payload.categoryId ??
