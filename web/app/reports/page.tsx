@@ -7,13 +7,11 @@ import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
-import { PlanTierBanner } from "@/components/plan-tier-banner";
 import type { ReportsQueueItem } from "@/components/reports-review-queue";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
-import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { recordAppError } from "@/lib/error-logs";
@@ -244,30 +242,6 @@ async function ReportsStream({
   });
   const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
   const isPro = user.planTier === "pro";
-  const planLimits = getEffectiveUserLimits(user);
-  const freePlanReports = [
-    "Income",
-    "Expenses",
-    "Net income",
-    "Savings rate",
-    "Where your money went",
-    "Spending by category",
-    "Repeat charges",
-    "Top spenders",
-    "This month",
-    "Review queue",
-    "Data health",
-  ] as const;
-  const proPlanReports = [
-    "What changed",
-    "Why it changed",
-    "What to do next",
-    "Goal lens",
-    "Attention",
-    "Decision lens",
-    "Account health detail",
-    "Comparison modes",
-  ] as const;
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
@@ -1214,45 +1188,6 @@ async function ReportsStream({
             chart_type: "timeline",
           }}
         />
-        <PlanTierBanner
-          planTier={user.planTier}
-          label="Reports, insights, and limits"
-          limits={planLimits}
-          ctaHref={user.planTier === "free" ? "/pricing" : "/settings#billing"}
-          ctaLabel={user.planTier === "free" ? "See Pro pricing" : "Manage billing"}
-          secondaryHref="/insights"
-          secondaryLabel="Open insights"
-          className="reports-plan-banner"
-        />
-        <section className="reports-plan-split glass">
-          <div className="reports-plan-split__head">
-            <div>
-              <p className="eyebrow">Plan split</p>
-              <h4>Free gives the essentials. Pro adds the decision layer.</h4>
-            </div>
-            <p className="reports-plan-split__summary">
-              Reports, insights, goals, and recommendations stay tied to the same plan tier so the upgrade path is clear.
-            </p>
-          </div>
-          <div className="reports-plan-split__grid">
-            <article className="reports-plan-split__column">
-              <p className="reports-plan-split__label">Free</p>
-              <ul className="reports-plan-split__list">
-                {freePlanReports.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </article>
-            <article className="reports-plan-split__column reports-plan-split__column--pro">
-              <p className="reports-plan-split__label">Pro</p>
-              <ul className="reports-plan-split__list">
-                {proPlanReports.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            </article>
-          </div>
-        </section>
         {isEmptyWorkspace ? (
           <div style={{ marginBottom: 20 }}>
             <EmptyDataCta
@@ -1685,6 +1620,15 @@ async function ReportsStream({
             </div>
           </article>
         </section>
+
+        {!isPro ? (
+          <div className="reports-footer-upsell">
+            <p>
+              Want a little more context and room to explore? <Link href="/pricing">Upgrade to Pro</Link> to unlock more charts,
+              deeper comparisons, and extra analysis when you need it.
+            </p>
+          </div>
+        ) : null}
 
       </>
     );

@@ -5463,6 +5463,24 @@ label {
   gap: 10px;
 }
 
+.goals-upgrade-note {
+  margin: 8px 6px 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+  letter-spacing: -0.01em;
+}
+
+.goals-upgrade-note a {
+  color: var(--cyan-700);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.goals-upgrade-note a:hover {
+  text-decoration: underline;
+}
+
 .goals-beginner-guide__item {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr);
