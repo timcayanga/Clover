@@ -78,18 +78,16 @@ export function HelpSectionPage({ section, returnTo }: HelpSectionPageProps) {
           </div>
         </nav>
 
-        <section className="help-section-search glass">
-          <label className="help-search help-search--section" htmlFor="help-section-search">
-            <span className="sr-only">Search within this help section</span>
-            <input
-              id="help-section-search"
-              type="search"
-              placeholder={`Search ${section.title.toLowerCase()}`}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </label>
-        </section>
+        <label className="help-search help-search--section" htmlFor="help-section-search">
+          <span className="sr-only">Search within this help section</span>
+          <input
+            id="help-section-search"
+            type="search"
+            placeholder={`Search ${section.title.toLowerCase()}`}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
 
         <section className="help-section-header">
           <h1>{section.title}</h1>

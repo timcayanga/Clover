@@ -17800,7 +17800,10 @@ input.transaction-inline-edit--amount::placeholder {
 
 .help-hero--simple {
   grid-template-columns: minmax(0, 1fr);
-  padding: 18px 20px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .help-hero__copy,
@@ -17810,7 +17813,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .help-hero--simple .help-hero__copy {
-  max-width: 720px;
+  max-width: none;
 }
 
 .help-hero__copy h1,
@@ -17832,11 +17835,11 @@ input.transaction-inline-edit--amount::placeholder {
 .help-search {
   display: block;
   width: 100%;
-  max-width: 560px;
+  max-width: none;
 }
 
 .help-search--hero {
-  max-width: 760px;
+  max-width: none;
 }
 
 .help-search input {
@@ -18090,13 +18093,13 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .help-section-search {
-  padding: 18px 20px;
-  border-radius: 26px;
-  box-shadow: var(--shadow-soft);
+  padding: 0;
+  border: 0;
+  box-shadow: none;
 }
 
 .help-search--section {
-  max-width: 100%;
+  max-width: none;
 }
 
 .help-section-header {

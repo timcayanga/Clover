@@ -133,20 +133,16 @@ export function HelpCenter({ returnTo }: HelpCenterProps) {
           </Link>
         </nav>
 
-        <section className="help-hero help-hero--simple glass">
-          <div className="help-hero__copy">
-            <label className="help-search help-search--hero" htmlFor="help-search">
-              <span className="sr-only">Search help</span>
-              <input
-                id="help-search"
-                type="search"
-                placeholder="Search Clover help"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-              />
-            </label>
-          </div>
-        </section>
+        <label className="help-search help-search--hero" htmlFor="help-search">
+          <span className="sr-only">Search help</span>
+          <input
+            id="help-search"
+            type="search"
+            placeholder="Search Clover help"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
 
         <section className="help-grid" aria-label="Help topics">
           {filteredSections.map((section) => (
