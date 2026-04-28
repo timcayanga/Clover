@@ -14,6 +14,7 @@ import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { PlanTierBanner } from "@/components/plan-tier-banner";
 import {
   analyticsOnceKey,
   capturePostHogClientEvent,
@@ -28,6 +29,7 @@ import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import type { UserLimits } from "@/lib/user-limits";
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
@@ -909,7 +911,19 @@ const toolbarAddStyle = {
 function ActionIcon({
   name,
 }: {
-  name: "plus" | "chevron-down" | "chevron-right" | "undo" | "redo" | "search" | "calendar" | "filters" | "summary" | "save" | "download";
+  name:
+    | "plus"
+    | "chevron-down"
+    | "chevron-right"
+    | "undo"
+    | "redo"
+    | "search"
+    | "calendar"
+    | "filters"
+    | "summary"
+    | "save"
+    | "download"
+    | "more";
 }) {
   const common = {
     width: 14,
@@ -1004,6 +1018,14 @@ function ActionIcon({
           <path d="M12 4v10" />
           <path d="m8 10 4 4 4-4" />
           <path d="M5 19h14" />
+        </svg>
+      );
+    case "more":
+      return (
+        <svg {...common}>
+          <circle cx="6" cy="12" r="1.4" />
+          <circle cx="12" cy="12" r="1.4" />
+          <circle cx="18" cy="12" r="1.4" />
         </svg>
       );
     default:
@@ -1130,6 +1152,7 @@ function TransactionsPageContent() {
   const manualNameInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const initialWorkspaceId = readSelectedWorkspaceId();
   const initialCachedWorkspace = getCachedTransactionsWorkspace(initialWorkspaceId);
@@ -1178,6 +1201,7 @@ function TransactionsPageContent() {
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
@@ -1195,6 +1219,8 @@ function TransactionsPageContent() {
   const [bulkEditForm, setBulkEditForm] = useState<BulkEditForm>(createEmptyBulkEditForm());
   const [manualForm, setManualForm] = useState<ManualTransactionForm>(createEmptyManualForm());
   const [isSaving, setIsSaving] = useState(false);
+  const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
+  const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
   const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
   const [hasInitialTransactionsLoaded, setHasInitialTransactionsLoaded] = useState(false);
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
@@ -1497,6 +1523,39 @@ function TransactionsPageContent() {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadPlan = async () => {
+      const response = await fetch("/api/me");
+      if (!response.ok || cancelled) {
+        return;
+      }
+
+      const payload = await response.json();
+      const nextPlanTier = payload?.user?.planTier === "pro" ? "pro" : "free";
+      const nextLimits = payload?.user
+        ? {
+            accountLimit: Number(payload.user.accountLimit ?? 5),
+            monthlyUploadLimit: Number(payload.user.monthlyUploadLimit ?? 10),
+            transactionLimit:
+              payload.user.transactionLimit === null || payload.user.transactionLimit === undefined
+                ? null
+                : Number(payload.user.transactionLimit),
+          }
+        : null;
+
+      setPlanTier(nextPlanTier);
+      setPlanLimits(nextLimits);
+    };
+
+    void loadPlan();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     persistSelectedWorkspaceId(selectedWorkspaceId);
   }, [selectedWorkspaceId]);
 
@@ -1601,7 +1660,7 @@ function TransactionsPageContent() {
   ]);
 
   useEffect(() => {
-    if (!addMenuOpen && !downloadMenuOpen) {
+    if (!addMenuOpen && !downloadMenuOpen && !moreMenuOpen) {
       return;
     }
 
@@ -1611,18 +1670,24 @@ function TransactionsPageContent() {
         return;
       }
 
-      if (addMenuRef.current?.contains(target) || downloadMenuRef.current?.contains(target)) {
+      if (
+        addMenuRef.current?.contains(target) ||
+        downloadMenuRef.current?.contains(target) ||
+        moreMenuRef.current?.contains(target)
+      ) {
         return;
       }
 
       setAddMenuOpen(false);
       setDownloadMenuOpen(false);
+      setMoreMenuOpen(false);
     };
 
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         setAddMenuOpen(false);
         setDownloadMenuOpen(false);
+        setMoreMenuOpen(false);
         setImportOpen(false);
       }
     };
@@ -1633,7 +1698,7 @@ function TransactionsPageContent() {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [addMenuOpen, downloadMenuOpen]);
+  }, [addMenuOpen, downloadMenuOpen, moreMenuOpen]);
 
   useEffect(() => {
     if (filterOpen) {
@@ -1674,16 +1739,25 @@ function TransactionsPageContent() {
   const closeToolbarMenus = () => {
     setAddMenuOpen(false);
     setDownloadMenuOpen(false);
+    setMoreMenuOpen(false);
   };
 
   const openAddMenu = () => {
     setDownloadMenuOpen(false);
+    setMoreMenuOpen(false);
     setAddMenuOpen((current) => !current);
   };
 
   const openDownloadMenu = () => {
     setAddMenuOpen(false);
+    setMoreMenuOpen(false);
     setDownloadMenuOpen((current) => !current);
+  };
+
+  const openMoreMenu = () => {
+    setAddMenuOpen(false);
+    setDownloadMenuOpen(false);
+    setMoreMenuOpen((current) => !current);
   };
 
   const openImportFiles = () => {
@@ -3342,6 +3416,7 @@ function TransactionsPageContent() {
   const hasReviewItems = warningTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
   const isTableLoading = false;
+  const hasActiveFilters = activeFilterChips.length > 0;
 
   useEffect(() => {
     if (!selectedWorkspaceId || !isWorkspaceDataReady) {
@@ -3398,6 +3473,16 @@ function TransactionsPageContent() {
 
   return (
     <CloverShell active="transactions" title="Transactions" showTopbar={false}>
+      <PlanTierBanner
+        planTier={planTier}
+        label="Manual tracking and limits"
+        limits={planLimits}
+        ctaHref={planTier === "free" ? "/pricing" : "/settings#billing"}
+        ctaLabel={planTier === "free" ? "See Pro pricing" : "Manage billing"}
+        secondaryHref="/accounts"
+        secondaryLabel="Open accounts"
+        className="transactions-plan-banner"
+      />
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`}>
         <div className="glass table-panel table-panel--full transactions-table-panel transactions-main-panel">
           <div className="transactions-topbar">
@@ -3446,19 +3531,86 @@ function TransactionsPageContent() {
                   <span>Filters</span>
                   {activeFilterCount > 0 ? <span className="transactions-filter-count-badge">{activeFilterCount}</span> : null}
                 </button>
-                <button
-                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-summary-toggle-button"
-                  style={toolbarChipStyle}
-                  type="button"
-                  aria-pressed={summaryOpen}
-                  onClick={() => setSummaryOpen((current) => !current)}
-                  title="Summary"
-                  aria-label="Summary"
-                >
-                  <span className="button-icon" aria-hidden="true">
-                    <ActionIcon name="summary" />
-                  </span>
-                </button>
+                <div className="transactions-more-menu" id="transactions-more-menu" ref={moreMenuRef}>
+                  <button
+                    className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-more-menu__toggle"
+                    style={toolbarChipStyle}
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={moreMenuOpen}
+                    onClick={openMoreMenu}
+                    title="More actions"
+                    aria-label="More actions"
+                  >
+                    <span className="button-icon" aria-hidden="true">
+                      <ActionIcon name="more" />
+                    </span>
+                  </button>
+                  <div className="transactions-more-menu__panel" hidden={!moreMenuOpen}>
+                    <button
+                      className="transactions-more-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        setSummaryOpen((current) => !current);
+                      }}
+                    >
+                      {summaryOpen ? "Hide summary" : "Show summary"}
+                    </button>
+                    <button
+                      className="transactions-more-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        void undoLastChange();
+                      }}
+                      disabled={!undoStack.length || isSaving || isApplyingHistory}
+                    >
+                      Undo
+                    </button>
+                    <button
+                      className="transactions-more-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        void redoLastChange();
+                      }}
+                      disabled={!redoStack.length || isSaving || isApplyingHistory}
+                    >
+                      Redo
+                    </button>
+                    <button
+                      className="transactions-more-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        saveView();
+                      }}
+                    >
+                      Save view
+                    </button>
+                    <button
+                      className="transactions-more-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        downloadCsv();
+                      }}
+                    >
+                      Export CSV
+                    </button>
+                    <button
+                      className="transactions-more-menu__item"
+                      type="button"
+                      onClick={() => {
+                        closeToolbarMenus();
+                        downloadPdf();
+                      }}
+                    >
+                      Export PDF
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -3628,7 +3780,12 @@ function TransactionsPageContent() {
                   </div>
                 </>
               ) : (
-                <span className="transactions-context-strip__label">Filters</span>
+                <div className="transactions-context-strip__intro">
+                  <span className="transactions-context-strip__label">Start here</span>
+                  <p className="transactions-context-strip__note">
+                    Add a transaction or import files, then use Filters to narrow the list.
+                  </p>
+                </div>
               )}
             </div>
           </div>
