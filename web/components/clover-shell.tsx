@@ -736,103 +736,117 @@ export function CloverShell({
         </div>
 
         <div className="sidebar-search-wrap" ref={searchWrapRef}>
-          <label className="sidebar-search" htmlFor="sidebar-search">
-            <span className="sr-only">Search Clover</span>
-            <input
-              id="sidebar-search"
-              type="search"
-              placeholder="Search Clover"
-              value={searchQuery}
-              onFocus={() => setIsSearchOpen(true)}
-              onChange={(event) => {
-                setSearchQuery(event.target.value);
-                setIsSearchOpen(true);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  navigateSearchResult(firstSearchHref);
-                }
-              }}
-            />
-          </label>
+          <button
+            className="sidebar-search-trigger"
+            type="button"
+            aria-label={isSearchOpen ? "Close search" : "Open search"}
+            aria-expanded={isSearchOpen}
+            aria-controls="sidebar-search-panel"
+            onClick={() => setIsSearchOpen((current) => !current)}
+          >
+            <MenuIcon name="search" />
+          </button>
 
           {shouldShowSearchResults ? (
-            <div className="sidebar-search-results" ref={searchResultsRef}>
-              {searchTickerLoading ? (
-                <div className="sidebar-search-results__empty">Searching Clover...</div>
-              ) : searchResults.hasAnyResults ? (
-                <>
-                  {searchResults.pages.length > 0 ? (
-                    <div className="sidebar-search-results__group">
-                      <div className="sidebar-search-results__label">Pages</div>
-                      {searchResults.pages.map((result) => (
+            <div className="sidebar-search-panel" id="sidebar-search-panel">
+              <label className="sidebar-search" htmlFor="sidebar-search">
+                <span className="sr-only">Search Clover</span>
+                <input
+                  id="sidebar-search"
+                  type="search"
+                  placeholder="Search Clover"
+                  value={searchQuery}
+                  autoComplete="off"
+                  onFocus={() => setIsSearchOpen(true)}
+                  onChange={(event) => {
+                    setSearchQuery(event.target.value);
+                    setIsSearchOpen(true);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      navigateSearchResult(firstSearchHref);
+                    }
+                  }}
+                />
+              </label>
+
+              <div className="sidebar-search-results" ref={searchResultsRef}>
+                {searchTickerLoading ? (
+                  <div className="sidebar-search-results__empty">Searching Clover...</div>
+                ) : searchResults.hasAnyResults ? (
+                  <>
+                    {searchResults.pages.length > 0 ? (
+                      <div className="sidebar-search-results__group">
+                        <div className="sidebar-search-results__label">Pages</div>
+                        {searchResults.pages.map((result) => (
+                          <button
+                            key={result.key}
+                            type="button"
+                            className="sidebar-search-results__item"
+                            onClick={() => navigateSearchResult(result.href)}
+                          >
+                            <span className="sidebar-search-results__icon" aria-hidden="true">
+                              <MenuIcon name={result.icon} />
+                            </span>
+                            <span className="sidebar-search-results__copy">
+                              <strong>{result.title}</strong>
+                              <span>{result.detail}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {searchResults.accounts.length > 0 ? (
+                      <div className="sidebar-search-results__group">
+                        <div className="sidebar-search-results__label">Accounts</div>
+                        {searchResults.accounts.map((result) => (
+                          <button
+                            key={result.key}
+                            type="button"
+                            className="sidebar-search-results__item"
+                            onClick={() => navigateSearchResult(result.href)}
+                          >
+                            <span className="sidebar-search-results__icon" aria-hidden="true">
+                              <MenuIcon name={result.icon} />
+                            </span>
+                            <span className="sidebar-search-results__copy">
+                              <strong>{result.title}</strong>
+                              <span>{result.detail}</span>
+                            </span>
+                            {result.badge ? <span className="sidebar-search-results__badge">{result.badge}</span> : null}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    {searchResults.ticker ? (
+                      <div className="sidebar-search-results__group">
+                        <div className="sidebar-search-results__label">Markets</div>
                         <button
-                          key={result.key}
                           type="button"
                           className="sidebar-search-results__item"
-                          onClick={() => navigateSearchResult(result.href)}
+                          onClick={() => navigateSearchResult(searchResults.ticker!.href)}
                         >
                           <span className="sidebar-search-results__icon" aria-hidden="true">
-                            <MenuIcon name={result.icon} />
+                            <MenuIcon name="investments" />
                           </span>
                           <span className="sidebar-search-results__copy">
-                            <strong>{result.title}</strong>
-                            <span>{result.detail}</span>
+                            <strong>{searchResults.ticker.title}</strong>
+                            <span>{searchResults.ticker.detail}</span>
                           </span>
+                          {searchResults.ticker.badge ? <span className="sidebar-search-results__badge">{searchResults.ticker.badge}</span> : null}
                         </button>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {searchResults.accounts.length > 0 ? (
-                    <div className="sidebar-search-results__group">
-                      <div className="sidebar-search-results__label">Accounts</div>
-                      {searchResults.accounts.map((result) => (
-                        <button
-                          key={result.key}
-                          type="button"
-                          className="sidebar-search-results__item"
-                          onClick={() => navigateSearchResult(result.href)}
-                        >
-                          <span className="sidebar-search-results__icon" aria-hidden="true">
-                            <MenuIcon name={result.icon} />
-                          </span>
-                          <span className="sidebar-search-results__copy">
-                            <strong>{result.title}</strong>
-                            <span>{result.detail}</span>
-                          </span>
-                          {result.badge ? <span className="sidebar-search-results__badge">{result.badge}</span> : null}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {searchResults.ticker ? (
-                    <div className="sidebar-search-results__group">
-                      <div className="sidebar-search-results__label">Markets</div>
-                      <button
-                        type="button"
-                        className="sidebar-search-results__item"
-                        onClick={() => navigateSearchResult(searchResults.ticker!.href)}
-                      >
-                        <span className="sidebar-search-results__icon" aria-hidden="true">
-                          <MenuIcon name="investments" />
-                        </span>
-                        <span className="sidebar-search-results__copy">
-                          <strong>{searchResults.ticker.title}</strong>
-                          <span>{searchResults.ticker.detail}</span>
-                        </span>
-                        {searchResults.ticker.badge ? <span className="sidebar-search-results__badge">{searchResults.ticker.badge}</span> : null}
-                      </button>
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <div className="sidebar-search-results__empty">
-                  No matches yet. Try an account, page, or ticker.
-                </div>
-              )}
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <div className="sidebar-search-results__empty">
+                    No matches yet. Try an account, page, or ticker.
+                  </div>
+                )}
+              </div>
             </div>
           ) : null}
         </div>

@@ -15,13 +15,81 @@ import { ensureImportProcessingWorker } from "@/lib/import-worker-runtime";
 import { readImportedFileText } from "@/lib/import-file-text.server";
 import { uploadObject } from "@/lib/s3";
 import { validateImportFile } from "@/lib/import-file-validation";
+import { countWorkspaceImportFilesThisMonth } from "@/lib/plan-access";
+import { getOrCreateCurrentUser } from "@/lib/user-context";
+import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { NextResponse } from "next/server";
+import { normalizeBankName } from "@/lib/data-qa-banks";
+import { hasCompatibleTable } from "@/lib/data-engine";
+import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
+const upsertUploadBankHint = async (params: {
+  importFileId: string;
+  workspaceId: string;
+  bankName?: string | null;
+}) => {
+  const bankName = normalizeBankName(params.bankName ?? "");
+  if (!bankName || bankName === "Unknown") {
+    return;
+  }
+
+  if (!(await hasCompatibleTable("AccountStatementCheckpoint"))) {
+    return;
+  }
+
+  const sourceMetadata = {
+    institution: bankName,
+    uploadBankHint: bankName,
+    uploadHintSource: "admin_data_qa_bank_upload",
+  } as Prisma.InputJsonValue;
+
+  await prisma.accountStatementCheckpoint.upsert({
+    where: { importFileId: params.importFileId },
+    update: {
+      workspaceId: params.workspaceId,
+      sourceMetadata,
+    },
+    create: {
+      workspaceId: params.workspaceId,
+      importFileId: params.importFileId,
+      status: "pending",
+      sourceMetadata,
+      rowCount: 0,
+    },
+  });
+};
+
+const detectLimitError = (message: string | null | undefined) => {
+  if (!message) {
+    return null;
+  }
+
+  const normalized = message.toLowerCase();
+  const limitMatch = message.match(/up to\s+([\d,]+)/i);
+  const limitValue = limitMatch ? Number(limitMatch[1].replaceAll(",", "")) : null;
+
+  if (normalized.includes("non-cash accounts")) {
+    return { limitType: "account_limit", limitValue };
+  }
+
+  if (normalized.includes("transaction rows")) {
+    return { limitType: "transaction_limit", limitValue };
+  }
+
+  if (normalized.includes("monthly uploads")) {
+    return { limitType: "upload_limit", limitValue };
+  }
+
+  return null;
+};
+
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   let stage = "initializing";
+  let responsePlanTier: "free" | "pro" | "unknown" = "unknown";
   try {
     const { importId } = await params;
     const localDev = await isLocalDevHost();
@@ -71,6 +139,24 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         stage = "creating import record";
         if (!localDev) {
           await assertWorkspaceAccess(userId, formWorkspaceId);
+          const user = await getOrCreateCurrentUser(userId);
+          responsePlanTier = user.planTier;
+          const effectiveLimits = getEffectiveUserLimits(user);
+          const currentMonthUploads = await countWorkspaceImportFilesThisMonth(formWorkspaceId);
+          if (effectiveLimits.monthlyUploadLimit !== null && currentMonthUploads >= effectiveLimits.monthlyUploadLimit) {
+            const isFreePlan = user.planTier === "free";
+            return NextResponse.json(
+              {
+                error: isFreePlan
+                  ? `Free includes up to ${effectiveLimits.monthlyUploadLimit} monthly uploads. Upgrade to Pro to import more files this month.`
+                  : `You’ve reached the current ${effectiveLimits.monthlyUploadLimit}-upload limit on Pro for this month. Manage billing if you need more room.`,
+                planTier: user.planTier,
+                limitType: "upload_limit",
+                limitValue: effectiveLimits.monthlyUploadLimit,
+              },
+              { status: 403 }
+            );
+          }
         }
         importFile = await insertImportFileCompat({
           id: importId,
@@ -93,6 +179,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       stage = "uploading raw file";
       const bytes = new Uint8Array(await file.arrayBuffer());
       await uploadObject(String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)), bytes, file.type || "application/octet-stream");
+      await upsertUploadBankHint({
+        importFileId: importId,
+        workspaceId: String(importFile.workspaceId),
+        bankName: formBankName || null,
+      });
       stage = "reading statement metadata";
       let metadata: Record<string, unknown> | null = null;
       let extractedText = "";
@@ -203,6 +294,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       allowDuplicateStatement = Boolean(body?.allowDuplicateStatement ?? false);
       forceInlineProcessing = Boolean(body?.forceInlineProcessing ?? false);
       const bodyBankName = typeof body?.bankName === "string" ? String(body.bankName) : "";
+      await upsertUploadBankHint({
+        importFileId: importId,
+        workspaceId: String(importFile.workspaceId),
+        bankName: bodyBankName || null,
+      });
 
       if (!text) {
         return NextResponse.json({ error: "Missing extracted statement text." }, { status: 400 });
@@ -243,12 +339,28 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     const localDev = await isLocalDevHost().catch(() => false);
     console.error("Import processing failed", error);
     console.error("Import processing failed", { stage, error: summarizeErrorForLog(error) });
+    const errorMessage = error instanceof Error ? error.message || "Unable to process import" : "Unable to process import";
+    const detectedLimit = detectLimitError(errorMessage);
+    if (detectedLimit) {
+      if (responsePlanTier === "unknown") {
+        responsePlanTier = /upgrade to pro/i.test(errorMessage) ? "free" : /on pro/i.test(errorMessage) ? "pro" : "unknown";
+      }
+
+      return NextResponse.json(
+        {
+          error: errorMessage,
+          stage,
+          planTier: responsePlanTier,
+          limitType: detectedLimit.limitType,
+          limitValue: detectedLimit.limitValue,
+        },
+        { status: 403 }
+      );
+    }
+
     return NextResponse.json(
       {
-        error:
-          localDev && error instanceof Error
-            ? error.message || "Unable to process import"
-            : "Unable to process import",
+        error: localDev && error instanceof Error ? errorMessage : "Unable to process import",
         stage,
       },
       { status: 400 }
