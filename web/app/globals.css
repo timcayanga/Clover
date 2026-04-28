@@ -1951,6 +1951,10 @@ label {
   letter-spacing: -0.04em;
 }
 
+.shell-compact-bar__copy--hide-mobile {
+  display: grid;
+}
+
 .shell-menu-button {
   display: none;
   appearance: none;
@@ -9548,6 +9552,67 @@ input.transaction-inline-edit--amount::placeholder {
   flex-wrap: wrap;
 }
 
+.plan-limit-nudge {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 110;
+  width: min(360px, calc(100vw - 28px));
+  border-radius: 22px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+  background:
+    radial-gradient(circle at top right, rgba(94, 211, 208, 0.15), transparent 30%),
+    rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  box-shadow: 0 22px 40px rgba(31, 41, 51, 0.16);
+}
+
+.plan-limit-nudge__title-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.plan-limit-nudge__eyebrow {
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.plan-limit-nudge__title-row strong {
+  display: block;
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.plan-limit-nudge__dismiss {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.35rem;
+  line-height: 1;
+  padding: 0;
+  min-width: auto;
+  min-height: auto;
+}
+
+.plan-limit-nudge__body {
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.plan-limit-nudge__actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
 .import-progress-layer {
   position: fixed;
   inset: 0;
@@ -15309,6 +15374,10 @@ input.transaction-inline-edit--amount::placeholder {
     display: inline-flex;
   }
 
+  .shell-compact-bar__copy--hide-mobile {
+    display: none;
+  }
+
   .topbar-actions {
     justify-content: flex-start;
     align-items: center;
@@ -15494,6 +15563,17 @@ input.transaction-inline-edit--amount::placeholder {
 
   .transactions-footer-snapshot__metrics {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .plan-limit-nudge {
+    left: 14px;
+    right: 14px;
+    bottom: 14px;
+    width: auto;
+    padding: 14px;
+    border-radius: 18px;
   }
 }
 
@@ -15757,7 +15837,13 @@ input.transaction-inline-edit--amount::placeholder {
 
   .dashboard-home__copy h3 {
     max-width: none;
-    font-size: clamp(2.15rem, 9vw, 3rem);
+    font-size: clamp(1.55rem, 6.6vw, 2.1rem);
+    line-height: 1.05;
+  }
+
+  .dashboard-home__copy p {
+    font-size: 14px;
+    line-height: 1.45;
   }
 
   .dashboard-home__hero-metrics,
@@ -15859,6 +15945,24 @@ input.transaction-inline-edit--amount::placeholder {
 
   .dashboard-home__hero-visual {
     padding: 14px;
+  }
+
+  .dashboard-home__hero {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .dashboard-home__hero-metrics {
+    gap: 8px;
+  }
+
+  .dashboard-home__mini-card {
+    padding: 12px 13px;
+  }
+
+  .dashboard-home__ring {
+    width: 138px;
+    height: 138px;
   }
 
   .dashboard-home__ring {

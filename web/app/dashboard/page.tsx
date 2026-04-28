@@ -879,6 +879,7 @@ async function DashboardPageStream({
       title="Your finances at a glance"
       subtitle={experienceProfile.dashboardSubtitle}
       showTopbar={false}
+      hideCompactBarCopyOnMobile
       actions={
         <Link className="pill-link" href="/goals">
           Open goals
