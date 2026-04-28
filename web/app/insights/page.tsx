@@ -643,12 +643,12 @@ async function InsightsPageStream() {
           : `${headlineDriver} is the main pressure point, even while you are on track for ${goalLabel.toLowerCase()}.`
         : `${headlineDriver} is the biggest spend area this month.`
       : currentNet >= 0
-        ? "Cash flow is positive, but the page needs more recent activity before the drivers are obvious."
-        : "Cash flow is negative, and the page needs more recent activity before the drivers are obvious.";
+        ? "Cash flow looks positive, but the driver is still unclear."
+        : "Cash flow looks negative, but the driver is still unclear.";
 
   const aiSummary =
     spendDelta === null || incomeDelta === null
-      ? "Recent activity is enough to guide the page, but one comparison window is still thin."
+      ? "More activity will sharpen the next insight."
       : [
           currentNet >= 0
             ? `Net cash flow is positive at ${formatSignedCurrency(currentNet)}.`
@@ -682,13 +682,6 @@ async function InsightsPageStream() {
       value: headlineDriver,
       note: `${formatCurrency(headlineDriverAmount)}${headlineDriverShare === null ? "" : ` · ${formatPercent(headlineDriverShare)}`}`,
       tone: "neutral",
-    },
-    {
-      label: "Signal quality",
-      value: Math.round(confidenceScore).toString(),
-      note: confidenceLabel,
-      tone: confidenceScore >= 85 ? "positive" : confidenceScore >= 70 ? "neutral" : "negative",
-      suffix: "%",
     },
   ];
 
@@ -910,9 +903,6 @@ async function InsightsPageStream() {
       <section className="insights-story">
         <article className="insights-snapshot insights-snapshot--hero glass">
           <div className="insights-snapshot__copy">
-            <div className="insights-snapshot__header">
-              <span className="pill pill-accent">Decision brief</span>
-            </div>
             <h3>{aiHeadline}</h3>
             <p>{aiSummaryWithInvestments}</p>
             <div className="insights-snapshot__summary">
