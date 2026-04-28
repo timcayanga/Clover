@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { getHelpHomeHref, type HelpQuestion, type HelpSection } from "@/lib/help-center";
+import { getHelpHomeHref, getHelpSectionImageSrc, type HelpQuestion, type HelpSection } from "@/lib/help-center";
 
 type HelpSectionPageProps = {
   section: HelpSection;
@@ -78,6 +78,16 @@ export function HelpSectionPage({ section, returnTo }: HelpSectionPageProps) {
           </div>
         </nav>
 
+        <div className="help-section-page__image-wrap" aria-hidden="true">
+          <img
+            className="help-section-page__image"
+            src={getHelpSectionImageSrc(section.slug)}
+            alt=""
+            loading="lazy"
+            decoding="async"
+          />
+        </div>
+
         <label className="help-search help-search--section" htmlFor="help-section-search">
           <span className="sr-only">Search within this help section</span>
           <input
@@ -88,11 +98,6 @@ export function HelpSectionPage({ section, returnTo }: HelpSectionPageProps) {
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
-
-        <section className="help-section-header">
-          <h1>{section.title}</h1>
-          <p>{section.summary}</p>
-        </section>
 
         <section className="help-section-faq" aria-label="Questions and answers">
           {filteredQuestions.length > 0 ? (

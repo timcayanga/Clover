@@ -17963,11 +17963,11 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .help-card {
-  display: grid;
-  gap: 16px;
-  align-content: space-between;
-  min-height: 150px;
-  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 120px;
+  padding: 18px 18px 18px 20px;
   border-radius: 30px;
   border: 0;
   text-decoration: none;
@@ -18016,57 +18016,19 @@ input.transaction-inline-edit--amount::placeholder {
   box-shadow: 0 22px 50px rgba(15, 23, 42, 0.16);
 }
 
-.help-card__icon {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.help-card--teal .help-card__icon {
-  color: rgba(255, 255, 255, 0.98);
-}
-
-.help-card--mint .help-card__icon {
-  color: rgba(255, 255, 255, 0.98);
-}
-
-.help-card--gold .help-card__icon {
-  color: rgba(255, 255, 255, 0.98);
-}
-
-.help-card--sky .help-card__icon {
-  color: rgba(255, 255, 255, 0.98);
-}
-
-.help-card--coral .help-card__icon {
-  color: rgba(255, 255, 255, 0.98);
-}
-
-.help-card--violet .help-card__icon {
-  color: rgba(255, 255, 255, 0.98);
-}
-
-.help-card--lime .help-card__icon {
-  color: rgba(255, 255, 255, 0.98);
-}
-
-.help-card--rose .help-card__icon {
-  color: rgba(255, 255, 255, 0.98);
-}
-
-.help-card__icon svg {
-  width: 26px;
-  height: 26px;
+.help-card__image {
+  width: 52px;
+  height: 52px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 10px rgba(15, 23, 42, 0.14));
 }
 
 .help-card h3 {
   margin: 0;
-  max-width: 10ch;
-  font-size: clamp(1.4rem, 2vw, 1.7rem);
-  line-height: 1.02;
+  max-width: 12ch;
+  font-size: clamp(1.08rem, 1.4vw, 1.45rem);
+  line-height: 1.08;
   letter-spacing: -0.05em;
   color: #ffffff;
 }
@@ -18090,6 +18052,20 @@ input.transaction-inline-edit--amount::placeholder {
 
 .help-section-page__inner {
   gap: 16px;
+}
+
+.help-section-page__image-wrap {
+  display: flex;
+  justify-content: center;
+  padding-top: 4px;
+}
+
+.help-section-page__image {
+  width: min(100%, 96px);
+  height: auto;
+  display: block;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 22px rgba(15, 23, 42, 0.12));
 }
 
 .help-section-search {
@@ -20116,12 +20092,14 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .help-card {
-    min-height: 138px;
+    min-height: 112px;
+    padding: 16px;
+    gap: 12px;
   }
 
-  .help-card__icon {
-    width: 28px;
-    height: 28px;
+  .help-card__image {
+    width: 44px;
+    height: 44px;
   }
 
   .help-section-panel__head,
@@ -20143,6 +20121,10 @@ input.transaction-inline-edit--amount::placeholder {
   .help-search--hero input {
     min-height: 70px;
     border-radius: 24px;
+  }
+
+  .help-section-page__image {
+    width: min(100%, 84px);
   }
 
   .admin-data-qa-bank-detail__table-row {

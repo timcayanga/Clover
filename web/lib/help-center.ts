@@ -1636,6 +1636,27 @@ export const getHelpHomeHref = (returnTo?: string | null) => {
   return query ? `/help?${query}` : "/help";
 };
 
+export const getHelpSectionImageSrc = (sectionSlug: HelpSection["slug"]) => {
+  switch (sectionSlug) {
+    case "getting-started":
+      return "/help-icons/getting-started.png";
+    case "importing-reviewing":
+      return "/help-icons/importing-and-reviewing.png";
+    case "transactions-categories":
+      return "/help-icons/transactions-and-categories.png";
+    case "accounts-workspaces":
+      return "/help-icons/accounts-and-workspaces.png";
+    case "reports-insights-goals":
+      return "/help-icons/reports-insights-goals.png";
+    case "billing-plan":
+      return "/help-icons/billing-and-plan.png";
+    case "privacy-security-data":
+      return "/help-icons/privacy-security-data.png";
+    case "troubleshooting":
+      return "/help-icons/troubleshooting.png";
+  }
+};
+
 export const findHelpSectionArticle = (sectionSlug: string, articleSlug: string) =>
   helpSectionMap.get(sectionSlug)?.articles.find((article) => article.slug === articleSlug) ?? null;
 
