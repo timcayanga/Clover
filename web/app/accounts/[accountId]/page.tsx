@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { InfoTooltip } from "@/components/info-tooltip";
 import { getAccountBrand } from "@/lib/account-brand";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
@@ -102,6 +103,17 @@ const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
 const normalizeAccountBalance = (type: Account["type"] | null | undefined, value: number) =>
   type === "credit_card" ? -Math.abs(value) : Math.abs(value);
+
+const ACCOUNT_DETAILS_GUIDE =
+  "Use this page to confirm one account's balance, review its recent activity, and check whether imported statements match the running history.";
+
+const ACCOUNT_DETAILS_INFO = {
+  currentBalance: "The latest balance Clover is showing for this account after imports, edits, and reconciliation.",
+  status: "Shows whether this account is active or currently being deleted.",
+  accountType: "The account type controls how Clover groups this account and how totals are calculated.",
+  reconciliation: "Reconciliation compares a statement ending balance with Clover's running account history.",
+  transactions: "Transactions are the individual money movements that changed this account over time.",
+} as const;
 
 const parseNullableNumber = (value: string | null | undefined) => {
   if (value === null || value === undefined || value === "") {
@@ -567,6 +579,27 @@ function AccountDetailPageContent() {
       value: currentBalance,
     };
   }, [account, currentBalance, investmentMaturityValue, investmentPrincipal, investmentSubtype]);
+  const accountDetailValueCardInfo = useMemo(() => {
+    if (!account) {
+      return "Cash-like money you can use now from this account.";
+    }
+
+    if (account.type === "credit_card") {
+      return "The amount currently owed on this credit card.";
+    }
+
+    if (account.type === "investment") {
+      if (isFixedIncomeInvestmentSubtype(investmentSubtype)) {
+        return investmentMaturityValue !== null
+          ? "The amount this fixed-income investment is expected to be worth at maturity."
+          : "The original amount placed into this fixed-income investment.";
+      }
+
+      return "The latest tracked value of this investment holding.";
+    }
+
+    return "Cash-like money you can use now from this account.";
+  }, [account, investmentMaturityValue, investmentSubtype]);
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {
       return null;
@@ -713,7 +746,10 @@ function AccountDetailPageContent() {
             {account ? <AccountBrandMark accountBrand={accountBrand} label={account.name} /> : null}
             <div>
               <p className="eyebrow">Account details</p>
-              <h2>{account?.name ?? "Account"}</h2>
+              <h2>
+                {account?.name ?? "Account"}
+                <InfoTooltip title="How Account Details works" label={ACCOUNT_DETAILS_GUIDE} />
+              </h2>
               <p className="panel-muted">
                 {account ? `${accountBrand.label} · ${formatAccountType(account.type)} · ${account.currency} · ${account.source}` : message}
               </p>
@@ -730,25 +766,37 @@ function AccountDetailPageContent() {
           <div className="accounts-detail__summary">
             <div className="status-card">
               <div>
-                <div className="panel-muted">Current balance</div>
+                <div className="panel-muted">
+                  Current balance
+                  <InfoTooltip label={ACCOUNT_DETAILS_INFO.currentBalance} />
+                </div>
                 <strong>{currencyFormatter.format(currentBalance)}</strong>
               </div>
             </div>
             <div className="status-card">
               <div>
-                <div className="panel-muted">{accountDetailValueCard.label}</div>
+                <div className="panel-muted">
+                  {accountDetailValueCard.label}
+                  <InfoTooltip label={accountDetailValueCardInfo} />
+                </div>
                 <strong>{currencyFormatter.format(accountDetailValueCard.value)}</strong>
               </div>
             </div>
             <div className="status-card">
               <div>
-                <div className="panel-muted">Status</div>
+                <div className="panel-muted">
+                  Status
+                  <InfoTooltip label={ACCOUNT_DETAILS_INFO.status} />
+                </div>
                 <strong>{deletingAccountIds.has(account.id) ? "Deleting" : "Active"}</strong>
               </div>
             </div>
             <div className="status-card">
               <div>
-                <div className="panel-muted">Account type</div>
+                <div className="panel-muted">
+                  Account type
+                  <InfoTooltip label={ACCOUNT_DETAILS_INFO.accountType} />
+                </div>
                 <strong>{formatAccountType(account.type)}</strong>
               </div>
             </div>
@@ -870,7 +918,10 @@ function AccountDetailPageContent() {
         <div className="accounts-detail__transactions glass" style={{ marginTop: 24 }}>
           <div className="accounts-detail__reconciliation-head">
             <div>
-              <p className="eyebrow">Transaction history</p>
+              <p className="eyebrow">
+                Transaction history
+                <InfoTooltip label={ACCOUNT_DETAILS_INFO.transactions} />
+              </p>
               <h3>All transactions</h3>
             </div>
             <div className="accounts-detail__transactions-actions">
@@ -954,7 +1005,10 @@ function AccountDetailPageContent() {
           <div className="accounts-detail__reconciliation glass" style={{ marginTop: 20 }}>
             <div className="accounts-detail__reconciliation-head">
               <div>
-                <p className="eyebrow">Reconciliation</p>
+                <p className="eyebrow">
+                  Reconciliation
+                  <InfoTooltip label={ACCOUNT_DETAILS_INFO.reconciliation} />
+                </p>
                 <h3>Statement checkpoint</h3>
               </div>
               <span className={`accounts-summary-chip is-${latestCheckpointSummary.tone}`}>
