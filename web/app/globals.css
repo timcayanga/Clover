@@ -18119,15 +18119,32 @@ input.transaction-inline-edit--amount::placeholder {
 
 .help-accordion {
   display: grid;
-  gap: 12px;
+  gap: 0;
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: var(--shadow-soft);
 }
 
 .help-accordion-item {
   overflow: hidden;
-  border-radius: 22px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 0;
+  border: 0;
   background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--shadow-soft);
+}
+
+.help-accordion-item + .help-accordion-item {
+  border-top: 1px solid rgba(15, 23, 42, 0.07);
+}
+
+.help-accordion-item[open] {
+  background:
+    linear-gradient(180deg, rgba(3, 168, 192, 0.04), rgba(255, 255, 255, 0.96)),
+    rgba(255, 255, 255, 0.92);
+}
+
+.help-accordion-item[open] + .help-accordion-item {
+  border-top-color: rgba(3, 168, 192, 0.14);
 }
 
 .help-accordion-item__summary {
@@ -18142,6 +18159,8 @@ input.transaction-inline-edit--amount::placeholder {
   line-height: 1.35;
   letter-spacing: -0.03em;
   color: var(--text);
+  cursor: pointer;
+  position: relative;
 }
 
 .help-accordion-item__summary::-webkit-details-marker {
@@ -18158,9 +18177,10 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(15, 23, 42, 0.12);
-  color: var(--muted);
+  color: var(--accent);
   font-size: 1rem;
   line-height: 1;
+  background: rgba(3, 168, 192, 0.06);
 }
 
 .help-accordion-item[open] .help-accordion-item__summary::after {
@@ -18169,6 +18189,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .help-accordion-item__body {
   padding: 0 20px 18px;
+  border-top: 1px solid rgba(3, 168, 192, 0.08);
 }
 
 .help-accordion-item__body p {
