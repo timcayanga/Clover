@@ -4119,29 +4119,6 @@ label {
   justify-content: flex-end;
 }
 
-.reports-orientation {
-  display: grid;
-  gap: 8px;
-  padding: 16px 18px;
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 30%),
-    rgba(255, 255, 255, 0.88);
-  box-shadow: var(--shadow-soft);
-}
-
-.reports-orientation h4 {
-  font-size: 20px;
-  line-height: 1.25;
-  letter-spacing: -0.03em;
-}
-
-.reports-orientation p {
-  margin: 0;
-  color: var(--muted);
-  line-height: 1.55;
-}
-
 .reports-footer-upsell {
   display: flex;
   justify-content: center;
@@ -15712,10 +15689,6 @@ input.transaction-inline-edit--amount::placeholder {
 
   .reports-range-switch__controls {
     justify-content: flex-start;
-  }
-
-  .reports-orientation {
-    gap: 6px;
   }
 
   .reports-pro-preview {

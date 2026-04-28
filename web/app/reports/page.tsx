@@ -1217,15 +1217,6 @@ async function ReportsStream({
           </div>
         </section>
 
-        <section className="reports-orientation glass">
-          <p className="eyebrow">Quick guide</p>
-          <h4>Start with the four cards at the top, then scan where money went, what repeats, and what needs attention.</h4>
-          <p>
-            Free shows the essentials. Pro adds the short explanations that help you understand why things changed and what to do
-            next.
-          </p>
-        </section>
-
         <section className="reports-summary-grid reports-summary-grid--highlights">
           <article className="metric compact metric--highlight glass">
             <span>Income</span>
