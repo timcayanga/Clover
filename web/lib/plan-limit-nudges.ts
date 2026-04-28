@@ -92,8 +92,8 @@ export const getPlanLimitNudgeCopy = ({ planTier, limitType, limitValue }: PlanL
     if (planTier === "free") {
       return {
         eyebrow: "Account limit reached",
-        title: "You’ve filled your Free account space.",
-        body: `Upgrade to Pro to unlock up to 20 accounts and keep adding more places where your money lives.`,
+        title: "You’ve filled your 5-account space on Free.",
+        body: "Upgrade to Pro to unlock up to 20 accounts and keep bringing more banks, wallets, and cards into one view.",
         ctaLabel: "Upgrade to Pro",
         ctaHref: "/pricing",
       };
@@ -101,7 +101,7 @@ export const getPlanLimitNudgeCopy = ({ planTier, limitType, limitValue }: PlanL
 
     return {
       eyebrow: "Account limit reached",
-      title: `You’ve reached the current ${limitText}-account limit.`,
+      title: `You’ve reached the current ${limitText}-account limit on Pro.`,
       body: "You can remove an account to make room, or manage billing if you need more headroom.",
       ctaLabel: "Manage billing",
       ctaHref: "/settings#billing",
@@ -112,8 +112,8 @@ export const getPlanLimitNudgeCopy = ({ planTier, limitType, limitValue }: PlanL
     if (planTier === "free") {
       return {
         eyebrow: "Transaction limit reached",
-        title: "You’ve filled your Free transaction history for now.",
-        body: "Upgrade to Pro to keep adding and importing more transaction rows without trimming your timeline.",
+        title: "You’ve reached the 1,000-row limit on Free.",
+        body: "Upgrade to Pro to keep importing and adding more transaction history without trimming your timeline.",
         ctaLabel: "Upgrade to Pro",
         ctaHref: "/pricing",
       };
@@ -131,7 +131,7 @@ export const getPlanLimitNudgeCopy = ({ planTier, limitType, limitValue }: PlanL
   if (planTier === "free") {
     return {
       eyebrow: "Upload limit reached",
-      title: "You’ve used this month’s upload room on Free.",
+      title: "You’ve used this month’s 10-upload room on Free.",
       body: "Upgrade to Pro to unlock more monthly statement uploads and keep importing without waiting for the next cycle.",
       ctaLabel: "Upgrade to Pro",
       ctaHref: "/pricing",
@@ -140,7 +140,7 @@ export const getPlanLimitNudgeCopy = ({ planTier, limitType, limitValue }: PlanL
 
   return {
     eyebrow: "Upload limit reached",
-    title: `You’ve reached the current ${limitText}-upload limit for this month.`,
+    title: `You’ve reached the current ${limitText}-upload limit on Pro for this month.`,
     body: "Uploads will open back up next month, or you can manage billing if you need more room now.",
     ctaLabel: "Manage billing",
     ctaHref: "/settings#billing",
