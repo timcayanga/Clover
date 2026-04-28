@@ -7480,8 +7480,26 @@ label {
 
 .onboarding-actions {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+}
+
+.onboarding-actions__group {
+  display: inline-flex;
+  align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+.onboarding-actions__group--secondary {
+  justify-content: flex-start;
+}
+
+.onboarding-actions__group--primary {
+  justify-content: flex-end;
+  margin-left: auto;
 }
 
 .onboarding-actions .button {
@@ -18495,10 +18513,6 @@ input.transaction-inline-edit--amount::placeholder {
     min-height: 320px;
   }
 
-  .landing-photo--hero {
-    min-height: 0;
-  }
-
   .landing-photo--gallery {
     aspect-ratio: 16 / 10;
   }
@@ -18554,11 +18568,12 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .landing-nav__mobile {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 8px;
     width: 100%;
+    position: relative;
   }
 
   .landing-nav__mobile-toggle {
@@ -18591,9 +18606,13 @@ input.transaction-inline-edit--amount::placeholder {
 
   .landing-brand--mobile {
     display: inline-flex;
-    justify-self: center;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
     gap: 5px;
     font-size: 13px;
+    white-space: nowrap;
   }
 
   .landing-brand--mobile .landing-brand__mark {
@@ -19076,9 +19095,20 @@ input.transaction-inline-edit--amount::placeholder {
 
   .onboarding-actions {
     flex-direction: column;
+    align-items: stretch;
   }
 
-.onboarding-actions .button {
+  .onboarding-actions__group {
+    width: 100%;
+  }
+
+  .onboarding-actions__group--secondary,
+  .onboarding-actions__group--primary {
+    justify-content: stretch;
+    margin-left: 0;
+  }
+
+  .onboarding-actions .button {
     width: 100%;
     min-width: 0;
   }

@@ -236,18 +236,20 @@ export function OnboardingForm({
             ))}
           </div>
 
-          <div className="onboarding-actions">
-            <button
-              className="button button-primary"
-              type="button"
-              disabled={isPending || experience === null}
-              onClick={() => {
-                setStep("goals");
-                setMessage(selectedExperienceProfile.goalsSupport);
-              }}
-            >
-              Continue
-            </button>
+          <div className="onboarding-actions onboarding-actions--single">
+            <div className="onboarding-actions__group onboarding-actions__group--primary">
+              <button
+                className="button button-primary"
+                type="button"
+                disabled={isPending || experience === null}
+                onClick={() => {
+                  setStep("goals");
+                  setMessage(selectedExperienceProfile.goalsSupport);
+                }}
+              >
+                Continue
+              </button>
+            </div>
           </div>
         </>
       ) : step === "goals" ? (
@@ -316,31 +318,35 @@ export function OnboardingForm({
           ) : null}
 
           <div className="onboarding-actions">
-            <button
-              className="button button-primary"
-              type="button"
-              disabled={isPending || goals.length === 0}
-              onClick={() => {
-                setStep("start");
-                setMessage(selectedExperienceProfile.actionStripCopy);
-              }}
-            >
-              Continue
-            </button>
-            <button className="button button-secondary" type="button" disabled={isPending} onClick={skipForNow}>
-              Skip for now
-            </button>
-            <button
-              className="button button-secondary"
-              type="button"
-              disabled={isPending}
-              onClick={() => {
-                setStep("experience");
-                setMessage(selectedExperienceDefinition.description);
-              }}
-            >
-              Back
-            </button>
+            <div className="onboarding-actions__group onboarding-actions__group--secondary">
+              <button
+                className="button button-secondary"
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  setStep("experience");
+                  setMessage(selectedExperienceDefinition.description);
+                }}
+              >
+                Back
+              </button>
+              <button className="button button-secondary" type="button" disabled={isPending} onClick={skipForNow}>
+                Skip for now
+              </button>
+            </div>
+            <div className="onboarding-actions__group onboarding-actions__group--primary">
+              <button
+                className="button button-primary"
+                type="button"
+                disabled={isPending || goals.length === 0}
+                onClick={() => {
+                  setStep("start");
+                  setMessage(selectedExperienceProfile.actionStripCopy);
+                }}
+              >
+                Continue
+              </button>
+            </div>
           </div>
         </>
       ) : (
@@ -375,20 +381,23 @@ export function OnboardingForm({
           </div>
 
           <div className="onboarding-actions">
-            <button
-              className="button button-secondary"
-              type="button"
-              disabled={isPending}
-              onClick={() => {
-                setStep("goals");
-                setMessage(selectedExperienceProfile.goalsSupport);
-              }}
-            >
-              Back
-            </button>
-            <button className="button button-secondary" type="button" disabled={isPending} onClick={skipForNow}>
-              Skip for now
-            </button>
+            <div className="onboarding-actions__group onboarding-actions__group--secondary">
+              <button
+                className="button button-secondary"
+                type="button"
+                disabled={isPending}
+                onClick={() => {
+                  setStep("goals");
+                  setMessage(selectedExperienceProfile.goalsSupport);
+                }}
+              >
+                Back
+              </button>
+              <button className="button button-secondary" type="button" disabled={isPending} onClick={skipForNow}>
+                Skip for now
+              </button>
+            </div>
+            <div className="onboarding-actions__group onboarding-actions__group--primary" aria-hidden="true" />
           </div>
         </>
       )}
