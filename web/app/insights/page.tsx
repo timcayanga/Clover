@@ -7,8 +7,6 @@ import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
-import { PlanTierBanner } from "@/components/plan-tier-banner";
-import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
@@ -20,7 +18,6 @@ import {
 } from "@/lib/investments";
 import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
-import { getEffectiveUserLimits } from "@/lib/user-limits";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -165,8 +162,6 @@ async function InsightsPageStream() {
   if (!hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
-  const planLimits = getEffectiveUserLimits(user);
-
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
   const workspaceInclude = {
@@ -900,16 +895,6 @@ async function InsightsPageStream() {
           chart_type: "timeline",
         }}
       />
-      <PlanTierBanner
-        planTier={user.planTier}
-        label="Insights and recommendations"
-        limits={planLimits}
-        ctaHref={user.planTier === "free" ? "/pricing" : "/settings#billing"}
-        ctaLabel={user.planTier === "free" ? "See Pro pricing" : "Manage billing"}
-        secondaryHref="/goals"
-        secondaryLabel="Open goals"
-        className="insights-plan-banner"
-      />
       {isEmptyWorkspace ? (
         <div style={{ marginBottom: 20 }}>
           <EmptyDataCta
@@ -1451,16 +1436,9 @@ async function InsightsPageStream() {
         </article>
 
         {!isPro ? (
-          <PlanUpgradeCallout
-            planTier={user.planTier}
-            title="Free gives you the essentials. Pro adds the deeper picture."
-            copy="Keep it simple with Free, or unlock investments, richer pattern analysis, and more decision support in Pro."
-            ctaHref="/pricing"
-            ctaLabel="See Pro pricing"
-            secondaryHref="/goals"
-            secondaryLabel="Open goals"
-            className="insights-upgrade-callout"
-          />
+          <p className="insights-free-note">
+            Want more charts, investment context, and deeper analysis? Pro unlocks a fuller picture when you are ready for it.
+          </p>
         ) : null}
       </section>
     </CloverShell>

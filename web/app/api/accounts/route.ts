@@ -175,9 +175,15 @@ export async function POST(request: Request) {
       const nonCashAccountCount = countNonCashAccounts(existingAccounts);
 
       if (effectiveLimits.accountLimit !== null && nonCashAccountCount >= effectiveLimits.accountLimit) {
+        const isFreePlan = user.planTier === "free";
         return NextResponse.json(
           {
-            error: `Free plan includes up to ${effectiveLimits.accountLimit} non-cash accounts. Upgrade to Pro to add more.`,
+            error: isFreePlan
+              ? `Free includes up to ${effectiveLimits.accountLimit} non-cash accounts. Upgrade to Pro to add more.`
+              : `You’ve reached the current ${effectiveLimits.accountLimit}-account limit on Pro. Remove an account or manage billing if you need more room.`,
+            planTier: user.planTier,
+            limitType: "account_limit",
+            limitValue: effectiveLimits.accountLimit,
           },
           { status: 403 }
         );

@@ -35,10 +35,14 @@ worker.on("failed", async (job, error) => {
   console.error("Import job failed", { jobId: job?.id ?? null, error: summarizeErrorForLog(error) });
   const importFileId = job?.data?.importFileId;
   if (importFileId) {
+    const errorMessage =
+      error instanceof Error && error.message.trim().length > 0
+        ? error.message
+        : "Import failed. Waiting for the recovery loop to retry this file.";
     await updateImportFileCompat(importFileId, {
       status: "failed",
       processingPhase: "failed",
-      processingMessage: "Import failed. Waiting for the recovery loop to retry this file.",
+      processingMessage: errorMessage,
     });
   }
 });

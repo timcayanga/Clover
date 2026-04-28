@@ -4109,6 +4109,26 @@ label {
   line-height: 1.55;
 }
 
+.reports-footer-upsell {
+  display: flex;
+  justify-content: center;
+  padding: 8px 4px 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.reports-footer-upsell p {
+  margin: 0;
+  max-width: 72ch;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.reports-footer-upsell a {
+  font-weight: 700;
+  color: var(--accent-strong);
+}
+
 .reports-freshness {
   display: flex;
   justify-content: flex-end;
@@ -5321,6 +5341,15 @@ label {
   color: var(--text);
   line-height: 1.45;
   font-size: 12px;
+}
+
+.insights-free-note {
+  margin: 24px auto 0;
+  max-width: 72ch;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+  text-align: center;
 }
 
 .insight-pattern-grid {

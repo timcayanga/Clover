@@ -481,9 +481,15 @@ export async function POST(request: Request) {
     const transactionCount = await countWorkspaceTransactions(payload.workspaceId);
 
     if (effectiveLimits.transactionLimit !== null && transactionCount >= effectiveLimits.transactionLimit) {
+      const isFreePlan = user.planTier === "free";
       return NextResponse.json(
         {
-          error: `Free plan includes up to ${effectiveLimits.transactionLimit.toLocaleString()} transaction rows. Upgrade to Pro for unlimited rows.`,
+          error: isFreePlan
+            ? `Free includes up to ${effectiveLimits.transactionLimit.toLocaleString()} transaction rows. Upgrade to Pro for more history.`
+            : `You’ve reached the current ${effectiveLimits.transactionLimit.toLocaleString()}-row transaction limit on Pro. Manage billing if you need more room.`,
+          planTier: user.planTier,
+          limitType: "transaction_limit",
+          limitValue: effectiveLimits.transactionLimit,
         },
         { status: 403 }
       );

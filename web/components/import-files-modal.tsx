@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { PlanFeatureItem } from "@/components/plan-feature-item";
 import { ImportPasswordModal } from "@/components/import-password-modal";
+import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import { capturePostHogClientEvent, capturePostHogClientEventOnce, analyticsOnceKey } from "@/components/posthog-analytics";
 import { formatDuplicateImportMessage } from "@/lib/import-duplicate-message";
@@ -14,6 +14,7 @@ import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { validateImportFile } from "@/lib/import-file-validation";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import { syncImportedWorkspaceAccountCaches, syncImportedWorkspaceTransactionCaches } from "@/lib/workspace-cache";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 
@@ -595,12 +596,11 @@ export function ImportFilesModal({
   const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [monthlyUploadLimit, setMonthlyUploadLimit] = useState(10);
-  const [limitReached, setLimitReached] = useState(false);
+  const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [qaRunsByItemId, setQaRunsByItemId] = useState<Record<string, QaRunSummary | null>>({});
   const [qaLoadingByItemId, setQaLoadingByItemId] = useState<Record<string, boolean>>({});
   const [qaErrorByItemId, setQaErrorByItemId] = useState<Record<string, string | null>>({});
   const autoLoadedQaIdsRef = useRef(new Set<string>());
-  const upgradePromptTrackedRef = useRef(false);
 
   useEffect(() => {
     if (!open) {
@@ -611,12 +611,11 @@ export function ImportFilesModal({
       setSelectedPasswordItemId(null);
       setPlanTier("unknown");
       setMonthlyUploadLimit(10);
-      setLimitReached(false);
+      setPlanLimitNudge(null);
       setQaRunsByItemId({});
       setQaLoadingByItemId({});
       setQaErrorByItemId({});
       autoLoadedQaIdsRef.current.clear();
-      upgradePromptTrackedRef.current = false;
       accountIdByKeyRef.current.clear();
       setMessage("Upload CSV or PDF files to import transactions and balances.");
       setValidationNotice(null);
@@ -650,7 +649,7 @@ export function ImportFilesModal({
   }, [accounts, defaultAccountId, open]);
 
   useEffect(() => {
-    if (!open || !showQaTools) {
+    if (!open) {
       return;
     }
 
@@ -683,6 +682,16 @@ export function ImportFilesModal({
       cancelled = true;
     };
   }, [open]);
+
+  const showPlanLimitNudge = (payload: PlanLimitPayload) => {
+    setPlanLimitNudge(payload);
+    capturePostHogClientEvent("plan_limit_reached", {
+      limit_type: payload.limitType,
+      limit_value: payload.limitValue,
+      plan_tier: payload.planTier,
+      workspace_id: workspaceId || null,
+    });
+  };
 
   const createStatementAccount = async (
     name: string,
@@ -882,12 +891,10 @@ export function ImportFilesModal({
         validationMessage = `Warning: ${validationIssues.join(" ")}`;
       } else if (skippedTooMany > 0) {
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the ${monthlyUploadLimit}-file limit.`;
-        setLimitReached(true);
-        capturePostHogClientEvent("plan_limit_reached", {
-          limit_type: "upload_file_count",
-          current_usage: current.length + additionsCount,
-          limit_value: monthlyUploadLimit,
-          workspace_id: workspaceId || null,
+        showPlanLimitNudge({
+          planTier,
+          limitType: "upload_limit",
+          limitValue: monthlyUploadLimit,
         });
       } else if (additions.length > 0) {
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"} to the queue.`;
@@ -962,6 +969,10 @@ export function ImportFilesModal({
 
       if (!confirmResponse.ok) {
         const payload = await confirmResponse.json().catch(() => ({}));
+        const limitPayload = parsePlanLimitPayload(payload) ?? parsePlanLimitMessage(String(payload.error ?? ""), planTier);
+        if (limitPayload) {
+          showPlanLimitNudge(limitPayload);
+        }
         const confirmError = formatImportFailureMessage(summaryContext.fileName, payload.error || "Unable to confirm this import.");
         updateItem(itemId, {
           status: "error",
@@ -1067,10 +1078,17 @@ export function ImportFilesModal({
         const processingMessage = typeof importFile?.processingMessage === "string" ? importFile.processingMessage : null;
 
         if (importFile?.status === "failed") {
+          const limitPayload = parsePlanLimitMessage(processingMessage, planTier);
+          if (limitPayload) {
+            showPlanLimitNudge(limitPayload);
+          }
           updateItem(itemId, {
             status: "error",
             confirmationState: "staged",
-            error: formatImportFailureMessage(summaryContext.fileName, "Import parsing failed in the background."),
+            error: formatImportFailureMessage(
+              summaryContext.fileName,
+              processingMessage || "Import parsing failed in the background."
+            ),
             progress: 0,
             progressLabel: "Import failed",
           });
@@ -1296,6 +1314,10 @@ export function ImportFilesModal({
           targetAccountId: accountId,
         });
       } catch (error) {
+        const limitPayload = parsePlanLimitMessage(error instanceof Error ? error.message : null, planTier);
+        if (limitPayload) {
+          showPlanLimitNudge(limitPayload);
+        }
         updateItem(itemId, {
           status: "error",
           confirmationState: "staged",
@@ -1516,6 +1538,10 @@ export function ImportFilesModal({
 
       if (!processResponse.ok) {
         const payload = await processResponse.json().catch(() => ({}));
+        const limitPayload = parsePlanLimitPayload(payload) ?? parsePlanLimitMessage(String(payload.error ?? ""), planTier);
+        if (limitPayload) {
+          showPlanLimitNudge(limitPayload);
+        }
         capturePostHogClientEvent("file_upload_failed", {
           error_stage: "upload",
           error_code: String(payload.error ?? "unknown"),
@@ -1773,20 +1799,6 @@ export function ImportFilesModal({
           "For low-confidence statements, use Transactions to add anything Clover missed manually.",
           "If the import looks wrong but still completes, check Review before confirming changes.",
         ];
-  const shouldShowUpgradePrompt = planTier === "free" && limitReached;
-
-  useEffect(() => {
-    if (!shouldShowUpgradePrompt || upgradePromptTrackedRef.current) {
-      return;
-    }
-
-    upgradePromptTrackedRef.current = true;
-    capturePostHogClientEvent("upgrade_prompt_viewed", {
-      prompt_source: "import_limit",
-      workspace_id: workspaceId || null,
-    });
-  }, [shouldShowUpgradePrompt, workspaceId]);
-
   useEffect(() => {
     if (!open || passwordItems.length === 0) {
       setSelectedPasswordItemId(null);
@@ -2131,31 +2143,6 @@ export function ImportFilesModal({
           </aside>
         ) : null}
 
-        {shouldShowUpgradePrompt ? (
-          <aside className="import-limit-cta glass">
-            <div className="import-limit-cta__copy">
-              <p className="eyebrow">Free limit reached</p>
-              <strong>Upgrade to Pro for more import room.</strong>
-              <p>
-                Free users can queue up to {monthlyUploadLimit} statement files at a time. Pro is the path for heavier importing and later premium limits.
-              </p>
-              <ul className="import-limit-cta__features">
-                <PlanFeatureItem label="10 monthly uploads total, including statements and receipts" />
-                <PlanFeatureItem label="5 accounts in addition to Cash" />
-                <PlanFeatureItem label="1,000 transaction rows total" />
-              </ul>
-            </div>
-            <div className="import-limit-cta__actions">
-              <Link className="button button-primary button-small" href="/pricing">
-                View pricing
-              </Link>
-              <button className="button button-secondary button-small" type="button" onClick={() => setLimitReached(false)}>
-                Dismiss
-              </button>
-            </div>
-          </aside>
-        ) : null}
-
         <div className="accounts-import-files">
           {items.length > 0 ? (
             items.map((item) => {
@@ -2338,5 +2325,11 @@ export function ImportFilesModal({
     </div>
   );
 
-  return createPortal(modalContent, portalTarget);
+  return createPortal(
+    <>
+      {modalContent}
+      <PlanLimitNudge payload={planLimitNudge} onDismiss={() => setPlanLimitNudge(null)} />
+    </>,
+    portalTarget
+  );
 }

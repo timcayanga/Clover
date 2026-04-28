@@ -9,7 +9,7 @@ import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
-import { PlanTierBanner } from "@/components/plan-tier-banner";
+import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
@@ -41,6 +41,7 @@ import {
   isMarketInvestmentSubtype,
 } from "@/lib/investments";
 import type { UserLimits } from "@/lib/user-limits";
+import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
@@ -617,6 +618,7 @@ function AccountsPageContent() {
   const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(Boolean(initialCachedWorkspace));
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
+  const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importSessionId, setImportSessionId] = useState(0);
@@ -714,6 +716,11 @@ function AccountsPageContent() {
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
     [selectedWorkspaceId, workspaces]
   );
+  const nonCashAccountCount = useMemo(() => accounts.filter((account) => account.type !== "cash").length, [accounts]);
+
+  const showPlanLimitNudge = (payload: PlanLimitPayload) => {
+    setPlanLimitNudge(payload);
+  };
 
   const reconciledAccounts = useMemo(
     () =>
@@ -1412,7 +1419,31 @@ function AccountsPageContent() {
     setMessage(`Workspace "${selectedWorkspace?.name ?? "selected"}" refreshed.`);
   };
 
+  const openAddAccount = () => {
+    if (planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
+      showPlanLimitNudge({
+        planTier,
+        limitType: "account_limit",
+        limitValue: planLimits.accountLimit,
+      });
+      setMessage("You’ve reached the current account limit for this plan.");
+      return;
+    }
+
+    setAddOpen(true);
+  };
+
   const openImportFiles = () => {
+    if (planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
+      showPlanLimitNudge({
+        planTier,
+        limitType: "account_limit",
+        limitValue: planLimits.accountLimit,
+      });
+      setMessage("You’ve reached the current account limit for this plan.");
+      return;
+    }
+
     setPendingImportSummary(null);
     setAddOpen(false);
     setImportSessionId((current) => current + 1);
@@ -1606,7 +1637,12 @@ function AccountsPageContent() {
       });
 
       if (!response.ok) {
-        throw new Error("Unable to create account.");
+        const payload = await response.json().catch(() => null);
+        const limitPayload = parsePlanLimitPayload(payload);
+        if (limitPayload) {
+          showPlanLimitNudge(limitPayload);
+        }
+        throw new Error(payload?.error ?? "Unable to create account.");
       }
 
       const data = await response.json();
@@ -1716,16 +1752,6 @@ function AccountsPageContent() {
   return (
     <CloverShell active="accounts" title="Accounts" showTopbar={false}>
       <div className="accounts-page">
-        <PlanTierBanner
-          planTier={planTier}
-          label="Accounts and limits"
-          limits={planLimits}
-          ctaHref={planTier === "free" ? "/pricing" : "/settings#billing"}
-          ctaLabel={planTier === "free" ? "See Pro pricing" : "Manage billing"}
-          secondaryHref="/reports"
-          secondaryLabel="Open reports"
-          className="accounts-page__plan-banner"
-        />
         <div className="accounts-page__sticky">
           <div className="accounts-page__headline">
             <div className="accounts-page__headline-copy">
@@ -1735,7 +1761,7 @@ function AccountsPageContent() {
               </h1>
             </div>
             <div className="accounts-page__headline-actions">
-              <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={() => setAddOpen(true)}>
+              <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
                 <ActionIcon name="plus" />
                 <span>Add account</span>
               </button>
@@ -1802,7 +1828,7 @@ function AccountsPageContent() {
                   <strong>It's quiet in here.</strong>
                   <p>Add your first account to start seeing balances, history, and helpful review flags.</p>
                   <div className="accounts-empty-state__actions">
-                    <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)}>
+                    <button className="button button-primary button-small" type="button" onClick={openAddAccount}>
                       Add account
                     </button>
                     <button className="button button-secondary button-small" type="button" onClick={openImportFiles}>
@@ -2484,6 +2510,8 @@ function AccountsPageContent() {
           </section>
         </div>
       ) : null}
+
+      <PlanLimitNudge payload={planLimitNudge} onDismiss={() => setPlanLimitNudge(null)} />
 
       <ImportFilesModal
         key={importSessionId}

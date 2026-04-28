@@ -14,6 +14,7 @@ import { useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PlanTierBanner } from "@/components/plan-tier-banner";
 import {
   analyticsOnceKey,
@@ -30,6 +31,7 @@ import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } f
 import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import type { UserLimits } from "@/lib/user-limits";
+import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
@@ -1221,6 +1223,7 @@ function TransactionsPageContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
+  const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
   const [hasInitialTransactionsLoaded, setHasInitialTransactionsLoaded] = useState(false);
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
@@ -1239,6 +1242,7 @@ function TransactionsPageContent() {
   const [isCompactViewport, setIsCompactViewport] = useState(false);
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
+  const workspaceTransactionCount = transactions.length;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
   const accountInstitutionById = useMemo(
     () => new Map(accounts.map((account) => [account.id, account.institution ?? null] as const)),
@@ -2310,6 +2314,16 @@ function TransactionsPageContent() {
       return;
     }
 
+    if (planLimits?.transactionLimit != null && workspaceTransactionCount >= planLimits.transactionLimit) {
+      setPlanLimitNudge({
+        planTier,
+        limitType: "transaction_limit",
+        limitValue: planLimits.transactionLimit,
+      });
+      setMessage("You’ve reached the current transaction limit for this plan.");
+      return;
+    }
+
     try {
       const accountId = await ensureDefaultAccount(selectedWorkspaceId);
       setManualForm(createEmptyManualForm(accountId, getOtherCategoryId(categories)));
@@ -2465,7 +2479,12 @@ function TransactionsPageContent() {
       });
 
       if (!response.ok) {
-        throw new Error("Unable to create transaction.");
+        const payload = await response.json().catch(() => null);
+        const limitPayload = parsePlanLimitPayload(payload);
+        if (limitPayload) {
+          setPlanLimitNudge(limitPayload);
+        }
+        throw new Error(payload?.error ?? "Unable to create transaction.");
       }
 
       const payload = await response.json();
@@ -5494,6 +5513,7 @@ function TransactionsPageContent() {
           setMessage("Import complete. Accounts and Transactions are updated.");
         }}
       />
+      <PlanLimitNudge payload={planLimitNudge} onDismiss={() => setPlanLimitNudge(null)} />
     </CloverShell>
   );
 }
