@@ -1750,6 +1750,29 @@ export function ImportFilesModal({
   const overallProgress = items.length > 0
     ? ((completedFileCount + (activeProgressItem ? activeProgressItem.progress / 100 : 0)) / items.length) * 100
     : 0;
+  const hasImportIssue = items.some((item) => item.status === "error" || item.status === "needs_password") || Boolean(validationNotice);
+  const showImportHelp = hasImportIssue || items.some((item) => item.confirmationState === "staged");
+  const importHelpTitle = items.some((item) => item.status === "needs_password")
+    ? "Password needed"
+    : items.some((item) => item.status === "error")
+      ? "What to do next"
+      : "If Clover needs a hand";
+  const importHelpItems = items.some((item) => item.status === "needs_password")
+    ? [
+        "Enter the password for the statement, then unlock the file.",
+        "If the password still fails, re-upload the original PDF and try again.",
+      ]
+    : items.some((item) => item.status === "error")
+      ? [
+          "Try uploading the original PDF or CSV again, one file at a time.",
+          "If Clover says the file is not confident enough, add the transactions manually in Transactions.",
+          "If the statement imported but still looks off, check the Review queue before confirming anything.",
+        ]
+      : [
+          "If Clover stops on a file, upload the original statement again and keep the browser tab open.",
+          "For low-confidence statements, use Transactions to add anything Clover missed manually.",
+          "If the import looks wrong but still completes, check Review before confirming changes.",
+        ];
   const shouldShowUpgradePrompt = planTier === "free" && limitReached;
 
   useEffect(() => {
@@ -2087,6 +2110,26 @@ export function ImportFilesModal({
           <p>Accepted files: CSV and PDF. Password-protected files are supported.</p>
           <p>We upload the file first, then parse it on the server so the workflow stays responsive.</p>
         </div>
+
+        {showImportHelp ? (
+          <aside className="accounts-import-help glass">
+            <p className="eyebrow">{importHelpTitle}</p>
+            <strong>Clover will try again, but you can keep moving.</strong>
+            <ul className="accounts-import-help__list">
+              {importHelpItems.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <div className="accounts-import-help__actions">
+              <Link className="button button-secondary button-small" href="/transactions?manual=1">
+                Add transactions manually
+              </Link>
+              <Link className="button button-secondary button-small" href="/review">
+                Open review
+              </Link>
+            </div>
+          </aside>
+        ) : null}
 
         {shouldShowUpgradePrompt ? (
           <aside className="import-limit-cta glass">
