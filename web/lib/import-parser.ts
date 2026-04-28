@@ -75,6 +75,14 @@ export const inferAccountTypeFromStatement = (
 ): ImportedAccountType => {
   const normalized = `${institution ?? ""} ${accountName ?? ""}`.toLowerCase();
 
+  if (
+    /(maya\s+easy\s+credit|maya\s+credit|easy\s+credit|credit card|visa platinum|mastercard|amex|card ending|payment due date|total amount due|minimum amount due|credit limit)/.test(
+      normalized
+    )
+  ) {
+    return "credit_card";
+  }
+
   if (/(savings|checking|deposit account|passbook|current account|cav0?1|cav0?2|cav0?3)/.test(normalized)) {
     return "bank";
   }
@@ -83,11 +91,11 @@ export const inferAccountTypeFromStatement = (
     return "wallet";
   }
 
-  if (/(rcbc|bankard|credit card|visa platinum|mastercard|amex|card ending)/.test(normalized)) {
+  if (/(bpi.*signature|bpi.*credit card|signature card|payment due date|total amount due|minimum amount due|credit limit)/.test(normalized)) {
     return "credit_card";
   }
 
-  if (/(bpi.*signature|bpi.*credit card|signature card|payment due date|total amount due|minimum amount due|credit limit)/.test(normalized)) {
+  if (/(rcbc|bankard|credit card|visa platinum|mastercard|amex|card ending)/.test(normalized)) {
     return "credit_card";
   }
 
@@ -239,6 +247,7 @@ const institutionPatterns: Array<{ name: string; pattern: RegExp }> = [
   { name: "Chinabank", pattern: /\bCHINABANK\b/i },
   { name: "PNB", pattern: /\b(PNB|PHILIPPINE\s+NATIONAL\s+BANK)\b/i },
   { name: "Maya", pattern: /\bMAYA\b/i },
+  { name: "GoTyme", pattern: /\bGO\s*TYME|GOTYME\b/i },
   { name: "GCash", pattern: /\bGCASH\b/i },
   { name: "Wise", pattern: /\bWISE\b/i },
   { name: "PayPal", pattern: /\bPAYPAL\b/i },
@@ -3627,9 +3636,34 @@ const parseCimbTransactionSegment = (
     descriptionParts: string[];
     reference: string | null;
     isOpeningBalance: boolean;
+    hasPreDateNarrative: boolean;
     rawLine: string;
     confidence: number;
   } | null = null;
+
+  const shouldQueueForNextRow = (line: string) => {
+    if (!activeRow) {
+      return false;
+    }
+
+    if (activeRow.isOpeningBalance) {
+      return /[A-Za-z]/.test(line);
+    }
+
+    if (!activeRow.reference || !activeRow.hasPreDateNarrative) {
+      return false;
+    }
+
+    if (!/[A-Za-z]/.test(line)) {
+      return false;
+    }
+
+    if (/^\*\d{3,}$/u.test(line)) {
+      return false;
+    }
+
+    return true;
+  };
 
   const finalizeActiveRow = () => {
     if (!activeRow) {
@@ -3727,7 +3761,11 @@ const parseCimbTransactionSegment = (
     const dateMatch = line.match(dateStartPattern);
     if (!dateMatch) {
       if (activeRow) {
-        activeRow.descriptionParts.push(line);
+        if (shouldQueueForNextRow(line)) {
+          pendingPrelude.push(line);
+        } else {
+          activeRow.descriptionParts.push(line);
+        }
       } else {
         pendingPrelude.push(line);
       }
@@ -3766,6 +3804,7 @@ const parseCimbTransactionSegment = (
           descriptionParts,
           reference: null,
           isOpeningBalance: true,
+          hasPreDateNarrative: pendingPrelude.some((part) => /[A-Za-z]/.test(part)),
           rawLine: line,
           confidence: 100,
         };
@@ -3797,6 +3836,7 @@ const parseCimbTransactionSegment = (
       descriptionParts,
       reference: null,
       isOpeningBalance: false,
+      hasPreDateNarrative: pendingPrelude.some((part) => /[A-Za-z]/.test(part)),
       rawLine: line,
       confidence: /transfer to/.test((descriptionParts.join(" ") || line).toLowerCase()) && deposit > 0 && withdrawal === 0 ? 72 : 95,
     };
@@ -3846,46 +3886,21 @@ const parseCimbImportText = (text: string) => {
         parseMoney(sectionText.match(/Ending\s+Balance\s+PHP\s+([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
 
       const rows: ParsedImportRow[] = [];
-      const rowSegments: string[][] = [];
-      let current: string[] = [];
-      let pendingPrelude: string[] = [];
-      for (const line of sectionLines) {
-        if (isCimbBoilerplateLine(line)) {
-          continue;
-        }
+      const firstLedgerRowIndex = sectionLines.findIndex((line) => new RegExp(`^${cimbDatePattern}`, "i").test(line));
+      const ledgerLines =
+        firstLedgerRowIndex >= 0
+          ? sectionLines.slice(firstLedgerRowIndex)
+          : sectionLines;
 
-        if (new RegExp(`^${cimbDatePattern}`, "i").test(line)) {
-          if (current.length > 0) {
-            rowSegments.push(current);
-          }
-          current = [...pendingPrelude, line];
-          pendingPrelude = [];
-          continue;
-        }
+      const parsedRows = parseCimbTransactionSegment(ledgerLines, {
+        accountName,
+        institution: "CIMB",
+        statementStartDate: startDate ? startDate.toISOString() : null,
+        statementEndDate: endDate ? endDate.toISOString() : null,
+      });
 
-        if (current.length > 0) {
-          current.push(line);
-          continue;
-        }
-
-        pendingPrelude.push(line);
-      }
-
-      if (current.length > 0) {
-        rowSegments.push(current);
-      }
-
-      for (const segmentLines of rowSegments) {
-        const parsedRows = parseCimbTransactionSegment(segmentLines, {
-          accountName,
-          institution: "CIMB",
-          statementStartDate: startDate ? startDate.toISOString() : null,
-          statementEndDate: endDate ? endDate.toISOString() : null,
-        });
-
-        if (parsedRows.length > 0) {
-          rows.push(...parsedRows);
-        }
+      if (parsedRows.length > 0) {
+        rows.push(...parsedRows);
       }
 
       return {
@@ -4405,6 +4420,172 @@ const isMayaSavingsStatementText = (text: string) => {
   );
 };
 
+const isMayaCreditStatementText = (text: string) => {
+  const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  if (!/\bMAYA\b/i.test(normalized)) {
+    return false;
+  }
+
+  if (!/\b(CREDIT|EASY\s+CREDIT)\b/i.test(normalized)) {
+    return false;
+  }
+
+  return /\b(BILLING\s+STATEMENT|PAYMENT\s+DUE\s+DATE|TOTAL\s+AMOUNT\s+DUE|YOUR\s+TOTAL\s+MAYA\s+(?:EASY\s+)?CREDIT\s+STATEMENT\s+SUMMARY)\b/i.test(
+    normalized
+  );
+};
+
+const parseMayaCreditStatementMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
+  if (!isMayaCreditStatementText(text)) {
+    return null;
+  }
+
+  const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const product = /\bMAYA\s+EASY\s+CREDIT\b/i.test(normalized) ? "Maya Easy Credit" : "Maya Credit";
+  const accountNumber =
+    normalizeAccountNumberCandidate(context.accountNumber) ??
+    normalizeAccountNumberCandidate(normalized.match(/\bAccount\s+((?:\d[\d-]{8,}\d))\b/i)?.[1] ?? null) ??
+    detectAccountNumberFromText(normalized);
+  const accountName =
+    context.accountName?.trim() ||
+    (accountNumber ? `${product} ${accountNumber.slice(-4)}` : product);
+  const coverageMatch = normalized.match(
+    /Coverage Period\s+((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*\s+\d{1,2},\s+\d{4})\s*-\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*\s+\d{1,2},\s+\d{4})/i
+  );
+  const statementDateMatch = normalized.match(
+    /Statement Date\s+((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*\s+\d{1,2},\s+\d{4})/i
+  );
+  const dueMatch = normalized.match(
+    /Total Amount Due\s+Payment Due Date\s+PHP\s*([0-9][0-9,]*\.\d{2})\s+((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*\s+\d{1,2},\s+\d{4})/i
+  );
+  const previousBalance = parseMoney(normalized.match(/Previous Balance\s+PHP\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+  const totalAmountDue = parseMoney(dueMatch?.[1] ?? null);
+  const startDate = parseDateValue(coverageMatch?.[1] ?? statementDateMatch?.[1] ?? null);
+  const endDate = parseDateValue(coverageMatch?.[2] ?? statementDateMatch?.[1] ?? null);
+  const paymentDueDate = parseDateValue(dueMatch?.[2] ?? null);
+  const metadata = {
+    institution: context.institution?.trim() || "Maya",
+    accountNumber,
+    accountName,
+    accountType: inferAccountTypeFromStatement("Maya", accountName, "credit_card"),
+    openingBalance: previousBalance,
+    endingBalance: totalAmountDue,
+    paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
+    totalAmountDue,
+    startDate: startDate ? startDate.toISOString() : null,
+    endDate: endDate ? endDate.toISOString() : null,
+  };
+
+  return {
+    ...metadata,
+    confidence: scoreMetadataConfidence(metadata),
+  };
+};
+
+const parseMayaCreditTransactionLine = (
+  line: string,
+  state: { accountName: string; institution: string | null; product: string }
+) => {
+  const normalized = normalizeWhitespace(line).replace(/\u00a0/g, " ");
+  const match = normalized.match(
+    /^(?<date>\d{2}\/\d{2}\/\d{4})\s+(?<reference>\d{6,})\s+(?<description>.+?)\s+(?<amount>\(?[0-9][0-9,]*\.\d{2}\)?)$/i
+  );
+  if (!match?.groups) {
+    return null;
+  }
+
+  const date = parseDateValue(match.groups.date);
+  const description = normalizeWhitespace(match.groups.description);
+  const rawAmount = match.groups.amount;
+  const amount = parseMoney(rawAmount.replace(/[()]/g, "")) ?? null;
+  if (!date || amount === null) {
+    return null;
+  }
+
+  const lower = description.toLowerCase();
+  let type: TransactionType = "expense";
+  let categoryName = "Other";
+
+  if (/repayment|cash payment/.test(lower)) {
+    type = "transfer";
+    categoryName = "Transfers";
+  } else if (/transfer to wallet|credit drawdown/.test(lower)) {
+    type = "transfer";
+    categoryName = "Transfers";
+  } else if (/service fee|penalty fee|dst|documentary stamp tax|late penalty/.test(lower)) {
+    type = "expense";
+    categoryName = "Financial";
+  } else {
+    categoryName = guessCategoryName(description, type);
+  }
+
+  return {
+    date: date.toISOString().slice(0, 10),
+    amount: amount.toFixed(2),
+    merchantRaw: humanizeMerchantText(description),
+    merchantClean: summarizeMerchantText(description, state.institution),
+    description,
+    categoryName,
+    accountName: state.accountName,
+    institution: state.institution ?? undefined,
+    type,
+    confidence: 96,
+    rawPayload: {
+      bank: "Maya",
+      product: state.product,
+      kind: "maya_credit_transaction",
+      line: normalized,
+      reference: match.groups.reference,
+      amountText: rawAmount,
+      amountSign: /^\(/.test(rawAmount) ? "credit" : "debit",
+    },
+  } satisfies ParsedImportRow;
+};
+
+const parseMayaCreditImportText = (text: string, context: ImportParseContext = {}) => {
+  const metadata = parseMayaCreditStatementMetadata(text, context);
+  if (!metadata) {
+    return null;
+  }
+
+  const product = /\bMaya Easy Credit\b/i.test(text) ? "Maya Easy Credit" : "Maya Credit";
+  const lines = text.replace(/\u00a0/g, " ").split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const rows: ParsedImportRow[] = [];
+  const startIndex = lines.findIndex((line) => /Your Maya (?:Easy )?Credit Transactions/i.test(line));
+  if (startIndex < 0) {
+    return { metadata, rows };
+  }
+
+  for (let index = startIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index];
+    if (
+      /^Amount \(in PHP\)$/i.test(line) ||
+      /^Date\s+(?:Transaction|Reference)\s+No\.?\s+Description$/i.test(line) ||
+      /^PREVIOUS STATEMENT$/i.test(line) ||
+      /^BALANCE$/i.test(line) ||
+      /^0\.00$/i.test(line) ||
+      /^[0-9][0-9,]*\.\d{2}$/i.test(line)
+    ) {
+      continue;
+    }
+
+    if (/^(Total Transaction Amount|Deduct:\s+Payments Made|Add:\s+Service Fee|Add:\s+Documentary Stamp Tax|Penalties Incurred|Total Amount Due|PAGE:)/i.test(line)) {
+      break;
+    }
+
+    const parsed = parseMayaCreditTransactionLine(line, {
+      accountName: metadata.accountName ?? product,
+      institution: metadata.institution ?? "Maya",
+      product,
+    });
+    if (parsed) {
+      rows.push(parsed);
+    }
+  }
+
+  return { metadata, rows };
+};
+
 const monthIndexByName: Record<string, number> = {
   jan: 0,
   january: 0,
@@ -4476,6 +4657,533 @@ const parseMayaSavingsDateText = (value?: string | null, yearHint?: number | nul
   }
 
   return parseDateValue(removedTime) ?? null;
+};
+
+const isGoTymeStatementText = (text: string) => {
+  const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  return (
+    /\bGO\s*TYME\b|\bGOTYME\b/i.test(normalized) &&
+    /(STATEMENT\s+OF\s+ACCOUNT|GO\s*TYME\s+BANK\s+ACCOUNT|ACCOUNT\s+NUMBER\s*:|TOTAL\s+CREDIT|TOTAL\s+DEBIT|RUNNING\s+BALANCE)/i.test(
+      normalized
+    )
+  );
+};
+
+const parseGoTymeStatementMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
+  if (!isGoTymeStatementText(text)) {
+    return null;
+  }
+
+  const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const accountNumber =
+    normalizeAccountNumberCandidate(context.accountNumber) ??
+    normalizeAccountNumberCandidate(normalized.match(/Account\s+Number\s*:\s*((?:\d[\d\s-]{6,}\d))/i)?.[1] ?? null) ??
+    detectAccountNumberFromText(normalized);
+  const periodMatch =
+    normalized.match(
+      /Period\s*:\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*\s+\d{1,2},?\s+\d{4})\s*[-–—]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*\s+\d{1,2},?\s+\d{4})/i
+    ) ??
+    normalized.match(
+      /Period\s*:\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*\s+\d{1,2}\s+\d{4})\s*[-–—]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*\s+\d{1,2}\s+\d{4})/i
+    );
+  const startDate = parseDateValue(periodMatch?.[1] ?? null);
+  const endDate = parseDateValue(periodMatch?.[2] ?? null);
+  const openingBalance =
+    parseMoney(normalized.match(/Opening\s+balance\s+PHP\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ?? null;
+  const endingBalance =
+    parseMoney(normalized.match(/Closing\s+balance\s+PHP\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ?? null;
+  const accountName =
+    context.accountName?.trim() ||
+    (accountNumber ? `GoTyme ${accountNumber.slice(-4)}` : "GoTyme");
+
+  return {
+    institution: context.institution?.trim() || "GoTyme",
+    accountNumber,
+    accountName,
+    accountType: inferAccountTypeFromStatement("GoTyme", accountName, "bank"),
+    openingBalance,
+    endingBalance,
+    startDate: startDate ? startDate.toISOString() : null,
+    endDate: endDate ? endDate.toISOString() : null,
+    confidence: scoreMetadataConfidence({
+      institution: context.institution?.trim() || "GoTyme",
+      accountNumber,
+      accountName,
+      accountType: inferAccountTypeFromStatement("GoTyme", accountName, "bank"),
+      openingBalance,
+      endingBalance,
+      startDate: startDate ? startDate.toISOString() : null,
+      endDate: endDate ? endDate.toISOString() : null,
+    }),
+  };
+};
+
+const parseGoTymeDate = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = normalizeWhitespace(value);
+  const dashed = normalized.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (dashed) {
+    return new Date(Date.UTC(Number(dashed[3]), Number(dashed[1]) - 1, Number(dashed[2]), 12, 0, 0));
+  }
+
+  return parseDateValue(normalized);
+};
+
+const classifyGoTymeTransaction = (description: string, credit: number, debit: number): { type: TransactionType; categoryName: string } => {
+  const lower = description.toLowerCase();
+
+  if (/interest|salary credit/.test(lower)) {
+    return { type: "income", categoryName: /interest/.test(lower) ? "Financial" : "Income" };
+  }
+
+  if (/withholding tax|tax withheld/.test(lower)) {
+    return { type: "expense", categoryName: "Financial" };
+  }
+
+  if (/transfer fee|deposit fee|atm fee|\bfee\b/.test(lower)) {
+    return { type: "expense", categoryName: "Financial" };
+  }
+
+  if (/transfer|interbank|go save|gotyme bank account|qr payment|cash in|cash out|withdrawal|deposit|redemption/.test(lower)) {
+    return { type: "transfer", categoryName: "Transfers" };
+  }
+
+  if (credit > 0 && debit === 0) {
+    return { type: "income", categoryName: guessCategoryName(description, "income") };
+  }
+
+  return { type: "expense", categoryName: guessCategoryName(description, "expense") };
+};
+
+const parseGoTymeTransactionBlock = (
+  block: string[],
+  state: {
+    accountName: string;
+    institution: string | null;
+  }
+) => {
+  const rowText = normalizeWhitespace(block.join(" ")).replace(/\u00a0/g, " ");
+  if (!rowText) {
+    return null;
+  }
+
+  const rowMatch = rowText.match(/^(?<date>\d{2}-\d{2}-\d{4})\s+(?<body>.+)$/);
+  if (!rowMatch?.groups?.date || !rowMatch.groups.body) {
+    return null;
+  }
+
+  const date = parseGoTymeDate(rowMatch.groups.date);
+  if (!date) {
+    return null;
+  }
+
+  const moneyMatches = Array.from(rowMatch.groups.body.matchAll(/[0-9][0-9,]*\.\d{2}/g));
+  if (moneyMatches.length < 3) {
+    return null;
+  }
+
+  const creditText = moneyMatches.at(-3)?.[0] ?? null;
+  const debitText = moneyMatches.at(-2)?.[0] ?? null;
+  const balanceText = moneyMatches.at(-1)?.[0] ?? null;
+  const credit = parseMoney(creditText);
+  const debit = parseMoney(debitText);
+  const balance = parseMoney(balanceText);
+  if (credit === null || debit === null || balance === null) {
+    return null;
+  }
+
+  const descriptionEnd = moneyMatches.at(-3)?.index ?? rowMatch.groups.body.length;
+  let description = normalizeWhitespace(rowMatch.groups.body.slice(0, descriptionEnd));
+  description = description
+    .replace(/GoTyme Bank,\s*Account No\.\s*[•.\s\d-]+/gi, "GoTyme Bank Account")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (!description) {
+    return null;
+  }
+
+  const { type, categoryName } = classifyGoTymeTransaction(description, credit, debit);
+  const amount = credit > 0 ? credit : debit;
+  const confidence = date ? 95 : 78;
+
+  return {
+    date: date.toISOString().slice(0, 10),
+    amount: amount.toFixed(2),
+    merchantRaw: humanizeMerchantText(description),
+    merchantClean: summarizeMerchantText(description, state.institution),
+    description,
+    categoryName,
+    accountName: state.accountName,
+    institution: state.institution ?? undefined,
+    type,
+    confidence,
+    rawPayload: {
+      bank: "GoTyme",
+      line: rowText,
+      creditText,
+      debitText,
+      balanceText,
+      balance,
+    },
+  } satisfies ParsedImportRow;
+};
+
+const parseGoTymeImportText = (text: string, context: ImportParseContext = {}) => {
+  const metadata = parseGoTymeStatementMetadata(text, context);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+
+  const startIndex = lines.findIndex((line) => /^Date\s+Details\s+Crea?dits\s+Debits\s+Running\s+Balance$/i.test(line));
+  const firstDateIndex = lines.findIndex((line) => /^\d{2}-\d{2}-\d{4}\b/.test(line));
+  const ledgerStart = startIndex >= 0 ? startIndex + 1 : firstDateIndex;
+  if (ledgerStart < 0) {
+    return { metadata, rows: [] };
+  }
+
+  const blocks: string[][] = [];
+  let current: string[] = [];
+
+  for (const line of lines.slice(ledgerStart)) {
+    if (
+      /^All figures are in PHP\.?$/i.test(line) ||
+      /^Document ID:/i.test(line) ||
+      /^Page \d+ of \d+/i.test(line) ||
+      /^Request Date:/i.test(line)
+    ) {
+      break;
+    }
+
+    if (/^\d{2}-\d{2}-\d{4}\b/.test(line)) {
+      if (current.length > 0) {
+        blocks.push(current);
+      }
+      current = [line];
+      continue;
+    }
+
+    if (current.length > 0) {
+      current.push(line);
+    }
+  }
+
+  if (current.length > 0) {
+    blocks.push(current);
+  }
+
+  const rows = blocks
+    .map((block) =>
+      parseGoTymeTransactionBlock(block, {
+        accountName: metadata.accountName ?? "GoTyme",
+        institution: metadata.institution ?? "GoTyme",
+      })
+    )
+    .filter(Boolean) as ParsedImportRow[];
+
+  return rows.length > 0 ? { metadata, rows } : { metadata, rows: [] };
+};
+
+const genericStatementDateStartPattern = new RegExp(
+  `^(?:\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\b`,
+  "i"
+);
+
+const isGenericBankStatementText = (text: string) => {
+  const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const hasTopMetadata =
+    /(?:account\s+number|account\s+no\.?|account\s*#|customer\s+number|payment\s+due\s+date|payment\s+amount|total\s+amount\s+due|minimum\s+amount\s+due|opening\s+balance|closing\s+balance|ending\s+balance|available\s+balance|running\s+balance)/i.test(
+      normalized
+    );
+  const hasTransactionShell =
+    /(?:transaction\s+list|transaction\s+history|posted\s+date|transaction\s+date|date\s+details?|date\s+description|date\s+transaction|description\s+amount|running\s+balance|credits?\s+debits?|deposits?\s+withdrawals?|debit\s+credit|amount\s+balance)/i.test(
+      normalized
+    );
+
+  return hasTopMetadata && hasTransactionShell;
+};
+
+const parseGenericStatementDateText = (value: string, yearHint?: number | null) => {
+  const normalized = normalizeWhitespace(value).replace(/,\s*/g, " ").trim();
+  const direct = parseDateValue(normalized);
+  if (direct) {
+    return direct;
+  }
+
+  if (yearHint) {
+    const noYearLeadingMonth = normalized.match(new RegExp(`^(${monthNamePattern})\\s+(\\d{1,2})$`, "i"));
+    if (noYearLeadingMonth) {
+      return parseDateValue(`${noYearLeadingMonth[1]} ${noYearLeadingMonth[2]} ${yearHint}`);
+    }
+
+    const noYearTrailingMonth = normalized.match(new RegExp(`^(\\d{1,2})\\s+(${monthNamePattern})$`, "i"));
+    if (noYearTrailingMonth) {
+      return parseDateValue(`${noYearTrailingMonth[1]} ${noYearTrailingMonth[2]} ${yearHint}`);
+    }
+  }
+
+  return null;
+};
+
+const parseGenericStatementMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
+  if (!isGenericBankStatementText(text)) {
+    return null;
+  }
+
+  const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const institution = context.institution ?? detectInstitutionFromText(normalized);
+  const accountNumber = normalizeAccountNumberCandidate(context.accountNumber) ?? detectAccountNumberFromText(normalized);
+  const { startDate, endDate } = detectStatementDatesFromText(normalized);
+  const { openingBalance, endingBalance } = detectBalanceFromText(normalized);
+  const paymentDueDate = parseDateValue(
+    normalized.match(/payment\s+due\s+date\s*[:\-]?\s*([A-Za-z0-9,\-\/ ]{6,30})/i)?.[1] ?? null
+  );
+  const totalAmountDue = parseMoney(normalized.match(/total\s+amount\s+due\s*[:\-]?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+  const accountName =
+    context.accountName?.trim() ||
+    (institution && accountNumber
+      ? `${institution} ${accountNumber.slice(-4)}`
+      : institution
+        ? institution
+        : accountNumber
+          ? `Account ${accountNumber.slice(-4)}`
+          : null);
+
+  if (!institution && !accountNumber && !startDate && !endDate && openingBalance === null && endingBalance === null) {
+    return null;
+  }
+
+  return {
+    institution,
+    accountNumber,
+    accountName,
+    accountType: inferAccountTypeFromStatement(institution, accountName, "bank"),
+    openingBalance,
+    endingBalance,
+    paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
+    totalAmountDue,
+    startDate: startDate ? startDate.toISOString() : null,
+    endDate: endDate ? endDate.toISOString() : null,
+    confidence: scoreMetadataConfidence({
+      institution,
+      accountNumber,
+      accountName,
+      accountType: inferAccountTypeFromStatement(institution, accountName, "bank"),
+      openingBalance,
+      endingBalance,
+      paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
+      totalAmountDue,
+      startDate: startDate ? startDate.toISOString() : null,
+      endDate: endDate ? endDate.toISOString() : null,
+    }),
+  };
+};
+
+const classifyGenericStatementTransaction = (description: string, credit: number | null, debit: number | null, explicitAmount: number | null) => {
+  const lower = description.toLowerCase();
+
+  if (/interest|salary|payroll|refund|credit memo|cash in|received/.test(lower)) {
+    return { type: "income" as TransactionType, categoryName: guessCategoryName(description, "income") };
+  }
+
+  if (/tax|fee|charge|penalty|withheld/.test(lower)) {
+    return { type: "expense" as TransactionType, categoryName: "Financial" };
+  }
+
+  if (/transfer|instapay|pesonet|withdrawal|deposit|payment|cash out|cash in/.test(lower)) {
+    return { type: "transfer" as TransactionType, categoryName: "Transfers" };
+  }
+
+  if ((credit ?? 0) > 0 && (debit ?? 0) === 0) {
+    return { type: "income" as TransactionType, categoryName: guessCategoryName(description, "income") };
+  }
+
+  if ((debit ?? 0) > 0 && (credit ?? 0) === 0) {
+    return { type: "expense" as TransactionType, categoryName: guessCategoryName(description, "expense") };
+  }
+
+  if ((explicitAmount ?? 0) < 0) {
+    return { type: "expense" as TransactionType, categoryName: guessCategoryName(description, "expense") };
+  }
+
+  return { type: "expense" as TransactionType, categoryName: guessCategoryName(description, "expense") };
+};
+
+const parseGenericStatementTransactionBlock = (
+  block: string[],
+  state: { accountName: string; institution: string | null; yearHint: number | null }
+) => {
+  const rowText = normalizeWhitespace(block.join(" ")).replace(/\u00a0/g, " ");
+  if (!rowText) {
+    return null;
+  }
+
+  if (
+    /^transactions?$/i.test(rowText) ||
+    /^date\s+(?:and\s+time|details?|description|transaction)/i.test(rowText) ||
+    /^posted\s+date/i.test(rowText) ||
+    /^running\s+balance$/i.test(rowText)
+  ) {
+    return null;
+  }
+
+  const dateMatch = rowText.match(
+    new RegExp(
+      `^(?<date>(?:\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\s+(?<body>.+)$`,
+      "i"
+    )
+  );
+  if (!dateMatch?.groups?.date || !dateMatch.groups.body) {
+    return null;
+  }
+
+  const date = parseGenericStatementDateText(dateMatch.groups.date, state.yearHint);
+  if (!date) {
+    return null;
+  }
+
+  const moneyMatches = Array.from(dateMatch.groups.body.matchAll(/-?(?:PHP\s*)?[0-9][0-9,]*\.\d{2}/gi));
+  if (moneyMatches.length === 0) {
+    return null;
+  }
+
+  const numericValues = moneyMatches.map((match) => parseMoney(match[0]?.replace(/^PHP\s*/i, "") ?? null));
+  if (numericValues.some((value) => value === null)) {
+    return null;
+  }
+
+  let credit: number | null = null;
+  let debit: number | null = null;
+  let explicitAmount: number | null = null;
+  let balance: number | null = null;
+
+  if (numericValues.length >= 3) {
+    credit = numericValues.at(-3) ?? null;
+    debit = numericValues.at(-2) ?? null;
+    balance = numericValues.at(-1) ?? null;
+  } else if (numericValues.length === 2) {
+    explicitAmount = numericValues[0] ?? null;
+    balance = numericValues[1] ?? null;
+  } else {
+    explicitAmount = numericValues[0] ?? null;
+  }
+
+  const descriptionEnd = (moneyMatches.length >= 3 ? moneyMatches.at(-3)?.index : moneyMatches[0]?.index) ?? dateMatch.groups.body.length;
+  let description = normalizeWhitespace(dateMatch.groups.body.slice(0, descriptionEnd));
+  description = description
+    .replace(/\b(?:account|acct)\s+no\.?\s*[•.\s\d-]+/gi, "Account")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (!description) {
+    return null;
+  }
+
+  const { type, categoryName } = classifyGenericStatementTransaction(description, credit, debit, explicitAmount);
+  const amount =
+    explicitAmount !== null
+      ? Math.abs(explicitAmount)
+      : (credit ?? 0) > 0 && (debit ?? 0) === 0
+        ? credit
+        : (debit ?? 0) > 0 && (credit ?? 0) === 0
+          ? debit
+          : Math.max(credit ?? 0, debit ?? 0);
+
+  if (amount === null || amount <= 0) {
+    return null;
+  }
+
+  return {
+    date: date.toISOString().slice(0, 10),
+    amount: amount.toFixed(2),
+    merchantRaw: humanizeMerchantText(description),
+    merchantClean: summarizeMerchantText(description, state.institution),
+    description,
+    categoryName,
+    accountName: state.accountName,
+    institution: state.institution ?? undefined,
+    type,
+    confidence: 82,
+    rawPayload: {
+      bank: state.institution ?? "Unknown",
+      kind: "generic_bank_statement_transaction",
+      line: rowText,
+      creditText: moneyMatches.length >= 3 ? moneyMatches.at(-3)?.[0] ?? null : null,
+      debitText: moneyMatches.length >= 3 ? moneyMatches.at(-2)?.[0] ?? null : null,
+      amountText: moneyMatches.length === 2 ? moneyMatches[0]?.[0] ?? null : null,
+      balanceText: balance !== null ? moneyMatches.at(-1)?.[0] ?? null : null,
+      balance,
+    },
+  } satisfies ParsedImportRow;
+};
+
+const parseGenericBankStatementText = (text: string, context: ImportParseContext = {}) => {
+  const metadata = parseGenericStatementMetadata(text, context);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+  const yearHint = metadata.endDate
+    ? new Date(metadata.endDate).getUTCFullYear()
+    : metadata.startDate
+      ? new Date(metadata.startDate).getUTCFullYear()
+      : new Date().getUTCFullYear();
+
+  const firstDateIndex = lines.findIndex((line) => genericStatementDateStartPattern.test(line));
+  if (firstDateIndex < 0) {
+    return { metadata, rows: [] };
+  }
+
+  const blocks: string[][] = [];
+  let current: string[] = [];
+
+  for (const line of lines.slice(firstDateIndex)) {
+    if (/^all figures/i.test(line) || /^page\s+\d+\s+of\s+\d+/i.test(line) || /^request date:/i.test(line)) {
+      continue;
+    }
+
+    if (genericStatementDateStartPattern.test(line)) {
+      if (current.length > 0) {
+        blocks.push(current);
+      }
+      current = [line];
+      continue;
+    }
+
+    if (current.length > 0) {
+      current.push(line);
+    }
+  }
+
+  if (current.length > 0) {
+    blocks.push(current);
+  }
+
+  const rows = blocks
+    .map((block) =>
+      parseGenericStatementTransactionBlock(block, {
+        accountName: metadata.accountName ?? metadata.institution ?? "Account",
+        institution: metadata.institution,
+        yearHint,
+      })
+    )
+    .filter(Boolean) as ParsedImportRow[];
+
+  return rows.length > 0 ? { metadata, rows } : { metadata, rows: [] };
 };
 
 const parseMayaSavingsTransactionBlock = (
@@ -4783,6 +5491,11 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     return unionbankMetadata;
   }
 
+  const mayaCreditMetadata = parseMayaCreditStatementMetadata(text);
+  if (mayaCreditMetadata) {
+    return mayaCreditMetadata;
+  }
+
   const mayaSavingsMetadata = parseMayaSavingsStatementMetadata(text);
   if (mayaSavingsMetadata) {
     return mayaSavingsMetadata;
@@ -4808,9 +5521,19 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     return cimbMetadata.metadata;
   }
 
+  const gotymeMetadata = parseGoTymeImportText(text);
+  if (gotymeMetadata) {
+    return gotymeMetadata.metadata;
+  }
+
   const bdoParsed = parseBdoSavingsImportText(text);
   if (bdoParsed) {
     return bdoParsed.metadata;
+  }
+
+  const genericMetadata = parseGenericStatementMetadata(text);
+  if (genericMetadata) {
+    return genericMetadata;
   }
 
   const normalized = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -5050,6 +5773,11 @@ export const parseImportText = (
     return unionbankParsed.rows;
   }
 
+  const mayaCreditParsed = parseMayaCreditImportText(text, context);
+  if (mayaCreditParsed) {
+    return mayaCreditParsed.rows;
+  }
+
   const mayaSavingsParsed = parseMayaSavingsImportText(text, context);
   if (mayaSavingsParsed) {
     return mayaSavingsParsed.rows;
@@ -5058,6 +5786,11 @@ export const parseImportText = (
   const cimbParsed = parseCimbImportText(text);
   if (cimbParsed) {
     return cimbParsed.rows;
+  }
+
+  const gotymeParsed = parseGoTymeImportText(text, context);
+  if (gotymeParsed && gotymeParsed.rows.length > 0) {
+    return gotymeParsed.rows;
   }
 
   const bpiCreditParsed = parseBpiCreditCardImportText(text);
@@ -5073,6 +5806,11 @@ export const parseImportText = (
   const bpiParsed = parseBpiImportText(text);
   if (bpiParsed) {
     return bpiParsed.rows;
+  }
+
+  const genericParsed = parseGenericBankStatementText(text, context);
+  if (genericParsed && genericParsed.rows.length > 0) {
+    return genericParsed.rows;
   }
 
   const delimiter = delimiterForFile(fileType, fileName);

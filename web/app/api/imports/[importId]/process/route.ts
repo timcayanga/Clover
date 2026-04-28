@@ -29,6 +29,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
     const contentType = _request.headers.get("content-type") ?? "";
     const isMultipart = contentType.includes("multipart/form-data");
     let allowDuplicateStatement = false;
+    let forceInlineProcessing = false;
 
     let importFile = await fetchImportFileCompat(importId);
     let password: string | undefined;
@@ -42,8 +43,10 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const formWorkspaceId = typeof formData.get("workspaceId") === "string" ? String(formData.get("workspaceId")) : "";
       const formFileName = typeof formData.get("fileName") === "string" ? String(formData.get("fileName")) : "";
       const formFileType = typeof formData.get("fileType") === "string" ? String(formData.get("fileType")) : "";
+      const formBankName = typeof formData.get("bankName") === "string" ? String(formData.get("bankName")) : "";
       allowDuplicateStatement =
         String(formData.get("allowDuplicateStatement") ?? formData.get("qaMode") ?? "").toLowerCase() === "true";
+      forceInlineProcessing = String(formData.get("forceInlineProcessing") ?? "").toLowerCase() === "true";
       password = typeof formPassword === "string" && formPassword.length > 0 ? formPassword : undefined;
 
       if (!uploadedFile || typeof uploadedFile !== "object" || typeof (uploadedFile as { arrayBuffer?: unknown }).arrayBuffer !== "function") {
@@ -121,7 +124,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         (hasExtractedText && parsedMetadataConfidence >= 95 && bytes.length <= 8_000_000) ||
         (!hasExtractedText && bytes.length <= 2_500_000);
 
-      if (shouldProcessInline) {
+      if (shouldProcessInline || forceInlineProcessing) {
         stage = "processing statement text";
         await updateImportFileCompat(importId, {
           status: "processing",
@@ -134,6 +137,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           actorUserId: userId,
           qaSource: "import_processing",
           allowDuplicateStatement,
+          statementMetadataOverride: formBankName
+            ? {
+                institution: formBankName,
+              }
+            : null,
         });
 
         return NextResponse.json({
@@ -155,6 +163,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           importFileId: importId,
           password,
           allowDuplicateStatement,
+          bankName: formBankName || undefined,
         });
       } catch (error) {
         console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
@@ -192,6 +201,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const text = typeof body?.text === "string" ? body.text : "";
       password = typeof body?.password === "string" ? body.password : undefined;
       allowDuplicateStatement = Boolean(body?.allowDuplicateStatement ?? false);
+      forceInlineProcessing = Boolean(body?.forceInlineProcessing ?? false);
+      const bodyBankName = typeof body?.bankName === "string" ? String(body.bankName) : "";
 
       if (!text) {
         return NextResponse.json({ error: "Missing extracted statement text." }, { status: 400 });
@@ -210,6 +221,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         actorUserId: userId,
         qaSource: "import_processing",
         allowDuplicateStatement,
+        statementMetadataOverride: bodyBankName
+          ? {
+              institution: bodyBankName,
+            }
+          : null,
       });
 
       return NextResponse.json({
@@ -224,10 +240,15 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     }
   } catch (error) {
+    const localDev = await isLocalDevHost().catch(() => false);
+    console.error("Import processing failed", error);
     console.error("Import processing failed", { stage, error: summarizeErrorForLog(error) });
     return NextResponse.json(
       {
-        error: "Unable to process import",
+        error:
+          localDev && error instanceof Error
+            ? error.message || "Unable to process import"
+            : "Unable to process import",
         stage,
       },
       { status: 400 }

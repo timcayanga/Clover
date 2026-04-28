@@ -36,18 +36,7 @@ type ImportQaPayload = {
   } | null;
 };
 
-type PreviewPayload = {
-  importFile: FileSummary | null;
-  parsedRows: PreviewRow[];
-  statementCheckpoint: {
-    openingBalance: string | null;
-    endingBalance: string | null;
-    status: string | null;
-    rowCount: number | null;
-  } | null;
-};
-
-type StatusPayload = {
+type FileDetailPayload = {
   importFile: (FileSummary & {
     processingPhase?: string | null;
     processingMessage?: string | null;
@@ -59,6 +48,14 @@ type StatusPayload = {
   parsedRowsCount: number;
   confirmedTransactionsCount: number;
   confirmationStatus: string;
+  parsedRows: PreviewRow[];
+  statementCheckpoint: {
+    openingBalance: string | null;
+    endingBalance: string | null;
+    status: string | null;
+    rowCount: number | null;
+  } | null;
+  run: ImportQaPayload["run"];
 };
 
 const formatDate = (value: string | null) => {
@@ -90,56 +87,54 @@ const readText = (row: PreviewRow, keys: string[]) => {
 
 export function AdminDataQaFileDetail({ importFileId }: { importFileId: string }) {
   const router = useRouter();
-  const [qaPayload, setQaPayload] = useState<ImportQaPayload | null>(null);
-  const [previewPayload, setPreviewPayload] = useState<PreviewPayload | null>(null);
-  const [statusPayload, setStatusPayload] = useState<StatusPayload | null>(null);
+  const [detailPayload, setDetailPayload] = useState<FileDetailPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+    let intervalId: number | null = null;
 
-    const load = async () => {
-      setLoading(true);
-      setError(null);
-
+    const load = async (showLoading = true) => {
+      if (showLoading) {
+        setLoading(true);
+      }
       try {
-        const [qaResponse, previewResponse, statusResponse] = await Promise.all([
-          fetch(`/api/imports/${importFileId}/qa`, { cache: "no-store" }),
-          fetch(`/api/imports/${importFileId}/preview`, { cache: "no-store" }),
-          fetch(`/api/imports/${importFileId}/status`, { cache: "no-store" }),
-        ]);
-
-        if (!qaResponse.ok) {
-          throw new Error((await qaResponse.json().catch(() => ({}))).error || "Unable to load QA file.");
+        const response = await fetch(`/api/admin/data-qa/file/${importFileId}`, { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error((await response.json().catch(() => ({}))).error || "Unable to load file detail.");
         }
 
-        if (!previewResponse.ok) {
-          throw new Error((await previewResponse.json().catch(() => ({}))).error || "Unable to load file preview.");
-        }
-
-        if (!statusResponse.ok) {
-          throw new Error((await statusResponse.json().catch(() => ({}))).error || "Unable to load file status.");
-        }
-
-        const [qaData, previewData, statusData] = await Promise.all([
-          qaResponse.json() as Promise<ImportQaPayload>,
-          previewResponse.json() as Promise<PreviewPayload>,
-          statusResponse.json() as Promise<StatusPayload>,
-        ]);
+        const data = (await response.json()) as FileDetailPayload;
 
         if (!cancelled) {
-          setQaPayload(qaData);
-          setPreviewPayload(previewData);
-          setStatusPayload(statusData);
+          setError(null);
+          setDetailPayload(data);
+
+          if (intervalId) {
+            window.clearInterval(intervalId);
+            intervalId = null;
+          }
+
+          const shouldPoll =
+            running ||
+            data.importFile?.status === "processing" ||
+            data.importFile?.status === "queued" ||
+            data.importFile?.processingPhase === "auto_rerunning";
+
+          if (shouldPoll) {
+            intervalId = window.setInterval(() => {
+              void load(false);
+            }, 4000);
+          }
         }
       } catch (loadError) {
         if (!cancelled) {
           setError(loadError instanceof Error ? loadError.message : "Unable to load file detail.");
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelled && showLoading) {
           setLoading(false);
         }
       }
@@ -147,20 +142,18 @@ export function AdminDataQaFileDetail({ importFileId }: { importFileId: string }
 
     void load();
 
-    const interval = window.setInterval(() => {
-      void load();
-    }, 5000);
-
     return () => {
       cancelled = true;
-      window.clearInterval(interval);
+      if (intervalId) {
+        window.clearInterval(intervalId);
+      }
     };
-  }, [importFileId]);
+  }, [importFileId, running]);
 
-  const importFile = qaPayload?.importFile ?? statusPayload?.importFile ?? previewPayload?.importFile ?? null;
-  const latestRun = qaPayload?.run ?? null;
-  const parsedRows = previewPayload?.parsedRows ?? [];
-  const checkpoint = previewPayload?.statementCheckpoint ?? null;
+  const importFile = detailPayload?.importFile ?? null;
+  const latestRun = detailPayload?.run ?? null;
+  const parsedRows = detailPayload?.parsedRows ?? [];
+  const checkpoint = detailPayload?.statementCheckpoint ?? null;
   const fileName = importFile?.fileName ?? "Imported file";
 
   const runScan = async () => {
@@ -185,7 +178,11 @@ export function AdminDataQaFileDetail({ importFileId }: { importFileId: string }
         return;
       }
 
-      void router.refresh();
+      const detailResponse = await fetch(`/api/admin/data-qa/file/${importFileId}`, { cache: "no-store" });
+      if (detailResponse.ok) {
+        const data = (await detailResponse.json()) as FileDetailPayload;
+        setDetailPayload(data);
+      }
     } catch (scanError) {
       setError(scanError instanceof Error ? scanError.message : "Unable to scan file.");
     } finally {
@@ -223,11 +220,11 @@ export function AdminDataQaFileDetail({ importFileId }: { importFileId: string }
 
         <div className="admin-users__stats">
           <div className="admin-users__stat">
-            <strong>{statusPayload?.confirmationStatus ?? "unknown"}</strong>
+            <strong>{detailPayload?.confirmationStatus ?? "unknown"}</strong>
             <span>Status</span>
           </div>
           <div className="admin-users__stat">
-            <strong>{formatNumber(statusPayload?.parsedRowsCount ?? null)}</strong>
+            <strong>{formatNumber(detailPayload?.parsedRowsCount ?? null)}</strong>
             <span>Parsed rows</span>
           </div>
           <div className="admin-users__stat">
@@ -239,7 +236,7 @@ export function AdminDataQaFileDetail({ importFileId }: { importFileId: string }
             <span>Findings</span>
           </div>
           <div className="admin-users__stat">
-            <strong>{formatDate(statusPayload?.importFile?.updatedAt ?? null)}</strong>
+            <strong>{formatDate(detailPayload?.importFile?.updatedAt ?? null)}</strong>
             <span>Last update</span>
           </div>
           <div className="admin-users__stat">
@@ -280,7 +277,7 @@ export function AdminDataQaFileDetail({ importFileId }: { importFileId: string }
           </div>
           <div className="admin-data-qa-run-detail__summary-card">
             <span>Confirmed transactions</span>
-            <strong>{formatNumber(statusPayload?.confirmedTransactionsCount ?? null)}</strong>
+            <strong>{formatNumber(detailPayload?.confirmedTransactionsCount ?? null)}</strong>
           </div>
         </div>
 

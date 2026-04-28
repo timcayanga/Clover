@@ -7209,6 +7209,12 @@ label {
   font-size: 15px;
 }
 
+.onboarding-card__copy--subtle {
+  margin-top: -4px;
+  color: var(--muted-2);
+  font-size: 13px;
+}
+
 .onboarding-card__message {
   margin-top: 2px;
   color: var(--muted);

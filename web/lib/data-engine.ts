@@ -20,6 +20,7 @@ type TrainingSignalRow = {
   categoryName: string | null;
   merchantKey: string;
   merchantTokens: string[];
+  type: TransactionType;
   source: string;
   confidence: number;
 };
@@ -305,8 +306,37 @@ const getHardcodedCategoryOverride = (merchantText: string) => {
     return "Transfers";
   }
 
+  if (
+    /repayment|cash\s+payment|transfer\s+to\s+wallet|credit\s+drawdown/.test(lower) ||
+    /repayment|cashpayment|transfertowallet|creditdrawdown/.test(compact)
+  ) {
+    return "Transfers";
+  }
+
+  if (
+    /service\s+fee|penalty\s+fee|late\s+penalty|documentary\s+stamp\s+tax|\bdst\b/.test(lower) ||
+    /servicefee|penaltyfee|latepenalty|documentarystamptax|\bdst\b/.test(compact)
+  ) {
+    return "Financial";
+  }
+
   return null;
 };
+
+const HARDCODED_EXACT_MERCHANT_KEYS = new Set([
+  "deposit",
+  "withdrawal",
+  "atm withdrawal",
+  "transfer fee",
+  "base interest",
+  "boost interest",
+  "tax withheld",
+  "repayment",
+  "credit drawdown",
+  "service fee",
+  "penalty fee",
+  "documentary stamp tax",
+]);
 
 export const normalizeMerchantText = (value?: string | null) =>
   normalizeWhitespace(String(value ?? ""))
@@ -830,6 +860,23 @@ export const listImportFilesCompat = async (workspaceId: string): Promise<any[]>
     `SELECT ${selectColumns} FROM "ImportFile" WHERE "workspaceId" = $1${orderBy}`,
     workspaceId
   );
+};
+
+export const listAllImportFilesCompat = async (limit?: number): Promise<any[]> => {
+  const columns = await getCompatibleImportFileColumns();
+  if (columns.length === 0) {
+    return [];
+  }
+
+  const selectColumns = columns.map((column) => `"${column}"`).join(", ");
+  const orderBy = columns.includes("uploadedAt")
+    ? ' ORDER BY "uploadedAt" DESC'
+    : columns.includes("createdAt")
+      ? ' ORDER BY "createdAt" DESC'
+      : ' ORDER BY "id" DESC';
+  const limitClause = Number.isFinite(limit ?? NaN) ? ` LIMIT ${Math.max(1, Number(limit))}` : "";
+
+  return prisma.$queryRawUnsafe<any[]>(`SELECT ${selectColumns} FROM "ImportFile"${orderBy}${limitClause}`);
 };
 
 export const updateImportFileCompat = async (
@@ -1425,15 +1472,6 @@ export const classifyMerchant = (params: {
   const tokens = tokenizeMerchant(params.merchantText);
   const normalizedMerchant = normalizeMerchantText(params.merchantText);
   const hardcodedOverride = getHardcodedCategoryOverride(params.merchantText);
-  if (hardcodedOverride) {
-    return {
-      categoryName: hardcodedOverride,
-      confidence: 99,
-      categoryReason: "hardcoded-override",
-      merchantKey: normalizedMerchant,
-      merchantTokens: tokens,
-    };
-  }
   const heuristicCategory = params.categoryName?.trim() || guessCategoryFallback(params.merchantText, params.type);
 
   let bestRule: MerchantRuleRow | null = null;
@@ -1452,12 +1490,15 @@ export const classifyMerchant = (params: {
   if (bestRule && bestRuleScore >= 20) {
     const learnedCategory = bestRule.categoryName ?? heuristicCategory;
     const exact = bestRule.merchantKey === normalizedMerchant;
+    const learnedType = params.trainingSignals.find((signal) => signal.merchantKey === normalizedMerchant)?.type ?? params.type;
     return {
       categoryName: learnedCategory,
       confidence: Math.min(99, Math.round(Math.max(78, bestRuleScore))),
       categoryReason: exact ? "rule-exact" : "rule-pattern",
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
+      normalizedName: bestRule.normalizedName || summarizeMerchantText(params.merchantText),
+      preferredType: learnedType,
     };
   }
 
@@ -1469,25 +1510,53 @@ export const classifyMerchant = (params: {
     }
   }
 
-  if (!bestSignal || bestScore < 18) {
+  if (bestSignal && bestScore >= 18) {
+    const learnedCategory = bestSignal.categoryName ?? heuristicCategory;
+    const confidence = Math.min(99, Math.round(Math.max(68, bestScore)));
+
     return {
-      categoryName: heuristicCategory,
-      confidence: heuristicCategory === "Other" ? 35 : 62,
-      categoryReason: heuristicCategory === "Other" ? "heuristic-other" : "heuristic-rule",
+      categoryName: learnedCategory,
+      confidence,
+      categoryReason: bestSignal.merchantKey === normalizedMerchant ? "learned-exact" : "learned-pattern",
       merchantKey: normalizedMerchant,
       merchantTokens: tokens,
+      normalizedName: summarizeMerchantText(params.merchantText),
+      preferredType: bestSignal.type ?? params.type,
     };
   }
 
-  const learnedCategory = bestSignal.categoryName ?? heuristicCategory;
-  const confidence = Math.min(99, Math.round(Math.max(68, bestScore)));
+  if (HARDCODED_EXACT_MERCHANT_KEYS.has(normalizedMerchant)) {
+    return {
+      categoryName: heuristicCategory,
+      confidence: 99,
+      categoryReason: "hardcoded-exact",
+      merchantKey: normalizedMerchant,
+      merchantTokens: tokens,
+      normalizedName: summarizeMerchantText(params.merchantText),
+      preferredType: params.type,
+    };
+  }
+
+  if (hardcodedOverride) {
+    return {
+      categoryName: hardcodedOverride,
+      confidence: 99,
+      categoryReason: "hardcoded-override",
+      merchantKey: normalizedMerchant,
+      merchantTokens: tokens,
+      normalizedName: summarizeMerchantText(params.merchantText),
+      preferredType: params.type,
+    };
+  }
 
   return {
-    categoryName: learnedCategory,
-    confidence,
-    categoryReason: bestSignal.merchantKey === normalizedMerchant ? "learned-exact" : "learned-pattern",
+    categoryName: heuristicCategory,
+    confidence: heuristicCategory === "Other" ? 35 : 62,
+    categoryReason: heuristicCategory === "Other" ? "heuristic-other" : "heuristic-rule",
     merchantKey: normalizedMerchant,
     merchantTokens: tokens,
+    normalizedName: summarizeMerchantText(params.merchantText),
+    preferredType: params.type,
   };
 };
 
@@ -1502,6 +1571,7 @@ export const loadTrainingSignals = async (workspaceId: string) => {
     categoryName: string | null;
     merchantKey: string;
     merchantTokens: Prisma.JsonValue | null;
+    type: TransactionType;
     source: string;
     confidence: number;
     category: { name: string };
@@ -1529,6 +1599,7 @@ export const loadTrainingSignals = async (workspaceId: string) => {
     categoryName: signal.category.name,
     merchantKey: signal.merchantKey,
     merchantTokens: Array.isArray(signal.merchantTokens) ? signal.merchantTokens.filter((token): token is string => typeof token === "string") : [],
+    type: signal.type,
     source: signal.source,
     confidence: signal.confidence,
   }));
@@ -1586,6 +1657,7 @@ export const recordTrainingSignal = async (params: {
   importFileId?: string | null;
   transactionId?: string | null;
   merchantText: string;
+  normalizedName?: string | null;
   categoryId: string;
   categoryName?: string | null;
   type: TransactionType;
@@ -1595,7 +1667,7 @@ export const recordTrainingSignal = async (params: {
 }) => {
   const merchantKey = normalizeMerchantText(params.merchantText);
   const merchantTokens = tokenizeMerchant(params.merchantText);
-  const normalizedMerchantLabel = summarizeMerchantText(params.merchantText);
+  const normalizedMerchantLabel = params.normalizedName?.trim() || summarizeMerchantText(params.merchantText);
   const dedupeKey = buildTrainingSignalDedupeKey({
     source: params.source,
     transactionId: params.transactionId ?? null,
@@ -1871,14 +1943,21 @@ export const applyDataQaReviewLearning = async (params: {
 
     const parsedRow = params.parsedRows[index];
     const parsedRecord = isRecord(parsedRow) ? parsedRow : {};
+    const parsedMerchantText = normalizeReviewText(parsedRecord.merchantRaw ?? parsedRecord.description ?? parsedRecord.name ?? parsedRecord.merchantClean);
+    const parsedNormalizedText = normalizeReviewText(parsedRecord.merchantClean ?? parsedRecord.normalizedName ?? parsedRecord.normalizedMerchant ?? parsedRecord.merchantRaw);
     const categoryName =
       readReviewString(reviewRow.output, "category") ??
       normalizeReviewText(parsedRecord.categoryName ?? parsedRecord.category ?? parsedRecord.normalizedCategory);
     const category = categoriesByName.get(normalizeMerchantText(categoryName)) ?? null;
     const merchantText =
-      readReviewString(reviewRow.output, "transactionName") ??
-      readReviewString(reviewRow.output, "normalizedName") ??
+      parsedMerchantText ||
+      readReviewString(reviewRow.output, "transactionName") ||
+      readReviewString(reviewRow.output, "normalizedName") ||
       normalizeReviewText(parsedRecord.merchantClean ?? parsedRecord.merchantRaw ?? parsedRecord.description ?? parsedRecord.name);
+    const normalizedName =
+      readReviewString(reviewRow.output, "normalizedName") ??
+      readReviewString(reviewRow.output, "transactionName") ??
+      (parsedNormalizedText || parsedMerchantText);
     const type = normalizeTransactionType(
       readReviewString(reviewRow.output, "type") ?? parsedRecord.type ?? parsedRecord.transactionType ?? "expense",
       parsedRecord.amount ?? parsedRecord.value ?? parsedRecord.total
@@ -1893,6 +1972,7 @@ export const applyDataQaReviewLearning = async (params: {
         workspaceId: params.workspaceId,
         importFileId: params.importFileId ?? null,
         merchantText,
+        normalizedName,
         categoryId: category.id,
         categoryName: category.name,
         type,
@@ -2000,18 +2080,18 @@ export const enrichParsedRowsWithTraining = async (params: {
 
   return params.rows.map((row) => {
     const rowWithInstitution = row as ParsedImportRow & { institution?: string | null };
-    const merchantText = row.merchantClean || row.merchantRaw || row.description || "";
-    const merchantClean = summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
+    const merchantText = row.merchantRaw || row.description || row.merchantClean || "";
     const accountMatch = findBestAccountRule(row.accountName ?? null, rowWithInstitution.institution ?? null, accountRules);
     const learned = classifyMerchant({
-      merchantText: merchantClean,
+      merchantText,
       type: row.type ?? "expense",
       categoryName: row.categoryName ?? null,
       merchantRules,
       trainingSignals,
     });
-
-    const categoryName = learned.categoryName || row.categoryName || defaultCategoryForType(row.type ?? "expense");
+    const nextType = learned.preferredType ?? row.type ?? "expense";
+    const merchantClean = learned.normalizedName || summarizeMerchantText(merchantText, rowWithInstitution.institution ?? null);
+    const categoryName = learned.categoryName || row.categoryName || defaultCategoryForType(nextType);
     const accountName = row.accountName ?? null;
     const effectiveConfidence = Math.max(0, Math.min(100, Math.min(learned.confidence, statementConfidence)));
     const learnedRuleIdsApplied = [
@@ -2031,7 +2111,7 @@ export const enrichParsedRowsWithTraining = async (params: {
         effectiveConfidence,
         categoryName,
         categoryReason: learned.categoryReason,
-        rowType: row.type,
+        rowType: nextType,
       })
         ? "pending_review"
         : "suggested",
@@ -2039,12 +2119,12 @@ export const enrichParsedRowsWithTraining = async (params: {
       categoryConfidence: effectiveConfidence,
       accountMatchConfidence: accountMatch ? Math.min(99, Math.round(Math.min(Math.max(70, accountMatch.score), statementConfidence))) : 0,
       duplicateConfidence: 0,
-      transferConfidence: row.type === "transfer" ? 100 : 0,
+      transferConfidence: nextType === "transfer" ? 100 : 0,
       learnedRuleIdsApplied,
       normalizedPayload: {
         merchantClean: merchantClean || null,
         categoryName,
-        type: row.type ?? "expense",
+        type: nextType,
         accountName: accountMatch?.rule.accountName ?? accountName ?? null,
         institution: row.institution ?? accountMatch?.rule.institution ?? null,
       } as Prisma.InputJsonValue,
@@ -2059,8 +2139,11 @@ export const enrichParsedRowsWithTraining = async (params: {
           accountRuleKey: accountMatch?.rule.ruleKey ?? null,
           accountRuleConfidence: accountMatch ? Math.round(accountMatch.score) : null,
           statementConfidence,
+          normalizedName: merchantClean || null,
+          preferredType: nextType,
         },
       },
+      type: nextType,
     } satisfies EnrichedParsedImportRow;
   });
 };

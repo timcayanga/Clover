@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdminAuth } from "@/lib/admin";
+import { listAllImportFilesCompat } from "@/lib/data-engine";
 import { prisma } from "@/lib/prisma";
 import { processImportFileText } from "@/workers/import-processor";
 
@@ -21,32 +22,6 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const { limit } = querySchema.parse({
       limit: searchParams.get("limit") ?? undefined,
-    });
-
-    const recentImports = await prisma.importFile.findMany({
-      where: {
-        status: "done",
-      },
-      orderBy: {
-        uploadedAt: "desc",
-      },
-      take: limit ?? 5,
-      include: {
-        workspace: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        account: {
-          select: {
-            id: true,
-            name: true,
-            institution: true,
-            type: true,
-          },
-        },
-      },
     });
 
     const [sampleRuns, sampleAverage] = await Promise.all([
@@ -70,25 +45,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       sampleRuns,
       sampleAverageScore: Math.round(sampleAverage._avg.score ?? 0),
-      recentImports: recentImports.map((importFile) => ({
-        id: importFile.id,
-        workspaceId: importFile.workspaceId,
-        workspaceName: importFile.workspace.name,
-        fileName: importFile.fileName,
-        fileType: importFile.fileType,
-        status: importFile.status,
-        parsedRowsCount: importFile.parsedRowsCount,
-        confirmedTransactionsCount: importFile.confirmedTransactionsCount,
-        uploadedAt: importFile.uploadedAt.toISOString(),
-        account: importFile.account
-          ? {
-              id: importFile.account.id,
-              name: importFile.account.name,
-              institution: importFile.account.institution,
-              type: importFile.account.type,
-            }
-          : null,
-      })),
+      recentImports: [],
+      limit: limit ?? 5,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to load sample corpus.";
@@ -106,25 +64,10 @@ export async function POST(request: Request) {
     await requireAdminAuth();
     const payload = replaySchema.parse(await request.json().catch(() => ({})));
 
+    const allImports = await listAllImportFilesCompat(payload.limit ?? 5);
     const imports = payload.importFileIds?.length
-      ? await prisma.importFile.findMany({
-          where: {
-            id: { in: payload.importFileIds },
-            status: "done",
-          },
-          orderBy: {
-            uploadedAt: "desc",
-          },
-        })
-      : await prisma.importFile.findMany({
-          where: {
-            status: "done",
-          },
-          orderBy: {
-            uploadedAt: "desc",
-          },
-          take: payload.limit ?? 5,
-        });
+      ? allImports.filter((importFile) => payload.importFileIds?.includes(importFile.id))
+      : allImports;
 
     const results: Array<{
       importFileId: string;

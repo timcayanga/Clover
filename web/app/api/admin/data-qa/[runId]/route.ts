@@ -7,6 +7,7 @@ import {
   applyDataQaReviewLearning,
   buildStatementFingerprint,
   detectStatementMetadataFromText,
+  fetchImportFileCompat,
   fetchParsedTransactionRows,
   hasCompatibleTable,
 } from "@/lib/data-engine";
@@ -24,6 +25,18 @@ const updateSchema = z.object({
 const reparseSchema = updateSchema.extend({
   reparse: z.literal(true),
 });
+
+const resolveReviewPayload = (incoming: unknown, stored: unknown) => {
+  if (isRecord(incoming)) {
+    return incoming;
+  }
+
+  if (isRecord(stored)) {
+    return stored;
+  }
+
+  return {};
+};
 
 const normalizeJson = (value: unknown) => {
   if (value === null || value === undefined) {
@@ -103,7 +116,7 @@ const buildStatementMetadataOverride = (params: {
 });
 
 const AUTO_REPARSE_SCORE_TARGET = 95;
-const AUTO_REPARSE_MAX_ATTEMPTS = 6;
+const AUTO_REPARSE_MAX_ATTEMPTS = 12;
 
 const readParsedRowText = (row: Record<string, unknown>, keys: string[]) => {
   for (const key of keys) {
@@ -241,11 +254,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
             name: true,
           },
         },
-        importFile: {
-          include: {
-            account: true,
-          },
-        },
         findings: {
           orderBy: {
             createdAt: "asc",
@@ -258,6 +266,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
 
+    const importFile = run.importFileId ? await fetchImportFileCompat(run.importFileId) : null;
+    const account = importFile?.accountId
+      ? await prisma.account.findUnique({
+          where: { id: String(importFile.accountId) },
+        })
+      : null;
     const parsedRows = run.importFileId ? await fetchParsedTransactionRows(run.importFileId) : [];
     const categories = await prisma.category.findMany({
       where: {
@@ -278,13 +292,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
         : null;
 
     let rawFilePreview: string | null = null;
-    if (run.importFile?.storageKey) {
+    if (importFile?.storageKey) {
       try {
         const text = await readImportedFileText(
           {
-            storageKey: String(run.importFile.storageKey),
-            fileType: String(run.importFile.fileType ?? "unknown"),
-            fileName: String(run.importFile.fileName ?? "imported-file"),
+            storageKey: String(importFile.storageKey),
+            fileType: String(importFile.fileType ?? "unknown"),
+            fileName: String(importFile.fileName ?? "imported-file"),
           },
         );
         rawFilePreview = text.slice(0, 12_000);
@@ -332,27 +346,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
           transactionId: finding.transactionId,
         })),
       },
-      importFile: run.importFile
-        ? {
-            id: run.importFile.id,
-            workspaceId: run.importFile.workspaceId,
-            accountId: run.importFile.accountId,
-            fileName: run.importFile.fileName,
-            fileType: run.importFile.fileType,
-            storageKey: run.importFile.storageKey,
-            status: run.importFile.status,
-            parsedRowsCount: run.importFile.parsedRowsCount,
-            confirmedTransactionsCount: run.importFile.confirmedTransactionsCount,
-            uploadedAt: run.importFile.uploadedAt.toISOString(),
-            createdAt: run.importFile.createdAt.toISOString(),
-            updatedAt: run.importFile.updatedAt.toISOString(),
-            account: run.importFile.account
+        importFile: importFile
+          ? {
+            ...importFile,
+            uploadedAt: importFile.uploadedAt?.toISOString?.() ?? null,
+            createdAt: importFile.createdAt?.toISOString?.() ?? null,
+            updatedAt: importFile.updatedAt?.toISOString?.() ?? null,
+            account: account
               ? {
-                  id: run.importFile.account.id,
-                  name: run.importFile.account.name,
-                  institution: run.importFile.account.institution,
-                  type: run.importFile.account.type,
-                  balance: run.importFile.account.balance?.toString() ?? null,
+                  id: account.id,
+                  name: account.name,
+                  institution: account.institution,
+                  type: account.type,
+                  balance: account.balance?.toString() ?? null,
                 }
               : null,
           }
@@ -393,20 +399,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ru
 
     const existingRun = await prisma.dataQaRun.findUnique({
       where: { id: runId },
-      include: {
-        importFile: {
-          include: {
-            account: true,
-          },
-        },
-      },
     });
 
     if (!existingRun) {
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
 
-    if (!existingRun.importFile) {
+    const importFile = existingRun.importFileId ? await fetchImportFileCompat(existingRun.importFileId) : null;
+    const account = importFile?.accountId
+      ? await prisma.account.findUnique({
+          where: { id: String(importFile.accountId) },
+        })
+      : null;
+
+    if (!importFile) {
       return NextResponse.json({ error: "Import not found" }, { status: 404 });
     }
 
@@ -445,19 +451,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ru
         : null;
     const extractedText = await readImportedFileText(
       {
-        storageKey: String(existingRun.importFile.storageKey),
-        fileType: String(existingRun.importFile.fileType ?? "unknown"),
-        fileName: String(existingRun.importFile.fileName ?? "imported-file"),
+        storageKey: String(importFile.storageKey),
+        fileType: String(importFile.fileType ?? "unknown"),
+        fileName: String(importFile.fileName ?? "imported-file"),
       },
     );
     const detectedMetadata = detectStatementMetadataFromText(extractedText);
     const statementFingerprint = buildStatementFingerprint(
       extractedText,
       detectedMetadata,
-      String(existingRun.importFile.fileName ?? "imported-file"),
-      String(existingRun.importFile.fileType ?? "unknown")
+      String(importFile.fileName ?? "imported-file"),
+      String(importFile.fileType ?? "unknown")
     );
-    const reviewPayload = isRecord(payload.fieldReviewPayload) ? payload.fieldReviewPayload : {};
+    const reviewPayload = resolveReviewPayload(payload.fieldReviewPayload, existingRun.fieldReviewPayload);
     const statementMetadataOverride = buildStatementMetadataOverride({
       reviewPayload,
       detectedMetadata,
@@ -470,11 +476,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ru
             statementEndDate: statementCheckpoint.statementEndDate,
           }
         : null,
-      importAccount: existingRun.importFile?.account
+      importAccount: account
         ? {
-            institution: existingRun.importFile.account.institution ?? null,
-            type: existingRun.importFile.account.type ?? null,
-            name: existingRun.importFile.account.name ?? null,
+            institution: account.institution ?? null,
+            type: account.type ?? null,
+            name: account.name ?? null,
           }
         : null,
     });
@@ -483,9 +489,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ru
       void applyDataQaReviewLearning({
         workspaceId: existingRun.workspaceId,
         importFileId: existingRun.importFileId,
-        accountId: existingRun.importFile?.account?.id ?? null,
-        fileName: String(existingRun.importFile?.fileName ?? "imported-file"),
-        fileType: String(existingRun.importFile?.fileType ?? "unknown"),
+        accountId: account?.id ?? null,
+        fileName: String(importFile.fileName ?? "imported-file"),
+        fileType: String(importFile.fileType ?? "unknown"),
         metadata: {
           institution:
             (statementCheckpoint?.sourceMetadata &&
@@ -493,7 +499,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ru
             !Array.isArray(statementCheckpoint.sourceMetadata) &&
             typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).institution === "string")
               ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).institution)
-              : existingRun.importFile?.account?.institution ?? null,
+              : account?.institution ?? null,
           accountNumber:
             (statementCheckpoint?.sourceMetadata &&
             typeof statementCheckpoint.sourceMetadata === "object" &&
@@ -507,8 +513,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ru
             !Array.isArray(statementCheckpoint.sourceMetadata) &&
             typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).accountName === "string")
               ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).accountName)
-              : existingRun.importFile?.account?.name ?? null,
-          accountType: existingRun.importFile?.account?.type ?? null,
+              : account?.name ?? null,
+          accountType: account?.type ?? null,
           openingBalance:
             statementCheckpoint?.openingBalance !== null && statementCheckpoint?.openingBalance !== undefined
               ? Number(statementCheckpoint.openingBalance)
@@ -589,17 +595,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
 
     const existingRun = await prisma.dataQaRun.findUnique({
       where: { id: runId },
-      include: {
-        importFile: {
-          include: {
-            account: true,
-          },
-        },
-      },
     });
 
-    if (!existingRun || !existingRun.importFile) {
+    if (!existingRun) {
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
+    }
+
+    const importFile = existingRun.importFileId ? await fetchImportFileCompat(existingRun.importFileId) : null;
+    const account = importFile?.accountId
+      ? await prisma.account.findUnique({
+          where: { id: String(importFile.accountId) },
+        })
+      : null;
+
+    if (!importFile) {
+      return NextResponse.json({ error: "Import not found" }, { status: 404 });
     }
 
     const statementCheckpoint =
@@ -611,17 +621,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
 
     const extractedText = await readImportedFileText(
       {
-        storageKey: String(existingRun.importFile.storageKey),
-        fileType: String(existingRun.importFile.fileType ?? "unknown"),
-        fileName: String(existingRun.importFile.fileName ?? "imported-file"),
+        storageKey: String(importFile.storageKey),
+        fileType: String(importFile.fileType ?? "unknown"),
+        fileName: String(importFile.fileName ?? "imported-file"),
       },
     );
     const detectedMetadata = detectStatementMetadataFromText(extractedText);
     const statementFingerprint = buildStatementFingerprint(
       extractedText,
       detectedMetadata,
-      String(existingRun.importFile.fileName ?? "imported-file"),
-      String(existingRun.importFile.fileType ?? "unknown")
+      String(importFile.fileName ?? "imported-file"),
+      String(importFile.fileType ?? "unknown")
     );
     const reviewPayload = isRecord(payload.fieldReviewPayload) ? payload.fieldReviewPayload : {};
     const statementMetadataOverride = buildStatementMetadataOverride({
@@ -636,14 +646,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
             statementEndDate: statementCheckpoint.statementEndDate,
           }
         : null,
-      importAccount: existingRun.importFile.account
+      importAccount: account
         ? {
-            institution: existingRun.importFile.account.institution ?? null,
-            type: existingRun.importFile.account.type ?? null,
-            name: existingRun.importFile.account.name ?? null,
+            institution: account.institution ?? null,
+            type: account.type ?? null,
+            name: account.name ?? null,
           }
         : null,
     });
+
+    const effectiveManualFeedback = payload.manualFeedback ?? existingRun.manualFeedback ?? null;
 
     if (payload.manualFeedback !== undefined || payload.fieldReviewPayload !== undefined) {
       await prisma.dataQaRun.update({
@@ -669,13 +681,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
 
     const parsedRows = existingRun.importFileId ? await fetchParsedTransactionRows(existingRun.importFileId) : [];
 
-    if (payload.manualFeedback !== undefined || payload.fieldReviewPayload !== undefined) {
+    const hasSavedReviewContext = Boolean(existingRun.manualFeedback) || isRecord(existingRun.fieldReviewPayload);
+
+    if (payload.manualFeedback !== undefined || payload.fieldReviewPayload !== undefined || hasSavedReviewContext) {
       await applyDataQaReviewLearning({
         workspaceId: existingRun.workspaceId,
         importFileId: existingRun.importFileId,
-        accountId: existingRun.importFile.account?.id ?? null,
-        fileName: String(existingRun.importFile.fileName ?? "imported-file"),
-        fileType: String(existingRun.importFile.fileType ?? "unknown"),
+        accountId: account?.id ?? null,
+        fileName: String(importFile.fileName ?? "imported-file"),
+        fileType: String(importFile.fileType ?? "unknown"),
         metadata: {
           institution:
             (statementCheckpoint?.sourceMetadata &&
@@ -683,7 +697,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
             !Array.isArray(statementCheckpoint.sourceMetadata) &&
             typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).institution === "string")
               ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).institution)
-              : existingRun.importFile.account?.institution ?? null,
+              : account?.institution ?? null,
           accountNumber:
             (statementCheckpoint?.sourceMetadata &&
             typeof statementCheckpoint.sourceMetadata === "object" &&
@@ -697,8 +711,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
             !Array.isArray(statementCheckpoint.sourceMetadata) &&
             typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).accountName === "string")
               ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).accountName)
-              : existingRun.importFile.account?.name ?? null,
-          accountType: existingRun.importFile.account?.type ?? null,
+              : account?.name ?? null,
+          accountType: account?.type ?? null,
           openingBalance:
             statementCheckpoint?.openingBalance !== null && statementCheckpoint?.openingBalance !== undefined
               ? Number(statementCheckpoint.openingBalance)
@@ -732,8 +746,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
               : 0,
         },
         parsedRows,
-        fieldReviewPayload: (payload.fieldReviewPayload ?? null) as unknown as Prisma.JsonValue,
-        manualFeedback: payload.manualFeedback ?? null,
+        fieldReviewPayload: reviewPayload as unknown as Prisma.JsonValue,
+        manualFeedback: effectiveManualFeedback,
         actorUserId: "local-admin",
         statementFingerprint,
         statementMetadataOverride,
@@ -790,12 +804,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
               endingBalance: statementCheckpoint.endingBalance?.toString() ?? null,
             }
           : null,
-        importAccount: existingRun.importFile.account
+        importAccount: account
           ? {
-              institution: existingRun.importFile.account.institution ?? null,
-              type: existingRun.importFile.account.type ?? null,
-              name: existingRun.importFile.account.name ?? null,
-              balance: existingRun.importFile.account.balance?.toString() ?? null,
+              institution: account.institution ?? null,
+              type: account.type ?? null,
+              name: account.name ?? null,
+              balance: account.balance?.toString() ?? null,
             }
           : null,
       });
@@ -803,9 +817,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
       await applyDataQaReviewLearning({
         workspaceId: existingRun.workspaceId,
         importFileId,
-        accountId: existingRun.importFile.account?.id ?? null,
-        fileName: String(existingRun.importFile.fileName ?? "imported-file"),
-        fileType: String(existingRun.importFile.fileType ?? "unknown"),
+        accountId: account?.id ?? null,
+        fileName: String(importFile.fileName ?? "imported-file"),
+        fileType: String(importFile.fileType ?? "unknown"),
         metadata: {
           institution:
             (statementCheckpoint?.sourceMetadata &&
@@ -813,7 +827,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
             !Array.isArray(statementCheckpoint.sourceMetadata) &&
             typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).institution === "string")
               ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).institution)
-              : existingRun.importFile.account?.institution ?? null,
+              : account?.institution ?? null,
           accountNumber:
             (statementCheckpoint?.sourceMetadata &&
             typeof statementCheckpoint.sourceMetadata === "object" &&
@@ -827,8 +841,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
             !Array.isArray(statementCheckpoint.sourceMetadata) &&
             typeof (statementCheckpoint.sourceMetadata as Record<string, unknown>).accountName === "string")
               ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).accountName)
-              : existingRun.importFile.account?.name ?? null,
-          accountType: existingRun.importFile.account?.type ?? null,
+              : account?.name ?? null,
+          accountType: account?.type ?? null,
           openingBalance:
             statementCheckpoint?.openingBalance !== null && statementCheckpoint?.openingBalance !== undefined
               ? Number(statementCheckpoint.openingBalance)
@@ -863,7 +877,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
         },
         parsedRows,
         fieldReviewPayload: autoReview.fieldReviewPayload as unknown as Prisma.JsonValue,
-        manualFeedback: autoReview.manualFeedback,
+        manualFeedback: autoReview.manualFeedback || effectiveManualFeedback,
         actorUserId: "local-admin",
         statementFingerprint,
         statementMetadataOverride,

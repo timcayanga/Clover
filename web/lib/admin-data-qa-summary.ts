@@ -1,4 +1,8 @@
 import { prisma } from "@/lib/prisma";
+import { unstable_cache } from "next/cache";
+import { listAllImportFilesCompat } from "@/lib/data-engine";
+import { BANK_PRIORITY, getBankPriorityIndex, getBankSlug, inferBankNameFromText, normalizeBankName } from "@/lib/data-qa-banks";
+import { dedupeBankFilesByName, normalizeFileNameKey } from "@/lib/data-qa-files";
 
 export type AdminDataQaBankFile = {
   id: string;
@@ -9,10 +13,14 @@ export type AdminDataQaBankFile = {
   trainingStatus: string;
   runCount: number;
   latestRunAt: string | null;
+  status: string;
+  parsedRowsCount: number | null;
+  confirmedTransactionsCount: number | null;
 };
 
 export type AdminDataQaBankSummary = {
   bankName: string;
+  bankSlug: string;
   uniqueFilesTested: number;
   testingStatus: string;
   fileCount: number;
@@ -56,7 +64,7 @@ const extractBankName = (importFile: {
   }
 
   const fallbackName = importFile.fileName.replace(/\.[^.]+$/, "").trim();
-  return fallbackName || "Unknown";
+  return inferBankNameFromText(fallbackName || "Unknown");
 };
 
 const deriveFileTrainingStatus = (params: {
@@ -108,20 +116,8 @@ const deriveBankTrainingStatus = (files: AdminDataQaBankFile[]) => {
   return "pending";
 };
 
-export async function getAdminDataQaBankSummary(): Promise<AdminDataQaSummaryResponse> {
-  const importFiles = await prisma.importFile.findMany({
-    orderBy: [{ updatedAt: "desc" }],
-    select: {
-      id: true,
-      workspaceId: true,
-      accountId: true,
-      fileName: true,
-      status: true,
-      uploadedAt: true,
-      updatedAt: true,
-      createdAt: true,
-    },
-  });
+const buildAdminDataQaBankSummary = async (): Promise<AdminDataQaSummaryResponse> => {
+  const importFiles = await listAllImportFilesCompat();
 
   const accounts = await prisma.account.findMany({
     select: {
@@ -196,16 +192,25 @@ export async function getAdminDataQaBankSummary(): Promise<AdminDataQaSummaryRes
   let testingFiles = 0;
   let processingFiles = 0;
   let failedFiles = 0;
+  let visibleFiles = 0;
   let latestUpdatedAt: Date | null = null;
 
   for (const importFile of importFiles) {
+    if (importFile.status === "deleted") {
+      continue;
+    }
+
+    visibleFiles += 1;
+
     const account = importFile.accountId ? accountById.get(importFile.accountId) ?? null : null;
     const statementCheckpoint = statementCheckpointByImportFileId.get(importFile.id) ?? null;
-    const bankName = extractBankName({
-      account: account ? { institution: account.institution } : null,
-      statementCheckpoint,
-      fileName: importFile.fileName,
-    });
+    const bankName = normalizeBankName(
+      extractBankName({
+        account: account ? { institution: account.institution } : null,
+        statementCheckpoint,
+        fileName: importFile.fileName,
+      })
+    );
     const latestRun = runsByFile.get(importFile.id) ?? null;
     const trainingStatus = deriveFileTrainingStatus({
       latestRun: latestRun ? { score: latestRun.latestScore, status: latestRun.latestStatus } : null,
@@ -231,6 +236,10 @@ export async function getAdminDataQaBankSummary(): Promise<AdminDataQaSummaryRes
       trainingStatus,
       runCount: latestRun?.runCount ?? 0,
       latestRunAt: latestRun?.latestRunAt?.toISOString() ?? importFile.updatedAt.toISOString(),
+      status: importFile.status,
+      parsedRowsCount: typeof importFile.parsedRowsCount === "number" ? importFile.parsedRowsCount : null,
+      confirmedTransactionsCount:
+        typeof importFile.confirmedTransactionsCount === "number" ? importFile.confirmedTransactionsCount : null,
     };
 
     const current = grouped.get(bankName);
@@ -250,7 +259,7 @@ export async function getAdminDataQaBankSummary(): Promise<AdminDataQaSummaryRes
 
   const banks = Array.from(grouped.values())
     .map((group) => {
-      const files = group.files.sort((left, right) => {
+      const files = dedupeBankFilesByName(group.files).sort((left, right) => {
         const leftTime = left.latestRunAt ? new Date(left.latestRunAt).getTime() : 0;
         const rightTime = right.latestRunAt ? new Date(right.latestRunAt).getTime() : 0;
         return rightTime - leftTime;
@@ -259,6 +268,7 @@ export async function getAdminDataQaBankSummary(): Promise<AdminDataQaSummaryRes
       const testingStatus = deriveBankTrainingStatus(files);
       return {
         bankName: group.bankName,
+        bankSlug: getBankSlug(group.bankName),
         uniqueFilesTested: files.length,
         testingStatus,
         fileCount: files.length,
@@ -270,6 +280,12 @@ export async function getAdminDataQaBankSummary(): Promise<AdminDataQaSummaryRes
       };
     })
     .sort((left, right) => {
+      const leftPriority = getBankPriorityIndex(left.bankName);
+      const rightPriority = getBankPriorityIndex(right.bankName);
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority;
+      }
+
       if (right.uniqueFilesTested !== left.uniqueFilesTested) {
         return right.uniqueFilesTested - left.uniqueFilesTested;
       }
@@ -277,10 +293,47 @@ export async function getAdminDataQaBankSummary(): Promise<AdminDataQaSummaryRes
       return left.bankName.localeCompare(right.bankName);
     });
 
+  const bankMap = new Map(banks.map((bank) => [normalizeFileNameKey(bank.bankName), bank]));
+  const orderedBanks: AdminDataQaBankSummary[] = [];
+
+  for (const bankName of BANK_PRIORITY) {
+    const existing = bankMap.get(normalizeFileNameKey(bankName));
+    if (existing) {
+      orderedBanks.push(existing);
+      bankMap.delete(normalizeFileNameKey(bankName));
+      continue;
+    }
+
+    orderedBanks.push({
+      bankName,
+      bankSlug: getBankSlug(bankName),
+      uniqueFilesTested: 0,
+      testingStatus: "pending",
+      fileCount: 0,
+      completedCount: 0,
+      testingCount: 0,
+      processingCount: 0,
+      failedCount: 0,
+      files: [],
+    });
+  }
+
+  const extraBanks = Array.from(bankMap.values()).sort((left, right) => {
+    const leftPriority = getBankPriorityIndex(left.bankName);
+    const rightPriority = getBankPriorityIndex(right.bankName);
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+
+    return left.bankName.localeCompare(right.bankName);
+  });
+
+  orderedBanks.push(...extraBanks);
+
   return {
     overview: {
-      totalBanks: banks.length,
-      totalFiles: importFiles.length,
+      totalBanks: orderedBanks.length,
+      totalFiles: visibleFiles,
       totalRuns,
       completedFiles,
       testingFiles,
@@ -288,6 +341,14 @@ export async function getAdminDataQaBankSummary(): Promise<AdminDataQaSummaryRes
       failedFiles,
       latestUpdatedAt: latestUpdatedAt ? latestUpdatedAt.toISOString() : null,
     },
-    banks,
+    banks: orderedBanks,
   };
+};
+
+const getCachedAdminDataQaBankSummary = unstable_cache(buildAdminDataQaBankSummary, ["admin-data-qa-bank-summary"], {
+  revalidate: 5,
+});
+
+export async function getAdminDataQaBankSummary(): Promise<AdminDataQaSummaryResponse> {
+  return getCachedAdminDataQaBankSummary();
 }

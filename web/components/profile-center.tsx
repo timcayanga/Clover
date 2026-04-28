@@ -128,6 +128,9 @@ export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
             <Link className="profile-shortcut" href="/settings">
               Open settings
             </Link>
+            <Link className="profile-shortcut" href="/help">
+              Open help center
+            </Link>
             <Link className="profile-shortcut" href="/transactions">
               Review transactions
             </Link>

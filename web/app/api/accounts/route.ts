@@ -4,6 +4,9 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { hasCompatibleTable, loadAccountRules, normalizeAccountRuleKey, upsertAccountRule } from "@/lib/data-engine";
 import { INVESTMENT_SUBTYPES, type InvestmentSubtype } from "@/lib/investments";
+import { countNonCashAccounts } from "@/lib/plan-access";
+import { getOrCreateCurrentUser } from "@/lib/user-context";
+import { getEffectiveUserLimits } from "@/lib/user-limits";
 
 export const dynamic = "force-dynamic";
 
@@ -164,6 +167,21 @@ export async function POST(request: Request) {
       return NextResponse.json({
         account: serializeAccount(existingAccount),
       });
+    }
+
+    if (type !== "cash") {
+      const user = await getOrCreateCurrentUser(userId);
+      const effectiveLimits = getEffectiveUserLimits(user);
+      const nonCashAccountCount = countNonCashAccounts(existingAccounts);
+
+      if (effectiveLimits.accountLimit !== null && nonCashAccountCount >= effectiveLimits.accountLimit) {
+        return NextResponse.json(
+          {
+            error: `Free plan includes up to ${effectiveLimits.accountLimit} non-cash accounts. Upgrade to Pro to add more.`,
+          },
+          { status: 403 }
+        );
+      }
     }
 
     const account = await prisma.account.create({

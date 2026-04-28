@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
 import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/data-qa";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
+import { countNonCashAccounts, getWorkspaceOwnerLimits } from "@/lib/plan-access";
 import { parseAmountValue, parseDateValue, parseImportText } from "@/lib/import-parser";
 import { readImportedFileText, readImportedPdfPageImages } from "@/lib/import-file-text.server";
 import {
@@ -112,7 +113,8 @@ const chunkArray = <T,>(items: T[], size: number) => {
 };
 
 const AUTO_REPARSE_SCORE_TARGET = 95;
-const AUTO_REPARSE_MAX_ATTEMPTS = 6;
+const AUTO_REPARSE_MAX_ATTEMPTS = 12;
+const AUTO_REPARSE_PLATEAU_WINDOW = 3;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -272,6 +274,9 @@ const resolveConfirmationAccount = async (params: {
     institution?: unknown;
   }>;
   accountId?: string | null;
+  planLimits?: {
+    accountLimit: number;
+  } | null;
 }) => {
   const workspaceId = String(params.importFile.workspaceId);
   const candidateRow =
@@ -335,6 +340,16 @@ const resolveConfirmationAccount = async (params: {
   }
 
   if (inferredAccountName || inferredAccountNumber) {
+    const nonCashAccountCount = countNonCashAccounts(workspaceAccounts);
+    const inferredType =
+      inferredAccountType ?? inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank");
+
+    if (params.planLimits?.accountLimit != null && inferredType !== "cash" && nonCashAccountCount >= params.planLimits.accountLimit) {
+      throw new Error(
+        `Free plan includes up to ${params.planLimits.accountLimit} non-cash accounts. Upgrade to Pro to add more accounts from imports.`
+      );
+    }
+
     return prisma.account.create({
       data: {
         workspaceId,
@@ -342,7 +357,7 @@ const resolveConfirmationAccount = async (params: {
           inferredAccountName ??
           (inferredInstitution && inferredAccountNumber ? `${inferredInstitution} ${inferredAccountNumber.slice(-4)}` : String(params.importFile.fileName ?? "Imported account").replace(/\.[^.]+$/, "").trim()),
         institution: inferredInstitution,
-        type: inferredAccountType ?? inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank"),
+        type: inferredType,
         currency: "PHP",
         source: "upload",
       },
@@ -536,19 +551,27 @@ export const processImportFileText = async (
       !metadataForParse.accountNumber ||
       gcashSuspiciouslySparse ||
       suspiciousDateCoverage);
-  const pageImages =
-      shouldUseVisionFallback
-      ? await readImportedPdfPageImages(
-          {
-            storageKey: String(importFile.storageKey ?? ""),
-            fileType: String(importFile.fileType ?? ""),
-            fileName: String(importFile.fileName ?? ""),
-          },
-          options.password,
-          !text.trim() ? 4 : gcashSuspiciouslySparse ? 3 : 2,
-          !text.trim() ? 1.6 : gcashSuspiciouslySparse ? 1.35 : 1.1
-        )
-      : null;
+  let pageImages: Awaited<ReturnType<typeof readImportedPdfPageImages>> | null = null;
+  if (shouldUseVisionFallback) {
+    try {
+      pageImages = await readImportedPdfPageImages(
+        {
+          storageKey: String(importFile.storageKey ?? ""),
+          fileType: String(importFile.fileType ?? ""),
+          fileName: String(importFile.fileName ?? ""),
+        },
+        options.password,
+        !text.trim() ? 4 : gcashSuspiciouslySparse ? 3 : 2,
+        !text.trim() ? 1.6 : gcashSuspiciouslySparse ? 1.35 : 1.1
+      );
+    } catch (error) {
+      console.warn("Unable to render PDF page images for fallback; continuing without them", {
+        importFileId,
+        error,
+      });
+      pageImages = null;
+    }
+  }
   const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
   const openAiParsed = await parseImportTextWithOpenAIFallback({
     text,
@@ -757,8 +780,31 @@ export const processImportFileText = async (
       actorUserId: options.actorUserId ?? null,
     });
 
+    const recentRuns = importFileId
+      ? await prisma.dataQaRun.findMany({
+          where: {
+            importFileId,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: AUTO_REPARSE_PLATEAU_WINDOW,
+          select: {
+            score: true,
+            findingCount: true,
+          },
+        })
+      : [];
+
+    const plateaued =
+      recentRuns.length >= AUTO_REPARSE_PLATEAU_WINDOW &&
+      recentRuns.every(
+        (run) => run.score === qaRunResult.evaluation.score && run.findingCount === qaRunResult.evaluation.findings.length
+      );
+
     const shouldAutoRerun =
       autoRerunEnabled &&
+      !plateaued &&
       qaRunResult.evaluation.score < AUTO_REPARSE_SCORE_TARGET &&
       autoRerunAttempt < AUTO_REPARSE_MAX_ATTEMPTS;
 
@@ -859,13 +905,22 @@ export const processImportFileText = async (
     }
 
     await updateImportFileCompat(importFileId, {
-      status: "done",
-      processingPhase: "complete",
+      status: qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET ? "done" : "failed",
+      processingPhase:
+        qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET
+          ? "complete"
+          : plateaued
+            ? "plateaued"
+            : "needs_retry",
       processingCurrentScore: qaRunResult.evaluation.score,
       processingMessage:
-        autoRerunEnabled && autoRerunAttempt > 0
-          ? `Auto-rerun ${autoRerunAttempt}/${AUTO_REPARSE_MAX_ATTEMPTS} complete. Final score ${qaRunResult.evaluation.score}.`
-          : null,
+        qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET
+          ? autoRerunEnabled && autoRerunAttempt > 0
+            ? `Auto-rerun ${autoRerunAttempt}/${AUTO_REPARSE_MAX_ATTEMPTS} complete. Final score ${qaRunResult.evaluation.score}.`
+            : null
+          : plateaued
+            ? `Automatic reruns plateaued at score ${qaRunResult.evaluation.score}. Manual parser fixes are needed before rerunning again.`
+            : `Automatic reruns stopped below the ${AUTO_REPARSE_SCORE_TARGET} target. Latest score ${qaRunResult.evaluation.score}.`,
     });
   } catch (error) {
     console.warn("Data QA recording failed after import processing", {
@@ -1009,6 +1064,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     throw new Error("Import file not found");
   }
 
+  const planLimits = await getWorkspaceOwnerLimits(String(importFile.workspaceId));
+
   let parsedRows: Array<Record<string, unknown>> = await fetchParsedTransactionRows(importFileId);
   if (parsedRows.length === 0) {
     try {
@@ -1052,6 +1109,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     },
     parsedRows,
     accountId,
+    planLimits: planLimits ? { accountLimit: planLimits.accountLimit } : null,
   });
   if (!account) {
     throw new Error("Account not found");
@@ -1280,12 +1338,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     });
   }
 
-  const existingCategories = await tx.category.findMany({
-    where: { workspaceId: importFile.workspaceId },
-  });
+    const existingCategories = await tx.category.findMany({
+      where: { workspaceId: importFile.workspaceId },
+    });
   const categoryByName = new Map(existingCategories.map((category) => [category.name.toLowerCase(), category.id]));
 
-  for (const row of parsedRows) {
+    for (const row of parsedRows) {
     const rowType =
       row.type === "income" || row.type === "expense" || row.type === "transfer" ? row.type : undefined;
     const rowConfidence = typeof row.confidence === "number" ? row.confidence : 0;
@@ -1363,11 +1421,24 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         confidence: typeof row.confidence === "number" ? row.confidence : 100,
         notes: typeof row.categoryReason === "string" ? row.categoryReason : null,
       },
-    });
-  }
+      });
+    }
 
-  for (const batch of chunkArray(preparedTransactions, 25)) {
-    await tx.transaction.createMany({
+    if (planLimits?.transactionLimit != null) {
+      const existingTransactionCount = await tx.transaction.count({
+        where: { workspaceId: String(importFile.workspaceId) },
+      });
+      const projectedTransactionCount = existingTransactionCount + preparedTransactions.length + (openingBalanceInserted ? 1 : 0);
+
+      if (projectedTransactionCount > planLimits.transactionLimit) {
+        throw new Error(
+          `Free plan includes up to ${planLimits.transactionLimit.toLocaleString()} transaction rows. Upgrade to Pro to import more rows.`
+        );
+      }
+    }
+
+    for (const batch of chunkArray(preparedTransactions, 25)) {
+      await tx.transaction.createMany({
       data: batch.map((entry) => entry.insertRow as any),
     });
   }

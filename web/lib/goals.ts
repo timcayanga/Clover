@@ -119,9 +119,9 @@ const FINANCIAL_EXPERIENCE_PROFILES: Record<FinancialExperienceLevel, FinancialE
     title: "Start simple",
     onboardingLead: "We’ll keep the setup light and explain the first useful step clearly.",
     onboardingSupport: "Choose the level that feels closest. Clover will keep the next screens beginner-friendly.",
-    goalsLead: "Pick a lane, set a number, and let Clover explain the next step in plain language.",
-    goalsSupport: "We’ll keep the coaching simple, with one clear move at a time and less jargon.",
-    goalsShellSubtitle: "A calm, step-by-step view of your goal with simple guidance and a place to set the number.",
+    goalsLead: "Start here. Pick one lane, set one number, and let Clover explain the next step in plain language.",
+    goalsSupport: "One goal at a time, one clear move at a time, and less jargon.",
+    goalsShellSubtitle: "A calm, step-by-step view of one goal with simple guidance and a place to set the number.",
     dashboardSubtitle: "See your goal, your month, and the biggest pattern in one simple glance.",
     emptyStateTitle: "Import files to see Clover turn statements into a clear picture.",
     emptyStateCopy:

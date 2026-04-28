@@ -9,6 +9,7 @@ import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
+import { PlanTierBanner } from "@/components/plan-tier-banner";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
@@ -39,6 +40,7 @@ import {
   isFixedIncomeInvestmentSubtype,
   isMarketInvestmentSubtype,
 } from "@/lib/investments";
+import type { UserLimits } from "@/lib/user-limits";
 
 const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
@@ -613,6 +615,8 @@ function AccountsPageContent() {
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [accountsLoading, setAccountsLoading] = useState(false);
   const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(Boolean(initialCachedWorkspace));
+  const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
+  const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importSessionId, setImportSessionId] = useState(0);
@@ -672,6 +676,39 @@ function AccountsPageContent() {
   useEffect(() => {
     setSearchQuery(searchQueryFromUrl);
   }, [searchQueryFromUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPlan = async () => {
+      const response = await fetch("/api/me");
+      if (!response.ok || cancelled) {
+        return;
+      }
+
+      const payload = await response.json();
+      const nextPlanTier = payload?.user?.planTier === "pro" ? "pro" : "free";
+      const nextLimits = payload?.user
+        ? {
+            accountLimit: Number(payload.user.accountLimit ?? 5),
+            monthlyUploadLimit: Number(payload.user.monthlyUploadLimit ?? 10),
+            transactionLimit:
+              payload.user.transactionLimit === null || payload.user.transactionLimit === undefined
+                ? null
+                : Number(payload.user.transactionLimit),
+          }
+        : null;
+
+      setPlanTier(nextPlanTier);
+      setPlanLimits(nextLimits);
+    };
+
+    void loadPlan();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
@@ -1679,6 +1716,16 @@ function AccountsPageContent() {
   return (
     <CloverShell active="accounts" title="Accounts" showTopbar={false}>
       <div className="accounts-page">
+        <PlanTierBanner
+          planTier={planTier}
+          label="Accounts and limits"
+          limits={planLimits}
+          ctaHref={planTier === "free" ? "/pricing" : "/settings#billing"}
+          ctaLabel={planTier === "free" ? "See Pro pricing" : "Manage billing"}
+          secondaryHref="/reports"
+          secondaryLabel="Open reports"
+          className="accounts-page__plan-banner"
+        />
         <div className="accounts-page__sticky">
           <div className="accounts-page__headline">
             <div className="accounts-page__headline-copy">

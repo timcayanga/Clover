@@ -9,11 +9,16 @@ const connection = getRedisConnection();
 const worker = new Worker(
   "import-processing",
   async (job) => {
-    const { importFileId, password, allowDuplicateStatement } = job.data;
+    const { importFileId, password, allowDuplicateStatement, bankName } = job.data;
     return processImportFileText(importFileId, {
       password,
       allowDuplicateStatement,
       qaSource: "import_processing",
+      statementMetadataOverride: bankName
+        ? {
+            institution: bankName,
+          }
+        : null,
     });
   },
   {

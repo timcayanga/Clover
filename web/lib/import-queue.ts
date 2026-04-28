@@ -6,6 +6,7 @@ type ImportJobPayload = {
   importFileId: string;
   password?: string;
   allowDuplicateStatement?: boolean;
+  bankName?: string;
 };
 
 const redisUrl = getEnv().REDIS_URL ?? "redis://127.0.0.1:6379";

@@ -796,63 +796,85 @@ export function AdminDataQaConsole() {
     setUploadStatus(null);
 
     try {
+      let skippedCount = 0;
+      const skippedMessages: string[] = [];
+
+      const describeSkip = (fileName: string, reason: unknown) => {
+        const message = reason instanceof Error ? reason.message : typeof reason === "string" ? reason : "";
+        if (/unable to process import|unable to parse this file|no parsed rows available|specified key does not exist|import parsing failed in the background|unable to confirm this import|timed out waiting for trusted statement identity/i.test(message)) {
+          return `Skipped ${fileName}: file is unreadable or could not be processed.`;
+        }
+        return `Skipped ${fileName}: ${message || "file could not be processed."}`;
+      };
+
       for (let index = 0; index < uploadFiles.length; index += 1) {
         const file = uploadFiles[index];
-        setUploadStatus(`Scanning ${index + 1} of ${uploadFiles.length}: ${file.name}`);
+        try {
+          setUploadStatus(`Scanning ${index + 1} of ${uploadFiles.length}: ${file.name}`);
 
-        const prepareResponse = await fetch("/api/imports", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            workspaceId: uploadWorkspaceId,
-            fileName: file.name,
-            fileType: file.type || "unknown",
-            contentType: file.type || "application/octet-stream",
-            skipUpload: false,
-          }),
-        });
+          const prepareResponse = await fetch("/api/imports", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              workspaceId: uploadWorkspaceId,
+              fileName: file.name,
+              fileType: file.type || "unknown",
+              contentType: file.type || "application/octet-stream",
+              skipUpload: false,
+            }),
+          });
 
-        if (!prepareResponse.ok) {
-          const payload = await prepareResponse.json().catch(() => ({}));
-          throw new Error(payload.error || `Unable to prepare ${file.name}.`);
+          if (!prepareResponse.ok) {
+            const payload = await prepareResponse.json().catch(() => ({}));
+            throw new Error(payload.error || `Unable to prepare ${file.name}.`);
+          }
+
+          const preparePayload = (await prepareResponse.json()) as { importFile?: { id: string } };
+          const importId = preparePayload.importFile?.id;
+
+          if (!importId) {
+            throw new Error(`Unable to start import for ${file.name}.`);
+          }
+
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("workspaceId", uploadWorkspaceId);
+          formData.append("fileName", file.name);
+          formData.append("fileType", file.type || "unknown");
+          formData.append("qaMode", "true");
+
+          const processResponse = await fetch(`/api/imports/${importId}/process`, {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!processResponse.ok) {
+            const payload = await processResponse.json().catch(() => ({}));
+            throw new Error(payload.error || `Unable to scan ${file.name}.`);
+          }
+
+          const processPayload = await processResponse.json().catch(() => ({}));
+          if (processPayload?.queued) {
+            setUploadStatus(`Queued ${file.name} for background QA processing.`);
+          } else if (processPayload?.processed) {
+            setUploadStatus(`Scanned ${file.name} and recorded the latest QA run.`);
+          }
+          setRefreshToken((current) => current + 1);
+        } catch (fileError) {
+          skippedCount += 1;
+          skippedMessages.push(describeSkip(file.name, fileError));
+          setUploadStatus(skippedMessages[skippedMessages.length - 1]);
+          continue;
         }
-
-        const preparePayload = (await prepareResponse.json()) as { importFile?: { id: string } };
-        const importId = preparePayload.importFile?.id;
-
-        if (!importId) {
-          throw new Error(`Unable to start import for ${file.name}.`);
-        }
-
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("workspaceId", uploadWorkspaceId);
-        formData.append("fileName", file.name);
-        formData.append("fileType", file.type || "unknown");
-        formData.append("qaMode", "true");
-
-        const processResponse = await fetch(`/api/imports/${importId}/process`, {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!processResponse.ok) {
-          const payload = await processResponse.json().catch(() => ({}));
-          throw new Error(payload.error || `Unable to scan ${file.name}.`);
-        }
-
-        const processPayload = await processResponse.json().catch(() => ({}));
-        if (processPayload?.queued) {
-          setUploadStatus(`Queued ${file.name} for background QA processing.`);
-        } else if (processPayload?.processed) {
-          setUploadStatus(`Scanned ${file.name} and recorded the latest QA run.`);
-        }
-        setRefreshToken((current) => current + 1);
       }
 
-      setUploadStatus(`Submitted ${uploadFiles.length} file(s) for QA scan.`);
+      if (skippedCount > 0) {
+        setUploadStatus(`Submitted ${uploadFiles.length - skippedCount} file(s) for QA scan. Skipped ${skippedCount} unreadable file(s).`);
+      } else {
+        setUploadStatus(`Submitted ${uploadFiles.length} file(s) for QA scan.`);
+      }
       setUploadFiles([]);
       if (uploadInputRef.current) {
         uploadInputRef.current.value = "";

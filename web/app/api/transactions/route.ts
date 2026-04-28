@@ -6,6 +6,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { recordTrainingSignal } from "@/lib/data-engine";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { countWorkspaceTransactions } from "@/lib/plan-access";
+import { getOrCreateCurrentUser } from "@/lib/user-context";
+import { getEffectiveUserLimits } from "@/lib/user-limits";
 import {
   buildTransactionQueryWhere,
   parseTransactionQueryFilters,
@@ -473,6 +476,18 @@ export async function POST(request: Request) {
     const payload = transactionSchema.parse(await request.json());
 
     await assertWorkspaceAccess(userId, payload.workspaceId);
+    const user = await getOrCreateCurrentUser(userId);
+    const effectiveLimits = getEffectiveUserLimits(user);
+    const transactionCount = await countWorkspaceTransactions(payload.workspaceId);
+
+    if (effectiveLimits.transactionLimit !== null && transactionCount >= effectiveLimits.transactionLimit) {
+      return NextResponse.json(
+        {
+          error: `Free plan includes up to ${effectiveLimits.transactionLimit.toLocaleString()} transaction rows. Upgrade to Pro for unlimited rows.`,
+        },
+        { status: 403 }
+      );
+    }
 
     const resolvedCategoryId =
       payload.categoryId ??

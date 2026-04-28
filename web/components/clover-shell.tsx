@@ -129,6 +129,14 @@ const sidebarSearchPages: Array<{
     detail: "Save, pay down debt, or track milestones.",
     terms: ["goals", "goal", "savings", "save", "debt", "milestone"],
   },
+  {
+    key: "help",
+    title: "Help",
+    href: "/help",
+    icon: "help",
+    detail: "Guides for setup, pricing, safety, and storage.",
+    terms: ["help", "support", "guide", "setup", "pricing", "security", "storage"],
+  },
 ];
 
 const normalizeSidebarSearch = (value: string) => value.trim().toLowerCase();
@@ -175,6 +183,7 @@ type IconName =
   | "notifications"
   | "profile"
   | "settings"
+  | "help"
   | "sign-out";
 
 function MenuIcon({ name }: { name: IconName }) {
@@ -242,6 +251,14 @@ function MenuIcon({ name }: { name: IconName }) {
         <svg {...common}>
           <circle cx="12" cy="12" r="3.2" />
           <path d="M19.4 13a7.8 7.8 0 0 0 .1-2l2-1.2-1.9-3.2-2.3.7a8.1 8.1 0 0 0-1.7-1l-.3-2.4H10l-.3 2.4a8.1 8.1 0 0 0-1.7 1l-2.3-.7-1.9 3.2 2 1.2a7.8 7.8 0 0 0 0 2l-2 1.2 1.9 3.2 2.3-.7a8.1 8.1 0 0 0 1.7 1l.3 2.4h4.1l.3-2.4a8.1 8.1 0 0 0 1.7-1l2.3.7 1.9-3.2-2-1.2Z" />
+        </svg>
+      );
+    case "help":
+      return (
+        <svg {...common}>
+          <path d="M9.5 9a2.5 2.5 0 1 1 4 2c-.9.6-1.5 1.2-1.5 2.5" />
+          <path d="M12 17h.01" />
+          <circle cx="12" cy="12" r="8.5" />
         </svg>
       );
     case "sign-out":
@@ -897,6 +914,17 @@ export function CloverShell({
                     <MenuIcon name="settings" />
                   </span>
                   <span>Settings</span>
+                </Link>
+                <Link
+                  className="sidebar-popover__link sidebar-popover__link--bare"
+                  role="menuitem"
+                  href={pathname ? `/help?returnTo=${encodeURIComponent(pathname)}` : "/help"}
+                  onClick={() => setOpenMenu(null)}
+                >
+                  <span className="sidebar-popover__link-icon" aria-hidden="true">
+                    <MenuIcon name="help" />
+                  </span>
+                  <span>Help</span>
                 </Link>
                 <button
                   className="sidebar-popover__link sidebar-popover__button sidebar-popover__button--danger sidebar-popover__link--bare"

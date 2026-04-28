@@ -252,8 +252,13 @@ export function OnboardingForm({
         </>
       ) : step === "goals" ? (
         <>
-          <h3>Welcome to Clover</h3>
-          <p className="onboarding-card__copy">{selectedExperienceProfile.goalsLead}</p>
+          <h3>Start here</h3>
+          <p className="onboarding-card__copy">
+            {selectedExperienceProfile.goalsLead ?? "One goal at a time. Pick the one thing you want Clover to coach first."}
+          </p>
+          <p className="onboarding-card__copy onboarding-card__copy--subtle">
+            Start with one main goal. You can add the others later from the Goals page.
+          </p>
 
           <div className="onboarding-grid" role="list" aria-label="Financial goals">
             {GOALS.map((option) => (
@@ -307,7 +312,7 @@ export function OnboardingForm({
                   ? "We’ll use your first selected goal as the main target for now. You can add the others on the Goals page."
                   : "You can leave this blank and set it later on the Goals page."}
               </small>
-            </label>
+          </label>
           ) : null}
 
           <div className="onboarding-actions">
@@ -341,7 +346,9 @@ export function OnboardingForm({
       ) : (
         <>
           <h3>Choose your first move</h3>
-          <p className="onboarding-card__copy">{selectedExperienceProfile.actionStripCopy}</p>
+          <p className="onboarding-card__copy">
+            {selectedExperienceProfile.actionStripCopy ?? "One goal at a time. Start with the simplest move that feels useful."}
+          </p>
 
           <div className="onboarding-grid onboarding-grid--start" role="list" aria-label="Getting started options">
             {START_OPTIONS.map((option) => (

@@ -164,7 +164,13 @@ const summarizeFileSpeed = (params: { totalMs?: number; rowCount: number; fileTy
   const isPdf = params.fileType.toLowerCase().includes("pdf");
   const slowThreshold = isPdf ? 4500 : 1500;
   const rowThreshold = isPdf ? 120 : 35;
-  const isSlow = totalMs !== null && (totalMs > slowThreshold || (msPerRow !== null && msPerRow > rowThreshold));
+  const minRowsForPerRowSpeedCheck = isPdf ? 25 : 15;
+  const isSlow =
+    totalMs !== null &&
+    (
+      totalMs > slowThreshold ||
+      (params.rowCount >= minRowsForPerRowSpeedCheck && msPerRow !== null && msPerRow > rowThreshold)
+    );
 
   return { totalMs, msPerRow, isSlow };
 };
@@ -200,6 +206,22 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
   const rowCount = rows.length;
   const parseableDateCount = countParseableDates(rows);
   const dateCoverage = rowCount > 0 ? parseableDateCount / rowCount : 0;
+  const statementStart = parseDateValue(typeof input.metadata.startDate === "string" ? input.metadata.startDate : null);
+  const statementEnd = parseDateValue(typeof input.metadata.endDate === "string" ? input.metadata.endDate : null);
+  const rowsOutsideStatementPeriod =
+    statementStart && statementEnd
+      ? rows.reduce((count, row) => {
+          const date = parseDateValue(typeof row.date === "string" ? row.date : row.date instanceof Date ? row.date.toISOString() : null);
+          if (!date) {
+            return count;
+          }
+
+          const lowerBound = statementStart.getTime() - 7 * 24 * 60 * 60 * 1000;
+          const upperBound = statementEnd.getTime() + 7 * 24 * 60 * 60 * 1000;
+          return date.getTime() < lowerBound || date.getTime() > upperBound ? count + 1 : count;
+        }, 0)
+      : 0;
+  const outsideStatementPeriodRate = rowCount > 0 ? rowsOutsideStatementPeriod / rowCount : 0;
   const merchantNormalizationCoverage = rowCount > 0
     ? countRowsWithValue(rows, (row) => normalizeKey(row.merchantClean).length > 0)
       / rowCount
@@ -312,6 +334,31 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
       suggestion: "Improve date tokenization, OCR spacing normalization, or file-specific row splitting.",
       confidence: 90,
       metadata: {
+        fileType: input.fileType,
+      },
+    });
+  }
+
+  if (rowCount > 0 && statementStart && statementEnd && outsideStatementPeriodRate > 0.1) {
+    findings.push({
+      code: "transactions.statement_period_mismatch",
+      severity: outsideStatementPeriodRate > 0.35 ? "critical" : "warning",
+      field: "date",
+      message: "Many parsed transaction dates fall outside the statement period.",
+      observedValue: {
+        rowCount,
+        rowsOutsideStatementPeriod,
+        outsideStatementPeriodRate,
+        statementStart: statementStart.toISOString(),
+        statementEnd: statementEnd.toISOString(),
+      },
+      expectedValue: {
+        maxOutsideStatementPeriodRate: 0.1,
+      },
+      suggestion: "Check the row splitter and date parser for column bleed, wrapped rows, or the wrong year being applied.",
+      confidence: 92,
+      metadata: {
+        fileName: input.fileName,
         fileType: input.fileType,
       },
     });

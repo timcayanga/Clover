@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AdminDataQaConsole } from "@/components/admin-data-qa-console";
 import { CloverShell } from "@/components/clover-shell";
 import { requireAdminAuth } from "@/lib/admin";
+import { getAdminDataQaBankSummary } from "@/lib/admin-data-qa-summary";
+import { AdminDataQaSummary } from "@/components/admin-data-qa-summary";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,8 @@ export default async function AdminDataQaPage() {
   } catch {
     redirect("/dashboard");
   }
+
+  const data = await getAdminDataQaBankSummary();
 
   return (
     <CloverShell
@@ -34,7 +37,7 @@ export default async function AdminDataQaPage() {
         </div>
       }
     >
-      <AdminDataQaConsole />
+      <AdminDataQaSummary data={data} />
     </CloverShell>
   );
 }

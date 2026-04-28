@@ -19,6 +19,7 @@ type GoalsEditorProps = {
   currentGoalPlan?: GoalPlan | null;
   monthlyIncome?: number | null;
   suggestedTargetAmount?: number | null;
+  beginnerMode?: boolean;
 };
 
 const formatCurrency = (value: number) =>
@@ -41,6 +42,7 @@ export function GoalsEditor({
   currentGoalPlan = null,
   monthlyIncome = null,
   suggestedTargetAmount = null,
+  beginnerMode = false,
 }: GoalsEditorProps) {
   const router = useRouter();
   const [selectedGoal, setSelectedGoal] = useState(currentGoal ?? goals[0]?.value ?? null);
@@ -60,6 +62,7 @@ export function GoalsEditor({
   );
   const [targetPercent, setTargetPercent] = useState(initialPlan?.targetPercent !== null ? String(initialPlan?.targetPercent ?? "") : "");
   const [status, setStatus] = useState<string | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(!beginnerMode);
   const [isPending, startTransition] = useTransition();
 
   const selectedGoalMeta = useMemo(() => goals.find((goal) => goal.value === selectedGoal) ?? null, [goals, selectedGoal]);
@@ -134,6 +137,10 @@ export function GoalsEditor({
 
     setTargetAmount("");
   }, [currentGoal, currentGoalPlan, currentTargetAmount, goals, suggestedTargetAmount]);
+
+  useEffect(() => {
+    setShowAdvanced(!beginnerMode);
+  }, [beginnerMode]);
 
   const saveGoal = (goalValue: string | null) => {
     startTransition(() => {
@@ -274,48 +281,62 @@ export function GoalsEditor({
                 ? `A strong starting point from the last 30 days is ${currencyFormatter.format(suggestedTargetAmount)}.`
                 : "Set the monthly number you want Clover to coach against."}
         </small>
+        {beginnerMode ? <small className="goals-editor__helper">Amount means a fixed peso goal. Percent means a share of salary.</small> : null}
       </label>
 
-      <div className="goals-editor__mode-grid">
-        <label className="goals-editor__mode">
-          <span>Target type</span>
-          <select value={targetMode} onChange={(event) => setTargetMode(event.target.value as GoalTargetMode)}>
-            <option value="amount">{goalTargetModeLabels.amount}</option>
-            <option value="percent">{goalTargetModeLabels.percent}</option>
-          </select>
-        </label>
-        <label className="goals-editor__mode">
-          <span>Cadence</span>
-          <select value={cadence} onChange={(event) => setCadence(event.target.value as GoalTargetCadence)}>
-            <option value="monthly">{goalTargetCadenceLabels.monthly}</option>
-            <option value="annual">{goalTargetCadenceLabels.annual}</option>
-          </select>
-        </label>
-      </div>
-
-      <label className="goals-editor__purpose">
-        <span>What is this goal for?</span>
-        <input
-          type="text"
-          value={purpose}
-          onChange={(event) => setPurpose(event.target.value)}
-          placeholder={selectedGoalMeta ? goalPurposeSuggestions[selectedGoalMeta.value][0] : "For a car, house, phone, or something else"}
-        />
-        <small>Examples: car, phone, house, emergency fund, retirement.</small>
-      </label>
-
-      <div className="goals-editor__purpose-chips" aria-label="Suggested purposes">
-        {(selectedGoalMeta ? goalPurposeSuggestions[selectedGoalMeta.value] : []).map((option) => (
-          <button
-            key={option}
-            type="button"
-            className={`goals-editor__purpose-chip ${purpose === option ? "is-selected" : ""}`}
-            onClick={() => setPurpose(option)}
-          >
-            {option}
+      {beginnerMode ? (
+        <div className="goals-editor__advanced-toggle">
+          <button type="button" className="pill-link pill-link--inline" onClick={() => setShowAdvanced((current) => !current)}>
+            {showAdvanced ? "Hide advanced options" : "Show advanced options"}
           </button>
-        ))}
-      </div>
+          <small>Use this if you want to switch from a simple peso goal to salary share or annual planning.</small>
+        </div>
+      ) : null}
+
+      {showAdvanced ? (
+        <>
+          <div className="goals-editor__mode-grid">
+            <label className="goals-editor__mode">
+              <span>Target type</span>
+              <select value={targetMode} onChange={(event) => setTargetMode(event.target.value as GoalTargetMode)}>
+                <option value="amount">{goalTargetModeLabels.amount}</option>
+                <option value="percent">{goalTargetModeLabels.percent}</option>
+              </select>
+            </label>
+            <label className="goals-editor__mode">
+              <span>Cadence</span>
+              <select value={cadence} onChange={(event) => setCadence(event.target.value as GoalTargetCadence)}>
+                <option value="monthly">{goalTargetCadenceLabels.monthly}</option>
+                <option value="annual">{goalTargetCadenceLabels.annual}</option>
+              </select>
+            </label>
+          </div>
+
+          <label className="goals-editor__purpose">
+            <span>What is this goal for?</span>
+            <input
+              type="text"
+              value={purpose}
+              onChange={(event) => setPurpose(event.target.value)}
+              placeholder={selectedGoalMeta ? goalPurposeSuggestions[selectedGoalMeta.value][0] : "For a car, house, phone, or something else"}
+            />
+            <small>Examples: car, phone, house, emergency fund, retirement.</small>
+          </label>
+
+          <div className="goals-editor__purpose-chips" aria-label="Suggested purposes">
+            {(selectedGoalMeta ? goalPurposeSuggestions[selectedGoalMeta.value] : []).map((option) => (
+              <button
+                key={option}
+                type="button"
+                className={`goals-editor__purpose-chip ${purpose === option ? "is-selected" : ""}`}
+                onClick={() => setPurpose(option)}
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
 
       <div className="goals-editor__actions">
         <button

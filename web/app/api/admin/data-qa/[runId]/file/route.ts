@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
+import { fetchImportFileCompat } from "@/lib/data-engine";
 import { downloadImportObject } from "@/lib/import-file-text.server";
 
 export const dynamic = "force-dynamic";
@@ -35,14 +36,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
 
     const run = await prisma.dataQaRun.findUnique({
       where: { id: runId },
-      include: {
-        importFile: true,
+      select: {
+        importFileId: true,
       },
     });
 
-    const importFile = run?.importFile;
+    const importFile = run?.importFileId ? await fetchImportFileCompat(run.importFileId) : null;
 
-    if (!run || !importFile?.storageKey) {
+    if (!importFile?.storageKey) {
       return NextResponse.json({ error: "Run not found" }, { status: 404 });
     }
 
