@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { getHelpSearchResults, getHelpSectionHref, helpSections, type HelpSection } from "@/lib/help-center";
+import { getHelpSectionHref, helpSections, type HelpSection } from "@/lib/help-center";
 
 type HelpCenterProps = {
   returnTo?: string | null;
@@ -114,7 +114,6 @@ export function HelpCenter({ returnTo }: HelpCenterProps) {
 
   const normalizedQuery = query.trim().toLowerCase();
 
-  const searchResults = useMemo(() => getHelpSearchResults(normalizedQuery, 6), [normalizedQuery]);
   const filteredSections = useMemo(() => {
     if (!normalizedQuery) {
       return helpSections;
@@ -124,35 +123,18 @@ export function HelpCenter({ returnTo }: HelpCenterProps) {
   }, [normalizedQuery]);
 
   const heroBackHref = returnTo ?? "/";
-  const heroBackLabel = returnTo ? "Back to account" : "Back to home";
-  const heroBackNote = returnTo ? "Return to your account area without leaving Clover." : "Go back to the landing page.";
-
   return (
     <main className="help-page">
       <div className="help-page__inner">
         <nav className="help-page__nav" aria-label="Help page navigation">
-          <Link className="landing-brand" href="/" aria-label="Clover home" prefetch={false}>
+          <Link className="landing-brand" href={heroBackHref} aria-label="Clover home" prefetch={false}>
             <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
             <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" />
           </Link>
-          <div className="help-page__nav-links">
-            <Link className="help-page__nav-link" href={heroBackHref} prefetch={false}>
-              {heroBackLabel}
-            </Link>
-            <Link className="help-page__nav-link" href="/pricing" prefetch={false}>
-              Pricing
-            </Link>
-            <Link className="help-page__nav-link" href="/privacy-policy" prefetch={false}>
-              Privacy
-            </Link>
-          </div>
         </nav>
 
         <section className="help-hero help-hero--simple glass">
           <div className="help-hero__copy">
-            <span className="pill pill-accent">Help center</span>
-            <h1>Simple answers for every part of Clover.</h1>
-
             <label className="help-search help-search--hero" htmlFor="help-search">
               <span className="sr-only">Search help</span>
               <input
@@ -163,45 +145,8 @@ export function HelpCenter({ returnTo }: HelpCenterProps) {
                 onChange={(event) => setQuery(event.target.value)}
               />
             </label>
-
-            <div className="help-hero__actions help-hero__actions--simple">
-              <Link className="button button-primary button-pill" href={heroBackHref} prefetch={false}>
-                {heroBackLabel}
-              </Link>
-              <Link className="button button-secondary button-pill" href="/pricing" prefetch={false}>
-                Pricing
-              </Link>
-              <Link className="button button-secondary button-pill" href="/privacy-policy" prefetch={false}>
-                Privacy
-              </Link>
-            </div>
-
-            <p className="help-hero__note">{heroBackNote}</p>
           </div>
         </section>
-
-        {normalizedQuery ? (
-          <section className="help-search-results glass" aria-label="Matching pages">
-            <div className="help-search-results__head">
-              <p className="eyebrow">Matching pages</p>
-              <h2>Results for “{query.trim()}”</h2>
-            </div>
-
-            {searchResults.length > 0 ? (
-              <div className="help-search-results__list">
-                {searchResults.map((result) => (
-                  <Link key={`${result.kind}-${result.sectionSlug}-${result.articleSlug ?? "section"}`} className="help-search-result" href={result.href} prefetch={false}>
-                    <span className="help-search-result__type">{result.kind === "article" ? "Article" : "Section"}</span>
-                    <strong>{result.title}</strong>
-                    <span>{result.sectionTitle}</span>
-                  </Link>
-                ))}
-              </div>
-            ) : (
-              <p className="help-search-results__empty">Try a broader phrase like setup, import, pricing, security, or delete account.</p>
-            )}
-          </section>
-        ) : null}
 
         <section className="help-grid" aria-label="Help topics">
           {filteredSections.map((section) => (
@@ -213,20 +158,6 @@ export function HelpCenter({ returnTo }: HelpCenterProps) {
             </Link>
           ))}
         </section>
-
-        {!normalizedQuery && filteredSections.length === 0 ? (
-          <section className="help-empty glass">
-            <h3>No matches yet.</h3>
-            <p>Try a broader search like “setup”, “billing”, “privacy”, or “security”.</p>
-            <div className="help-empty__actions">
-              {helpSections.slice(0, 3).map((section) => (
-                <Link key={section.slug} className="button button-secondary button-small" href={getHelpSectionHref(section.slug, returnTo)} prefetch={false}>
-                  {section.title}
-                </Link>
-              ))}
-            </div>
-          </section>
-        ) : null}
 
       </div>
     </main>

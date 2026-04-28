@@ -17800,7 +17800,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .help-hero--simple {
   grid-template-columns: minmax(0, 1fr);
-  padding: 28px;
+  padding: 18px 20px;
 }
 
 .help-hero__copy,
@@ -17850,10 +17850,10 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .help-search--hero input {
-  min-height: 82px;
-  padding: 0 24px;
-  border-radius: 28px;
-  font-size: clamp(1rem, 2vw, 1.18rem);
+  min-height: 46px;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 0.98rem;
 }
 
 .help-search input:focus {
