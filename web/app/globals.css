@@ -538,29 +538,37 @@ label {
 .sidebar-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 12px;
-  padding: 2px 2px 4px;
-}
-
-.sidebar-close-button {
-  appearance: none;
-  border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.78);
-  color: var(--muted);
-  border-radius: 999px;
-  width: 36px;
-  height: 36px;
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
+  padding: 4px 2px 6px;
 }
 
 .sidebar-brand-link {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  gap: 8px;
   min-width: 0;
+  width: 100%;
+}
+
+.sidebar-brand-link--centered {
+  width: 100%;
+}
+
+.sidebar-brand-link__mark {
+  display: block;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  object-fit: contain;
+}
+
+.sidebar-brand-link__wordmark {
+  display: block;
+  width: 76px;
+  height: auto;
+  object-fit: contain;
 }
 
 .sidebar-brand-actions {

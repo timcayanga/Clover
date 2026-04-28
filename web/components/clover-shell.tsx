@@ -722,21 +722,14 @@ export function CloverShell({
       />
       <aside className="sidebar" aria-label="Primary">
         <div className="sidebar-header">
-          <button
-            className="sidebar-close-button"
-            type="button"
-            aria-label="Close menu"
-            onClick={() => setIsSidebarOpen(false)}
-          >
-            ×
-          </button>
           <Link
             href="/dashboard"
             aria-label="Clover home"
             prefetch={false}
-            style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center" }}
+            className="sidebar-brand-link sidebar-brand-link--centered"
           >
-            <img src="/clover-logo-full.svg" alt="Clover" style={{ display: "block", width: 132, height: "auto" }} />
+            <img src="/clover-mark.svg" alt="" aria-hidden="true" className="sidebar-brand-link__mark" />
+            <img src="/clover-name-teal.svg" alt="Clover" className="sidebar-brand-link__wordmark" />
           </Link>
         </div>
 
