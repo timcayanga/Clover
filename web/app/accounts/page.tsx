@@ -7,6 +7,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
@@ -266,6 +267,16 @@ const isSpendableAccountType = (type: Account["type"]) => type === "bank" || typ
 
 const getSpendableBalance = (account: Account) =>
   (isSpendableAccountType(getEffectiveAccountType(account)) ? normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(account.balance)) : 0);
+
+const ACCOUNTS_PAGE_GUIDE =
+  "Accounts shows where your money lives right now. Use Transactions for money movement and Investments for longer-term holdings.";
+
+const ACCOUNTS_OVERVIEW_COPY = {
+  netWorth: "Everything you own minus everything you owe across this workspace.",
+  spendable: "Cash-like money you can use now across bank accounts, wallets, and cash.",
+  assets: "Positive-value accounts such as banks, wallets, cash, and investments.",
+  liabilities: "Amounts you owe, like credit cards and other negative-balance accounts.",
+} as const;
 
 const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined) => {
   if (!checkpoint) {
@@ -1671,7 +1682,10 @@ function AccountsPageContent() {
         <div className="accounts-page__sticky">
           <div className="accounts-page__headline">
             <div className="accounts-page__headline-copy">
-              <h1>Accounts</h1>
+              <h1>
+                Accounts
+                <InfoTooltip title="How Accounts works" label={ACCOUNTS_PAGE_GUIDE} />
+              </h1>
             </div>
             <div className="accounts-page__headline-actions">
               <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={() => setAddOpen(true)}>
@@ -1687,19 +1701,31 @@ function AccountsPageContent() {
 
           <section className="accounts-overview-grid">
             <article className="accounts-overview-card glass">
-              <p className="eyebrow">Net worth</p>
+              <p className="eyebrow">
+                Net worth
+                <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.netWorth} />
+              </p>
               <strong className="accounts-overview-card__amount is-neutral">{currencyFormatter.format(totals.netWorth)}</strong>
             </article>
             <article className="accounts-overview-card glass">
-              <p className="eyebrow">Spendable</p>
+              <p className="eyebrow">
+                Spendable
+                <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.spendable} />
+              </p>
               <strong className="accounts-overview-card__amount is-good">{currencyFormatter.format(spendableAmount)}</strong>
             </article>
             <article className="accounts-overview-card glass">
-              <p className="eyebrow">Assets</p>
+              <p className="eyebrow">
+                Assets
+                <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.assets} />
+              </p>
               <strong className="accounts-overview-card__amount is-good">{currencyFormatter.format(totals.assets)}</strong>
             </article>
             <article className="accounts-overview-card glass">
-              <p className="eyebrow">Liabilities</p>
+              <p className="eyebrow">
+                Liabilities
+                <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.liabilities} />
+              </p>
               <strong className="accounts-overview-card__amount is-danger">{currencyFormatter.format(totals.liabilities)}</strong>
             </article>
           </section>
