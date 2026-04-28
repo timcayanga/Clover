@@ -7,11 +7,13 @@ import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
+import { PlanTierBanner } from "@/components/plan-tier-banner";
 import type { ReportsQueueItem } from "@/components/reports-review-queue";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { recordAppError } from "@/lib/error-logs";
@@ -242,19 +244,26 @@ async function ReportsStream({
   });
   const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
   const isPro = user.planTier === "pro";
+  const planLimits = getEffectiveUserLimits(user);
   const freePlanReports = [
-    "Cash flow",
+    "Income",
+    "Expenses",
+    "Net income",
+    "Savings rate",
+    "Where your money went",
     "Spending by category",
-    "Recurring payments",
-    "Top merchants",
-    "Monthly summary",
+    "Repeat charges",
+    "Top spenders",
+    "This month",
     "Review queue",
     "Data health",
   ] as const;
   const proPlanReports = [
-    "What changed / why / what next",
+    "What changed",
+    "Why it changed",
+    "What to do next",
     "Goal lens",
-    "Attention strip",
+    "Attention",
     "Decision lens",
     "Account health detail",
     "Comparison modes",
@@ -1205,6 +1214,45 @@ async function ReportsStream({
             chart_type: "timeline",
           }}
         />
+        <PlanTierBanner
+          planTier={user.planTier}
+          label="Reports, insights, and limits"
+          limits={planLimits}
+          ctaHref={user.planTier === "free" ? "/pricing" : "/settings#billing"}
+          ctaLabel={user.planTier === "free" ? "See Pro pricing" : "Manage billing"}
+          secondaryHref="/insights"
+          secondaryLabel="Open insights"
+          className="reports-plan-banner"
+        />
+        <section className="reports-plan-split glass">
+          <div className="reports-plan-split__head">
+            <div>
+              <p className="eyebrow">Plan split</p>
+              <h4>Free gives the essentials. Pro adds the decision layer.</h4>
+            </div>
+            <p className="reports-plan-split__summary">
+              Reports, insights, goals, and recommendations stay tied to the same plan tier so the upgrade path is clear.
+            </p>
+          </div>
+          <div className="reports-plan-split__grid">
+            <article className="reports-plan-split__column">
+              <p className="reports-plan-split__label">Free</p>
+              <ul className="reports-plan-split__list">
+                {freePlanReports.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+            <article className="reports-plan-split__column reports-plan-split__column--pro">
+              <p className="reports-plan-split__label">Pro</p>
+              <ul className="reports-plan-split__list">
+                {proPlanReports.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </article>
+          </div>
+        </section>
         {isEmptyWorkspace ? (
           <div style={{ marginBottom: 20 }}>
             <EmptyDataCta
@@ -1217,7 +1265,7 @@ async function ReportsStream({
           </div>
         ) : null}
 
-        <section className="reports-range-switch glass">
+    <section className="reports-range-switch glass">
           <div className="reports-range-switch__copy">
             <span className="eyebrow">Range</span>
             <p>{selectedRangeLabel}</p>
@@ -1234,21 +1282,30 @@ async function ReportsStream({
           </div>
         </section>
 
+        <section className="reports-orientation glass">
+          <p className="eyebrow">Quick guide</p>
+          <h4>Start with the four cards at the top, then scan where money went, what repeats, and what needs attention.</h4>
+          <p>
+            Free shows the essentials. Pro adds the short explanations that help you understand why things changed and what to do
+            next.
+          </p>
+        </section>
+
         <section className="reports-summary-grid reports-summary-grid--highlights">
           <article className="metric compact metric--highlight glass">
-            <span>Total Income</span>
+            <span>Income</span>
             <strong>{formatCurrency(currentSummary.income)}</strong>
           </article>
           <article className="metric compact metric--highlight glass">
-            <span>Total Expenses</span>
+            <span>Expenses</span>
             <strong>{formatCurrency(currentSummary.expense)}</strong>
           </article>
           <article className="metric compact metric--highlight glass">
-            <span>Total Net Income</span>
+            <span>Net income</span>
             <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
           </article>
           <article className="metric compact metric--highlight glass">
-            <span>Savings Rate %</span>
+            <span>Savings rate</span>
             <strong>{savingsRate === null ? "N/A" : formatPercent(savingsRate * 100)}</strong>
           </article>
         </section>
@@ -1320,7 +1377,7 @@ async function ReportsStream({
             <section className="reports-attention-strip">
               {attentionItems.map((item) => (
                 <article key={item.title} className="reports-attention-card glass">
-                  <span className="eyebrow">Attention</span>
+                  <span className="eyebrow">Things to check</span>
                   <h4>{item.title}</h4>
                   <p>{item.body}</p>
                   <Link className="pill-link pill-link--inline" href={item.href}>
@@ -1332,7 +1389,7 @@ async function ReportsStream({
 
             <article className="reports-decision-lens glass">
               <div>
-                <p className="eyebrow">Decision lens</p>
+                <p className="eyebrow">Next best action</p>
                 <h4>{nextStep.title}</h4>
                 <p>{nextStep.body}</p>
               </div>
@@ -1347,11 +1404,11 @@ async function ReportsStream({
           <article className="report-card glass report-card--wide">
             <div className="report-card__head">
               <div>
-                <h4>Income flow map</h4>
+                <h4>Where your money went</h4>
               </div>
               <div className="report-card__stat">
                 <strong>{formatCurrency(currentSummary.income)}</strong>
-                <span>income flowing into spending categories</span>
+                <span>how spending is split across categories</span>
               </div>
             </div>
 
@@ -1359,7 +1416,7 @@ async function ReportsStream({
               <div className="report-flow-map__source">
                 <span>Total income</span>
                 <strong>{formatCurrency(currentSummary.income)}</strong>
-                <small>{formatCurrency(currentSpend)} routed to expense categories</small>
+                <small>{formatCurrency(currentSpend)} routed to spending categories</small>
               </div>
               <div className="report-flow-map__rows">
                 {reportCategorySegments.length > 0 ? (
@@ -1495,7 +1552,7 @@ async function ReportsStream({
           <article className="report-card glass">
             <div className="report-card__head">
               <div>
-                <h4>Recurring payments</h4>
+                <h4>Repeat charges</h4>
               </div>
               <div className="report-card__stat">
                 <strong>{recurringMerchants.length}</strong>
@@ -1551,7 +1608,7 @@ async function ReportsStream({
           <article className="report-card glass">
             <div className="report-card__head">
               <div>
-                <h4>Top merchants</h4>
+                <h4>Top spenders</h4>
               </div>
               <div className="report-card__stat">
                 <strong>{topMerchants.length}</strong>
@@ -1589,7 +1646,7 @@ async function ReportsStream({
           <article className="report-card glass">
             <div className="report-card__head">
               <div>
-                <h4>Monthly summary</h4>
+                <h4>This month</h4>
               </div>
               <div className="report-card__stat">
                 <strong className={currentMonthBucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentMonthBucket.net)}</strong>
