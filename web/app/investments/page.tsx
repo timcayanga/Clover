@@ -8,8 +8,6 @@ import { CloverShell } from "@/components/clover-shell";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
-import { PlanTierBanner } from "@/components/plan-tier-banner";
-import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
 import { getAccountBrand } from "@/lib/account-brand";
 import {
   chooseWorkspaceId,
@@ -26,7 +24,6 @@ import {
   isMarketInvestmentSubtype,
   type InvestmentSubtype,
 } from "@/lib/investments";
-import type { UserLimits } from "@/lib/user-limits";
 
 type Workspace = {
   id: string;
@@ -219,7 +216,6 @@ export default function InvestmentsPage() {
   const [hasLoaded, setHasLoaded] = useState(Boolean(initialCachedWorkspace));
   const [message, setMessage] = useState("");
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
-  const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
   const [investmentSearch, setInvestmentSearch] = useState(searchQueryFromUrl);
   const [investmentSubtypeFilter, setInvestmentSubtypeFilter] = useState<InvestmentSubtype | "all">("all");
   const [investmentSortKey, setInvestmentSortKey] = useState<InvestmentSortKey>("value_desc");
@@ -260,19 +256,8 @@ export default function InvestmentsPage() {
 
       const payload = await response.json();
       const nextPlanTier = payload?.user?.planTier === "pro" ? "pro" : "free";
-      const nextLimits = payload?.user
-        ? {
-            accountLimit: Number(payload.user.accountLimit ?? 5),
-            monthlyUploadLimit: Number(payload.user.monthlyUploadLimit ?? 10),
-            transactionLimit:
-              payload.user.transactionLimit === null || payload.user.transactionLimit === undefined
-                ? null
-                : Number(payload.user.transactionLimit),
-          }
-        : null;
 
       setPlanTier(nextPlanTier);
-      setPlanLimits(nextLimits);
     };
 
     void loadPlan();
@@ -662,17 +647,6 @@ export default function InvestmentsPage() {
             </Link>
           </div>
         </div>
-
-        <PlanTierBanner
-          planTier={planTier}
-          label="Investments and limits"
-          limits={planLimits}
-          ctaHref={planTier === "free" ? "/pricing" : "/settings#billing"}
-          ctaLabel={planTier === "free" ? "See Pro pricing" : "Manage billing"}
-          secondaryHref="/reports"
-          secondaryLabel="Open reports"
-          className="investments-page__plan-banner"
-        />
 
         {loading ? <p className="panel-muted">Loading investments...</p> : null}
         {!loading && message ? <p className="panel-muted">{message}</p> : null}
@@ -1101,16 +1075,10 @@ export default function InvestmentsPage() {
         ) : null}
 
         {planTier === "free" ? (
-          <PlanUpgradeCallout
-            planTier="free"
-            title="Free gives you a useful portfolio view. Pro takes the analysis further."
-            copy="Upgrade when you want broader market coverage, richer charting, and more room for the rest of your financial picture to connect to investing."
-            ctaHref="/pricing"
-            ctaLabel="See Pro pricing"
-            secondaryHref="/reports"
-            secondaryLabel="Open reports"
-            className="investments-upgrade-callout"
-          />
+          <p className="investments-upgrade-note panel-muted">
+            Want more market coverage, deeper charts, and broader portfolio analysis?{" "}
+            <Link href="/pricing">Upgrade to Pro</Link> when Clover starts feeling like a useful daily investing workspace.
+          </p>
         ) : null}
       </CloverShell>
   );

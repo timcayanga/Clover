@@ -10661,6 +10661,18 @@ input.transaction-inline-edit--amount::placeholder {
   white-space: nowrap;
 }
 
+.investments-upgrade-note {
+  margin: 4px 4px 0;
+  padding: 0;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.investments-upgrade-note a {
+  color: var(--teal);
+  font-weight: 600;
+}
+
 .investments-market .insight-chart svg {
   height: 220px;
 }
