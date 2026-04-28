@@ -1,0 +1,8 @@
+ALTER TABLE "DataQaRun"
+ADD COLUMN IF NOT EXISTS "manualFeedback" TEXT;
+
+ALTER TABLE "DataQaRun"
+ADD COLUMN IF NOT EXISTS "manualFeedbackUpdatedAt" TIMESTAMP(3);
+
+ALTER TABLE "DataQaRun"
+ADD COLUMN IF NOT EXISTS "manualFeedbackAuthorId" TEXT;

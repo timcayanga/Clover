@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { persistSelectedWorkspaceId } from "@/lib/workspace-selection";
+import { clearAllWorkspaceCaches } from "@/lib/workspace-cache";
 
 type ProfileCenterProps = {
   canSignOut?: boolean;
@@ -55,6 +56,7 @@ export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
     }
 
     persistSelectedWorkspaceId("");
+    clearAllWorkspaceCaches();
 
     void signOut({
       redirectUrl: "/",

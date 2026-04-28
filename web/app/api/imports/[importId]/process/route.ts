@@ -1,8 +1,9 @@
-import { requireAuth } from "@/lib/auth";
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { buildImportKey } from "@/lib/import-keys";
 import {
   detectStatementMetadataFromText,
   fetchImportFileCompat,
+  insertImportFileCompat,
   loadStatementTemplate,
   mergeStatementMetadataWithTemplate,
   updateImportFileCompat,
@@ -10,9 +11,9 @@ import {
 } from "@/lib/data-engine";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { enqueueImportProcessing } from "@/lib/import-queue";
+import { ensureImportProcessingWorker } from "@/lib/import-worker-runtime";
 import { readImportedFileText } from "@/lib/import-file-text.server";
 import { uploadObject } from "@/lib/s3";
-import { prisma } from "@/lib/prisma";
 import { validateImportFile } from "@/lib/import-file-validation";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 import { NextResponse } from "next/server";
@@ -23,9 +24,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
   let stage = "initializing";
   try {
     const { importId } = await params;
-    const { userId } = await requireAuth();
+    const localDev = await isLocalDevHost();
+    const { userId } = localDev ? { userId: "local-admin" } : await requireAuth();
     const contentType = _request.headers.get("content-type") ?? "";
     const isMultipart = contentType.includes("multipart/form-data");
+    let allowDuplicateStatement = false;
 
     let importFile = await fetchImportFileCompat(importId);
     let password: string | undefined;
@@ -39,6 +42,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const formWorkspaceId = typeof formData.get("workspaceId") === "string" ? String(formData.get("workspaceId")) : "";
       const formFileName = typeof formData.get("fileName") === "string" ? String(formData.get("fileName")) : "";
       const formFileType = typeof formData.get("fileType") === "string" ? String(formData.get("fileType")) : "";
+      allowDuplicateStatement =
+        String(formData.get("allowDuplicateStatement") ?? formData.get("qaMode") ?? "").toLowerCase() === "true";
       password = typeof formPassword === "string" && formPassword.length > 0 ? formPassword : undefined;
 
       if (!uploadedFile || typeof uploadedFile !== "object" || typeof (uploadedFile as { arrayBuffer?: unknown }).arrayBuffer !== "function") {
@@ -61,19 +66,25 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         }
 
         stage = "creating import record";
-        await assertWorkspaceAccess(userId, formWorkspaceId);
-        importFile = await prisma.importFile.create({
-          data: {
-            id: importId,
-            workspaceId: formWorkspaceId,
-            fileName: formFileName || file.name || "imported-file",
-            fileType: formFileType || file.type || "unknown",
-            storageKey: buildImportKey(formWorkspaceId, formFileName || file.name || "imported-file"),
-            status: "processing",
-          },
+        if (!localDev) {
+          await assertWorkspaceAccess(userId, formWorkspaceId);
+        }
+        importFile = await insertImportFileCompat({
+          id: importId,
+          workspaceId: formWorkspaceId,
+          fileName: formFileName || file.name || "imported-file",
+          fileType: formFileType || file.type || "unknown",
+          storageKey: buildImportKey(formWorkspaceId, formFileName || file.name || "imported-file"),
+          status: "processing",
         });
+
+        if (!importFile) {
+          return NextResponse.json({ error: "Unable to create import record." }, { status: 400 });
+        }
       } else {
-        await assertWorkspaceAccess(userId, importFile.workspaceId as string);
+        if (!localDev) {
+          await assertWorkspaceAccess(userId, importFile.workspaceId as string);
+        }
       }
 
       stage = "uploading raw file";
@@ -107,7 +118,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const parsedMetadataConfidence = Number((metadata as { confidence?: unknown } | null)?.confidence ?? 0);
       const hasExtractedText = extractedText.trim().length > 0;
       const shouldProcessInline =
-        (hasExtractedText && parsedMetadataConfidence >= 85 && bytes.length <= 8_000_000) ||
+        (hasExtractedText && parsedMetadataConfidence >= 95 && bytes.length <= 8_000_000) ||
         (!hasExtractedText && bytes.length <= 2_500_000);
 
       if (shouldProcessInline) {
@@ -117,7 +128,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         });
 
         const { processImportFileText } = await import("@/workers/import-processor");
-        const result = await processImportFileText(importId, { text: extractedText, password, actorUserId: userId });
+        const result = await processImportFileText(importId, {
+          text: extractedText,
+          password,
+          actorUserId: userId,
+          qaSource: "import_processing",
+          allowDuplicateStatement,
+        });
 
         return NextResponse.json({
           ok: true,
@@ -133,9 +150,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       stage = "scheduling background processing";
       try {
+        await ensureImportProcessingWorker();
         await enqueueImportProcessing({
           importFileId: importId,
           password,
+          allowDuplicateStatement,
         });
       } catch (error) {
         console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
@@ -172,6 +191,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const body = await _request.json().catch(() => ({}));
       const text = typeof body?.text === "string" ? body.text : "";
       password = typeof body?.password === "string" ? body.password : undefined;
+      allowDuplicateStatement = Boolean(body?.allowDuplicateStatement ?? false);
 
       if (!text) {
         return NextResponse.json({ error: "Missing extracted statement text." }, { status: 400 });
@@ -184,7 +204,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
 
       stage = "processing statement text";
       const { processImportFileText } = await import("@/workers/import-processor");
-      const result = await processImportFileText(importId, { text, password, actorUserId: userId });
+      const result = await processImportFileText(importId, {
+        text,
+        password,
+        actorUserId: userId,
+        qaSource: "import_processing",
+        allowDuplicateStatement,
+      });
 
       return NextResponse.json({
         ok: true,

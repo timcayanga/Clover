@@ -13,7 +13,8 @@ import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
-import { getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
+import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
+import { recordAppError } from "@/lib/error-logs";
 import { Suspense } from "react";
 
 const ReportsReviewQueue = nextDynamic(() => import("@/components/reports-review-queue").then((module) => module.ReportsReviewQueue), {
@@ -284,10 +285,17 @@ async function ReportsStream({
     const starterWorkspace = await ensureStarterWorkspace(user);
     const starterWorkspaceId = starterWorkspace?.id;
     if (!starterWorkspaceId) {
-      console.error("Reports starter workspace could not be resolved", {
-        clerkUserId: user.clerkUserId,
+      await recordAppError({
+        message: "Reports starter workspace could not be resolved",
+        name: "ReportsWorkspaceError",
+        source: "reports-page",
+        route: "/reports",
         userId: user.id,
-      });
+        clerkUserId: user.clerkUserId,
+        metadata: {
+          selectedWorkspaceCookieId,
+        },
+      }).catch(() => null);
       redirect("/dashboard");
     }
     const starterWorkspaceData = await prisma.workspace.findUnique({
@@ -295,11 +303,17 @@ async function ReportsStream({
       select: { id: true },
     });
     if (!starterWorkspaceData?.id) {
-      console.error("Reports starter workspace lookup failed", {
-        clerkUserId: user.clerkUserId,
+      await recordAppError({
+        message: "Reports starter workspace lookup failed",
+        name: "ReportsWorkspaceError",
+        source: "reports-page",
+        route: "/reports",
         userId: user.id,
-        starterWorkspaceId,
-      });
+        clerkUserId: user.clerkUserId,
+        metadata: {
+          starterWorkspaceId,
+        },
+      }).catch(() => null);
       redirect("/dashboard");
     }
     selectedWorkspaceId = starterWorkspaceData.id;
@@ -754,6 +768,8 @@ async function ReportsStream({
     const goalKey = user.primaryGoal?.trim() ?? null;
     const goalLabel = goalKey ? goalLabels[goalKey] ?? goalKey : null;
     const goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
+    const currentGoalPlan = normalizeGoalPlan(user.goalPlan, goalKey as GoalKey | null, goalTargetAmount);
+    const goalPlanSummary = getGoalPlanSummary(currentGoalPlan, currentSummary.income > 0 ? currentSummary.income : null);
 
     const merchantSpend = new Map<
       string,
@@ -867,6 +883,7 @@ async function ReportsStream({
     const goalProgress = getGoalProgressSnapshot({
       goalKey: goalKey as GoalKey | null,
       targetAmount: goalTargetAmount,
+      goalPlan: currentGoalPlan,
       currentNet,
       currentSpend,
       monthlyIncome: currentSummary.income > 0 ? currentSummary.income : null,
@@ -1001,7 +1018,7 @@ async function ReportsStream({
 
     const goalSummary = goalLabel
       ? goalTargetAmount !== null
-        ? `${goalLabel} is ${goalProgress.progressPercent === null ? "set" : `${Math.round(goalProgress.progressPercent)}% complete`}. ${goalProgress.nextAction}`
+        ? `${goalLabel} is ${goalProgress.progressPercent === null ? "set" : `${Math.round(goalProgress.progressPercent)}% complete`}. ${goalPlanSummary?.detail ?? goalProgress.nextAction}`
         : currentNet >= 0
           ? `Your ${goalLabel.toLowerCase()} goal has room to move forward because the last ${rangeWindowText} ended positive.`
           : `Your ${goalLabel.toLowerCase()} goal needs a tighter spending pattern or higher income to move faster.`
@@ -1615,12 +1632,22 @@ async function ReportsStream({
       </>
     );
   } catch (error) {
-    console.error("Reports page failed to load", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorDigest =
       error && typeof error === "object" && "digest" in error && typeof (error as { digest?: unknown }).digest === "string"
         ? (error as { digest: string }).digest
         : "";
+
+    await recordAppError({
+      message: errorMessage,
+      name: error instanceof Error ? error.name : "Error",
+      stack: error instanceof Error ? error.stack ?? null : null,
+      source: "reports-page",
+      route: "/reports",
+      metadata: {
+        digest: errorDigest || null,
+      },
+    }).catch(() => null);
 
     return (
       <>

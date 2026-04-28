@@ -8,6 +8,7 @@ import { AccountBrandMark } from "@/components/account-brand-mark";
 import { getAccountBrand } from "@/lib/account-brand";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
+import { formatTransactionDirectionLabel } from "@/lib/transaction-directions";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   clearWorkspaceCache,
@@ -298,9 +299,7 @@ const getCheckpointSymbol = (tone: "good" | "danger" | "neutral") => {
 };
 
 const getTransactionTypeLabel = (type: Transaction["type"]) => {
-  if (type === "income") return "Income";
-  if (type === "expense") return "Expense";
-  return "Transfer";
+  return formatTransactionDirectionLabel(type);
 };
 
 const formatAccountType = (value: string) =>

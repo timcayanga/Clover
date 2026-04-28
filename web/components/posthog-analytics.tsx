@@ -4,7 +4,13 @@ import Script from "next/script";
 import { useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
-import { analyticsOnceKey, shouldTrackAnalytics, type AnalyticsEventName, type AnalyticsProperties } from "@/lib/analytics";
+import {
+  analyticsOnceKey,
+  getPostHogClientHost,
+  shouldTrackAnalytics,
+  type AnalyticsEventName,
+  type AnalyticsProperties,
+} from "@/lib/analytics";
 
 declare global {
   interface Window {
@@ -22,6 +28,11 @@ declare global {
 type PostHogScriptProps = {
   token: string;
   host: string;
+};
+
+type PostHogPersonPropertiesProps = {
+  distinctId: string;
+  properties: AnalyticsProperties;
 };
 
 const normalizeHost = (host: string) => host.replace(/\/$/, "");
@@ -140,7 +151,7 @@ function PostHogIdentity() {
 
 export function PostHogAnalytics() {
   const token = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-  const host = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com";
+  const host = getPostHogClientHost();
 
   if (!token) {
     return null;
@@ -162,6 +173,20 @@ export function PostHogClerkIdentity() {
   }
 
   return <PostHogIdentity />;
+}
+
+export function PostHogPersonProperties({ distinctId, properties }: PostHogPersonPropertiesProps) {
+  useEffect(() => {
+    if (!shouldTrackAnalytics() || !distinctId) {
+      return;
+    }
+
+    runWhenPostHogReady(() => {
+      window.posthog?.identify(distinctId, properties);
+    });
+  }, [distinctId, properties]);
+
+  return null;
 }
 
 type PostHogEventProps = {

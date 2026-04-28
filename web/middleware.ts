@@ -24,6 +24,10 @@ const clerkAuthMiddleware = clerkMiddleware(async (auth, request) => {
 });
 
 export default function middleware(request: NextRequest, event: NextFetchEvent) {
+  if (isLocalHost(request)) {
+    return NextResponse.next();
+  }
+
   return clerkAuthMiddleware(request, event);
 }
 

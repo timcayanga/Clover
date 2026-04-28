@@ -40,6 +40,9 @@ export type AdminErrorLogListResponse = {
 
 const DEFAULT_PAGE_SIZE = 25;
 const MAX_PAGE_SIZE = 100;
+const PRODUCTION_ERROR_LOG_WHERE = {
+  environment: "production",
+};
 
 type AdminErrorLogRecord = {
   id: string;
@@ -119,6 +122,7 @@ export async function getAdminErrorLogs(filters: AdminErrorLogFilters = {}): Pro
 
   const where: AdminErrorLogWhereInput = query
     ? {
+        ...PRODUCTION_ERROR_LOG_WHERE,
         OR: [
           { message: { contains: query, mode: "insensitive" } },
           { name: { contains: query, mode: "insensitive" } },
@@ -131,7 +135,7 @@ export async function getAdminErrorLogs(filters: AdminErrorLogFilters = {}): Pro
           { userId: { contains: query, mode: "insensitive" } },
         ],
       }
-    : {};
+    : PRODUCTION_ERROR_LOG_WHERE;
 
   const [totalCount, logs] = await Promise.all([
     appErrorLog.count({ where }),

@@ -24,6 +24,7 @@ async function main() {
     update: {
       email: "demo@finance.local",
       verified: true,
+      environment: "production",
       primaryGoal: "track_spending",
       onboardingCompletedAt: new Date(),
     },
@@ -31,6 +32,7 @@ async function main() {
       clerkUserId: "seed-demo-user",
       email: "demo@finance.local",
       verified: true,
+      environment: "production",
       planTier: "free",
       primaryGoal: "track_spending",
       onboardingCompletedAt: new Date(),

@@ -15075,8 +15075,30 @@ input.transaction-inline-edit--amount::placeholder {
     align-items: flex-start;
   }
 
+  .accounts-page__headline {
+    gap: 8px;
+  }
+
+  .accounts-page__headline-copy {
+    display: none;
+  }
+
   .accounts-overview-grid {
     grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .accounts-overview-card {
+    min-height: 74px;
+    padding: 8px 10px;
+  }
+
+  .accounts-overview-card .eyebrow {
+    font-size: 0.58rem;
+  }
+
+  .accounts-overview-card__amount {
+    font-size: 1.18rem;
   }
 
   .accounts-add-grid {
@@ -15114,6 +15136,47 @@ input.transaction-inline-edit--amount::placeholder {
 
   .accounts-detail__investment-grid {
     grid-template-columns: 1fr;
+  }
+
+  .transactions-topbar {
+    gap: 8px;
+  }
+
+  .transactions-toolbar-row--top,
+  .transactions-toolbar-row--bottom {
+    grid-template-columns: 1fr;
+  }
+
+  .transactions-toolbar-group {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .transactions-toolbar-group--right {
+    justify-content: flex-start;
+    justify-self: stretch;
+  }
+
+  .transactions-action-button {
+    min-height: 32px;
+    padding-inline: 8px;
+  }
+
+  .transactions-page .transactions-toolbar-chip.button-secondary,
+  .transactions-page .transactions-toolbar-add.button-primary {
+    width: 32px;
+    min-width: 32px;
+    padding-inline: 0;
+  }
+
+  .transactions-page .transactions-toolbar-chip.button-secondary > span:not(.button-icon),
+  .transactions-page .transactions-toolbar-add.button-primary > span:not(.button-icon) {
+    display: none;
+  }
+
+  .transactions-page .transactions-toolbar-chip.button-secondary .button-icon:last-child,
+  .transactions-page .transactions-toolbar-add.button-primary .button-icon:last-child {
+    display: none;
   }
 
   .accounts-drawer-backdrop {

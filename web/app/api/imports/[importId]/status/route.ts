@@ -1,6 +1,7 @@
-import { requireAuth } from "@/lib/auth";
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { fetchImportFileCompat, hasCompatibleTable } from "@/lib/data-engine";
+import { recoverStalledImportFiles } from "@/lib/import-recovery";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -9,7 +10,9 @@ export const dynamic = "force-dynamic";
 export async function GET(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   try {
     const { importId } = await params;
-    const { userId } = await requireAuth();
+    const localDev = await isLocalDevHost();
+    const { userId } = localDev ? { userId: "local-admin" } : await requireAuth();
+    await recoverStalledImportFiles(1);
 
     let importFile = await fetchImportFileCompat(importId);
 
@@ -17,7 +20,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       return NextResponse.json({ error: "Import not found" }, { status: 404 });
     }
 
-    await assertWorkspaceAccess(userId, importFile.workspaceId as string);
+    if (!localDev) {
+      await assertWorkspaceAccess(userId, importFile.workspaceId as string);
+    }
     let parsedRowsCount = Number(importFile.parsedRowsCount ?? 0);
     let confirmedTransactionsCount = Number(importFile.confirmedTransactionsCount ?? 0);
     const importAgeMs = Date.now() - importFile.updatedAt.getTime();
@@ -54,7 +59,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     const shouldAutoConfirm =
       parsedRowsCount > 0 &&
       confirmedTransactionsCount === 0 &&
-      importFile.status !== "failed" &&
+      importFile.status === "done" &&
+      importFile.processingPhase !== "auto_rerunning" &&
       !importFile.accountId;
 
     if (shouldAutoConfirm) {
@@ -86,6 +92,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         fileName: importFile.fileName,
         fileType: importFile.fileType,
         status: importFile.status,
+        processingPhase: importFile.processingPhase ?? null,
+        processingMessage: importFile.processingMessage ?? null,
+        processingAttempt: Number(importFile.processingAttempt ?? 0),
+        processingTargetScore: importFile.processingTargetScore ?? null,
+        processingCurrentScore: importFile.processingCurrentScore ?? null,
         accountId: importFile.accountId,
         confirmedAt: importFile.confirmedAt?.toISOString() ?? null,
         uploadedAt: importFile.uploadedAt.toISOString(),

@@ -30,6 +30,17 @@ export async function POST(request: Request) {
     const user = await getOrCreateCurrentUser(userId);
     const primaryGoal = payload.skipped ? null : payload.goal ?? payload.goals[0] ?? null;
     const targetAmount = payload.skipped || payload.targetAmount === null || payload.targetAmount === undefined ? null : new Prisma.Decimal(payload.targetAmount);
+    const goalPlan =
+      primaryGoal === null
+        ? null
+        : {
+            goalKey: primaryGoal,
+            targetMode: "amount",
+            cadence: "monthly",
+            targetAmount: targetAmount ? Number(targetAmount.toString()) : null,
+            targetPercent: null,
+            purpose: null,
+          };
 
     const updated = await prisma.$transaction(async (tx) => {
       const userUpdate = await tx.user.update({
@@ -40,6 +51,7 @@ export async function POST(request: Request) {
           primaryGoal,
           goalTargetAmount: targetAmount,
           goalTargetSource: targetAmount ? "onboarding" : null,
+          goalPlan: goalPlan === null ? Prisma.DbNull : (goalPlan as Prisma.InputJsonValue),
           onboardingCompletedAt: new Date(),
         },
       });
@@ -51,6 +63,7 @@ export async function POST(request: Request) {
             primaryGoal,
             targetAmount,
             source: "onboarding",
+            goalPlan: goalPlan === null ? Prisma.DbNull : (goalPlan as Prisma.InputJsonValue),
           },
         });
       }
@@ -58,13 +71,15 @@ export async function POST(request: Request) {
       return userUpdate;
     });
 
-      void capturePostHogServerEvent("onboarding_completed", userId, {
+    void capturePostHogServerEvent("onboarding_completed", userId, {
       experience: payload.experience ?? user.financialExperience ?? null,
       primary_goal: primaryGoal ?? null,
       start_action: payload.startAction ?? null,
       skipped: payload.skipped,
       goal_count: payload.goals.length,
       goal_target_amount: payload.targetAmount ? Number(payload.targetAmount) : null,
+      goal_target_mode: goalPlan?.targetMode ?? null,
+      goal_target_cadence: goalPlan?.cadence ?? null,
     });
 
     if (targetAmount !== null) {

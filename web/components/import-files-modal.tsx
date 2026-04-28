@@ -94,6 +94,25 @@ type QaRunSummary = {
   findings: QaFinding[];
 };
 
+type ImportStatusPayload = {
+  importFile?: {
+    status?: string;
+    accountId?: string | null;
+    processingPhase?: string | null;
+    processingMessage?: string | null;
+    processingAttempt?: number | null;
+    processingTargetScore?: number | null;
+    processingCurrentScore?: number | null;
+  };
+  parsedRowsCount?: number;
+  confirmedTransactionsCount?: number;
+  confirmationStatus?: string;
+  statementCheckpoint?: {
+    sourceMetadata?: Record<string, unknown> | null;
+    endingBalance?: string | null;
+  } | null;
+};
+
 const isPasswordError = (error: unknown) => {
   if (!error || typeof error !== "object") return false;
   const name = "name" in error ? String((error as { name?: unknown }).name ?? "") : "";
@@ -1039,10 +1058,12 @@ export function ImportFilesModal({
           throw new Error("Unable to load import status.");
         }
 
-        const payload = await response.json();
-        const importFile = payload.importFile as { status?: string; accountId?: string | null } | undefined;
+        const payload = (await response.json()) as ImportStatusPayload;
+        const importFile = payload.importFile;
         const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
         const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
+        const processingPhase = typeof importFile?.processingPhase === "string" ? importFile.processingPhase : null;
+        const processingMessage = typeof importFile?.processingMessage === "string" ? importFile.processingMessage : null;
 
         if (importFile?.status === "failed") {
           updateItem(itemId, {
@@ -1053,6 +1074,20 @@ export function ImportFilesModal({
             progressLabel: "Import failed",
           });
           return;
+        }
+
+        if (importFile?.status === "processing" && processingPhase) {
+          updateItem(itemId, {
+            status: "importing",
+            progress: Math.max(90, Math.min(98, 90 + Number(importFile.processingAttempt ?? 0))),
+            progressLabel:
+              processingMessage ??
+              (processingPhase === "auto_rerunning"
+                ? `Auto-rerun ${Number(importFile.processingAttempt ?? 0)}/${Number(importFile.processingTargetScore ?? 95)} in progress`
+                : "Parsing in background"),
+          });
+          await sleep(600);
+          continue;
         }
 
         if (confirmedTransactionsCount > 0 || importFile?.accountId) {

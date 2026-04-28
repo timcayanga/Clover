@@ -3,9 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { syncClerkUser, type SyncedClerkUser } from "@/lib/clerk";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { reconcileBillingPlanTier } from "@/lib/paypal-billing";
+import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/lib/user-environment";
 
 export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User> => {
   const clerkUser: SyncedClerkUser = await syncClerkUser(clerkUserId);
+  const currentEnvironment = getCurrentUserEnvironment();
   const existing = await prisma.user.findUnique({
     where: { clerkUserId: clerkUser.clerkUserId },
   });
@@ -18,6 +20,10 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
         firstName: clerkUser.firstName,
         lastName: clerkUser.lastName,
         verified: clerkUser.verified,
+        environment: resolvePersistedUserEnvironment(
+          currentEnvironment,
+          existing?.environment
+        ),
       },
       create: {
         clerkUserId: clerkUser.clerkUserId,
@@ -25,6 +31,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
         firstName: clerkUser.firstName,
         lastName: clerkUser.lastName,
         verified: clerkUser.verified,
+        environment: currentEnvironment,
         planTier: "free",
       },
     });
@@ -66,6 +73,10 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
         firstName: clerkUser.firstName,
         lastName: clerkUser.lastName,
         verified: clerkUser.verified,
+        environment: resolvePersistedUserEnvironment(
+          currentEnvironment,
+          existingByEmail.environment
+        ),
       },
     });
 

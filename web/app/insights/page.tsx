@@ -15,7 +15,7 @@ import {
   isFixedIncomeInvestmentSubtype,
   isMarketInvestmentSubtype,
 } from "@/lib/investments";
-import { getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
+import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const dynamic = "force-dynamic";
@@ -530,6 +530,8 @@ async function InsightsPageStream() {
   const spendDelta = previousSpend > 0 ? ((currentSpend - previousSpend) / previousSpend) * 100 : null;
   const incomeDelta =
     previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
+  const currentGoalPlan = normalizeGoalPlan(user.goalPlan, selectedGoalValue as GoalKey | null, goalTargetAmount);
+  const goalPlanSummary = getGoalPlanSummary(currentGoalPlan, currentSummary.income > 0 ? currentSummary.income : null);
 
   const topCategories = Array.from(currentSummary.expenseCategories.entries())
     .sort((a, b) => b[1] - a[1])
@@ -621,6 +623,7 @@ async function InsightsPageStream() {
   const goalProgress = getGoalProgressSnapshot({
     goalKey: selectedGoalValue as GoalKey | null,
     targetAmount: goalTargetAmount,
+    goalPlan: currentGoalPlan,
     currentNet,
     currentSpend,
     monthlyIncome: currentSummary.income > 0 ? currentSummary.income : null,
@@ -672,7 +675,7 @@ async function InsightsPageStream() {
       value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
       note:
         goalLabel !== null && goalTargetAmount !== null
-          ? `${goalProgress.bandLabel} · ${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}`
+          ? `${goalProgress.bandLabel} · ${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}${goalPlanSummary?.subtitle ? ` · ${goalPlanSummary.subtitle}` : ""}`
           : goalLabel ?? "No primary goal set yet",
       tone: currentSavingsRate !== null && currentSavingsRate >= 0.2 ? "positive" : "neutral",
     },

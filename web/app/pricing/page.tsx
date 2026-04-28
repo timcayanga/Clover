@@ -73,10 +73,7 @@ export default async function PricingPage() {
           <span className="legal-page__eyebrow">Clover</span>
           <h1>Pricing</h1>
           <p>Choose a plan that fits the way you want to understand your money.</p>
-          <p>
-            Start free if you want to explore Clover first. Upgrade to Pro when you need higher limits, more reporting room, and more AI insights
-            each month.
-          </p>
+          <p>Start free if you want to explore Clover first. Upgrade to Pro when you need higher limits and advanced reports.</p>
         </header>
 
         <section className="pricing-page__comparison" aria-label="Clover pricing plans">
@@ -144,15 +141,11 @@ export default async function PricingPage() {
               </li>
               <li>
                 <CheckIcon />
-                <span>Receipt scanning.</span>
+                <span>20 accounts.</span>
               </li>
               <li>
                 <CheckIcon />
-                <span>Unlimited accounts.</span>
-              </li>
-              <li>
-                <CheckIcon />
-                <span>Unlimited monthly uploads, including statements and receipts.</span>
+                <span>100 monthly uploads total.</span>
               </li>
               <li>
                 <CheckIcon />
@@ -172,8 +165,8 @@ export default async function PricingPage() {
             <h2>More room means more clarity.</h2>
           </div>
           <p>
-            Clover is most useful when it can see a fuller picture of your money. Pro gives you the headroom to bring in more statements, track more
-            of your finances, and get better reports and AI guidance over time.
+            Clover is most useful when it can see a fuller picture of your money. Pro gives you the headroom to bring in more statements, organize
+            more of your finances, and get better reports over time.
           </p>
         </section>
 

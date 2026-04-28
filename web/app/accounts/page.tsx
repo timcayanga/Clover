@@ -741,9 +741,14 @@ function AccountsPageContent() {
         setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current, deletedAccountIdsRef.current));
         setAccountRules(Array.isArray(payload.accountRules) ? payload.accountRules : []);
         setStatementCheckpoints(Array.isArray(payload.statementCheckpoints) ? (payload.statementCheckpoints as StatementCheckpoint[]) : []);
+      } else {
         if (!options?.silent) {
-          setHasInitialWorkspaceDataLoaded(true);
+          setMessage("Unable to load accounts for this workspace.");
         }
+      }
+
+      if (!options?.silent) {
+        setHasInitialWorkspaceDataLoaded(true);
       }
 
       if (!options?.silent) {

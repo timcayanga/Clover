@@ -92,12 +92,17 @@ model User {
   firstName             String?
   lastName              String?
   verified              Boolean                   @default(false)
+  environment           String                    @default("production")
   planTier              PlanTier                  @default(free)
   planTierLocked        Boolean                   @default(false)
+  accountLimit          Int?
+  monthlyUploadLimit    Int?
+  transactionLimit      Int?
   financialExperience   FinancialExperienceLevel? @default(beginner)
   primaryGoal           String?
   goalTargetAmount      Decimal?                  @db.Decimal(18, 2)
   goalTargetSource      String?
+  goalPlan              Json?
   onboardingCompletedAt DateTime?
   dataWipedAt           DateTime?
   createdAt             DateTime                  @default(now())
@@ -106,6 +111,7 @@ model User {
   goalSettings          GoalSetting[]
   billingSubscription   BillingSubscription?
   billingEvents         BillingEvent[]
+  appErrorLogs          AppErrorLog[]
 }
 
 model BillingSubscription {
@@ -153,6 +159,35 @@ model BillingEvent {
   @@index([eventType])
 }
 
+model AppErrorLog {
+  id            String    @id @default(cuid())
+  message       String
+  name          String?
+  stack         String?
+  source        String
+  route         String?
+  url           String?
+  method        String?
+  statusCode    Int?
+  buildId       String
+  deploymentId  String?
+  environment   String
+  userAgent     String?
+  clerkUserId   String?
+  userId        String?
+  workspaceId   String?
+  metadata      Json?
+  occurredAt    DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([occurredAt])
+  @@index([buildId])
+  @@index([environment])
+  @@index([source])
+  @@index([userId])
+}
+
 model Workspace {
   id                   String                       @id @default(cuid())
   userId               String
@@ -171,6 +206,8 @@ model Workspace {
   merchantRules        MerchantRule[]
   accountRules         AccountRule[]
   trainingSignals      TrainingSignal[]
+  dataQaRuns           DataQaRun[]
+  dataQaFindings       DataQaFinding[]
 
   @@index([userId])
 }
@@ -251,6 +288,7 @@ model Transaction {
   importFile             ImportFile?      @relation(fields: [importFileId], references: [id], onDelete: SetNull)
   category               Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   trainingSignals        TrainingSignal[]
+  dataQaFindings         DataQaFinding[]
 
   @@index([workspaceId])
   @@index([accountId])
@@ -268,6 +306,11 @@ model ImportFile {
   fileType                   String
   storageKey                 String
   status                     ImportFileStatus            @default(processing)
+  processingPhase            String?
+  processingMessage          String?
+  processingAttempt          Int                         @default(0)
+  processingTargetScore      Int?
+  processingCurrentScore     Int?
   parsedRowsCount            Int                         @default(0)
   confirmedTransactionsCount Int                         @default(0)
   confirmedAt                DateTime?
@@ -280,6 +323,8 @@ model ImportFile {
   transactions               Transaction[]
   trainingSignals            TrainingSignal[]
   statementCheckpoint        AccountStatementCheckpoint?
+  dataQaRuns                 DataQaRun[]
+  dataQaFindings             DataQaFinding[]
 
   @@index([workspaceId])
   @@index([accountId])
@@ -368,11 +413,24 @@ model GoalSetting {
   primaryGoal  String?
   targetAmount Decimal? @db.Decimal(18, 2)
   source       String?
+  goalPlan     Json?
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([userId, createdAt])
+}
+
+model DataQaConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  title     String
+  body      String   @db.Text
+  updatedBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
 }
 
 model MerchantRule {
@@ -446,6 +504,67 @@ model TrainingSignal {
   @@index([transactionId])
   @@index([importFileId])
   @@index([merchantKey])
+}
+
+model DataQaRun {
+  id                String         @id @default(cuid())
+  workspaceId       String
+  importFileId      String?
+  source            String
+  stage             String?
+  status            String         @default("completed")
+  parserVersion     String?
+  parserDurationMs  Int?
+  totalDurationMs   Int?
+  score             Int            @default(0)
+  findingCount      Int            @default(0)
+  criticalCount     Int            @default(0)
+  feedbackPayload   Json?
+  manualFeedback    String?
+  manualFeedbackUpdatedAt DateTime?
+  manualFeedbackAuthorId  String?
+  fieldReviewPayload Json?
+  fieldReviewUpdatedAt DateTime?
+  fieldReviewAuthorId String?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  workspace         Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  importFile        ImportFile?    @relation(fields: [importFileId], references: [id], onDelete: SetNull)
+  findings          DataQaFinding[]
+
+  @@index([workspaceId])
+  @@index([importFileId])
+  @@index([source])
+  @@index([status])
+}
+
+model DataQaFinding {
+  id              String      @id @default(cuid())
+  workspaceId     String
+  dataQaRunId     String
+  importFileId    String?
+  transactionId   String?
+  code            String
+  severity        String
+  field           String?
+  message         String
+  observedValue   Json?
+  expectedValue   Json?
+  suggestion      String?
+  confidence      Int         @default(0)
+  metadata        Json?
+  createdAt       DateTime    @default(now())
+  workspace       Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  dataQaRun       DataQaRun   @relation(fields: [dataQaRunId], references: [id], onDelete: Cascade)
+  importFile      ImportFile? @relation(fields: [importFileId], references: [id], onDelete: SetNull)
+  transaction     Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([dataQaRunId])
+  @@index([importFileId])
+  @@index([transactionId])
+  @@index([code])
+  @@index([severity])
 }
 
 model AuditLog {

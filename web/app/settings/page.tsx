@@ -11,6 +11,7 @@ import { getEnv } from "@/lib/env";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getUserBillingSubscription } from "@/lib/paypal-billing";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
+import { getEffectiveUserLimits } from "@/lib/user-limits";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -92,6 +93,7 @@ async function SettingsPageStream() {
   ]);
 
   const billingSubscription = await getUserBillingSubscription(user.id);
+  const planLimits = getEffectiveUserLimits(user);
 
   return (
     <CloverShell active="settings" title="Settings">
@@ -120,6 +122,7 @@ async function SettingsPageStream() {
         paypalMonthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
         paypalAnnualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
         paypalBuyerCountry={env.PAYPAL_BUYER_COUNTRY ?? null}
+        planLimits={planLimits}
         planUsage={{
           accountCount,
           cashAccountCount,

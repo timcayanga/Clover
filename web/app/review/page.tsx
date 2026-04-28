@@ -1,14 +1,18 @@
+import nextDynamic from "next/dynamic";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PostHogEvent } from "@/components/posthog-analytics";
-import { ReviewWorkbench } from "@/components/review-workbench";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
 import { buildReviewQueueWhere } from "@/lib/review-queue";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+
+const ReviewWorkbench = nextDynamic(() => import("@/components/review-workbench").then((module) => module.ReviewWorkbench), {
+  loading: () => <div className="panel-muted">Loading review workbench...</div>,
+});
 
 export const dynamic = "force-dynamic";
 export const metadata = {

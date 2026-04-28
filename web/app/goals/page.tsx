@@ -15,10 +15,12 @@ import {
   getFinancialExperienceProfile,
   getGoalDefinition,
   getGoalMoneyLabel,
+  getGoalPlanSummary,
   getGoalProgressLabel,
   getGoalProgressSnapshot,
   getGoalPlaybook,
   getSuggestedGoalAmount,
+  normalizeGoalPlan,
   type GoalKey,
 } from "@/lib/goals";
 
@@ -70,10 +72,22 @@ type GoalTransaction = {
   merchantClean: string | null;
   account: {
     name: string;
+    type: string;
   };
   category: {
     name: string;
   } | null;
+};
+
+type InvestmentAccountSnapshot = {
+  id: string;
+  name: string;
+  institution: string | null;
+  investmentSubtype: string | null;
+  balance: unknown;
+  investmentCostBasis: unknown;
+  investmentPrincipal: unknown;
+  updatedAt: Date;
 };
 
 type MonthBucket = {
@@ -273,6 +287,7 @@ async function GoalsPageStream() {
     sixMonthSummaryRows,
     goalHistoryRows,
     currentWindowTransactionsQuery,
+    investmentAccountRows,
   ] = await Promise.all([
     prisma.$queryRaw<SummaryRow[]>`
       SELECT
@@ -334,6 +349,7 @@ async function GoalsPageStream() {
         primaryGoal: true,
         targetAmount: true,
         source: true,
+        goalPlan: true,
         createdAt: true,
       },
     }),
@@ -352,6 +368,7 @@ async function GoalsPageStream() {
         account: {
           select: {
             name: true,
+            type: true,
           },
         },
         category: {
@@ -362,6 +379,25 @@ async function GoalsPageStream() {
       },
       orderBy: { date: "desc" },
       take: 180,
+    }),
+    prisma.account.findMany({
+      where: {
+        workspaceId: resolvedWorkspace.id,
+        type: "investment",
+      },
+      select: {
+        id: true,
+        name: true,
+        institution: true,
+        investmentSubtype: true,
+        balance: true,
+        investmentCostBasis: true,
+        investmentPrincipal: true,
+        updatedAt: true,
+      },
+      orderBy: {
+        updatedAt: "desc",
+      },
     }),
   ]);
 
@@ -429,6 +465,9 @@ async function GoalsPageStream() {
   );
   const monthlyIncome = currentSummary.income > 0 ? currentSummary.income : null;
   const suggestedGoalTarget = getSuggestedGoalAmount(selectedGoalKey as GoalKey | null, monthlyIncome);
+  const latestGoalPlan = goalHistoryRows.length > 0 ? normalizeGoalPlan(goalHistoryRows[0].goalPlan, goalHistoryRows[0].primaryGoal as GoalKey | null, goalHistoryRows[0].targetAmount !== null && goalHistoryRows[0].targetAmount !== undefined ? Number(goalHistoryRows[0].targetAmount) : null) : null;
+  const currentGoalPlan = normalizeGoalPlan(user.goalPlan, selectedGoalKey as GoalKey | null, goalTargetAmount) ?? latestGoalPlan;
+  const goalPlanSummary = getGoalPlanSummary(currentGoalPlan, monthlyIncome);
 
   const monthBuckets = getMonthBuckets(now);
   sixMonthSummaryRows.forEach((row) => {
@@ -501,9 +540,25 @@ async function GoalsPageStream() {
 
   const recurringDrag = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0);
   const recurringShare = currentSpend > 0 ? recurringDrag / currentSpend : 0;
+  const investmentAccounts = investmentAccountRows as InvestmentAccountSnapshot[];
+  const investmentHoldings = investmentAccounts
+    .slice()
+    .sort((left, right) => Number(right.balance ?? 0) - Number(left.balance ?? 0));
+  const investmentHoldingsValue = investmentAccounts.reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
+  const investmentCostBasis = investmentAccounts.reduce((sum, account) => {
+    const basis = account.investmentCostBasis ?? account.investmentPrincipal;
+    return sum + Number(basis ?? 0);
+  }, 0);
+  const investmentGainLoss = investmentHoldingsValue - investmentCostBasis;
+  const investmentHoldingsCount = investmentAccounts.length;
+  const investmentFlow = currentWindowTransactions
+    .filter((transaction) => transaction.account.type === "investment" && transaction.type !== "income")
+    .reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0);
+  const topInvestmentHolding = investmentHoldings.length > 0 ? investmentHoldings[0] : null;
   const goalProgress = getGoalProgressSnapshot({
     goalKey: selectedGoalKey as GoalKey | null,
     targetAmount: goalTargetAmount,
+    goalPlan: currentGoalPlan,
     currentNet,
     currentSpend,
     monthlyIncome,
@@ -511,6 +566,10 @@ async function GoalsPageStream() {
     previousSavingsRate,
     spendDelta,
     recurringShare,
+    investmentValue: investmentHoldingsValue,
+    investmentGainLoss,
+    investmentFlow,
+    investmentHoldings: investmentHoldingsCount,
   });
   const uncategorizedShare = currentSpend > 0
     ? uncategorizedTransactions.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0) / currentSpend
@@ -633,6 +692,14 @@ async function GoalsPageStream() {
         : `${uncategorizedTransactions.length} items still need attention`,
     },
     {
+      label: "Investments",
+      value: investmentHoldingsCount > 0 ? currencyFormatter.format(investmentHoldingsValue) : "No holdings",
+      note:
+        investmentHoldingsCount > 0
+          ? `${investmentHoldingsCount} holding${investmentHoldingsCount === 1 ? "" : "s"} · ${investmentGainLoss >= 0 ? "+" : "-"}${formatCurrency(Math.abs(investmentGainLoss))} gain/loss`
+          : "Connect your Investments page to make this goal feel more real",
+    },
+    {
       label: "Momentum",
       value: goalScore.toString(),
       note: progressLabel,
@@ -708,9 +775,13 @@ async function GoalsPageStream() {
       ? goalHistoryRows.map((row) => {
           const rowGoal = getGoalDefinition(row.primaryGoal);
           const rowTarget = row.targetAmount !== null && row.targetAmount !== undefined ? Number(row.targetAmount) : null;
+          const rowPlan = normalizeGoalPlan(row.goalPlan, row.primaryGoal as GoalKey | null, rowTarget);
+          const rowPlanSummary = getGoalPlanSummary(rowPlan, monthlyIncome);
           return {
             label: formatShortDate(row.createdAt),
-            detail: `${rowGoal.title}${rowTarget !== null ? ` · ${formatCurrency(rowTarget)}` : " · No amount set"} · ${row.source === "onboarding" ? "Saved during onboarding" : "Updated in Goals"}`,
+            detail:
+              rowPlanSummary?.detail ??
+              `${rowGoal.title}${rowTarget !== null ? ` · ${formatCurrency(rowTarget)}` : " · No amount set"} · ${row.source === "onboarding" ? "Saved during onboarding" : "Updated in Goals"}`,
           };
         })
       : [
@@ -724,13 +795,29 @@ async function GoalsPageStream() {
     {
       text: hasGoalTarget
         ? goalProgress.achieved
-          ? `You reached your ${formatCurrency(goalTargetAmount)} monthly target. That is a real win.`
+          ? currentGoalPlan?.targetMode === "percent"
+            ? `You reached your salary-share target. That is a real win.`
+            : currentGoalPlan?.cadence === "annual"
+              ? `You are on pace for your annual goal. That is a real win.`
+              : `You reached your ${formatCurrency(goalTargetAmount)} monthly target. That is a real win.`
           : goalProgress.remainingAmount !== null
             ? `${formatCurrency(goalProgress.remainingAmount)} left to go this month. Keep the rhythm steady.`
             : goalProgress.nextAction
         : "Set a monthly target to unlock live progress tracking.",
       icon: goalProgress.achieved ? "spark" : hasGoalTarget ? "chart" : "target",
     },
+    investmentHoldingsCount > 0
+      ? {
+          text:
+            selectedGoalKey === "invest_better"
+              ? `Your portfolio is sitting at ${formatCurrency(investmentHoldingsValue)} across ${investmentHoldingsCount} holding${investmentHoldingsCount === 1 ? "" : "s"}.`
+              : `Your Investments page shows ${formatCurrency(investmentHoldingsValue)} in assets${topInvestmentHolding ? `, led by ${topInvestmentHolding.name}` : ""}.`,
+          icon: "chart" as const,
+        }
+      : {
+          text: "Open Investments to connect portfolio value with this goal.",
+          icon: "target" as const,
+        },
     uncategorizedTransactions.length > 0
       ? {
           text: `${uncategorizedTransactions.length} uncategorized transaction${uncategorizedTransactions.length === 1 ? "" : "s"} are softening the signal.`,
@@ -786,7 +873,19 @@ async function GoalsPageStream() {
     href: "/transactions",
     label: "Review now",
     icon: getChecklistIcon(focus),
-    }));
+  }));
+
+  const specificGoalSummary =
+    currentGoalPlan !== null
+      ? goalPlanSummary
+      : goalTargetAmount !== null
+        ? {
+            title: `${selectedGoal.title} monthly`,
+            detail: `Aim to set aside ${formatCurrency(goalTargetAmount)} each month${goalTargetSource ? ` · tracked from ${goalTargetSource}` : ""}.`,
+            subtitle: "Legacy monthly target",
+            targetAmount: goalTargetAmount,
+          }
+        : null;
 
   return (
     <CloverShell
@@ -970,6 +1069,102 @@ async function GoalsPageStream() {
             </article>
           </div>
         </article>
+
+        {specificGoalSummary || investmentAccounts.length > 0 ? (
+          <section className="goals-plan-grid">
+            {specificGoalSummary ? (
+              <article className="goals-plan glass">
+                <div className="goals-panel__head">
+                  <div>
+                    <p className="eyebrow">Specific goal</p>
+                    <h4>{specificGoalSummary.title}</h4>
+                  </div>
+                  <div className="goals-panel__stat">
+                    <strong>{specificGoalSummary.subtitle}</strong>
+                    <span>{goalTargetSource ?? "Saved goal"}</span>
+                  </div>
+                </div>
+
+                <div className="goals-plan__body">
+                  <GoalGlyph goalKey={selectedGoal.value} />
+                  <div>
+                    <p>{specificGoalSummary.detail}</p>
+                    <small>
+                      {goalProgress.achieved
+                        ? "You already hit the current target. Time to set the next one."
+                        : goalProgress.remainingAmount !== null
+                          ? `${formatCurrency(goalProgress.remainingAmount)} remains to close the gap this cycle.`
+                          : "Set a specific amount, cadence, or salary share to make the target more concrete."}
+                    </small>
+                  </div>
+                </div>
+              </article>
+            ) : null}
+
+            <article className="goals-investments glass">
+              <div className="goals-panel__head">
+                <div>
+                  <p className="eyebrow">Investments</p>
+                  <h4>What your portfolio adds to the plan</h4>
+                </div>
+                <div className="goals-panel__stat">
+                  <strong>{investmentAccounts.length}</strong>
+                  <span>Holdings tracked</span>
+                </div>
+              </div>
+
+              {investmentAccounts.length > 0 ? (
+                <>
+                  <div className="goals-investments__metrics">
+                    <div>
+                      <span>Portfolio value</span>
+                      <strong>{formatCurrency(investmentHoldingsValue)}</strong>
+                      <small>{investmentHoldingsCount} holding{investmentHoldingsCount === 1 ? "" : "s"} total</small>
+                    </div>
+                    <div>
+                      <span>Gain / loss</span>
+                      <strong className={investmentGainLoss >= 0 ? "positive" : "negative"}>
+                        {investmentGainLoss >= 0 ? "+" : "-"}
+                        {formatCurrency(Math.abs(investmentGainLoss))}
+                      </strong>
+                      <small>{investmentCostBasis > 0 ? `${formatPercent((investmentGainLoss / investmentCostBasis) * 100)} vs cost basis` : "No cost basis yet"}</small>
+                    </div>
+                    <div>
+                      <span>Monthly flow</span>
+                      <strong>{formatCurrency(investmentFlow)}</strong>
+                      <small>Investment movement this month</small>
+                    </div>
+                  </div>
+
+                  <div className="goals-investments__list">
+                    {investmentHoldings.slice(0, 3).map((account) => (
+                      <div key={account.id} className="goals-investments__item">
+                        <div>
+                          <strong>{account.name}</strong>
+                          <span>
+                            {account.investmentSubtype ?? "investment"}
+                            {account.institution ? ` · ${account.institution}` : ""}
+                          </span>
+                        </div>
+                        <strong>{formatCurrency(Number(account.balance ?? 0))}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="goals-investments__empty">
+                  <p>
+                    Open Investments to bring portfolio values into the goal plan. That makes investing targets feel like
+                    real money movement instead of just a monthly wish.
+                  </p>
+                  <Link className="pill-link pill-link--inline" href="/investments">
+                    Open Investments
+                  </Link>
+                </div>
+              )}
+            </article>
+          </section>
+        ) : null}
 
         <article className="goals-action-plan glass">
           <div className="goals-panel__head">
@@ -1253,6 +1448,8 @@ async function GoalsPageStream() {
             goals={GOAL_OPTIONS}
             currentGoal={selectedGoalKey}
             currentTargetAmount={goalTargetAmount !== null ? String(goalTargetAmount) : null}
+            currentGoalPlan={currentGoalPlan}
+            monthlyIncome={monthlyIncome}
             suggestedTargetAmount={suggestedGoalTarget}
           />
         </div>
