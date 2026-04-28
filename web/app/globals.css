@@ -543,16 +543,6 @@ label {
   padding: 2px 2px 4px;
 }
 
-.sidebar-header__copy {
-  display: grid;
-  gap: 2px;
-}
-
-.sidebar-header__copy strong {
-  font-size: 15px;
-  letter-spacing: -0.02em;
-}
-
 .sidebar-close-button {
   appearance: none;
   border: 1px solid var(--stroke);
@@ -12259,37 +12249,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .admin-data-qa-summary__table-wrap {
-  overflow-x: auto;
-}
-
-.admin-data-qa-summary__table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.admin-data-qa-summary__table th,
-.admin-data-qa-summary__table td {
-  padding: 12px 14px;
-  border-top: 1px solid rgba(3, 168, 192, 0.12);
-  vertical-align: top;
-  text-align: left;
-}
-
-.admin-data-qa-summary__table th {
-  font-size: 0.76rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
-  background: rgba(3, 168, 192, 0.03);
-}
-
-.admin-data-qa-summary__bank-name {
-  display: grid;
-  gap: 4px;
-}
-
-.admin-data-qa-summary__bank-name small {
-  color: var(--muted);
+  overflow: visible;
 }
 
 .admin-data-qa-summary__file-list {
@@ -12313,6 +12273,10 @@ input.transaction-inline-edit--amount::placeholder {
   font-weight: 600;
 }
 
+.admin-data-qa-summary__file-chip .admin-data-qa__truncated-name {
+  max-width: 100%;
+}
+
 .admin-data-qa-summary__file-chip a:hover,
 .admin-data-qa-summary__file-chip a:focus-visible {
   text-decoration: underline;
@@ -12321,6 +12285,181 @@ input.transaction-inline-edit--amount::placeholder {
 .admin-data-qa-summary__file-chip small {
   color: var(--muted);
   font-size: 0.75rem;
+}
+
+.admin-data-qa-summary__bank-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-data-qa-summary__bank-card {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-data-qa-summary__bank-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-data-qa-summary__bank-card-head h3 {
+  margin: 0;
+}
+
+.admin-data-qa-summary__bank-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-data-qa-summary__bank-stats div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.8);
+}
+
+.admin-data-qa-summary__bank-stats strong {
+  font-size: 18px;
+}
+
+.admin-data-qa-summary__bank-stats span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-data-qa-summary__card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-data-qa-bank-detail__file-list {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-data-qa-bank-detail__table {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-data-qa-bank-detail__table-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 2.2fr) minmax(110px, 0.8fr) minmax(80px, 0.55fr) minmax(70px, 0.45fr) minmax(90px, 0.55fr) minmax(100px, 0.6fr) minmax(220px, 1.3fr);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.admin-data-qa-bank-detail__table-row--head {
+  background: rgba(245, 248, 250, 0.98);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-data-qa-bank-detail__table-row > span {
+  min-width: 0;
+  font-size: 0.9rem;
+}
+
+.admin-data-qa-bank-detail__table-file {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-data-qa-bank-detail__table-file strong {
+  display: block;
+  font-size: 0.92rem;
+}
+
+.admin-data-qa-bank-detail__table-file small {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.admin-data-qa-bank-detail__table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-data-qa-bank-detail__file-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.admin-data-qa-bank-detail__file-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-data-qa-bank-detail__file-head strong {
+  display: block;
+}
+
+.admin-data-qa-bank-detail__file-head .admin-data-qa__truncated-name {
+  max-width: 100%;
+}
+
+.admin-data-qa-bank-detail__file-head small {
+  color: var(--muted);
+}
+
+.admin-data-qa-bank-detail__file-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.admin-data-qa-bank-detail__file-metrics div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 16px;
+  background: rgba(248, 250, 252, 0.8);
+}
+
+.admin-data-qa-bank-detail__file-metrics strong {
+  font-size: 18px;
+}
+
+.admin-data-qa-bank-detail__file-metrics span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-data-qa-bank-detail__file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-data-qa__truncated-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .admin-data-qa__run-meta {
@@ -14751,7 +14890,8 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
   }
 
   .accounts-detail__summary {
@@ -15084,21 +15224,24 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-overview-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
   }
 
   .accounts-overview-card {
-    min-height: 74px;
-    padding: 8px 10px;
+    min-height: 62px;
+    padding: 7px 8px;
+    border-radius: 16px;
   }
 
   .accounts-overview-card .eyebrow {
-    font-size: 0.58rem;
+    margin-bottom: 4px;
+    font-size: 0.5rem;
   }
 
   .accounts-overview-card__amount {
-    font-size: 1.18rem;
+    font-size: 1rem;
+    line-height: 1.05;
   }
 
   .accounts-add-grid {
@@ -15127,7 +15270,63 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-card-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .accounts-group {
+    padding: 8px;
+    gap: 6px;
+    border-radius: 14px;
+  }
+
+  .accounts-group__head h5 {
+    font-size: 0.88rem;
+  }
+
+  .accounts-group__head p {
+    font-size: 0.68rem;
+  }
+
+  .accounts-account-card {
+    padding: 8px;
+    gap: 8px;
+    border-radius: 14px;
+  }
+
+  .accounts-account-card__head {
+    gap: 6px;
+  }
+
+  .accounts-account-card__brand {
+    gap: 6px;
+  }
+
+  .accounts-account-card__brand strong {
+    font-size: 0.76rem;
+  }
+
+  .accounts-account-card__brand span {
+    margin-top: 1px;
+    font-size: 0.62rem;
+  }
+
+  .accounts-account-card__amount {
+    font-size: 0.94rem;
+  }
+
+  .accounts-account-card__balance-pill {
+    min-height: 16px;
+    padding: 0 4px;
+    font-size: 0.56rem;
+  }
+
+  .accounts-row-button {
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
+    min-height: 26px;
+    padding: 0;
   }
 
   .accounts-detail__summary {
@@ -17297,8 +17496,23 @@ input.transaction-inline-edit--amount::placeholder {
   .settings-data-delete,
   .settings-plan-grid,
   .settings-plan-usage,
-  .admin-data-qa__sample-grid {
+  .admin-data-qa__sample-grid,
+  .admin-data-qa-summary__bank-grid,
+  .admin-data-qa-summary__bank-stats,
+  .admin-data-qa-bank-detail__file-metrics {
     grid-template-columns: 1fr;
+  }
+
+  .admin-data-qa-bank-detail__table-row {
+    grid-template-columns: minmax(200px, 1.6fr) minmax(100px, 0.75fr) minmax(70px, 0.5fr) minmax(60px, 0.45fr) minmax(80px, 0.55fr) minmax(90px, 0.6fr);
+  }
+
+  .admin-data-qa-bank-detail__table-row--head {
+    display: none;
+  }
+
+  .admin-data-qa-bank-detail__table-actions {
+    grid-column: 1 / -1;
   }
 
   .settings-hub__brand {
@@ -17350,5 +17564,15 @@ input.transaction-inline-edit--amount::placeholder {
   .accounts-detail__transaction-category,
   .accounts-detail__transaction-type {
     display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-data-qa-bank-detail__table-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-data-qa-bank-detail__table-actions {
+    grid-column: auto;
   }
 }

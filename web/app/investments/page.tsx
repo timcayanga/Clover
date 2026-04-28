@@ -207,7 +207,8 @@ export default function InvestmentsPage() {
   const initialWorkspaceId = readSelectedWorkspaceId();
   const initialCachedWorkspace = getCachedAccountsWorkspace(initialWorkspaceId);
   const searchParams = useSearchParams();
-  const searchQueryFromUrl = searchParams.get("q") ?? "";
+  const urlSearchParams = useMemo(() => searchParams ?? new URLSearchParams(), [searchParams]);
+  const searchQueryFromUrl = urlSearchParams.get("q") ?? "";
 
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
   const [accounts, setAccounts] = useState<Account[]>(() => (initialCachedWorkspace?.accounts as Account[]) ?? []);

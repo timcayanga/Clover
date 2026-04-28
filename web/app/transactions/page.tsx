@@ -607,9 +607,8 @@ const createEmptyBulkEditForm = (): BulkEditForm => ({
 
 const normalizeFilterValue = (value: string) => value.trim().toLowerCase();
 
-const readSearchParamValues = (searchParams: ReturnType<typeof useSearchParams>, key: string) =>
-  searchParams
-    .getAll(key)
+const readSearchParamValues = (searchParams: { getAll: (key: string) => string[] } | null, key: string) =>
+  (searchParams?.getAll(key) ?? [])
     .flatMap((entry) => splitMerchantFilters(entry))
     .map((entry) => entry.trim())
     .filter(Boolean);
@@ -1126,6 +1125,7 @@ export default function TransactionsPage() {
 
 function TransactionsPageContent() {
   const searchParams = useSearchParams();
+  const urlSearchParams = useMemo(() => searchParams ?? new URLSearchParams(), [searchParams]);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const manualNameInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
@@ -1370,7 +1370,7 @@ function TransactionsPageContent() {
     searchParams.set("summaryMode", options?.summaryMode ?? (options?.background ? "full" : "light"));
 
     try {
-      const response = await fetch(`/api/transactions?${searchParams.toString()}`);
+      const response = await fetch(`/api/transactions?${searchParams?.toString() ?? ""}`);
       if (!response.ok) {
         throw new Error("Unable to load transactions.");
       }
@@ -1650,7 +1650,7 @@ function TransactionsPageContent() {
   }, [manualOpen]);
 
   useEffect(() => {
-    const reviewTransactionId = searchParams.get("review");
+    const reviewTransactionId = urlSearchParams.get("review");
     if (!reviewTransactionId || !isWorkspaceDataReady || !transactions.length) {
       return;
     }
@@ -1669,7 +1669,7 @@ function TransactionsPageContent() {
     const nextUrl = new URL(window.location.href);
     nextUrl.searchParams.delete("review");
     window.history.replaceState({}, "", `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
-  }, [isWorkspaceDataReady, searchParams, transactions]);
+  }, [isWorkspaceDataReady, searchParams, transactions, urlSearchParams]);
 
   const closeToolbarMenus = () => {
     setAddMenuOpen(false);
@@ -1693,18 +1693,18 @@ function TransactionsPageContent() {
   };
 
   useEffect(() => {
-    if (searchParams.get("import") === "1") {
+    if (urlSearchParams.get("import") === "1") {
       setImportOpen(true);
       window.history.replaceState({}, "", "/transactions");
     }
-  }, [searchParams]);
+  }, [urlSearchParams]);
 
   useEffect(() => {
-    if (searchParams.get("manual") === "1") {
+    if (urlSearchParams.get("manual") === "1") {
       setManualOpen(true);
       window.history.replaceState({}, "", "/transactions");
     }
-  }, [searchParams]);
+  }, [urlSearchParams]);
 
   useEffect(() => {
     if (!isWorkspaceDataReady) {
@@ -1712,22 +1712,22 @@ function TransactionsPageContent() {
     }
 
     const drilldownSignature = [
-      searchParams.get("q") ?? "",
-      searchParams.get("month") ?? "",
-      searchParams.get("merchant") ?? "",
-      searchParams.get("category") ?? "",
-      searchParams.get("account") ?? "",
+      urlSearchParams.get("q") ?? "",
+      urlSearchParams.get("month") ?? "",
+      urlSearchParams.get("merchant") ?? "",
+      urlSearchParams.get("category") ?? "",
+      urlSearchParams.get("account") ?? "",
     ].join("|");
 
     if (drilldownParamRef.current === drilldownSignature) {
       return;
     }
 
-    const q = searchParams.get("q") ?? "";
-    const month = searchParams.get("month") ?? "";
-    const merchants = readSearchParamValues(searchParams, "merchant");
-    const categoriesFromUrl = readSearchParamValues(searchParams, "category");
-    const accountsFromUrl = readSearchParamValues(searchParams, "account");
+    const q = urlSearchParams.get("q") ?? "";
+    const month = urlSearchParams.get("month") ?? "";
+    const merchants = readSearchParamValues(urlSearchParams, "merchant");
+    const categoriesFromUrl = readSearchParamValues(urlSearchParams, "category");
+    const accountsFromUrl = readSearchParamValues(urlSearchParams, "account");
 
     const hasDrilldownParams = Boolean(q || month || merchants.length > 0 || categoriesFromUrl.length > 0 || accountsFromUrl.length > 0);
 
@@ -3103,7 +3103,7 @@ function TransactionsPageContent() {
       }
     );
 
-    const response = await fetch(`/api/transactions?${searchParams.toString()}`);
+    const response = await fetch(`/api/transactions?${searchParams?.toString() ?? ""}`);
     if (!response.ok) {
       throw new Error("Unable to export transactions.");
     }

@@ -364,7 +364,7 @@ export function CloverShell({
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
   const profileImage = user?.imageUrl ?? null;
   const profileBackground = avatarBackgrounds[hashString(displayName) % avatarBackgrounds.length];
-  const isProfileActive = active === "profile" || pathname.startsWith("/profile");
+  const isProfileActive = active === "profile" || pathname?.startsWith("/profile");
   const isNotificationsActive = openMenu === "notifications";
   const isProfileMenuOpen = openMenu === "profile";
 

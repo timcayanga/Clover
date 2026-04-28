@@ -572,14 +572,14 @@ export default function AccountsPage() {
 function AccountsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const searchQueryFromUrl = searchParams.get("q") ?? "";
+  const searchQueryFromUrl = searchParams?.get("q") ?? "";
   const addRef = useRef<HTMLDivElement>(null);
   const balanceInputRef = useRef<HTMLInputElement>(null);
   const workspaceLoadSeqRef = useRef(0);
   const deletedAccountIdsRef = useRef(new Set<string>(getDeletedWorkspaceAccountIds(readSelectedWorkspaceId())));
   const initialWorkspaceId = readSelectedWorkspaceId();
-  const deletingAccountIdFromQuery = searchParams.get("deletingAccountId");
-  const deletingWorkspaceIdFromQuery = searchParams.get("deletingWorkspaceId");
+  const deletingAccountIdFromQuery = searchParams?.get("deletingAccountId");
+  const deletingWorkspaceIdFromQuery = searchParams?.get("deletingWorkspaceId");
   const initialCachedWorkspace = getCachedAccountsWorkspace(initialWorkspaceId);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -821,19 +821,19 @@ function AccountsPageContent() {
   }, [selectedWorkspaceId]);
 
   useEffect(() => {
-    if (searchParams.get("import") === "1") {
+    if (searchParams?.get("import") === "1") {
       setImportOpen(true);
       router.replace("/accounts");
     }
   }, [router, searchParams]);
 
   useEffect(() => {
-    const deletingAccountId = searchParams.get("deletingAccountId");
+    const deletingAccountId = searchParams?.get("deletingAccountId");
     if (!deletingAccountId) {
       return;
     }
 
-    const activeWorkspaceId = searchParams.get("deletingWorkspaceId") ?? readSelectedWorkspaceId() ?? selectedWorkspaceId;
+    const activeWorkspaceId = searchParams?.get("deletingWorkspaceId") ?? readSelectedWorkspaceId() ?? selectedWorkspaceId;
     if (!activeWorkspaceId) {
       return;
     }
@@ -842,7 +842,7 @@ function AccountsPageContent() {
     deletingAccountIdsRef.current.add(deletingAccountId);
     setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
 
-    const nextSearchParams = new URLSearchParams(searchParams.toString());
+    const nextSearchParams = new URLSearchParams(searchParams?.toString() ?? "");
     nextSearchParams.delete("deletingAccountId");
     nextSearchParams.delete("deletingWorkspaceId");
     const nextQuery = nextSearchParams.toString();

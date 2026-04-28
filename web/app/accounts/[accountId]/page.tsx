@@ -318,7 +318,7 @@ export default function AccountDetailPage() {
 function AccountDetailPageContent() {
   const router = useRouter();
   const params = useParams<{ accountId: string }>();
-  const accountId = params.accountId;
+  const accountId = params?.accountId ?? "";
 
   const [account, setAccount] = useState<Account | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);

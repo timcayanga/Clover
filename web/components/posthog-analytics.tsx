@@ -113,7 +113,7 @@ function PostHogBootstrap({ token, host }: PostHogScriptProps) {
 function PostHogPageViews() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const search = searchParams.toString();
+  const search = searchParams?.toString() ?? "";
 
   useEffect(() => {
     runWhenPostHogReady(() => {
@@ -223,7 +223,7 @@ export function PostHogEvent({ event, properties = {}, onceKey }: PostHogEventPr
 export function PostHogPageEvent({ event, properties }: Omit<PostHogEventProps, "onceKey">) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const search = searchParams.toString();
+  const search = searchParams?.toString() ?? "";
 
   useEffect(() => {
     if (!shouldTrackAnalytics()) {
