@@ -661,7 +661,13 @@ async function InsightsPageStream() {
           .filter((line): line is string => line !== null)
           .join(" ");
   const aiSummaryWithInvestments = investmentSummaryLine ? `${aiSummary} ${investmentSummaryLine}` : aiSummary;
-  const primarySnapshotItems = [
+  const primarySnapshotItems: Array<{
+    label: string;
+    value: string;
+    note: string;
+    tone: "positive" | "negative" | "neutral";
+    suffix?: string;
+  }> = [
     {
       label: "Net position",
       value: formatSignedCurrency(currentNet),

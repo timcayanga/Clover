@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { persistSelectedWorkspaceId } from "@/lib/workspace-selection";
@@ -13,6 +14,7 @@ type ProfileCenterProps = {
 export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
   const { isLoaded, isSignedIn, user } = useUser();
   const { signOut } = useClerk();
+  const pathname = usePathname();
   const currentDisplayName =
     user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
   const email = user?.primaryEmailAddress?.emailAddress ?? "tim@example.com";
@@ -26,6 +28,7 @@ export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
   }, [currentDisplayName]);
 
   const initial = displayName.trim().slice(0, 1).toUpperCase();
+  const helpHref = pathname ? `/help?returnTo=${encodeURIComponent(pathname)}` : "/help";
 
   const handleSave = () => {
     if (!isLoaded || !isSignedIn || !user) {
@@ -83,6 +86,9 @@ export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
           <Link className="button button-primary button-small" href="/settings">
             Open settings
           </Link>
+          <Link className="button button-secondary button-small" href={helpHref}>
+            Open help center
+          </Link>
           <Link className="button button-secondary button-small" href="/dashboard">
             Back to dashboard
           </Link>
@@ -128,7 +134,7 @@ export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
             <Link className="profile-shortcut" href="/settings">
               Open settings
             </Link>
-            <Link className="profile-shortcut" href="/help">
+            <Link className="profile-shortcut" href={helpHref}>
               Open help center
             </Link>
             <Link className="profile-shortcut" href="/transactions">
