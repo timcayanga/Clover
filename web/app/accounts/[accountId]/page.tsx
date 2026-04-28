@@ -1,18 +1,47 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
-import { deriveReconciledBalance } from "@/lib/account-balance";
+import { InfoTooltip } from "@/components/info-tooltip";
 import { getAccountBrand } from "@/lib/account-brand";
-import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import { deriveReconciledBalance } from "@/lib/account-balance";
+import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
+import { formatTransactionDirectionLabel } from "@/lib/transaction-directions";
+import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
+import {
+  clearWorkspaceCache,
+  clearDeletingWorkspaceAccount,
+  getDeletedWorkspaceAccountIds,
+  getDeletingWorkspaceAccountIds,
+  markDeletedWorkspaceAccount,
+  markDeletingWorkspaceAccount,
+  normalizeImportedAccountKey,
+} from "@/lib/workspace-cache";
+import {
+  getInvestmentFieldConfigs,
+  getInvestmentSubtypeLabel,
+  type InvestmentSubtype,
+  isFixedIncomeInvestmentSubtype,
+  isMarketInvestmentSubtype,
+} from "@/lib/investments";
 
 type Account = {
   id: string;
   workspaceId: string;
   name: string;
   institution: string | null;
+  investmentSubtype: InvestmentSubtype | null;
+  investmentSymbol: string | null;
+  investmentQuantity: string | null;
+  investmentCostBasis: string | null;
+  investmentPrincipal: string | null;
+  investmentStartDate: string | null;
+  investmentMaturityDate: string | null;
+  investmentInterestRate: string | null;
+  investmentMaturityValue: string | null;
   type: string;
   currency: string;
   source: string;
@@ -61,6 +90,8 @@ const currencyFormatter = new Intl.NumberFormat("en-PH", {
   minimumFractionDigits: 2,
 });
 
+const TRANSACTION_PAGE_SIZE = 25;
+
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", {
     day: "2-digit",
@@ -70,19 +101,132 @@ const formatDate = (value: string) =>
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
-const isSpendableAccountType = (value: string) => value === "bank" || value === "wallet" || value === "cash";
+const normalizeAccountBalance = (type: Account["type"] | null | undefined, value: number) =>
+  type === "credit_card" ? -Math.abs(value) : Math.abs(value);
 
-const getBalanceContext = (accountType: string) => {
-  if (accountType === "credit_card") {
-    return { label: "Outstanding balance", tone: "danger" as const };
+const ACCOUNT_DETAILS_GUIDE =
+  "Use this page to confirm one account's balance, review its recent activity, and check whether imported statements match the running history.";
+
+const ACCOUNT_DETAILS_INFO = {
+  currentBalance: "The latest balance Clover is showing for this account after imports, edits, and reconciliation.",
+  status: "Shows whether this account is active or currently being deleted.",
+  accountType: "The account type controls how Clover groups this account and how totals are calculated.",
+  reconciliation: "Reconciliation compares a statement ending balance with Clover's running account history.",
+  transactions: "Transactions are the individual money movements that changed this account over time.",
+} as const;
+
+const parseNullableNumber = (value: string | null | undefined) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
   }
-  if (accountType === "investment") {
-    return { label: "Held balance", tone: "neutral" as const };
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const normalized = hex.trim().replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) {
+    return `rgba(14, 165, 183, ${alpha})`;
   }
-  if (isSpendableAccountType(accountType)) {
-    return { label: "Spendable amount", tone: "good" as const };
+
+  const parsed = Number.parseInt(normalized, 16);
+  const red = (parsed >> 16) & 255;
+  const green = (parsed >> 8) & 255;
+  const blue = parsed & 255;
+
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+};
+
+const formatNullableDate = (value: string | null | undefined) => (value ? formatDate(value) : "Not set");
+
+const getCategoryIconSrc = (categoryName: string | null | undefined) => {
+  switch ((categoryName ?? "").trim().toLowerCase()) {
+    case "income":
+      return "/category-icons/income.svg";
+    case "food & dining":
+      return "/category-icons/food.svg";
+    case "transport":
+      return "/category-icons/transport.svg";
+    case "housing":
+      return "/category-icons/housing.svg";
+    case "bills & utilities":
+    case "utilities":
+      return "/category-icons/utilities.svg";
+    case "travel & lifestyle":
+      return "/category-icons/travel.svg";
+    case "entertainment":
+      return "/category-icons/entertainment.svg";
+    case "shopping":
+      return "/category-icons/shopping.svg";
+    case "health & wellness":
+      return "/category-icons/health.svg";
+    case "education":
+      return "/category-icons/education.svg";
+    case "financial":
+      return "/category-icons/financial.png";
+    case "gifts & donations":
+      return "/category-icons/gift.svg";
+    case "business":
+      return "/category-icons/business.png";
+    case "transfers":
+      return "/category-icons/transfer.svg";
+    case "groceries":
+      return "/category-icons/groceries.svg";
+    case "medical":
+      return "/category-icons/medical.svg";
+    case "salary":
+      return "/category-icons/salary.svg";
+    case "investments":
+    case "investment":
+      return "/category-icons/investments.svg";
+    case "other":
+    default:
+      return "/category-icons/default.svg";
   }
-  return { label: "Current balance", tone: "neutral" as const };
+};
+
+const getCategoryIconTone = (categoryName: string | null | undefined) => {
+  switch ((categoryName ?? "").trim().toLowerCase()) {
+    case "income":
+    case "salary":
+      return { backgroundColor: "rgba(34, 197, 94, 0.14)", borderColor: "rgba(34, 197, 94, 0.24)" };
+    case "food & dining":
+    case "groceries":
+      return { backgroundColor: "rgba(249, 115, 22, 0.14)", borderColor: "rgba(249, 115, 22, 0.24)" };
+    case "transport":
+      return { backgroundColor: "rgba(59, 130, 246, 0.14)", borderColor: "rgba(59, 130, 246, 0.24)" };
+    case "housing":
+      return { backgroundColor: "rgba(168, 85, 247, 0.14)", borderColor: "rgba(168, 85, 247, 0.24)" };
+    case "bills & utilities":
+    case "utilities":
+      return { backgroundColor: "rgba(14, 165, 233, 0.14)", borderColor: "rgba(14, 165, 233, 0.24)" };
+    case "travel & lifestyle":
+      return { backgroundColor: "rgba(236, 72, 153, 0.14)", borderColor: "rgba(236, 72, 153, 0.24)" };
+    case "entertainment":
+      return { backgroundColor: "rgba(245, 158, 11, 0.14)", borderColor: "rgba(245, 158, 11, 0.24)" };
+    case "shopping":
+      return { backgroundColor: "rgba(244, 63, 94, 0.14)", borderColor: "rgba(244, 63, 94, 0.24)" };
+    case "health & wellness":
+    case "medical":
+      return { backgroundColor: "rgba(20, 184, 166, 0.14)", borderColor: "rgba(20, 184, 166, 0.24)" };
+    case "education":
+      return { backgroundColor: "rgba(234, 179, 8, 0.14)", borderColor: "rgba(234, 179, 8, 0.24)" };
+    case "financial":
+      return { backgroundColor: "rgba(37, 99, 235, 0.14)", borderColor: "rgba(37, 99, 235, 0.24)" };
+    case "gifts & donations":
+      return { backgroundColor: "rgba(190, 24, 93, 0.14)", borderColor: "rgba(190, 24, 93, 0.24)" };
+    case "business":
+      return { backgroundColor: "rgba(100, 116, 139, 0.14)", borderColor: "rgba(100, 116, 139, 0.24)" };
+    case "transfers":
+      return { backgroundColor: "rgba(6, 182, 212, 0.14)", borderColor: "rgba(6, 182, 212, 0.24)" };
+    case "investments":
+    case "investment":
+      return { backgroundColor: "rgba(124, 58, 237, 0.14)", borderColor: "rgba(124, 58, 237, 0.24)" };
+    case "other":
+    default:
+      return { backgroundColor: "rgba(148, 163, 184, 0.14)", borderColor: "rgba(148, 163, 184, 0.24)" };
+  }
 };
 
 const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined) => {
@@ -166,6 +310,10 @@ const getCheckpointSymbol = (tone: "good" | "danger" | "neutral") => {
   return "•";
 };
 
+const getTransactionTypeLabel = (type: Transaction["type"]) => {
+  return formatTransactionDirectionLabel(type);
+};
+
 const formatAccountType = (value: string) =>
   value
     .replace(/_/g, " ")
@@ -182,19 +330,41 @@ export default function AccountDetailPage() {
 function AccountDetailPageContent() {
   const router = useRouter();
   const params = useParams<{ accountId: string }>();
-  const accountId = params.accountId;
+  const accountId = params?.accountId ?? "";
 
   const [account, setAccount] = useState<Account | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [transactionPage, setTransactionPage] = useState(1);
+  const [transactionTotalCount, setTransactionTotalCount] = useState(0);
+  const [transactionsLoading, setTransactionsLoading] = useState(true);
+  const [transactionsLoadingMore, setTransactionsLoadingMore] = useState(false);
+  const [transactionsError, setTransactionsError] = useState<string | null>(null);
   const [checkpoints, setCheckpoints] = useState<StatementCheckpoint[]>([]);
   const [message, setMessage] = useState("Loading account history...");
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [hasInitialDataLoaded, setHasInitialDataLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
     const load = async () => {
+      const selectedWorkspaceId = readSelectedWorkspaceId();
+      const activeWorkspaceId = selectedWorkspaceId ?? "";
+      if (
+        getDeletingWorkspaceAccountIds(activeWorkspaceId).includes(accountId) ||
+        getDeletedWorkspaceAccountIds(activeWorkspaceId).includes(accountId)
+      ) {
+        router.replace("/accounts");
+        return;
+      }
+
       try {
-        const accountResponse = await fetch(`/api/accounts/${accountId}`);
+        const accountPromise = fetch(`/api/accounts/${accountId}`);
+        const transactionsPromise = fetch(`/api/accounts/${accountId}/transactions?page=1&pageSize=${TRANSACTION_PAGE_SIZE}`);
+        const checkpointsPromise = fetch(`/api/accounts/${accountId}/statement-checkpoints`);
+
+        const accountResponse = await accountPromise;
         if (!accountResponse.ok) {
           throw new Error("Unable to load this account.");
         }
@@ -202,35 +372,66 @@ function AccountDetailPageContent() {
         const accountPayload = await accountResponse.json();
         const nextAccount = accountPayload.account as Account | undefined;
         if (!nextAccount || cancelled) {
+          if (getDeletedWorkspaceAccountIds(selectedWorkspaceId ?? "").includes(accountId)) {
+            router.replace("/accounts");
+          }
           return;
         }
 
         setAccount(nextAccount);
 
-        const transactionsResponse = await fetch(
-          `/api/transactions?workspaceId=${encodeURIComponent(nextAccount.workspaceId)}&accountId=${encodeURIComponent(nextAccount.id)}`
-        );
-        if (!transactionsResponse.ok) {
-          throw new Error("Unable to load account transactions.");
-        }
+        void transactionsPromise
+          .then(async (response) => {
+            if (!response.ok || cancelled) {
+              if (!cancelled && !response.ok) {
+                setTransactionsError("Unable to load account transactions.");
+                setTransactionsLoading(false);
+                setHasInitialDataLoaded(true);
+              }
+              return;
+            }
 
-        const transactionsPayload = await transactionsResponse.json();
-        const allTransactions = Array.isArray(transactionsPayload.transactions) ? (transactionsPayload.transactions as Transaction[]) : [];
-        if (!cancelled) {
-          setTransactions(allTransactions.filter((transaction) => transaction.accountId === nextAccount.id));
-          setMessage("");
-        }
+            const transactionsPayload = (await response.json()) as {
+              transactions?: Transaction[];
+              page?: number;
+              totalCount?: number;
+            } | null;
 
-        const checkpointsResponse = await fetch(`/api/accounts/${accountId}/statement-checkpoints`);
-        if (checkpointsResponse.ok) {
-          const checkpointsPayload = await checkpointsResponse.json();
-          if (!cancelled) {
-            setCheckpoints(Array.isArray(checkpointsPayload.checkpoints) ? (checkpointsPayload.checkpoints as StatementCheckpoint[]) : []);
-          }
-        }
+            if (!cancelled) {
+              setTransactions(Array.isArray(transactionsPayload?.transactions) ? transactionsPayload.transactions : []);
+              setTransactionPage(typeof transactionsPayload?.page === "number" ? transactionsPayload.page : 1);
+              setTransactionTotalCount(typeof transactionsPayload?.totalCount === "number" ? transactionsPayload.totalCount : 0);
+              setTransactionsError(null);
+              setTransactionsLoading(false);
+              setMessage("");
+              setHasInitialDataLoaded(true);
+            }
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setTransactionsError("Unable to load account transactions.");
+              setTransactionsLoading(false);
+              setHasInitialDataLoaded(true);
+            }
+          });
+
+        void checkpointsPromise
+          .then(async (response) => {
+            if (!response.ok || cancelled) {
+              return;
+            }
+
+            const checkpointsPayload = (await response.json()) as { checkpoints?: StatementCheckpoint[] } | null;
+            if (!cancelled) {
+              setCheckpoints(Array.isArray(checkpointsPayload?.checkpoints) ? checkpointsPayload!.checkpoints : []);
+            }
+          })
+          .catch(() => null);
       } catch (error) {
         if (!cancelled) {
           setMessage(error instanceof Error ? error.message : "Unable to load this account.");
+          setTransactionsLoading(false);
+          setHasInitialDataLoaded(true);
         }
       }
     };
@@ -241,11 +442,6 @@ function AccountDetailPageContent() {
       cancelled = true;
     };
   }, [accountId]);
-
-  const openingBalanceEntry = useMemo(
-    () => transactions.find((transaction) => transaction.merchantRaw === "Beginning balance") ?? null,
-    [transactions]
-  );
 
   const accountCheckpointKey = useMemo(
     () => normalizeImportedAccountKey(account?.name, account?.institution),
@@ -287,24 +483,24 @@ function AccountDetailPageContent() {
     [latestCheckpoint]
   );
 
-  const accountBalanceContext = useMemo(
-    () => getBalanceContext(account?.type ?? ""),
-    [account?.type]
+  const investmentSubtype = account?.investmentSubtype ?? null;
+  const investmentSymbol = account?.investmentSymbol?.trim() || null;
+  const investmentQuantity = useMemo(() => parseNullableNumber(account?.investmentQuantity), [account?.investmentQuantity]);
+  const investmentCostBasis = useMemo(() => parseNullableNumber(account?.investmentCostBasis), [account?.investmentCostBasis]);
+  const investmentPrincipal = useMemo(() => parseNullableNumber(account?.investmentPrincipal), [account?.investmentPrincipal]);
+  const investmentInterestRate = useMemo(() => parseNullableNumber(account?.investmentInterestRate), [account?.investmentInterestRate]);
+  const investmentMaturityValue = useMemo(() => parseNullableNumber(account?.investmentMaturityValue), [account?.investmentMaturityValue]);
+  const investmentStartDate = account?.investmentStartDate ?? null;
+  const investmentMaturityDate = account?.investmentMaturityDate ?? null;
+  const investmentFieldConfigs = useMemo(() => getInvestmentFieldConfigs(investmentSubtype), [investmentSubtype]);
+  const investmentPurchaseValue = useMemo(
+    () => investmentCostBasis ?? (isFixedIncomeInvestmentSubtype(investmentSubtype) ? investmentPrincipal : null),
+    [investmentCostBasis, investmentPrincipal, investmentSubtype]
   );
 
   const importSummaries = useMemo(
     () => buildImportSummaries(transactions),
     [transactions]
-  );
-
-  const reconciledBalance = useMemo(
-    () =>
-      deriveReconciledBalance({
-        balance: account?.balance ?? null,
-        transactions,
-        checkpoints,
-      }),
-    [account?.balance, checkpoints, transactions]
   );
 
   const accountBrand = useMemo(
@@ -317,16 +513,110 @@ function AccountDetailPageContent() {
     [account?.institution, account?.name, account?.type]
   );
 
+  const accountBrandStyles = useMemo(
+    () =>
+      ({
+        "--account-accent": accountBrand.accent,
+        "--account-accent-soft": hexToRgba(accountBrand.accent, 0.18),
+        "--account-accent-faint": hexToRgba(accountBrand.accent, 0.08),
+      }) as CSSProperties,
+    [accountBrand.accent]
+  );
+
   const checkpointStatus = useMemo(() => {
     return getCheckpointSummary(latestCheckpoint).label;
   }, [latestCheckpoint]);
 
-  const checkpointBalance = useMemo(() => parseAmount(latestCheckpoint?.endingBalance), [latestCheckpoint?.endingBalance]);
-  const currentBalance = parseAmount(reconciledBalance ?? account?.balance);
+  const checkpointBalance = useMemo(
+    () => normalizeAccountBalance(account?.type ?? null, parseAmount(latestCheckpoint?.endingBalance)),
+    [account?.type, latestCheckpoint?.endingBalance]
+  );
+  const currentBalance = useMemo(
+    () =>
+      normalizeAccountBalance(
+        account?.type ?? null,
+        parseAmount(
+          deriveReconciledBalance({
+            balance: account?.balance ?? null,
+            transactions,
+            checkpoints: latestCheckpoint ? [latestCheckpoint] : [],
+          })
+        )
+      ),
+    [account?.balance, account?.type, latestCheckpoint, transactions]
+  );
+  const accountDetailValueCard = useMemo(() => {
+    if (!account) {
+      return {
+        label: "Spendable amount",
+        value: currentBalance,
+      };
+    }
+
+    if (account.type === "credit_card") {
+      return {
+        label: "Outstanding balance",
+        value: Math.abs(currentBalance),
+      };
+    }
+
+    if (account.type === "investment") {
+      if (isFixedIncomeInvestmentSubtype(investmentSubtype)) {
+        return {
+          label: investmentMaturityValue !== null ? "Maturity value" : "Principal",
+          value: investmentMaturityValue ?? investmentPrincipal ?? currentBalance,
+        };
+      }
+
+      return {
+        label: "Current value",
+        value: currentBalance,
+      };
+    }
+
+    return {
+      label: "Spendable amount",
+      value: currentBalance,
+    };
+  }, [account, currentBalance, investmentMaturityValue, investmentPrincipal, investmentSubtype]);
+  const accountDetailValueCardInfo = useMemo(() => {
+    if (!account) {
+      return "Cash-like money you can use now from this account.";
+    }
+
+    if (account.type === "credit_card") {
+      return "The amount currently owed on this credit card.";
+    }
+
+    if (account.type === "investment") {
+      if (isFixedIncomeInvestmentSubtype(investmentSubtype)) {
+        return investmentMaturityValue !== null
+          ? "The amount this fixed-income investment is expected to be worth at maturity."
+          : "The original amount placed into this fixed-income investment.";
+      }
+
+      return "The latest tracked value of this investment holding.";
+    }
+
+    return "Cash-like money you can use now from this account.";
+  }, [account, investmentMaturityValue, investmentSubtype]);
+  const investmentGainLoss = useMemo(() => {
+    if (account?.type !== "investment" || investmentPurchaseValue === null) {
+      return null;
+    }
+
+    return currentBalance - investmentPurchaseValue;
+  }, [account?.type, currentBalance, investmentPurchaseValue]);
   const checkpointGap =
     latestCheckpoint && Number.isFinite(checkpointBalance) && Number.isFinite(currentBalance)
       ? checkpointBalance - currentBalance
       : null;
+
+  const selectedWorkspaceId = readSelectedWorkspaceId();
+  const deletingAccountIds = useMemo(
+    () => new Set(getDeletingWorkspaceAccountIds(account?.workspaceId ?? selectedWorkspaceId ?? "")),
+    [account?.workspaceId, selectedWorkspaceId]
+  );
 
   const checkpointGapLabel = useMemo(() => {
     if (checkpointGap === null || !latestCheckpoint) {
@@ -345,22 +635,121 @@ function AccountDetailPageContent() {
   }, [checkpointGap, latestCheckpoint]);
 
   const visibleTransactions = useMemo(
-    () =>
-      transactions
-        .filter((transaction) => transaction.merchantRaw !== "Beginning balance")
-        .sort((left, right) => new Date(right.date).getTime() - new Date(left.date).getTime()),
+    () => transactions.filter((transaction) => transaction.merchantRaw !== "Beginning balance"),
     [transactions]
   );
 
+  const hasMoreTransactions = transactionTotalCount > transactions.length;
+
+  const loadMoreTransactions = async () => {
+    if (!account || transactionsLoadingMore || !hasMoreTransactions) {
+      return;
+    }
+
+    const nextPage = transactionPage + 1;
+    setTransactionsLoadingMore(true);
+    try {
+      const response = await fetch(`/api/accounts/${accountId}/transactions?page=${nextPage}&pageSize=${TRANSACTION_PAGE_SIZE}`);
+      if (!response.ok) {
+        throw new Error("Unable to load more transactions.");
+      }
+
+      const payload = (await response.json()) as { transactions?: Transaction[]; page?: number; totalCount?: number } | null;
+      const nextTransactions = Array.isArray(payload?.transactions) ? payload.transactions : [];
+      setTransactions((current) => [...current, ...nextTransactions]);
+      setTransactionPage(typeof payload?.page === "number" ? payload.page : nextPage);
+      if (typeof payload?.totalCount === "number") {
+        setTransactionTotalCount(payload.totalCount);
+      }
+    } catch (error) {
+      setTransactionsError(error instanceof Error ? error.message : "Unable to load more transactions.");
+    } finally {
+      setTransactionsLoadingMore(false);
+    }
+  };
+
+  const openTransactionsPage = () => {
+    if (!account) {
+      return;
+    }
+
+    const params = buildTransactionQuerySearchParams(
+      account.workspaceId,
+      { accountIds: [account.id] },
+      { pageSize: "all" }
+    );
+    router.push(`/transactions?${params.toString()}`);
+  };
+
+  const deleteAccount = async () => {
+    if (!accountId) {
+      return;
+    }
+
+    setDeleteBusy(true);
+    try {
+      const workspaceId = account?.workspaceId ?? selectedWorkspaceId ?? readSelectedWorkspaceId() ?? null;
+      if (workspaceId) {
+        markDeletingWorkspaceAccount(workspaceId, accountId);
+      }
+
+      const deleteRequest = fetch(`/api/accounts/${accountId}`, {
+        method: "DELETE",
+      });
+
+      const deleteRedirectSearchParams = new URLSearchParams();
+      deleteRedirectSearchParams.set("deletingAccountId", accountId);
+      if (workspaceId) {
+        deleteRedirectSearchParams.set("deletingWorkspaceId", workspaceId);
+      }
+
+      router.replace(`/accounts?${deleteRedirectSearchParams.toString()}`);
+      void deleteRequest
+        .then(async (response) => {
+          if (!response.ok) {
+            if (workspaceId) {
+              clearDeletingWorkspaceAccount(workspaceId, accountId);
+            }
+            return;
+          }
+
+          const payload = (await response.json().catch(() => null)) as { account?: { workspaceId?: string | null } } | null;
+          const resolvedWorkspaceId = payload?.account?.workspaceId ?? workspaceId;
+          if (resolvedWorkspaceId) {
+            clearDeletingWorkspaceAccount(resolvedWorkspaceId, accountId);
+            markDeletedWorkspaceAccount(resolvedWorkspaceId, accountId);
+            clearWorkspaceCache(resolvedWorkspaceId);
+          }
+        })
+        .catch(() => {
+          if (workspaceId) {
+            clearDeletingWorkspaceAccount(workspaceId, accountId);
+          }
+        });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete account.");
+      setDeleteConfirmOpen(false);
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  if (!hasInitialDataLoaded) {
+    return <CloverLoadingScreen label="account details" />;
+  }
+
   return (
     <CloverShell active="accounts" title={account?.name ?? "Account"} kicker="Account history" subtitle="View the full statement history for a single account." showTopbar={false}>
-      <section className="panel">
+      <section className="panel accounts-detail__panel" style={accountBrandStyles}>
         <div className="accounts-detail__header">
           <div className="accounts-detail__headline">
             {account ? <AccountBrandMark accountBrand={accountBrand} label={account.name} /> : null}
             <div>
               <p className="eyebrow">Account details</p>
-              <h2>{account?.name ?? "Account"}</h2>
+              <h2>
+                {account?.name ?? "Account"}
+                <InfoTooltip title="How Account Details works" label={ACCOUNT_DETAILS_GUIDE} />
+              </h2>
               <p className="panel-muted">
                 {account ? `${accountBrand.label} · ${formatAccountType(account.type)} · ${account.currency} · ${account.source}` : message}
               </p>
@@ -377,40 +766,249 @@ function AccountDetailPageContent() {
           <div className="accounts-detail__summary">
             <div className="status-card">
               <div>
-                <div className="panel-muted">Current balance</div>
-                <strong>{currencyFormatter.format(parseAmount(reconciledBalance ?? account.balance))}</strong>
-                <span>{accountBalanceContext.label}</span>
+                <div className="panel-muted">
+                  Current balance
+                  <InfoTooltip label={ACCOUNT_DETAILS_INFO.currentBalance} />
+                </div>
+                <strong>{currencyFormatter.format(currentBalance)}</strong>
               </div>
             </div>
             <div className="status-card">
               <div>
-                <div className="panel-muted">Spendable amount</div>
-                <strong>{currencyFormatter.format(isSpendableAccountType(account.type) ? parseAmount(reconciledBalance ?? account.balance) : 0)}</strong>
-                <span>{isSpendableAccountType(account.type) ? "Ready to use now" : "Not immediately spendable"}</span>
+                <div className="panel-muted">
+                  {accountDetailValueCard.label}
+                  <InfoTooltip label={accountDetailValueCardInfo} />
+                </div>
+                <strong>{currencyFormatter.format(accountDetailValueCard.value)}</strong>
               </div>
             </div>
             <div className="status-card">
               <div>
-                <div className="panel-muted">Account type</div>
+                <div className="panel-muted">
+                  Status
+                  <InfoTooltip label={ACCOUNT_DETAILS_INFO.status} />
+                </div>
+                <strong>{deletingAccountIds.has(account.id) ? "Deleting" : "Active"}</strong>
+              </div>
+            </div>
+            <div className="status-card">
+              <div>
+                <div className="panel-muted">
+                  Account type
+                  <InfoTooltip label={ACCOUNT_DETAILS_INFO.accountType} />
+                </div>
                 <strong>{formatAccountType(account.type)}</strong>
-                <span>{accountBrand.label}</span>
-              </div>
-            </div>
-            <div className="status-card">
-              <div>
-                <div className="panel-muted">Institution</div>
-                <strong>{account.institution ?? accountBrand.label}</strong>
-                <span>{account.source === "manual" ? "Manual" : "Imported"} · Updated {formatDate(account.updatedAt)}</span>
               </div>
             </div>
           </div>
         ) : null}
 
+        {account?.type === "investment" ? (
+          <div className="accounts-detail__investment glass" style={{ marginTop: 20 }}>
+            <div className="accounts-detail__reconciliation-head">
+              <div>
+                <p className="eyebrow">Investment details</p>
+                <h3>Holdings snapshot</h3>
+              </div>
+            </div>
+            <div className="accounts-detail__investment-summary">
+              <div className="status-card">
+                <div className="panel-muted">Subtype</div>
+                <strong>{getInvestmentSubtypeLabel(investmentSubtype)}</strong>
+              </div>
+              <div className="status-card">
+                <div className="panel-muted">Current value</div>
+                <strong>{currencyFormatter.format(currentBalance)}</strong>
+              </div>
+              <div className="status-card">
+                <div className="panel-muted">Purchase value / principal</div>
+                <strong>{investmentPurchaseValue === null ? "Not set" : currencyFormatter.format(investmentPurchaseValue)}</strong>
+              </div>
+              <div className="status-card">
+                <div className="panel-muted">Holding note</div>
+                <strong>{account.institution ?? accountBrand.label}</strong>
+              </div>
+            </div>
+            <div className="accounts-detail__investment-grid">
+              {investmentFieldConfigs.map((field) => {
+                const value =
+                  field.key === "investmentSymbol"
+                    ? investmentSymbol
+                    : field.key === "investmentQuantity"
+                      ? investmentQuantity === null
+                        ? null
+                        : String(investmentQuantity)
+                      : field.key === "investmentCostBasis"
+                        ? investmentCostBasis === null
+                          ? null
+                          : String(investmentCostBasis)
+                        : field.key === "investmentPrincipal"
+                          ? investmentPrincipal === null
+                            ? null
+                            : String(investmentPrincipal)
+                          : field.key === "investmentStartDate"
+                            ? investmentStartDate
+                            : field.key === "investmentMaturityDate"
+                              ? investmentMaturityDate
+                              : field.key === "investmentInterestRate"
+                                ? investmentInterestRate === null
+                                  ? null
+                                  : String(investmentInterestRate)
+                                : field.key === "investmentMaturityValue"
+                                  ? investmentMaturityValue === null
+                                    ? null
+                                    : String(investmentMaturityValue)
+                                  : null;
+
+                return (
+                  <div className="status-card" key={field.key}>
+                    <div className="panel-muted">{field.label}</div>
+                    <strong>
+                      {field.type === "date"
+                        ? formatNullableDate(value)
+                        : value === null
+                          ? "Not set"
+                          : field.key === "investmentSymbol"
+                            ? value
+                            : field.key === "investmentQuantity"
+                              ? value
+                              : field.key === "investmentInterestRate"
+                                ? `${value}%`
+                                : currencyFormatter.format(Number(value))}
+                    </strong>
+                    <span>
+                      {field.key === "investmentSymbol"
+                        ? "Identifier for the holding"
+                        : field.key === "investmentQuantity"
+                          ? "Quantity or units owned"
+                          : field.key === "investmentCostBasis"
+                            ? "Historical purchase value"
+                            : field.key === "investmentPrincipal"
+                              ? "Initial principal"
+                              : field.key === "investmentStartDate"
+                                ? "When the holding began"
+                                : field.key === "investmentMaturityDate"
+                                  ? "When the holding matures"
+                                  : field.key === "investmentInterestRate"
+                                    ? "Rate for this product"
+                                    : field.key === "investmentMaturityValue"
+                                      ? "Expected maturity value"
+                                      : "Investment detail"}
+                    </span>
+                  </div>
+                );
+              })}
+              <div className="status-card">
+                <div className="panel-muted">Unrealized gain / loss</div>
+                <strong>
+                  {investmentGainLoss === null ? "Not set" : currencyFormatter.format(investmentGainLoss)}
+                </strong>
+                <span>
+                  {investmentGainLoss === null
+                    ? "Add a purchase value to compare performance."
+                    : investmentGainLoss >= 0
+                      ? "Above purchase value"
+                      : "Below purchase value"}
+                </span>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        <div className="accounts-detail__transactions glass" style={{ marginTop: 24 }}>
+          <div className="accounts-detail__reconciliation-head">
+            <div>
+              <p className="eyebrow">
+                Transaction history
+                <InfoTooltip label={ACCOUNT_DETAILS_INFO.transactions} />
+              </p>
+              <h3>All transactions</h3>
+            </div>
+            <div className="accounts-detail__transactions-actions">
+              <span className="accounts-detail__transactions-count">{`${visibleTransactions.length} of ${transactionTotalCount} loaded`}</span>
+              <button className="button button-secondary button-small" type="button" onClick={openTransactionsPage} disabled={!account}>
+                Open in Transactions
+              </button>
+            </div>
+          </div>
+          {transactionsError ? (
+            <p className="panel-muted">{transactionsError}</p>
+          ) : visibleTransactions.length > 0 ? (
+            <>
+              <div className="accounts-detail__transaction-list" aria-label="Transaction history">
+                <div className="line-item-header accounts-detail__transaction-header">
+                  <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
+                  <button className="line-item-header-cell line-item-header-cell--name" type="button">
+                    Name
+                  </button>
+                  <button className="line-item-header-cell" type="button">
+                    Date
+                  </button>
+                  <button className="line-item-header-cell" type="button">
+                    Category
+                  </button>
+                  <button className="line-item-header-cell" type="button">
+                    Type
+                  </button>
+                  <button className="line-item-header-cell line-item-header-cell--amount" type="button">
+                    Amount
+                  </button>
+                </div>
+                {visibleTransactions.map((transaction) => {
+                  const amount = Number(transaction.amount);
+                  const amountToneClass = transaction.type === "income" ? "positive" : "negative";
+                  const merchantDisplay = transaction.merchantClean || transaction.merchantRaw;
+                  const subtext =
+                    transaction.description && transaction.description.trim() && transaction.description !== merchantDisplay
+                      ? transaction.description
+                      : transaction.source === "upload"
+                        ? "Imported"
+                        : transaction.source === "manual"
+                          ? "Manual"
+                          : "";
+
+                  return (
+                    <div key={transaction.id} className={`line-item accounts-detail__transaction-row ${transaction.isExcluded ? "is-muted" : ""}`}>
+                      <div className="transaction-category-icon-cell" aria-hidden="true">
+                        <span className="transaction-category-icon" style={getCategoryIconTone(transaction.categoryName)}>
+                          <img src={getCategoryIconSrc(transaction.categoryName)} alt="" aria-hidden="true" />
+                        </span>
+                      </div>
+                      <div className="accounts-detail__transaction-name">
+                        <strong>{merchantDisplay}</strong>
+                        {subtext ? <span>{subtext}</span> : null}
+                      </div>
+                      <div className="accounts-detail__transaction-date">{formatDate(transaction.date)}</div>
+                      <div className="accounts-detail__transaction-category">{transaction.categoryName || "Other"}</div>
+                      <div className="accounts-detail__transaction-type">{getTransactionTypeLabel(transaction.type)}</div>
+                      <div className={`accounts-detail__transaction-amount ${amountToneClass}`}>
+                        {currencyFormatter.format(amount)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {hasMoreTransactions ? (
+                <div className="accounts-detail__transactions-more">
+                  <button className="button button-secondary button-small" type="button" onClick={() => void loadMoreTransactions()} disabled={transactionsLoadingMore}>
+                    {transactionsLoadingMore ? "Loading more..." : "Load more transactions"}
+                  </button>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <p className="panel-muted">No transactions are linked to this account yet.</p>
+          )}
+        </div>
+
         {latestCheckpoint ? (
           <div className="accounts-detail__reconciliation glass" style={{ marginTop: 20 }}>
             <div className="accounts-detail__reconciliation-head">
               <div>
-                <p className="eyebrow">Reconciliation</p>
+                <p className="eyebrow">
+                  Reconciliation
+                  <InfoTooltip label={ACCOUNT_DETAILS_INFO.reconciliation} />
+                </p>
                 <h3>Statement checkpoint</h3>
               </div>
               <span className={`accounts-summary-chip is-${latestCheckpointSummary.tone}`}>
@@ -474,47 +1072,34 @@ function AccountDetailPageContent() {
           </div>
         ) : null}
 
-        {openingBalanceEntry ? (
-          <div className="status-card" style={{ marginTop: 20 }}>
-            <div>
-              <div className="panel-muted">Opening balance</div>
-              <strong>{formatDate(openingBalanceEntry.date)}</strong>
+        {deleteConfirmOpen ? (
+          <div className="detail-warning-box accounts-detail__delete-confirm" style={{ marginTop: 20 }}>
+            <div className="detail-warning-actions">
+              <button
+                className="button button-secondary button-small"
+                type="button"
+                onClick={() => setDeleteConfirmOpen(false)}
+                disabled={deleteBusy}
+              >
+                Cancel
+              </button>
+              <button className="button button-danger button-small" type="button" onClick={() => void deleteAccount()} disabled={deleteBusy}>
+                {deleteBusy ? "Deleting..." : "Delete"}
+              </button>
             </div>
-            <strong>{currencyFormatter.format(parseAmount(openingBalanceEntry.amount))}</strong>
           </div>
-        ) : null}
-
-        <div style={{ marginTop: 24 }}>
-          <h3>All transactions</h3>
-          {visibleTransactions.length > 0 ? (
-            <div style={{ overflowX: "auto" }}>
-              <table className="preview-table">
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Description</th>
-                    <th>Category</th>
-                    <th>Type</th>
-                    <th>Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleTransactions.map((transaction) => (
-                    <tr key={transaction.id}>
-                      <td>{formatDate(transaction.date)}</td>
-                      <td>{transaction.merchantClean || transaction.merchantRaw}</td>
-                      <td>{transaction.categoryName || "—"}</td>
-                      <td>{transaction.type}</td>
-                      <td>{currencyFormatter.format(parseAmount(transaction.amount))}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="panel-muted">No transactions are linked to this account yet.</p>
-          )}
-        </div>
+        ) : (
+          <div style={{ marginTop: 20 }}>
+            <button
+              className="button button-secondary button-small accounts-drawer__delete"
+              type="button"
+              onClick={() => setDeleteConfirmOpen(true)}
+              disabled={deleteBusy}
+            >
+              Delete
+            </button>
+          </div>
+        )}
       </section>
     </CloverShell>
   );
