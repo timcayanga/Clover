@@ -2642,7 +2642,7 @@ label {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
   gap: 16px;
-  padding: 24px;
+  padding: 18px;
   border: 1px solid var(--stroke);
   background:
     radial-gradient(circle at top left, rgba(3, 168, 192, 0.12), transparent 32%),
@@ -2667,7 +2667,7 @@ label {
 .dashboard-home__copy h3 {
   margin: 0;
   max-width: 16ch;
-  font-size: clamp(2.2rem, 4.6vw, 4rem);
+  font-size: clamp(1.55rem, 3vw, 2.45rem);
   line-height: 1.03;
   letter-spacing: -0.055em;
 }
@@ -2677,7 +2677,7 @@ label {
   max-width: 58ch;
   color: var(--muted);
   line-height: 1.55;
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .dashboard-home__decision-grid {
@@ -2689,7 +2689,7 @@ label {
 .dashboard-home__decision-card {
   display: grid;
   gap: 5px;
-  padding: 16px 17px;
+  padding: 14px 15px;
   border-radius: 22px;
   border: 1px solid rgba(15, 23, 42, 0.06);
   background: rgba(255, 255, 255, 0.82);
@@ -2709,7 +2709,7 @@ label {
 }
 
 .dashboard-home__decision-head h4 {
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.15;
   letter-spacing: -0.03em;
 }
@@ -2722,7 +2722,7 @@ label {
 }
 
 .dashboard-home__decision-card strong {
-  font-size: 18px;
+  font-size: 15px;
   line-height: 1.15;
   letter-spacing: -0.04em;
 }
@@ -2752,7 +2752,7 @@ label {
 .dashboard-home__rail-card {
   display: grid;
   gap: 12px;
-  padding: 16px;
+  padding: 14px;
   border-radius: 24px;
   border: 1px solid rgba(15, 23, 42, 0.06);
   background: rgba(255, 255, 255, 0.74);
@@ -2767,7 +2767,7 @@ label {
 }
 
 .dashboard-home__rail-head h4 {
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.15;
   letter-spacing: -0.03em;
 }
@@ -2837,7 +2837,7 @@ label {
 }
 
 .dashboard-home__mini-metric strong {
-  font-size: 24px;
+  font-size: 18px;
   line-height: 1.1;
   letter-spacing: -0.04em;
 }
@@ -2861,7 +2861,7 @@ label {
 .dashboard-home__panel {
   display: grid;
   gap: 14px;
-  padding: 18px;
+  padding: 16px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.88);
   box-shadow: var(--shadow);
@@ -2875,7 +2875,7 @@ label {
 }
 
 .dashboard-home__panel-head h4 {
-  font-size: 22px;
+  font-size: 17px;
   line-height: 1.15;
   letter-spacing: -0.04em;
 }
@@ -3001,7 +3001,7 @@ label {
 .dashboard-home__summary-card {
   display: grid;
   gap: 14px;
-  padding: 18px;
+  padding: 14px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.9);
   box-shadow: var(--shadow);
@@ -3015,18 +3015,18 @@ label {
 }
 
 .dashboard-home__summary-card-head h4 {
-  font-size: 18px;
+  font-size: 15px;
   line-height: 1.15;
   letter-spacing: -0.03em;
 }
 
 .dashboard-home__summary-card-body {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .dashboard-home__summary-card-chart {
-  min-height: 120px;
+  min-height: 92px;
   border-radius: 18px;
 }
 
@@ -14950,6 +14950,56 @@ input.transaction-inline-edit--amount::placeholder {
   .goal-illustration__metrics {
     grid-template-columns: 1fr;
   }
+
+  .dashboard-home__summary-card,
+  .reports-summary-grid > *,
+  .reports-summary-grid--three > *,
+  .report-ai-card,
+  .reports-attention-card,
+  .reports-decision-lens,
+  .reports-pro-preview,
+  .insights-snapshot,
+  .insights-hero__summary,
+  .insights-hero__sidebar,
+  .goals-hero,
+  .goals-investments,
+  .investments-market,
+  .investments-filters,
+  .investments-allocation {
+    padding: 14px;
+  }
+
+  .dashboard-home__summary-card-head h4,
+  .reports-hero__copy h3,
+  .reports-next h4,
+  .reports-attention-card h4,
+  .reports-decision-lens h4,
+  .reports-pro-preview h3,
+  .insights-hero__summary h3,
+  .insights-snapshot__copy h3,
+  .goals-hero__copy h3,
+  .goals-investments__head h4,
+  .investments-page__header-copy h1 {
+    font-size: clamp(1rem, 3.3vw, 1.35rem);
+    line-height: 1.14;
+  }
+
+  .dashboard-home__summary-card-chart {
+    min-height: 104px;
+  }
+
+  .reports-summary-grid,
+  .reports-summary-grid--three,
+  .reports-attention-strip,
+  .reports-ai-signal-grid,
+  .insights-snapshot__metrics,
+  .insights-snapshot__actions,
+  .insights-hero__stats,
+  .goals-hero__stats,
+  .goals-investments__metrics,
+  .investments-allocation__list {
+    gap: 8px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -15050,6 +15100,66 @@ input.transaction-inline-edit--amount::placeholder {
     flex-direction: column;
   }
 
+  .dashboard-home__summary-card,
+  .reports-summary-grid > *,
+  .reports-summary-grid--three > *,
+  .report-ai-card,
+  .reports-attention-card,
+  .reports-decision-lens,
+  .reports-pro-preview,
+  .insights-snapshot,
+  .insights-hero__summary,
+  .insights-hero__sidebar,
+  .goals-hero,
+  .goals-investments,
+  .investments-market,
+  .investments-filters,
+  .investments-allocation {
+    padding: 12px;
+  }
+
+  .dashboard-home__summary-card {
+    gap: 10px;
+  }
+
+  .dashboard-home__summary-card-head h4,
+  .reports-hero__copy h3,
+  .reports-next h4,
+  .reports-attention-card h4,
+  .reports-decision-lens h4,
+  .reports-pro-preview h3,
+  .insights-hero__summary h3,
+  .insights-snapshot__copy h3,
+  .goals-hero__copy h3,
+  .goals-investments__head h4,
+  .investments-page__header-copy h1 {
+    font-size: clamp(0.98rem, 4.4vw, 1.18rem);
+  }
+
+  .dashboard-home__summary-card-chart {
+    min-height: 84px;
+    border-radius: 14px;
+  }
+
+  .reports-summary-grid,
+  .reports-summary-grid--three,
+  .reports-attention-strip,
+  .reports-ai-signal-grid,
+  .insights-snapshot__metrics,
+  .insights-snapshot__actions,
+  .insights-hero__stats,
+  .goals-hero__stats,
+  .goals-investments__metrics,
+  .investments-allocation__list {
+    gap: 6px;
+  }
+
+  .dashboard-home__review-strip,
+  .reports-decision-lens,
+  .reports-pro-preview {
+    padding: 12px;
+  }
+
   .dashboard-home__priority-strip {
     padding: 16px;
   }
@@ -15100,6 +15210,20 @@ input.transaction-inline-edit--amount::placeholder {
     font-size: 16px;
   }
 
+  .insights-snapshot__copy p,
+  .reports-hero__copy p,
+  .reports-next p,
+  .reports-attention-card p,
+  .reports-decision-lens p,
+  .reports-pro-preview p,
+  .insights-hero__summary p,
+  .goals-hero__copy p,
+  .goals-investments__empty p,
+  .investments-page__header-copy p {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
   .insights-snapshot__actions,
   .insight-donut,
   .insight-pattern-grid {
@@ -15118,6 +15242,15 @@ input.transaction-inline-edit--amount::placeholder {
   .goals-hero__stats,
   .goals-chart__labels {
     grid-template-columns: 1fr;
+  }
+
+  .goals-hero__ring {
+    width: 118px;
+    height: 118px;
+  }
+
+  .goals-hero__ring-inner strong {
+    font-size: 1.36rem;
   }
 
   .goals-editor__head {
