@@ -332,6 +332,7 @@ async function InsightsPageStream() {
   const ninetyDayInsightTransactions = ninetyDayTransactions;
   const sixMonthInsightTransactions = sixMonthTransactions as InsightTransaction[];
   const selectedGoal = selectedGoalValue;
+  const isPro = user.planTier === "pro";
   const isEmptyWorkspace = workspaceAccounts.length <= 1 && workspaceImportFiles.length === 0 && currentWindowTransactions.length === 0;
 
   const currentSummary = currentWindowTransactions.reduce(
@@ -477,7 +478,7 @@ async function InsightsPageStream() {
       ? Number(investmentTopHolding.balance) / investmentCurrentValue
       : null;
   const investmentSummaryLine =
-    investmentAccounts.length > 0
+    isPro && investmentAccounts.length > 0
       ? `Investments total ${formatCurrency(investmentCurrentValue)} across ${investmentAccounts.length} holdings${
           investmentMarketValue > 0 || investmentFixedIncomeValue > 0
             ? `, with ${formatCurrency(investmentMarketValue)} in market holdings and ${formatCurrency(investmentFixedIncomeValue)} in fixed income.`
@@ -665,6 +666,10 @@ async function InsightsPageStream() {
           .filter((line): line is string => line !== null)
           .join(" ");
   const aiSummaryWithInvestments = investmentSummaryLine ? `${aiSummary} ${investmentSummaryLine}` : aiSummary;
+  const visibleDriverInsightCards = isPro ? driverInsightCards : driverInsightCards.slice(0, 2);
+  const visibleRecurringInsightCards = isPro ? recurringInsightCards : recurringInsightCards.slice(0, 2);
+  const visibleBehaviorInsightCards = isPro ? behaviorInsightCards : behaviorInsightCards.slice(0, 2);
+  const showInvestmentSection = isPro && investmentAccounts.length > 0;
   const primarySnapshotItems = [
     {
       label: "Net position",
@@ -836,7 +841,7 @@ async function InsightsPageStream() {
     <CloverShell
       active="insights"
       title="A clearer view of what your money is doing."
-      subtitle="Decision-ready insight from real transactions, investment holdings, recurring patterns, and month-over-month comparisons."
+      subtitle="A simple summary of cash flow, patterns, and next steps."
       showTopbar={false}
     >
       <PostHogEvent
@@ -930,7 +935,7 @@ async function InsightsPageStream() {
               </span>
               <span>{currentWindowTransactions.length} transactions reviewed</span>
               <span>{goalLabel ?? "No primary goal set yet"}</span>
-              {investmentAccounts.length > 0 ? <span>{investmentAccounts.length} investment holdings</span> : null}
+              {showInvestmentSection ? <span>{investmentAccounts.length} investment holdings</span> : null}
             </div>
           </div>
 
@@ -966,7 +971,7 @@ async function InsightsPageStream() {
           </div>
         </article>
 
-        {investmentAccounts.length > 0 ? (
+        {showInvestmentSection ? (
           <article className="insight-panel glass">
             <div className="insight-panel__head">
               <div>
@@ -1356,8 +1361,8 @@ async function InsightsPageStream() {
           </div>
 
           <div className="insight-list">
-            {driverInsightCards.length > 0 ? (
-              driverInsightCards.map((driver) => (
+            {visibleDriverInsightCards.length > 0 ? (
+              visibleDriverInsightCards.map((driver) => (
                 <Link key={driver.categoryName} href={driver.href} className="insight-list__item insight-list__item--link">
                   <strong>
                     <span className="insight-list__icon" aria-hidden="true">
@@ -1380,8 +1385,12 @@ async function InsightsPageStream() {
           <div className="insight-panel__head">
             <div>
               <p className="eyebrow">Patterns to watch</p>
-              <h4>Recurring costs and habits</h4>
-              <span className="insight-panel__hint">Fixed costs and behavior signals linked back to transactions.</span>
+              <h4>{isPro ? "Recurring costs and habits" : "A few patterns to watch"}</h4>
+              <span className="insight-panel__hint">
+                {isPro
+                  ? "Fixed costs, behavior signals, and data quality linked back to transactions."
+                  : "Begin with the simplest patterns that are easiest to act on."}
+              </span>
             </div>
             <div className="insight-panel__stat">
               <strong>{formatCurrency(recurringSavingsPotential)}</strong>
@@ -1393,8 +1402,8 @@ async function InsightsPageStream() {
             <div className="insight-pattern-card">
               <p className="eyebrow">Recurring costs</p>
               <div className="insight-list">
-                {recurringInsightCards.length > 0 ? (
-                  recurringInsightCards.map((merchant) => (
+                {visibleRecurringInsightCards.length > 0 ? (
+                  visibleRecurringInsightCards.map((merchant) => (
                     <Link key={merchant.label} href={merchant.href} className="insight-list__item insight-list__item--link">
                       <strong>
                         <span className="insight-list__icon" aria-hidden="true">
@@ -1422,7 +1431,7 @@ async function InsightsPageStream() {
             <div className="insight-pattern-card">
               <p className="eyebrow">Behavioral patterns</p>
               <div className="insight-list">
-                {behaviorInsightCards.map((item) => (
+                {visibleBehaviorInsightCards.map((item) => (
                   <Link key={item.title} href={item.href} className="insight-list__item insight-list__item--link">
                     <strong>
                       <span className="insight-list__icon" aria-hidden="true">
@@ -1440,16 +1449,18 @@ async function InsightsPageStream() {
           </div>
         </article>
 
-        <PlanUpgradeCallout
-          planTier={user.planTier}
-          title="Free gives you the essentials. Pro adds the decision layer."
-          copy="If you want more context on what changed, why it moved, and what to do next, Pro opens up a richer story across reports, goals, and investing."
-          ctaHref={user.planTier === "free" ? "/pricing" : "/settings#billing"}
-          ctaLabel={user.planTier === "free" ? "See Pro pricing" : "Manage billing"}
-          secondaryHref="/goals"
-          secondaryLabel="Open goals"
-          className="insights-upgrade-callout"
-        />
+        {!isPro ? (
+          <PlanUpgradeCallout
+            planTier={user.planTier}
+            title="Free gives you the essentials. Pro adds the deeper picture."
+            copy="Keep it simple with Free, or unlock investments, richer pattern analysis, and more decision support in Pro."
+            ctaHref="/pricing"
+            ctaLabel="See Pro pricing"
+            secondaryHref="/goals"
+            secondaryLabel="Open goals"
+            className="insights-upgrade-callout"
+          />
+        ) : null}
       </section>
     </CloverShell>
   );
