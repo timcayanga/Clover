@@ -255,24 +255,24 @@ label {
 .clover-auth-card {
   width: min(100%, 520px);
   margin: 0 auto;
-  padding: 18px 20px 0;
+  padding: 14px 18px 0;
   border: 1px solid var(--stroke);
   border-radius: 24px;
   background: rgba(255, 255, 255, 0.98);
   box-shadow: var(--shadow);
   overflow: hidden;
   display: grid;
-  gap: 16px;
+  gap: 12px;
 }
 
 .clover-auth-card__brand {
   display: flex;
   justify-content: center;
-  margin-bottom: -2px;
+  margin-bottom: -6px;
 }
 
 .clover-auth-card__logo {
-  width: min(220px, 100%);
+  width: 56px;
   height: auto;
   display: block;
 }
@@ -7439,8 +7439,8 @@ label {
 .onboarding-option--experience-comfortable .onboarding-option__icon img,
 .onboarding-option--experience-advanced .onboarding-option__icon img,
 .onboarding-option--start-account .onboarding-option__icon img {
-  width: 68%;
-  height: 68%;
+  width: 62%;
+  height: 62%;
 }
 
 .onboarding-option--goal .onboarding-option__icon img {
@@ -7449,8 +7449,8 @@ label {
 }
 
 .onboarding-option--start-account .onboarding-option__icon img {
-  width: 60%;
-  height: 60%;
+  width: 54%;
+  height: 54%;
 }
 
 .onboarding-option.is-selected .onboarding-option__icon {
