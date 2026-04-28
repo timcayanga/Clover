@@ -10781,6 +10781,9 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-page__headline-copy h1 {
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 28px;
   font-weight: 600;
   letter-spacing: -0.05em;
@@ -10822,6 +10825,9 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-overview-card .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 0.64rem;
   letter-spacing: 0.18em;
   font-weight: 800;
@@ -11253,6 +11259,14 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+
+.accounts-detail__headline h2,
+.accounts-detail__reconciliation-head .eyebrow,
+.accounts-detail__summary .panel-muted {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .accounts-detail__panel {

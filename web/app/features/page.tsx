@@ -2,6 +2,60 @@ import { ScrollReveal } from "../../components/scroll-reveal";
 import { LandingNav } from "../../components/landing-nav";
 import Link from "next/link";
 
+function FeatureIcon({ name }: { name: "upload" | "understand" | "review" | "plan" }) {
+  const common = {
+    width: 22,
+    height: 22,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.8,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  switch (name) {
+    case "upload":
+      return (
+        <svg {...common}>
+          <path d="M12 16V5" />
+          <path d="m8 9 4-4 4 4" />
+          <path d="M5 19h14" />
+        </svg>
+      );
+    case "understand":
+      return (
+        <svg {...common}>
+          <path d="M4 18h16" />
+          <path d="M7 14h2" />
+          <path d="M11 10h2" />
+          <path d="M15 6h2" />
+          <path d="M6 6v12" />
+        </svg>
+      );
+    case "review":
+      return (
+        <svg {...common}>
+          <path d="M4 7h16" />
+          <path d="M4 12h16" />
+          <path d="M4 17h16" />
+          <path d="m15 7 2 2 3-3" />
+          <path d="m15 12 2 2 3-3" />
+        </svg>
+      );
+    case "plan":
+      return (
+        <svg {...common}>
+          <path d="M7 20V10" />
+          <path d="M12 20V6" />
+          <path d="M17 20v-8" />
+          <path d="M5 20h14" />
+        </svg>
+      );
+  }
+}
+
 function FeatureVisual({
   src,
   alt,
@@ -46,14 +100,33 @@ export default function FeaturesPage() {
             <span>Review reports</span>
             <span>Use AI insights</span>
           </div>
+          <div className="features-page__section-markers" aria-hidden="true">
+            <span>
+              <FeatureIcon name="upload" />
+            </span>
+            <span>
+              <FeatureIcon name="understand" />
+            </span>
+            <span>
+              <FeatureIcon name="review" />
+            </span>
+            <span>
+              <FeatureIcon name="plan" />
+            </span>
+          </div>
         </div>
 
         <FeatureVisual src="/landing-images/hero.jpg" alt="" badge="Turn raw files into a clearer view" />
       </ScrollReveal>
 
-      <ScrollReveal as="section" className="features-page__section">
+      <ScrollReveal as="section" className="features-page__section" id="upload">
         <div className="features-page__section-copy">
-          <p className="eyebrow">1. Upload</p>
+          <div className="features-page__section-head">
+            <span className="features-page__section-icon">
+              <FeatureIcon name="upload" />
+            </span>
+            <p className="eyebrow">1. Upload</p>
+          </div>
           <h2>Bring statements and receipts into Clover.</h2>
           <p>
             Upload PDFs and receipt files so Clover can start organizing your finances without manual setup.
@@ -68,9 +141,14 @@ export default function FeaturesPage() {
         <FeatureVisual src="/landing-images/statement-upload.jpg" alt="" badge="A simple place to add files" />
       </ScrollReveal>
 
-      <ScrollReveal as="section" className="features-page__section features-page__section--reverse">
+      <ScrollReveal as="section" className="features-page__section features-page__section--reverse" id="understand">
         <div className="features-page__section-copy">
-          <p className="eyebrow">2. Understand</p>
+          <div className="features-page__section-head">
+            <span className="features-page__section-icon">
+              <FeatureIcon name="understand" />
+            </span>
+            <p className="eyebrow">2. Understand</p>
+          </div>
           <h2>See your money in a clearer way.</h2>
           <p>
             Clover pulls your accounts and transactions into one view so it is easier to understand where your money goes.
@@ -85,9 +163,14 @@ export default function FeaturesPage() {
         <FeatureVisual src="/landing-images/smart-overview.jpg" alt="" badge="One overview for the full picture" />
       </ScrollReveal>
 
-      <ScrollReveal as="section" className="features-page__section">
+      <ScrollReveal as="section" className="features-page__section" id="review">
         <div className="features-page__section-copy">
-          <p className="eyebrow">3. Review</p>
+          <div className="features-page__section-head">
+            <span className="features-page__section-icon">
+              <FeatureIcon name="review" />
+            </span>
+            <p className="eyebrow">3. Review</p>
+          </div>
           <h2>Use reports and AI to spot what matters.</h2>
           <p>
             Open reports to see patterns over time, then use AI insights to get a simpler explanation of what changed.
@@ -102,9 +185,14 @@ export default function FeaturesPage() {
         <FeatureVisual src="/landing-images/reports-ai.jpg" alt="" badge="Reports that are easy to review" />
       </ScrollReveal>
 
-      <ScrollReveal as="section" className="features-page__section features-page__section--compact">
+      <ScrollReveal as="section" className="features-page__section features-page__section--compact" id="plan">
         <div className="features-page__section-copy">
-          <p className="eyebrow">4. Plan</p>
+          <div className="features-page__section-head">
+            <span className="features-page__section-icon">
+              <FeatureIcon name="plan" />
+            </span>
+            <p className="eyebrow">4. Plan</p>
+          </div>
           <h2>Turn clearer insights into better next steps.</h2>
           <p>
             Clover helps you decide what to watch, what to adjust, and what to keep improving next month.
