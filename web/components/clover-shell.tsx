@@ -300,9 +300,10 @@ function MenuIcon({ name }: { name: IconName }) {
     case "reports":
       return (
         <svg {...common}>
-          <path d="M12 12V4a8 8 0 1 1-8 8h8Z" />
-          <path d="M13.5 4.2A8 8 0 0 1 20 10.8h-6.5Z" />
-          <path d="M4 12a8 8 0 0 1 6.5-7.8V12Z" />
+          <circle cx="12" cy="12" r="8" />
+          <path d="M12 12V4" />
+          <path d="M12 12l6.9 4" />
+          <path d="M12 12l-6.9 4" />
         </svg>
       );
     case "insights":
