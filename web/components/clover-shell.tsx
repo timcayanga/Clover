@@ -705,10 +705,6 @@ export function CloverShell({
       />
       <aside className="sidebar" aria-label="Primary">
         <div className="sidebar-header">
-          <div className="sidebar-header__copy">
-            <span className="eyebrow">Menu</span>
-            <strong>Navigation</strong>
-          </div>
           <button
             className="sidebar-close-button"
             type="button"
@@ -717,6 +713,14 @@ export function CloverShell({
           >
             ×
           </button>
+          <Link
+            href="/dashboard"
+            aria-label="Clover home"
+            prefetch={false}
+            style={{ marginLeft: "auto", display: "inline-flex", alignItems: "center" }}
+          >
+            <img src="/clover-logo-full.svg" alt="Clover" style={{ display: "block", width: 132, height: "auto" }} />
+          </Link>
         </div>
 
         <div className="sidebar-search-wrap" ref={searchWrapRef}>
