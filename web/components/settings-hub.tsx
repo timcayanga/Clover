@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { UserProfile } from "@clerk/nextjs";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { BillingActions } from "@/components/billing-actions";
 import { type BillingInterval } from "@/lib/billing-plans";
+import { getPlanDisplayLabel } from "@/lib/user-limits";
 
 type ThemeMode = "light" | "dark" | "system";
 type SettingsSectionKey = "profile" | "display" | "data" | "plan";
@@ -32,6 +34,11 @@ type SettingsHubProps = {
   paypalMonthlyPlanId?: string | null;
   paypalAnnualPlanId?: string | null;
   paypalBuyerCountry?: string | null;
+  planLimits: {
+    accountLimit: number;
+    monthlyUploadLimit: number;
+    transactionLimit: number | null;
+  };
   planUsage: {
     accountCount: number;
     cashAccountCount: number;
@@ -197,19 +204,6 @@ const planCards = [
   },
 ] as const;
 
-const usageLimits = {
-  free: {
-    accounts: 5,
-    uploads: 10,
-    transactions: 1000,
-  },
-  pro: {
-    accounts: 20,
-    uploads: 100,
-    transactions: null,
-  },
-} as const;
-
 function getResolvedTheme(mode: ThemeMode) {
   if (mode !== "system") {
     return mode;
@@ -278,6 +272,7 @@ export function SettingsHub({
   paypalMonthlyPlanId,
   paypalAnnualPlanId,
   paypalBuyerCountry,
+  planLimits,
   planUsage,
 }: SettingsHubProps) {
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>("profile");
@@ -357,34 +352,41 @@ export function SettingsHub({
   const isFree = planTier === "free";
   const currentPlanValue = planTier === "free" ? "free" : billingSubscription?.interval ?? "annual";
   const currentPlanCard = planCards.find((plan) => plan.value === currentPlanValue) ?? planCards[0];
+  const currentPlanLabel = getPlanDisplayLabel(planTier, billingSubscription?.interval ?? null);
   const renewalDate = formatPlanDate(billingSubscription?.currentPeriodEnd ?? billingSubscription?.nextBillingTime ?? null);
-  const usageLimit = isFree ? usageLimits.free : usageLimits.pro;
   const annualCheckoutReady = Boolean(paypalClientId && paypalAnnualPlanId);
   const monthlyCheckoutReady = Boolean(paypalClientId && paypalMonthlyPlanId);
   const planUsageCards = [
     {
       label: "Accounts",
-      value: formatLimitCount(planUsage.accountCount, usageLimit.accounts, "accounts"),
+      value: formatLimitCount(planUsage.accountCount, planLimits.accountLimit, "accounts"),
       used: planUsage.accountCount,
-      limit: usageLimit.accounts,
+      limit: planLimits.accountLimit,
     },
     {
       label: "Monthly uploads",
-      value: formatLimitCount(planUsage.monthlyUploadCount, usageLimit.uploads, "uploads"),
+      value: formatLimitCount(planUsage.monthlyUploadCount, planLimits.monthlyUploadLimit, "uploads"),
       used: planUsage.monthlyUploadCount,
-      limit: usageLimit.uploads,
+      limit: planLimits.monthlyUploadLimit,
     },
     {
       label: "Transaction rows",
-      value: formatLimitCount(planUsage.transactionCount, usageLimit.transactions, "rows"),
+      value: formatLimitCount(planUsage.transactionCount, planLimits.transactionLimit, "rows"),
       used: planUsage.transactionCount,
-      limit: usageLimit.transactions,
+      limit: planLimits.transactionLimit,
     },
   ];
 
   return (
     <section className="settings-hub">
       <aside className="settings-hub__menu glass">
+        <Link className="settings-hub__brand" href="/dashboard" aria-label="Go to dashboard">
+          <img className="settings-hub__brand-mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
+          <div className="settings-hub__brand-copy">
+            <strong>Clover</strong>
+            <span>{workspaceName}</span>
+          </div>
+        </Link>
         <div className="settings-hub__menu-list" role="tablist" aria-label="Settings sections">
           {(Object.keys(sectionCopy) as SettingsSectionKey[]).map((sectionKey) => {
             const section = sectionCopy[sectionKey];
@@ -609,7 +611,7 @@ export function SettingsHub({
                     {currentPlanCard.title}
                   </span>
                 </div>
-                <div className="settings-plan-usage__value">{currentPlanCard.title}</div>
+                <div className="settings-plan-usage__value">{currentPlanLabel}</div>
                 {planTier === "pro" && renewalDate ? (
                   <div className="settings-plan-usage__renewal">
                     <span>Renewal</span>
@@ -656,10 +658,10 @@ export function SettingsHub({
                           <PlanIcon name={option.icon} />
                         </div>
                         <div className="settings-plan-card__band-text">
-                          <span className="settings-plan-card__band-title">{option.title}</span>
-                          <span className="settings-plan-card__band-price">{option.price}</span>
-                        </div>
-                      </div>
+                      <span className="settings-plan-card__band-title">{option.title}</span>
+                      <span className="settings-plan-card__band-price">{option.price}</span>
+                    </div>
+                  </div>
                       {option.badge ? <span className="settings-plan-card__band-badge">{option.badge}</span> : null}
                     </div>
 
