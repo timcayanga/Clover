@@ -5,6 +5,7 @@ import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { UserProfile } from "@clerk/nextjs";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { BillingActions } from "@/components/billing-actions";
+import { PlanFeatureItem } from "@/components/plan-feature-item";
 import { type BillingInterval } from "@/lib/billing-plans";
 import { getPlanDisplayLabel } from "@/lib/user-limits";
 
@@ -92,31 +93,6 @@ function PlanIcon({ name }: { name: "free" | "annual" | "monthly" }) {
   );
 }
 
-function FeatureIcon({ tier }: { tier: "free" | "pro" }) {
-  if (tier === "pro") {
-    return (
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 20 20"
-        className="settings-plan-card__feature-icon"
-      >
-        <path d="m10 2.5 1.4 3.9 4 .2-3.1 2.5 1.1 3.8L10 10.7 6.6 12.9l1.1-3.8-3.1-2.5 4-.2L10 2.5Z" fill="currentColor" />
-      </svg>
-    );
-  }
-
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 20 20"
-      className="settings-plan-card__feature-icon"
-    >
-      <circle cx="10" cy="10" r="4" fill="currentColor" />
-      <path d="M10 3.8V2.2M10 17.8v-1.6M3.8 10H2.2M17.8 10h-1.6" stroke="currentColor" strokeLinecap="round" strokeWidth="1.4" />
-    </svg>
-  );
-}
-
 const sectionCopy: Record<
   SettingsSectionKey,
   {
@@ -163,10 +139,12 @@ const planCards = [
     description: "Best for getting a small workspace organized without commitment.",
     features: [
       "Manual transaction tracking",
-      "5 accounts in addition to Cash",
-      "10 monthly uploads total",
+      "5 non-cash accounts",
+      "10 monthly uploads",
       "1,000 transaction rows",
-      "Basic reports",
+      "Basic investment tracking",
+      "Basic reports and insights",
+      "Basic goal tracking",
     ],
   },
   {
@@ -180,10 +158,12 @@ const planCards = [
     description: "Upgrade for the yearly price and get the same Pro access for less than monthly billing.",
     features: [
       "Everything in Free",
-      "20 accounts",
+      "20 non-cash accounts",
       "100 monthly uploads",
       "Unlimited transaction rows",
-      "Advanced reports",
+      "Full investment portfolio tools",
+      "Advanced reports and insights",
+      "Enhanced goal tracking and recommendations",
     ],
   },
   {
@@ -196,10 +176,12 @@ const planCards = [
     description: "Upgrade for shorter commitment while keeping the same Pro feature set.",
     features: [
       "Everything in Free",
-      "20 accounts",
+      "20 non-cash accounts",
       "100 monthly uploads",
       "Unlimited transaction rows",
-      "Advanced reports",
+      "Full investment portfolio tools",
+      "Advanced reports and insights",
+      "Enhanced goal tracking and recommendations",
     ],
   },
 ] as const;
@@ -668,10 +650,7 @@ export function SettingsHub({
                     <div className="settings-plan-card__body">
                       <ul className="settings-plan-card__features">
                         {option.features.map((feature) => (
-                          <li key={feature}>
-                            <FeatureIcon tier={option.value === "free" ? "free" : "pro"} />
-                            <span>{feature}</span>
-                          </li>
+                          <PlanFeatureItem key={feature} label={feature} className="settings-plan-card__feature-row" />
                         ))}
                       </ul>
 

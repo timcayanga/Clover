@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { PlanFeatureItem } from "@/components/plan-feature-item";
 import { ImportPasswordModal } from "@/components/import-password-modal";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import { capturePostHogClientEvent, capturePostHogClientEventOnce, analyticsOnceKey } from "@/components/posthog-analytics";
@@ -2095,6 +2096,11 @@ export function ImportFilesModal({
               <p>
                 Free users can queue up to {monthlyUploadLimit} statement files at a time. Pro is the path for heavier importing and later premium limits.
               </p>
+              <ul className="import-limit-cta__features">
+                <PlanFeatureItem label="10 monthly uploads total, including statements and receipts" />
+                <PlanFeatureItem label="5 accounts in addition to Cash" />
+                <PlanFeatureItem label="1,000 transaction rows total" />
+              </ul>
             </div>
             <div className="import-limit-cta__actions">
               <Link className="button button-primary button-small" href="/pricing">

@@ -8,8 +8,11 @@ import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
+import { PlanTierBanner } from "@/components/plan-tier-banner";
+import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+import { getEffectiveUserLimits } from "@/lib/user-limits";
 import {
   GOAL_OPTIONS,
   getFinancialExperienceProfile,
@@ -224,6 +227,7 @@ async function GoalsPageStream() {
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
+  const planLimits = getEffectiveUserLimits(user);
 
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
@@ -895,6 +899,16 @@ async function GoalsPageStream() {
       subtitle={shellSubtitle}
       showTopbar={false}
     >
+      <PlanTierBanner
+        planTier={user.planTier}
+        label="Goals and recommendations"
+        limits={planLimits}
+        ctaHref={user.planTier === "free" ? "/pricing" : "/settings#billing"}
+        ctaLabel={user.planTier === "free" ? "See Pro pricing" : "Manage billing"}
+        secondaryHref="/insights"
+        secondaryLabel="Open insights"
+        className="goals-plan-banner"
+      />
       {isEmptyWorkspace ? (
         <div style={{ marginBottom: 20 }}>
           <EmptyDataCta
@@ -1496,6 +1510,17 @@ async function GoalsPageStream() {
             </article>
           </div>
         </article>
+
+        <PlanUpgradeCallout
+          planTier={user.planTier}
+          title="Free keeps the basics open. Pro adds a fuller coaching layer."
+          copy="If you want Clover to help with deeper investing, richer reports, and more advanced goal advice, Pro gives the workspace more room to grow with you."
+          ctaHref={user.planTier === "free" ? "/pricing" : "/settings#billing"}
+          ctaLabel={user.planTier === "free" ? "See Pro pricing" : "Manage billing"}
+          secondaryHref="/insights"
+          secondaryLabel="Open insights"
+          className="goals-upgrade-callout"
+        />
       </section>
     </CloverShell>
   );

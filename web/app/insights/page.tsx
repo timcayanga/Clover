@@ -7,9 +7,12 @@ import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
+import { PlanTierBanner } from "@/components/plan-tier-banner";
+import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
+import { listImportFilesCompat } from "@/lib/data-engine";
 import {
   getInvestmentSubtypeLabel,
   isFixedIncomeInvestmentSubtype,
@@ -17,6 +20,7 @@ import {
 } from "@/lib/investments";
 import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+import { getEffectiveUserLimits } from "@/lib/user-limits";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -150,7 +154,6 @@ async function InsightsPageStream() {
   let ninetyDayTransactions: InsightTransaction[] = [];
   let sixMonthTransactions: Array<Pick<InsightTransaction, "date" | "amount" | "type">> = [];
   let workspaceAccounts: WorkspaceAccount[] = [];
-  let importFiles: Array<{ status: "processing" | "done" | "failed" | "deleted" }> = [];
   let selectedGoalValue: string | null = null;
   let goalTargetAmount: number | null = null;
   let isFreshResetWorkspace = false;
@@ -162,14 +165,12 @@ async function InsightsPageStream() {
   if (!hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
+  const planLimits = getEffectiveUserLimits(user);
 
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
   const workspaceInclude = {
     accounts: true,
-    importFiles: {
-      orderBy: { uploadedAt: "desc" },
-    },
   } as const;
 
   const selectedWorkspace =
@@ -204,6 +205,8 @@ async function InsightsPageStream() {
   if (!resolvedWorkspace) {
     redirect("/dashboard");
   }
+
+  const workspaceImportFiles = await listImportFilesCompat(resolvedWorkspace.id);
 
   const thirtyDaysAgo = new Date(now);
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -318,10 +321,9 @@ async function InsightsPageStream() {
     investmentInterestRate: account.investmentInterestRate === null ? null : Number(account.investmentInterestRate),
     investmentMaturityValue: account.investmentMaturityValue === null ? null : Number(account.investmentMaturityValue),
   }));
-  importFiles = resolvedWorkspace.importFiles;
   selectedGoalValue = user.primaryGoal?.trim() ?? null;
   goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
-  isFreshResetWorkspace = user.dataWipedAt !== null && resolvedWorkspace.accounts.length <= 1 && resolvedWorkspace.importFiles.length === 0;
+  isFreshResetWorkspace = user.dataWipedAt !== null && resolvedWorkspace.accounts.length <= 1 && workspaceImportFiles.length === 0;
 
   const reportType = "insights";
   const workspaceId = resolvedWorkspace.id;
@@ -330,7 +332,7 @@ async function InsightsPageStream() {
   const ninetyDayInsightTransactions = ninetyDayTransactions;
   const sixMonthInsightTransactions = sixMonthTransactions as InsightTransaction[];
   const selectedGoal = selectedGoalValue;
-  const isEmptyWorkspace = workspaceAccounts.length <= 1 && importFiles.length === 0 && currentWindowTransactions.length === 0;
+  const isEmptyWorkspace = workspaceAccounts.length <= 1 && workspaceImportFiles.length === 0 && currentWindowTransactions.length === 0;
 
   const currentSummary = currentWindowTransactions.reduce(
     (accumulator, transaction) => {
@@ -508,7 +510,7 @@ async function InsightsPageStream() {
     .sort((a, b) => b.length - a.length)
     .slice(0, 3);
 
-  const importStatusCounts = importFiles.reduce(
+  const importStatusCounts = workspaceImportFiles.reduce(
     (counts, file) => {
       counts[file.status] += 1;
       return counts;
@@ -891,6 +893,16 @@ async function InsightsPageStream() {
           report_type: reportType,
           chart_type: "timeline",
         }}
+      />
+      <PlanTierBanner
+        planTier={user.planTier}
+        label="Insights and recommendations"
+        limits={planLimits}
+        ctaHref={user.planTier === "free" ? "/pricing" : "/settings#billing"}
+        ctaLabel={user.planTier === "free" ? "See Pro pricing" : "Manage billing"}
+        secondaryHref="/goals"
+        secondaryLabel="Open goals"
+        className="insights-plan-banner"
       />
       {isEmptyWorkspace ? (
         <div style={{ marginBottom: 20 }}>
@@ -1427,6 +1439,17 @@ async function InsightsPageStream() {
             </div>
           </div>
         </article>
+
+        <PlanUpgradeCallout
+          planTier={user.planTier}
+          title="Free gives you the essentials. Pro adds the decision layer."
+          copy="If you want more context on what changed, why it moved, and what to do next, Pro opens up a richer story across reports, goals, and investing."
+          ctaHref={user.planTier === "free" ? "/pricing" : "/settings#billing"}
+          ctaLabel={user.planTier === "free" ? "See Pro pricing" : "Manage billing"}
+          secondaryHref="/goals"
+          secondaryLabel="Open goals"
+          className="insights-upgrade-callout"
+        />
       </section>
     </CloverShell>
   );

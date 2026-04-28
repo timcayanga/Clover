@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { BillingActions } from "@/components/billing-actions";
+import { PlanFeatureItem } from "@/components/plan-feature-item";
 import { getEnv } from "@/lib/env";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getUserBillingSubscription } from "@/lib/paypal-billing";
@@ -37,14 +38,6 @@ function PlanIcon({ name }: { name: "starter" | "growth" }) {
   );
 }
 
-function CheckIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="m20 6-11 11-5-5" />
-    </svg>
-  );
-}
-
 export default async function PricingPage() {
   const session = await auth();
   const env = getEnv();
@@ -73,7 +66,7 @@ export default async function PricingPage() {
           <span className="legal-page__eyebrow">Clover</span>
           <h1>Pricing</h1>
           <p>Choose a plan that fits the way you want to understand your money.</p>
-          <p>Start free if you want to explore Clover first. Upgrade to Pro when you need higher limits and advanced reports.</p>
+          <p>Start free if you want to explore Clover first. Upgrade to Pro when you need higher limits, fuller investing tools, and richer reports, insights, and goals.</p>
         </header>
 
         <section className="pricing-page__comparison" aria-label="Clover pricing plans">
@@ -91,30 +84,14 @@ export default async function PricingPage() {
               Great for getting started, importing a smaller set of statements, and seeing the value of Clover before you upgrade.
             </p>
             <ul className="pricing-card__list">
-              <li>
-                <CheckIcon />
-                <span>Manual transaction tracking.</span>
-              </li>
-              <li>
-                <CheckIcon />
-                <span>Receipt scanning.</span>
-              </li>
-              <li>
-                <CheckIcon />
-                <span>5 accounts in addition to Cash.</span>
-              </li>
-              <li>
-                <CheckIcon />
-                <span>10 monthly uploads total, including statements and receipts.</span>
-              </li>
-              <li>
-                <CheckIcon />
-                <span>1,000 transaction rows total.</span>
-              </li>
-              <li>
-                <CheckIcon />
-                <span>Basic reports.</span>
-              </li>
+              <PlanFeatureItem label="Manual transaction tracking" />
+              <PlanFeatureItem label="Receipt scanning" />
+              <PlanFeatureItem label="5 accounts in addition to Cash" />
+              <PlanFeatureItem label="10 monthly uploads total, including statements and receipts" />
+              <PlanFeatureItem label="1,000 transaction rows total" />
+              <PlanFeatureItem label="Basic investment tracking" />
+              <PlanFeatureItem label="Basic reports and insights" />
+              <PlanFeatureItem label="Basic goal tracking" />
             </ul>
           </article>
 
@@ -135,26 +112,13 @@ export default async function PricingPage() {
               PHP 149 monthly or PHP 1,299 annually.
             </p>
             <ul className="pricing-card__list">
-              <li>
-                <CheckIcon />
-                <span>Manual transaction tracking.</span>
-              </li>
-              <li>
-                <CheckIcon />
-                <span>20 accounts.</span>
-              </li>
-              <li>
-                <CheckIcon />
-                <span>100 monthly uploads total.</span>
-              </li>
-              <li>
-                <CheckIcon />
-                <span>Unlimited transaction rows.</span>
-              </li>
-              <li>
-                <CheckIcon />
-                <span>Advanced reports.</span>
-              </li>
+              <PlanFeatureItem label="Manual transaction tracking" />
+              <PlanFeatureItem label="20 non-cash accounts" />
+              <PlanFeatureItem label="100 monthly uploads total" />
+              <PlanFeatureItem label="Unlimited transaction rows" />
+              <PlanFeatureItem label="Full investment portfolio tools" />
+              <PlanFeatureItem label="Advanced reports and insights" />
+              <PlanFeatureItem label="Enhanced goal tracking and recommendations" />
             </ul>
           </article>
         </section>
