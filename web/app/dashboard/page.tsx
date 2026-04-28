@@ -10,7 +10,6 @@ import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getFinancialExperienceProfile, getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
-import { getUpcomingStatementReminders } from "@/lib/statement-reminders";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
 
@@ -23,12 +22,6 @@ const currencyFormatter = new Intl.NumberFormat("en-PH", {
   style: "currency",
   currency: "PHP",
   minimumFractionDigits: 2,
-});
-
-const dateFormatter = new Intl.DateTimeFormat("en-PH", {
-  month: "short",
-  day: "2-digit",
-  year: "numeric",
 });
 
 const relativeTimeFormatter = new Intl.RelativeTimeFormat("en-PH", {
@@ -117,8 +110,6 @@ const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
 
 const formatSignedCurrency = (value: number) => `${value < 0 ? "-" : ""}${currencyFormatter.format(Math.abs(value))}`;
-
-const formatDate = (value: Date) => dateFormatter.format(value);
 
 const formatRelativeDate = (value: Date, now = new Date()) => {
   const diffMinutes = Math.round((value.getTime() - now.getTime()) / 60000);
@@ -488,7 +479,6 @@ async function DashboardStream({
       uploadedAt: true,
     },
   });
-  const remindersPromise = getUpcomingStatementReminders(workspaceSummary.id);
 
   const shouldLoadTransactions = !selectedWorkspaceData || workspaceSummary._count.transactions > 0;
   const transactionsPromise = shouldLoadTransactions
@@ -525,10 +515,9 @@ async function DashboardStream({
       })
     : Promise.resolve([] as DashboardTransaction[]);
 
-  const [latestImport, recentTransactions, reminders] = await Promise.all([latestImportPromise, transactionsPromise, remindersPromise]);
+  const [latestImport, recentTransactions] = await Promise.all([latestImportPromise, transactionsPromise]);
 
   const currentTransactions = recentTransactions as DashboardTransaction[];
-  const nextReminder = reminders[0] ?? null;
   const currentThirtyDayTransactions = currentTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo);
   const previousTransactionsWindow = currentTransactions.filter(
     (transaction) => transaction.date >= sixtyDaysAgo && transaction.date < thirtyDaysAgo
@@ -571,8 +560,6 @@ async function DashboardStream({
   );
   const confidenceLabel = confidenceScore >= 85 ? "High confidence" : confidenceScore >= 70 ? "Good confidence" : "Watch closely";
   const latestImportLabel = latestImport ? `${latestImport.fileName} · ${latestImport.status} · ${formatRelativeDate(latestImport.uploadedAt)}` : null;
-  const currentPositionValue = linkedBalanceTotal !== 0 ? linkedBalanceTotal : currentSummary.net;
-  const currentPositionLabel = accountsWithBalance.length > 0 ? (trackedBalanceCurrency === "mixed" ? "Mixed balances" : "Tracked balance") : "Net position";
   const topCategories = Array.from(currentSummary.current.expenseCategories.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
@@ -603,14 +590,6 @@ async function DashboardStream({
   const goalAction = goalProgress.nextAction;
   const goalProgressLabel = goalProgress.progressPercent === null ? "Set a target" : `${Math.round(goalProgress.progressPercent)}%`;
   const topDriver = currentSummary.topCategory?.[0] ?? "No clear driver yet";
-  const topDriverAmount = currentSummary.topCategory?.[1] ?? 0;
-  const insightTrend = currentSummary.biggestMover?.name ?? recurringItem?.name ?? "Patterns are still forming";
-  const insightTrendCopy =
-    currentSummary.biggestMover && currentSummary.biggestMover.previousAmount > 0
-      ? `${formatSignedCurrency(currentSummary.biggestMover.delta)} versus the prior period`
-      : recurringItem
-        ? `${recurringItem.count} repeats over the last 90 days`
-        : "More activity will sharpen the insight";
   const reviewAttentionText =
     reviewAttentionCount > 0
       ? `${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} need review`
@@ -651,31 +630,33 @@ async function DashboardStream({
         <article className="dashboard-home__hero glass">
           <div className="dashboard-home__copy">
             <div className="dashboard-home__kicker-row">
-              <span className="pill pill-accent">Goals</span>
-              <span className="pill pill-subtle">Reports</span>
-              <span className="pill pill-subtle">Insights</span>
+              <span className="pill pill-accent">Overview</span>
+              <span className="pill pill-subtle">Goal</span>
+              <span className="pill pill-subtle">Month</span>
+              <span className="pill pill-subtle">Pattern</span>
               <span className="pill pill-subtle">{workspaceSummary.name}</span>
               {latestImport ? <span className="pill pill-subtle">{formatRelativeDate(latestImport.uploadedAt)}</span> : null}
             </div>
 
-            <h3>{goalKey ? "How close are you to your goal?" : "Your finances at a glance, with the important patterns up front."}</h3>
-            <p>{goalProgress.coachCopy}</p>
+            <h3>{user.financialExperience === "beginner" ? "Your money, in one simple view." : goalKey ? "How close are you to your goal?" : "Your finances at a glance."}</h3>
+            <p>
+              {user.financialExperience === "beginner"
+                ? "The cards below show your goal, your month, and the biggest pattern. The small review note stays tucked away until you need it."
+                : goalProgress.coachCopy}
+            </p>
 
             <div className="dashboard-home__hero-metrics">
               <div className="dashboard-home__mini-card">
-                <span>Goal pace</span>
+                <span>Goal</span>
                 <strong>{goalProgressLabel}</strong>
-                <small>{goalProgress.bandLabel}</small>
+                <small>{goalSummaryLabel}</small>
               </div>
               <div className="dashboard-home__mini-card">
-                <span>{currentPositionLabel}</span>
-                <strong>{formatSignedCurrency(currentPositionValue)}</strong>
-                <small>{currentSummary.net >= 0 ? "Positive cash flow" : "Negative cash flow"}</small>
-              </div>
-              <div className="dashboard-home__mini-card">
-                <span>Signal quality</span>
-                <strong>{confidenceLabel}</strong>
-                <small>{reviewCoverageText}</small>
+                <span>This month</span>
+                <strong>{reportNetLabel}</strong>
+                <small>
+                  {reportIncomeLabel} in · {reportExpenseLabel} out
+                </small>
               </div>
             </div>
           </div>
@@ -694,23 +675,14 @@ async function DashboardStream({
             </div>
             <div className="dashboard-home__hero-visual-grid">
               <div className="dashboard-home__mini-card">
-                <span>Goals</span>
+                <span>Goal next</span>
                 <strong>{goalSummaryLabel}</strong>
                 <small>{goalAction}</small>
               </div>
               <div className="dashboard-home__mini-card">
-                <span>Reports</span>
+                <span>Month</span>
                 <strong>{reportNetLabel}</strong>
-                <small>
-                  {reportIncomeLabel} in, {reportExpenseLabel} out
-                </small>
-              </div>
-              <div className="dashboard-home__mini-card">
-                <span>Insights</span>
-                <strong>{topDriver}</strong>
-                <small>
-                  {insightTrend} · {insightTrendCopy} · {formatCurrency(topDriverAmount)} this period
-                </small>
+                <small>{reportDirectionLabel}</small>
               </div>
             </div>
           </div>
@@ -721,7 +693,7 @@ async function DashboardStream({
             <div className="dashboard-home__summary-card-head">
               <div>
                 <p className="eyebrow">Goals</p>
-                <h4>{goalKey ? `How close are you to ${goalProgress.bandLabel.toLowerCase()}?` : "Set a goal to make this dashboard more useful"}</h4>
+                <h4>{goalKey ? "How close are you to your goal?" : "Set a goal to make this dashboard more useful"}</h4>
               </div>
               <span className="dashboard-visual-pill">{goalProgressLabel}</span>
             </div>
@@ -803,11 +775,18 @@ async function DashboardStream({
             <div className="dashboard-home__summary-card-head">
               <div>
                 <p className="eyebrow">Insights</p>
-                <h4>What is driving the month</h4>
+                <h4>What stands out</h4>
               </div>
               <span className="dashboard-visual-pill">{confidenceLabel}</span>
             </div>
             <div className="dashboard-home__summary-card-body">
+              <div className="dashboard-home__mini-card dashboard-home__mini-card--stacked">
+                <span>Biggest pattern</span>
+                <strong>{topDriver}</strong>
+                <small>
+                  {formatCurrency(currentSummary.topCategory?.[1] ?? 0)} this month
+                </small>
+              </div>
               <div className="dashboard-home__insight-bars">
                 {topCategories.length > 0 ? (
                   topCategories.map((category, index) => (
@@ -841,7 +820,7 @@ async function DashboardStream({
                   </small>
                 </div>
                 <div className="dashboard-home__mini-card">
-                  <span>Signal quality</span>
+                  <span>Trust</span>
                   <strong>{Math.round(confidenceScore)}%</strong>
                   <small>{reviewCoverageText}</small>
                 </div>
@@ -852,43 +831,14 @@ async function DashboardStream({
 
         <article className="dashboard-home__review-strip glass">
           <div className="dashboard-home__review-copy">
-            <p className="eyebrow">Review, if needed</p>
+            <p className="eyebrow">Small follow-up</p>
             <strong>{reviewAttentionText}</strong>
-            <span>{latestImportLabel ?? "Import a statement to populate the dashboard with live data."}</span>
+            <span>{reviewCoverageText}</span>
           </div>
           <div className="dashboard-home__review-actions">
-            <Link className="button button-primary button-small" href="/review">
-              Open review
+            <Link className="button button-primary button-small" href={reviewAttentionCount > 0 ? "/review" : "/goals"}>
+              {reviewAttentionCount > 0 ? "Open review" : "See goal"}
             </Link>
-            <Link className="pill-link pill-link--inline" href="/dashboard?import=1">
-              Import statement
-            </Link>
-          </div>
-        </article>
-
-        <article className="dashboard-home__review-strip glass">
-          <div className="dashboard-home__review-copy">
-            <p className="eyebrow">Upcoming card payments</p>
-            <strong>
-              {nextReminder
-                ? `${nextReminder.accountName} due ${formatDate(new Date(nextReminder.paymentDueDate))} for ${formatCurrency(nextReminder.totalAmountDue)}`
-                : "No upcoming card payments"}
-            </strong>
-            <span>
-              {nextReminder
-                ? "Future-dated due reminders are tracked here and in Notifications."
-                : "Statements with past-due dates are intentionally ignored."}
-            </span>
-          </div>
-          <div className="dashboard-home__review-actions">
-            <Link className="button button-primary button-small" href="/notifications">
-              Open reminders
-            </Link>
-            {nextReminder?.accountId ? (
-              <Link className="pill-link pill-link--inline" href={`/accounts/${nextReminder.accountId}`}>
-                Open account
-              </Link>
-            ) : null}
           </div>
         </article>
 

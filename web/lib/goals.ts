@@ -122,7 +122,7 @@ const FINANCIAL_EXPERIENCE_PROFILES: Record<FinancialExperienceLevel, FinancialE
     goalsLead: "Pick a lane, set a number, and let Clover explain the next step in plain language.",
     goalsSupport: "We’ll keep the coaching simple, with one clear move at a time and less jargon.",
     goalsShellSubtitle: "A calm, step-by-step view of your goal with simple guidance and a place to set the number.",
-    dashboardSubtitle: "See your goal pace, report trend, and key insight at a glance without the jargon.",
+    dashboardSubtitle: "See your goal, your month, and the biggest pattern in one simple glance.",
     emptyStateTitle: "Import files to see Clover turn statements into a clear picture.",
     emptyStateCopy:
       "Start with a statement and Clover will build the dashboard, explain the review queue, and help you understand the month one step at a time. You can add an account or enter transactions manually if that suits you better.",
@@ -137,7 +137,7 @@ const FINANCIAL_EXPERIENCE_PROFILES: Record<FinancialExperienceLevel, FinancialE
     goalsLead: "Set the lane and the number, then let Clover keep the month honest.",
     goalsSupport: "You’ll get a clearer mix of coaching, progress, and pattern tracking.",
     goalsShellSubtitle: "A visual goal view with the target, progress, and next step kept easy to scan.",
-    dashboardSubtitle: "A quick visual summary of goals, reports, and insights with the small follow-up items tucked away.",
+    dashboardSubtitle: "A clear summary of your goal, month, and biggest pattern.",
     emptyStateTitle: "Import files to wake up the dashboard.",
     emptyStateCopy:
       "Upload a statement to populate balances, review items, trends, and goal progress. You can also connect an account or enter transactions manually if that is your preferred starting point.",
@@ -152,7 +152,7 @@ const FINANCIAL_EXPERIENCE_PROFILES: Record<FinancialExperienceLevel, FinancialE
     goalsLead: "Set the target and let the numbers do the talking.",
     goalsSupport: "You’ll see tighter summaries, quicker scans, and less explanatory copy.",
     goalsShellSubtitle: "A concise goal view with the target, pace, and trend signals front and center.",
-    dashboardSubtitle: "See the goal pace, report trend, and main insight signals in one quick glance.",
+    dashboardSubtitle: "See your goal, month, and main pattern in one quick glance.",
     emptyStateTitle: "Import files to load the numbers fast.",
     emptyStateCopy:
       "Start with a statement if you want Clover to populate the dashboard, review queue, and goal signals immediately. You can still add an account or enter transactions manually if needed.",

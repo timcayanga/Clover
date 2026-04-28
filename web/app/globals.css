@@ -3229,7 +3229,7 @@ label {
 
 .dashboard-home__hero-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -3466,6 +3466,10 @@ label {
 
 .dashboard-home__mini-card--loading {
   min-height: 88px;
+}
+
+.dashboard-home__mini-card--stacked {
+  align-content: start;
 }
 
 .dashboard-home__summary-card--loading {
@@ -5310,6 +5314,68 @@ label {
   gap: 12px;
 }
 
+.goals-story--beginner .goals-pace-card,
+.goals-story--beginner .goals-plan-grid,
+.goals-story--beginner .goals-visual-grid,
+.goals-story--beginner .goals-lanes,
+.goals-story--beginner .goals-intel-grid,
+.goals-story--beginner .goals-alerts,
+.goals-story--beginner .goals-upgrade-callout {
+  display: none;
+}
+
+.goals-beginner-guide {
+  padding: 20px;
+  border-radius: 28px;
+  border: 1px solid var(--stroke);
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 28%),
+    rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 14px;
+}
+
+.goals-beginner-guide__list {
+  display: grid;
+  gap: 10px;
+}
+
+.goals-beginner-guide__item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 14px 15px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.goals-beginner-guide__item > span {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: rgba(3, 168, 192, 0.12);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.goals-beginner-guide__item strong {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 15px;
+  letter-spacing: -0.02em;
+}
+
+.goals-beginner-guide__item p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .goals-hero {
   position: relative;
   overflow: hidden;
@@ -6481,6 +6547,23 @@ label {
   border-color: rgba(3, 168, 192, 0.24);
   background: rgba(3, 168, 192, 0.08);
   color: var(--accent);
+}
+
+.goals-editor__helper {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.goals-editor__advanced-toggle {
+  display: grid;
+  gap: 8px;
+  align-items: start;
+}
+
+.goals-editor__advanced-toggle small {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .goals-plan-grid {

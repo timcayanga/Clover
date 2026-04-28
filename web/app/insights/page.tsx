@@ -666,10 +666,6 @@ async function InsightsPageStream() {
           .filter((line): line is string => line !== null)
           .join(" ");
   const aiSummaryWithInvestments = investmentSummaryLine ? `${aiSummary} ${investmentSummaryLine}` : aiSummary;
-  const visibleDriverInsightCards = isPro ? driverInsightCards : driverInsightCards.slice(0, 2);
-  const visibleRecurringInsightCards = isPro ? recurringInsightCards : recurringInsightCards.slice(0, 2);
-  const visibleBehaviorInsightCards = isPro ? behaviorInsightCards : behaviorInsightCards.slice(0, 2);
-  const showInvestmentSection = isPro && investmentAccounts.length > 0;
   const primarySnapshotItems = [
     {
       label: "Net position",
@@ -806,6 +802,11 @@ async function InsightsPageStream() {
       icon: "🎯",
     },
   ];
+  const visibleDriverInsightCards = isPro ? driverInsightCards : driverInsightCards.slice(0, 2);
+  const visibleRecurringInsightCards = isPro ? recurringInsightCards : recurringInsightCards.slice(0, 2);
+  const visibleBehaviorInsightCards = isPro ? behaviorInsightCards : behaviorInsightCards.slice(0, 2);
+
+  const showInvestmentSection = isPro && investmentAccounts.length > 0;
 
   const chartWidth = 520;
   const chartHeight = 150;
