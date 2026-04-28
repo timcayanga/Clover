@@ -24,6 +24,9 @@ export default async function AdminPage() {
       subtitle="Operate Clover from one place: user editing, analytics, error visibility, and drill-downs. Production users only."
       actions={
         <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+          <Link className="button button-secondary button-small" href="/admin/inquiries">
+            Inquiries
+          </Link>
           <Link className="button button-secondary button-small" href="/admin/data-qa">
             Data QA
           </Link>

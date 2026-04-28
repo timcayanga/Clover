@@ -252,6 +252,9 @@ export default function HomePage() {
 
       <footer className="landing-footer" aria-label="Legal links">
         <nav className="landing-footer__nav" aria-label="Legal">
+          <Link href="/contact-us" prefetch={false}>
+            Contact Us
+          </Link>
           <Link href="/privacy-policy" prefetch={false}>
             Privacy Policy
           </Link>

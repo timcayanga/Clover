@@ -138,6 +138,14 @@ const sidebarSearchPages: Array<{
     detail: "Guides for setup, pricing, safety, and storage.",
     terms: ["help", "support", "guide", "setup", "pricing", "security", "storage"],
   },
+  {
+    key: "inquiries",
+    title: "Inquiries",
+    href: "/admin/inquiries",
+    icon: "help",
+    detail: "Customer messages and support requests.",
+    terms: ["inquiries", "contact us", "support inbox", "customer messages", "questions", "concerns"],
+  },
 ];
 
 const normalizeSidebarSearch = (value: string) => value.trim().toLowerCase();

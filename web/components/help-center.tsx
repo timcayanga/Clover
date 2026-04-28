@@ -57,6 +57,11 @@ export function HelpCenter({ returnTo }: HelpCenterProps) {
             <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
             <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" />
           </Link>
+          <div className="help-page__nav-links">
+            <Link className="help-page__nav-link" href="/contact-us" prefetch={false}>
+              Contact us
+            </Link>
+          </div>
         </nav>
 
         <label className="help-search help-search--hero" htmlFor="help-search">

@@ -59,6 +59,9 @@ export function HelpArticlePage({ section, article, returnTo }: HelpArticlePageP
             <Link className="help-page__nav-link" href={homeHref} prefetch={false}>
               Help home
             </Link>
+            <Link className="help-page__nav-link" href="/contact-us" prefetch={false}>
+              Contact us
+            </Link>
           </div>
         </nav>
 
@@ -143,4 +146,3 @@ export function HelpArticlePage({ section, article, returnTo }: HelpArticlePageP
     </main>
   );
 }
-
