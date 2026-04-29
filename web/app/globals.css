@@ -2591,7 +2591,7 @@ label {
   .investments-tabs-shell,
   .reports-toolbar.reports-tabs-shell,
   .reports-toolbar.section-tabs-shell {
-    margin-inline: -18px;
+    margin: -16px -18px 14px;
     padding-inline: 18px;
   }
 
@@ -4211,7 +4211,7 @@ label {
 .investments-tabs-shell {
   display: grid;
   gap: 8px;
-  margin: 0 -20px 14px;
+  margin: -16px -20px 14px;
   padding: 8px 20px 6px;
   border-radius: 0;
   border: 0;
@@ -4246,7 +4246,7 @@ label {
   justify-content: space-between;
   gap: 12px;
   padding: 8px 20px 6px;
-  margin-inline: -20px;
+  margin: -16px -20px 14px;
   border-radius: 0;
   border-bottom: 0;
   background:
@@ -17237,7 +17237,7 @@ input.transaction-inline-edit--amount::placeholder {
   .investments-tabs-shell,
   .reports-toolbar.reports-tabs-shell,
   .reports-toolbar.section-tabs-shell {
-    margin-inline: -12px;
+    margin: -12px -12px 14px;
     padding-inline: 12px;
   }
 
