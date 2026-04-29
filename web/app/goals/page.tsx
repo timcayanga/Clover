@@ -247,6 +247,24 @@ async function GoalsPageStream({
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const requestedSection = normalizeGoalsSection(resolvedSearchParams?.section);
   const selectedSection = requestedSection && availableSections.includes(requestedSection) ? requestedSection : "overview";
+  const titleAddon = (
+    <nav className="goals-tabs" aria-label="Goal sections">
+      {availableSections.map((section) => {
+        const isActive = section === selectedSection;
+        return (
+          <Link
+            key={section}
+            id={`goals-tab-${section}`}
+            className={`goals-tab ${isActive ? "goals-tab--active" : ""}`}
+            href={section === "overview" ? "/goals" : `/goals?section=${section}`}
+            aria-current={isActive ? "page" : undefined}
+          >
+            {section === "overview" ? "Overview" : section === "progress" ? "Progress" : section === "drivers" ? "Drivers" : "History"}
+          </Link>
+        );
+      })}
+    </nav>
+  );
 
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
@@ -1292,6 +1310,7 @@ async function GoalsPageStream({
     <CloverShell
       active="goals"
       title="Goals"
+      titleAddon={titleAddon}
     >
       {isEmptyWorkspace ? (
         <div style={{ marginBottom: 20 }}>
@@ -1306,7 +1325,7 @@ async function GoalsPageStream({
         </div>
       ) : null}
 
-      <GoalsSubtabs initialSection={selectedSection} availableSections={availableSections} beginnerMode={isBeginnerMode}>
+      <GoalsSubtabs activeSection={selectedSection} beginnerMode={isBeginnerMode}>
         <article className="goals-hero glass goals-section goals-section--overview">
           <div className="goals-hero__copy">
             <p className="goals-hero__eyebrow">{isBeginnerMode ? "Start here" : "Goal coaching"}</p>

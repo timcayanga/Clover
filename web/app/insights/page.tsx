@@ -345,6 +345,20 @@ async function InsightsPageStream({
   const requestedTab = normalizeInsightsTab(resolvedSearchParams?.tab);
   const availableTabs: InsightsTab[] = ["summary", "spending", "patterns"];
   const selectedTab: InsightsTab = availableTabs.includes(requestedTab) ? requestedTab : "summary";
+  const titleAddon = (
+    <nav className="insights-tabs" aria-label="Insights sections">
+      {availableTabs.map((tab) => (
+        <Link
+          key={tab}
+          className={`insights-tab ${selectedTab === tab ? "insights-tab--active" : ""}`}
+          href={tab === "summary" ? "/insights" : `/insights?tab=${tab}`}
+          aria-current={selectedTab === tab ? "page" : undefined}
+        >
+          {insightsTabLabels[tab]}
+        </Link>
+      ))}
+    </nav>
+  );
   const isEmptyWorkspace = workspaceAccounts.length <= 1 && workspaceImportFiles.length === 0 && currentWindowTransactions.length === 0;
 
   const currentSummary = currentWindowTransactions.reduce(
@@ -789,6 +803,7 @@ async function InsightsPageStream({
     <CloverShell
       active="insights"
       title="Insights"
+      titleAddon={titleAddon}
     >
       <PostHogEvent
         event="insight_generated"
@@ -859,8 +874,7 @@ async function InsightsPageStream({
       ) : null}
       <section className="insights-story">
         <InsightsTabs
-          initialTab={selectedTab}
-          labels={insightsTabLabels}
+          selectedTab={selectedTab}
           summary={
           <article className="insights-snapshot insights-snapshot--hero glass">
           <div className="insights-snapshot__copy">

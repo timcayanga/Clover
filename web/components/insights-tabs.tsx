@@ -1,45 +1,20 @@
-"use client";
-
-import { ReactNode, useState } from "react";
+import { ReactNode } from "react";
 
 type InsightsTab = "summary" | "spending" | "patterns";
 
 type InsightsTabsProps = {
-  initialTab: InsightsTab;
-  labels: Record<InsightsTab, string>;
+  selectedTab: InsightsTab;
   summary: ReactNode;
   spending: ReactNode;
   patterns: ReactNode;
 };
 
-export function InsightsTabs({ initialTab, labels, summary, spending, patterns }: InsightsTabsProps) {
-  const [selectedTab, setSelectedTab] = useState<InsightsTab>(initialTab);
-
+export function InsightsTabs({ selectedTab, summary, spending, patterns }: InsightsTabsProps) {
   const panels: Record<InsightsTab, ReactNode> = {
     summary,
     spending,
     patterns,
   };
 
-  return (
-    <>
-      <div className="subtabs-row subtabs-row--stacked">
-        <nav className="insights-tabs" aria-label="Insights sections">
-          {(Object.keys(labels) as InsightsTab[]).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              className={`insights-tab ${selectedTab === tab ? "insights-tab--active" : ""}`}
-              aria-pressed={selectedTab === tab}
-              onClick={() => setSelectedTab(tab)}
-            >
-              {labels[tab]}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      {panels[selectedTab]}
-    </>
-  );
+  return panels[selectedTab];
 }
