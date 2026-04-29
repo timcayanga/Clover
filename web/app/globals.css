@@ -2047,6 +2047,7 @@ label {
 .content-body {
   flex: 1;
   display: grid;
+  align-content: start;
   gap: 16px;
   min-width: 0;
   min-height: 0;
@@ -4085,6 +4086,7 @@ label {
   position: sticky;
   top: 10px;
   z-index: 23;
+  align-self: start;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -5703,7 +5705,47 @@ label {
 }
 
 .goals-tabs--top {
-  margin: 2px 0 14px;
+  margin: 0;
+}
+
+.goals-tabs-shell {
+  margin: 0 0 14px;
+  padding: 14px 15px 16px;
+  border-radius: 24px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 38%),
+    rgba(255, 255, 255, 0.88);
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 12px;
+}
+
+.goals-tabs-shell__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.goals-tabs-shell__head span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.goals-tabs-shell .reports-tabs {
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+}
+
+.goals-tabs-shell .reports-tab {
+  min-height: 44px;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.goals-tabs-shell .reports-tab--active {
+  background: rgba(3, 168, 192, 0.12);
 }
 
 .goals-story--section-overview .goals-section--progress,
