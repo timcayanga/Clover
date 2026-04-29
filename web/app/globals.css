@@ -10627,6 +10627,45 @@ input.transaction-inline-edit--amount::placeholder {
   min-width: 0;
 }
 
+.transactions-manual-type-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.transactions-manual-type-help {
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(3, 168, 192, 0.22);
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.08);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  cursor: help;
+}
+
+.transactions-manual-type-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transactions-manual-type-symbol {
+  min-width: 18px;
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+}
+
 .transactions-bulk-toggle-group {
   grid-column: span 2;
 }
@@ -12913,7 +12952,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-add-modal {
-  width: min(720px, calc(100vw - 28px));
+  width: min(640px, calc(100vw - 28px));
   max-height: calc(100dvh - 28px);
   overflow: auto;
 }
@@ -12921,7 +12960,7 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-add-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
+  gap: 12px;
   align-items: start;
 }
 
@@ -12933,6 +12972,44 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-manual-form > label {
   gap: 6px;
+}
+
+.accounts-add-layout {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.accounts-add-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.accounts-add-fields__name {
+  gap: 6px;
+}
+
+.accounts-add-fields__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.accounts-add-brand-tile {
+  display: grid;
+  place-items: center;
+  width: 112px;
+  min-height: 112px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(238, 247, 250, 0.96));
+}
+
+.accounts-add-brand-tile .account-brand-mark {
+  width: 72px;
+  height: 72px;
 }
 
 .institution-autocomplete {
@@ -17124,6 +17201,25 @@ input.transaction-inline-edit--amount::placeholder {
     grid-template-columns: 1fr;
   }
 
+  .accounts-add-layout {
+    grid-template-columns: 88px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .accounts-add-fields__row {
+    grid-template-columns: 1fr;
+  }
+
+  .accounts-add-brand-tile {
+    width: 88px;
+    min-height: 88px;
+  }
+
+  .accounts-add-brand-tile .account-brand-mark {
+    width: 56px;
+    height: 56px;
+  }
+
   .institution-autocomplete__suggestions {
     max-height: 260px;
   }
@@ -17842,6 +17938,8 @@ input.transaction-inline-edit--amount::placeholder {
   border-top: 1px solid rgba(15, 23, 42, 0.08);
   display: grid;
   gap: 10px;
+  justify-items: center;
+  text-align: center;
 }
 
 .landing-flow__number {
@@ -17852,25 +17950,20 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .landing-flow__icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--teal-700);
-  background: rgba(3, 168, 192, 0.08);
-  border: 1px solid rgba(3, 168, 192, 0.14);
-}
-
-.landing-flow__icon svg {
-  width: 22px;
-  height: 22px;
+  display: block;
+  width: fit-content;
+  margin: 0 auto 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  line-height: 0;
 }
 
 .landing-flow__icon img {
-  width: 100%;
-  height: 100%;
+  display: block;
+  width: 72px;
+  height: 72px;
   object-fit: contain;
 }
 
@@ -20396,6 +20489,8 @@ input.transaction-inline-edit--amount::placeholder {
     gap: 8px;
     padding: 12px 0 0;
     min-height: 180px;
+    justify-items: center;
+    text-align: center;
   }
 
   .landing-flow__mobile .landing-carousel__viewport {
@@ -20409,13 +20504,17 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .landing-flow__icon {
-    width: 42px;
-    height: 42px;
+    width: fit-content;
   }
 
   .landing-flow__mobile .landing-flow__icon {
-    width: 40px;
-    height: 40px;
+    width: fit-content;
+    margin-bottom: 2px;
+  }
+
+  .landing-flow__mobile .landing-flow__icon img {
+    width: 60px;
+    height: 60px;
   }
 
   .landing-cta {
