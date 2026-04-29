@@ -33,7 +33,31 @@ const getCompatibleAccountColumns = async () => {
   return accountColumnCache;
 };
 
+const getCompatibleAccountSelect = (columns: Set<string>) => ({
+  id: true,
+  workspaceId: true,
+  name: true,
+  institution: true,
+  ...(columns.has("accountNumber") ? { accountNumber: true } : {}),
+  investmentSubtype: true,
+  investmentSymbol: true,
+  investmentQuantity: true,
+  investmentCostBasis: true,
+  investmentPrincipal: true,
+  investmentStartDate: true,
+  investmentMaturityDate: true,
+  investmentInterestRate: true,
+  investmentMaturityValue: true,
+  type: true,
+  currency: true,
+  source: true,
+  balance: true,
+  updatedAt: true,
+  createdAt: true,
+});
+
 const serializeAccount = <T extends {
+  accountNumber?: string | null;
   balance: { toString: () => string } | null;
   investmentQuantity: { toString: () => string } | null;
   investmentCostBasis: { toString: () => string } | null;
@@ -46,6 +70,7 @@ const serializeAccount = <T extends {
   investmentMaturityDate: Date | null;
 }>(account: T) => ({
   ...account,
+  accountNumber: account.accountNumber ?? null,
   balance: account.balance?.toString() ?? null,
   investmentQuantity: account.investmentQuantity?.toString() ?? null,
   investmentCostBasis: account.investmentCostBasis?.toString() ?? null,
@@ -92,10 +117,12 @@ export async function GET(request: Request) {
     }
 
     await assertWorkspaceAccess(userId, workspaceId);
+    const compatibleColumns = await getCompatibleAccountColumns();
 
     const accounts = await prisma.account.findMany({
       where: { workspaceId },
       orderBy: { createdAt: "desc" },
+      select: getCompatibleAccountSelect(compatibleColumns),
     });
     const accountRules = await loadAccountRules(workspaceId);
 
@@ -147,7 +174,7 @@ export async function GET(request: Request) {
       }));
     })();
 
-    return NextResponse.json({ accounts, accountRules, statementCheckpoints });
+    return NextResponse.json({ accounts: accounts.map((account) => serializeAccount(account)), accountRules, statementCheckpoints });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -179,9 +206,11 @@ export async function POST(request: Request) {
 
     await assertWorkspaceAccess(userId, workspaceId);
     await seedWorkspaceDefaults(workspaceId);
+    const compatibleColumns = await getCompatibleAccountColumns();
 
     const existingAccounts = await prisma.account.findMany({
       where: { workspaceId },
+      select: getCompatibleAccountSelect(compatibleColumns),
     });
     const candidateKey = normalizeAccountRuleKey(name, institution);
     const existingAccount =
@@ -215,7 +244,6 @@ export async function POST(request: Request) {
       }
     }
 
-    const compatibleColumns = await getCompatibleAccountColumns();
     const accountCreateData = {
       workspaceId,
       name,

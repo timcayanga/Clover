@@ -8,6 +8,51 @@ import { INVESTMENT_SUBTYPES, type InvestmentSubtype } from "@/lib/investments";
 
 export const dynamic = "force-dynamic";
 
+let accountColumnCache: Set<string> | null = null;
+
+const getCompatibleAccountColumns = async () => {
+  if (accountColumnCache) {
+    return accountColumnCache;
+  }
+
+  try {
+    const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'Account'
+    `;
+
+    accountColumnCache = new Set(columns.map((column) => column.column_name));
+  } catch {
+    accountColumnCache = new Set();
+  }
+
+  return accountColumnCache;
+};
+
+const getCompatibleAccountSelect = (columns: Set<string>) => ({
+  id: true,
+  workspaceId: true,
+  name: true,
+  institution: true,
+  ...(columns.has("accountNumber") ? { accountNumber: true } : {}),
+  investmentSubtype: true,
+  investmentSymbol: true,
+  investmentQuantity: true,
+  investmentCostBasis: true,
+  investmentPrincipal: true,
+  investmentStartDate: true,
+  investmentMaturityDate: true,
+  investmentInterestRate: true,
+  investmentMaturityValue: true,
+  type: true,
+  currency: true,
+  source: true,
+  balance: true,
+  updatedAt: true,
+  createdAt: true,
+});
+
 const accountPatchSchema = z.object({
   workspaceId: z.string().min(1),
   name: z.string().min(1).optional(),
@@ -29,6 +74,7 @@ const accountPatchSchema = z.object({
 });
 
 const serializeAccount = <T extends {
+  accountNumber?: string | null;
   balance: { toString: () => string } | null;
   investmentQuantity: { toString: () => string } | null;
   investmentCostBasis: { toString: () => string } | null;
@@ -41,6 +87,7 @@ const serializeAccount = <T extends {
   investmentMaturityDate: Date | null;
 }>(account: T) => ({
   ...account,
+  accountNumber: account.accountNumber ?? null,
   balance: account.balance?.toString() ?? null,
   investmentQuantity: account.investmentQuantity?.toString() ?? null,
   investmentCostBasis: account.investmentCostBasis?.toString() ?? null,
@@ -80,8 +127,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
   try {
     const { userId } = await requireAuth();
     const { accountId } = await params;
+    const compatibleColumns = await getCompatibleAccountColumns();
 
-    const account = await prisma.account.findUnique({ where: { id: accountId } });
+    const account = await prisma.account.findUnique({
+      where: { id: accountId },
+      select: getCompatibleAccountSelect(compatibleColumns),
+    });
     if (!account) {
       return NextResponse.json({ error: "Account not found" }, { status: 404 });
     }
@@ -101,6 +152,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
     const { userId } = await requireAuth();
     const { accountId } = await params;
     const payload = accountPatchSchema.parse(await request.json());
+    const compatibleColumns = await getCompatibleAccountColumns();
 
     await assertWorkspaceAccess(userId, payload.workspaceId);
 
@@ -109,7 +161,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
       data: {
         name: payload.name?.trim() ?? undefined,
         institution: payload.institution === undefined ? undefined : payload.institution?.trim() || null,
-        accountNumber: payload.accountNumber === undefined ? undefined : payload.accountNumber?.trim() || null,
+        ...(compatibleColumns.has("accountNumber")
+          ? { accountNumber: payload.accountNumber === undefined ? undefined : payload.accountNumber?.trim() || null }
+          : {}),
         investmentSubtype:
           payload.investmentSubtype === undefined ? undefined : normalizeInvestmentSubtype(payload.investmentSubtype),
         investmentSymbol: payload.investmentSymbol === undefined ? undefined : payload.investmentSymbol?.trim() || null,
@@ -136,6 +190,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
         source: payload.source,
         balance: payload.balance === undefined ? undefined : payload.balance === null || payload.balance === "" ? null : payload.balance.toString(),
       },
+      select: getCompatibleAccountSelect(compatibleColumns),
     });
 
     void upsertAccountRule({
@@ -158,9 +213,11 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
   try {
     const { userId } = await requireAuth();
     const { accountId } = await params;
+    const compatibleColumns = await getCompatibleAccountColumns();
 
     const existingAccount = await prisma.account.findUnique({
       where: { id: accountId },
+      select: getCompatibleAccountSelect(compatibleColumns),
     });
 
     if (!existingAccount) {
@@ -176,6 +233,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
         name: existingAccount.name,
         institution: existingAccount.institution,
         type: existingAccount.type,
+      },
+      select: {
+        id: true,
       },
     });
     const shouldMergeWithTarget = existingAccount.source !== "upload" && Boolean(mergeTarget);
@@ -224,6 +284,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
 
       return tx.account.delete({
         where: { id: accountId },
+        select: getCompatibleAccountSelect(compatibleColumns),
       });
     });
 
