@@ -132,8 +132,14 @@ export function LandingNav() {
       </div>
 
       {mobileMenuOpen ? (
-        <div className="landing-nav__mobile-backdrop" onClick={() => setMobileMenuOpen(false)} aria-hidden="true">
-          <div className="landing-nav__mobile-menu glass" id="landing-mobile-menu" role="dialog" aria-label="Primary menu" onClick={(event) => event.stopPropagation()}>
+        <div className="landing-nav__mobile-layer">
+          <button
+            type="button"
+            className="landing-nav__mobile-backdrop"
+            aria-label="Close menu"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <div className="landing-nav__mobile-menu glass" id="landing-mobile-menu" role="dialog" aria-label="Primary menu">
             <div className="landing-nav__mobile-menu-group">
               <p className="landing-nav__mobile-menu-label">Pages</p>
               <Link href="/" prefetch={false} onClick={() => setMobileMenuOpen(false)}>

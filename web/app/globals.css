@@ -19481,8 +19481,17 @@ input.transaction-inline-edit--amount::placeholder {
     display: block;
     position: fixed;
     inset: 0;
-    z-index: 29;
+    z-index: 39;
     background: rgba(15, 23, 42, 0.1);
+    border: 0;
+    padding: 0;
+    margin: 0;
+  }
+
+  .landing-nav__mobile-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 39;
   }
 
   .landing-nav__mobile-menu {
