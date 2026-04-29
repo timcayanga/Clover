@@ -19074,7 +19074,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .help-section-page__image {
-  width: min(100%, 84px);
+  width: min(100%, 220px);
   height: auto;
   display: block;
   object-fit: contain;
@@ -19082,10 +19082,10 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .help-section-page__image-wrap {
-  width: fit-content;
+  width: min(100%, 320px);
   margin: 0 auto;
-  padding: 14px;
-  border-radius: 28px;
+  padding: 18px;
+  border-radius: 30px;
   border: 1px solid rgba(3, 168, 192, 0.14);
   background:
     radial-gradient(circle at top left, rgba(3, 168, 192, 0.14), transparent 52%),
@@ -19102,6 +19102,14 @@ input.transaction-inline-edit--amount::placeholder {
 
 .help-search--section {
   max-width: none;
+}
+
+.help-page__context-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .help-section-header {
@@ -21238,7 +21246,11 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .help-section-page__image {
-    width: min(100%, 72px);
+    width: min(100%, 180px);
+  }
+
+  .help-section-page__image-wrap {
+    width: min(100%, 260px);
   }
 
   .contact-page {

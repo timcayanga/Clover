@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LandingNav } from "@/components/landing-nav";
 import { getHelpHomeHref, getHelpSectionHref, type HelpArticle, type HelpSection } from "@/lib/help-center";
 
 type HelpArticlePageProps = {
@@ -44,26 +45,22 @@ export function HelpArticlePage({ section, article, returnTo }: HelpArticlePageP
     <main className="help-page">
       <div className="help-page__inner">
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }} />
-        <nav className="help-page__nav" aria-label="Help page navigation">
-          <Link className="landing-brand" href="/" aria-label="Clover home" prefetch={false}>
-            <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
-            <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" />
+        <LandingNav />
+
+        <div className="help-page__context-links" aria-label="Help context links">
+          <Link className="help-page__nav-link" href={backHref} prefetch={false}>
+            {backLabel}
           </Link>
-          <div className="help-page__nav-links">
-            <Link className="help-page__nav-link" href={backHref} prefetch={false}>
-              {backLabel}
-            </Link>
-            <Link className="help-page__nav-link" href={sectionHref} prefetch={false}>
-              Back to section
-            </Link>
-            <Link className="help-page__nav-link" href={homeHref} prefetch={false}>
-              Help home
-            </Link>
-            <Link className="help-page__nav-link" href="/contact-us" prefetch={false}>
-              Contact us
-            </Link>
-          </div>
-        </nav>
+          <Link className="help-page__nav-link" href={sectionHref} prefetch={false}>
+            Back to section
+          </Link>
+          <Link className="help-page__nav-link" href={homeHref} prefetch={false}>
+            Help home
+          </Link>
+          <Link className="help-page__nav-link" href="/contact-us" prefetch={false}>
+            Contact us
+          </Link>
+        </div>
 
         <section className="help-article-hero glass">
           <div className="help-article-hero__copy">
@@ -143,6 +140,20 @@ export function HelpArticlePage({ section, article, returnTo }: HelpArticlePageP
           </div>
         </section>
       </div>
+
+      <footer className="landing-footer" aria-label="Legal links">
+        <nav className="landing-footer__nav" aria-label="Legal">
+          <Link href="/contact-us" prefetch={false}>
+            Contact Us
+          </Link>
+          <Link href="/privacy-policy" prefetch={false}>
+            Privacy Policy
+          </Link>
+          <Link href="/terms-of-service" prefetch={false}>
+            Terms of Service
+          </Link>
+        </nav>
+      </footer>
     </main>
   );
 }
