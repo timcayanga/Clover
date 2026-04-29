@@ -12,6 +12,7 @@ import {
   buildParsedTransactionInsertData,
   buildStatementFingerprint,
   detectStatementMetadataFromText,
+  type EnrichedParsedImportRow,
   findExistingImportedStatement,
   fetchImportFileCompat,
   fetchParsedTransactionRows,
@@ -29,6 +30,8 @@ import {
 } from "@/lib/data-engine";
 import { getTrailingBalanceFromParsedRows, inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { parseImportTextWithOpenAIFallback } from "@/lib/openai-import-parser";
+import { toInternalTransactionType } from "@/lib/transaction-directions";
+import { normalizeBankName } from "@/lib/data-qa-banks";
 
 type ImportInsightSummary = {
   incomeTotal: number;
@@ -73,6 +76,42 @@ type ProcessImportResult = {
   accountBalance?: string | null;
 };
 
+let accountColumnCache: Set<string> | null = null;
+
+const getCompatibleAccountColumns = async () => {
+  if (accountColumnCache) {
+    return accountColumnCache;
+  }
+
+  try {
+    const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'Account'
+    `;
+
+    accountColumnCache = new Set(columns.map((column) => column.column_name));
+  } catch {
+    accountColumnCache = new Set();
+  }
+
+  return accountColumnCache;
+};
+
+const getCompatibleAccountSelect = (columns: Set<string>) => ({
+  id: true,
+  workspaceId: true,
+  name: true,
+  institution: true,
+  ...(columns.has("accountNumber") ? { accountNumber: true } : {}),
+  type: true,
+  currency: true,
+  source: true,
+  balance: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 const shouldRouteToReview = (params: { confidence: number; categoryName?: string | null; type?: string | null }) => {
   if (params.confidence < 90) {
     return true;
@@ -112,12 +151,91 @@ const chunkArray = <T,>(items: T[], size: number) => {
   return chunks;
 };
 
+const readCheckpointBankName = (sourceMetadata: unknown) => {
+  if (!isRecord(sourceMetadata)) {
+    return null;
+  }
+
+  const bankName =
+    (typeof sourceMetadata.uploadBankHint === "string" && sourceMetadata.uploadBankHint.trim()
+      ? sourceMetadata.uploadBankHint
+      : null) ??
+    (typeof sourceMetadata.institution === "string" && sourceMetadata.institution.trim()
+      ? sourceMetadata.institution
+      : null);
+
+  if (!bankName) {
+    return null;
+  }
+
+  const normalized = normalizeBankName(bankName);
+  return normalized && normalized !== "Unknown" ? normalized : null;
+};
+
+const detectGenericTrainingBundle = (root: Record<string, unknown>, fileName: string) => {
+  const bundleType =
+    Array.isArray(root.modules) && isRecord(root.fallback)
+      ? "parser_system"
+      : Array.isArray(root.global_rules) && isRecord(root.output_shape)
+        ? "parser_instructions"
+        : Array.isArray(root.examples)
+          ? "few_shot_examples"
+          : Array.isArray(root.canonicalCategories) || isRecord(root.merchant_and_code_normalization) || isRecord(root.category_mapping)
+            ? "normalization_rules"
+            : Array.isArray(root.balance_validation) || Array.isArray(root.row_validation) || isRecord(root.confidence_scoring)
+              ? "validation_rules"
+              : Object.keys(root).length > 0 &&
+                  Object.values(root).every((value) => isRecord(value) || Array.isArray(value)) &&
+                  Object.keys(root).some((key) => /bank|wallet|credit|savings|statement|bpi|bdo|gotyme|maya|gcash|unionbank|security/i.test(key))
+                ? "bank_rules"
+                : null;
+
+  if (!bundleType) {
+    return null;
+  }
+
+  const bankTargets = Array.from(
+    new Set(
+      Object.keys(root)
+        .filter((key) => !["name", "version", "goal", "modules", "fallback", "examples", "output_shape"].includes(key))
+        .map((key) => normalizeBankName(key.replaceAll("_", " ")))
+        .filter((value) => value && value !== "Unknown")
+    )
+  );
+
+  return {
+    bundleType,
+    bundleName:
+      (typeof root.name === "string" && root.name.trim()) ||
+      fileName.replace(/\.[^.]+$/, "").trim() ||
+      "Generic Parser Training",
+    bankTargets,
+    summary: {
+      topLevelKeys: Object.keys(root),
+      bankTargets,
+      hasExamples: Array.isArray(root.examples) && root.examples.length > 0,
+      hasModules: Array.isArray(root.modules) && root.modules.length > 0,
+      hasNormalizationRules:
+        Array.isArray(root.canonicalCategories) ||
+        isRecord(root.merchant_and_code_normalization) ||
+        isRecord(root.category_mapping),
+      hasValidationRules:
+        Array.isArray(root.balance_validation) ||
+        Array.isArray(root.row_validation) ||
+        isRecord(root.confidence_scoring),
+    },
+  };
+};
+
 const AUTO_REPARSE_SCORE_TARGET = 95;
 const AUTO_REPARSE_MAX_ATTEMPTS = 12;
 const AUTO_REPARSE_PLATEAU_WINDOW = 3;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const isJsonImportFile = (fileType: string | null | undefined, fileName: string | null | undefined) =>
+  /\.json$/i.test(fileName ?? "") || /(?:^|\/)json$/i.test(fileType ?? "") || /\bjson\b/i.test(fileType ?? "");
 
 const readParsedRowText = (row: Record<string, unknown>, keys: string[]) => {
   for (const key of keys) {
@@ -130,6 +248,706 @@ const readParsedRowText = (row: Record<string, unknown>, keys: string[]) => {
     }
   }
   return "";
+};
+
+const getCandidateObjects = (root: unknown) => {
+  const queue: unknown[] = [root];
+  const objects: Record<string, unknown>[] = [];
+  const seen = new Set<unknown>();
+
+  while (queue.length > 0 && objects.length < 64) {
+    const value = queue.shift();
+    if (!isRecord(value) || seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+    objects.push(value);
+
+    for (const nested of Object.values(value)) {
+      if (isRecord(nested)) {
+        queue.push(nested);
+      }
+    }
+  }
+
+  return objects;
+};
+
+const readCandidateString = (objects: Record<string, unknown>[], keys: string[]) => {
+  for (const object of objects) {
+    for (const key of keys) {
+      const value = object[key];
+      if (typeof value === "string" && value.trim()) {
+        return value.trim();
+      }
+    }
+  }
+  return null;
+};
+
+const readCandidateNumber = (objects: Record<string, unknown>[], keys: string[]) => {
+  for (const object of objects) {
+    for (const key of keys) {
+      const value = object[key];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+      }
+      if (typeof value === "string" && value.trim()) {
+        const parsed = parseAmountValue(value);
+        if (parsed !== null) {
+          return parsed;
+        }
+      }
+    }
+  }
+  return null;
+};
+
+const readCandidateArray = (objects: Record<string, unknown>[], keys: string[]) => {
+  for (const object of objects) {
+    for (const key of keys) {
+      const value = object[key];
+      if (Array.isArray(value)) {
+        return value;
+      }
+    }
+  }
+  return null;
+};
+
+const isTransactionLikeRow = (value: unknown): boolean => {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const keys = Object.keys(value);
+  const ownMatch = keys.some((key) =>
+    [
+      "date",
+      "transactiondate",
+      "datetime",
+      "merchant",
+      "merchantraw",
+      "merchantclean",
+      "description",
+      "details",
+      "transactionname",
+      "amount",
+      "value",
+      "transactionamount",
+    ].includes(key.toLowerCase())
+  );
+
+  if (ownMatch) {
+    return true;
+  }
+
+  return isRecord(value.expected) && isTransactionLikeRow(value.expected);
+};
+
+const findTransactionsArray = (root: unknown, objects: Record<string, unknown>[]) => {
+  const preferred = readCandidateArray(objects, [
+    "transactions",
+    "parsedRows",
+    "rows",
+    "transactionList",
+    "items",
+    "entries",
+  ]);
+
+  if (Array.isArray(preferred) && preferred.some(isTransactionLikeRow)) {
+    return preferred;
+  }
+
+  const queue: unknown[] = [root];
+  const seen = new Set<unknown>();
+
+  while (queue.length > 0) {
+    const value = queue.shift();
+    if (!value || seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+
+    if (Array.isArray(value) && value.length > 0 && value.every((item) => isRecord(item))) {
+      if (value.some(isTransactionLikeRow)) {
+        return value;
+      }
+      continue;
+    }
+
+    if (isRecord(value)) {
+      for (const nested of Object.values(value)) {
+        if (Array.isArray(nested) || isRecord(nested)) {
+          queue.push(nested);
+        }
+      }
+    }
+  }
+
+  return [];
+};
+
+const normalizeTrainingRowText = (row: Record<string, unknown>, keys: string[]) => {
+  for (const key of keys) {
+    const value = row[key];
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+  return "";
+};
+
+const normalizeTrainingConfidence = (value: unknown, fallback = 100) => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  const scaled = value > 0 && value <= 1 ? value * 100 : value;
+  return Math.max(0, Math.min(100, Math.round(scaled)));
+};
+
+const normalizeTrainingTransactionType = (value: unknown, amount?: unknown): TransactionType => {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "transfer") {
+    return "transfer";
+  }
+  return toInternalTransactionType(value, amount);
+};
+
+const buildTrainingRowCandidateObjects = (row: Record<string, unknown>) => {
+  const candidates: Record<string, unknown>[] = [row];
+  const expected = row.expected;
+  if (isRecord(expected)) {
+    candidates.push(expected);
+  }
+  return candidates;
+};
+
+const normalizeTrainingValueFromCandidates = (candidates: Record<string, unknown>[], keys: string[]) => {
+  for (const candidate of candidates) {
+    const value = normalizeTrainingRowText(candidate, keys);
+    if (value) {
+      return value;
+    }
+  }
+  return "";
+};
+
+const buildTrainingReviewPayload = (params: {
+  metadata: ReturnType<typeof detectStatementMetadataFromText>;
+  rows: Array<Record<string, unknown>>;
+}) => ({
+  bank: {
+    correct: Boolean(params.metadata.institution),
+    feedback: "Imported from JSON training data.",
+    output: { value: params.metadata.institution ?? "" },
+  },
+  accountNumber: {
+    correct: Boolean(params.metadata.accountNumber),
+    feedback: "Imported from JSON training data.",
+    output: { value: params.metadata.accountNumber ?? "" },
+  },
+  accountType: {
+    correct: Boolean(params.metadata.accountType),
+    feedback: "Imported from JSON training data.",
+    output: { value: params.metadata.accountType ?? "" },
+  },
+  accountBalance: {
+    correct: params.metadata.endingBalance !== null || params.metadata.openingBalance !== null,
+    feedback: "Imported from JSON training data.",
+    output: {
+      value:
+        params.metadata.endingBalance !== null && params.metadata.endingBalance !== undefined
+          ? String(params.metadata.endingBalance)
+          : params.metadata.openingBalance !== null && params.metadata.openingBalance !== undefined
+            ? String(params.metadata.openingBalance)
+            : "",
+    },
+  },
+  transactionCount: {
+    correct: params.rows.length > 0,
+    feedback: "Imported from JSON training data.",
+    output: { value: String(params.rows.length) },
+  },
+  transactions: params.rows.map((row) => ({
+    correct: true,
+    feedback: "Trusted JSON training example.",
+    output: {
+      transactionName: normalizeTrainingRowText(row, ["merchantRaw", "transactionName", "description", "name"]),
+      normalizedName: normalizeTrainingRowText(row, ["merchantClean", "normalizedName", "normalizedMerchant", "merchantRaw"]),
+      date: normalizeTrainingRowText(row, ["date", "transactionDate", "postedDate", "dateTime"]),
+      category: normalizeTrainingRowText(row, ["categoryName", "category", "normalizedCategory"]),
+      type: normalizeTrainingRowText(row, ["type", "transactionType", "direction"]),
+      amount: normalizeTrainingRowText(row, ["amount", "value", "transactionAmount"]),
+    },
+  })),
+  additionalTransactions: [],
+  deletedTransactions: [],
+});
+
+const parseTrainingJsonPayload = (jsonText: string, params: { fileName: string; fileType: string; bankName?: string | null }) => {
+  let root: unknown;
+  try {
+    root = JSON.parse(jsonText);
+  } catch (error) {
+    throw new Error(`Invalid JSON training file: ${error instanceof Error ? error.message : "Unable to parse JSON."}`);
+  }
+
+  if (!isRecord(root)) {
+    throw new Error("JSON training file must contain an object with statement metadata and transactions.");
+  }
+
+  const genericBundle = detectGenericTrainingBundle(root, params.fileName);
+
+  const objects = getCandidateObjects(root);
+  const transactions = findTransactionsArray(root, objects)
+    .filter((entry): entry is Record<string, unknown> => isRecord(entry))
+    .map((row) => {
+      const candidates = buildTrainingRowCandidateObjects(row);
+      const merchantRaw = normalizeTrainingValueFromCandidates(candidates, [
+        "transactionName",
+        "name",
+        "merchantRaw",
+        "merchant",
+        "description",
+        "details",
+        "rawDescription",
+        "source_text",
+        "sourceText",
+      ]);
+      const merchantClean = normalizeTrainingValueFromCandidates(candidates, [
+        "normalizedName",
+        "merchantClean",
+        "normalizedMerchant",
+        "cleanName",
+      ]);
+      const date = normalizeTrainingValueFromCandidates(candidates, ["date", "transactionDate", "postedDate", "dateTime", "datetime"]);
+      const amountText = normalizeTrainingValueFromCandidates(candidates, ["amount", "value", "transactionAmount", "netAmount"]);
+      const amount =
+        parseAmountValue(amountText) ??
+        candidates.map((candidate) => (typeof candidate.amount === "number" ? candidate.amount : null)).find((value) => value !== null) ??
+        null;
+      const type = normalizeTrainingTransactionType(
+        candidates
+          .map((candidate) => candidate.type ?? candidate.transactionType ?? candidate.direction ?? candidate.debitCredit ?? null)
+          .find((value) => value !== null) ?? "expense",
+        amountText || (amount ?? undefined)
+      );
+      return {
+        date: date || null,
+        amount: amount !== null ? amount : amountText || null,
+        merchantRaw: merchantRaw || merchantClean || null,
+        merchantClean: merchantClean || merchantRaw || null,
+        description:
+          normalizeTrainingValueFromCandidates(candidates, ["description", "details", "transactionName", "name", "source_text", "sourceText"]) ||
+          merchantRaw ||
+          null,
+        categoryName:
+          normalizeTrainingValueFromCandidates(candidates, ["categoryName", "category", "normalizedCategory"]) ||
+          defaultCategoryForType(type),
+        type,
+        confidence: normalizeTrainingConfidence(row.confidence, 100),
+        parserConfidence: normalizeTrainingConfidence(row.parserConfidence, normalizeTrainingConfidence(row.confidence, 100)),
+        categoryConfidence: normalizeTrainingConfidence(row.categoryConfidence, normalizeTrainingConfidence(row.confidence, 100)),
+        rawPayload: row as Prisma.InputJsonValue,
+        reviewStatus: "confirmed" as const,
+      };
+    })
+    .filter((row) => row.amount !== null || row.merchantRaw || row.date);
+
+  const institution =
+    params.bankName?.trim() ||
+    readCandidateString(objects, ["bankName", "bank", "institution", "institutionName"]) ||
+    null;
+  const accountNumber = readCandidateString(objects, ["accountNumber", "accountNo", "acctNo", "account_no", "acctNumber", "cardNumber"]);
+  const accountName = readCandidateString(objects, ["accountName", "accountHolder", "holderName", "name"]);
+  const accountType = readCandidateString(objects, ["accountType", "account_category", "accountKind", "type"]);
+  const openingBalance = readCandidateNumber(objects, ["openingBalance", "opening_balance", "startingBalance", "beginningBalance"]);
+  const endingBalance = readCandidateNumber(objects, ["endingBalance", "closingBalance", "accountBalance", "balance", "currentBalance", "statementBalance"]);
+  const paymentDueDate = readCandidateString(objects, ["paymentDueDate", "dueDate", "payment_date"]);
+  const totalAmountDue = readCandidateNumber(objects, ["paymentAmountDue", "amountDue", "totalAmountDue", "minimumAmountDue"]);
+  const startDate = readCandidateString(objects, ["statementStartDate", "startDate", "periodStart", "fromDate"]);
+  const endDate = readCandidateString(objects, ["statementEndDate", "endDate", "periodEnd", "toDate"]);
+  const sourceText =
+    readCandidateString(objects, ["statementText", "sourceText", "rawText", "ocrText", "rawStatementText"]) ??
+    jsonText;
+
+  const detectedMetadata = detectStatementMetadataFromText(sourceText);
+  const metadata = {
+    ...detectedMetadata,
+    institution: institution ?? detectedMetadata.institution ?? null,
+    accountNumber: accountNumber ?? detectedMetadata.accountNumber ?? null,
+    accountName: accountName ?? detectedMetadata.accountName ?? null,
+    accountType: (accountType || detectedMetadata.accountType || null) as typeof detectedMetadata.accountType,
+    openingBalance: openingBalance ?? detectedMetadata.openingBalance ?? null,
+    endingBalance: endingBalance ?? detectedMetadata.endingBalance ?? null,
+    paymentDueDate: paymentDueDate ?? detectedMetadata.paymentDueDate ?? null,
+    totalAmountDue: totalAmountDue ?? detectedMetadata.totalAmountDue ?? null,
+    startDate: startDate ?? detectedMetadata.startDate ?? null,
+    endDate: endDate ?? detectedMetadata.endDate ?? null,
+    confidence:
+      typeof (root as Record<string, unknown>).confidence === "number"
+        ? normalizeTrainingConfidence((root as Record<string, unknown>).confidence, 100)
+        : transactions.length > 0
+          ? 100
+          : Math.max(detectedMetadata.confidence ?? 0, 80),
+  };
+
+  if (!metadata.institution && institution) {
+    metadata.institution = institution;
+  }
+
+  if (transactions.length === 0 && genericBundle) {
+    return {
+      metadata: {
+        ...metadata,
+        institution: metadata.institution ?? "Generic Parser Training",
+        accountName: metadata.accountName ?? genericBundle.bundleName,
+        accountType: metadata.accountType ?? "other",
+        confidence: 100,
+      },
+      sourceText,
+      rows: transactions,
+      genericBundle,
+    };
+  }
+
+  if (transactions.length === 0 && !metadata.institution && !metadata.accountNumber) {
+    throw new Error("JSON training file did not contain usable statement metadata or transactions.");
+  }
+
+  return {
+    metadata,
+    sourceText,
+    rows: transactions,
+    genericBundle: null,
+  };
+};
+
+const processImportTrainingJson = async (
+  importFileId: string,
+  importFile: Awaited<ReturnType<typeof fetchImportFileCompat>>,
+  jsonText: string,
+  options: {
+    actorUserId?: string | null;
+    qaSource?: DataQaSource;
+    statementMetadataOverride?: Partial<{
+      institution: string | null;
+      accountNumber: string | null;
+      accountName: string | null;
+      accountType: string | null;
+      openingBalance: number | null;
+      endingBalance: number | null;
+      paymentDueDate: string | null;
+      totalAmountDue: number | null;
+      startDate: string | null;
+      endDate: string | null;
+    }> | null;
+  },
+  startedAt: number
+): Promise<ProcessImportResult> => {
+  const parsed = parseTrainingJsonPayload(jsonText, {
+    fileName: String(importFile?.fileName ?? "training.json"),
+    fileType: String(importFile?.fileType ?? "application/json"),
+    bankName: options.statementMetadataOverride?.institution ?? null,
+  });
+  const metadata = {
+    ...parsed.metadata,
+    ...Object.fromEntries(Object.entries(options.statementMetadataOverride ?? {}).filter(([, value]) => value !== undefined)),
+  };
+  const parsedRows = parsed.rows as unknown as EnrichedParsedImportRow[];
+  const statementFingerprint = buildStatementFingerprint(parsed.sourceText, metadata, importFile?.fileName, importFile?.fileType);
+
+  if (await hasCompatibleTable("ParsedTransaction")) {
+    await prisma.parsedTransaction.deleteMany({
+      where: { importFileId },
+    });
+  }
+
+  const parsedTransactionData = await buildParsedTransactionInsertData({
+    importFileId,
+    workspaceId: String(importFile?.workspaceId ?? ""),
+    rows: parsedRows,
+    metadata,
+    statementFingerprint,
+  });
+  await insertParsedTransactionsCompat({
+    importFileId,
+    rows: parsedTransactionData,
+  });
+
+  await updateImportFileCompat(importFileId, {
+    parsedRowsCount: parsed.rows.length,
+  });
+
+  await upsertStatementTemplate({
+    workspaceId: String(importFile?.workspaceId ?? ""),
+    fingerprint: statementFingerprint,
+    metadata,
+    fileType: String(importFile?.fileType ?? "application/json"),
+    parserConfig: {
+      source: "json_training_upload",
+      rowCount: parsed.rows.length,
+      importFileId,
+      genericBundleType: parsed.genericBundle?.bundleType ?? null,
+      genericBundleBankTargets: parsed.genericBundle?.bankTargets ?? [],
+      genericBundleSummary: parsed.genericBundle?.summary ?? null,
+    } as Prisma.InputJsonValue,
+  }).catch((error) => {
+    console.warn("Statement template upsert failed for JSON training import", {
+      importFileId,
+      error,
+    });
+  });
+
+  const existingCheckpointSourceMetadata = (await hasCompatibleTable("AccountStatementCheckpoint"))
+    ? await prisma.accountStatementCheckpoint.findUnique({
+        where: { importFileId },
+        select: { sourceMetadata: true },
+      }).then((checkpoint) => (isRecord(checkpoint?.sourceMetadata) ? checkpoint.sourceMetadata : null))
+      .catch(() => null)
+    : null;
+
+  if (await hasCompatibleTable("AccountStatementCheckpoint")) {
+    const mergedSourceMetadata = {
+      ...(existingCheckpointSourceMetadata ?? {}),
+      ...metadata,
+      trainingFormat: "json",
+      trainingImport: true,
+      genericBundleType: parsed.genericBundle?.bundleType ?? null,
+      genericBundleBankTargets: parsed.genericBundle?.bankTargets ?? [],
+      genericBundleSummary: parsed.genericBundle?.summary ?? null,
+    } as Prisma.InputJsonValue;
+
+    await prisma.accountStatementCheckpoint.upsert({
+      where: { importFileId },
+      update: {
+        workspaceId: String(importFile?.workspaceId ?? ""),
+        statementStartDate: metadata.startDate ? new Date(metadata.startDate) : null,
+        statementEndDate: metadata.endDate ? new Date(metadata.endDate) : null,
+        openingBalance: metadata.openingBalance === null ? null : String(metadata.openingBalance),
+        endingBalance: metadata.endingBalance === null ? null : String(metadata.endingBalance),
+        status: "pending",
+        mismatchReason: null,
+        sourceMetadata: mergedSourceMetadata,
+        rowCount: parsed.rows.length,
+      },
+      create: {
+        workspaceId: String(importFile?.workspaceId ?? ""),
+        importFileId,
+        statementStartDate: metadata.startDate ? new Date(metadata.startDate) : null,
+        statementEndDate: metadata.endDate ? new Date(metadata.endDate) : null,
+        openingBalance: metadata.openingBalance === null ? null : String(metadata.openingBalance),
+        endingBalance: metadata.endingBalance === null ? null : String(metadata.endingBalance),
+        status: "pending",
+        sourceMetadata: mergedSourceMetadata,
+        rowCount: parsed.rows.length,
+      },
+    }).catch((error) => {
+      console.warn("Statement checkpoint upsert failed for JSON training import", {
+        importFileId,
+        error,
+      });
+    });
+  }
+
+  await recordDataQaRun({
+    workspaceId: String(importFile?.workspaceId ?? ""),
+    importFileId,
+    source: "local_training",
+    fileName: String(importFile?.fileName ?? "training.json"),
+    fileType: String(importFile?.fileType ?? "application/json"),
+    parserVersion: DATA_ENGINE_VERSION,
+    parsedRows: parsedRows as unknown as DataQaParsedRow[],
+    metadata,
+    timings: {
+      totalMs: Date.now() - startedAt,
+      parsingMs: Date.now() - startedAt,
+      usedDeterministicParser: true,
+      usedOpenAiFallback: false,
+      usedVisionFallback: false,
+    },
+    duplicate: false,
+    actorUserId: options.actorUserId ?? null,
+  });
+
+  await applyDataQaReviewLearning({
+    workspaceId: String(importFile?.workspaceId ?? ""),
+    importFileId,
+    accountId: importFile?.account?.id ?? null,
+    fileName: String(importFile?.fileName ?? "training.json"),
+    fileType: String(importFile?.fileType ?? "application/json"),
+    metadata,
+    parsedRows: parsedRows as unknown as Array<Record<string, unknown>>,
+    fieldReviewPayload: buildTrainingReviewPayload({
+      metadata,
+      rows: parsedRows as unknown as Array<Record<string, unknown>>,
+    }) as Prisma.JsonValue,
+    manualFeedback: "Imported from JSON training data and treated as confirmed parser guidance.",
+    actorUserId: options.actorUserId ?? null,
+    statementFingerprint,
+    statementMetadataOverride: metadata,
+  }).catch((error) => {
+    console.warn("JSON training learning application failed", {
+      importFileId,
+      error,
+    });
+  });
+
+  const replaySummary = parsed.rows.length > 0
+    ? await replayRelatedImportsAfterGenericTraining({
+        workspaceId: String(importFile?.workspaceId ?? ""),
+        sourceImportFileId: importFileId,
+        sourceBankName:
+          metadata.institution ??
+          readCheckpointBankName(existingCheckpointSourceMetadata) ??
+          null,
+        actorUserId: options.actorUserId ?? null,
+      }).catch((error) => {
+        console.warn("Related import replay failed after JSON training import", {
+          importFileId,
+          error,
+        });
+        return { replayed: 0, candidates: 0 };
+      })
+    : { replayed: 0, candidates: 0 };
+
+  await updateImportFileCompat(importFileId, {
+    status: "done",
+    processingPhase: "complete",
+    processingCurrentScore: parsed.rows.length > 0 ? 100 : Number(metadata.confidence ?? 80),
+    processingMessage:
+      parsed.rows.length === 0 && parsed.genericBundle
+        ? `Generic parser guidance file processed (${parsed.genericBundle.bundleType.replaceAll("_", " ")}).`
+        : parsed.rows.length === 0
+        ? "JSON training file saved metadata, but it did not include transaction rows for generic parser learning."
+        : replaySummary.replayed > 0
+        ? `JSON training file processed and replayed ${replaySummary.replayed} related file${replaySummary.replayed === 1 ? "" : "s"}.`
+        : "JSON training file processed and applied to the learning loop.",
+  });
+
+  return {
+    imported: parsed.rows.length,
+    duplicate: false,
+    metadata,
+  };
+};
+
+const replayRelatedImportsAfterGenericTraining = async (params: {
+  workspaceId: string;
+  sourceImportFileId: string;
+  sourceBankName: string | null;
+  actorUserId?: string | null;
+}) => {
+  const normalizedBankName = normalizeBankName(params.sourceBankName ?? "");
+  if (!normalizedBankName || normalizedBankName === "Unknown") {
+    return { replayed: 0, candidates: 0 };
+  }
+
+  const importFiles = await prisma.importFile.findMany({
+    where: {
+      workspaceId: params.workspaceId,
+      id: { not: params.sourceImportFileId },
+      status: { not: "deleted" },
+    },
+    select: {
+      id: true,
+      fileName: true,
+      fileType: true,
+      status: true,
+      updatedAt: true,
+    },
+    orderBy: { updatedAt: "desc" },
+    take: 200,
+  }).catch(() => []);
+
+  if (importFiles.length === 0 || !(await hasCompatibleTable("AccountStatementCheckpoint"))) {
+    return { replayed: 0, candidates: 0 };
+  }
+
+  const importFileIds = importFiles.map((file) => file.id);
+  const [checkpoints, runs] = await Promise.all([
+    prisma.accountStatementCheckpoint.findMany({
+      where: {
+        importFileId: { in: importFileIds },
+      },
+      select: {
+        importFileId: true,
+        sourceMetadata: true,
+      },
+    }).catch(() => []),
+    prisma.dataQaRun.findMany({
+      where: {
+        importFileId: { in: importFileIds },
+      },
+      select: {
+        importFileId: true,
+        score: true,
+        createdAt: true,
+      },
+      orderBy: [{ createdAt: "desc" }],
+    }).catch(() => []),
+  ]);
+
+  const checkpointByImportId = new Map(checkpoints.map((checkpoint) => [checkpoint.importFileId, checkpoint]));
+  const latestRunByImportId = new Map<string, { score: number; createdAt: Date }>();
+  for (const run of runs) {
+    if (!run.importFileId || latestRunByImportId.has(run.importFileId)) {
+      continue;
+    }
+    latestRunByImportId.set(run.importFileId, { score: run.score, createdAt: run.createdAt });
+  }
+
+  const candidates = importFiles.filter((file) => {
+    if (isJsonImportFile(file.fileType, file.fileName)) {
+      return false;
+    }
+
+    const checkpoint = checkpointByImportId.get(file.id);
+    const bankName = readCheckpointBankName(checkpoint?.sourceMetadata);
+    if (bankName !== normalizedBankName) {
+      return false;
+    }
+
+    const latestRun = latestRunByImportId.get(file.id);
+    if (!latestRun) {
+      return true;
+    }
+
+    return latestRun.score < AUTO_REPARSE_SCORE_TARGET;
+  });
+
+  let replayed = 0;
+  for (const candidate of candidates.slice(0, 12)) {
+    try {
+      await processImportFileText(candidate.id, {
+        actorUserId: params.actorUserId ?? null,
+        qaSource: "import_processing",
+        allowDuplicateStatement: true,
+        statementMetadataOverride: {
+          institution: normalizedBankName,
+        },
+      });
+      replayed += 1;
+    } catch (error) {
+      console.warn("Unable to replay related import after generic JSON training", {
+        sourceImportFileId: params.sourceImportFileId,
+        candidateImportFileId: candidate.id,
+        bankName: normalizedBankName,
+        error,
+      });
+    }
+  }
+
+  return {
+    replayed,
+    candidates: candidates.length,
+  };
 };
 
 const buildAutoRerunPayload = (params: {
@@ -279,6 +1097,7 @@ const resolveConfirmationAccount = async (params: {
   } | null;
 }) => {
   const workspaceId = String(params.importFile.workspaceId);
+  const compatibleAccountColumns = await getCompatibleAccountColumns();
   const candidateRow =
     (typeof params.statementMetadata?.accountName === "string" && params.statementMetadata.accountName.trim()
       ? params.statementMetadata
@@ -318,6 +1137,7 @@ const resolveConfirmationAccount = async (params: {
   const directAccount = providedAccountId && !isOptimisticId
     ? await prisma.account.findUnique({
         where: { id: providedAccountId },
+        select: getCompatibleAccountSelect(compatibleAccountColumns),
       })
     : null;
   if (directAccount) {
@@ -331,6 +1151,7 @@ const resolveConfirmationAccount = async (params: {
 
   const workspaceAccounts = await prisma.account.findMany({
     where: { workspaceId },
+    select: getCompatibleAccountSelect(compatibleAccountColumns),
   });
   const existingByKey = workspaceAccounts.find(
     (account) => normalizeAccountRuleKey(account.name, account.institution) === candidateKey
@@ -350,6 +1171,7 @@ const resolveConfirmationAccount = async (params: {
       );
     }
 
+    const compatibleAccountColumns = await getCompatibleAccountColumns();
     return prisma.account.create({
       data: {
         workspaceId,
@@ -357,10 +1179,14 @@ const resolveConfirmationAccount = async (params: {
           inferredAccountName ??
           (inferredInstitution && inferredAccountNumber ? `${inferredInstitution} ${inferredAccountNumber.slice(-4)}` : String(params.importFile.fileName ?? "Imported account").replace(/\.[^.]+$/, "").trim()),
         institution: inferredInstitution,
+        ...(compatibleAccountColumns.has("accountNumber") && inferredAccountNumber
+          ? { accountNumber: inferredAccountNumber }
+          : {}),
         type: inferredType,
         currency: "PHP",
         source: "upload",
       },
+      select: getCompatibleAccountSelect(compatibleAccountColumns),
     });
   }
 
@@ -489,6 +1315,10 @@ export const processImportFileText = async (
       },
       options.password
     );
+  }
+
+  if (isJsonImportFile(String(importFile.fileType ?? ""), String(importFile.fileName ?? ""))) {
+    return processImportTrainingJson(importFileId, importFile, text, options, startedAt);
   }
 
   const metadata = detectStatementMetadataFromText(text);

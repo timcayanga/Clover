@@ -31,9 +31,13 @@ const upsertUploadBankHint = async (params: {
   importFileId: string;
   workspaceId: string;
   bankName?: string | null;
+  trainingMode?: "bank_context" | "generic_parser";
 }) => {
   const bankName = normalizeBankName(params.bankName ?? "");
-  if (!bankName || bankName === "Unknown") {
+  const hasBankName = Boolean(bankName && bankName !== "Unknown");
+  const isGenericParserTraining = params.trainingMode === "generic_parser";
+
+  if (!hasBankName && !isGenericParserTraining) {
     return;
   }
 
@@ -42,9 +46,15 @@ const upsertUploadBankHint = async (params: {
   }
 
   const sourceMetadata = {
-    institution: bankName,
-    uploadBankHint: bankName,
-    uploadHintSource: "admin_data_qa_bank_upload",
+    ...(hasBankName
+      ? {
+          institution: bankName,
+          uploadBankHint: bankName,
+        }
+      : {}),
+    uploadHintSource: isGenericParserTraining ? "admin_data_qa_generic_json_upload" : "admin_data_qa_bank_upload",
+    trainingMode: params.trainingMode ?? (hasBankName ? "bank_context" : undefined),
+    genericParserTraining: isGenericParserTraining || undefined,
   } as Prisma.InputJsonValue;
 
   await prisma.accountStatementCheckpoint.upsert({
@@ -87,6 +97,9 @@ const detectLimitError = (message: string | null | undefined) => {
   return null;
 };
 
+const isPdfUpload = (fileName: string, fileType: string) =>
+  fileType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
+
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   let stage = "initializing";
   let responsePlanTier: "free" | "pro" | "unknown" = "unknown";
@@ -112,6 +125,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const formFileName = typeof formData.get("fileName") === "string" ? String(formData.get("fileName")) : "";
       const formFileType = typeof formData.get("fileType") === "string" ? String(formData.get("fileType")) : "";
       const formBankName = typeof formData.get("bankName") === "string" ? String(formData.get("bankName")) : "";
+      const formTrainingMode =
+        formData.get("trainingMode") === "generic_parser" ? "generic_parser" : formData.get("trainingMode") === "bank_context" ? "bank_context" : undefined;
       allowDuplicateStatement =
         String(formData.get("allowDuplicateStatement") ?? formData.get("qaMode") ?? "").toLowerCase() === "true";
       forceInlineProcessing = String(formData.get("forceInlineProcessing") ?? "").toLowerCase() === "true";
@@ -183,7 +198,46 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         importFileId: importId,
         workspaceId: String(importFile.workspaceId),
         bankName: formBankName || null,
+        trainingMode: formTrainingMode,
       });
+      const shouldQueuePdfImmediately = isPdfUpload(file.name || formFileName || "imported-file", file.type || formFileType || "") && !forceInlineProcessing;
+
+      if (shouldQueuePdfImmediately) {
+        stage = "scheduling background processing";
+        try {
+          await ensureImportProcessingWorker();
+          await enqueueImportProcessing({
+            importFileId: importId,
+            password,
+            allowDuplicateStatement,
+            bankName: formBankName || undefined,
+          });
+        } catch (error) {
+          console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
+          await updateImportFileCompat(importId, {
+            status: "failed",
+          });
+          return NextResponse.json(
+            {
+              error: "Unable to queue import processing",
+              stage,
+            },
+            { status: 400 }
+          );
+        }
+
+        return NextResponse.json({
+          ok: true,
+          queued: true,
+          processed: false,
+          importedRows: 0,
+          duplicate: false,
+          status: "queued",
+          importFileId: importId,
+          metadata: null,
+        });
+      }
+
       stage = "reading statement metadata";
       let metadata: Record<string, unknown> | null = null;
       let extractedText = "";
@@ -294,10 +348,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       allowDuplicateStatement = Boolean(body?.allowDuplicateStatement ?? false);
       forceInlineProcessing = Boolean(body?.forceInlineProcessing ?? false);
       const bodyBankName = typeof body?.bankName === "string" ? String(body.bankName) : "";
+      const bodyTrainingMode =
+        body?.trainingMode === "generic_parser" ? "generic_parser" : body?.trainingMode === "bank_context" ? "bank_context" : undefined;
       await upsertUploadBankHint({
         importFileId: importId,
         workspaceId: String(importFile.workspaceId),
         bankName: bodyBankName || null,
+        trainingMode: bodyTrainingMode,
       });
 
       if (!text) {
@@ -336,10 +393,18 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       });
     }
   } catch (error) {
+    const importId = await params.then((value) => value.importId).catch(() => null);
     const localDev = await isLocalDevHost().catch(() => false);
     console.error("Import processing failed", error);
     console.error("Import processing failed", { stage, error: summarizeErrorForLog(error) });
     const errorMessage = error instanceof Error ? error.message || "Unable to process import" : "Unable to process import";
+    if (importId) {
+      await updateImportFileCompat(importId, {
+        status: "failed",
+        processingPhase: null,
+        processingMessage: errorMessage,
+      }).catch(() => null);
+    }
     const detectedLimit = detectLimitError(errorMessage);
     if (detectedLimit) {
       if (responsePlanTier === "unknown") {

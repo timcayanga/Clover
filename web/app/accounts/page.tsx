@@ -393,6 +393,15 @@ const getCheckpointIdentityKey = (checkpoint: StatementCheckpoint) =>
     typeof checkpoint.sourceMetadata?.institution === "string" ? checkpoint.sourceMetadata.institution : null
   );
 
+const getLastFourDigits = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const digits = String(value).replace(/\D/g, "");
+  return digits.length >= 4 ? digits.slice(-4) : null;
+};
+
 const mergeStatementCheckpoints = (current: StatementCheckpoint[], next: StatementCheckpoint[]) => {
   if (next.length === 0) {
     return current;
@@ -428,9 +437,23 @@ const getLatestCheckpointForAccount = (
   const identityKey = normalizeImportedAccountKey(account.name, account.institution);
 
   for (const checkpoint of statementCheckpoints) {
+    const checkpointInstitution =
+      typeof checkpoint.sourceMetadata?.institution === "string" ? checkpoint.sourceMetadata.institution : null;
+    const checkpointAccountNumber =
+      typeof checkpoint.sourceMetadata?.accountNumber === "string" ? checkpoint.sourceMetadata.accountNumber : null;
+    const checkpointLastFour = getLastFourDigits(checkpointAccountNumber);
+    const accountLastFour = getLastFourDigits(account.accountNumber ?? account.name);
     const matchesAccount =
       checkpoint.accountId === account.id ||
-      (getCheckpointIdentityKey(checkpoint) !== "" && getCheckpointIdentityKey(checkpoint) === identityKey);
+      (getCheckpointIdentityKey(checkpoint) !== "" && getCheckpointIdentityKey(checkpoint) === identityKey) ||
+      Boolean(
+        checkpointInstitution &&
+          account.institution &&
+          checkpointInstitution.trim().toLowerCase() === account.institution.trim().toLowerCase() &&
+          checkpointLastFour &&
+          accountLastFour &&
+          checkpointLastFour === accountLastFour
+      );
 
     if (!matchesAccount) {
       continue;
