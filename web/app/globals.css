@@ -2584,6 +2584,17 @@ label {
     min-height: 0;
   }
 
+  .section-tabs-shell,
+  .reports-tabs-shell,
+  .goals-tabs-shell,
+  .insights-tabs-shell,
+  .investments-tabs-shell,
+  .reports-toolbar.reports-tabs-shell,
+  .reports-toolbar.section-tabs-shell {
+    margin-inline: -18px;
+    padding-inline: 18px;
+  }
+
   .topbar {
     border-radius: 24px;
   }
@@ -4200,16 +4211,18 @@ label {
 .investments-tabs-shell {
   display: grid;
   gap: 8px;
-  margin: 0 0 14px;
-  padding: 12px 0 10px;
+  margin: 0 -20px 14px;
+  padding: 8px 20px 6px;
   border-radius: 0;
   border: 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+  border-bottom: 0;
   background:
     radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 34%),
     radial-gradient(circle at top right, rgba(110, 231, 183, 0.05), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(245, 247, 249, 0.34));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(245, 247, 249, 0.36));
   box-shadow: none;
+  position: relative;
+  overflow: hidden;
 }
 
 .investments-tabs-shell--row {
@@ -4232,14 +4245,29 @@ label {
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 0 10px;
+  padding: 8px 20px 6px;
+  margin-inline: -20px;
   border-radius: 0;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+  border-bottom: 0;
   background:
     radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 34%),
     radial-gradient(circle at top right, rgba(110, 231, 183, 0.05), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(245, 247, 249, 0.34));
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(245, 247, 249, 0.36));
   box-shadow: none;
+}
+
+.section-tabs-shell::after,
+.reports-tabs-shell::after,
+.goals-tabs-shell::after,
+.insights-tabs-shell::after,
+.investments-tabs-shell::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: rgba(148, 163, 184, 0.28);
 }
 
 .section-tabs-shell + .section-tabs-shell,
@@ -17200,6 +17228,17 @@ input.transaction-inline-edit--amount::placeholder {
 
   .content {
     padding: 12px 12px 16px;
+  }
+
+  .section-tabs-shell,
+  .reports-tabs-shell,
+  .goals-tabs-shell,
+  .insights-tabs-shell,
+  .investments-tabs-shell,
+  .reports-toolbar.reports-tabs-shell,
+  .reports-toolbar.section-tabs-shell {
+    margin-inline: -12px;
+    padding-inline: 12px;
   }
 
   .sidebar,
