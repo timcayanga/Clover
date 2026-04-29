@@ -59,6 +59,7 @@ type Account = {
   id: string;
   name: string;
   institution: string | null;
+  accountNumber: string | null;
   investmentSubtype: InvestmentSubtype | null;
   investmentSymbol: string | null;
   investmentQuantity: string | null;
@@ -86,6 +87,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     id: optimisticAccountId,
     name: summary.accountName,
     institution: summary.institution,
+    accountNumber: summary.accountNumber ?? null,
     investmentSubtype: null,
     investmentSymbol: null,
     investmentQuantity: null,
@@ -626,6 +628,7 @@ function AccountsPageContent() {
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
+  const [manualAccountNumber, setManualAccountNumber] = useState("");
   const [manualInvestmentSubtype, setManualInvestmentSubtype] = useState<InvestmentSubtype>("stock");
   const [manualInvestmentSymbol, setManualInvestmentSymbol] = useState("");
   const [manualInvestmentQuantity, setManualInvestmentQuantity] = useState("");
@@ -1583,6 +1586,7 @@ function AccountsPageContent() {
               : manualType === "investment"
                 ? manualInstitution.trim() || name
                 : name,
+          accountNumber: manualAccountNumber.trim() || null,
           investmentSubtype: manualIsInvestment ? manualInvestmentSubtype : null,
           investmentSymbol:
             manualIsInvestment && (manualIsMarket || manualInvestmentSubtype === "other")
@@ -1620,6 +1624,7 @@ function AccountsPageContent() {
       }
       setManualName("");
       setManualInstitution("");
+      setManualAccountNumber("");
       setManualInvestmentSubtype("stock");
       setManualInvestmentSymbol("");
       setManualInvestmentQuantity("");
@@ -2302,7 +2307,7 @@ function AccountsPageContent() {
       ) : null}
 
       {addOpen ? (
-        <div className="modal-backdrop" role="presentation" onClick={() => setAddOpen(false)}>
+        <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => setAddOpen(false)}>
           <section
             className="modal-card modal-card--wide accounts-add-modal glass"
             role="dialog"
@@ -2337,6 +2342,15 @@ function AccountsPageContent() {
                       placeholder={manualType === "investment" ? "Example: FMETF" : "Example: BDO"}
                       variant="account"
                     />
+                    <label className="accounts-add-fields__account-number">
+                      Account number <span className="field-optional">Optional</span>
+                      <input
+                        value={manualAccountNumber}
+                        onChange={(event) => setManualAccountNumber(event.target.value)}
+                        inputMode="numeric"
+                        placeholder="Example: 1234 5678 9012"
+                      />
+                    </label>
                     <div className="accounts-add-fields__row">
                       <label>
                         Type

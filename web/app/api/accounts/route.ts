@@ -137,6 +137,7 @@ export async function POST(request: Request) {
     const workspaceId = String(body?.workspaceId || "");
     const name = String(body?.name || "").trim();
     const institution = body?.institution ? String(body.institution) : null;
+    const accountNumber = body?.accountNumber ? String(body.accountNumber).trim() || null : null;
     const type = body?.type || "bank";
     const investmentSubtype = normalizeInvestmentSubtype(body?.investmentSubtype);
     const investmentSymbol = body?.investmentSymbol ? String(body.investmentSymbol).trim() || null : null;
@@ -195,6 +196,7 @@ export async function POST(request: Request) {
         workspaceId,
         name,
         institution,
+        accountNumber,
         investmentSubtype: type === "investment" ? investmentSubtype : null,
         investmentSymbol: type === "investment" ? investmentSymbol : null,
         investmentQuantity: type === "investment" ? investmentQuantity : null,

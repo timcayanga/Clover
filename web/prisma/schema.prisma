@@ -245,6 +245,7 @@ model Account {
   workspaceId            String
   name                   String
   institution            String?
+  accountNumber          String?
   investmentSubtype      String?
   investmentSymbol       String?
   investmentQuantity     Decimal?      @db.Decimal(18, 8)

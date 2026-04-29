@@ -12,6 +12,7 @@ const accountPatchSchema = z.object({
   workspaceId: z.string().min(1),
   name: z.string().min(1).optional(),
   institution: z.string().nullable().optional(),
+  accountNumber: z.string().nullable().optional(),
   investmentSubtype: z.string().nullable().optional(),
   investmentSymbol: z.string().nullable().optional(),
   investmentQuantity: z.union([z.string(), z.number(), z.null()]).optional(),
@@ -108,6 +109,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
       data: {
         name: payload.name?.trim() ?? undefined,
         institution: payload.institution === undefined ? undefined : payload.institution?.trim() || null,
+        accountNumber: payload.accountNumber === undefined ? undefined : payload.accountNumber?.trim() || null,
         investmentSubtype:
           payload.investmentSubtype === undefined ? undefined : normalizeInvestmentSubtype(payload.investmentSubtype),
         investmentSymbol: payload.investmentSymbol === undefined ? undefined : payload.investmentSymbol?.trim() || null,

@@ -13032,10 +13032,21 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 6px;
 }
 
+.accounts-add-fields__account-number {
+  gap: 6px;
+}
+
 .accounts-add-fields__row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
+}
+
+.field-optional {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 500;
 }
 
 .accounts-add-brand-tile {
@@ -17504,6 +17515,11 @@ input.transaction-inline-edit--amount::placeholder {
     padding: 0;
   }
 
+  .modal-backdrop--centered-mobile {
+    align-items: center;
+    padding: 20px 12px;
+  }
+
   .modal-card {
     width: 100%;
     max-height: calc(100dvh - env(safe-area-inset-bottom) - 12px);
@@ -17514,6 +17530,13 @@ input.transaction-inline-edit--amount::placeholder {
 
   .modal-card--wide {
     width: 100%;
+  }
+
+  .modal-backdrop--centered-mobile .modal-card,
+  .modal-backdrop--centered-mobile .modal-card--wide {
+    width: min(640px, 100%);
+    max-height: calc(100dvh - 24px);
+    border-radius: 26px;
   }
 
   .accounts-drawer-backdrop {
