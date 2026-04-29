@@ -4,44 +4,13 @@ import { MobileCarousel } from "../components/mobile-carousel";
 import Link from "next/link";
 
 function StepIcon({ name }: { name: "upload" | "insights" | "decision" }) {
-  const common = {
-    width: 24,
-    height: 24,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.8,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    "aria-hidden": true,
-  };
+  const icons = {
+    upload: "/landing-icons/upload3d.png",
+    insights: "/landing-icons/analyze.png",
+    decision: "/landing-icons/plan.png",
+  } as const;
 
-  switch (name) {
-    case "upload":
-      return (
-        <svg {...common}>
-          <path d="M12 16V5" />
-          <path d="m8 9 4-4 4 4" />
-          <path d="M5 19h14" />
-        </svg>
-      );
-    case "insights":
-      return (
-        <svg {...common}>
-          <path d="M5 19V9" />
-          <path d="M10 19V5" />
-          <path d="M15 19v-7" />
-          <path d="M20 19V7" />
-        </svg>
-      );
-    case "decision":
-      return (
-        <svg {...common}>
-          <path d="m6 13 4 4 8-8" />
-          <path d="M12 3a9 9 0 1 0 9 9" />
-        </svg>
-      );
-  }
+  return <img src={icons[name]} alt="" aria-hidden="true" loading="lazy" decoding="async" />;
 }
 
 function HeroImage() {
