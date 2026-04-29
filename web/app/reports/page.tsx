@@ -1687,14 +1687,14 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
       title="Reports"
       showTopbar={false}
       actions={
-        <>
+        <div className="reports-shell-actions">
           <Link className="pill-link" href="/transactions">
             Transactions
           </Link>
           <Link className="pill-link" href="/settings">
             Settings
           </Link>
-        </>
+        </div>
       }
     >
       <Suspense fallback={<ReportsStreamFallback />}>
