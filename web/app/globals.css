@@ -1956,6 +1956,7 @@ label {
   gap: 12px;
   padding: 12px 14px;
   border-radius: 20px;
+  border-bottom: 1px solid rgba(219, 227, 232, 0.85);
 }
 
 .shell-compact-bar__copy {
@@ -2021,6 +2022,7 @@ label {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  border-bottom: 1px solid rgba(219, 227, 232, 0.85);
 }
 
 .topbar h1 {
