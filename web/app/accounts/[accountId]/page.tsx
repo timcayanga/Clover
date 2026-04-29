@@ -321,6 +321,11 @@ const formatAccountType = (value: string) =>
 export default function AccountDetailPage() {
   useEffect(() => {
     document.title = "Clover | Account";
+    document.body.classList.add("account-detail-page");
+
+    return () => {
+      document.body.classList.remove("account-detail-page");
+    };
   }, []);
 
   return <AccountDetailPageContent />;
