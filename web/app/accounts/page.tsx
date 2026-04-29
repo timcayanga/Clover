@@ -270,14 +270,15 @@ const isSpendableAccountType = (type: Account["type"]) => type === "bank" || typ
 const getSpendableBalance = (account: Account) =>
   (isSpendableAccountType(getEffectiveAccountType(account)) ? normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(account.balance)) : 0);
 
-const ACCOUNTS_PAGE_GUIDE =
-  "Accounts shows where your money lives right now. Use Transactions for money movement and Investments for longer-term holdings.";
-
 const ACCOUNTS_OVERVIEW_COPY = {
-  netWorth: "Everything you own minus everything you owe across this workspace.",
-  spendable: "Cash-like money you can use now across bank accounts, wallets, and cash.",
-  assets: "Positive-value accounts such as banks, wallets, cash, and investments.",
-  liabilities: "Amounts you owe, like credit cards and other negative-balance accounts.",
+  netWorth:
+    "Net worth = total assets minus total liabilities. Clover adds positive balances from accounts like banks, wallets, cash, and investments, then subtracts owed balances such as credit cards.",
+  spendable:
+    "Spendable = the sum of bank, wallet, and cash balances you can use right away. Investments and credit cards are excluded from this number.",
+  assets:
+    "Assets = the total of positive balances across accounts in this workspace, including banks, wallets, cash, investments, and any other positive-value holdings.",
+  liabilities:
+    "Liabilities = the total amount owed across negative-balance accounts, usually credit cards and other payables.",
 } as const;
 
 const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined) => {
@@ -1741,7 +1742,6 @@ function AccountsPageContent() {
             <div className="accounts-page__headline-copy">
               <h1>
                 Accounts
-                <InfoTooltip title="How Accounts works" label={ACCOUNTS_PAGE_GUIDE} />
               </h1>
             </div>
             <div className="accounts-page__headline-actions">

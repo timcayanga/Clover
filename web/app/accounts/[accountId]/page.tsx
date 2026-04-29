@@ -104,15 +104,14 @@ const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 const normalizeAccountBalance = (type: Account["type"] | null | undefined, value: number) =>
   type === "credit_card" ? -Math.abs(value) : Math.abs(value);
 
-const ACCOUNT_DETAILS_GUIDE =
-  "Use this page to confirm one account's balance, review its recent activity, and check whether imported statements match the running history.";
-
 const ACCOUNT_DETAILS_INFO = {
-  currentBalance: "The latest balance Clover is showing for this account after imports, edits, and reconciliation.",
+  currentBalance:
+    "Current balance = the latest balance Clover can derive for this account after applying its saved balance, imported transactions, and any statement checkpoint used for reconciliation.",
   status: "Shows whether this account is active or currently being deleted.",
-  accountType: "The account type controls how Clover groups this account and how totals are calculated.",
-  reconciliation: "Reconciliation compares a statement ending balance with Clover's running account history.",
-  transactions: "Transactions are the individual money movements that changed this account over time.",
+  accountType: "Account type controls how Clover groups this account and whether it is treated like an asset, wallet, cash balance, credit card, or investment.",
+  reconciliation:
+    "Reconciliation compares a statement ending balance with Clover's running history for this account so you can see whether the account matches the imported statement.",
+  transactions: "Transactions are the money movements linked to this account. The running balance changes as each transaction is imported, edited, or excluded.",
 } as const;
 
 const parseNullableNumber = (value: string | null | undefined) => {
@@ -581,24 +580,24 @@ function AccountDetailPageContent() {
   }, [account, currentBalance, investmentMaturityValue, investmentPrincipal, investmentSubtype]);
   const accountDetailValueCardInfo = useMemo(() => {
     if (!account) {
-      return "Cash-like money you can use now from this account.";
+      return "Spendable amount = the usable cash-like balance from this account.";
     }
 
     if (account.type === "credit_card") {
-      return "The amount currently owed on this credit card.";
+      return "Outstanding balance = the amount currently owed on this credit card.";
     }
 
     if (account.type === "investment") {
       if (isFixedIncomeInvestmentSubtype(investmentSubtype)) {
         return investmentMaturityValue !== null
-          ? "The amount this fixed-income investment is expected to be worth at maturity."
-          : "The original amount placed into this fixed-income investment.";
+          ? "Maturity value = the amount this fixed-income investment is expected to be worth at maturity."
+          : "Principal = the original amount placed into this fixed-income investment.";
       }
 
-      return "The latest tracked value of this investment holding.";
+      return "Current value = the latest tracked value of this investment holding.";
     }
 
-    return "Cash-like money you can use now from this account.";
+    return "Spendable amount = the cash-like money you can use now from this account.";
   }, [account, investmentMaturityValue, investmentSubtype]);
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {
@@ -748,7 +747,6 @@ function AccountDetailPageContent() {
               <p className="eyebrow">Account details</p>
               <h2>
                 {account?.name ?? "Account"}
-                <InfoTooltip title="How Account Details works" label={ACCOUNT_DETAILS_GUIDE} />
               </h2>
               <p className="panel-muted">
                 {account ? `${accountBrand.label} · ${formatAccountType(account.type)} · ${account.currency} · ${account.source}` : message}
