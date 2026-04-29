@@ -501,7 +501,7 @@ export default function InvestmentsPage() {
       accountPerformance
         .filter((item) => item.gainLoss !== null)
         .slice()
-        .sort((left, right) => (right.gainLoss ?? 0) - (left.gainLoss ?? 0))[0] ?? null
+        .sort((left, right) => (right.gainLoss ?? Number.NEGATIVE_INFINITY) - (left.gainLoss ?? Number.NEGATIVE_INFINITY))[0] ?? null
     );
   }, [accountPerformance]);
 
@@ -510,7 +510,7 @@ export default function InvestmentsPage() {
       accountPerformance
         .filter((item) => item.gainLoss !== null)
         .slice()
-        .sort((left, right) => (left.gainLoss ?? 0) - (right.gainLoss ?? 0))[0] ?? null
+        .sort((left, right) => (left.gainLoss ?? Number.POSITIVE_INFINITY) - (right.gainLoss ?? Number.POSITIVE_INFINITY))[0] ?? null
     );
   }, [accountPerformance]);
 
@@ -534,6 +534,10 @@ export default function InvestmentsPage() {
   const canUseProTabs = planTier !== "free";
   const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "insights") && !canUseProTabs);
   const editingAccount = editingAccountId ? visibleInvestmentAccounts.find((account) => account.id === editingAccountId) ?? accounts.find((account) => account.id === editingAccountId) ?? null : null;
+  const topStatusMessage =
+    !loading && hasLoaded && investmentAccounts.length === 0
+      ? "Add an investment to get started."
+      : message;
 
   const beginEditingAccount = (account: Account) => {
     setEditingAccountId(account.id);
@@ -740,7 +744,7 @@ export default function InvestmentsPage() {
         </div>
 
         {loading ? <p className="panel-muted">Loading investments...</p> : null}
-        {!loading && message ? <p className="panel-muted">{message}</p> : null}
+        {!loading && topStatusMessage ? <p className="panel-muted">{topStatusMessage}</p> : null}
 
         <nav className="investments-tabs" aria-label="Investment sections">
           {INVESTMENT_TABS.map((tab) => {
@@ -1281,9 +1285,7 @@ export default function InvestmentsPage() {
                     <span>Best gain</span>
                     <InfoTip label="The holding with the largest gain in absolute currency value." />
                   </div>
-                  <strong>
-                    {bestGainHolding?.gainLoss === null ? "—" : currencyFormatter.format(bestGainHolding.gainLoss)}
-                  </strong>
+                  <strong>{bestGainHolding?.gainLoss === null || bestGainHolding?.gainLoss === undefined ? "—" : currencyFormatter.format(bestGainHolding.gainLoss)}</strong>
                   <span>{bestGainHolding?.account.name ?? "No holdings yet"}</span>
                 </article>
                 <article className="accounts-overview-card glass">
@@ -1291,9 +1293,7 @@ export default function InvestmentsPage() {
                     <span>Best return</span>
                     <InfoTip label="The holding with the highest return percentage." />
                   </div>
-                  <strong>
-                    {bestReturnHolding?.returnPercent === null ? "—" : percentFormatter.format(bestReturnHolding.returnPercent)}
-                  </strong>
+                  <strong>{bestReturnHolding?.returnPercent === null || bestReturnHolding?.returnPercent === undefined ? "—" : percentFormatter.format(bestReturnHolding.returnPercent)}</strong>
                   <span>{bestReturnHolding?.account.name ?? "No holdings yet"}</span>
                 </article>
                 <article className="accounts-overview-card glass">
@@ -1301,9 +1301,7 @@ export default function InvestmentsPage() {
                     <span>Worst gain</span>
                     <InfoTip label="The holding with the largest loss in absolute currency value." />
                   </div>
-                  <strong>
-                    {worstGainHolding?.gainLoss === null ? "—" : currencyFormatter.format(worstGainHolding.gainLoss)}
-                  </strong>
+                  <strong>{worstGainHolding?.gainLoss === null || worstGainHolding?.gainLoss === undefined ? "—" : currencyFormatter.format(worstGainHolding.gainLoss)}</strong>
                   <span>{worstGainHolding?.account.name ?? "No holdings yet"}</span>
                 </article>
               </div>
