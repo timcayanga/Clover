@@ -835,8 +835,7 @@ async function InsightsPageStream() {
   return (
     <CloverShell
       active="insights"
-      title="A clearer view of what your money is doing."
-      subtitle="A simple summary of cash flow, patterns, and next steps."
+      title="Insights"
       showTopbar={false}
     >
       <PostHogEvent
