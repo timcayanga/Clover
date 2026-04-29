@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { buildTransactionQueryWhere } from "@/lib/transaction-query";
 
 export const dynamic = "force-dynamic";
+
+const resolveAccountTransactionsRouteUserId = async () => {
+  if (await isLocalDevHost()) {
+    return "local-admin";
+  }
+
+  const { userId } = await requireAuth();
+  return userId;
+};
 
 type TransactionApiRow = {
   id: string;
@@ -51,7 +60,7 @@ const mapTransactionRow = (transaction: {
 
 export async function GET(request: Request, { params }: { params: Promise<{ accountId: string }> }) {
   try {
-    const { userId } = await requireAuth();
+    const userId = await resolveAccountTransactionsRouteUserId();
     const { accountId } = await params;
     const { searchParams } = new URL(request.url);
 

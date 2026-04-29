@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { hasCompatibleTable } from "@/lib/data-engine";
 
 export const dynamic = "force-dynamic";
+
+const resolveStatementCheckpointsRouteUserId = async () => {
+  if (await isLocalDevHost()) {
+    return "local-admin";
+  }
+
+  const { userId } = await requireAuth();
+  return userId;
+};
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
@@ -26,7 +35,7 @@ const normalizeAccountKey = (accountName?: string | null, institution?: string |
 
 export async function GET(_request: Request, { params }: { params: Promise<{ accountId: string }> }) {
   try {
-    const { userId } = await requireAuth();
+    const userId = await resolveStatementCheckpointsRouteUserId();
     const { accountId } = await params;
 
     const account = await prisma.account.findUnique({

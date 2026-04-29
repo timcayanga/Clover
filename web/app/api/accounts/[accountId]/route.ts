@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -7,6 +7,15 @@ import { upsertAccountRule } from "@/lib/data-engine";
 import { INVESTMENT_SUBTYPES, type InvestmentSubtype } from "@/lib/investments";
 
 export const dynamic = "force-dynamic";
+
+const resolveAccountRouteUserId = async () => {
+  if (await isLocalDevHost()) {
+    return "local-admin";
+  }
+
+  const { userId } = await requireAuth();
+  return userId;
+};
 
 let accountColumnCache: Set<string> | null = null;
 
@@ -125,7 +134,7 @@ const normalizeInvestmentSubtype = (value: unknown): InvestmentSubtype | null =>
 
 export async function GET(_request: Request, { params }: { params: Promise<{ accountId: string }> }) {
   try {
-    const { userId } = await requireAuth();
+    const userId = await resolveAccountRouteUserId();
     const { accountId } = await params;
     const compatibleColumns = await getCompatibleAccountColumns();
 
@@ -149,7 +158,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ acc
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ accountId: string }> }) {
   try {
-    const { userId } = await requireAuth();
+    const userId = await resolveAccountRouteUserId();
     const { accountId } = await params;
     const payload = accountPatchSchema.parse(await request.json());
     const compatibleColumns = await getCompatibleAccountColumns();
@@ -211,7 +220,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ accountId: string }> }) {
   try {
-    const { userId } = await requireAuth();
+    const userId = await resolveAccountRouteUserId();
     const { accountId } = await params;
     const compatibleColumns = await getCompatibleAccountColumns();
 

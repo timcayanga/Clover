@@ -199,7 +199,6 @@ export const buildTransactionQueryWhere = (workspaceId: string, filters: Transac
   const where: Prisma.TransactionWhereInput = {
     workspaceId,
   };
-  const andConditions: Prisma.TransactionWhereInput[] = [];
 
   const query = filters.query?.trim();
   const categoryIds = (filters.categoryIds ?? []).filter(Boolean);
@@ -235,7 +234,7 @@ export const buildTransactionQueryWhere = (workspaceId: string, filters: Transac
   }
 
   if (merchantFilters.length > 0) {
-    andConditions.push({ OR: buildMerchantFilters(merchantFilters) });
+    where.AND = [{ OR: buildMerchantFilters(merchantFilters) }];
   }
 
   if (dateFilterMode !== "ltd") {
@@ -256,16 +255,6 @@ export const buildTransactionQueryWhere = (workspaceId: string, filters: Transac
                   };
 
     where.date = dateRange;
-  }
-
-  andConditions.push({
-    NOT: {
-      OR: [{ merchantRaw: "Beginning balance" }, { description: "Beginning balance" }],
-    },
-  });
-
-  if (andConditions.length > 0) {
-    where.AND = andConditions;
   }
 
   return where;
