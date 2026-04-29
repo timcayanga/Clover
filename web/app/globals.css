@@ -9211,23 +9211,11 @@ input.transaction-inline-edit--amount::placeholder {
   flex: 1 1 auto;
 }
 
-.transactions-context-strip__intro {
-  display: grid;
-  gap: 4px;
-}
-
 .transactions-context-strip__label {
   color: var(--muted-2);
   font-size: 0.6rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-}
-
-.transactions-context-strip__note {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.75rem;
-  line-height: 1.35;
 }
 
 .transactions-context-strip__chips {
@@ -16303,6 +16291,11 @@ input.transaction-inline-edit--amount::placeholder {
     gap: 8px;
     flex-wrap: nowrap;
     min-width: max-content;
+  }
+
+  .transactions-toolbar-row--bottom .transactions-toolbar-group--left .transactions-toolbar-chip:not(.transactions-toolbar-add),
+  .transactions-toolbar-row--bottom .transactions-toolbar-group--right {
+    display: none;
   }
 
   .transactions-context-strip {

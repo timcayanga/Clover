@@ -3788,12 +3788,7 @@ function TransactionsPageContent() {
                   </div>
                 </>
               ) : (
-                <div className="transactions-context-strip__intro">
-                  <span className="transactions-context-strip__label">Start here</span>
-                  <p className="transactions-context-strip__note">
-                    Add a transaction or import files, then use Filters to narrow the list.
-                  </p>
-                </div>
+                null
               )}
             </div>
           </div>
