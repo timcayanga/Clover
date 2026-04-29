@@ -939,6 +939,58 @@ const toolbarAddStyle = {
   boxShadow: "none",
 } as const;
 
+const transactionsToolbarRowStyle = {
+  display: "grid",
+  gridTemplateColumns: "auto minmax(0, 1fr)",
+  alignItems: "center",
+  gap: "10px",
+  width: "100%",
+} as const;
+
+const transactionsToolbarLeftStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  flex: "0 0 auto",
+} as const;
+
+const transactionsToolbarRightStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: "5px",
+  minWidth: 0,
+  width: "100%",
+} as const;
+
+const transactionsToolbarSearchStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "8px",
+  height: "30px",
+  padding: "0 9px",
+  borderRadius: "999px",
+  border: "1px solid rgba(219, 227, 232, 0.9)",
+  background: "rgba(255, 255, 255, 0.96)",
+  boxShadow: "var(--shadow-soft)",
+  minWidth: "150px",
+  maxWidth: "185px",
+  flex: "0 1 185px",
+} as const;
+
+const transactionsFooterStyle = {
+  background: "transparent",
+  borderTop: "1px solid rgba(219, 227, 232, 0.72)",
+  boxShadow: "none",
+  backdropFilter: "none",
+  WebkitBackdropFilter: "none",
+} as const;
+
+const transactionsFooterNetMetricStyle = {
+  borderColor: "var(--stroke)",
+  background: "rgba(255, 255, 255, 0.94)",
+} as const;
+
 function ActionIcon({
   name,
 }: {
@@ -3719,8 +3771,8 @@ function TransactionsPageContent() {
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`}>
         <div className="transactions-main-panel">
           <div className="transactions-topbar">
-            <div className="transactions-toolbar-row transactions-toolbar-row--single">
-              <div className="transactions-toolbar-group transactions-toolbar-group--left">
+            <div className="transactions-toolbar-row transactions-toolbar-row--single" style={transactionsToolbarRowStyle}>
+              <div className="transactions-toolbar-group transactions-toolbar-group--left" style={transactionsToolbarLeftStyle}>
                 <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef}>
                   <button
                     className="button button-primary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
@@ -3766,8 +3818,8 @@ function TransactionsPageContent() {
                 </div>
               </div>
 
-              <div className="transactions-toolbar-group transactions-toolbar-group--right">
-                <label className="transactions-toolbar-search">
+              <div className="transactions-toolbar-group transactions-toolbar-group--right" style={transactionsToolbarRightStyle}>
+                <label className="transactions-toolbar-search" style={transactionsToolbarSearchStyle}>
                   <span className="transactions-toolbar-search__icon" aria-hidden="true">
                     <ActionIcon name="search" />
                   </span>
@@ -4503,7 +4555,7 @@ function TransactionsPageContent() {
             )}
           </div>
 
-          <div className="transactions-footer">
+          <div className="transactions-footer" style={transactionsFooterStyle}>
             <div className="table-footer__summary">
               <span className="pill pill-neutral">{transactionsSummary.totalCount} transactions</span>
               {transactionsSummary.totalCount > 0 ? (
@@ -4599,7 +4651,7 @@ function TransactionsPageContent() {
                     {currencyFormatter.format(transactionsSummary.transfers)}
                   </span>
                 </div>
-                <div className="transactions-footer-snapshot__metric transactions-footer-snapshot__metric--net">
+                <div className="transactions-footer-snapshot__metric transactions-footer-snapshot__metric--net" style={transactionsFooterNetMetricStyle}>
                   <span className="transactions-footer-snapshot__metric-label">Net cash flow</span>
                   <span className={`transactions-footer-snapshot__metric-value ${netCashFlow >= 0 ? "positive" : "negative"}`}>
                     {currencyFormatter.format(netCashFlow)}
