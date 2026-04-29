@@ -595,6 +595,7 @@ async function GoalsPageStream({
     investmentFlow,
     investmentHoldings: investmentHoldingsCount,
   });
+  const goalActionSteps = playbook.weeklyFocus.length > 0 ? playbook.weeklyFocus : [goalProgress.nextAction];
   const uncategorizedShare = currentSpend > 0
     ? uncategorizedTransactions.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0) / currentSpend
     : 0;

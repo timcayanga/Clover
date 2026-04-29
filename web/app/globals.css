@@ -4199,15 +4199,16 @@ label {
 .insights-tabs-shell,
 .investments-tabs-shell {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   margin: 0 0 14px;
-  padding: 14px 15px 12px;
-  border-radius: 24px;
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  padding: 12px 0 10px;
+  border-radius: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 40%),
-    radial-gradient(circle at top right, rgba(110, 231, 183, 0.05), transparent 34%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(245, 247, 249, 0.72));
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 34%),
+    radial-gradient(circle at top right, rgba(110, 231, 183, 0.05), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(245, 247, 249, 0.34));
   box-shadow: none;
 }
 
@@ -4231,6 +4232,14 @@ label {
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
+  padding: 12px 0 10px;
+  border-radius: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 34%),
+    radial-gradient(circle at top right, rgba(110, 231, 183, 0.05), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(245, 247, 249, 0.34));
+  box-shadow: none;
 }
 
 .section-tabs-shell + .section-tabs-shell,
@@ -4247,7 +4256,7 @@ label {
   gap: 4px;
   margin-top: 0;
   padding: 0 2px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+  border-bottom: 0;
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
