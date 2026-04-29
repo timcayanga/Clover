@@ -866,16 +866,10 @@ async function DashboardPageStream({
   return (
     <CloverShell
       active="dashboard"
-      kicker="Home"
-      title="Your finances at a glance"
+      title="Dashboard"
       subtitle={experienceProfile.dashboardSubtitle}
       showTopbar={false}
       hideCompactBarCopyOnMobile
-      actions={
-        <Link className="pill-link" href="/goals">
-          Open goals
-        </Link>
-      }
     >
       <Suspense fallback={<DashboardStreamFallback />}>
         <DashboardStream user={user} resolvedSearchParams={resolvedSearchParams} />
