@@ -19488,12 +19488,12 @@ input.transaction-inline-edit--amount::placeholder {
   .landing-nav__mobile-menu {
     display: grid;
     gap: 14px;
-    position: absolute;
+    position: fixed;
     left: 12px;
     right: 12px;
-    top: calc(100% + 10px);
+    top: 60px;
     z-index: 40;
-    max-height: calc(100dvh - 120px);
+    max-height: calc(100dvh - 72px);
     overflow: auto;
     padding: 14px;
     border-radius: 20px;
