@@ -419,6 +419,37 @@ const mergeStatementCheckpoints = (current: StatementCheckpoint[], next: Stateme
   return Array.from(checkpointsById.values());
 };
 
+const getLatestCheckpointForAccount = (
+  account: Account,
+  statementCheckpoints: StatementCheckpoint[]
+) => {
+  let latestCheckpoint: StatementCheckpoint | null = null;
+  let latestTime = -1;
+  const identityKey = normalizeImportedAccountKey(account.name, account.institution);
+
+  for (const checkpoint of statementCheckpoints) {
+    const matchesAccount =
+      checkpoint.accountId === account.id ||
+      (getCheckpointIdentityKey(checkpoint) !== "" && getCheckpointIdentityKey(checkpoint) === identityKey);
+
+    if (!matchesAccount) {
+      continue;
+    }
+
+    const checkpointTime = Math.max(
+      checkpoint.statementEndDate ? new Date(checkpoint.statementEndDate).getTime() : 0,
+      new Date(checkpoint.createdAt).getTime()
+    );
+
+    if (checkpointTime >= latestTime) {
+      latestCheckpoint = checkpoint;
+      latestTime = checkpointTime;
+    }
+  }
+
+  return latestCheckpoint;
+};
+
 function ActionIcon({
   name,
 }: {
@@ -726,7 +757,11 @@ function AccountsPageContent() {
         const accountTransactions = drawerAccountId === account.id
           ? drawerTransactions
           : transactions.filter((transaction) => transactionMatchesAccount(transaction, account));
-        const accountCheckpoints = drawerAccountId === account.id ? drawerStatementCheckpoints : [];
+        const latestCheckpoint =
+          drawerAccountId === account.id
+            ? drawerStatementCheckpoints[0] ?? null
+            : getLatestCheckpointForAccount(account, statementCheckpoints);
+        const accountCheckpoints = latestCheckpoint ? [latestCheckpoint] : [];
         const effectiveType = getEffectiveAccountType(account);
         const reconciledBalance = deriveReconciledBalance({
           balance: account.balance,
@@ -741,7 +776,7 @@ function AccountsPageContent() {
           balance: String(normalizedBalance),
         };
       }),
-    [accounts, drawerAccountId, drawerStatementCheckpoints, drawerTransactions, transactions]
+    [accounts, drawerAccountId, drawerStatementCheckpoints, drawerTransactions, statementCheckpoints, transactions]
   );
 
   const deletingAccountIdsSet = useMemo(

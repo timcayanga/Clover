@@ -464,14 +464,6 @@ const resolveStatementIdentityFromMetadata = (metadata: unknown) => {
   };
 };
 
-const isSpecificOptimisticAccountName = (accountName?: string | null) => {
-  if (!accountName) {
-    return false;
-  }
-
-  return /\b\d{4}\b/.test(accountName);
-};
-
 const deriveFallbackAccountNameFromFileName = (fileName: string) => {
   const stem = fileName.replace(/\.[^.]+$/, "").trim();
   return stem || "Imported statement";
@@ -847,7 +839,7 @@ export function ImportFilesModal({
 
         additionsCount += 1;
         const guessedIdentity = guessStatementIdentity(file.name);
-        const canUseOptimisticGuess = isSpecificOptimisticAccountName(guessedIdentity?.accountName ?? null);
+        const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName);
         const optimisticAccountId = guessedIdentity && canUseOptimisticGuess ? `optimistic-${crypto.randomUUID()}` : null;
         const selectedAccount = selectedAccountId ? accounts.find((account) => account.id === selectedAccountId) : null;
         capturePostHogClientEvent("file_upload_started", {
@@ -1504,7 +1496,7 @@ export function ImportFilesModal({
     const item = items.find((entry) => entry.id === itemId);
     if (!item) return { status: "error", importedRows: null, summary: null };
     const guessedIdentity = guessStatementIdentity(item.file.name);
-    const canUseOptimisticGuess = isSpecificOptimisticAccountName(guessedIdentity?.accountName ?? null);
+    const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName);
 
     if (!workspaceId) {
       updateItem(itemId, { status: "error", error: "Select a workspace before importing files." });
@@ -1626,20 +1618,27 @@ export function ImportFilesModal({
                 statementIdentity?.institution ?? null
               )
             : [];
-        const optimisticSummary = hasStatementIdentity
+        const optimisticIdentity =
+          statementIdentity ??
+          (guessedIdentity
+            ? {
+                ...guessedIdentity,
+                accountType: inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank"),
+              }
+            : null);
+        const optimisticSummary = optimisticIdentity
           ? ({
               ...buildOptimisticUploadSummary(
                 item.file.name,
                 0,
                 optimisticAccountId,
-                statementIdentity?.accountName ?? null,
-                statementIdentity?.institution ?? null,
-                statementAccountType,
+                optimisticIdentity.accountName ?? null,
+                optimisticIdentity.institution ?? null,
+                optimisticIdentity.accountType ?? statementAccountType,
                 optimisticAccountId,
                 null,
                 previewTransactions
               ),
-              optimistic: false,
             } satisfies UploadInsightsSummary)
           : null;
         updateItem(itemId, {
@@ -1704,7 +1703,6 @@ export function ImportFilesModal({
                 null,
                 previewTransactions
               ),
-              optimistic: false,
             } satisfies UploadInsightsSummary)
           : null;
 
