@@ -21,6 +21,34 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     if (!localDev) {
       await assertWorkspaceAccess(userId, importFile.workspaceId as string);
     }
+
+    const parsedRowsCountBefore = Number(importFile.parsedRowsCount ?? 0);
+    const confirmedTransactionsCountBefore = Number(importFile.confirmedTransactionsCount ?? 0);
+    const updatedAtMs = importFile.updatedAt ? new Date(importFile.updatedAt).getTime() : 0;
+    const createdAtMs = importFile.createdAt ? new Date(importFile.createdAt).getTime() : 0;
+    const importAgeMs = Math.max(0, Date.now() - Math.max(updatedAtMs, createdAtMs));
+    const shouldSelfHeal =
+      (importFile.status === "processing" || importFile.status === "queued") &&
+      parsedRowsCountBefore === 0 &&
+      confirmedTransactionsCountBefore === 0 &&
+      importAgeMs > 15_000;
+
+    if (shouldSelfHeal) {
+      try {
+        const { processImportFileText } = await import("@/workers/import-processor");
+        await processImportFileText(importId, { actorUserId: null });
+        const refreshedImportFile = await fetchImportFileCompat(importId);
+        if (refreshedImportFile) {
+          importFile = refreshedImportFile;
+        }
+      } catch (error) {
+        console.warn("Unable to self-heal stalled import status", {
+          importId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     let parsedRowsCount = Number(importFile.parsedRowsCount ?? 0);
     let confirmedTransactionsCount = Number(importFile.confirmedTransactionsCount ?? 0);
     const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
