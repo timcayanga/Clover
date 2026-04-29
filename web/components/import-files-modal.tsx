@@ -165,7 +165,7 @@ const lowQualityImportWarning = (fileName: string) =>
 
 const isLowQualityImportFailure = (file: File | string, errorMessage: string) =>
   isPdfImportFile(file) &&
-  /Unable to process import|Unable to parse this file|No parsed rows available|Import parsing failed in the background|Unable to confirm this import\.|Timed out waiting for trusted statement identity\./i.test(
+  /blurry|low[- ]?resolution|unreadable|cannot read|can't read|could not read|failed to extract text|text layer is missing|ocr/i.test(
     errorMessage
   );
 

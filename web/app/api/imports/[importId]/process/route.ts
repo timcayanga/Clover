@@ -200,7 +200,44 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         bankName: formBankName || null,
         trainingMode: formTrainingMode,
       });
-      const shouldQueuePdfImmediately = isPdfUpload(file.name || formFileName || "imported-file", file.type || formFileType || "") && !forceInlineProcessing;
+      let metadata: Record<string, unknown> | null = null;
+      let extractedText = "";
+      const effectiveFileName = file.name || formFileName || "imported-file";
+      const effectiveFileType = file.type || formFileType || "";
+      const shouldPreflightPdf = isPdfUpload(effectiveFileName, effectiveFileType) && bytes.length <= 1_000_000;
+
+      if (shouldPreflightPdf) {
+        stage = "reading statement metadata";
+        try {
+          extractedText = await readImportedFileText(
+            {
+              storageKey: String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
+              fileType: effectiveFileType || "application/octet-stream",
+              fileName: effectiveFileName,
+            },
+            password
+          );
+          const detectedMetadata = detectStatementMetadataFromText(extractedText);
+          const statementFingerprint = buildStatementFingerprint(extractedText, detectedMetadata, effectiveFileName, effectiveFileType || "application/octet-stream");
+          const template = await loadStatementTemplate({
+            workspaceId: String(importFile.workspaceId),
+            fingerprint: statementFingerprint,
+          });
+          metadata = mergeStatementMetadataWithTemplate(
+            detectedMetadata,
+            template?.metadata && typeof template.metadata === "object" && !Array.isArray(template.metadata)
+              ? (template.metadata as Record<string, unknown>)
+              : null
+          );
+        } catch (error) {
+          console.warn("Unable to pre-read statement metadata", { importId, error: summarizeErrorForLog(error) });
+        }
+      }
+
+      const parsedMetadataConfidence = Number((metadata as { confidence?: unknown } | null)?.confidence ?? 0);
+      const hasExtractedText = extractedText.trim().length > 0;
+      const shouldQueuePdfImmediately =
+        isPdfUpload(effectiveFileName, effectiveFileType) && !forceInlineProcessing && !(hasExtractedText && parsedMetadataConfidence >= 80);
 
       if (shouldQueuePdfImmediately) {
         stage = "scheduling background processing";
@@ -239,36 +276,39 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       stage = "reading statement metadata";
-      let metadata: Record<string, unknown> | null = null;
-      let extractedText = "";
-      try {
-        extractedText = await readImportedFileText(
-          {
-            storageKey: String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
-            fileType: file.type || "application/octet-stream",
-            fileName: file.name || String(importFile.fileName ?? "imported-file"),
-          },
-          password
-        );
-        const detectedMetadata = detectStatementMetadataFromText(extractedText);
-        const statementFingerprint = buildStatementFingerprint(extractedText, detectedMetadata, file.name || String(importFile.fileName ?? "imported-file"), file.type || "application/octet-stream");
-        const template = await loadStatementTemplate({
-          workspaceId: String(importFile.workspaceId),
-          fingerprint: statementFingerprint,
-        });
-        metadata = mergeStatementMetadataWithTemplate(detectedMetadata, template?.metadata && typeof template.metadata === "object" && !Array.isArray(template.metadata)
-          ? (template.metadata as Record<string, unknown>)
-          : null);
-      } catch (error) {
-        console.warn("Unable to pre-read statement metadata", { importId, error: summarizeErrorForLog(error) });
+      if (!metadata || !extractedText) {
+        try {
+          extractedText = await readImportedFileText(
+            {
+              storageKey: String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)),
+              fileType: effectiveFileType || "application/octet-stream",
+              fileName: effectiveFileName,
+            },
+            password
+          );
+          const detectedMetadata = detectStatementMetadataFromText(extractedText);
+          const statementFingerprint = buildStatementFingerprint(extractedText, detectedMetadata, effectiveFileName, effectiveFileType || "application/octet-stream");
+          const template = await loadStatementTemplate({
+            workspaceId: String(importFile.workspaceId),
+            fingerprint: statementFingerprint,
+          });
+          metadata = mergeStatementMetadataWithTemplate(
+            detectedMetadata,
+            template?.metadata && typeof template.metadata === "object" && !Array.isArray(template.metadata)
+              ? (template.metadata as Record<string, unknown>)
+              : null
+          );
+        } catch (error) {
+          console.warn("Unable to pre-read statement metadata", { importId, error: summarizeErrorForLog(error) });
+        }
       }
 
-      const parsedMetadataConfidence = Number((metadata as { confidence?: unknown } | null)?.confidence ?? 0);
-      const hasExtractedText = extractedText.trim().length > 0;
+      const shouldProcessInlinePdf = isPdfUpload(effectiveFileName, effectiveFileType) && hasExtractedText && parsedMetadataConfidence >= 80;
       const shouldProcessInline =
-        !isPdfUpload(file.name || formFileName || "imported-file", file.type || formFileType || "") &&
+        (!isPdfUpload(effectiveFileName, effectiveFileType) &&
         ((hasExtractedText && parsedMetadataConfidence >= 95 && bytes.length <= 8_000_000) ||
-          (!hasExtractedText && bytes.length <= 2_500_000));
+          (!hasExtractedText && bytes.length <= 2_500_000))) ||
+        shouldProcessInlinePdf;
 
       if (shouldProcessInline || forceInlineProcessing) {
         stage = "processing statement text";
