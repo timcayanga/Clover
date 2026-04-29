@@ -164,7 +164,21 @@ async function InsightsPageStream({
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
   const workspaceInclude = {
-    accounts: true,
+    accounts: {
+      select: {
+        name: true,
+        type: true,
+        balance: true,
+        investmentSubtype: true,
+        investmentSymbol: true,
+        investmentCostBasis: true,
+        investmentPrincipal: true,
+        investmentStartDate: true,
+        investmentMaturityDate: true,
+        investmentInterestRate: true,
+        investmentMaturityValue: true,
+      },
+    },
   } as const;
 
   const selectedWorkspace =
