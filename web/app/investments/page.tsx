@@ -171,7 +171,7 @@ type InvestmentTab = "overview" | "holdings" | "market" | "insights";
 const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; proOnly?: boolean }> = [
   { key: "overview", label: "Overview" },
   { key: "holdings", label: "Holdings" },
-  { key: "market", label: "Market Tracker", proOnly: true },
+  { key: "market", label: "Markets", proOnly: true },
   { key: "insights", label: "Insights", proOnly: true },
 ];
 
@@ -549,7 +549,7 @@ export default function InvestmentsPage() {
           <path d="M10 4v12M4 10h12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
         </svg>
       </span>
-      <span className="investments-page__add-button-label">{variant === "mobile" ? "+ Add" : "Add investment"}</span>
+      {variant === "desktop" ? <span className="investments-page__add-button-label">Add investment</span> : null}
     </button>
   );
 
@@ -780,7 +780,7 @@ export default function InvestmentsPage() {
         {!canAccessSelectedTab ? (
           <section className="investments-pro-gate glass">
             <div className="investments-pro-gate__badge">Pro</div>
-            <h5>{selectedTab === "market" ? "Market Tracker" : "Insights"}</h5>
+            <h5>{selectedTab === "market" ? "Markets" : "Insights"}</h5>
             <Link className="button button-primary button-small" href="/pricing">
               Upgrade to Pro
             </Link>
