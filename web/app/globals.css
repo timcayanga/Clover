@@ -15839,6 +15839,17 @@ input.transaction-inline-edit--amount::placeholder {
     display: none;
   }
 
+  @media (max-width: 920px) {
+    .shell-compact-bar__copy--hide-chrome-on-mobile .eyebrow,
+    .shell-compact-bar__copy--hide-chrome-on-mobile .topbar-subtitle {
+      display: none;
+    }
+
+    .shell-compact-bar__copy--hide-chrome-on-mobile h1 {
+      font-size: clamp(1.15rem, 4vw, 1.45rem);
+    }
+  }
+
   .topbar-actions {
     justify-content: flex-start;
     align-items: center;

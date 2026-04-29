@@ -8,8 +8,6 @@ import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
-import { PlanTierBanner } from "@/components/plan-tier-banner";
-import { PlanUpgradeCallout } from "@/components/plan-upgrade-callout";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
@@ -1292,17 +1290,8 @@ async function GoalsPageStream() {
       kicker="Goal coaching"
       subtitle={shellSubtitle}
       showTopbar={false}
+      hideCompactBarKickerAndSubtitleOnMobile
     >
-      <PlanTierBanner
-        planTier={user.planTier}
-        label="Goals and recommendations"
-        limits={planLimits}
-        ctaHref={user.planTier === "free" ? "/pricing" : "/settings#billing"}
-        ctaLabel={user.planTier === "free" ? "See Pro pricing" : "Manage billing"}
-        secondaryHref="/insights"
-        secondaryLabel="Open insights"
-        className="goals-plan-banner"
-      />
       {isEmptyWorkspace ? (
         <div style={{ marginBottom: 20 }}>
           <EmptyDataCta
@@ -1318,10 +1307,7 @@ async function GoalsPageStream() {
       <section className={`goals-story${isBeginnerMode ? " goals-story--beginner" : ""}`}>
         <article className="goals-hero glass">
           <div className="goals-hero__copy">
-            <div className="goals-hero__header">
-              <span className="pill pill-accent">{isBeginnerMode ? "Start here" : "Onboarding goals"}</span>
-              <span className="pill pill-subtle">{hasGoalSelection ? selectedGoal.title : "No goal set yet"}</span>
-            </div>
+            <p className="goals-hero__eyebrow">{isBeginnerMode ? "Start here" : "Goal coaching"}</p>
             <h3>{heroLead}</h3>
             <p>{heroSupport}</p>
             {!hasGoalTarget ? (
@@ -2054,16 +2040,11 @@ async function GoalsPageStream() {
           </div>
         </article>
 
-        <PlanUpgradeCallout
-          planTier={user.planTier}
-          title="Free keeps the basics open. Pro adds a fuller coaching layer."
-          copy="If you want Clover to help with deeper investing, richer reports, and more advanced goal advice, Pro gives the workspace more room to grow with you."
-          ctaHref={user.planTier === "free" ? "/pricing" : "/settings#billing"}
-          ctaLabel={user.planTier === "free" ? "See Pro pricing" : "Manage billing"}
-          secondaryHref="/insights"
-          secondaryLabel="Open insights"
-          className="goals-upgrade-callout"
-        />
+        {user.planTier === "free" ? (
+          <p className="goals-upgrade-note">
+            If you’d like to explore more later, <Link href="/pricing">Pro</Link> adds extra charts, deeper analysis, and more goal coaching to help you see the bigger picture.
+          </p>
+        ) : null}
       </section>
     </CloverShell>
   );

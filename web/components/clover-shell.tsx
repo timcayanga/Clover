@@ -26,6 +26,7 @@ type CloverShellProps = {
   actions?: ReactNode;
   showTopbar?: boolean;
   hideCompactBarCopyOnMobile?: boolean;
+  hideCompactBarKickerAndSubtitleOnMobile?: boolean;
   children: ReactNode;
 };
 
@@ -366,6 +367,7 @@ export function CloverShell({
   actions,
   showTopbar = true,
   hideCompactBarCopyOnMobile = false,
+  hideCompactBarKickerAndSubtitleOnMobile = false,
   children,
 }: CloverShellProps) {
   const { user } = useUser();
@@ -1001,7 +1003,11 @@ export function CloverShell({
             >
               <MenuIcon name="menu" />
             </button>
-            <div className={`shell-compact-bar__copy ${hideCompactBarCopyOnMobile ? "shell-compact-bar__copy--hide-mobile" : ""}`}>
+            <div
+              className={`shell-compact-bar__copy ${hideCompactBarCopyOnMobile ? "shell-compact-bar__copy--hide-mobile" : ""} ${
+                hideCompactBarKickerAndSubtitleOnMobile ? "shell-compact-bar__copy--hide-chrome-on-mobile" : ""
+              }`}
+            >
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <h1>{title}</h1>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
