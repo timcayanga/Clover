@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
+import { InfoTip as InsightInfoTip } from "@/components/info-tip";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
@@ -98,14 +99,6 @@ const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
 const normalizeMerchant = (value: string) => value.trim().toLowerCase();
 const buildTransactionsHref = (params: Record<string, string>) => `/transactions?${new URLSearchParams(params).toString()}`;
-
-function InsightTip({ label }: { label: string }) {
-  return (
-    <span className="report-tip" title={label} aria-label={label}>
-      i
-    </span>
-  );
-}
 
 const normalizeInsightsTab = (value: string | undefined): InsightsTab => {
   if (value === "spending" || value === "patterns") {
@@ -890,7 +883,7 @@ async function InsightsPageStream({
               <div key={item.label} className="insights-snapshot__metric">
                 <span className="insights-snapshot__metric-label">
                   {item.label}
-                  <InsightTip label={item.hint} />
+                  <InsightInfoTip label={item.hint} />
                 </span>
                 <strong className={item.tone === "positive" ? "positive" : item.tone === "negative" ? "negative" : undefined}>
                   {item.value}
@@ -927,7 +920,7 @@ async function InsightsPageStream({
               <div>
                 <p className="eyebrow">Investments</p>
                 <h4>
-                  Quick snapshot <InsightTip label="A lightweight investment summary for the Insights page. Open Investments for the full portfolio view." />
+                  Quick snapshot <InsightInfoTip label="A lightweight investment summary for the Insights page. Open Investments for the full portfolio view." />
                 </h4>
               </div>
               <Link className="pill-link pill-link--inline" href="/investments">
@@ -970,7 +963,7 @@ async function InsightsPageStream({
             <div>
               <p className="eyebrow">What happened</p>
               <h4>
-                Cash flow momentum <InsightTip label="Tap a month to open matching transactions. This chart shows the last six months of net cash flow." />
+                Cash flow momentum <InsightInfoTip label="Tap a month to open matching transactions. This chart shows the last six months of net cash flow." />
               </h4>
             </div>
             <div className="insight-panel__stat">
@@ -1038,7 +1031,7 @@ async function InsightsPageStream({
             <div>
               <p className="eyebrow">Where your money went</p>
               <h4>
-                Spending concentration <InsightTip label="Tap a category to open matching transactions. The donut shows how this month's spending is distributed." />
+                Spending concentration <InsightInfoTip label="Tap a category to open matching transactions. The donut shows how this month's spending is distributed." />
               </h4>
             </div>
             <div className="insight-panel__stat">
@@ -1131,7 +1124,7 @@ async function InsightsPageStream({
             <div>
               <p className="eyebrow">Why it happened</p>
               <h4>
-                What changed and why <InsightTip label="This compares the current period with the prior period and highlights the biggest category shifts." />
+                What changed and why <InsightInfoTip label="This compares the current period with the prior period and highlights the biggest category shifts." />
               </h4>
             </div>
             <div className="insight-panel__stat">

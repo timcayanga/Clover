@@ -16,6 +16,7 @@ import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { recordAppError } from "@/lib/error-logs";
 import { Suspense } from "react";
+import { InfoTip as ReportInfoTip } from "@/components/info-tip";
 
 const ReportsReviewQueue = nextDynamic(() => import("@/components/reports-review-queue").then((module) => module.ReportsReviewQueue), {
   loading: () => (
@@ -188,14 +189,6 @@ const normalizeMerchant = (value: string) => value.trim().toLowerCase();
 const buildTransactionsHref = (params: Record<string, string>) => `/transactions?${new URLSearchParams(params).toString()}`;
 
 const isDefined = <T,>(value: T | null | undefined): value is T => value !== null && value !== undefined;
-
-function ReportTip({ label }: { label: string }) {
-  return (
-    <span className="report-tip" title={label} aria-label={label}>
-      i
-    </span>
-  );
-}
 
 const goalLabels: Record<string, string> = {
   save_more: "Save more",
@@ -1281,28 +1274,28 @@ async function ReportsStream({
           <article className="metric compact metric--highlight glass">
             <div className="metric__label">
               <span>Income</span>
-              <ReportTip label="All money coming in during the selected range." />
+              <ReportInfoTip label="All money coming in during the selected range." />
             </div>
             <strong>{formatCurrency(currentSummary.income)}</strong>
           </article>
           <article className="metric compact metric--highlight glass">
             <div className="metric__label">
               <span>Expenses</span>
-              <ReportTip label="All spending recorded in the selected range." />
+              <ReportInfoTip label="All spending recorded in the selected range." />
             </div>
             <strong>{formatCurrency(currentSummary.expense)}</strong>
           </article>
           <article className="metric compact metric--highlight glass">
             <div className="metric__label">
               <span>Net income</span>
-              <ReportTip label="Income minus spending for the selected range." />
+              <ReportInfoTip label="Income minus spending for the selected range." />
             </div>
             <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
           </article>
           <article className="metric compact metric--highlight glass">
             <div className="metric__label">
               <span>Savings rate</span>
-              <ReportTip label="The share of income left after spending." />
+              <ReportInfoTip label="The share of income left after spending." />
             </div>
             <strong>{savingsRate === null ? "N/A" : formatPercent(savingsRate * 100)}</strong>
           </article>
@@ -1317,7 +1310,7 @@ async function ReportsStream({
                   <div>
                     <h4>What changed</h4>
                   </div>
-                  <ReportTip label="A short summary of the biggest change in your money this period." />
+                  <ReportInfoTip label="A short summary of the biggest change in your money this period." />
                 </div>
                 <h3>{aiHeadline}</h3>
                 <p>{aiSummary}</p>
@@ -1333,7 +1326,7 @@ async function ReportsStream({
                   <div>
                     <h4>Why it changed</h4>
                   </div>
-                  <ReportTip label="The main drivers behind the change." />
+                  <ReportInfoTip label="The main drivers behind the change." />
                 </div>
                 <div className="report-ai-signal-grid report-ai-signal-grid--compact">
                   {aiSignals.slice(0, 3).map((signal) => (
@@ -1351,7 +1344,7 @@ async function ReportsStream({
                   <div>
                     <h4>What to do next</h4>
                   </div>
-                  <ReportTip label="One action you can take right now from the report." />
+                  <ReportInfoTip label="One action you can take right now from the report." />
                 </div>
                 <div className="report-list">
                   {aiActions.map((action) => (
@@ -1420,7 +1413,7 @@ async function ReportsStream({
             <div className="report-card__head">
               <div className="report-card__head-title">
                 <h4>Where your money went</h4>
-                <ReportTip label="A flow view showing how income spreads into spending categories." />
+                <ReportInfoTip label="A flow view showing how income spreads into spending categories." />
               </div>
               <div className="report-card__stat">
                 <strong>{formatCurrency(currentSummary.income)}</strong>
@@ -1476,7 +1469,7 @@ async function ReportsStream({
             <div className="report-card__head">
               <div className="report-card__head-title">
                 <h4>Spending by category</h4>
-                <ReportTip label="The biggest spending groups in the selected range." />
+                <ReportInfoTip label="The biggest spending groups in the selected range." />
               </div>
               <div className="report-card__stat">
                 <strong>{formatCurrency(currentSpend)}</strong>
@@ -1568,7 +1561,7 @@ async function ReportsStream({
             <div className="report-card__head">
               <div className="report-card__head-title">
                 <h4>Repeat charges</h4>
-                <ReportTip label="Merchants that appear more than once and usually repeat." />
+                <ReportInfoTip label="Merchants that appear more than once and usually repeat." />
               </div>
               <div className="report-card__stat">
                 <strong>{recurringMerchants.length}</strong>
@@ -1622,7 +1615,7 @@ async function ReportsStream({
             <div className="report-card__head">
               <div className="report-card__head-title">
                 <h4>Top spenders</h4>
-                <ReportTip label="Where spending is most concentrated by merchant." />
+                <ReportInfoTip label="Where spending is most concentrated by merchant." />
               </div>
               <div className="report-card__stat">
                 <strong>{topMerchants.length}</strong>
@@ -1658,7 +1651,7 @@ async function ReportsStream({
             <div className="report-card__head">
               <div className="report-card__head-title">
                 <h4>This month</h4>
-                <ReportTip label="A quick month-to-month snapshot of net cash flow." />
+                <ReportInfoTip label="A quick month-to-month snapshot of net cash flow." />
               </div>
               <div className="report-card__stat">
                 <strong className={currentMonthBucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentMonthBucket.net)}</strong>

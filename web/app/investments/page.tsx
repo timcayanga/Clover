@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { InfoTip } from "@/components/info-tip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
 import { getAccountBrand } from "@/lib/account-brand";
@@ -180,14 +181,6 @@ const normalizeInvestmentTab = (value: string | null | undefined): InvestmentTab
 
   return "overview";
 };
-
-function InfoTip({ label }: { label: string }) {
-  return (
-    <span className="report-tip" title={label} aria-label={label}>
-      i
-    </span>
-  );
-}
 
 const INVESTMENT_SORT_OPTIONS: Array<{ key: InvestmentSortKey; label: string }> = [
   { key: "value_desc", label: "Current value: high to low" },
