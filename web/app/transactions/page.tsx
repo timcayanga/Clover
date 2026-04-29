@@ -2392,15 +2392,23 @@ function TransactionsPageContent() {
       return;
     }
 
+    setManualForm(createEmptyManualForm("", getOtherCategoryId(categories)));
+    setManualCategoryTouched(false);
+    setManualCategoryAutoApplied(false);
+    setManualCategorySuggestion(null);
+    setManualAccountMenuOpen(false);
+    setManualCategoryMenuOpen(false);
+    setManualOpen(true);
+
     try {
       const accountId = await ensureDefaultAccount(selectedWorkspaceId);
-      setManualForm(createEmptyManualForm(accountId, getOtherCategoryId(categories)));
-      setManualCategoryTouched(false);
-      setManualCategoryAutoApplied(false);
-      setManualCategorySuggestion(null);
-      setManualAccountMenuOpen(false);
-      setManualCategoryMenuOpen(false);
-      setManualOpen(true);
+      setManualForm((current) => {
+        if (current.accountId) {
+          return current;
+        }
+
+        return { ...current, accountId };
+      });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to prepare transaction form.");
     }
