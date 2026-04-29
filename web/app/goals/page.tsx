@@ -80,6 +80,8 @@ type GoalTransaction = {
   } | null;
 };
 
+type GoalsSection = "overview" | "progress" | "drivers" | "history";
+
 type InvestmentAccountSnapshot = {
   id: string;
   name: string;
@@ -132,6 +134,13 @@ const toMonthLabel = (date: Date) => monthFormatter.format(date);
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const normalizeMerchant = (value: string) => value.trim().toLowerCase();
 const toIsoDate = (date: Date) => date.toISOString().slice(0, 10);
+const normalizeGoalsSection = (value: string | undefined | null): GoalsSection | null => {
+  if (value === "overview" || value === "progress" || value === "drivers" || value === "history") {
+    return value;
+  }
+
+  return null;
+};
 
 const getMonthBuckets = (anchor: Date) => {
   const buckets: MonthBucket[] = [];
@@ -218,7 +227,13 @@ const createGoalChart = (buckets: MonthBucket[]) => {
   return { chartWidth, chartHeight, chartPadding, points, path };
 };
 
-async function GoalsPageStream() {
+async function GoalsPageStream({
+  searchParams,
+}: {
+  searchParams?: {
+    section?: string;
+  };
+}) {
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
 
@@ -226,6 +241,10 @@ async function GoalsPageStream() {
     redirect("/onboarding");
   }
   const planLimits = getEffectiveUserLimits(user);
+  const isPro = user.planTier === "pro";
+  const availableSections: GoalsSection[] = isPro ? ["overview", "progress", "drivers", "history"] : ["overview", "progress", "history"];
+  const requestedSection = normalizeGoalsSection(searchParams?.section);
+  const selectedSection = requestedSection && availableSections.includes(requestedSection) ? requestedSection : "overview";
 
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
@@ -589,6 +608,7 @@ async function GoalsPageStream() {
   const onboardingDate = user.onboardingCompletedAt ? new Date(user.onboardingCompletedAt) : null;
   const goalMoneyLabel = getGoalMoneyLabel(selectedGoalKey as GoalKey | null);
   const goalProgressLabel = getGoalProgressLabel(selectedGoalKey as GoalKey | null);
+  const buildGoalsHref = (section: GoalsSection) => (section === "overview" ? "/goals" : `/goals?section=${section}`);
 
   const progressLabel =
     goalScore >= 85 ? "Coach mode: you are ahead of the curve" : goalScore >= 70 ? "On pace and looking sharp" : goalScore >= 50 ? "Building good momentum" : "Early, but absolutely moving";
@@ -1304,7 +1324,7 @@ async function GoalsPageStream() {
           />
         </div>
       ) : null}
-      <section className={`goals-story${isBeginnerMode ? " goals-story--beginner" : ""}`}>
+      <section className={`goals-story goals-story--section-${selectedSection}${isBeginnerMode ? " goals-story--beginner" : ""}`}>
         <article className="goals-hero glass">
           <div className="goals-hero__copy">
             <p className="goals-hero__eyebrow">{isBeginnerMode ? "Start here" : "Goal coaching"}</p>
@@ -1586,8 +1606,21 @@ async function GoalsPageStream() {
           </div>
         </article>
 
+        <nav className="reports-tabs goals-tabs" aria-label="Goal sections" style={{ gridTemplateColumns: `repeat(${availableSections.length}, minmax(0, 1fr))` }}>
+          {availableSections.map((section) => (
+            <Link
+              key={section}
+              className={`reports-tab ${selectedSection === section ? "reports-tab--active" : ""}`}
+              href={buildGoalsHref(section)}
+              aria-current={selectedSection === section ? "page" : undefined}
+            >
+              {section === "overview" ? "Overview" : section === "progress" ? "Progress" : section === "drivers" ? "Drivers" : "History"}
+            </Link>
+          ))}
+        </nav>
+
         {isBeginnerMode ? (
-          <article className="goals-beginner-guide glass">
+          <article className="goals-beginner-guide glass goals-section goals-section--overview">
             <div className="goals-panel__head">
               <div>
                 <p className="eyebrow">Start here</p>
@@ -1616,7 +1649,7 @@ async function GoalsPageStream() {
         {specificGoalSummary || investmentAccounts.length > 0 ? (
           <section className="goals-plan-grid">
             {specificGoalSummary ? (
-              <article className="goals-plan glass">
+              <article className="goals-plan glass goals-section goals-section--overview">
                 <div className="goals-panel__head">
                   <div>
                     <p className="eyebrow">Specific goal</p>
@@ -1644,7 +1677,7 @@ async function GoalsPageStream() {
               </article>
             ) : null}
 
-            <article className="goals-investments glass">
+            <article className="goals-investments glass goals-section goals-section--drivers">
               <div className="goals-panel__head">
                 <div>
                   <p className="eyebrow">Investments</p>
@@ -1709,10 +1742,10 @@ async function GoalsPageStream() {
           </section>
         ) : null}
 
-        <article className="goals-action-plan glass">
+        <article className="goals-action-plan glass goals-section goals-section--overview">
           <div className="goals-panel__head">
             <div>
-              <p className="eyebrow">Action plan</p>
+              <p className="eyebrow">One next action</p>
               <h4>What Clover wants you to do next</h4>
             </div>
             <div className="goals-panel__stat">
@@ -1746,7 +1779,7 @@ async function GoalsPageStream() {
           </div>
         </article>
 
-        <section className="goals-visual-grid">
+        <section className="goals-visual-grid goals-section goals-section--drivers">
           <article className="goals-heatmap glass">
             <div className="goals-panel__head">
               <div>
@@ -1830,7 +1863,7 @@ async function GoalsPageStream() {
           </article>
         </section>
 
-        <section className="goals-lanes">
+        <section className="goals-lanes goals-section goals-section--history">
           <div className="goals-lanes__head">
             <div>
               <p className="eyebrow">Onboarding goals</p>
@@ -1879,7 +1912,7 @@ async function GoalsPageStream() {
         </section>
 
         <section className="goals-intel-grid">
-          <article className="goals-history glass">
+          <article className="goals-history glass goals-section goals-section--history">
             <div className="goals-panel__head">
               <div>
                 <p className="eyebrow">Goal history</p>
@@ -1902,7 +1935,7 @@ async function GoalsPageStream() {
             <p className="goals-history__hint">{playbook.historyMarkers[0]}</p>
           </article>
 
-          <article className="goals-milestones glass">
+          <article className="goals-milestones glass goals-section goals-section--progress">
             <div className="goals-panel__head">
               <div>
                 <p className="eyebrow">Milestones</p>
@@ -1936,7 +1969,7 @@ async function GoalsPageStream() {
             </div>
           </article>
 
-          <article className="goals-weekly glass">
+          <article className="goals-weekly glass goals-section goals-section--progress">
             <div className="goals-panel__head">
               <div>
                 <p className="eyebrow">Weekly change</p>
@@ -1960,9 +1993,11 @@ async function GoalsPageStream() {
           </article>
         </section>
 
-        <GoalsChecklist items={checklistItems} />
+        <div className="goals-section goals-section--progress">
+          <GoalsChecklist items={checklistItems} />
+        </div>
 
-        <article className="goals-alerts glass">
+        <article className="goals-alerts glass goals-section goals-section--drivers">
           <div className="goals-panel__head">
             <div>
               <p className="eyebrow">Goal alerts</p>
@@ -1986,7 +2021,7 @@ async function GoalsPageStream() {
           </div>
         </article>
 
-        <div className="goals-editor-shell" id="goal-editor">
+        <div className="goals-editor-shell goals-section goals-section--overview" id="goal-editor">
           <GoalsEditor
             goals={GOAL_OPTIONS}
             currentGoal={selectedGoalKey}
@@ -1997,7 +2032,7 @@ async function GoalsPageStream() {
           />
         </div>
 
-        <article className="goals-actions glass">
+        <article className="goals-actions glass goals-section goals-section--overview">
           <div className="goals-panel__head">
             <div>
               <p className="eyebrow">Next move</p>
@@ -2050,10 +2085,16 @@ async function GoalsPageStream() {
   );
 }
 
-export default function GoalsPage() {
+export default function GoalsPage({
+  searchParams,
+}: {
+  searchParams?: {
+    section?: string;
+  };
+}) {
   return (
     <Suspense fallback={<CloverLoadingScreen label="goals" />}>
-      <GoalsPageStream />
+      <GoalsPageStream searchParams={searchParams} />
     </Suspense>
   );
 }

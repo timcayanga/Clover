@@ -5593,13 +5593,57 @@ label {
   font-size: 12px;
 }
 
-.goals-story--beginner .goals-pace-card,
-.goals-story--beginner .goals-plan-grid,
-.goals-story--beginner .goals-visual-grid,
-.goals-story--beginner .goals-lanes,
-.goals-story--beginner .goals-intel-grid,
-.goals-story--beginner .goals-alerts,
-.goals-story--beginner .goals-upgrade-callout {
+.goals-story--section-overview .goals-section--progress,
+.goals-story--section-overview .goals-section--drivers,
+.goals-story--section-overview .goals-section--history,
+.goals-story--section-overview .goals-visual-grid,
+.goals-story--section-overview .goals-lanes,
+.goals-story--section-overview .goals-intel-grid,
+.goals-story--section-overview .goals-alerts {
+  display: none;
+}
+
+.goals-story--section-progress .goals-section--overview,
+.goals-story--section-progress .goals-section--drivers,
+.goals-story--section-progress .goals-lanes,
+.goals-story--section-progress .goals-visual-grid,
+.goals-story--section-progress .goals-alerts,
+.goals-story--section-progress .goals-plan-grid,
+.goals-story--section-progress .goals-editor-shell,
+.goals-story--section-progress .goals-actions {
+  display: none;
+}
+
+.goals-story--section-drivers .goals-section--overview,
+.goals-story--section-drivers .goals-section--progress,
+.goals-story--section-drivers .goals-lanes,
+.goals-story--section-drivers .goals-intel-grid,
+.goals-story--section-drivers .goals-editor-shell,
+.goals-story--section-drivers .goals-actions {
+  display: none;
+}
+
+.goals-story--section-history .goals-section--overview,
+.goals-story--section-history .goals-section--progress,
+.goals-story--section-history .goals-section--drivers,
+.goals-story--section-history .goals-visual-grid,
+.goals-story--section-history .goals-plan-grid,
+.goals-story--section-history .goals-editor-shell,
+.goals-story--section-history .goals-actions {
+  display: none;
+}
+
+.goals-story--section-progress .goals-plan-grid,
+.goals-story--section-history .goals-plan-grid,
+.goals-story--section-overview .goals-visual-grid,
+.goals-story--section-overview .goals-lanes,
+.goals-story--section-overview .goals-intel-grid,
+.goals-story--section-overview .goals-alerts,
+.goals-story--section-progress .goals-lanes,
+.goals-story--section-progress .goals-visual-grid,
+.goals-story--section-progress .goals-alerts,
+.goals-story--section-history .goals-visual-grid,
+.goals-story--section-history .goals-alerts {
   display: none;
 }
 
@@ -13566,6 +13610,17 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 16px;
 }
 
+.admin-data-qa__config-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-data-qa__guidance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .admin-data-qa__training-sync {
   display: grid;
   gap: 12px;
@@ -13586,17 +13641,6 @@ input.transaction-inline-edit--amount::placeholder {
 .admin-data-qa__training-sync-actions {
   display: flex;
   justify-content: flex-start;
-}
-
-.admin-data-qa__config-panel {
-  display: grid;
-  gap: 16px;
-}
-
-.admin-data-qa__guidance-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
 }
 
 .admin-data-qa__guidance-card {
