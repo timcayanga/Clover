@@ -2584,6 +2584,7 @@ function TransactionsPageContent() {
 
           if (
             suggestion &&
+            suggestion.source !== "heuristic" &&
             !manualCategoryTouched &&
             (manualCategoryAutoApplied || !manualForm.categoryId || manualForm.categoryId === otherCategoryId) &&
             suggestion.categoryId
@@ -2667,7 +2668,20 @@ function TransactionsPageContent() {
     setIsSaving(true);
     try {
       const accountId = manualForm.accountId || (await ensureDefaultAccount(selectedWorkspaceId));
-      const categoryId = manualForm.categoryId || getOtherCategoryId(categories) || undefined;
+      const merchantText = manualForm.merchantRaw.trim();
+      let categoryId = manualForm.categoryId || getOtherCategoryId(categories) || undefined;
+
+      if ((!categoryId || categoryId === getOtherCategoryId(categories)) && merchantText.length >= 2) {
+        const suggestion =
+          manualCategorySuggestion && manualCategorySuggestion.source !== "heuristic"
+            ? manualCategorySuggestion
+            : await fetchCategorySuggestion(merchantText, manualForm.type === "credit" ? "income" : "expense");
+
+        if (suggestion && suggestion.source !== "heuristic") {
+          categoryId = suggestion.categoryId;
+          setManualForm((current) => ({ ...current, categoryId: suggestion.categoryId }));
+        }
+      }
 
       const response = await fetch("/api/transactions", {
         method: "POST",
@@ -2704,6 +2718,9 @@ function TransactionsPageContent() {
       setUndoStack([]);
       setRedoStack([]);
       setManualOpen(false);
+      window.requestAnimationFrame(() => {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
       void loadTransactionsPage(selectedWorkspaceId, {
         background: true,
         pageOverride: 1,
