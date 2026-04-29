@@ -2032,17 +2032,17 @@ label {
 
 .topbar__title-wrap {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
 .topbar__title-row {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 14px;
   min-width: 0;
   white-space: nowrap;
 }
@@ -2050,15 +2050,15 @@ label {
 .topbar__title-row h1,
 .shell-compact-bar__copy h1 {
   margin: 0;
-  font-size: 14px;
-  line-height: 1.2;
+  font-size: 15px;
+  line-height: 1.15;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
 
 .topbar__title-addon {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   min-width: 0;
 }
 
@@ -16576,8 +16576,8 @@ input.transaction-inline-edit--amount::placeholder {
       display: none;
     }
 
-    .shell-compact-bar__copy--hide-chrome-on-mobile h1 {
-      font-size: 12px;
+  .shell-compact-bar__copy--hide-chrome-on-mobile h1 {
+      font-size: 13px;
       letter-spacing: -0.01em;
     }
   }
