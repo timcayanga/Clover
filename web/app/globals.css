@@ -16629,6 +16629,14 @@ input.transaction-inline-edit--amount::placeholder {
     display: contents;
   }
 
+  .transactions-toolbar-row--bottom .transactions-toolbar-group--left .transactions-toolbar-chip:not(.transactions-toolbar-add) {
+    display: inline-flex;
+  }
+
+  .transactions-toolbar-row--bottom .transactions-toolbar-group--right {
+    display: contents;
+  }
+
   .transactions-page .transactions-toolbar-chip.button-secondary,
   .transactions-page .transactions-toolbar-add.button-primary {
     min-height: 40px;
