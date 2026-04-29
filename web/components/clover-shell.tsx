@@ -61,11 +61,11 @@ type SidebarSearchResult = {
 };
 
 const avatarBackgrounds = [
-  "rgba(3, 168, 192, 0.16)",
-  "rgba(3, 168, 192, 0.22)",
-  "rgba(104, 220, 177, 0.22)",
-  "rgba(181, 246, 239, 0.9)",
-  "rgba(15, 23, 42, 0.08)",
+  "linear-gradient(135deg, rgba(3, 168, 192, 0.92), rgba(94, 211, 208, 0.88))",
+  "linear-gradient(135deg, rgba(3, 168, 192, 0.82), rgba(110, 231, 183, 0.86))",
+  "linear-gradient(135deg, rgba(110, 231, 183, 0.9), rgba(94, 211, 208, 0.9))",
+  "linear-gradient(135deg, rgba(181, 246, 239, 0.95), rgba(3, 168, 192, 0.22))",
+  "linear-gradient(135deg, rgba(15, 23, 42, 0.16), rgba(3, 168, 192, 0.84))",
 ] as const;
 
 const sidebarSearchPages: Array<{
@@ -139,6 +139,46 @@ const sidebarSearchPages: Array<{
     icon: "help",
     detail: "Guides for setup, pricing, safety, and storage.",
     terms: ["help", "support", "guide", "setup", "pricing", "security", "storage"],
+  },
+  {
+    key: "admin-home",
+    title: "Admin",
+    href: "/admin",
+    icon: "settings",
+    detail: "Command center and repository.",
+    terms: ["admin", "command center", "repository", "ops"],
+  },
+  {
+    key: "admin-users",
+    title: "User Management",
+    href: "/admin/users",
+    icon: "settings",
+    detail: "Production users, tiers, and limits.",
+    terms: ["user management", "users", "tiers", "limits", "admin users"],
+  },
+  {
+    key: "admin-analytics",
+    title: "Analytics",
+    href: "/admin/analytics",
+    icon: "reports",
+    detail: "Trends across users, QA, errors, and support.",
+    terms: ["admin analytics", "analytics", "trends"],
+  },
+  {
+    key: "admin-data-qa",
+    title: "Data QA",
+    href: "/admin/data-qa",
+    icon: "reports",
+    detail: "Parser coverage and bank testing.",
+    terms: ["data qa", "qa", "parser", "bank summary"],
+  },
+  {
+    key: "admin-errors",
+    title: "Error Logs",
+    href: "/admin/errors",
+    icon: "reports",
+    detail: "Production error history and build ids.",
+    terms: ["error logs", "errors", "production errors", "build ids"],
   },
   {
     key: "inquiries",
