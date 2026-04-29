@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { LandingNav } from "@/components/landing-nav";
-import { getHelpHomeHref, getHelpSectionImageSrc, type HelpQuestion, type HelpSection } from "@/lib/help-center";
+import { getHelpHomeHref, type HelpQuestion, type HelpSection } from "@/lib/help-center";
 
 type HelpSectionPageProps = {
   section: HelpSection;
@@ -33,10 +33,12 @@ function AccordionItem({ question }: { question: HelpQuestion }) {
 
 export function HelpSectionPage({ section, returnTo }: HelpSectionPageProps) {
   const [query, setQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const homeHref = getHelpHomeHref(returnTo);
   const backHref = returnTo ?? homeHref;
   const backLabel = returnTo ? "Back to account" : "Back to help";
   const normalizedQuery = query.trim().toLowerCase();
+  const quickPrompts = useMemo(() => section.searchPhrases.slice(0, 4), [section.searchPhrases]);
 
   const filteredQuestions = useMemo(() => {
     if (!normalizedQuery) {
@@ -78,20 +80,47 @@ export function HelpSectionPage({ section, returnTo }: HelpSectionPageProps) {
           </Link>
         </div>
 
-        <div className="help-section-page__hero">
-          <div className="help-section-page__image-wrap" aria-hidden="true">
-            <img
-              className="help-section-page__image"
-              src={getHelpSectionImageSrc(section.slug)}
-              alt=""
-              loading="lazy"
-              decoding="async"
-            />
+        <section className={`help-section-page__intro help-section-page__intro--${section.accent}`}>
+          <div className="help-section-page__intro-copy">
+            <p className="eyebrow">{section.eyebrow}</p>
+            <h1>{section.title}</h1>
+            <p>{section.summary}</p>
+            <div className="help-section-page__intro-stats" aria-label="Section summary">
+              <span>{section.articles.length} article{section.articles.length === 1 ? "" : "s"}</span>
+              <span>{section.questions.length} questions</span>
+              <span>{section.searchPhrases.length} search prompts</span>
+            </div>
           </div>
 
+          <div className="help-section-page__prompt-panel" aria-label="Popular searches">
+            <div className="help-section-page__prompt-panel-head">
+              <p className="help-section-page__prompt-label">Popular searches</p>
+              <p>Tap one to fill the search bar instantly.</p>
+            </div>
+
+            <div className="help-section-page__prompt-list">
+              {quickPrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  className="help-section-page__prompt"
+                  type="button"
+                  onClick={() => {
+                    setQuery(prompt);
+                    searchInputRef.current?.focus();
+                  }}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <div className="help-section-page__search-area">
           <label className="help-search help-search--section" htmlFor="help-section-search">
             <span className="sr-only">Search within this help section</span>
             <input
+              ref={searchInputRef}
               id="help-section-search"
               type="search"
               placeholder={`Search ${section.title.toLowerCase()}`}
@@ -99,6 +128,13 @@ export function HelpSectionPage({ section, returnTo }: HelpSectionPageProps) {
               onChange={(event) => setQuery(event.target.value)}
             />
           </label>
+
+          <div className="help-section-page__search-meta" aria-live="polite">
+            <span>
+              Showing {filteredQuestions.length} of {section.questions.length} questions
+            </span>
+            {normalizedQuery ? <span>Results update as you type.</span> : <span>Start with a prompt or type your own.</span>}
+          </div>
         </div>
 
         <section className="help-section-faq" aria-label="Questions and answers">
