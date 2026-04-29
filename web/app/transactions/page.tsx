@@ -4586,7 +4586,6 @@ function TransactionsPageContent() {
               </label>
             </div>
             <div className="transactions-footer-snapshot" aria-label="Cash flow snapshot">
-              <span className="transactions-footer-snapshot__label">This view</span>
               <div className="transactions-footer-snapshot__metrics">
                 <div className="transactions-footer-snapshot__metric">
                   <span className="transactions-footer-snapshot__metric-label">Spending</span>
