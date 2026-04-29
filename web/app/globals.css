@@ -4085,6 +4085,12 @@ label {
   display: flex;
   justify-content: flex-end;
   margin-bottom: 4px;
+  position: sticky;
+  top: 10px;
+  z-index: 22;
+  padding: 2px 0;
+  background: linear-gradient(180deg, rgba(245, 247, 249, 0.96), rgba(245, 247, 249, 0.84));
+  backdrop-filter: blur(12px);
 }
 
 .reports-range-menu details {
@@ -4169,6 +4175,14 @@ label {
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+}
+
+.reports-tabs {
+  position: sticky;
+  top: 58px;
+  z-index: 21;
+  background: linear-gradient(180deg, rgba(245, 247, 249, 0.94), rgba(245, 247, 249, 0.78));
+  backdrop-filter: blur(12px);
 }
 
 :is(.reports-tabs, .goals-tabs, .insights-tabs, .investments-tabs)::-webkit-scrollbar {
@@ -5675,6 +5689,10 @@ label {
 .goals-story--beginner .goals-progress p,
 .goals-story--beginner .goals-hero__setup-note {
   font-size: 12px;
+}
+
+.goals-tabs--top {
+  margin: 2px 0 14px;
 }
 
 .goals-story--section-overview .goals-section--progress,
@@ -16810,6 +16828,7 @@ input.transaction-inline-edit--amount::placeholder {
   .reports-tabs {
     gap: 3px;
     margin-top: 4px;
+    top: 56px;
   }
 
   :is(.reports-tab, .insights-tab, .investments-tab) {
@@ -17156,6 +17175,7 @@ input.transaction-inline-edit--amount::placeholder {
   .reports-tabs {
     gap: 3px;
     margin-top: 4px;
+    top: 52px;
   }
 
   :is(.reports-tab, .insights-tab, .investments-tab) {

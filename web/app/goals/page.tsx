@@ -1324,6 +1324,20 @@ async function GoalsPageStream({
           />
         </div>
       ) : null}
+
+      <nav className="reports-tabs goals-tabs goals-tabs--top" aria-label="Goal sections">
+        {availableSections.map((section) => (
+          <Link
+            key={section}
+            className={`reports-tab ${selectedSection === section ? "reports-tab--active" : ""}`}
+            href={buildGoalsHref(section)}
+            aria-current={selectedSection === section ? "page" : undefined}
+          >
+            {section === "overview" ? "Overview" : section === "progress" ? "Progress" : section === "drivers" ? "Drivers" : "History"}
+          </Link>
+        ))}
+      </nav>
+
       <section className={`goals-story goals-story--section-${selectedSection}${isBeginnerMode ? " goals-story--beginner" : ""}`}>
         <article className="goals-hero glass">
           <div className="goals-hero__copy">
@@ -1605,19 +1619,6 @@ async function GoalsPageStream({
             )}
           </div>
         </article>
-
-        <nav className="reports-tabs goals-tabs" aria-label="Goal sections">
-          {availableSections.map((section) => (
-            <Link
-              key={section}
-              className={`reports-tab ${selectedSection === section ? "reports-tab--active" : ""}`}
-              href={buildGoalsHref(section)}
-              aria-current={selectedSection === section ? "page" : undefined}
-            >
-              {section === "overview" ? "Overview" : section === "progress" ? "Progress" : section === "drivers" ? "Drivers" : "History"}
-            </Link>
-          ))}
-        </nav>
 
         {isBeginnerMode ? (
           <article className="goals-beginner-guide glass goals-section goals-section--overview">
