@@ -2046,6 +2046,12 @@ label {
   justify-content: flex-end;
 }
 
+@media (min-width: 921px) {
+  .topbar .shell-menu-button {
+    display: none !important;
+  }
+}
+
 .content-body {
   flex: 1;
   display: grid;
@@ -16500,9 +16506,10 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .topbar {
-    padding: 14px 16px;
+    padding: 12px 14px;
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
   }
 
   .shell-compact-bar {
@@ -16536,10 +16543,19 @@ input.transaction-inline-edit--amount::placeholder {
     justify-content: flex-start;
     align-items: center;
     width: 100%;
+    gap: 8px;
   }
 
   .topbar-actions > * {
     width: auto;
+  }
+
+  .topbar__title-row {
+    gap: 6px;
+  }
+
+  .topbar__title-addon {
+    gap: 4px;
   }
 
   .content {
@@ -16934,6 +16950,16 @@ input.transaction-inline-edit--amount::placeholder {
 
   .reports-shell-actions {
     display: none;
+  }
+
+  .topbar .shell-menu-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .topbar h1,
+  .shell-compact-bar__copy h1 {
+    font-size: clamp(1.35rem, 5.5vw, 1.85rem);
   }
 
   .reports-tabs {
