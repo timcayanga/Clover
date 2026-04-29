@@ -17112,6 +17112,44 @@ input.transaction-inline-edit--amount::placeholder {
     min-width: max-content;
   }
 
+  .transactions-toolbar-search {
+    width: 40px;
+    min-width: 40px;
+    max-width: 40px;
+    padding: 0;
+    justify-content: center;
+    overflow: hidden;
+    transition:
+      width 0.18s ease,
+      min-width 0.18s ease,
+      max-width 0.18s ease,
+      padding 0.18s ease;
+  }
+
+  .transactions-toolbar-search:focus-within {
+    width: min(180px, 52vw);
+    min-width: 150px;
+    max-width: 180px;
+    padding: 0 9px;
+    justify-content: flex-start;
+  }
+
+  .transactions-toolbar-search input {
+    width: 0;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+    pointer-events: auto;
+  }
+
+  .transactions-toolbar-search:focus-within input {
+    width: auto;
+    opacity: 1;
+  }
+
+  .transactions-toolbar-search input::placeholder {
+    color: transparent;
+  }
+
   .transactions-toolbar-row--bottom .transactions-toolbar-group--left .transactions-toolbar-chip:not(.transactions-toolbar-add),
   .transactions-toolbar-row--bottom .transactions-toolbar-group--right {
     display: none;
@@ -17253,14 +17291,14 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .transactions-page .transactions-toolbar-add.button-primary {
-    width: auto;
-    min-width: auto;
-    padding-inline: 12px;
-    gap: 6px;
+    width: 40px;
+    min-width: 40px;
+    padding-inline: 0;
+    gap: 0;
   }
 
   .transactions-page .transactions-toolbar-add.button-primary > span:not(.button-icon) {
-    display: inline;
+    display: none;
   }
 
   .transactions-page .transactions-toolbar-add.button-primary .button-icon:last-child {
@@ -17270,6 +17308,11 @@ input.transaction-inline-edit--amount::placeholder {
   .transactions-page .transactions-toolbar-chip.button-secondary .button-icon,
   .transactions-page .transactions-toolbar-add.button-primary .button-icon {
     margin-right: 0;
+  }
+
+  .transactions-page .transactions-toolbar-chip.button-secondary > span:not(.button-icon):not(.transactions-filter-count-badge),
+  .transactions-page .transactions-toolbar-add.button-primary > span:not(.button-icon) {
+    display: none;
   }
 
   .transactions-action-button {
