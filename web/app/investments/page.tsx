@@ -164,6 +164,31 @@ type InvestmentEditDraft = {
   balance: string;
 };
 
+type InvestmentTab = "overview" | "holdings" | "market" | "insights";
+
+const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; proOnly?: boolean }> = [
+  { key: "overview", label: "Overview" },
+  { key: "holdings", label: "Holdings" },
+  { key: "market", label: "Market Tracker", proOnly: true },
+  { key: "insights", label: "Insights", proOnly: true },
+];
+
+const normalizeInvestmentTab = (value: string | null | undefined): InvestmentTab => {
+  if (value === "holdings" || value === "market" || value === "insights") {
+    return value;
+  }
+
+  return "overview";
+};
+
+function InfoTip({ label }: { label: string }) {
+  return (
+    <span className="report-tip" title={label} aria-label={label}>
+      i
+    </span>
+  );
+}
+
 const INVESTMENT_SORT_OPTIONS: Array<{ key: InvestmentSortKey; label: string }> = [
   { key: "value_desc", label: "Current value: high to low" },
   { key: "value_asc", label: "Current value: low to high" },
@@ -207,8 +232,9 @@ export default function InvestmentsPage() {
   const initialWorkspaceId = readSelectedWorkspaceId();
   const initialCachedWorkspace = getCachedAccountsWorkspace(initialWorkspaceId);
   const searchParams = useSearchParams();
-  const urlSearchParams = useMemo(() => searchParams ?? new URLSearchParams(), [searchParams]);
+  const urlSearchParams = useMemo(() => new URLSearchParams(searchParams?.toString() ?? ""), [searchParams]);
   const searchQueryFromUrl = urlSearchParams.get("q") ?? "";
+  const requestedTab = normalizeInvestmentTab(urlSearchParams.get("tab"));
 
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
   const [accounts, setAccounts] = useState<Account[]>(() => (initialCachedWorkspace?.accounts as Account[]) ?? []);
@@ -236,6 +262,7 @@ export default function InvestmentsPage() {
   const [manualInvestmentInterestRate, setManualInvestmentInterestRate] = useState("");
   const [manualInvestmentMaturityValue, setManualInvestmentMaturityValue] = useState("");
   const [manualBalance, setManualBalance] = useState("");
+  const selectedTab = requestedTab;
 
   useEffect(() => {
     document.title = "Clover | Investments";
@@ -447,6 +474,62 @@ export default function InvestmentsPage() {
       .sort((left, right) => right.currentValue - left.currentValue);
   }, [investmentGroups]);
 
+  const accountPerformance = useMemo(
+    () =>
+      visibleInvestmentAccounts.map((account) => {
+        const currentValue = parseNullableAmount(account.balance) ?? 0;
+        const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
+        const gainLoss = purchaseValue === null ? null : currentValue - purchaseValue;
+        const returnPercent = getReturnPercent(currentValue, purchaseValue);
+
+        return {
+          account,
+          currentValue,
+          purchaseValue,
+          gainLoss,
+          returnPercent,
+        };
+      }),
+    [visibleInvestmentAccounts]
+  );
+
+  const topHoldings = useMemo(
+    () =>
+      accountPerformance
+        .slice()
+        .sort((left, right) => right.currentValue - left.currentValue || left.account.name.localeCompare(right.account.name))
+        .slice(0, 5),
+    [accountPerformance]
+  );
+  const topHoldingMaxValue = topHoldings[0]?.currentValue ?? 1;
+
+  const bestGainHolding = useMemo(() => {
+    return (
+      accountPerformance
+        .filter((item) => item.gainLoss !== null)
+        .slice()
+        .sort((left, right) => (right.gainLoss ?? 0) - (left.gainLoss ?? 0))[0] ?? null
+    );
+  }, [accountPerformance]);
+
+  const worstGainHolding = useMemo(() => {
+    return (
+      accountPerformance
+        .filter((item) => item.gainLoss !== null)
+        .slice()
+        .sort((left, right) => (left.gainLoss ?? 0) - (right.gainLoss ?? 0))[0] ?? null
+    );
+  }, [accountPerformance]);
+
+  const bestReturnHolding = useMemo(() => {
+    return (
+      accountPerformance
+        .filter((item) => item.returnPercent !== null)
+        .slice()
+        .sort((left, right) => (right.returnPercent ?? 0) - (left.returnPercent ?? 0))[0] ?? null
+    );
+  }, [accountPerformance]);
+
   const manualInvestmentFieldConfigs = useMemo(
     () => getInvestmentFieldConfigs(manualInvestmentSubtype),
     [manualInvestmentSubtype]
@@ -455,6 +538,8 @@ export default function InvestmentsPage() {
   const activeInvestmentFilters = Boolean(
     normalizeInvestmentSearchText(investmentSearch) || investmentSubtypeFilter !== "all" || investmentSortKey !== "value_desc"
   );
+  const canUseProTabs = planTier !== "free";
+  const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "insights") && !canUseProTabs);
   const editingAccount = editingAccountId ? visibleInvestmentAccounts.find((account) => account.id === editingAccountId) ?? accounts.find((account) => account.id === editingAccountId) ?? null : null;
 
   const beginEditingAccount = (account: Account) => {
@@ -626,6 +711,12 @@ export default function InvestmentsPage() {
     }
   };
 
+  const buildInvestmentsHref = (tab: InvestmentTab) => {
+    const query = new URLSearchParams(urlSearchParams.toString());
+    query.set("tab", tab);
+    return `?${query.toString()}`;
+  };
+
   if (!hasLoaded) {
     return <CloverLoadingScreen label="investments" />;
   }
@@ -659,316 +750,574 @@ export default function InvestmentsPage() {
         {loading ? <p className="panel-muted">Loading investments...</p> : null}
         {!loading && message ? <p className="panel-muted">{message}</p> : null}
 
-        <InvestmentMarketChart investmentAccounts={investmentAccounts} />
+        <nav className="investments-tabs" aria-label="Investment sections">
+          {INVESTMENT_TABS.map((tab) => {
+            const isLocked = Boolean(tab.proOnly && !canUseProTabs);
+            const isActive = selectedTab === tab.key;
 
-        <section className="investments-filters glass">
-          <label>
-            Search holdings
-            <input
-              value={investmentSearch}
-              onChange={(event) => setInvestmentSearch(event.target.value)}
-              placeholder="Search name, ticker, institution"
-            />
-          </label>
-          <label>
-            Subtype
-            <select value={investmentSubtypeFilter} onChange={(event) => setInvestmentSubtypeFilter(event.target.value as InvestmentSubtype | "all")}>
-              <option value="all">All subtypes</option>
-              {INVESTMENT_SUBTYPES.map((subtype) => (
-                <option key={subtype} value={subtype}>
-                  {getInvestmentSubtypeLabel(subtype)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Sort by
-            <select value={investmentSortKey} onChange={(event) => setInvestmentSortKey(event.target.value as InvestmentSortKey)}>
-              {INVESTMENT_SORT_OPTIONS.map((option) => (
-                <option key={option.key} value={option.key}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="investments-filters__actions">
-            <button className="button button-secondary button-small" type="button" onClick={() => {
-              setInvestmentSearch("");
-              setInvestmentSubtypeFilter("all");
-              setInvestmentSortKey("value_desc");
-            }} disabled={!activeInvestmentFilters}>
-              Reset filters
-            </button>
-            <span>
-              Showing {visibleInvestmentAccounts.length} of {investmentAccounts.length} investment
-              {investmentAccounts.length === 1 ? "" : "s"}
-            </span>
-          </div>
-        </section>
+            if (isLocked) {
+              return (
+                <button
+                  key={tab.key}
+                  className={`investments-tab ${isActive ? "is-active" : ""} is-locked`}
+                  type="button"
+                  disabled
+                  aria-current={isActive ? "page" : undefined}
+                  aria-label={`${tab.label}, Pro only`}
+                >
+                  <span>{tab.label}</span>
+                  <span className="investments-tab__badge">Pro</span>
+                </button>
+              );
+            }
 
-        <section className="accounts-overview-grid">
-          <article className="accounts-overview-card glass">
-            <p className="eyebrow">Current value</p>
-            <strong>{currencyFormatter.format(totals.currentValue)}</strong>
-          </article>
-          <article className="accounts-overview-card glass">
-            <p className="eyebrow">Purchase value</p>
-            <strong>{currencyFormatter.format(totals.purchaseValue)}</strong>
-          </article>
-          <article className="accounts-overview-card glass">
-            <p className="eyebrow">Gain / loss</p>
-            <strong>{currencyFormatter.format(totals.gainLoss)}</strong>
-          </article>
-          <article className="accounts-overview-card glass">
-            <p className="eyebrow">Holdings</p>
-            <strong>{visibleInvestmentAccounts.length}</strong>
-          </article>
-        </section>
+            return (
+              <Link
+                key={tab.key}
+                className={`investments-tab ${isActive ? "is-active" : ""}`}
+                href={buildInvestmentsHref(tab.key)}
+                aria-current={isActive ? "page" : undefined}
+              >
+                <span>{tab.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
 
-        <section className="investments-allocation glass">
-          <div className="investments-allocation__head">
-            <div>
-              <p className="eyebrow">Portfolio mix</p>
-              <h5>Allocation by subtype</h5>
-            </div>
-            <div className="investments-allocation__summary">
-              <span>Total value</span>
-              <strong>{currencyFormatter.format(totals.currentValue)}</strong>
-            </div>
-          </div>
+        {!canAccessSelectedTab ? (
+          <section className="investments-pro-gate glass">
+            <div className="investments-pro-gate__badge">Pro</div>
+            <h5>{selectedTab === "market" ? "Market Tracker" : "Insights"}</h5>
+            <Link className="button button-primary button-small" href="/pricing">
+              Upgrade to Pro
+            </Link>
+          </section>
+        ) : selectedTab === "overview" ? (
+          <>
+            <section className="accounts-overview-grid">
+              <article className="accounts-overview-card glass">
+                <div className="investments-metric__label">
+                  <span>Current value</span>
+                  <InfoTip label="The total value of the visible investment holdings." />
+                </div>
+                <strong>{currencyFormatter.format(totals.currentValue)}</strong>
+              </article>
+              <article className="accounts-overview-card glass">
+                <div className="investments-metric__label">
+                  <span>Purchase value</span>
+                  <InfoTip label="The combined cost basis of the visible holdings." />
+                </div>
+                <strong>{currencyFormatter.format(totals.purchaseValue)}</strong>
+              </article>
+              <article className="accounts-overview-card glass">
+                <div className="investments-metric__label">
+                  <span>Gain / loss</span>
+                  <InfoTip label="Current value minus purchase value for the visible holdings." />
+                </div>
+                <strong>{currencyFormatter.format(totals.gainLoss)}</strong>
+              </article>
+              <article className="accounts-overview-card glass">
+                <div className="investments-metric__label">
+                  <span>Holdings</span>
+                  <InfoTip label="The number of visible investment accounts." />
+                </div>
+                <strong>{visibleInvestmentAccounts.length}</strong>
+              </article>
+            </section>
 
-          {portfolioAllocation.length > 0 ? (
-            <div className="investments-allocation__list">
-              {portfolioAllocation.map((group) => (
-                <div key={group.key} className="investments-allocation__row">
-                  <div className="investments-allocation__row-head">
-                    <div>
-                      <strong>{group.label}</strong>
-                      <span>{group.accounts.length} account{group.accounts.length === 1 ? "" : "s"}</span>
-                    </div>
-                    <div>
-                      <strong>{currencyFormatter.format(group.currentValue)}</strong>
-                      <span>{group.share > 0 ? percentFormatter.format(group.share) : "0%"}</span>
-                    </div>
-                  </div>
-                  <div className="investments-allocation__bar">
-                    <span style={{ width: `${Math.max(group.share * 100, 4)}%` }} />
+            <section className="investments-allocation glass">
+              <div className="investments-allocation__head">
+                <div className="investments-allocation__head-title">
+                  <p className="eyebrow">Portfolio mix</p>
+                  <div className="investments-allocation__title-row">
+                    <h5>Allocation by subtype</h5>
+                    <InfoTip label="How current value is spread across investment types." />
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <strong>No allocation to show yet.</strong>
-              <p>Add an investment to see how your portfolio is distributed.</p>
-            </div>
-          )}
-        </section>
-
-        <section className="accounts-sections" style={{ marginTop: 20 }}>
-          {investmentGroups.length > 0 ? (
-            investmentGroups.map((group) => (
-              <article key={group.key} className="accounts-group glass">
-                <div className="accounts-group__head">
-                  <div>
-                    <h5>{group.label}</h5>
-                    <p>
-                      {group.accounts.length} account{group.accounts.length === 1 ? "" : "s"} ·{" "}
-                      {currencyFormatter.format(group.currentValue)}
-                    </p>
-                  </div>
-                  <span className="accounts-group__tone accounts-group__tone--neutral">{group.description}</span>
+                <div className="investments-allocation__summary">
+                  <span>Total value</span>
+                  <strong>{currencyFormatter.format(totals.currentValue)}</strong>
                 </div>
+              </div>
 
-                <div className="accounts-card-grid">
-                  {group.accounts.map((account) => {
-                    const accountBrand = getAccountBrand({
-                      institution: account.institution ?? null,
-                      name: account.name,
-                      type: account.type,
-                    });
-                    const currentValue = parseNullableAmount(account.balance);
-                    const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
-                    const gainLoss =
-                      currentValue === null || purchaseValue === null ? null : currentValue - purchaseValue;
-                    const returnPercent = getReturnPercent(currentValue, purchaseValue);
-                    const highlights = getInvestmentHighlights(account);
-                    const isEditing = editingAccountId === account.id && Boolean(editingDraft);
-                    const editFieldConfigs = isEditing && editingDraft ? getInvestmentFieldConfigs(editingDraft.investmentSubtype) : [];
+              {portfolioAllocation.length > 0 ? (
+                <div className="investments-allocation__list">
+                  {portfolioAllocation.map((group) => (
+                    <div key={group.key} className="investments-allocation__row">
+                      <div className="investments-allocation__row-head">
+                        <div>
+                          <strong>{group.label}</strong>
+                          <span>{group.accounts.length} account{group.accounts.length === 1 ? "" : "s"}</span>
+                        </div>
+                        <div>
+                          <strong>{currencyFormatter.format(group.currentValue)}</strong>
+                          <span>{group.share > 0 ? percentFormatter.format(group.share) : "0%"}</span>
+                        </div>
+                      </div>
+                      <div className="investments-allocation__bar">
+                        <span style={{ width: `${Math.max(group.share * 100, 4)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <strong>No investments yet.</strong>
+                  <p>Add an investment to see your portfolio mix.</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
+                    <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
+                      Add investment
+                    </button>
+                    <Link className="button button-secondary button-small" href="/accounts">
+                      Open Accounts
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </section>
+          </>
+        ) : selectedTab === "holdings" ? (
+          <>
+            <section className="investments-allocation glass investments-holdings-chart">
+              <div className="investments-allocation__head">
+                <div className="investments-allocation__head-title">
+                  <p className="eyebrow">Holdings</p>
+                  <div className="investments-allocation__title-row">
+                    <h5>Largest positions</h5>
+                    <InfoTip label="The biggest holdings by current value." />
+                  </div>
+                </div>
+                <div className="investments-allocation__summary">
+                  <span>Top 5</span>
+                  <strong>{topHoldings.length}</strong>
+                </div>
+              </div>
 
+              {topHoldings.length > 0 ? (
+                <div className="investments-allocation__list">
+                  {topHoldings.map((item) => {
+                    const returnPercent = getReturnPercent(item.currentValue, item.purchaseValue);
                     return (
-                      <article key={account.id} className="accounts-account-card glass">
-                        <div className="accounts-account-card__head">
-                          <div className="accounts-account-card__brand">
-                            <AccountBrandMark accountBrand={accountBrand} label={account.name} />
-                            <div>
-                              <strong>{account.name}</strong>
-                              <span>
-                                {accountBrand.label}
-                                {account.institution && account.institution !== accountBrand.label ? ` · ${account.institution}` : ""}
-                              </span>
-                            </div>
+                      <div key={item.account.id} className="investments-allocation__row">
+                        <div className="investments-allocation__row-head">
+                          <div>
+                            <strong>{item.account.name}</strong>
+                            <span>
+                              {item.account.investmentSubtype ? getInvestmentSubtypeLabel(item.account.investmentSubtype) : "Unclassified"}
+                            </span>
                           </div>
-                          <div className="accounts-account-card__head-actions">
-                            {isEditing ? (
-                              <>
-                                <button className="button button-primary button-small" type="button" onClick={saveEditingAccount} disabled={isUpdating}>
-                                  Save
-                                </button>
-                                <button className="button button-secondary button-small" type="button" onClick={cancelEditingAccount} disabled={isUpdating}>
-                                  Cancel
-                                </button>
-                              </>
-                            ) : (
-                              <>
-                                <button className="button button-secondary button-small" type="button" onClick={() => beginEditingAccount(account)}>
-                                  Edit
-                                </button>
-                                <Link className="button button-secondary button-small" href={`/accounts/${account.id}`}>
-                                  Open
-                                </Link>
-                              </>
-                            )}
+                          <div>
+                            <strong>{currencyFormatter.format(item.currentValue)}</strong>
+                            <span className={returnPercent === null ? "" : returnPercent >= 0 ? "is-positive" : "is-negative"}>
+                              {returnPercent === null ? "Return not set" : `${returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(returnPercent))}`}
+                            </span>
                           </div>
                         </div>
-
-                        <div className="accounts-account-card__body">
-                          {isEditing && editingDraft ? (
-                            <div className="accounts-inline-edit">
-                              <div className="accounts-inline-edit__grid">
-                                <label>
-                                  Name
-                                  <input value={editingDraft.name} onChange={(event) => updateEditingDraft("name", event.target.value)} />
-                                </label>
-                                <label>
-                                  Institution
-                                  <input value={editingDraft.institution} onChange={(event) => updateEditingDraft("institution", event.target.value)} />
-                                </label>
-                                <label>
-                                  Investment subtype
-                                  <select
-                                    value={editingDraft.investmentSubtype}
-                                    onChange={(event) => {
-                                      const nextSubtype = event.target.value as InvestmentSubtype;
-                                      setEditingDraft((current) =>
-                                        current
-                                          ? {
-                                              ...current,
-                                              investmentSubtype: nextSubtype,
-                                            }
-                                          : current
-                                      );
-                                    }}
-                                  >
-                                    {INVESTMENT_SUBTYPES.map((subtype) => (
-                                      <option key={subtype} value={subtype}>
-                                        {getInvestmentSubtypeLabel(subtype)}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <label>
-                                  Current value / balance
-                                  <input value={editingDraft.balance} onChange={(event) => updateEditingDraft("balance", event.target.value)} inputMode="decimal" />
-                                </label>
-                                {editFieldConfigs.map((field) => (
-                                  <label key={field.key}>
-                                    {field.label}
-                                    {field.type === "date" ? (
-                                      <input
-                                        type="date"
-                                        value={getEditingFieldValue(field.key)}
-                                        onChange={(event) => updateEditingDraft(field.key as keyof InvestmentEditDraft, event.target.value)}
-                                      />
-                                    ) : (
-                                      <input
-                                        value={getEditingFieldValue(field.key)}
-                                        onChange={(event) => updateEditingDraft(field.key as keyof InvestmentEditDraft, event.target.value)}
-                                        inputMode={field.inputMode}
-                                        placeholder={field.placeholder}
-                                      />
-                                    )}
-                                  </label>
-                                ))}
-                              </div>
-                              <p className="panel-muted">Use Save to update the account, or Cancel to discard changes.</p>
-                            </div>
-                          ) : (
-                            <>
-                              <div className="accounts-account-card__balance-row">
-                                <div className="accounts-account-card__amount is-asset">
-                                  {currentValue === null ? "Not set" : currencyFormatter.format(currentValue)}
-                                </div>
-                                <div className="accounts-account-card__balance-meta">
-                                  <span className="accounts-account-card__balance-pill is-neutral">
-                                    {account.investmentSubtype ? getInvestmentSubtypeLabel(account.investmentSubtype) : "Unclassified"}
-                                  </span>
-                                </div>
-                              </div>
-
-                              <div className="accounts-account-card__investment-meta">
-                                <span>
-                                  {purchaseValue === null
-                                    ? "Purchase value not set"
-                                    : `${account.investmentCostBasis ? "Purchase value" : "Principal"} ${currencyFormatter.format(purchaseValue)}`}
-                                </span>
-                                <span>
-                                  {gainLoss === null
-                                    ? "Gain/Loss not set"
-                                    : `${gainLoss >= 0 ? "Gain" : "Loss"} ${currencyFormatter.format(Math.abs(gainLoss))}`}
-                                </span>
-                              </div>
-
-                              <div className="accounts-account-card__investment-meta">
-                                <span>{highlights[0]}</span>
-                                <span>{highlights[1]}</span>
-                                <span className={returnPercent === null ? "" : returnPercent >= 0 ? "is-positive" : "is-negative"}>
-                                  {returnPercent === null
-                                    ? "Return not set"
-                                    : `Return ${returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(returnPercent))}`}
-                                </span>
-                              </div>
-                            </>
-                          )}
+                        <div className="investments-allocation__bar">
+                          <span style={{ width: `${Math.max((item.currentValue / topHoldingMaxValue) * 100, 4)}%` }} />
                         </div>
-                      </article>
+                      </div>
                     );
                   })}
                 </div>
-              </article>
-            ))
-          ) : investmentAccounts.length > 0 && activeInvestmentFilters ? (
-            <div className="empty-state">
-              <strong>No investments match these filters.</strong>
-              <p>Try widening the search, changing subtype, or resetting the sort and filters.</p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
-                <button className="button button-primary button-small" type="button" onClick={() => {
-                  setInvestmentSearch("");
-                  setInvestmentSubtypeFilter("all");
-                  setInvestmentSortKey("value_desc");
-                }}>
+              ) : (
+                <div className="empty-state">
+                  <strong>No holdings yet.</strong>
+                  <p>Add an investment to see your largest positions.</p>
+                </div>
+              )}
+            </section>
+
+            <section className="investments-filters glass">
+              <label>
+                Search holdings
+                <input
+                  value={investmentSearch}
+                  onChange={(event) => setInvestmentSearch(event.target.value)}
+                  placeholder="Search name, ticker, institution"
+                />
+              </label>
+              <label>
+                Subtype
+                <select value={investmentSubtypeFilter} onChange={(event) => setInvestmentSubtypeFilter(event.target.value as InvestmentSubtype | "all")}>
+                  <option value="all">All subtypes</option>
+                  {INVESTMENT_SUBTYPES.map((subtype) => (
+                    <option key={subtype} value={subtype}>
+                      {getInvestmentSubtypeLabel(subtype)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Sort by
+                <select value={investmentSortKey} onChange={(event) => setInvestmentSortKey(event.target.value as InvestmentSortKey)}>
+                  {INVESTMENT_SORT_OPTIONS.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="investments-filters__actions">
+                <button
+                  className="button button-secondary button-small"
+                  type="button"
+                  onClick={() => {
+                    setInvestmentSearch("");
+                    setInvestmentSubtypeFilter("all");
+                    setInvestmentSortKey("value_desc");
+                  }}
+                  disabled={!activeInvestmentFilters}
+                >
                   Reset filters
                 </button>
+                <span>
+                  Showing {visibleInvestmentAccounts.length} of {investmentAccounts.length} investment
+                  {investmentAccounts.length === 1 ? "" : "s"}
+                </span>
               </div>
-            </div>
-          ) : (
-            <div className="empty-state">
-              <strong>No investments yet.</strong>
-              <p>
-                Add an investment here, or create an Investment account from Accounts. Every account with type
-                <code>investment</code> will show up on this page automatically.
-              </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
-                <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
-                  Add investment
-                </button>
-                <Link className="button button-secondary button-small" href="/accounts">
-                  Open Accounts
-                </Link>
+            </section>
+
+            <section className="accounts-sections" style={{ marginTop: 20 }}>
+              {investmentGroups.length > 0 ? (
+                investmentGroups.map((group) => (
+                  <article key={group.key} className="accounts-group glass">
+                    <div className="accounts-group__head">
+                      <div className="accounts-group__head-title">
+                        <div>
+                          <h5>{group.label}</h5>
+                          <p>
+                            {group.accounts.length} account{group.accounts.length === 1 ? "" : "s"} ·{" "}
+                            {currencyFormatter.format(group.currentValue)}
+                          </p>
+                        </div>
+                        <InfoTip label={group.description} />
+                      </div>
+                    </div>
+
+                    <div className="accounts-card-grid">
+                      {group.accounts.map((account) => {
+                        const accountBrand = getAccountBrand({
+                          institution: account.institution ?? null,
+                          name: account.name,
+                          type: account.type,
+                        });
+                        const currentValue = parseNullableAmount(account.balance);
+                        const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
+                        const gainLoss =
+                          currentValue === null || purchaseValue === null ? null : currentValue - purchaseValue;
+                        const returnPercent = getReturnPercent(currentValue, purchaseValue);
+                        const highlights = getInvestmentHighlights(account);
+                        const isEditing = editingAccountId === account.id && Boolean(editingDraft);
+                        const editFieldConfigs = isEditing && editingDraft ? getInvestmentFieldConfigs(editingDraft.investmentSubtype) : [];
+
+                        return (
+                          <article key={account.id} className="accounts-account-card glass">
+                            <div className="accounts-account-card__head">
+                              <div className="accounts-account-card__brand">
+                                <AccountBrandMark accountBrand={accountBrand} label={account.name} />
+                                <div>
+                                  <strong>{account.name}</strong>
+                                  <span>
+                                    {accountBrand.label}
+                                    {account.institution && account.institution !== accountBrand.label ? ` · ${account.institution}` : ""}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="accounts-account-card__head-actions">
+                                {isEditing ? (
+                                  <>
+                                    <button className="button button-primary button-small" type="button" onClick={saveEditingAccount} disabled={isUpdating}>
+                                      Save
+                                    </button>
+                                    <button className="button button-secondary button-small" type="button" onClick={cancelEditingAccount} disabled={isUpdating}>
+                                      Cancel
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button className="button button-secondary button-small" type="button" onClick={() => beginEditingAccount(account)}>
+                                      Edit
+                                    </button>
+                                    <Link className="button button-secondary button-small" href={`/accounts/${account.id}`}>
+                                      Open
+                                    </Link>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="accounts-account-card__body">
+                              {isEditing && editingDraft ? (
+                                <div className="accounts-inline-edit">
+                                  <div className="accounts-inline-edit__grid">
+                                    <label>
+                                      Name
+                                      <input value={editingDraft.name} onChange={(event) => updateEditingDraft("name", event.target.value)} />
+                                    </label>
+                                    <label>
+                                      Institution
+                                      <input value={editingDraft.institution} onChange={(event) => updateEditingDraft("institution", event.target.value)} />
+                                    </label>
+                                    <label>
+                                      Investment subtype
+                                      <select
+                                        value={editingDraft.investmentSubtype}
+                                        onChange={(event) => {
+                                          const nextSubtype = event.target.value as InvestmentSubtype;
+                                          setEditingDraft((current) =>
+                                            current
+                                              ? {
+                                                  ...current,
+                                                  investmentSubtype: nextSubtype,
+                                                }
+                                              : current
+                                          );
+                                        }}
+                                      >
+                                        {INVESTMENT_SUBTYPES.map((subtype) => (
+                                          <option key={subtype} value={subtype}>
+                                            {getInvestmentSubtypeLabel(subtype)}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </label>
+                                    <label>
+                                      Current value / balance
+                                      <input value={editingDraft.balance} onChange={(event) => updateEditingDraft("balance", event.target.value)} inputMode="decimal" />
+                                    </label>
+                                    {editFieldConfigs.map((field) => (
+                                      <label key={field.key}>
+                                        {field.label}
+                                        {field.type === "date" ? (
+                                          <input
+                                            type="date"
+                                            value={getEditingFieldValue(field.key)}
+                                            onChange={(event) => updateEditingDraft(field.key as keyof InvestmentEditDraft, event.target.value)}
+                                          />
+                                        ) : (
+                                          <input
+                                            value={getEditingFieldValue(field.key)}
+                                            onChange={(event) => updateEditingDraft(field.key as keyof InvestmentEditDraft, event.target.value)}
+                                            inputMode={field.inputMode}
+                                            placeholder={field.placeholder}
+                                          />
+                                        )}
+                                      </label>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="accounts-account-card__balance-row">
+                                    <div className="accounts-account-card__amount is-asset">
+                                      {currentValue === null ? "Not set" : currencyFormatter.format(currentValue)}
+                                    </div>
+                                    <div className="accounts-account-card__balance-meta">
+                                      <span className="accounts-account-card__balance-pill is-neutral">
+                                        {account.investmentSubtype ? getInvestmentSubtypeLabel(account.investmentSubtype) : "Unclassified"}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="accounts-account-card__investment-meta">
+                                    <span>
+                                      {purchaseValue === null
+                                        ? "Purchase value not set"
+                                        : `${account.investmentCostBasis ? "Purchase value" : "Principal"} ${currencyFormatter.format(purchaseValue)}`}
+                                    </span>
+                                    <span>
+                                      {gainLoss === null
+                                        ? "Gain/Loss not set"
+                                        : `${gainLoss >= 0 ? "Gain" : "Loss"} ${currencyFormatter.format(Math.abs(gainLoss))}`}
+                                    </span>
+                                  </div>
+
+                                  <div className="accounts-account-card__investment-meta">
+                                    <span>{highlights[0]}</span>
+                                    <span>{highlights[1]}</span>
+                                    <span className={returnPercent === null ? "" : returnPercent >= 0 ? "is-positive" : "is-negative"}>
+                                      {returnPercent === null
+                                        ? "Return not set"
+                                        : `Return ${returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(returnPercent))}`}
+                                    </span>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </article>
+                        );
+                      })}
+                    </div>
+                  </article>
+                ))
+              ) : investmentAccounts.length > 0 && activeInvestmentFilters ? (
+                <div className="empty-state">
+                  <strong>No investments match these filters.</strong>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
+                    <button
+                      className="button button-primary button-small"
+                      type="button"
+                      onClick={() => {
+                        setInvestmentSearch("");
+                        setInvestmentSubtypeFilter("all");
+                        setInvestmentSortKey("value_desc");
+                      }}
+                    >
+                      Reset filters
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <strong>No investments yet.</strong>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
+                    <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
+                      Add investment
+                    </button>
+                    <Link className="button button-secondary button-small" href="/accounts">
+                      Open Accounts
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </section>
+          </>
+        ) : selectedTab === "market" ? (
+          <InvestmentMarketChart investmentAccounts={investmentAccounts} />
+        ) : (
+          <section className="investments-insights-grid">
+            <article className="investments-allocation glass">
+              <div className="investments-allocation__head">
+                <div className="investments-allocation__head-title">
+                  <p className="eyebrow">Insights</p>
+                  <div className="investments-allocation__title-row">
+                    <h5>Allocation by subtype</h5>
+                    <InfoTip label="A broader view of concentration across the portfolio." />
+                  </div>
+                </div>
+                <div className="investments-allocation__summary">
+                  <span>Total value</span>
+                  <strong>{currencyFormatter.format(totals.currentValue)}</strong>
+                </div>
               </div>
-            </div>
-          )}
-        </section>
+
+              {portfolioAllocation.length > 0 ? (
+                <div className="investments-allocation__list">
+                  {portfolioAllocation.map((group) => (
+                    <div key={group.key} className="investments-allocation__row">
+                      <div className="investments-allocation__row-head">
+                        <div>
+                          <strong>{group.label}</strong>
+                          <span>{group.accounts.length} account{group.accounts.length === 1 ? "" : "s"}</span>
+                        </div>
+                        <div>
+                          <strong>{currencyFormatter.format(group.currentValue)}</strong>
+                          <span>{group.share > 0 ? percentFormatter.format(group.share) : "0%"}</span>
+                        </div>
+                      </div>
+                      <div className="investments-allocation__bar">
+                        <span style={{ width: `${Math.max(group.share * 100, 4)}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <strong>No allocation to show yet.</strong>
+                </div>
+              )}
+            </article>
+
+            <article className="investments-insights-panel glass">
+              <div className="investments-allocation__head">
+                <div className="investments-allocation__head-title">
+                  <p className="eyebrow">Insights</p>
+                  <div className="investments-allocation__title-row">
+                    <h5>Largest positions</h5>
+                    <InfoTip label="The biggest holdings by current value." />
+                  </div>
+                </div>
+                <div className="investments-allocation__summary">
+                  <span>Top 5</span>
+                  <strong>{topHoldings.length}</strong>
+                </div>
+              </div>
+
+              {topHoldings.length > 0 ? (
+                <div className="investments-allocation__list">
+                  {topHoldings.map((item) => {
+                    const returnPercent = getReturnPercent(item.currentValue, item.purchaseValue);
+                    return (
+                      <div key={item.account.id} className="investments-allocation__row">
+                        <div className="investments-allocation__row-head">
+                          <div>
+                            <strong>{item.account.name}</strong>
+                            <span>{item.account.investmentSubtype ? getInvestmentSubtypeLabel(item.account.investmentSubtype) : "Unclassified"}</span>
+                          </div>
+                          <div>
+                            <strong>{currencyFormatter.format(item.currentValue)}</strong>
+                            <span className={returnPercent === null ? "" : returnPercent >= 0 ? "is-positive" : "is-negative"}>
+                              {returnPercent === null ? "Return not set" : `${returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(returnPercent))}`}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="investments-allocation__bar">
+                          <span style={{ width: `${Math.max((item.currentValue / topHoldingMaxValue) * 100, 4)}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="empty-state">
+                  <strong>No holdings yet.</strong>
+                </div>
+              )}
+
+              <div className="investments-insights__stats">
+                <article className="accounts-overview-card glass">
+                  <div className="investments-metric__label">
+                    <span>Largest position</span>
+                    <InfoTip label="The holding with the highest current value." />
+                  </div>
+                  <strong>{topHoldings[0] ? currencyFormatter.format(topHoldings[0].currentValue) : "—"}</strong>
+                  <span>{topHoldings[0]?.account.name ?? "No holdings yet"}</span>
+                </article>
+                <article className="accounts-overview-card glass">
+                  <div className="investments-metric__label">
+                    <span>Best gain</span>
+                    <InfoTip label="The holding with the largest gain in absolute currency value." />
+                  </div>
+                  <strong>
+                    {bestGainHolding?.gainLoss === null ? "—" : currencyFormatter.format(bestGainHolding.gainLoss)}
+                  </strong>
+                  <span>{bestGainHolding?.account.name ?? "No holdings yet"}</span>
+                </article>
+                <article className="accounts-overview-card glass">
+                  <div className="investments-metric__label">
+                    <span>Best return</span>
+                    <InfoTip label="The holding with the highest return percentage." />
+                  </div>
+                  <strong>
+                    {bestReturnHolding?.returnPercent === null ? "—" : percentFormatter.format(bestReturnHolding.returnPercent)}
+                  </strong>
+                  <span>{bestReturnHolding?.account.name ?? "No holdings yet"}</span>
+                </article>
+                <article className="accounts-overview-card glass">
+                  <div className="investments-metric__label">
+                    <span>Worst gain</span>
+                    <InfoTip label="The holding with the largest loss in absolute currency value." />
+                  </div>
+                  <strong>
+                    {worstGainHolding?.gainLoss === null ? "—" : currencyFormatter.format(worstGainHolding.gainLoss)}
+                  </strong>
+                  <span>{worstGainHolding?.account.name ?? "No holdings yet"}</span>
+                </article>
+              </div>
+            </article>
+          </section>
+        )}
       </div>
 
         {addOpen ? (
@@ -1081,12 +1430,6 @@ export default function InvestmentsPage() {
           </div>
         ) : null}
 
-        {planTier === "free" ? (
-          <p className="investments-upgrade-note panel-muted">
-            Want more market coverage, deeper charts, and broader portfolio analysis?{" "}
-            <Link href="/pricing">Upgrade to Pro</Link> when Clover starts feeling like a useful daily investing workspace.
-          </p>
-        ) : null}
       </CloverShell>
   );
 }

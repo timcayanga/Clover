@@ -597,9 +597,6 @@ export function InvestmentMarketChart({ investmentAccounts }: InvestmentMarketCh
   return (
     <section className="investments-market glass">
       <div className="investments-market__head">
-        <div>
-          <p className="eyebrow">Market tracker</p>
-        </div>
         <form
           className="investments-market__controls investments-market__controls--compact"
           onSubmit={(event) => {
