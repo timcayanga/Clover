@@ -629,15 +629,6 @@ async function DashboardStream({
       <section className="dashboard-home">
         <article className="dashboard-home__hero glass">
           <div className="dashboard-home__copy">
-            <div className="dashboard-home__kicker-row">
-              <span className="pill pill-accent">Overview</span>
-              <span className="pill pill-subtle">Goal</span>
-              <span className="pill pill-subtle">Month</span>
-              <span className="pill pill-subtle">Pattern</span>
-              <span className="pill pill-subtle">{workspaceSummary.name}</span>
-              {latestImport ? <span className="pill pill-subtle">{formatRelativeDate(latestImport.uploadedAt)}</span> : null}
-            </div>
-
             <h3>{user.financialExperience === "beginner" ? "Your money, in one simple view." : goalKey ? "How close are you to your goal?" : "Your finances at a glance."}</h3>
             <p>
               {user.financialExperience === "beginner"
