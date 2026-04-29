@@ -11,6 +11,7 @@ import { EmptyDataCta } from "@/components/empty-data-cta";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
+import { GoalsSubtabs } from "@/components/goals-subtabs";
 import {
   GOAL_OPTIONS,
   getFinancialExperienceProfile,
@@ -609,12 +610,13 @@ async function GoalsPageStream({
   const onboardingDate = user.onboardingCompletedAt ? new Date(user.onboardingCompletedAt) : null;
   const goalMoneyLabel = getGoalMoneyLabel(selectedGoalKey as GoalKey | null);
   const goalProgressLabel = getGoalProgressLabel(selectedGoalKey as GoalKey | null);
-  const buildGoalsHref = (section: GoalsSection) => (section === "overview" ? "/goals" : `/goals?section=${section}`);
-
   const progressLabel =
     goalScore >= 85 ? "Coach mode: you are ahead of the curve" : goalScore >= 70 ? "On pace and looking sharp" : goalScore >= 50 ? "Building good momentum" : "Early, but absolutely moving";
 
   const weeklyProgress = clamp(goalScore + (currentSavingsRate !== null && currentSavingsRate >= targetRate / 100 ? 8 : 0) - (recurringShare > 0.25 ? 6 : 0), 12, 100);
+  const progressRingPercent = goalProgress.progressPercent !== null ? clamp(goalProgress.progressPercent, 0, 100) : weeklyProgress;
+  const ringCircumference = 2 * Math.PI * 46;
+  const ringDashOffset = ringCircumference - (progressRingPercent / 100) * ringCircumference;
 
   const paceBars = [
     {
@@ -644,7 +646,7 @@ async function GoalsPageStream({
       note:
         currentSavingsRate === null
           ? "Need more income context"
-          : currentSavingsRate >= (targetRate / 100)
+          : currentSavingsRate >= targetRate / 100
             ? "Strong enough to support the goal"
             : "Below the target line",
       tone: currentSavingsRate !== null && currentSavingsRate >= targetRate / 100 ? "positive" : "warning",
@@ -668,20 +670,6 @@ async function GoalsPageStream({
       tone: goalProgress.bandTone,
     },
   ] as const;
-
-  const goalActionSteps = [
-    goalProgress.nextAction,
-    hasGoalTarget
-      ? goalProgress.achieved
-        ? "Keep the transfer amount on autopilot so the win repeats next month."
-        : "Check the goal again after the next spending update to see whether the band improved."
-      : "Set the target amount first so Clover can measure the next month cleanly.",
-    recurringShare > 0.25
-      ? "Review recurring costs and trim the easiest fixed expense."
-      : currentSavingsRate !== null && currentSavingsRate >= targetRate / 100
-        ? "Keep the current savings rhythm and protect the transfer from small leaks."
-        : "Move one flexible dollar into the goal before the week ends.",
-  ];
 
   const goalSnapshot = [
     {
@@ -787,7 +775,7 @@ async function GoalsPageStream({
     {
       label: "Spend",
       value: spendDelta === null ? "N/A" : formatPercent(spendDelta),
-      note: spendDelta === null ? "No prior comparison" : (spendDelta > 0 ? "Up vs prior month" : "Down vs prior month"),
+      note: spendDelta === null ? "No prior comparison" : spendDelta > 0 ? "Up vs prior month" : "Down vs prior month",
       tone: spendDelta === null ? "neutral" : spendDelta > 0 ? "negative" : "positive",
     },
     {
@@ -1326,23 +1314,8 @@ async function GoalsPageStream({
         </div>
       ) : null}
 
-      <div className="goals-tabs-shell section-tabs-shell">
-        <nav className="reports-tabs goals-tabs goals-tabs--top" aria-label="Goal sections">
-          {availableSections.map((section) => (
-            <Link
-              key={section}
-              className={`reports-tab ${selectedSection === section ? "reports-tab--active" : ""}`}
-              href={buildGoalsHref(section)}
-              aria-current={selectedSection === section ? "page" : undefined}
-            >
-              {section === "overview" ? "Overview" : section === "progress" ? "Progress" : section === "drivers" ? "Drivers" : "History"}
-            </Link>
-          ))}
-        </nav>
-      </div>
-
-      <section className={`goals-story goals-story--section-${selectedSection}${isBeginnerMode ? " goals-story--beginner" : ""}`}>
-        <article className="goals-hero glass">
+      <GoalsSubtabs initialSection={selectedSection} availableSections={availableSections} beginnerMode={isBeginnerMode}>
+        <article className="goals-hero glass goals-section goals-section--overview">
           <div className="goals-hero__copy">
             <p className="goals-hero__eyebrow">{isBeginnerMode ? "Start here" : "Goal coaching"}</p>
             <h3>{heroLead}</h3>
@@ -1650,380 +1623,7 @@ async function GoalsPageStream({
           </article>
         ) : null}
 
-        {specificGoalSummary || investmentAccounts.length > 0 ? (
-          <section className="goals-plan-grid">
-            {specificGoalSummary ? (
-              <article className="goals-plan glass goals-section goals-section--overview">
-                <div className="goals-panel__head">
-                  <div>
-                    <p className="eyebrow">Specific goal</p>
-                    <h4>{specificGoalSummary.title}</h4>
-                  </div>
-                  <div className="goals-panel__stat">
-                    <strong>{specificGoalSummary.subtitle}</strong>
-                    <span>{goalTargetSource ?? "Saved goal"}</span>
-                  </div>
-                </div>
-
-                <div className="goals-plan__body">
-                  <GoalGlyph goalKey={selectedGoal.value} />
-                  <div>
-                    <p>{specificGoalSummary.detail}</p>
-                    <small>
-                      {goalProgress.achieved
-                        ? "You already hit the current target. Time to set the next one."
-                        : goalProgress.remainingAmount !== null
-                          ? `${formatCurrency(goalProgress.remainingAmount)} remains to close the gap this cycle.`
-                          : "Set a specific amount, cadence, or salary share to make the target more concrete."}
-                    </small>
-                  </div>
-                </div>
-              </article>
-            ) : null}
-
-            <article className="goals-investments glass goals-section goals-section--drivers">
-              <div className="goals-panel__head">
-                <div>
-                  <p className="eyebrow">Investments</p>
-                  <h4>What your portfolio adds to the plan</h4>
-                </div>
-                <div className="goals-panel__stat">
-                  <strong>{investmentAccounts.length}</strong>
-                  <span>Holdings tracked</span>
-                </div>
-              </div>
-
-              {investmentAccounts.length > 0 ? (
-                <>
-                  <div className="goals-investments__metrics">
-                    <div>
-                      <span>Portfolio value</span>
-                      <strong>{formatCurrency(investmentHoldingsValue)}</strong>
-                      <small>{investmentHoldingsCount} holding{investmentHoldingsCount === 1 ? "" : "s"} total</small>
-                    </div>
-                    <div>
-                      <span>Gain / loss</span>
-                      <strong className={investmentGainLoss >= 0 ? "positive" : "negative"}>
-                        {investmentGainLoss >= 0 ? "+" : "-"}
-                        {formatCurrency(Math.abs(investmentGainLoss))}
-                      </strong>
-                      <small>{investmentCostBasis > 0 ? `${formatPercent((investmentGainLoss / investmentCostBasis) * 100)} vs cost basis` : "No cost basis yet"}</small>
-                    </div>
-                    <div>
-                      <span>Monthly flow</span>
-                      <strong>{formatCurrency(investmentFlow)}</strong>
-                      <small>Investment movement this month</small>
-                    </div>
-                  </div>
-
-                  <div className="goals-investments__list">
-                    {investmentHoldings.slice(0, 3).map((account) => (
-                      <div key={account.id} className="goals-investments__item">
-                        <div>
-                          <strong>{account.name}</strong>
-                          <span>
-                            {account.investmentSubtype ?? "investment"}
-                            {account.institution ? ` · ${account.institution}` : ""}
-                          </span>
-                        </div>
-                        <strong>{formatCurrency(Number(account.balance ?? 0))}</strong>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <div className="goals-investments__empty">
-                  <p>
-                    Open Investments to bring portfolio values into the goal plan. That makes investing targets feel like
-                    real money movement instead of just a monthly wish.
-                  </p>
-                  <Link className="pill-link pill-link--inline" href="/investments">
-                    Open Investments
-                  </Link>
-                </div>
-              )}
-            </article>
-          </section>
-        ) : null}
-
-        <article className="goals-action-plan glass goals-section goals-section--overview">
-          <div className="goals-panel__head">
-            <div>
-              <p className="eyebrow">One next action</p>
-              <h4>What Clover wants you to do next</h4>
-            </div>
-            <div className="goals-panel__stat">
-              <strong>{goalProgress.bandLabel}</strong>
-              <span>{goalProgress.achieved ? "Target hit" : "One clear step ahead"}</span>
-            </div>
-          </div>
-
-          <div className="goals-action-plan__lead">
-            <strong>{goalProgress.coachCopy}</strong>
-            <p>{goalProgress.nextAction}</p>
-          </div>
-
-          <div className="goals-action-plan__steps" aria-label="Goal actions">
-            {goalActionSteps.map((step, index) => (
-              <div key={step} className="goals-action-plan__step">
-                <span>Step {index + 1}</span>
-                <strong>{step}</strong>
-              </div>
-            ))}
-          </div>
-
-          <div className="goals-action-plan__list">
-            {movementHighlights.map((item) => (
-              <div key={item.label} className={`goals-action-plan__item ${item.tone}`}>
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-                <small>{item.note}</small>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <section className="goals-visual-grid goals-section goals-section--drivers">
-          <article className="goals-heatmap glass">
-            <div className="goals-panel__head">
-              <div>
-                <p className="eyebrow">Current pressure</p>
-                <h4>What is helping or slowing the goal</h4>
-              </div>
-              <div className="goals-panel__stat">
-                <strong>{formatPercent(recurringShare * 100)}</strong>
-                <span>Recurring share</span>
-              </div>
-            </div>
-
-            <div className="goals-heatmap__grid goals-heatmap__grid--actions">
-              <div className="goals-heatmap__cell is-4">
-                <span>Spend delta</span>
-                <strong>{spendDelta === null ? "N/A" : formatPercent(spendDelta)}</strong>
-                <small>{spendDelta === null ? "No prior comparison" : spendDelta > 0 ? "Spending is higher than before" : "Spending is easing"}</small>
-              </div>
-              <div className="goals-heatmap__cell is-3">
-                <span>Savings rate</span>
-                <strong>{currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}</strong>
-                <small>{currentSavingsRate === null ? "Need more income context" : goalProgress.bandLabel}</small>
-              </div>
-              <div className="goals-heatmap__cell is-2">
-                <span>Remaining</span>
-                <strong>{goalProgress.remainingAmount === null ? "Set target" : formatCurrency(goalProgress.remainingAmount)}</strong>
-                <small>{goalProgress.achieved ? "Target reached" : "Amount left to close the gap"}</small>
-              </div>
-            </div>
-          </article>
-
-          <article className="goals-drivers glass">
-            <div className="goals-panel__head">
-              <div>
-                <p className="eyebrow">Momentum drivers</p>
-                <h4>What is helping or hurting the lane</h4>
-              </div>
-              <div className="goals-panel__stat">
-                <strong>{formatPercent(recurringShare * 100)}</strong>
-                <span>Recurring share</span>
-              </div>
-            </div>
-
-            <div className="goals-drivers__bars">
-              {recurringMerchants.length > 0 ? (
-                recurringMerchants.map((merchant) => {
-                  const share = recurringDrag > 0 ? (merchant.amount / recurringDrag) * 100 : 0;
-                  return (
-                    <div key={merchant.label} className="goals-driver">
-                      <div className="goals-driver__head">
-                        <div className="goals-driver__icon" aria-hidden="true">
-                          <GoalGlyph goalKey={selectedGoal.value} />
-                        </div>
-                        <div>
-                          <strong>{merchant.label}</strong>
-                          <span>{merchant.count} transactions</span>
-                        </div>
-                      </div>
-                      <div className="goals-driver__track" aria-hidden="true">
-                        <div className="goals-driver__fill" style={{ width: `${clamp(share, 8, 100)}%` }} />
-                      </div>
-                      <small>{formatCurrency(merchant.amount)}</small>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="goals-driver goals-driver--empty">
-                  <div className="goals-driver__head">
-                    <div className="goals-driver__icon" aria-hidden="true">
-                      <GoalGlyph goalKey={selectedGoal.value} />
-                    </div>
-                    <div>
-                      <strong>No recurring drag yet</strong>
-                      <span>Clover has not seen a repeating merchant large enough to crowd this plan.</span>
-                    </div>
-                  </div>
-                  <small>Add a few more transactions and Clover will surface the first fixed cost worth watching.</small>
-                </div>
-              )}
-            </div>
-          </article>
-        </section>
-
-        <section className="goals-lanes goals-section goals-section--history">
-          <div className="goals-lanes__head">
-            <div>
-              <p className="eyebrow">Onboarding goals</p>
-              <h4>All the lanes Clover can coach you through</h4>
-            </div>
-            <p className="goals-lanes__summary">
-              These are the same focus areas Clover asked about during onboarding. Your active lane is highlighted so
-              you can see how the current month supports it.
-            </p>
-          </div>
-
-          <div className="goals-lane-grid">
-            {GOAL_OPTIONS.map((goal) => {
-              const isActive = goal.value === selectedGoalKey;
-              return (
-                <article key={goal.value} className={`goals-lane glass ${isActive ? "is-active" : ""}`}>
-                  <div className="goals-lane__top">
-                    <div className="goals-lane__icon" aria-hidden="true">
-                      <GoalGlyph goalKey={goal.value} />
-                    </div>
-                    <div className="goals-lane__badge-row">
-                      <span className={`pill ${isActive ? "pill-good" : "pill-subtle"}`}>{isActive ? "Current focus" : "Available focus"}</span>
-                      <span className="goals-lane__score">{goal.targetRate}% pace target</span>
-                    </div>
-                  </div>
-                  <h5>{goal.title}</h5>
-                  <p>{goal.description}</p>
-                  <div className="goals-lane__metrics">
-                    <div>
-                      <span>Target line</span>
-                      <strong>{goal.targetRate}%</strong>
-                    </div>
-                    <div>
-                      <span>Current band</span>
-                      <strong>{isActive ? goalProgress.bandLabel : "Not active"}</strong>
-                    </div>
-                  </div>
-                  <div className="goals-lane__footer">
-                    <span>{goal.signal}</span>
-                    {isActive ? <strong>{goalProgress.nextAction}</strong> : <strong>{goal.coachNote}</strong>}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="goals-intel-grid">
-          <article className="goals-history glass goals-section goals-section--history">
-            <div className="goals-panel__head">
-              <div>
-                <p className="eyebrow">Goal history</p>
-                <h4>Your path so far</h4>
-              </div>
-              <div className="goals-panel__stat">
-                <strong>{goalTimelineEntries.length}</strong>
-                <span>Saved goal updates</span>
-              </div>
-            </div>
-
-            <div className="goals-history__timeline">
-              {goalTimelineEntries.map((entry, index) => (
-                <div key={`${entry.label}-${index}`} className="goals-history__item">
-                  <span className="goals-history__label">{entry.label}</span>
-                  <strong>{entry.detail}</strong>
-                </div>
-              ))}
-            </div>
-            <p className="goals-history__hint">{playbook.historyMarkers[0]}</p>
-          </article>
-
-          <article className="goals-milestones glass goals-section goals-section--progress">
-            <div className="goals-panel__head">
-              <div>
-                <p className="eyebrow">Milestones</p>
-                <h4>What progress looks like here</h4>
-              </div>
-              <div className="goals-panel__stat">
-                <strong>{Math.round(weeklyProgress)}%</strong>
-                <span>Weekly pace</span>
-              </div>
-            </div>
-
-            <div className="goals-milestones__list">
-              {milestoneCards.map((milestone) => (
-                <div key={milestone.label} className={`goals-milestone ${milestone.reached ? "is-reached" : ""}`}>
-                  <div className="goals-milestone__head">
-                    <strong>
-                      <span className="goals-milestone__icon" aria-hidden="true">
-                        <GoalGlyph goalKey={selectedGoal.value} />
-                      </span>
-                      {milestone.label}
-                    </strong>
-                    <span>{milestone.reached ? "Reached" : `Threshold ${milestone.threshold}%`}</span>
-                  </div>
-                  <p>{milestone.detail}</p>
-                  <div className="goals-milestone__bar" aria-hidden="true">
-                    <div className="goals-milestone__fill" style={{ width: `${milestone.percent}%` }} />
-                  </div>
-                  <small>{milestone.reached ? "Keep this behavior consistent through month-end." : `You are ${Math.max(0, milestone.threshold - goalScore)} points away from this checkpoint.`}</small>
-                </div>
-              ))}
-            </div>
-          </article>
-
-          <article className="goals-weekly glass goals-section goals-section--progress">
-            <div className="goals-panel__head">
-              <div>
-                <p className="eyebrow">Weekly change</p>
-                <h4>What shifted since the last check</h4>
-              </div>
-              <div className="goals-panel__stat">
-                <strong className={goalScore >= 70 ? "positive" : "negative"}>{goalScore}</strong>
-                <span>Coach score</span>
-              </div>
-            </div>
-
-            <div className="goals-weekly__grid">
-              {weeklySignals.map((signal) => (
-                <div key={signal.label} className={`goals-weekly__card ${signal.tone}`}>
-                  <span>{signal.label}</span>
-                  <strong>{signal.value}</strong>
-                  <small>{signal.note}</small>
-                </div>
-              ))}
-            </div>
-          </article>
-        </section>
-
-        <div className="goals-section goals-section--progress">
-          <GoalsChecklist items={checklistItems} />
-        </div>
-
-        <article className="goals-alerts glass goals-section goals-section--drivers">
-          <div className="goals-panel__head">
-            <div>
-              <p className="eyebrow">Goal alerts</p>
-              <h4>Coach notes for this moment</h4>
-            </div>
-            <div className="goals-panel__stat">
-              <strong>{goalAlerts.length}</strong>
-              <span>Active messages</span>
-            </div>
-          </div>
-
-          <div className="goals-alerts__list">
-            {goalAlerts.map((alert, index) => (
-              <div key={`${alert.text}-${index}`} className="goals-alerts__item">
-                <span className="goals-alerts__dot" aria-hidden="true">
-                  <GoalGlyph goalKey={selectedGoal.value} />
-                </span>
-                <p>{alert.text}</p>
-              </div>
-            ))}
-          </div>
-        </article>
+        {advancedSections}
 
         <div className="goals-editor-shell goals-section goals-section--overview" id="goal-editor">
           <GoalsEditor
@@ -2078,13 +1678,13 @@ async function GoalsPageStream({
             </article>
           </div>
         </article>
+      </GoalsSubtabs>
 
-        {user.planTier === "free" ? (
-          <p className="goals-upgrade-note">
-            If you’d like to explore more later, <Link href="/pricing">Pro</Link> adds extra charts, deeper analysis, and more goal coaching to help you see the bigger picture.
-          </p>
-        ) : null}
-      </section>
+      {user.planTier === "free" ? (
+        <p className="goals-upgrade-note">
+          If you’d like to explore more later, <Link href="/pricing">Pro</Link> adds extra charts, deeper analysis, and more goal coaching to help you see the bigger picture.
+        </p>
+      ) : null}
     </CloverShell>
   );
 }
