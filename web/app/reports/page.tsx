@@ -248,6 +248,9 @@ async function ReportsStream({
   const isPro = user.planTier === "pro";
   const selectedSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
   const sectionTabs: ReportsSection[] = isPro ? ["overview", "spending", "trends", "advanced"] : ["overview", "spending", "trends"];
+  const needsSpendingData = selectedSection === "spending" || selectedSection === "advanced";
+  const needsTrendData = selectedSection === "trends" || selectedSection === "advanced";
+  const needsAdvancedData = selectedSection === "advanced";
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
@@ -363,121 +366,137 @@ async function ReportsStream({
         orderBy: { date: "desc" },
         take: 500,
       }),
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: selectedWorkspaceId,
-          isExcluded: false,
-          date: {
-            gte: previousWindowStart,
-            lt: currentWindowStart,
-          },
-        },
-        select: {
-          id: true,
-          date: true,
-          amount: true,
-          type: true,
-          merchantRaw: true,
-          merchantClean: true,
-          importFileId: true,
-          account: {
-            select: {
-              name: true,
+      (needsSpendingData || needsTrendData || needsAdvancedData
+        ? prisma.transaction.findMany({
+            where: {
+              workspaceId: selectedWorkspaceId,
+              isExcluded: false,
+              date: {
+                gte: previousWindowStart,
+                lt: currentWindowStart,
+              },
             },
-          },
-          category: {
             select: {
-              name: true,
+              id: true,
+              date: true,
+              amount: true,
+              type: true,
+              merchantRaw: true,
+              merchantClean: true,
+              importFileId: true,
+              account: {
+                select: {
+                  name: true,
+                },
+              },
+              category: {
+                select: {
+                  name: true,
+                },
+              },
             },
-          },
-        },
-      }),
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: selectedWorkspaceId,
-          isExcluded: false,
-          date: { gte: sixMonthsAgo },
-        },
-        select: {
-          date: true,
-          amount: true,
-          type: true,
-        },
-      }),
-      prisma.transaction.findMany({
-        where: {
-          workspaceId: selectedWorkspaceId,
-          isExcluded: false,
-          date: { gte: currentWindowStart },
-        },
-        select: {
-          id: true,
-          date: true,
-          amount: true,
-          type: true,
-          merchantRaw: true,
-          merchantClean: true,
-          account: {
+          })
+        : Promise.resolve([] as Array<ReportTransaction>)),
+      (selectedSection === "overview" || needsTrendData || needsAdvancedData
+        ? prisma.transaction.findMany({
+            where: {
+              workspaceId: selectedWorkspaceId,
+              isExcluded: false,
+              date: { gte: sixMonthsAgo },
+            },
             select: {
-              name: true,
+              date: true,
+              amount: true,
+              type: true,
             },
-          },
-        },
-        orderBy: { date: "desc" },
-        take: 250,
-      }),
-      prisma.transaction.aggregate({
-        where: {
-          workspaceId: selectedWorkspaceId,
-          isExcluded: false,
-          importFileId: { not: null },
-        },
-        _count: { id: true },
-        _sum: { amount: true },
-      }),
-      prisma.transaction.aggregate({
-        where: {
-          workspaceId: selectedWorkspaceId,
-          isExcluded: false,
-          importFileId: null,
-        },
-        _count: { id: true },
-        _sum: { amount: true },
-      }),
-      prisma.account.aggregate({
-        where: {
-          workspaceId: selectedWorkspaceId,
-        },
-        _sum: { balance: true },
-        _count: { id: true, balance: true },
-      }),
-      prisma.account.findMany({
-        where: {
-          workspaceId: selectedWorkspaceId,
-        },
-        select: {
-          id: true,
-          name: true,
-          balance: true,
-          currency: true,
-          type: true,
-        },
-        orderBy: [{ balance: "desc" }, { updatedAt: "desc" }],
-        take: 5,
-      }) as Promise<WorkspaceAccountSnapshot[]>,
-      prisma.importFile.findFirst({
-        where: { workspaceId: selectedWorkspaceId },
-        orderBy: { uploadedAt: "desc" },
-        select: {
-          fileName: true,
-          status: true,
-          uploadedAt: true,
-        },
-      }),
-      prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "processing" } }),
-      prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "done" } }),
-      prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "failed" } }),
-      prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "deleted" } }),
+          })
+        : Promise.resolve([] as Array<{ date: Date; amount: unknown; type: "income" | "expense" | "transfer" }>)),
+      (needsSpendingData || needsTrendData || needsAdvancedData
+        ? prisma.transaction.findMany({
+            where: {
+              workspaceId: selectedWorkspaceId,
+              isExcluded: false,
+              date: { gte: currentWindowStart },
+            },
+            select: {
+              id: true,
+              date: true,
+              amount: true,
+              type: true,
+              merchantRaw: true,
+              merchantClean: true,
+              account: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+            orderBy: { date: "desc" },
+            take: 250,
+          })
+        : Promise.resolve([] as Array<ReportTransaction>)),
+      needsAdvancedData
+        ? prisma.transaction.aggregate({
+            where: {
+              workspaceId: selectedWorkspaceId,
+              isExcluded: false,
+              importFileId: { not: null },
+            },
+            _count: { id: true },
+            _sum: { amount: true },
+          })
+        : Promise.resolve({ _count: { id: 0 }, _sum: { amount: 0 } }),
+      needsAdvancedData
+        ? prisma.transaction.aggregate({
+            where: {
+              workspaceId: selectedWorkspaceId,
+              isExcluded: false,
+              importFileId: null,
+            },
+            _count: { id: true },
+            _sum: { amount: true },
+          })
+        : Promise.resolve({ _count: { id: 0 }, _sum: { amount: 0 } }),
+      needsAdvancedData
+        ? prisma.account.aggregate({
+            where: {
+              workspaceId: selectedWorkspaceId,
+            },
+            _sum: { balance: true },
+            _count: { id: true, balance: true },
+          })
+        : Promise.resolve({ _sum: { balance: 0 }, _count: { id: 0, balance: 0 } }),
+      needsAdvancedData
+        ? (prisma.account.findMany({
+            where: {
+              workspaceId: selectedWorkspaceId,
+            },
+            select: {
+              id: true,
+              name: true,
+              balance: true,
+              currency: true,
+              type: true,
+            },
+            orderBy: [{ balance: "desc" }, { updatedAt: "desc" }],
+            take: 5,
+          }) as Promise<WorkspaceAccountSnapshot[]>)
+        : Promise.resolve([] as WorkspaceAccountSnapshot[]),
+      needsAdvancedData
+        ? prisma.importFile.findFirst({
+            where: { workspaceId: selectedWorkspaceId },
+            orderBy: { uploadedAt: "desc" },
+            select: {
+              fileName: true,
+              status: true,
+              uploadedAt: true,
+            },
+          })
+        : Promise.resolve(null),
+      needsAdvancedData ? prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "processing" } }) : Promise.resolve(0),
+      needsAdvancedData ? prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "done" } }) : Promise.resolve(0),
+      needsAdvancedData ? prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "failed" } }) : Promise.resolve(0),
+      needsAdvancedData ? prisma.importFile.count({ where: { workspaceId: selectedWorkspaceId, status: "deleted" } }) : Promise.resolve(0),
     ]);
 
     const importStatusCounts = {
@@ -1258,36 +1277,93 @@ async function ReportsStream({
         </div>
 
         {selectedSection === "overview" ? (
-          <section className="reports-summary-grid reports-summary-grid--highlights reports-overview-grid">
-          <article className="metric compact metric--highlight glass">
-            <div className="metric__label">
-              <span>Income</span>
-              <ReportInfoTip label="All money coming in during the selected range." />
-            </div>
-            <strong>{formatCurrency(currentSummary.income)}</strong>
-          </article>
-          <article className="metric compact metric--highlight glass">
-            <div className="metric__label">
-              <span>Expenses</span>
-              <ReportInfoTip label="All spending recorded in the selected range." />
-            </div>
-            <strong>{formatCurrency(currentSummary.expense)}</strong>
-          </article>
-          <article className="metric compact metric--highlight glass">
-            <div className="metric__label">
-              <span>Net income</span>
-              <ReportInfoTip label="Income minus spending for the selected range." />
-            </div>
-            <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
-          </article>
-          <article className="metric compact metric--highlight glass">
-            <div className="metric__label">
-              <span>Savings rate</span>
-              <ReportInfoTip label="The share of income left after spending." />
-            </div>
-            <strong>{savingsRate === null ? "N/A" : formatPercent(savingsRate * 100)}</strong>
-          </article>
-          </section>
+          <>
+            <section className="reports-summary-grid reports-summary-grid--highlights reports-overview-grid">
+              <article className="metric compact metric--highlight glass">
+                <div className="metric__label">
+                  <span>Income</span>
+                  <ReportInfoTip label="All money coming in during the selected range." />
+                </div>
+                <strong>{formatCurrency(currentSummary.income)}</strong>
+              </article>
+              <article className="metric compact metric--highlight glass">
+                <div className="metric__label">
+                  <span>Expenses</span>
+                  <ReportInfoTip label="All spending recorded in the selected range." />
+                </div>
+                <strong>{formatCurrency(currentSummary.expense)}</strong>
+              </article>
+              <article className="metric compact metric--highlight glass">
+                <div className="metric__label">
+                  <span>Net income</span>
+                  <ReportInfoTip label="Income minus spending for the selected range." />
+                </div>
+                <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
+              </article>
+              <article className="metric compact metric--highlight glass">
+                <div className="metric__label">
+                  <span>Savings rate</span>
+                  <ReportInfoTip label="The share of income left after spending." />
+                </div>
+                <strong>{savingsRate === null ? "N/A" : formatPercent(savingsRate * 100)}</strong>
+              </article>
+            </section>
+
+            <section className="reports-grid reports-grid--primary reports-overview-visual">
+              <article className="report-card glass report-card--wide">
+                <div className="report-card__head">
+                  <div className="report-card__head-title">
+                    <h4>Cash flow trend</h4>
+                    <ReportInfoTip label="A six-month line showing how net cash flow moved over time." />
+                  </div>
+                  <div className="report-card__stat">
+                    <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
+                    <span>{selectedRangeLabel}</span>
+                  </div>
+                </div>
+
+                <div className="report-chart report-chart--overview">
+                  <svg className="report-chart__svg" viewBox={`0 0 ${reportChartWidth} ${reportChartHeight}`} role="img" aria-label="Cash flow trend chart">
+                    <defs>
+                      <linearGradient id="reportCashFlowFill" x1="0" x2="0" y1="0" y2="1">
+                        <stop offset="0%" stopColor="rgba(3, 168, 192, 0.22)" />
+                        <stop offset="100%" stopColor="rgba(3, 168, 192, 0.03)" />
+                      </linearGradient>
+                    </defs>
+                    <g aria-hidden="true">
+                      {[0.25, 0.5, 0.75].map((fraction) => {
+                        const y = reportChartPadding + reportChartYSpan * fraction;
+                        return <line key={fraction} x1={reportChartPadding} y1={y} x2={reportChartWidth - reportChartPadding} y2={y} className="report-chart__gridline" />;
+                      })}
+                      <path
+                        d={`${reportCashFlowPath} L ${reportChartWidth - reportChartPadding} ${reportChartHeight - reportChartPadding} L ${reportChartPadding} ${reportChartHeight - reportChartPadding} Z`}
+                        className="report-chart__area"
+                      />
+                      <path d={reportCashFlowPath} className={`report-chart__line ${currentNet >= 0 ? "report-chart__line--positive" : "report-chart__line--negative"}`} />
+                      {reportCashFlowPoints.map((point) => (
+                        <circle
+                          key={point.key}
+                          cx={point.x}
+                          cy={point.y}
+                          r="4"
+                          className="report-chart__point"
+                          style={{ stroke: currentNet >= 0 ? "var(--good)" : "#f97316" }}
+                        />
+                      ))}
+                    </g>
+                  </svg>
+                  <div className="report-chart__labels report-chart__labels--six">
+                    {reportCashFlowPoints.map((bucket) => (
+                      <div key={bucket.key} className="report-chart__label">
+                        <span>{bucket.label}</span>
+                        <strong className={bucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(bucket.net)}</strong>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </article>
+            </section>
+          </>
         ) : null}
 
         {isPro && selectedSection === "advanced" ? (

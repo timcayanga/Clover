@@ -4455,10 +4455,53 @@ label {
   display: block;
 }
 
+.report-chart--overview {
+  gap: 12px;
+}
+
+.report-chart__gridline {
+  stroke: rgba(148, 163, 184, 0.18);
+  stroke-width: 1;
+  stroke-dasharray: 4 8;
+}
+
+.report-chart__area {
+  fill: url(#reportCashFlowFill);
+}
+
+.report-chart__line {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.report-chart__line--positive {
+  stroke: var(--good);
+}
+
+.report-chart__line--negative {
+  stroke: #f97316;
+}
+
+.report-chart__point {
+  fill: var(--surface);
+  stroke-width: 4;
+}
+
+.report-chart__line--positive + .report-chart__point,
+.report-chart__line--negative + .report-chart__point {
+  stroke: currentColor;
+}
+
 .report-chart__labels {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+}
+
+.report-chart__labels--six {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
 }
 
 .report-chart__label {
@@ -4480,6 +4523,10 @@ label {
 .report-chart__label strong {
   font-size: 14px;
   letter-spacing: -0.02em;
+}
+
+.reports-overview-visual {
+  margin-top: 2px;
 }
 
 .report-flow-map {
