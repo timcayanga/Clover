@@ -79,12 +79,21 @@ type WorkspaceAccount = {
   investmentMaturityValue: number | null;
 };
 
+type InsightsTab = "summary" | "spending" | "patterns" | "investments";
+
 const goalLabels: Record<string, string> = {
   save_more: "Save more",
   pay_down_debt: "Pay down debt",
   track_spending: "Track spending",
   build_emergency_fund: "Build an emergency fund",
   invest_better: "Invest better",
+};
+
+const insightsTabLabels: Record<InsightsTab, string> = {
+  summary: "Summary",
+  spending: "Spending",
+  patterns: "Patterns",
+  investments: "Investments",
 };
 
 const formatCurrency = (value: number) => currencyFormatter.format(value);
@@ -95,6 +104,21 @@ const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
 const normalizeMerchant = (value: string) => value.trim().toLowerCase();
 const buildTransactionsHref = (params: Record<string, string>) => `/transactions?${new URLSearchParams(params).toString()}`;
+
+function InsightTip({ label }: { label: string }) {
+  return (
+    <span className="report-tip" title={label} aria-label={label}>
+      i
+    </span>
+  );
+}
+
+const normalizeInsightsTab = (value: string | undefined): InsightsTab => {
+  if (value === "spending" || value === "patterns" || value === "investments") {
+    return value;
+  }
+  return "summary";
+};
 
 const getCategoryGlyph = (categoryName: string) => {
   const normalized = categoryName.trim().toLowerCase();
@@ -144,8 +168,13 @@ const getMonthBuckets = (anchor: Date) => {
   return buckets;
 };
 
-async function InsightsPageStream() {
+async function InsightsPageStream({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string }>;
+}) {
   const now = new Date();
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   let currentWindowTransactionsRaw: InsightTransaction[] = [];
   let previousWindowTransactionsRaw: InsightTransaction[] = [];
   let ninetyDayTransactions: InsightTransaction[] = [];
@@ -328,6 +357,9 @@ async function InsightsPageStream() {
   const sixMonthInsightTransactions = sixMonthTransactions as InsightTransaction[];
   const selectedGoal = selectedGoalValue;
   const isPro = user.planTier === "pro";
+  const requestedTab = normalizeInsightsTab(resolvedSearchParams?.tab);
+  const availableTabs: InsightsTab[] = isPro ? ["summary", "spending", "patterns", "investments"] : ["summary", "spending", "patterns"];
+  const selectedTab: InsightsTab = availableTabs.includes(requestedTab) ? requestedTab : "summary";
   const isEmptyWorkspace = workspaceAccounts.length <= 1 && workspaceImportFiles.length === 0 && currentWindowTransactions.length === 0;
 
   const currentSummary = currentWindowTransactions.reduce(
@@ -660,19 +692,20 @@ async function InsightsPageStream() {
         ]
           .filter((line): line is string => line !== null)
           .join(" ");
-  const aiSummaryWithInvestments = investmentSummaryLine ? `${aiSummary} ${investmentSummaryLine}` : aiSummary;
   const primarySnapshotItems: Array<{
     label: string;
     value: string;
     note: string;
     tone: "positive" | "negative" | "neutral";
     suffix?: string;
+    hint: string;
   }> = [
     {
       label: "Net position",
       value: formatSignedCurrency(currentNet),
       note: currentNet >= previousNet ? "Up vs prior period" : "Down vs prior period",
       tone: currentNet >= 0 ? "positive" : "negative",
+      hint: "Net position is income minus expenses for the selected window.",
     },
     {
       label: "Savings rate",
@@ -682,12 +715,14 @@ async function InsightsPageStream() {
           ? `${goalProgress.bandLabel} · ${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}${goalPlanSummary?.subtitle ? ` · ${goalPlanSummary.subtitle}` : ""}`
           : goalLabel ?? "No primary goal set yet",
       tone: currentSavingsRate !== null && currentSavingsRate >= 0.2 ? "positive" : "neutral",
+      hint: "Savings rate is the share of income left after spending.",
     },
     {
       label: "Top driver",
       value: headlineDriver,
       note: `${formatCurrency(headlineDriverAmount)}${headlineDriverShare === null ? "" : ` · ${formatPercent(headlineDriverShare)}`}`,
       tone: "neutral",
+      hint: "Top driver is the category contributing the most to this month's spending.",
     },
   ];
 
@@ -800,7 +835,12 @@ async function InsightsPageStream() {
   const visibleRecurringInsightCards = isPro ? recurringInsightCards : recurringInsightCards.slice(0, 2);
   const visibleBehaviorInsightCards = isPro ? behaviorInsightCards : behaviorInsightCards.slice(0, 2);
 
-  const showInvestmentSection = isPro && investmentAccounts.length > 0;
+  const buildInsightsHref = (overrides: { tab?: InsightsTab } = {}) => {
+    const params = new URLSearchParams({
+      tab: overrides.tab ?? selectedTab,
+    });
+    return `?${params.toString()}`;
+  };
 
   const chartWidth = 520;
   const chartHeight = 150;
@@ -906,24 +946,40 @@ async function InsightsPageStream() {
         </div>
       ) : null}
       <section className="insights-story">
-        <article className="insights-snapshot insights-snapshot--hero glass">
+        <nav className="insights-tabs" aria-label="Insights sections">
+          {availableTabs.map((tab) => (
+            <Link
+              key={tab}
+              className={`insights-tab ${selectedTab === tab ? "insights-tab--active" : ""}`}
+              href={buildInsightsHref({ tab })}
+              aria-current={selectedTab === tab ? "page" : undefined}
+            >
+              {insightsTabLabels[tab]}
+            </Link>
+          ))}
+        </nav>
+
+        {selectedTab === "summary" ? (
+          <article className="insights-snapshot insights-snapshot--hero glass">
           <div className="insights-snapshot__copy">
             <h3>{aiHeadline}</h3>
-            <p>{aiSummaryWithInvestments}</p>
+            <p>{aiSummary}</p>
             <div className="insights-snapshot__summary">
               <span className={`pill ${currentNet >= 0 ? "pill-good" : "pill-danger"}`}>
                 {currentNet >= 0 ? "On track" : "Needs attention"}
               </span>
               <span>{currentWindowTransactions.length} transactions reviewed</span>
               <span>{goalLabel ?? "No primary goal set yet"}</span>
-              {showInvestmentSection ? <span>{investmentAccounts.length} investment holdings</span> : null}
             </div>
           </div>
 
           <div className="insights-snapshot__metrics" aria-label="Insights snapshot metrics">
             {primarySnapshotItems.map((item) => (
               <div key={item.label} className="insights-snapshot__metric">
-                <span>{item.label}</span>
+                <span className="insights-snapshot__metric-label">
+                  {item.label}
+                  <InsightTip label={item.hint} />
+                </span>
                 <strong className={item.tone === "positive" ? "positive" : item.tone === "negative" ? "negative" : undefined}>
                   {item.value}
                   {item.suffix ?? ""}
@@ -950,15 +1006,17 @@ async function InsightsPageStream() {
               </article>
             ))}
           </div>
-        </article>
+          </article>
+        ) : null}
 
-        {showInvestmentSection ? (
+        {selectedTab === "investments" && isPro ? (
           <article className="insight-panel glass">
             <div className="insight-panel__head">
               <div>
                 <p className="eyebrow">Investments</p>
-                <h4>Portfolio at a glance</h4>
-                <span className="insight-panel__hint">Pulled from investment accounts in this workspace.</span>
+                <h4>
+                  Portfolio at a glance <InsightTip label="This section summarizes current value, gain or loss, allocation, and upcoming maturity dates from investment accounts." />
+                </h4>
               </div>
               <div className="insight-panel__stat">
                 <strong className={investmentGainLoss >= 0 ? "positive" : "negative"}>{formatSignedCurrency(investmentGainLoss)}</strong>
@@ -1173,12 +1231,14 @@ async function InsightsPageStream() {
           </article>
         ) : null}
 
-        <article className="insight-panel insight-panel--feature glass">
+        {selectedTab === "spending" ? (
+          <article className="insight-panel insight-panel--feature glass">
           <div className="insight-panel__head">
             <div>
               <p className="eyebrow">What happened</p>
-              <h4>Cash flow momentum</h4>
-              <span className="insight-panel__hint">Tap a month to open matching transactions.</span>
+              <h4>
+                Cash flow momentum <InsightTip label="Tap a month to open matching transactions. This chart shows the last six months of net cash flow." />
+              </h4>
             </div>
             <div className="insight-panel__stat">
               <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
@@ -1236,14 +1296,17 @@ async function InsightsPageStream() {
             </div>
           </div>
 
-        </article>
+          </article>
+        ) : null}
 
-        <article className="insight-panel glass">
+        {selectedTab === "spending" ? (
+          <article className="insight-panel glass">
           <div className="insight-panel__head">
             <div>
               <p className="eyebrow">Where your money went</p>
-              <h4>Spending concentration</h4>
-              <span className="insight-panel__hint">Tap a category to open matching transactions.</span>
+              <h4>
+                Spending concentration <InsightTip label="Tap a category to open matching transactions. The donut shows how this month's spending is distributed." />
+              </h4>
             </div>
             <div className="insight-panel__stat">
               <strong>{formatPercent(trackedCategoryShare * 100)}</strong>
@@ -1326,14 +1389,17 @@ async function InsightsPageStream() {
               </div>
             </div>
           </div>
-        </article>
+          </article>
+        ) : null}
 
-        <article className="insight-panel glass">
+        {selectedTab === "patterns" ? (
+          <article className="insight-panel glass">
           <div className="insight-panel__head">
             <div>
               <p className="eyebrow">Why it happened</p>
-              <h4>What changed and why</h4>
-              <span className="insight-panel__hint">Hard data first, guidance second.</span>
+              <h4>
+                What changed and why <InsightTip label="This compares the current period with the prior period and highlights the biggest category shifts." />
+              </h4>
             </div>
             <div className="insight-panel__stat">
               <strong>{previousTopCategories[0]?.[0] ?? "No baseline"}</strong>
@@ -1360,18 +1426,15 @@ async function InsightsPageStream() {
               <div className="empty-state">No category changes surfaced yet. Clover will highlight shifts once it has enough recent activity to compare.</div>
             )}
           </div>
-        </article>
+          </article>
+        ) : null}
 
-        <article className="insight-panel glass">
+        {selectedTab === "patterns" ? (
+          <article className="insight-panel glass">
           <div className="insight-panel__head">
             <div>
               <p className="eyebrow">Patterns to watch</p>
               <h4>{isPro ? "Recurring costs and habits" : "A few patterns to watch"}</h4>
-              <span className="insight-panel__hint">
-                {isPro
-                  ? "Fixed costs, behavior signals, and data quality linked back to transactions."
-                  : "Begin with the simplest patterns that are easiest to act on."}
-              </span>
             </div>
             <div className="insight-panel__stat">
               <strong>{formatCurrency(recurringSavingsPotential)}</strong>
@@ -1428,7 +1491,8 @@ async function InsightsPageStream() {
               </div>
             </div>
           </div>
-        </article>
+          </article>
+        ) : null}
 
         {!isPro ? (
           <p className="insights-free-note">
