@@ -2081,14 +2081,10 @@ export function ImportFilesModal({
         className="modal-card modal-card--wide accounts-import-modal glass"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="import-files-title"
+        aria-label="Import files"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="modal-head">
-          <div>
-            <p className="eyebrow">Import files</p>
-            <h4 id="import-files-title">Import files</h4>
-          </div>
+        <div className="accounts-import-modal__toolbar">
           <button className="accounts-import-close" type="button" onClick={onClose} aria-label="Close import files">
             ×
           </button>

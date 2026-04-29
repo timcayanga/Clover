@@ -30,10 +30,12 @@ export const getPlanDefaultLimits = (planTier: PlanTier): UserLimits => PLAN_DEF
 
 export const getEffectiveUserLimits = (user: UserLimitsLike): UserLimits => {
   const defaults = getPlanDefaultLimits(user.planTier);
+  const monthlyUploadLimit =
+    user.monthlyUploadLimit === null ? defaults.monthlyUploadLimit : Math.max(defaults.monthlyUploadLimit, user.monthlyUploadLimit);
 
   return {
     accountLimit: user.accountLimit ?? defaults.accountLimit,
-    monthlyUploadLimit: user.monthlyUploadLimit ?? defaults.monthlyUploadLimit,
+    monthlyUploadLimit,
     transactionLimit: user.transactionLimit ?? defaults.transactionLimit,
   };
 };

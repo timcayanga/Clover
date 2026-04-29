@@ -10024,6 +10024,14 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-import-modal {
   width: min(860px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
+}
+
+.accounts-import-modal__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
 }
 
 .search-modal {
