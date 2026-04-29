@@ -16549,13 +16549,15 @@ input.transaction-inline-edit--amount::placeholder {
 
   .topbar {
     padding: 0 0 8px;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
   }
 
   .shell-compact-bar {
     display: flex;
+    align-items: center;
+    gap: 8px;
   }
 
   .shell-menu-button {
@@ -16583,22 +16585,40 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .topbar-actions {
-    justify-content: flex-start;
     align-items: center;
-    width: 100%;
+    justify-content: flex-end;
+    width: auto;
+    margin-left: auto;
     gap: 8px;
+    flex-shrink: 0;
   }
 
   .topbar-actions > * {
     width: auto;
   }
 
+  .shell-compact-bar__copy,
+  .topbar__title-wrap {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+
   .topbar__title-row {
-    gap: 6px;
+    gap: 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
   }
 
   .topbar__title-addon {
-    gap: 4px;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .topbar__title-row::-webkit-scrollbar {
+    display: none;
   }
 
   .content {
