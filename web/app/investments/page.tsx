@@ -534,10 +534,23 @@ export default function InvestmentsPage() {
   const canUseProTabs = planTier !== "free";
   const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "insights") && !canUseProTabs);
   const editingAccount = editingAccountId ? visibleInvestmentAccounts.find((account) => account.id === editingAccountId) ?? accounts.find((account) => account.id === editingAccountId) ?? null : null;
-  const topStatusMessage =
-    !loading && hasLoaded && investmentAccounts.length === 0
-      ? "Add an investment to get started."
-      : message;
+
+  const renderAddInvestmentButton = (variant: "desktop" | "mobile") => (
+    <button
+      className={`button button-primary button-small investments-page__add-button${variant === "mobile" ? " investments-page__add-button--compact" : ""}`}
+      type="button"
+      onClick={() => setAddOpen(true)}
+      disabled={!selectedWorkspaceId}
+      aria-label="Add investment"
+    >
+      <span className="button-icon" aria-hidden="true">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <path d="M10 4v12M4 10h12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+        </svg>
+      </span>
+      <span className="investments-page__add-button-label">{variant === "mobile" ? "+ Add" : "Add investment"}</span>
+    </button>
+  );
 
   const beginEditingAccount = (account: Account) => {
     setEditingAccountId(account.id);
@@ -719,32 +732,17 @@ export default function InvestmentsPage() {
   }
 
   return (
-    <CloverShell active="investments" title="Investments" showTopbar={false}>
+    <CloverShell active="investments" title="Investments" showTopbar={false} actions={renderAddInvestmentButton("mobile")}>
       <div className="accounts-page">
         <div className="investments-page__header">
           <div className="investments-page__header-copy">
             <h1>Investments</h1>
           </div>
-          <div className="investments-page__header-actions">
-            <button
-              className="button button-primary button-small investments-page__add-button"
-              type="button"
-              onClick={() => setAddOpen(true)}
-              disabled={!selectedWorkspaceId}
-              aria-label="Add investment"
-            >
-              <span className="button-icon" aria-hidden="true">
-                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                  <path d="M10 4v12M4 10h12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-                </svg>
-              </span>
-              <span className="investments-page__add-button-label">Add investment</span>
-            </button>
-          </div>
+          <div className="investments-page__header-actions">{renderAddInvestmentButton("desktop")}</div>
         </div>
 
         {loading ? <p className="panel-muted">Loading investments...</p> : null}
-        {!loading && topStatusMessage ? <p className="panel-muted">{topStatusMessage}</p> : null}
+        {!loading && message ? <p className="panel-muted">{message}</p> : null}
 
         <nav className="investments-tabs" aria-label="Investment sections">
           {INVESTMENT_TABS.map((tab) => {

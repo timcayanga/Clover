@@ -11432,19 +11432,18 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .investments-page__header-actions {
-    flex-wrap: nowrap;
-    margin-left: auto;
+    display: none;
   }
 
-  .investments-page__add-button {
-    width: 40px;
-    min-width: 40px;
-    padding: 0;
+  .investments-page__add-button--compact {
+    width: auto;
+    min-width: 0;
+    padding-inline: 12px;
     justify-content: center;
   }
 
-  .investments-page__add-button-label {
-    display: none;
+  .investments-page__add-button--compact .investments-page__add-button-label {
+    display: inline;
   }
 
   .investments-tabs {
@@ -11718,7 +11717,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .investments-insights-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
