@@ -24,6 +24,7 @@ import {
 } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { getAccountBrand } from "@/lib/account-brand";
+import { guessCategoryFallback } from "@/lib/data-engine";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
@@ -305,6 +306,9 @@ const createEmptyManualForm = (accountId = "", categoryId = ""): ManualTransacti
 
 const getOtherCategoryId = (categoryList: Category[]) =>
   categoryList.find((category) => category.name.trim().toLowerCase() === "other")?.id ?? "";
+
+const getCategoryIdByName = (categoryList: Category[], categoryName: string) =>
+  categoryList.find((category) => category.name.trim().toLowerCase() === categoryName.trim().toLowerCase())?.id ?? "";
 
 const normalizeCategoryName = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
 
@@ -2599,6 +2603,26 @@ function TransactionsPageContent() {
       return;
     }
 
+    const immediateSuggestionCategoryName = guessCategoryFallback(
+      merchantText,
+      manualForm.type === "credit" ? "income" : "expense"
+    );
+    const immediateSuggestionCategoryId = immediateSuggestionCategoryName
+      ? getCategoryIdByName(categories, immediateSuggestionCategoryName)
+      : "";
+
+    if (
+      immediateSuggestionCategoryId &&
+      !manualCategoryTouched &&
+      (manualCategoryAutoApplied || !manualForm.categoryId || manualForm.categoryId === otherCategoryId)
+    ) {
+      setManualCategoryAutoApplied(true);
+      setManualForm((current) => ({
+        ...current,
+        categoryId: immediateSuggestionCategoryId,
+      }));
+    }
+
     const requestId = manualCategorySuggestionRequestRef.current + 1;
     manualCategorySuggestionRequestRef.current = requestId;
     const controller = new AbortController();
@@ -2636,6 +2660,7 @@ function TransactionsPageContent() {
       window.clearTimeout(timer);
     };
   }, [
+    categories,
     fetchCategorySuggestion,
     manualCategoryAutoApplied,
     manualCategoryTouched,
@@ -2704,6 +2729,21 @@ function TransactionsPageContent() {
       const accountId = manualForm.accountId || (await ensureDefaultAccount(activeWorkspaceId));
       const merchantText = manualForm.merchantRaw.trim();
       let categoryId = manualForm.categoryId || getOtherCategoryId(categories) || undefined;
+
+      if ((!categoryId || categoryId === getOtherCategoryId(categories)) && merchantText.length >= 2) {
+        const immediateSuggestionCategoryName = guessCategoryFallback(
+          merchantText,
+          manualForm.type === "credit" ? "income" : "expense"
+        );
+        const immediateSuggestionCategoryId = immediateSuggestionCategoryName
+          ? getCategoryIdByName(categories, immediateSuggestionCategoryName)
+          : "";
+
+        if (immediateSuggestionCategoryId) {
+          categoryId = immediateSuggestionCategoryId;
+          setManualForm((current) => ({ ...current, categoryId: immediateSuggestionCategoryId }));
+        }
+      }
 
       if ((!categoryId || categoryId === getOtherCategoryId(categories)) && merchantText.length >= 2) {
         const suggestion =
@@ -3010,6 +3050,19 @@ function TransactionsPageContent() {
     syncAfterTransactionRemoval(transactionId);
   };
 
+  const refreshTransactionsSummary = () => {
+    if (!selectedWorkspaceId) {
+      return;
+    }
+
+    void loadTransactionsPage(selectedWorkspaceId, {
+      background: true,
+      pageOverride: transactionsPage,
+      pageSizeOverride: transactionsPageSize,
+      summaryMode: "full",
+    });
+  };
+
   const confirmDeleteTransaction = async () => {
     if (!selectedTransaction) {
       return;
@@ -3018,6 +3071,7 @@ function TransactionsPageContent() {
     setIsSaving(true);
     try {
       await deleteTransaction(selectedTransaction.id);
+      refreshTransactionsSummary();
       setTransactionDeleteConfirmOpen(false);
       closeTransactionDetail();
       setMessage("Transaction deleted.");
@@ -3353,6 +3407,7 @@ function TransactionsPageContent() {
     setIsSaving(true);
     try {
       await Promise.all(selectedTransactionIds.map((transactionId) => deleteTransaction(transactionId)));
+      refreshTransactionsSummary();
       clearSelection();
       setBulkDeleteConfirmOpen(false);
       setUndoStack([]);

@@ -198,6 +198,7 @@ const buildMerchantFilters = (merchantFilters: string[]) =>
 export const buildTransactionQueryWhere = (workspaceId: string, filters: TransactionQueryFilters): Prisma.TransactionWhereInput => {
   const where: Prisma.TransactionWhereInput = {
     workspaceId,
+    deletedAt: null,
   };
 
   const query = filters.query?.trim();
