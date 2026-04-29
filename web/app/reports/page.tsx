@@ -1237,32 +1237,47 @@ async function ReportsStream({
           </div>
         ) : null}
 
-        <div className="reports-range-menu">
-          <details>
-            <summary className="reports-range-menu__summary" aria-label={`Change report range. Current range: ${selectedRangeLabel}`}>
-              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1.5A2.5 2.5 0 0 1 22 6.5v12A2.5 2.5 0 0 1 19.5 21h-15A2.5 2.5 0 0 1 2 18.5v-12A2.5 2.5 0 0 1 4.5 4H6V3a1 1 0 0 1 1-1Zm12.5 8h-15v8.5c0 .276.224.5.5.5h14a.5.5 0 0 0 .5-.5V10Zm-14-4A.5.5 0 0 0 5 8.5V8h14v.5a.5.5 0 0 0-.5-.5h-14Z" />
-              </svg>
-              <span className="sr-only">Change report range</span>
-            </summary>
-            <div className="reports-range-menu__panel glass">
-              <p className="reports-range-menu__label">Showing {selectedRangeLabel}</p>
-              <small>
-                {comparisonCopy} · {latestImportSummary ? "Fresh data available" : "No recent refresh yet"}
-              </small>
-              <div className="reports-range-menu__choices" role="menu" aria-label="Report range">
-                {(["30d", "90d", "ytd"] as const).map((range) => (
-                  <Link
-                    key={range}
-                    className={`pill pill-interactive ${selectedRange === range ? "pill-is-selected" : ""}`}
-                    href={buildReportsHref({ range }, selectedRange, selectedSection)}
-                  >
-                    {reportsRangeLabels[range]}
-                  </Link>
-                ))}
+        <div className="reports-toolbar glass">
+          <nav className="reports-tabs" aria-label="Report sections">
+            {sectionTabs.map((section) => (
+              <Link
+                key={section}
+                className={`reports-tab ${selectedSection === section ? "reports-tab--active" : ""}`}
+                href={buildReportsHref({ section }, selectedRange, selectedSection)}
+                aria-current={selectedSection === section ? "page" : undefined}
+              >
+                {reportsSectionLabels[section]}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="reports-range-menu">
+            <details>
+              <summary className="reports-range-menu__summary" aria-label={`Change report range. Current range: ${selectedRangeLabel}`}>
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1.5A2.5 2.5 0 0 1 22 6.5v12A2.5 2.5 0 0 1 19.5 21h-15A2.5 2.5 0 0 1 2 18.5v-12A2.5 2.5 0 0 1 4.5 4H6V3a1 1 0 0 1 1-1Zm12.5 8h-15v8.5c0 .276.224.5.5.5h14a.5.5 0 0 0 .5-.5V10Zm-14-4A.5.5 0 0 0 5 8.5V8h14v.5a.5.5 0 0 0-.5-.5h-14Z" />
+                </svg>
+                <span className="sr-only">Change report range</span>
+              </summary>
+              <div className="reports-range-menu__panel glass">
+                <p className="reports-range-menu__label">Showing {selectedRangeLabel}</p>
+                <small>
+                  {comparisonCopy} · {latestImportSummary ? "Fresh data available" : "No recent refresh yet"}
+                </small>
+                <div className="reports-range-menu__choices" role="menu" aria-label="Report range">
+                  {(["30d", "90d", "ytd"] as const).map((range) => (
+                    <Link
+                      key={range}
+                      className={`pill pill-interactive ${selectedRange === range ? "pill-is-selected" : ""}`}
+                      href={buildReportsHref({ range }, selectedRange, selectedSection)}
+                    >
+                      {reportsRangeLabels[range]}
+                    </Link>
+                  ))}
+                </div>
               </div>
-            </div>
-          </details>
+            </details>
+          </div>
         </div>
 
         {selectedSection === "overview" ? (
@@ -1803,27 +1818,11 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
   const requestedSection = normalizeReportsSection(resolvedSearchParams?.section);
   const isPro = user.planTier === "pro";
   const selectedSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
-  const sectionTabs: ReportsSection[] = isPro ? ["overview", "spending", "trends", "advanced"] : ["overview", "spending", "trends"];
-  const titleAddon = (
-    <nav className="reports-tabs" aria-label="Report sections">
-      {sectionTabs.map((section) => (
-        <Link
-          key={section}
-          className={`reports-tab ${selectedSection === section ? "reports-tab--active" : ""}`}
-          href={buildReportsHref({ section }, selectedRange, selectedSection)}
-          aria-current={selectedSection === section ? "page" : undefined}
-        >
-          {reportsSectionLabels[section]}
-        </Link>
-      ))}
-    </nav>
-  );
 
   return (
     <CloverShell
       active="reports"
       title="Reports"
-      titleAddon={titleAddon}
       actions={
         <div className="reports-shell-actions">
           <Link className="pill-link" href="/transactions">
