@@ -11243,47 +11243,10 @@ input.transaction-inline-edit--amount::placeholder {
   border-radius: 999px;
 }
 
-.accounts-search {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 30px;
-  width: 160px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.92);
-  color: var(--muted);
-}
-
-.accounts-search input {
-  border: 0;
-  background: transparent;
-  width: 100%;
-  min-width: 0;
-  color: var(--text);
-  font: inherit;
-  font-size: 11px;
-  line-height: 1;
-}
-
-.accounts-search input:focus {
-  outline: none;
-}
-
-.accounts-search .button-icon,
-.accounts-search svg {
-  color: var(--muted);
-}
-
 .accounts-list-controls .button.button-secondary.is-active {
   border-color: rgba(3, 168, 192, 0.22);
   background: rgba(3, 168, 192, 0.08);
   color: var(--accent);
-}
-
-.accounts-toolbar-filters {
-  position: relative;
 }
 
 .accounts-toolbar-button {
@@ -16600,15 +16563,6 @@ input.transaction-inline-edit--amount::placeholder {
     width: 100%;
   }
 
-  .accounts-search {
-    width: 100%;
-  }
-
-  .accounts-search input {
-    min-width: 0;
-    width: 100%;
-  }
-
   .accounts-card-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
@@ -19278,7 +19232,7 @@ input.transaction-inline-edit--amount::placeholder {
 
   .landing-nav__mobile {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: 44px minmax(0, 1fr) auto;
     align-items: center;
     column-gap: 8px;
     width: 100%;
@@ -19289,8 +19243,8 @@ input.transaction-inline-edit--amount::placeholder {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
     padding: 0;
     border: 1px solid rgba(15, 23, 42, 0.08);
     border-radius: 14px;
@@ -19299,6 +19253,8 @@ input.transaction-inline-edit--amount::placeholder {
     box-shadow: var(--shadow-soft);
     position: relative;
     z-index: 2;
+    touch-action: manipulation;
+    flex-shrink: 0;
   }
 
   .landing-nav__mobile-bars {
@@ -19323,6 +19279,7 @@ input.transaction-inline-edit--amount::placeholder {
     white-space: nowrap;
     position: relative;
     z-index: 1;
+    min-width: 0;
   }
 
   .landing-brand--mobile .landing-brand__mark {
