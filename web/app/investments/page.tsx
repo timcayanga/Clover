@@ -741,39 +741,41 @@ export default function InvestmentsPage() {
         {loading ? <p className="panel-muted">Loading investments...</p> : null}
         {!loading && message ? <p className="panel-muted">{message}</p> : null}
 
-        <nav className="investments-tabs" aria-label="Investment sections">
-          {INVESTMENT_TABS.map((tab) => {
-            const isLocked = Boolean(tab.proOnly && !canUseProTabs);
-            const isActive = selectedTab === tab.key;
+        <div className="investments-tabs-shell section-tabs-shell">
+          <nav className="investments-tabs" aria-label="Investment sections">
+            {INVESTMENT_TABS.map((tab) => {
+              const isLocked = Boolean(tab.proOnly && !canUseProTabs);
+              const isActive = selectedTab === tab.key;
 
-            if (isLocked) {
+              if (isLocked) {
+                return (
+                  <button
+                    key={tab.key}
+                    className={`investments-tab ${isActive ? "is-active" : ""} is-locked`}
+                    type="button"
+                    disabled
+                    aria-current={isActive ? "page" : undefined}
+                    aria-label={`${tab.label}, Pro only`}
+                  >
+                    <span>{tab.label}</span>
+                    <span className="investments-tab__badge">Pro</span>
+                  </button>
+                );
+              }
+
               return (
-                <button
+                <Link
                   key={tab.key}
-                  className={`investments-tab ${isActive ? "is-active" : ""} is-locked`}
-                  type="button"
-                  disabled
+                  className={`investments-tab ${isActive ? "is-active" : ""}`}
+                  href={buildInvestmentsHref(tab.key)}
                   aria-current={isActive ? "page" : undefined}
-                  aria-label={`${tab.label}, Pro only`}
                 >
                   <span>{tab.label}</span>
-                  <span className="investments-tab__badge">Pro</span>
-                </button>
+                </Link>
               );
-            }
-
-            return (
-              <Link
-                key={tab.key}
-                className={`investments-tab ${isActive ? "is-active" : ""}`}
-                href={buildInvestmentsHref(tab.key)}
-                aria-current={isActive ? "page" : undefined}
-              >
-                <span>{tab.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
+            })}
+          </nav>
+        </div>
 
         {!canAccessSelectedTab ? (
           <section className="investments-pro-gate glass">

@@ -230,9 +230,9 @@ const createGoalChart = (buckets: MonthBucket[]) => {
 async function GoalsPageStream({
   searchParams,
 }: {
-  searchParams?: {
+  searchParams?: Promise<{
     section?: string;
-  };
+  }>;
 }) {
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
@@ -243,7 +243,8 @@ async function GoalsPageStream({
   const planLimits = getEffectiveUserLimits(user);
   const isPro = user.planTier === "pro";
   const availableSections: GoalsSection[] = isPro ? ["overview", "progress", "drivers", "history"] : ["overview", "progress", "history"];
-  const requestedSection = normalizeGoalsSection(searchParams?.section);
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const requestedSection = normalizeGoalsSection(resolvedSearchParams?.section);
   const selectedSection = requestedSection && availableSections.includes(requestedSection) ? requestedSection : "overview";
 
   const cookieStore = await cookies();
@@ -1325,11 +1326,7 @@ async function GoalsPageStream({
         </div>
       ) : null}
 
-      <div className="goals-tabs-shell">
-        <div className="goals-tabs-shell__head">
-          <p className="eyebrow">Sections</p>
-          <span>Jump between the clean summary, the progress view, the deeper drivers, and your history.</span>
-        </div>
+      <div className="goals-tabs-shell section-tabs-shell">
         <nav className="reports-tabs goals-tabs goals-tabs--top" aria-label="Goal sections">
           {availableSections.map((section) => (
             <Link
@@ -2095,9 +2092,9 @@ async function GoalsPageStream({
 export default function GoalsPage({
   searchParams,
 }: {
-  searchParams?: {
+  searchParams?: Promise<{
     section?: string;
-  };
+  }>;
 }) {
   return (
     <Suspense fallback={<CloverLoadingScreen label="goals" />}>

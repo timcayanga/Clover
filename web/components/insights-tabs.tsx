@@ -23,19 +23,21 @@ export function InsightsTabs({ initialTab, labels, summary, spending, patterns }
 
   return (
     <>
-      <nav className="insights-tabs" aria-label="Insights sections">
-        {(Object.keys(labels) as InsightsTab[]).map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            className={`insights-tab ${selectedTab === tab ? "insights-tab--active" : ""}`}
-            aria-pressed={selectedTab === tab}
-            onClick={() => setSelectedTab(tab)}
-          >
-            {labels[tab]}
-          </button>
-        ))}
-      </nav>
+      <div className="insights-tabs-shell section-tabs-shell">
+        <nav className="insights-tabs" aria-label="Insights sections">
+          {(Object.keys(labels) as InsightsTab[]).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              className={`insights-tab ${selectedTab === tab ? "insights-tab--active" : ""}`}
+              aria-pressed={selectedTab === tab}
+              onClick={() => setSelectedTab(tab)}
+            >
+              {labels[tab]}
+            </button>
+          ))}
+        </nav>
+      </div>
 
       {panels[selectedTab]}
     </>

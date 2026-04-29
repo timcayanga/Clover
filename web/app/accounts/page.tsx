@@ -87,7 +87,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     id: optimisticAccountId,
     name: summary.accountName,
     institution: summary.institution,
-    accountNumber: summary.accountNumber ?? null,
+    accountNumber: null,
     investmentSubtype: null,
     investmentSymbol: null,
     investmentQuantity: null,
