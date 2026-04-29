@@ -2585,9 +2585,8 @@ function TransactionsPageContent() {
           if (
             suggestion &&
             !manualCategoryTouched &&
-            (manualCategoryAutoApplied || !manualForm.categoryId) &&
-            suggestion.categoryId &&
-            suggestion.confidence >= 60
+            (manualCategoryAutoApplied || !manualForm.categoryId || manualForm.categoryId === otherCategoryId) &&
+            suggestion.categoryId
           ) {
             setManualCategoryAutoApplied(true);
             setManualForm((current) => ({
@@ -2615,6 +2614,7 @@ function TransactionsPageContent() {
     manualForm.merchantRaw,
     manualForm.type,
     manualOpen,
+    otherCategoryId,
     selectedWorkspaceId,
   ]);
 
@@ -2699,10 +2699,17 @@ function TransactionsPageContent() {
 
       const payload = await response.json();
       const created = payload.transaction as Transaction;
+      setTransactionsPage(1);
       setTransactions((current) => [created, ...current]);
       setUndoStack([]);
       setRedoStack([]);
       setManualOpen(false);
+      void loadTransactionsPage(selectedWorkspaceId, {
+        background: true,
+        pageOverride: 1,
+        pageSizeOverride: transactionsPageSize,
+        summaryMode: "full",
+      });
       setMessage(`Transaction "${created.merchantRaw}" added.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to create transaction.");
@@ -5334,21 +5341,6 @@ function TransactionsPageContent() {
                         </div>
                       ) : null}
                     </div>
-                    {manualCategorySuggestion ? (
-                      <CategorySuggestionChip
-                        suggestion={manualCategorySuggestion}
-                        applied={manualForm.categoryId === manualCategorySuggestion.categoryId}
-                        onApply={
-                          manualForm.categoryId === manualCategorySuggestion.categoryId
-                            ? undefined
-                            : () => {
-                                setManualCategoryTouched(true);
-                                setManualCategoryAutoApplied(false);
-                                setManualForm((current) => ({ ...current, categoryId: manualCategorySuggestion.categoryId }));
-                              }
-                        }
-                      />
-                    ) : null}
                   </div>
                 </div>
 
