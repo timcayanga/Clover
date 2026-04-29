@@ -8719,10 +8719,11 @@ label {
 }
 
 .transactions-toolbar-row--single {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: nowrap;
   width: 100%;
 }
 
@@ -8750,12 +8751,14 @@ label {
 
 .transactions-toolbar-row--single .transactions-toolbar-group--left {
   flex: 0 0 auto;
+  display: flex;
 }
 
 .transactions-toolbar-row--single .transactions-toolbar-group--right {
-  justify-self: end;
-  width: 100%;
+  flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .transactions-toolbar-group--right {
@@ -8763,6 +8766,7 @@ label {
   justify-self: end;
   flex-wrap: nowrap;
   min-width: 0;
+  gap: 5px;
 }
 
 .transactions-toolbar-search {
@@ -8770,14 +8774,14 @@ label {
   align-items: center;
   gap: 8px;
   min-height: 30px;
-  padding: 0 10px;
+  padding: 0 9px;
   border-radius: 999px;
   border: 1px solid rgba(219, 227, 232, 0.9);
   background: rgba(255, 255, 255, 0.96);
   box-shadow: var(--shadow-soft);
-  min-width: 150px;
-  max-width: 230px;
-  flex: 0 1 230px;
+  min-width: 140px;
+  max-width: 200px;
+  flex: 0 1 200px;
 }
 
 .transactions-toolbar-search__icon {
@@ -8807,7 +8811,7 @@ label {
 .transactions-action-button {
   min-height: 30px;
   border-radius: 999px;
-  padding-inline: 10px;
+  padding-inline: 9px;
   flex: 0 0 auto;
 }
 
@@ -9676,8 +9680,8 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-footer-snapshot__metric--net {
-  border-color: rgba(3, 168, 192, 0.18);
-  background: rgba(3, 168, 192, 0.08);
+  border-color: var(--stroke);
+  background: rgba(255, 255, 255, 0.94);
 }
 
 .transactions-footer-snapshot__metric-label {
@@ -11191,36 +11195,29 @@ input.transaction-inline-edit--amount::placeholder {
     flex-wrap: nowrap;
     align-items: center;
     justify-content: space-between;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .transactions-toolbar-row--top::-webkit-scrollbar,
-  .transactions-toolbar-row--bottom::-webkit-scrollbar {
-    display: none;
   }
 
   .transactions-toolbar-group {
-    gap: 6px;
+    gap: 5px;
     flex-wrap: nowrap;
-    min-width: max-content;
+    min-width: 0;
   }
 
   .transactions-toolbar-group--right {
-    justify-content: flex-start;
-    justify-self: start;
+    justify-content: flex-end;
+    justify-self: end;
   }
 
   .transactions-action-button {
-    min-height: 34px;
-    padding-inline: 10px;
+    min-height: 30px;
+    padding-inline: 8px;
   }
 
   .transactions-page .transactions-toolbar-chip.button-secondary,
   .transactions-page .transactions-toolbar-add.button-primary {
-    width: 34px;
-    min-width: 34px;
-    padding-inline: 0;
+    width: auto;
+    min-width: auto;
+    padding-inline: 10px;
     justify-content: center;
   }
 
@@ -11231,12 +11228,12 @@ input.transaction-inline-edit--amount::placeholder {
 
   .transactions-page .transactions-toolbar-chip.button-secondary > span:not(.button-icon),
   .transactions-page .transactions-toolbar-add.button-primary > span:not(.button-icon) {
-    display: none;
+    display: inline;
   }
 
   .transactions-page .transactions-toolbar-add.button-primary .button-icon:last-child,
   .transactions-page .transactions-toolbar-chip.button-secondary .button-icon:last-child {
-    display: none;
+    display: inline-flex;
   }
 
   .transactions-empty-state__import {
@@ -16718,22 +16715,24 @@ input.transaction-inline-edit--amount::placeholder {
   .transactions-toolbar-row--top,
   .transactions-toolbar-row--bottom {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    align-items: center;
     justify-content: space-between;
   }
 
   .transactions-toolbar-group {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    min-width: 0;
   }
 
   .transactions-action-button {
-    min-height: 36px;
-    padding-inline: 12px;
-    font-size: 13px;
+    min-height: 30px;
+    padding-inline: 8px;
+    font-size: 0.72rem;
   }
 
   .transactions-action-button > span:not(.button-icon):not(.transactions-filter-count-badge) {
-    display: none;
+    display: inline;
   }
 
   .transactions-action-button .button-icon {
