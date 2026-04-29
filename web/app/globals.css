@@ -18716,11 +18716,24 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .help-section-page__image {
-  width: min(100%, 96px);
+  width: min(100%, 84px);
   height: auto;
   display: block;
   object-fit: contain;
   filter: drop-shadow(0 10px 22px rgba(15, 23, 42, 0.12));
+}
+
+.help-section-page__image-wrap {
+  width: fit-content;
+  margin: 0 auto;
+  padding: 14px;
+  border-radius: 28px;
+  border: 1px solid rgba(3, 168, 192, 0.14);
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.14), transparent 52%),
+    radial-gradient(circle at bottom right, rgba(110, 231, 183, 0.12), transparent 48%),
+    rgba(255, 255, 255, 0.82);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.08);
 }
 
 .help-section-search {
@@ -19695,10 +19708,22 @@ input.transaction-inline-edit--amount::placeholder {
     right: 10px;
   }
 
+  .landing-carousel__button--footer {
+    position: static;
+    transform: none;
+  }
+
   .landing-carousel__button span {
     font-size: 26px;
     line-height: 1;
     margin-top: -2px;
+  }
+
+  .landing-carousel__footer {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    align-items: center;
+    gap: 10px;
   }
 
   .landing-carousel__status {
@@ -19715,6 +19740,7 @@ input.transaction-inline-edit--amount::placeholder {
     align-items: center;
     justify-content: center;
     gap: 6px;
+    margin-top: -2px;
   }
 
   .landing-carousel__dots span {
@@ -19766,6 +19792,16 @@ input.transaction-inline-edit--amount::placeholder {
     gap: 8px;
     padding: 12px 0 0;
     min-height: 180px;
+  }
+
+  .landing-flow__mobile .landing-carousel__viewport {
+    margin-bottom: 2px;
+  }
+
+  .landing-flow__mobile .landing-carousel__status {
+    justify-content: center;
+    gap: 8px;
+    font-size: 11px;
   }
 
   .landing-flow__icon {
@@ -20813,7 +20849,7 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .help-section-page__image {
-    width: min(100%, 84px);
+    width: min(100%, 72px);
   }
 
   .contact-page {
