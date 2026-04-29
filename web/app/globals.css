@@ -12976,9 +12976,9 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-add-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 84px;
+  grid-template-columns: 112px minmax(0, 1fr);
   gap: 12px;
-  align-items: end;
+  align-items: stretch;
 }
 
 .accounts-add-fields {
@@ -12999,8 +12999,8 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-add-brand-tile {
   display: grid;
   place-items: center;
-  width: 84px;
-  min-height: 84px;
+  width: 112px;
+  min-height: 112px;
   padding: 10px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 20px;
@@ -13008,8 +13008,8 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-add-brand-tile .account-brand-mark {
-  width: 56px;
-  height: 56px;
+  width: 72px;
+  height: 72px;
 }
 
 .institution-autocomplete {
@@ -17202,7 +17202,8 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-add-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: 88px minmax(0, 1fr);
+    align-items: start;
   }
 
   .accounts-add-fields__row {
@@ -17210,8 +17211,13 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-add-brand-tile {
-    width: 72px;
-    min-height: 72px;
+    width: 88px;
+    min-height: 88px;
+  }
+
+  .accounts-add-brand-tile .account-brand-mark {
+    width: 56px;
+    height: 56px;
   }
 
   .institution-autocomplete__suggestions {

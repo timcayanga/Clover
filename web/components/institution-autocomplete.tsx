@@ -11,6 +11,7 @@ type InstitutionAutocompleteProps = {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  onSelectSuggestion?: (suggestion: InstitutionSuggestion) => void;
   placeholder?: string;
   variant?: InstitutionAutocompleteVariant;
   helperText?: string;
@@ -32,6 +33,7 @@ export function InstitutionAutocomplete({
   label,
   value,
   onChange,
+  onSelectSuggestion,
   placeholder,
   variant = "account",
   helperText,
@@ -74,6 +76,7 @@ export function InstitutionAutocomplete({
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => {
                       onChange(suggestion.label);
+                      onSelectSuggestion?.(suggestion);
                       setIsFocused(false);
                     }}
                   >

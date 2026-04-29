@@ -40,6 +40,7 @@ import {
   isFixedIncomeInvestmentSubtype,
   isMarketInvestmentSubtype,
 } from "@/lib/investments";
+import type { InstitutionSuggestion } from "@/lib/institution-suggestions";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 
@@ -1395,6 +1396,23 @@ function AccountsPageContent() {
     setImportOpen(true);
   };
 
+  const applyManualNameSuggestion = (suggestion: InstitutionSuggestion) => {
+    if (suggestion.category === "investment_platform") {
+      setManualType("investment");
+      setManualInstitution(suggestion.label);
+      return;
+    }
+
+    if (suggestion.category === "wallet") {
+      setManualType("wallet");
+      setManualInstitution("");
+      return;
+    }
+
+    setManualType("bank");
+    setManualInstitution("");
+  };
+
   const openAccountDrawer = (account: Account) => {
     if (deletingAccountIdsSet.has(account.id)) {
       return;
@@ -2307,15 +2325,18 @@ function AccountsPageContent() {
             <div className="accounts-add-grid">
               <form className="accounts-manual-form" onSubmit={createManualAccount}>
                 <div className="accounts-add-layout">
+                  <aside className="accounts-add-brand-tile" aria-label="Account logo preview">
+                    <AccountBrandMark accountBrand={manualAccountBrand} label={manualName || manualInstitution || "Account"} />
+                  </aside>
                   <div className="accounts-add-fields">
-                    <label className="accounts-add-fields__name">
-                      Name
-                      <input
-                        value={manualName}
-                        onChange={(event) => setManualName(event.target.value)}
-                        placeholder={manualType === "investment" ? "Example: FMETF" : "Example: BDO Savings"}
-                      />
-                    </label>
+                    <InstitutionAutocomplete
+                      label="Name"
+                      value={manualName}
+                      onChange={setManualName}
+                      onSelectSuggestion={applyManualNameSuggestion}
+                      placeholder={manualType === "investment" ? "Example: FMETF" : "Example: BDO"}
+                      variant="account"
+                    />
                     <div className="accounts-add-fields__row">
                       <label>
                         Type
@@ -2339,9 +2360,6 @@ function AccountsPageContent() {
                       </label>
                     </div>
                   </div>
-                  <aside className="accounts-add-brand-tile" aria-label="Account logo preview">
-                    <AccountBrandMark accountBrand={manualAccountBrand} label={manualName || manualInstitution || "Account"} />
-                  </aside>
                 </div>
                 {manualType === "investment" ? (
                   <InstitutionAutocomplete
