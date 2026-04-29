@@ -22,6 +22,7 @@ type AccountOption = {
   id: string;
   name: string;
   institution: string | null;
+  accountNumber?: string | null;
   type: string;
 };
 
@@ -50,6 +51,13 @@ type ImportStatus = "pending" | "needs_password" | "parsing" | "importing" | "do
 type ConfirmationState = "none" | "staged" | "confirmed";
 
 type UploadAccountType = "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other" | null;
+
+type StatementIdentity = {
+  accountName: string | null;
+  institution: string | null;
+  accountNumber: string | null;
+  accountType: UploadAccountType;
+};
 
 type QueuedFile = {
   id: string;
@@ -132,6 +140,21 @@ const fileTypeLabel = (file: File) => {
   if (lowerName.endsWith(".csv")) return "CSV";
   if (lowerName.endsWith(".tsv")) return "TSV";
   return "File";
+};
+
+const fileAnalyticsBase = (file: File, workspaceId: string) => ({
+  workspace_id: workspaceId || null,
+  file_name: file.name,
+  file_type: fileTypeLabel(file),
+  file_size_bytes: file.size,
+});
+
+const getImportErrorCode = (error: unknown) => {
+  if (error instanceof Error) {
+    return error.name && error.name !== "Error" ? error.name : error.message || "unknown_error";
+  }
+
+  return "unknown_error";
 };
 
 const isPdfImportFile = (file: File | string) =>
@@ -441,8 +464,10 @@ const resolveStatementIdentityFromMetadata = (metadata: unknown) => {
   const source = metadata as Record<string, unknown>;
   const accountName = typeof source.accountName === "string" && source.accountName.trim() ? source.accountName.trim() : null;
   const institution = typeof source.institution === "string" && source.institution.trim() ? source.institution.trim() : null;
+  const accountNumber =
+    typeof source.accountNumber === "string" && source.accountNumber.trim() ? source.accountNumber.trim() : null;
 
-  if (!accountName && !institution) {
+  if (!accountName && !institution && !accountNumber) {
     return null;
   }
 
@@ -460,6 +485,7 @@ const resolveStatementIdentityFromMetadata = (metadata: unknown) => {
   return {
     accountName,
     institution,
+    accountNumber,
     accountType,
   };
 };
@@ -709,7 +735,8 @@ export function ImportFilesModal({
   const createStatementAccount = async (
     name: string,
     institution: string | null,
-    accountType?: UploadInsightsSummary["accountType"]
+    accountType?: UploadInsightsSummary["accountType"],
+    accountNumber?: string | null
   ) => {
     const inferredType = accountType ?? inferAccountTypeFromStatement(institution, name, "bank");
     const response = await fetch("/api/accounts", {
@@ -719,6 +746,7 @@ export function ImportFilesModal({
         workspaceId,
         name,
         institution,
+        accountNumber: accountNumber?.trim() || null,
         type: inferredType,
         currency: "PHP",
         source: "upload",
@@ -764,7 +792,8 @@ export function ImportFilesModal({
     accountId: string,
     name: string,
     institution: string | null,
-    accountType?: UploadInsightsSummary["accountType"]
+    accountType?: UploadInsightsSummary["accountType"],
+    accountNumber?: string | null
   ) => {
     const normalizedName = normalizeStatementAccountName(name, institution);
     const expectedType = accountType ?? inferAccountTypeFromStatement(institution, normalizedName, "bank");
@@ -779,6 +808,10 @@ export function ImportFilesModal({
     }
     if (current.name !== normalizedName) {
       nextPayload.name = normalizedName;
+    }
+    const normalizedAccountNumber = accountNumber?.trim() || null;
+    if ((current.accountNumber ?? null) !== normalizedAccountNumber) {
+      nextPayload.accountNumber = normalizedAccountNumber;
     }
 
     if (Object.keys(nextPayload).length === 1) {
@@ -843,8 +876,9 @@ export function ImportFilesModal({
         const optimisticAccountId = guessedIdentity && canUseOptimisticGuess ? `optimistic-${crypto.randomUUID()}` : null;
         const selectedAccount = selectedAccountId ? accounts.find((account) => account.id === selectedAccountId) : null;
         capturePostHogClientEvent("file_upload_started", {
-          file_type: fileTypeLabel(file),
-          file_size_bytes: file.size,
+          ...fileAnalyticsBase(file, workspaceId),
+          selected_account_id: selectedAccount?.id ?? null,
+          selected_account_type: selectedAccount?.type ?? null,
         });
         if (selectedAccount) {
           const optimisticSummary = buildOptimisticUploadSummaryFromAccount(file.name, selectedAccount);
@@ -915,6 +949,17 @@ export function ImportFilesModal({
         feedbackMessage = "No files were added.";
       }
 
+      if (validationIssues.length > 0 || skippedTooMany > 0) {
+        capturePostHogClientEvent("import_parsed_with_warnings", {
+          workspace_id: workspaceId || null,
+          warning_count: validationIssues.length + skippedTooMany,
+          validation_issue_count: validationIssues.length,
+          skipped_count: skippedTooMany,
+          file_count: additions.length,
+          limit_type: skippedTooMany > 0 ? "upload_limit" : null,
+        });
+      }
+
       return [...current, ...additions];
     });
 
@@ -941,6 +986,7 @@ export function ImportFilesModal({
       fileName: string;
       accountName: string | null;
       institution: string | null;
+      accountNumber: string | null;
       accountType: UploadInsightsSummary["accountType"];
       optimisticAccountId: string | null;
       previewTransactions?: NonNullable<UploadInsightsSummary["previewTransactions"]>;
@@ -949,7 +995,12 @@ export function ImportFilesModal({
     const resolvedAccountId =
       accountId && !accountId.startsWith("optimistic-")
         ? accountId
-        : await ensureTargetAccountId(summaryContext.accountName, summaryContext.institution);
+        : await ensureTargetAccountId(
+            summaryContext.accountName,
+            summaryContext.institution,
+            summaryContext.accountType,
+            summaryContext.accountNumber
+          );
 
     if (!resolvedAccountId) {
       throw new Error("Unable to determine the destination account for this statement.");
@@ -996,6 +1047,9 @@ export function ImportFilesModal({
       });
         capturePostHogClientEvent("import_failed", {
           error_stage: "confirm",
+          error_code: String(payload.error ?? "unable_to_confirm"),
+          file_name: summaryContext.fileName,
+          workspace_id: workspaceId || null,
         });
         return { status: "error", importedRows: null, summary: null };
       }
@@ -1041,14 +1095,13 @@ export function ImportFilesModal({
         progressLabel: "Done",
       });
       capturePostHogClientEvent("import_confirmed", {
+        workspace_id: workspaceId || null,
+        file_name: summaryContext.fileName,
         file_type: summaryContext.fileName.split(".").pop()?.toUpperCase() ?? "FILE",
         transaction_count: importedRows,
         institution: summaryContext.institution ?? null,
-      });
-      capturePostHogClientEvent("transaction_imported", {
-        transaction_count: importedRows,
-        income_total: summary?.incomeTotal ?? 0,
-        expense_total: summary?.expenseTotal ?? 0,
+        amount_total: summary ? summary.incomeTotal + summary.expenseTotal : null,
+        currency: "PHP",
       });
       return { status: "done", importedRows, summary };
     } finally {
@@ -1065,6 +1118,7 @@ export function ImportFilesModal({
       fallbackAccountName: string;
       accountName: string | null;
       institution: string | null;
+      accountNumber: string | null;
       accountType: UploadInsightsSummary["accountType"];
       optimisticAccountId: string | null;
       password?: string;
@@ -1104,6 +1158,12 @@ export function ImportFilesModal({
             ),
             progress: 0,
             progressLabel: "Import failed",
+          });
+          capturePostHogClientEvent("import_failed", {
+            workspace_id: workspaceId || null,
+            file_name: summaryContext.fileName,
+            error_stage: "background",
+            error_code: processingMessage ?? "background_failure",
           });
           return;
         }
@@ -1151,6 +1211,11 @@ export function ImportFilesModal({
               typeof statementMetadata?.institution === "string" && statementMetadata.institution.trim()
                 ? statementMetadata.institution.trim()
                 : summaryContext.institution,
+            accountNumber:
+              trustStatementIdentity &&
+              typeof statementMetadata?.accountNumber === "string" && statementMetadata.accountNumber.trim()
+                ? statementMetadata.accountNumber.trim()
+                : summaryContext.accountNumber,
             accountType:
               trustStatementIdentity &&
               typeof statementMetadata?.accountType === "string" &&
@@ -1163,6 +1228,24 @@ export function ImportFilesModal({
             accounts.find((account) => account.id === resolvedAccountId)?.type ??
             summaryContext.accountType ??
             null) as UploadInsightsSummary["accountType"];
+          if (!trustStatementIdentity || statementConfidence < 80 || !resolvedIdentity.accountName || !resolvedIdentity.institution) {
+            capturePostHogClientEventOnce(
+              "import_parsed_with_warnings",
+              {
+                workspace_id: workspaceId || null,
+                file_name: summaryContext.fileName,
+                file_type: summaryContext.fileName.split(".").pop()?.toUpperCase() ?? "FILE",
+                warning_count: 1,
+                validation_issue_count: 0,
+                skipped_count: 0,
+                file_count: 1,
+                limit_type: null,
+                parse_confidence: statementConfidence || null,
+                queued: Boolean(importFile?.status === "processing"),
+              },
+          analyticsOnceKey("import_parsed_with_warnings", `queued-import:${itemId}`)
+            );
+          }
           const shouldDeferClientConfirmation =
             resolvedIdentity.institution === "GCash" || resolvedAccountType === "wallet";
 
@@ -1205,7 +1288,7 @@ export function ImportFilesModal({
             if (parsedRowsCount > 0 && !seededFallbackSummary) {
               const fallbackAccountId = accountId && !accountId.startsWith("optimistic-")
                 ? accountId
-                : await ensureTargetAccountId(summaryContext.fallbackAccountName, null, null);
+                : await ensureTargetAccountId(summaryContext.fallbackAccountName, null, null, summaryContext.accountNumber);
               const fallbackPreviewTransactions =
                 summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
                   ? summaryContext.previewTransactions
@@ -1262,14 +1345,20 @@ export function ImportFilesModal({
               currentAccountId,
               syncAccountName,
               syncInstitution,
-              resolvedAccountType
+              resolvedAccountType,
+              resolvedIdentity.accountNumber ?? summaryContext.accountNumber
             ).catch(() => null);
           }
 
           if (!resolvedAccountId || resolvedAccountId.startsWith("optimistic-")) {
             const accountName = resolvedIdentity.accountName ?? summaryContext.accountName ?? null;
             const institution = resolvedIdentity.institution ?? summaryContext.institution ?? null;
-            resolvedAccountId = await ensureTargetAccountId(accountName, institution, resolvedAccountType);
+            resolvedAccountId = await ensureTargetAccountId(
+              accountName,
+              institution,
+              resolvedAccountType,
+              resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null
+            );
           }
           if (!resolvedAccountId) {
             throw new Error("Unable to determine the destination account for this statement.");
@@ -1310,6 +1399,7 @@ export function ImportFilesModal({
             ...summaryContext,
             accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
             institution: resolvedIdentity.institution ?? summaryContext.institution,
+            accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
             accountType: resolvedAccountType,
             previewTransactions: summaryContext.previewTransactions ?? [],
           });
@@ -1317,6 +1407,20 @@ export function ImportFilesModal({
             seedImportedWorkspaceCaches(workspaceId, result.summary);
             void onImported(result.summary);
           }
+          capturePostHogClientEvent("statement_identity_confirmed", {
+            workspace_id: workspaceId,
+            import_file_id: importFileId,
+            file_name: summaryContext.fileName,
+            statement_account_name: resolvedIdentity.accountName ?? summaryContext.accountName ?? null,
+            statement_institution: resolvedIdentity.institution ?? summaryContext.institution ?? null,
+            account_id: resolvedAccountId,
+          });
+          capturePostHogClientEvent("import_retry_succeeded", {
+            workspace_id: workspaceId,
+            import_file_id: importFileId,
+            file_name: summaryContext.fileName,
+            retry_reason: "background_confirmation",
+          });
           return;
         }
 
@@ -1331,6 +1435,13 @@ export function ImportFilesModal({
         if (limitPayload) {
           showPlanLimitNudge(limitPayload);
         }
+        capturePostHogClientEvent("import_retry_failed", {
+          workspace_id: workspaceId,
+          import_file_id: importFileId,
+          file_name: summaryContext.fileName,
+          retry_reason: "background_confirmation",
+          error_code: getImportErrorCode(error),
+        });
         updateItem(itemId, {
           status: "error",
           confirmationState: "staged",
@@ -1377,7 +1488,8 @@ export function ImportFilesModal({
   const ensureTargetAccountId = async (
     statementAccountName?: string | null,
     institution?: string | null,
-    accountType?: UploadInsightsSummary["accountType"]
+    accountType?: UploadInsightsSummary["accountType"],
+    accountNumber?: string | null
   ) => {
     if (statementAccountName) {
       const normalizedStatementAccountName = normalizeStatementAccountName(statementAccountName, institution ?? null);
@@ -1385,7 +1497,7 @@ export function ImportFilesModal({
       const existing = accountIdByKeyRef.current.get(key) ?? accounts.find((account) => accountKey(account.name, account.institution) === key)?.id;
       if (existing) {
         accountIdByKeyRef.current.set(key, existing);
-        await syncStatementAccountIdentity(existing, normalizedStatementAccountName, institution ?? null, accountType);
+        await syncStatementAccountIdentity(existing, normalizedStatementAccountName, institution ?? null, accountType, accountNumber);
         return existing;
       }
 
@@ -1395,7 +1507,7 @@ export function ImportFilesModal({
           : null;
       if (genericMatch) {
         accountIdByKeyRef.current.set(accountKey(genericMatch.name, genericMatch.institution), genericMatch.id);
-        await syncStatementAccountIdentity(genericMatch.id, normalizedStatementAccountName, institution ?? null, accountType);
+        await syncStatementAccountIdentity(genericMatch.id, normalizedStatementAccountName, institution ?? null, accountType, accountNumber);
         return genericMatch.id;
       }
 
@@ -1406,12 +1518,12 @@ export function ImportFilesModal({
         const matchedAccount = accounts.find((account) => account.id === rule.accountId);
         if (matchedAccount) {
           accountIdByKeyRef.current.set(accountKey(matchedAccount.name, matchedAccount.institution), matchedAccount.id);
-          await syncStatementAccountIdentity(matchedAccount.id, normalizedStatementAccountName, institution ?? null, accountType);
+          await syncStatementAccountIdentity(matchedAccount.id, normalizedStatementAccountName, institution ?? null, accountType, accountNumber);
           return matchedAccount.id;
         }
       }
 
-      return createStatementAccount(normalizedStatementAccountName, institution ?? null, accountType);
+      return createStatementAccount(normalizedStatementAccountName, institution ?? null, accountType, accountNumber);
     }
 
     if (selectedAccountId) {
@@ -1424,7 +1536,7 @@ export function ImportFilesModal({
       return fallback;
     }
 
-    return createStatementAccount("Cash", "Cash", "cash");
+    return createStatementAccount("Cash", "Cash", "cash", null);
   };
 
   const removeItem = (id: string) => {
@@ -1482,11 +1594,29 @@ export function ImportFilesModal({
             }
           : null,
       }));
+
+      capturePostHogClientEvent("qa_run_completed", {
+        workspace_id: workspaceId,
+        import_file_id: item.importFileId,
+        file_name: item.file.name,
+        score: Number(run?.score ?? 0),
+        finding_count: Number(run?.findingCount ?? findings.length),
+        critical_count: Number(run?.criticalCount ?? 0),
+        source: String(run?.source ?? "unknown"),
+        force_rerun: forceRerun,
+      });
     } catch (error) {
       setQaErrorByItemId((current) => ({
         ...current,
         [itemId]: error instanceof Error ? error.message : "Unable to load QA results.",
       }));
+      capturePostHogClientEvent("qa_run_failed", {
+        workspace_id: workspaceId,
+        import_file_id: item.importFileId,
+        file_name: item.file.name,
+        force_rerun: forceRerun,
+        error_code: getImportErrorCode(error),
+      });
     } finally {
       setQaLoadingByItemId((current) => ({ ...current, [itemId]: false }));
     }
@@ -1497,6 +1627,7 @@ export function ImportFilesModal({
     if (!item) return { status: "error", importedRows: null, summary: null };
     const guessedIdentity = guessStatementIdentity(item.file.name);
     const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName);
+    let importFileId: string | null = null;
 
     if (!workspaceId) {
       updateItem(itemId, { status: "error", error: "Select a workspace before importing files." });
@@ -1514,7 +1645,7 @@ export function ImportFilesModal({
     }
 
     try {
-      const importFileId = crypto.randomUUID();
+      importFileId = crypto.randomUUID();
 
       capturePostHogClientEvent("import_started", {
         file_type: fileTypeLabel(item.file),
@@ -1556,26 +1687,50 @@ export function ImportFilesModal({
           showPlanLimitNudge(limitPayload);
         }
         capturePostHogClientEvent("file_upload_failed", {
+          ...fileAnalyticsBase(item.file, workspaceId),
           error_stage: "upload",
           error_code: String(payload.error ?? "unknown"),
+          limit_type: limitPayload?.limitType ?? null,
         });
         throw new Error(payload.error || "Unable to parse this file.");
       }
 
       const processPayload = await processResponse.json().catch(() => ({}));
       const payloadIdentity = resolveStatementIdentityFromMetadata(processPayload?.metadata);
-      const statementIdentity =
+      const statementIdentity: StatementIdentity | null =
         payloadIdentity ??
         (guessedIdentity
           ? {
               ...guessedIdentity,
+              accountNumber: null,
               accountType: inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank"),
             }
           : null);
       const statementAccountType =
         statementIdentity?.accountType ??
         inferAccountTypeFromStatement(statementIdentity?.institution, statementIdentity?.accountName, "bank");
+      if (statementIdentity?.accountName || statementIdentity?.institution) {
+        capturePostHogClientEventOnce(
+          "statement_identity_resolved",
+          {
+            ...fileAnalyticsBase(item.file, workspaceId),
+            import_file_id: importFileId,
+            statement_account_name: statementIdentity?.accountName ?? null,
+            statement_institution: statementIdentity?.institution ?? null,
+            statement_account_type: statementIdentity?.accountType ?? statementAccountType ?? null,
+            confidence: Number(processPayload?.metadata?.confidence ?? 0) || null,
+          },
+          analyticsOnceKey("statement_identity_resolved", `file:${item.id}`)
+        );
+      }
       if (processPayload?.duplicate) {
+        capturePostHogClientEvent("import_duplicate_detected", {
+          ...fileAnalyticsBase(item.file, workspaceId),
+          import_file_id: importFileId,
+          statement_account_name: statementIdentity?.accountName ?? guessedIdentity?.accountName ?? null,
+          statement_institution: statementIdentity?.institution ?? guessedIdentity?.institution ?? null,
+          duplicate_status: true,
+        });
         const duplicateMessage = formatDuplicateImportMessage(item.file.name, guessedIdentity?.accountName ?? null);
         updateItem(itemId, {
           status: "done",
@@ -1592,11 +1747,30 @@ export function ImportFilesModal({
       }
 
       capturePostHogClientEvent("import_parsed_successfully", {
-        file_type: fileTypeLabel(item.file),
-        file_size_bytes: item.file.size,
+        ...fileAnalyticsBase(item.file, workspaceId),
         transaction_count: Number(processPayload?.imported ?? 0) || undefined,
         institution: statementIdentity?.institution ?? null,
+        parsing_mode: processPayload?.queued ? "queued" : "inline",
+        confidence: Number(processPayload?.metadata?.confidence ?? 0) || null,
       });
+
+      const parseConfidence = Number(processPayload?.metadata?.confidence ?? 0);
+      if (processPayload?.queued || parseConfidence < 80 || !statementIdentity?.institution || !statementIdentity?.accountName) {
+        capturePostHogClientEventOnce(
+          "import_parsed_with_warnings",
+          {
+            ...fileAnalyticsBase(item.file, workspaceId),
+            warning_count: processPayload?.queued ? 1 : 0,
+            validation_issue_count: 0,
+            skipped_count: 0,
+            file_count: 1,
+            limit_type: null,
+            parse_confidence: parseConfidence || null,
+            queued: Boolean(processPayload?.queued),
+          },
+          analyticsOnceKey("import_parsed_with_warnings", `file:${item.id}`)
+        );
+      }
 
       if (processPayload?.queued) {
         const hasStatementIdentity = Boolean(statementIdentity?.accountName && statementIdentity?.institution);
@@ -1604,7 +1778,8 @@ export function ImportFilesModal({
           ? await ensureTargetAccountId(
               statementIdentity?.accountName ?? null,
               statementIdentity?.institution ?? null,
-              statementAccountType
+              statementAccountType,
+              statementIdentity?.accountNumber ?? null
             )
           : canUseOptimisticGuess
             ? item.optimisticAccountId ?? null
@@ -1623,6 +1798,7 @@ export function ImportFilesModal({
           (guessedIdentity
             ? {
                 ...guessedIdentity,
+                accountNumber: null,
                 accountType: inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank"),
               }
             : null);
@@ -1659,6 +1835,7 @@ export function ImportFilesModal({
           fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
           accountName: statementIdentity?.accountName ?? null,
           institution: statementIdentity?.institution ?? null,
+          accountNumber: statementIdentity?.accountNumber ?? null,
           accountType: statementIdentity?.accountType ?? null,
           optimisticAccountId: hasStatementIdentity ? optimisticAccountId : canUseOptimisticGuess ? item.optimisticAccountId : null,
           password: item.password.trim() || undefined,
@@ -1676,7 +1853,8 @@ export function ImportFilesModal({
         ? await ensureTargetAccountId(
             statementIdentity.accountName ?? null,
             statementIdentity.institution ?? null,
-            statementAccountType
+            statementAccountType,
+            statementIdentity?.accountNumber ?? null
           )
         : null;
 
@@ -1724,6 +1902,7 @@ export function ImportFilesModal({
           fileName: item.file.name,
           accountName: statementIdentity?.accountName ?? null,
           institution: statementIdentity?.institution ?? null,
+          accountNumber: statementIdentity?.accountNumber ?? null,
           accountType: statementIdentity?.accountType ?? statementAccountType,
           optimisticAccountId: targetAccountId,
           previewTransactions,
@@ -1739,6 +1918,7 @@ export function ImportFilesModal({
           fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
           accountName: statementIdentity?.accountName ?? null,
           institution: statementIdentity?.institution ?? null,
+          accountNumber: statementIdentity?.accountNumber ?? null,
           accountType: statementIdentity?.accountType ?? null,
           optimisticAccountId: null,
           password: item.password.trim() || undefined,
@@ -1752,6 +1932,15 @@ export function ImportFilesModal({
         };
     } catch (error) {
       if (isPasswordError(error)) {
+        const currentImportFileId = importFileId ?? item.importFileId ?? null;
+        if (item.password.trim()) {
+          capturePostHogClientEvent("password_failed", {
+            ...fileAnalyticsBase(item.file, workspaceId),
+            import_file_id: currentImportFileId,
+            error_stage: "process",
+            error_code: getImportErrorCode(error),
+          });
+        }
         const needsPasswordMessage = item.password.trim()
           ? `Wrong password for ${item.file.name}.`
           : `${item.file.name} is password-protected. Enter the password to continue.`;
@@ -1768,7 +1957,8 @@ export function ImportFilesModal({
 
       capturePostHogClientEvent("import_failed", {
         error_stage: "process",
-        error_code: error instanceof Error ? error.message : "unknown_error",
+        error_code: getImportErrorCode(error),
+        ...fileAnalyticsBase(item.file, workspaceId),
       });
       const processError = formatImportFailureMessage(
         item.file,
@@ -1839,6 +2029,7 @@ export function ImportFilesModal({
       "first_import_started",
       {
         file_count: items.length,
+        workspace_id: workspaceId || null,
       },
       analyticsOnceKey("first_import_started", "session")
     );
@@ -1917,6 +2108,8 @@ export function ImportFilesModal({
           transaction_count: uploadInsightsSummaries.reduce((total, summary) => total + summary.rowsImported, 0),
           income_total: uploadInsightsSummaries.reduce((total, summary) => total + summary.incomeTotal, 0),
           expense_total: uploadInsightsSummaries.reduce((total, summary) => total + summary.expenseTotal, 0),
+          amount_total: uploadInsightsSummaries.reduce((total, summary) => total + summary.incomeTotal + summary.expenseTotal, 0),
+          workspace_id: workspaceId || null,
         },
         analyticsOnceKey("first_import_completed", "session")
       );
@@ -1934,6 +2127,20 @@ export function ImportFilesModal({
   };
 
   const handleRetry = async (itemId: string) => {
+    const item = items.find((entry) => entry.id === itemId);
+    if (item) {
+      capturePostHogClientEvent("password_provided", {
+        ...fileAnalyticsBase(item.file, workspaceId),
+        import_file_id: item.importFileId,
+        retry_reason: "password_unlock",
+      });
+      capturePostHogClientEvent("import_retry_started", {
+        ...fileAnalyticsBase(item.file, workspaceId),
+        import_file_id: item.importFileId,
+        retry_reason: "password_unlock",
+      });
+    }
+
     updateItem(itemId, {
       status: "pending",
       error: null,
@@ -1961,11 +2168,17 @@ export function ImportFilesModal({
     setBusy(true);
     setMessage("Retrying confirmation...");
     try {
+      capturePostHogClientEvent("import_retry_started", {
+        ...fileAnalyticsBase(item.file, workspaceId),
+        import_file_id: item.importFileId,
+        retry_reason: "confirmation_retry",
+      });
       const accountId = item.targetAccountId || selectedAccountId || (await ensureTargetAccountId());
       const result = await confirmItemImport(itemId, item.importFileId, accountId, {
         fileName: item.file.name,
         accountName: null,
         institution: null,
+        accountNumber: null,
         accountType: null,
         optimisticAccountId: item.targetAccountId,
       });
@@ -1975,8 +2188,24 @@ export function ImportFilesModal({
       if (result.summary) {
         void onImported(result.summary);
       }
+      capturePostHogClientEvent("statement_identity_confirmed", {
+        ...fileAnalyticsBase(item.file, workspaceId),
+        import_file_id: item.importFileId,
+        account_id: accountId,
+      });
+      capturePostHogClientEvent("import_retry_succeeded", {
+        ...fileAnalyticsBase(item.file, workspaceId),
+        import_file_id: item.importFileId,
+        retry_reason: "confirmation_retry",
+      });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to confirm this import.");
+      capturePostHogClientEvent("import_retry_failed", {
+        ...fileAnalyticsBase(item.file, workspaceId),
+        import_file_id: item.importFileId,
+        retry_reason: "confirmation_retry",
+        error_code: getImportErrorCode(error),
+      });
     } finally {
       setBusy(false);
     }
@@ -2266,7 +2495,39 @@ export function ImportFilesModal({
                         <button
                           className="button button-secondary button-small"
                           type="button"
-                          onClick={() => void processFile(item.id)}
+                          onClick={() => {
+                            capturePostHogClientEvent("import_retry_started", {
+                              ...fileAnalyticsBase(item.file, workspaceId),
+                              import_file_id: item.importFileId,
+                              retry_reason: "reprocess_error",
+                            });
+                            void processFile(item.id)
+                              .then((result) => {
+                                if (result.status === "error") {
+                                  capturePostHogClientEvent("import_retry_failed", {
+                                    ...fileAnalyticsBase(item.file, workspaceId),
+                                    import_file_id: item.importFileId,
+                                    retry_reason: "reprocess_error",
+                                    error_code: item.error ? getImportErrorCode(new Error(item.error)) : "unknown_error",
+                                  });
+                                  return;
+                                }
+
+                                capturePostHogClientEvent("import_retry_succeeded", {
+                                  ...fileAnalyticsBase(item.file, workspaceId),
+                                  import_file_id: item.importFileId,
+                                  retry_reason: "reprocess_error",
+                                });
+                              })
+                              .catch((error) => {
+                                capturePostHogClientEvent("import_retry_failed", {
+                                  ...fileAnalyticsBase(item.file, workspaceId),
+                                  import_file_id: item.importFileId,
+                                  retry_reason: "reprocess_error",
+                                  error_code: getImportErrorCode(error),
+                                });
+                              });
+                          }}
                           disabled={busy || !selectedAccountId}
                         >
                           Retry import

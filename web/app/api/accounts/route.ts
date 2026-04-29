@@ -8,6 +8,7 @@ import { countNonCashAccounts } from "@/lib/plan-access";
 import { seedWorkspaceDefaults } from "@/lib/starter-data";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
+import { capturePostHogServerEvent } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -227,6 +228,16 @@ export async function POST(request: Request) {
       existingAccounts.find((account) => account.type === type && account.name === name && account.institution === institution) ??
       null;
     if (existingAccount) {
+      if (compatibleColumns.has("accountNumber") && accountNumber && (existingAccount.accountNumber ?? null) !== accountNumber) {
+        const updatedAccount = await prisma.account.update({
+          where: { id: existingAccount.id },
+          data: { accountNumber },
+          select: getCompatibleAccountSelect(compatibleColumns),
+        });
+        return NextResponse.json({
+          account: serializeAccount(updatedAccount),
+        });
+      }
       return NextResponse.json({
         account: serializeAccount(existingAccount),
       });
@@ -276,6 +287,17 @@ export async function POST(request: Request) {
     const account = await prisma.account.create({
       data: accountCreateData,
       select: getCompatibleAccountSelect(compatibleColumns),
+    });
+
+    void capturePostHogServerEvent("account_created", userId, {
+      workspace_id: workspaceId,
+      account_id: account.id,
+      account_name: account.name,
+      account_institution: account.institution,
+      account_type: account.type,
+      account_currency: account.currency,
+      account_source: account.source,
+      is_cash: account.type === "cash",
     });
 
     void upsertAccountRule({

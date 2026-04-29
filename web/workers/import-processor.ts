@@ -1,6 +1,7 @@
-import type { Prisma, TransactionType } from "@prisma/client";
+import type { AccountType, Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
+import { capturePostHogServerEvent } from "@/lib/analytics";
 import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/data-qa";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { countNonCashAccounts, getWorkspaceOwnerLimits } from "@/lib/plan-access";
@@ -1098,6 +1099,48 @@ const resolveConfirmationAccount = async (params: {
 }) => {
   const workspaceId = String(params.importFile.workspaceId);
   const compatibleAccountColumns = await getCompatibleAccountColumns();
+  const updateAccountIdentity = async (
+    account: {
+      id: string;
+      name: string;
+      institution: string | null;
+      accountNumber: string | null;
+      type: AccountType;
+    },
+    next: {
+      name?: string | null;
+      institution?: string | null;
+      accountNumber?: string | null;
+      type?: AccountType | null;
+    }
+  ) => {
+    const data: Record<string, unknown> = {};
+    if (typeof next.name === "string" && next.name.trim() && next.name.trim() !== account.name) {
+      data.name = next.name.trim();
+    }
+    if (next.institution !== undefined && (next.institution ?? null) !== account.institution) {
+      data.institution = next.institution === null ? null : next.institution.trim() || null;
+    }
+    if (compatibleAccountColumns.has("accountNumber")) {
+      const normalizedAccountNumber = next.accountNumber?.trim() || null;
+      if ((account.accountNumber ?? null) !== normalizedAccountNumber) {
+        data.accountNumber = normalizedAccountNumber;
+      }
+    }
+    if (next.type && next.type !== account.type) {
+      data.type = next.type;
+    }
+
+    if (Object.keys(data).length === 0) {
+      return account;
+    }
+
+    return prisma.account.update({
+      where: { id: account.id },
+      data,
+      select: getCompatibleAccountSelect(compatibleAccountColumns),
+    });
+  };
   const candidateRow =
     (typeof params.statementMetadata?.accountName === "string" && params.statementMetadata.accountName.trim()
       ? params.statementMetadata
@@ -1141,7 +1184,12 @@ const resolveConfirmationAccount = async (params: {
       })
     : null;
   if (directAccount) {
-    return directAccount;
+    return updateAccountIdentity(directAccount, {
+      name: inferredAccountName,
+      institution: inferredInstitution,
+      accountNumber: inferredAccountNumber,
+      type: inferredAccountType,
+    });
   }
 
   const candidateKey = normalizeAccountRuleKey(
@@ -1157,7 +1205,12 @@ const resolveConfirmationAccount = async (params: {
     (account) => normalizeAccountRuleKey(account.name, account.institution) === candidateKey
   );
   if (existingByKey) {
-    return existingByKey;
+    return updateAccountIdentity(existingByKey, {
+      name: inferredAccountName,
+      institution: inferredInstitution,
+      accountNumber: inferredAccountNumber,
+      type: inferredAccountType,
+    });
   }
 
   if (inferredAccountName || inferredAccountNumber) {
@@ -2310,6 +2363,47 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       confirmedTransactionsCount: preparedTransactions.length + (openingBalanceInserted ? 1 : 0),
     },
   });
+
+  const analyticsDistinctId = String(importFile.workspaceId ?? "import-worker");
+  for (const entry of preparedTransactions) {
+    const insertRow = entry.insertRow as {
+      amount?: unknown;
+      currency?: unknown;
+      reviewStatus?: unknown;
+      isTransfer?: unknown;
+      isExcluded?: unknown;
+      categoryId?: unknown;
+      categoryConfidence?: unknown;
+      accountMatchConfidence?: unknown;
+      parserConfidence?: unknown;
+      merchantClean?: unknown;
+      merchantRaw?: unknown;
+      type?: unknown;
+    };
+    const amount = Math.abs(Number(insertRow.amount ?? 0));
+
+    void capturePostHogServerEvent("transaction_imported", analyticsDistinctId, {
+      workspace_id: String(importFile.workspaceId ?? null),
+      import_file_id: importFileId,
+      transaction_id: entry.transactionId,
+      amount,
+      currency: String(insertRow.currency ?? "PHP"),
+      transaction_type: String(entry.insightRow.type ?? "expense"),
+      review_status: typeof insertRow.reviewStatus === "string" ? insertRow.reviewStatus : null,
+      is_transfer: Boolean(insertRow.isTransfer),
+      is_excluded: Boolean(insertRow.isExcluded),
+      category_id: typeof insertRow.categoryId === "string" ? insertRow.categoryId : null,
+      category_confidence: typeof insertRow.categoryConfidence === "number" ? insertRow.categoryConfidence : null,
+      account_match_confidence: typeof insertRow.accountMatchConfidence === "number" ? insertRow.accountMatchConfidence : null,
+      parser_confidence: typeof insertRow.parserConfidence === "number" ? insertRow.parserConfidence : null,
+      merchant_name:
+        typeof insertRow.merchantClean === "string"
+          ? insertRow.merchantClean
+          : typeof insertRow.merchantRaw === "string"
+            ? insertRow.merchantRaw
+            : null,
+    });
+  }
 
   for (const entry of preparedTransactions) {
     transactions.push(entry.insightRow);
