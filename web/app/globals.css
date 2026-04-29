@@ -4211,6 +4211,20 @@ label {
   box-shadow: none;
 }
 
+.investments-tabs-shell--row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.investments-tabs-shell__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: none;
+}
+
 .reports-toolbar.reports-tabs-shell,
 .reports-toolbar.section-tabs-shell {
   display: flex;
@@ -11552,6 +11566,15 @@ input.transaction-inline-edit--amount::placeholder {
 
   .investments-page__add-button--compact .investments-page__add-button-label {
     display: inline;
+  }
+
+  .investments-tabs-shell--row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .investments-tabs-shell__actions {
+    display: none;
   }
 
   .investments-tabs {

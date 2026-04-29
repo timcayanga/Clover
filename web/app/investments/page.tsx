@@ -323,7 +323,7 @@ export default function InvestmentsPage() {
       const response = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`);
       if (!response.ok || cancelled) {
         if (!cancelled) {
-          setMessage("Unable to load investments.");
+          setMessage("");
         }
         setLoading(false);
         setHasLoaded(true);
@@ -734,14 +734,7 @@ export default function InvestmentsPage() {
   return (
     <CloverShell active="investments" title="Investments" showTopbar={false} actions={renderAddInvestmentButton("mobile")}>
       <div className="accounts-page">
-        <div className="investments-page__header">
-          <div className="investments-page__header-actions">{renderAddInvestmentButton("desktop")}</div>
-        </div>
-
-        {loading ? <p className="panel-muted">Loading investments...</p> : null}
-        {!loading && message ? <p className="panel-muted">{message}</p> : null}
-
-        <div className="investments-tabs-shell section-tabs-shell">
+        <div className="investments-tabs-shell section-tabs-shell investments-tabs-shell--row">
           <nav className="investments-tabs" aria-label="Investment sections">
             {INVESTMENT_TABS.map((tab) => {
               const isLocked = Boolean(tab.proOnly && !canUseProTabs);
@@ -775,7 +768,11 @@ export default function InvestmentsPage() {
               );
             })}
           </nav>
+          <div className="investments-tabs-shell__actions">{renderAddInvestmentButton("desktop")}</div>
         </div>
+
+        {loading ? <p className="panel-muted">Loading investments...</p> : null}
+        {!loading && message ? <p className="panel-muted">{message}</p> : null}
 
         {!canAccessSelectedTab ? (
           <section className="investments-pro-gate glass">
