@@ -39,6 +39,8 @@ type ImportFilesModalProps = {
   accountRules?: AccountRule[];
   defaultAccountId?: string | null;
   showQaTools?: boolean;
+  initialFiles?: File[] | null;
+  onInitialFilesConsumed?: () => void;
   onClose: () => void;
   onImported: (summary: UploadInsightsSummary) => Promise<void> | void;
 };
@@ -580,6 +582,8 @@ export function ImportFilesModal({
   accountRules = [],
   defaultAccountId,
   showQaTools = false,
+  initialFiles = null,
+  onInitialFilesConsumed,
   onClose,
   onImported,
 }: ImportFilesModalProps) {
@@ -601,6 +605,7 @@ export function ImportFilesModal({
   const [qaLoadingByItemId, setQaLoadingByItemId] = useState<Record<string, boolean>>({});
   const [qaErrorByItemId, setQaErrorByItemId] = useState<Record<string, string | null>>({});
   const autoLoadedQaIdsRef = useRef(new Set<string>());
+  const initialFilesSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -619,6 +624,7 @@ export function ImportFilesModal({
       accountIdByKeyRef.current.clear();
       setMessage("Upload CSV or PDF files to import transactions and balances.");
       setValidationNotice(null);
+      initialFilesSignatureRef.current = null;
       return;
     }
 
@@ -647,6 +653,21 @@ export function ImportFilesModal({
     setMessage("Upload CSV or PDF files to import transactions and balances.");
     setValidationNotice(null);
   }, [accounts, defaultAccountId, open]);
+
+  useEffect(() => {
+    if (!open || !initialFiles || initialFiles.length === 0) {
+      return;
+    }
+
+    const signature = initialFiles.map(fileKey).join("|");
+    if (initialFilesSignatureRef.current === signature) {
+      return;
+    }
+
+    initialFilesSignatureRef.current = signature;
+    addFiles(initialFiles);
+    onInitialFilesConsumed?.();
+  }, [initialFiles, open, onInitialFilesConsumed]);
 
   useEffect(() => {
     if (!open) {
@@ -807,7 +828,7 @@ export function ImportFilesModal({
         if (validationError) {
           if (validationError === "Import files must be 2 MB or smaller.") {
             validationIssues.push(`${file.name} is larger than 2 MB.`);
-          } else if (validationError === "Only PDF, CSV, and TSV files are supported.") {
+          } else if (validationError === "Only PDF, CSV, TSV, and JSON files are supported.") {
             validationIssues.push(`${file.name} has an invalid file extension.`);
           } else {
             validationIssues.push(`${file.name} could not be added.`);

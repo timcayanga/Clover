@@ -10,6 +10,7 @@ import { AccountBrandMark } from "@/components/account-brand-mark";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
+import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
@@ -619,6 +620,7 @@ function AccountsPageContent() {
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importSessionId, setImportSessionId] = useState(0);
+  const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
@@ -1396,7 +1398,7 @@ function AccountsPageContent() {
     setAddOpen(true);
   };
 
-  const openImportFiles = () => {
+  const openImportFiles = (files: File[] | null = null) => {
     if (planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
       showPlanLimitNudge({
         planTier,
@@ -1410,6 +1412,7 @@ function AccountsPageContent() {
     setPendingImportSummary(null);
     setAddOpen(false);
     setImportSessionId((current) => current + 1);
+    setImportSeedFiles(files && files.length > 0 ? files : null);
     setImportOpen(true);
   };
 
@@ -1723,7 +1726,7 @@ function AccountsPageContent() {
             <ActionIcon name="plus" />
             <span>Add account</span>
           </button>
-          <button className="button button-secondary button-small accounts-toolbar-button" type="button" onClick={openImportFiles}>
+          <button className="button button-secondary button-small accounts-toolbar-button" type="button" onClick={() => openImportFiles()}>
             <ActionIcon name="upload" />
             <span>Import files</span>
           </button>
@@ -1744,7 +1747,7 @@ function AccountsPageContent() {
                 <ActionIcon name="plus" />
                 <span>Add account</span>
               </button>
-              <button className="button button-secondary button-small accounts-toolbar-button" type="button" onClick={openImportFiles}>
+              <button className="button button-secondary button-small accounts-toolbar-button" type="button" onClick={() => openImportFiles()}>
                 <ActionIcon name="upload" />
                 <span>Import files</span>
               </button>
@@ -1794,7 +1797,7 @@ function AccountsPageContent() {
                     <button className="button button-primary button-small" type="button" onClick={openAddAccount}>
                       Add account
                     </button>
-                    <button className="button button-secondary button-small" type="button" onClick={openImportFiles}>
+                    <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
                       Import files
                     </button>
                   </div>
@@ -2184,7 +2187,7 @@ function AccountsPageContent() {
                     <button className="button button-secondary button-small" type="button" onClick={openFullAccountPage}>
                       {latestCheckpoint.status === "mismatch" ? "Review mismatch" : "View checkpoint"}
                     </button>
-                    <button className="button button-secondary button-small" type="button" onClick={openImportFiles}>
+                    <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
                       Import files
                     </button>
                     <button
@@ -2220,7 +2223,7 @@ function AccountsPageContent() {
                 <p className="accounts-drawer__note">No uploaded import batches are linked to this account yet.</p>
               )}
               <div className="accounts-drawer__actions">
-                <button className="button button-secondary button-small" type="button" onClick={openImportFiles}>
+                <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
                   Import files
                 </button>
                 <button className="button button-secondary button-small" type="button" onClick={openFullAccountPage} disabled={!selectedAccount}>
@@ -2470,6 +2473,13 @@ function AccountsPageContent() {
         </div>
       ) : null}
 
+      <PageFileDropZone
+        enabled={!importOpen}
+        title="Drop statement files anywhere"
+        subtitle="Clover will catch them and open import for you."
+        onFilesDropped={(files) => openImportFiles(files)}
+      />
+
       <PlanLimitNudge payload={planLimitNudge} onDismiss={() => setPlanLimitNudge(null)} />
 
       <ImportFilesModal
@@ -2479,7 +2489,12 @@ function AccountsPageContent() {
         accounts={accounts}
         accountRules={accountRules}
         defaultAccountId={selectedAccount?.id ?? accounts[0]?.id ?? null}
-        onClose={() => setImportOpen(false)}
+        initialFiles={importSeedFiles}
+        onInitialFilesConsumed={() => setImportSeedFiles(null)}
+        onClose={() => {
+          setImportOpen(false);
+          setImportSeedFiles(null);
+        }}
         onImported={async (summary) => {
           setPendingImportSummary(summary);
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;

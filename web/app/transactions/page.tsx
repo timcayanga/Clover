@@ -15,6 +15,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
+import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import {
   analyticsOnceKey,
   capturePostHogClientEvent,
@@ -1204,6 +1205,7 @@ function TransactionsPageContent() {
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
@@ -1763,9 +1765,10 @@ function TransactionsPageContent() {
     setMoreMenuOpen((current) => !current);
   };
 
-  const openImportFiles = () => {
+  const openImportFiles = (files: File[] | null = null) => {
     setPendingImportSummary(null);
     closeToolbarMenus();
+    setImportSeedFiles(files && files.length > 0 ? files : null);
     setImportOpen(true);
   };
 
@@ -3491,6 +3494,12 @@ function TransactionsPageContent() {
 
   return (
     <CloverShell active="transactions" title="Transactions" showTopbar={false}>
+      <PageFileDropZone
+        enabled={!importOpen}
+        title="Drop statement files anywhere"
+        subtitle="Clover will catch them and open import for you."
+        onFilesDropped={(files) => openImportFiles(files)}
+      />
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`}>
         <div className="glass table-panel table-panel--full transactions-table-panel transactions-main-panel">
           <div className="transactions-topbar">
@@ -5422,7 +5431,12 @@ function TransactionsPageContent() {
         workspaceId={selectedWorkspaceId}
         accounts={accounts}
         defaultAccountId={accounts[0]?.id ?? null}
-        onClose={() => setImportOpen(false)}
+        initialFiles={importSeedFiles}
+        onInitialFilesConsumed={() => setImportSeedFiles(null)}
+        onClose={() => {
+          setImportOpen(false);
+          setImportSeedFiles(null);
+        }}
         onImported={async (summary) => {
           const previewTransactions = summary.previewTransactions ?? [];
           const optimisticAccount = buildOptimisticImportedAccount(summary);
