@@ -19652,6 +19652,37 @@ input.transaction-inline-edit--amount::placeholder {
     gap: 6px;
   }
 
+  .landing-nav__mobile-menu-toggle {
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    background: rgba(255, 255, 255, 0.76);
+    color: var(--text);
+    font-size: 14px;
+    text-align: left;
+  }
+
+  .landing-nav__mobile-menu-toggle-chevron {
+    color: var(--muted-2);
+    font-size: 0.9em;
+  }
+
+  .landing-nav__mobile-menu-subgroup {
+    display: grid;
+    gap: 6px;
+    padding-left: 10px;
+  }
+
+  .landing-nav__mobile-menu-subgroup a {
+    padding-left: 16px;
+    font-size: 13px;
+  }
+
   .landing-nav__mobile-menu-label {
     margin: 0 0 2px;
     color: var(--muted-2);

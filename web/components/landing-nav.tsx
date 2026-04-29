@@ -19,6 +19,7 @@ export function LandingNav() {
   const currentPathname = pathname ?? "";
   const [isScrolled, setIsScrolled] = useState(false);
   const [featuresOpen, setFeaturesOpen] = useState(currentPathname.startsWith("/features"));
+  const [mobileFeaturesOpen, setMobileFeaturesOpen] = useState(currentPathname.startsWith("/features"));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export function LandingNav() {
 
   useEffect(() => {
     setFeaturesOpen(currentPathname.startsWith("/features"));
+    setMobileFeaturesOpen(currentPathname.startsWith("/features"));
     setMobileMenuOpen(false);
   }, [currentPathname]);
 
@@ -76,16 +78,13 @@ export function LandingNav() {
                 <Link href="/features" prefetch={false} role="menuitem">
                   Overview
                 </Link>
-                <Link href="/features#upload" prefetch={false} role="menuitem">
-                  Upload
+                <Link href="/features#tracking" prefetch={false} role="menuitem">
+                  Tracking
                 </Link>
-                <Link href="/features#understand" prefetch={false} role="menuitem">
+                <Link href="/features#understanding" prefetch={false} role="menuitem">
                   Understand
                 </Link>
-                <Link href="/features#review" prefetch={false} role="menuitem">
-                  Review
-                </Link>
-                <Link href="/features#plan" prefetch={false} role="menuitem">
+                <Link href="/features#planning" prefetch={false} role="menuitem">
                   Plan
                 </Link>
               </div>
@@ -145,30 +144,39 @@ export function LandingNav() {
               <Link href="/" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
                 Home
               </Link>
-              <Link href="/features" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
-                Features
-              </Link>
+              <button
+                type="button"
+                className="landing-nav__mobile-menu-toggle"
+                aria-expanded={mobileFeaturesOpen}
+                aria-controls="landing-mobile-features"
+                onClick={() => setMobileFeaturesOpen((current) => !current)}
+              >
+                <span>Features</span>
+                <span aria-hidden="true" className="landing-nav__mobile-menu-toggle-chevron">
+                  ▾
+                </span>
+              </button>
+              {mobileFeaturesOpen ? (
+                <div className="landing-nav__mobile-menu-subgroup" id="landing-mobile-features">
+                  <Link href="/features" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
+                    Overview
+                  </Link>
+                  <Link href="/features#tracking" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
+                    Tracking
+                  </Link>
+                  <Link href="/features#understanding" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
+                    Understand
+                  </Link>
+                  <Link href="/features#planning" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
+                    Plan
+                  </Link>
+                </div>
+              ) : null}
               <Link href="/pricing" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
                 Pricing
               </Link>
               <Link href="/help" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
                 Help
-              </Link>
-            </div>
-
-            <div className="landing-nav__mobile-menu-group">
-              <p className="landing-nav__mobile-menu-label">Features</p>
-              <Link href="/features#upload" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
-                Upload
-              </Link>
-              <Link href="/features#understand" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
-                Understand
-              </Link>
-              <Link href="/features#review" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
-                Review
-              </Link>
-              <Link href="/features#plan" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
-                Plan
               </Link>
             </div>
 
