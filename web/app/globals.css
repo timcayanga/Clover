@@ -8722,7 +8722,7 @@ label {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 12px;
   flex-wrap: nowrap;
   width: 100%;
 }
@@ -8755,11 +8755,14 @@ label {
 
 .transactions-toolbar-row--single .transactions-toolbar-group--right {
   flex: 1 1 auto;
+  min-width: 0;
 }
 
 .transactions-toolbar-group--right {
   justify-content: flex-end;
   justify-self: end;
+  flex-wrap: nowrap;
+  min-width: 0;
 }
 
 .transactions-toolbar-search {
@@ -8772,8 +8775,9 @@ label {
   border: 1px solid rgba(219, 227, 232, 0.9);
   background: rgba(255, 255, 255, 0.96);
   box-shadow: var(--shadow-soft);
-  min-width: 180px;
-  flex: 1 1 280px;
+  min-width: 150px;
+  max-width: 270px;
+  flex: 1 1 220px;
 }
 
 .transactions-toolbar-search__icon {
