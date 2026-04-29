@@ -17342,7 +17342,24 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-detail__summary {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .accounts-detail__summary .status-card {
+    margin-bottom: 0;
+    padding: 10px 8px;
+    border-radius: 14px;
+  }
+
+  .accounts-detail__summary .panel-muted {
+    font-size: 0.72rem;
+    line-height: 1.25;
+  }
+
+  .accounts-detail__summary .status-card strong {
+    font-size: 0.94rem;
+    line-height: 1.1;
   }
 
   .accounts-detail__investment-grid {

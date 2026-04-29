@@ -107,7 +107,6 @@ const normalizeAccountBalance = (type: Account["type"] | null | undefined, value
 const ACCOUNT_DETAILS_INFO = {
   currentBalance:
     "Current balance = the latest balance Clover can derive for this account after applying its saved balance, imported transactions, and any statement checkpoint used for reconciliation.",
-  status: "Shows whether this account is active or currently being deleted.",
   accountType: "Account type controls how Clover groups this account and whether it is treated like an asset, wallet, cash balance, credit card, or investment.",
   reconciliation:
     "Reconciliation compares a statement ending balance with Clover's running history for this account so you can see whether the account matches the imported statement.",
@@ -738,7 +737,14 @@ function AccountDetailPageContent() {
   }
 
   return (
-    <CloverShell active="accounts" title={account?.name ?? "Account"} kicker="Account history" subtitle="View the full statement history for a single account." showTopbar={false}>
+    <CloverShell
+      active="accounts"
+      title={account?.name ?? "Account"}
+      kicker="Account history"
+      subtitle="View the full statement history for a single account."
+      hideCompactBarKickerAndSubtitleOnMobile
+      showTopbar={false}
+    >
       <section className="panel accounts-detail__panel" style={accountBrandStyles}>
         <div className="accounts-detail__header">
           <div className="accounts-detail__headline">
@@ -778,15 +784,6 @@ function AccountDetailPageContent() {
                   <InfoTooltip label={accountDetailValueCardInfo} />
                 </div>
                 <strong>{currencyFormatter.format(accountDetailValueCard.value)}</strong>
-              </div>
-            </div>
-            <div className="status-card">
-              <div>
-                <div className="panel-muted">
-                  Status
-                  <InfoTooltip label={ACCOUNT_DETAILS_INFO.status} />
-                </div>
-                <strong>{deletingAccountIds.has(account.id) ? "Deleting" : "Active"}</strong>
               </div>
             </div>
             <div className="status-card">
