@@ -15,7 +15,6 @@ import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
-import { PlanTierBanner } from "@/components/plan-tier-banner";
 import {
   analyticsOnceKey,
   capturePostHogClientEvent,
@@ -3492,16 +3491,6 @@ function TransactionsPageContent() {
 
   return (
     <CloverShell active="transactions" title="Transactions" showTopbar={false}>
-      <PlanTierBanner
-        planTier={planTier}
-        label="Manual tracking and limits"
-        limits={planLimits}
-        ctaHref={planTier === "free" ? "/pricing" : "/settings#billing"}
-        ctaLabel={planTier === "free" ? "See Pro pricing" : "Manage billing"}
-        secondaryHref="/accounts"
-        secondaryLabel="Open accounts"
-        className="transactions-plan-banner"
-      />
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`}>
         <div className="glass table-panel table-panel--full transactions-table-panel transactions-main-panel">
           <div className="transactions-topbar">
