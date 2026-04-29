@@ -34,7 +34,6 @@ import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-s
 import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
 import {
   getInvestmentFieldConfigs,
-  getInvestmentSubtypeDescription,
   getInvestmentSubtypeLabel,
   INVESTMENT_SUBTYPES,
   type InvestmentSubtype,
@@ -1336,7 +1335,12 @@ function AccountsPageContent() {
   const manualAccountBrand = useMemo(
     () =>
       getAccountBrand({
-        institution: manualType === "cash" ? "Cash" : manualInstitution,
+        institution:
+          manualType === "cash"
+            ? "Cash"
+            : manualType === "investment"
+              ? manualInstitution
+              : manualName,
         name: manualName,
         type: manualType,
       }),
@@ -1352,31 +1356,6 @@ function AccountsPageContent() {
     () => getInvestmentFieldConfigs(accountEditType === "investment" ? accountEditInvestmentSubtype : null),
     [accountEditInvestmentSubtype, accountEditType]
   );
-
-  const getManualInvestmentFieldValue = (key: string) => {
-    if (key === "investmentSymbol") return manualInvestmentSymbol;
-    if (key === "investmentQuantity") return manualInvestmentQuantity;
-    if (key === "investmentCostBasis") return manualInvestmentCostBasis;
-    if (key === "investmentPrincipal") return manualInvestmentPrincipal;
-    if (key === "investmentStartDate") return manualInvestmentStartDate;
-    if (key === "investmentMaturityDate") return manualInvestmentMaturityDate;
-    if (key === "investmentInterestRate") return manualInvestmentInterestRate;
-    if (key === "investmentMaturityValue") return manualInvestmentMaturityValue;
-    return "";
-  };
-
-  const getManualInvestmentFieldLabel = (key: string) => {
-    return manualInvestmentFieldConfigs.find((field) => field.key === key)?.label ?? "Value";
-  };
-
-  const getManualInvestmentPreviewValue = (field: { key: string; inputMode?: "text" | "decimal"; type?: "text" | "date" }) => {
-    const value = getManualInvestmentFieldValue(field.key).trim();
-    if (value) {
-      return value;
-    }
-
-    return field.type === "date" ? "Not set" : "Not set";
-  };
 
   const refreshAll = async () => {
     if (!selectedWorkspaceId) return;
@@ -1579,7 +1558,12 @@ function AccountsPageContent() {
         body: JSON.stringify({
           workspaceId: selectedWorkspaceId,
           name,
-          institution: manualType === "cash" ? "Cash" : manualInstitution.trim() || null,
+          institution:
+            manualType === "cash"
+              ? "Cash"
+              : manualType === "investment"
+                ? manualInstitution.trim() || name
+                : name,
           investmentSubtype: manualIsInvestment ? manualInvestmentSubtype : null,
           investmentSymbol:
             manualIsInvestment && (manualIsMarket || manualInvestmentSubtype === "other")
@@ -2322,29 +2306,53 @@ function AccountsPageContent() {
 
             <div className="accounts-add-grid">
               <form className="accounts-manual-form" onSubmit={createManualAccount}>
-                <label>
-                  Name
-                  <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: BDO Savings" />
-                </label>
-                <InstitutionAutocomplete
-                  label="Institution"
-                  value={manualInstitution}
-                  onChange={setManualInstitution}
-                  placeholder={manualType === "investment" ? "Example: COL Financial" : "Example: BDO"}
-                  variant={manualType === "investment" ? "investment" : "account"}
-                  helperText="Pick the institution that best matches the logo or platform users will recognize."
-                />
-                <label>
-                  Type
-                  <select value={manualType} onChange={(event) => setManualType(event.target.value as Account["type"])}>
-                    <option value="bank">Bank</option>
-                    <option value="wallet">Wallet</option>
-                    <option value="credit_card">Credit Card</option>
-                    <option value="cash">Cash</option>
-                    <option value="investment">Investment</option>
-                    <option value="other">Other</option>
-                  </select>
-                </label>
+                <div className="accounts-add-layout">
+                  <div className="accounts-add-fields">
+                    <label className="accounts-add-fields__name">
+                      Name
+                      <input
+                        value={manualName}
+                        onChange={(event) => setManualName(event.target.value)}
+                        placeholder={manualType === "investment" ? "Example: FMETF" : "Example: BDO Savings"}
+                      />
+                    </label>
+                    <div className="accounts-add-fields__row">
+                      <label>
+                        Type
+                        <select value={manualType} onChange={(event) => setManualType(event.target.value as Account["type"])}>
+                          <option value="bank">Bank</option>
+                          <option value="wallet">Wallet</option>
+                          <option value="credit_card">Credit Card</option>
+                          <option value="cash">Cash</option>
+                          <option value="investment">Investment</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </label>
+                      <label>
+                        Balance
+                        <input
+                          value={manualBalance}
+                          onChange={(event) => setManualBalance(event.target.value)}
+                          inputMode="decimal"
+                          placeholder="0.00"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                  <aside className="accounts-add-brand-tile" aria-label="Account logo preview">
+                    <AccountBrandMark accountBrand={manualAccountBrand} label={manualName || manualInstitution || "Account"} />
+                  </aside>
+                </div>
+                {manualType === "investment" ? (
+                  <InstitutionAutocomplete
+                    label="Institution"
+                    value={manualInstitution}
+                    onChange={setManualInstitution}
+                    placeholder="Example: COL Financial"
+                    variant="investment"
+                    helperText="Use the platform or provider name when it differs from the investment name."
+                  />
+                ) : null}
                 {manualType === "investment" ? (
                   <>
                     <label>
@@ -2416,15 +2424,6 @@ function AccountsPageContent() {
                     </div>
                   </>
                 ) : null}
-                <label>
-                  Balance
-                  <input
-                    value={manualBalance}
-                    onChange={(event) => setManualBalance(event.target.value)}
-                    inputMode="decimal"
-                    placeholder="0.00"
-                  />
-                </label>
                 <button className="button button-primary" type="submit" disabled={isSaving || (manualType === "cash" && accounts.some((account) => account.type === "cash"))}>
                   {isSaving ? "Saving..." : "Create account"}
                 </button>
@@ -2432,42 +2431,6 @@ function AccountsPageContent() {
                   <p className="modal-copy">Cash already appears automatically in this workspace.</p>
                 ) : null}
               </form>
-              <aside className="accounts-add-preview glass" aria-label="Account preview">
-                <div className="accounts-add-preview__head">
-                  <p className="eyebrow">Live preview</p>
-                  <AccountBrandMark accountBrand={manualAccountBrand} label={manualName || manualInstitution || "Account"} />
-                </div>
-                <strong>{manualName || "Account name"}</strong>
-                <p>
-                  {manualAccountBrand.label}
-                  {manualType === "investment" ? ` · ${getInvestmentSubtypeLabel(manualInvestmentSubtype)}` : ""}
-                  {manualType !== "cash" && manualInstitution.trim() ? ` · ${manualInstitution.trim()}` : ""}
-                </p>
-                {manualType === "investment" ? (
-                  <div className="accounts-add-preview__investment">
-                    <span>
-                      Subtype <strong>{getInvestmentSubtypeLabel(manualInvestmentSubtype)}</strong>
-                    </span>
-                    {manualInvestmentFieldConfigs.map((field) => (
-                      <span key={field.key}>
-                        {getManualInvestmentFieldLabel(field.key)}{" "}
-                        <strong>
-                          {getManualInvestmentPreviewValue(field)}
-                        </strong>
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                <span>
-                  {manualType === "investment"
-                    ? isFixedIncomeInvestmentSubtype(manualInvestmentSubtype)
-                      ? getInvestmentSubtypeDescription(manualInvestmentSubtype)
-                      : isMarketInvestmentSubtype(manualInvestmentSubtype)
-                        ? "Track the holding like a market position with units and purchase value."
-                        : getInvestmentSubtypeDescription(manualInvestmentSubtype)
-                    : "We use the institution to match the right logo and statement rules."}
-                </span>
-              </aside>
             </div>
           </section>
         </div>

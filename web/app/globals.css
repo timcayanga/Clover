@@ -12913,7 +12913,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-add-modal {
-  width: min(720px, calc(100vw - 28px));
+  width: min(640px, calc(100vw - 28px));
   max-height: calc(100dvh - 28px);
   overflow: auto;
 }
@@ -12921,7 +12921,7 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-add-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
+  gap: 12px;
   align-items: start;
 }
 
@@ -12933,6 +12933,44 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-manual-form > label {
   gap: 6px;
+}
+
+.accounts-add-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px;
+  gap: 12px;
+  align-items: end;
+}
+
+.accounts-add-fields {
+  display: grid;
+  gap: 12px;
+}
+
+.accounts-add-fields__name {
+  gap: 6px;
+}
+
+.accounts-add-fields__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.accounts-add-brand-tile {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  min-height: 84px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(238, 247, 250, 0.96));
+}
+
+.accounts-add-brand-tile .account-brand-mark {
+  width: 56px;
+  height: 56px;
 }
 
 .institution-autocomplete {
@@ -17122,6 +17160,19 @@ input.transaction-inline-edit--amount::placeholder {
 
   .accounts-add-grid {
     grid-template-columns: 1fr;
+  }
+
+  .accounts-add-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .accounts-add-fields__row {
+    grid-template-columns: 1fr;
+  }
+
+  .accounts-add-brand-tile {
+    width: 72px;
+    min-height: 72px;
   }
 
   .institution-autocomplete__suggestions {
