@@ -9796,6 +9796,27 @@ input.transaction-inline-edit--amount::placeholder {
   width: min(860px, 100%);
 }
 
+.search-modal {
+  width: min(560px, 100%);
+}
+
+.search-modal__body {
+  display: grid;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.search-modal__field {
+  display: grid;
+  gap: 6px;
+}
+
+.search-modal__hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
 .upload-insights-toast {
   position: fixed;
   right: 20px;
@@ -16635,6 +16656,10 @@ input.transaction-inline-edit--amount::placeholder {
 
   .transactions-toolbar-row--bottom .transactions-toolbar-group--right {
     display: contents;
+  }
+
+  .transactions-add-menu {
+    order: -1;
   }
 
   .transactions-page .transactions-toolbar-chip.button-secondary,

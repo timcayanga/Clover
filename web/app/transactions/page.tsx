@@ -1238,6 +1238,7 @@ function TransactionsPageContent() {
   const [typeFilters, setTypeFilters] = useState<Array<"debit" | "credit">>([]);
   const [merchantFilters, setMerchantFilters] = useState<string[]>([]);
   const [merchantFilterInput, setMerchantFilterInput] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [message, setMessage] = useState("Select a workspace to review transactions.");
@@ -1761,10 +1762,10 @@ function TransactionsPageContent() {
   }, [addMenuOpen, downloadMenuOpen, moreMenuOpen]);
 
   useEffect(() => {
-    if (filterOpen) {
+    if (searchOpen) {
       searchInputRef.current?.focus();
     }
-  }, [filterOpen]);
+  }, [searchOpen]);
 
   useEffect(() => {
     if (manualOpen) {
@@ -2342,12 +2343,21 @@ function TransactionsPageContent() {
     setBulkEditOpen(true);
   };
 
-  const openSearchFilters = () => {
-    if (filterOpen) {
+  const openSearchModal = () => {
+    closeToolbarMenus();
+
+    if (searchOpen) {
       searchInputRef.current?.focus();
       return;
     }
 
+    setFilterOpen(false);
+    setSearchOpen(true);
+  };
+
+  const openFiltersModal = () => {
+    closeToolbarMenus();
+    setSearchOpen(false);
     setFilterOpen(true);
   };
 
@@ -2465,6 +2475,11 @@ function TransactionsPageContent() {
           return;
         }
 
+        if (searchOpen) {
+          setSearchOpen(false);
+          return;
+        }
+
         if (filterOpen) {
           setFilterOpen(false);
           return;
@@ -2489,13 +2504,13 @@ function TransactionsPageContent() {
       const key = event.key.toLowerCase();
       if (key === "/") {
         event.preventDefault();
-        openSearchFilters();
+        openSearchModal();
         return;
       }
 
       if (key === "f") {
         event.preventDefault();
-        openSearchFilters();
+        openFiltersModal();
         return;
       }
 
@@ -2529,11 +2544,13 @@ function TransactionsPageContent() {
     hasSelectedTransactions,
     manualOpen,
     merchantRenameSuggestion,
-    openSearchFilters,
+    openFiltersModal,
+    openSearchModal,
     openBulkEdit,
     openManualAdd,
     selectedTransaction,
     transactionDeleteConfirmOpen,
+    searchOpen,
   ]);
 
   useEffect(() => {
@@ -3701,7 +3718,7 @@ function TransactionsPageContent() {
                   className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-search-trigger"
                   style={toolbarChipStyle}
                   type="button"
-                  onClick={openSearchFilters}
+                  onClick={openSearchModal}
                   title="Search (/)"
                   aria-label="Search transactions"
                   aria-keyshortcuts="/"
@@ -3729,7 +3746,7 @@ function TransactionsPageContent() {
                   style={toolbarChipStyle}
                   type="button"
                   title={activeFilterCount > 0 ? `Filters (F) · ${activeFilterCount} active` : "Filters (F)"}
-                  onClick={openSearchFilters}
+                  onClick={openFiltersModal}
                   aria-label={activeFilterCount > 0 ? `Open filters, ${activeFilterCount} active` : "Open filters"}
                   aria-keyshortcuts="f"
                 >
@@ -4863,15 +4880,6 @@ function TransactionsPageContent() {
             </div>
 
             <div className="form-grid">
-              <label className="span-2">
-                Search
-                <input
-                  ref={searchInputRef}
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search by merchant, note, or alias"
-                />
-              </label>
               <MerchantFilterGroup
                 merchants={merchantFilters}
                 input={merchantFilterInput}
@@ -4947,6 +4955,62 @@ function TransactionsPageContent() {
                   setFilterOpen(false);
                 }}
               >
+                Done
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {searchOpen ? (
+        <div
+          className="modal-backdrop modal-backdrop--soft modal-backdrop--centered-mobile"
+          role="presentation"
+          onClick={() => setSearchOpen(false)}
+        >
+          <section
+            className="modal-card modal-card--wide search-modal glass"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="transaction-search-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="modal-head">
+              <div>
+                <p className="eyebrow">Transactions</p>
+                <h4 id="transaction-search-title">Search</h4>
+                <p className="modal-copy">Search by merchant, note, alias, or amount.</p>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setSearchOpen(false)} aria-label="Close search">
+                ×
+              </button>
+            </div>
+
+            <div className="search-modal__body">
+              <label className="search-modal__field">
+                Search
+                <input
+                  ref={searchInputRef}
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search by merchant, note, or alias"
+                />
+              </label>
+              <p className="search-modal__hint">Results update as you type.</p>
+            </div>
+
+            <div className="form-actions">
+              <button
+                className="button button-secondary"
+                type="button"
+                onClick={() => {
+                  setQuery("");
+                  setSearchOpen(false);
+                }}
+              >
+                Clear
+              </button>
+              <button className="button button-primary" type="button" onClick={() => setSearchOpen(false)}>
                 Done
               </button>
             </div>
@@ -5070,7 +5134,7 @@ function TransactionsPageContent() {
       ) : null}
 
       {manualOpen ? (
-        <div className="modal-backdrop" role="presentation" onClick={() => setManualOpen(false)}>
+        <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => setManualOpen(false)}>
           <section
             className="modal-card modal-card--wide glass"
             role="dialog"
