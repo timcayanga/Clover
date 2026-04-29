@@ -5,6 +5,53 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 
 type StarterWorkspaceUser = Pick<User, "id" | "clerkUserId" | "email" | "verified" | "dataWipedAt">;
 
+const starterAccountSelect = {
+  id: true,
+  workspaceId: true,
+  name: true,
+  institution: true,
+  investmentSubtype: true,
+  investmentSymbol: true,
+  investmentQuantity: true,
+  investmentCostBasis: true,
+  investmentPrincipal: true,
+  investmentStartDate: true,
+  investmentMaturityDate: true,
+  investmentInterestRate: true,
+  investmentMaturityValue: true,
+  type: true,
+  currency: true,
+  source: true,
+  balance: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+const starterCategorySelect = {
+  id: true,
+  workspaceId: true,
+  name: true,
+  type: true,
+  parentCategoryId: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+const starterWorkspaceSelect = {
+  id: true,
+  userId: true,
+  name: true,
+  type: true,
+  createdAt: true,
+  updatedAt: true,
+  accounts: {
+    select: starterAccountSelect,
+  },
+  categories: {
+    select: starterCategorySelect,
+  },
+} as const;
+
 const ensureStarterCashAccount = async (workspaceId: string) => {
   await prisma.account.updateMany({
     where: {
@@ -53,10 +100,7 @@ export const ensureStarterWorkspace = async (
 
   const existing = await prisma.workspace.findFirst({
     where: { userId: user.id },
-    include: {
-      accounts: true,
-      categories: true,
-    },
+    select: starterWorkspaceSelect,
   });
 
   if (existing) {
@@ -89,13 +133,14 @@ export const ensureStarterWorkspace = async (
         })),
       },
     },
-    include: {
-      accounts: true,
-      categories: true,
-    },
   });
 
-  return workspace;
+  const createdWorkspace = await prisma.workspace.findUnique({
+    where: { id: workspace.id },
+    select: starterWorkspaceSelect,
+  });
+
+  return createdWorkspace ?? workspace;
 };
 
 export const seedWorkspaceDefaults = async (workspaceId: string) => {

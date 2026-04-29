@@ -2377,9 +2377,15 @@ function TransactionsPageContent() {
   const openManualAdd = async () => {
     setAddMenuOpen(false);
 
-    if (!selectedWorkspaceId) {
+    const activeWorkspaceId = selectedWorkspaceId || readTransactionsWorkspaceCache()?.selectedWorkspaceId || workspaces[0]?.id || null;
+
+    if (!activeWorkspaceId) {
       setMessage("Choose a workspace first.");
       return;
+    }
+
+    if (activeWorkspaceId !== selectedWorkspaceId) {
+      setSelectedWorkspaceId(activeWorkspaceId);
     }
 
     if (planLimits?.transactionLimit != null && workspaceTransactionCount >= planLimits.transactionLimit) {
@@ -2401,7 +2407,7 @@ function TransactionsPageContent() {
     setManualOpen(true);
 
     try {
-      const accountId = await ensureDefaultAccount(selectedWorkspaceId);
+      const accountId = await ensureDefaultAccount(activeWorkspaceId);
       setManualForm((current) => {
         if (current.accountId) {
           return current;
@@ -2668,14 +2674,20 @@ function TransactionsPageContent() {
   const saveManualTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!selectedWorkspaceId) {
+    const activeWorkspaceId = selectedWorkspaceId || readTransactionsWorkspaceCache()?.selectedWorkspaceId || workspaces[0]?.id || null;
+
+    if (!activeWorkspaceId) {
       setMessage("Choose a workspace first.");
       return;
     }
 
+    if (activeWorkspaceId !== selectedWorkspaceId) {
+      setSelectedWorkspaceId(activeWorkspaceId);
+    }
+
     setIsSaving(true);
     try {
-      const accountId = manualForm.accountId || (await ensureDefaultAccount(selectedWorkspaceId));
+      const accountId = manualForm.accountId || (await ensureDefaultAccount(activeWorkspaceId));
       const merchantText = manualForm.merchantRaw.trim();
       let categoryId = manualForm.categoryId || getOtherCategoryId(categories) || undefined;
 
@@ -2695,7 +2707,7 @@ function TransactionsPageContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          workspaceId: selectedWorkspaceId,
+          workspaceId: activeWorkspaceId,
           accountId,
           categoryId: categoryId ?? null,
           date: manualForm.date,
@@ -2729,7 +2741,7 @@ function TransactionsPageContent() {
       window.requestAnimationFrame(() => {
         window.scrollTo({ top: 0, behavior: "smooth" });
       });
-      void loadTransactionsPage(selectedWorkspaceId, {
+      void loadTransactionsPage(activeWorkspaceId, {
         background: true,
         pageOverride: 1,
         pageSizeOverride: transactionsPageSize,
