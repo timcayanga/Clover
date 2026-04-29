@@ -4891,7 +4891,6 @@ function TransactionsPageContent() {
               <div>
                 <p className="eyebrow">Transactions</p>
                 <h4 id="add-transaction-title">Add transaction</h4>
-                <p className="modal-copy">Add a manual transaction or keep it as a quick review note.</p>
               </div>
               <button className="icon-button" type="button" onClick={() => setManualOpen(false)} aria-label="Close add transaction dialog">
                 ×
@@ -4906,7 +4905,7 @@ function TransactionsPageContent() {
                     ref={manualNameInputRef}
                     value={manualForm.merchantRaw}
                     onChange={(event) => setManualForm((current) => ({ ...current, merchantRaw: event.target.value }))}
-                    placeholder="Merchant or payee"
+                    placeholder="e.g. Lunch at SM Parking"
                     required
                   />
                 </label>
@@ -4933,19 +4932,34 @@ function TransactionsPageContent() {
                     />
                   </label>
                   <label>
-                    Type
-                    <select
-                      value={manualForm.type}
-                      onChange={(event) =>
-                        setManualForm((current) => ({
-                          ...current,
-                          type: event.target.value as ManualTransactionForm["type"],
-                        }))
-                      }
-                    >
-                      <option value="debit">Debit</option>
-                      <option value="credit">Credit</option>
-                    </select>
+                    <span className="transactions-manual-type-label">
+                      <span>Type</span>
+                      <button
+                        type="button"
+                        className="transactions-manual-type-help"
+                        title="Debit means money leaving this account. Credit means money coming in."
+                        aria-label="Debit means money leaving this account. Credit means money coming in."
+                      >
+                        i
+                      </button>
+                    </span>
+                    <div className="transactions-manual-type-control">
+                      <span className="transactions-manual-type-symbol" aria-hidden="true">
+                        {manualForm.type === "credit" ? "+" : "−"}
+                      </span>
+                      <select
+                        value={manualForm.type}
+                        onChange={(event) =>
+                          setManualForm((current) => ({
+                            ...current,
+                            type: event.target.value as ManualTransactionForm["type"],
+                          }))
+                        }
+                      >
+                        <option value="debit">Debit</option>
+                        <option value="credit">Credit</option>
+                      </select>
+                    </div>
                   </label>
                 </div>
 

@@ -10627,6 +10627,45 @@ input.transaction-inline-edit--amount::placeholder {
   min-width: 0;
 }
 
+.transactions-manual-type-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.transactions-manual-type-help {
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(3, 168, 192, 0.22);
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.08);
+  color: var(--accent);
+  font: inherit;
+  font-size: 0.65rem;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  cursor: help;
+}
+
+.transactions-manual-type-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transactions-manual-type-symbol {
+  min-width: 18px;
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+}
+
 .transactions-bulk-toggle-group {
   grid-column: span 2;
 }
