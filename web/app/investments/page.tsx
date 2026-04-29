@@ -726,7 +726,6 @@ export default function InvestmentsPage() {
       <div className="accounts-page">
         <div className="investments-page__header">
           <div className="investments-page__header-copy">
-            <p className="eyebrow">Investments</p>
             <h1>Investments</h1>
           </div>
           <div className="investments-page__header-actions">

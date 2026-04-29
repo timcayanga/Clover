@@ -1606,7 +1606,7 @@ async function GoalsPageStream({
           </div>
         </article>
 
-        <nav className="reports-tabs goals-tabs" aria-label="Goal sections" style={{ gridTemplateColumns: `repeat(${availableSections.length}, minmax(0, 1fr))` }}>
+        <nav className="reports-tabs goals-tabs" aria-label="Goal sections">
           {availableSections.map((section) => (
             <Link
               key={section}

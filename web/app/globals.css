@@ -4173,46 +4173,65 @@ label {
   gap: 8px;
 }
 
-.reports-tabs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+:is(.reports-tabs, .goals-tabs, .insights-tabs, .investments-tabs) {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
   margin-top: 6px;
+  padding: 0 2px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
-.reports-tab {
+:is(.reports-tabs, .goals-tabs, .insights-tabs, .investments-tabs)::-webkit-scrollbar {
+  display: none;
+}
+
+:is(.reports-tab, .insights-tab, .investments-tab) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
-  padding: 10px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.76);
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 12px 12px 0 0;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-bottom: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 249, 251, 0.94));
   color: var(--muted);
   text-decoration: none;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.02em;
-  box-shadow: var(--shadow-soft);
-  transition: border-color 160ms ease, color 160ms ease, background 160ms ease, transform 160ms ease;
+  box-shadow: none;
+  white-space: nowrap;
+  transition:
+    border-color 160ms ease,
+    color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
 }
 
-.reports-tab:hover,
-.reports-tab:focus-visible {
+:is(.reports-tab, .insights-tab, .investments-tab):hover,
+:is(.reports-tab, .insights-tab, .investments-tab):focus-visible {
   color: var(--text);
-  border-color: rgba(3, 168, 192, 0.2);
-  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(3, 168, 192, 0.24);
+  background: rgba(255, 255, 255, 0.98);
 }
 
-.reports-tab--active {
-  color: var(--accent);
-  border-color: rgba(3, 168, 192, 0.2);
-  background: rgba(3, 168, 192, 0.08);
+:is(.reports-tab--active, .insights-tab--active, .investments-tab.is-active) {
+  color: var(--accent-strong);
+  border-color: rgba(3, 168, 192, 0.45);
+  background: linear-gradient(180deg, rgba(3, 168, 192, 0.18), rgba(255, 255, 255, 0.98));
+  transform: translateY(1px);
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.78), 0 4px 10px rgba(3, 168, 192, 0.08);
 }
 
-.reports-tab--active:hover,
-.reports-tab--active:focus-visible {
+:is(.reports-tab--active, .insights-tab--active, .investments-tab.is-active):hover,
+:is(.reports-tab--active, .insights-tab--active, .investments-tab.is-active):focus-visible {
   color: var(--accent-strong);
 }
 
@@ -4954,49 +4973,6 @@ label {
   gap: 10px;
 }
 
-.insights-tabs {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.insights-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 10px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.76);
-  color: var(--muted);
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  box-shadow: var(--shadow-soft);
-  transition: border-color 160ms ease, color 160ms ease, background 160ms ease, transform 160ms ease;
-}
-
-.insights-tab:hover,
-.insights-tab:focus-visible {
-  color: var(--text);
-  border-color: rgba(3, 168, 192, 0.2);
-  background: rgba(255, 255, 255, 0.94);
-}
-
-.insights-tab--active {
-  color: var(--accent);
-  border-color: rgba(3, 168, 192, 0.2);
-  background: rgba(3, 168, 192, 0.08);
-}
-
-.insights-tab--active:hover,
-.insights-tab--active:focus-visible {
-  color: var(--accent-strong);
-}
-
 .insights-snapshot {
   padding: 24px;
   border: 1px solid var(--stroke);
@@ -5449,6 +5425,10 @@ label {
   gap: 8px;
 }
 
+.insight-signal-grid--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .insight-signal {
   padding: 10px 12px;
   border-radius: 16px;
@@ -5484,6 +5464,11 @@ label {
   width: 100%;
   height: 140px;
   display: block;
+}
+
+.insights-investment-summary {
+  display: grid;
+  gap: 10px;
 }
 
 .insight-chart__labels {
@@ -10836,45 +10821,6 @@ input.transaction-inline-edit--amount::placeholder {
   justify-content: flex-end;
 }
 
-.investments-tabs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 4px;
-}
-
-.investments-tab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 10px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.78);
-  color: var(--muted);
-  text-decoration: none;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  box-shadow: var(--shadow-soft);
-  transition: border-color 160ms ease, color 160ms ease, background 160ms ease, transform 160ms ease, opacity 160ms ease;
-}
-
-.investments-tab:hover,
-.investments-tab:focus-visible {
-  color: var(--text);
-  border-color: rgba(3, 168, 192, 0.2);
-  background: rgba(255, 255, 255, 0.94);
-}
-
-.investments-tab.is-active {
-  color: var(--accent);
-  border-color: rgba(3, 168, 192, 0.28);
-  background: linear-gradient(180deg, rgba(3, 168, 192, 0.08), rgba(255, 255, 255, 0.92));
-}
-
 .investments-tab.is-locked {
   opacity: 0.7;
 }
@@ -11188,7 +11134,8 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .investments-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 3px;
+    margin-top: 4px;
   }
 
   .investments-market__head {
@@ -16438,14 +16385,15 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .reports-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
+    gap: 3px;
+    margin-top: 4px;
   }
 
-  .reports-tab {
-    min-height: 36px;
-    padding: 8px 10px;
-    font-size: 13px;
+  :is(.reports-tab, .insights-tab, .investments-tab) {
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 12px;
+    border-radius: 11px 11px 0 0;
   }
 
   .reports-summary-grid--highlights {
@@ -16782,14 +16730,15 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .reports-tabs {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
+    gap: 3px;
+    margin-top: 4px;
   }
 
-  .reports-tab {
-    min-height: 36px;
-    padding: 8px 10px;
-    font-size: 13px;
+  :is(.reports-tab, .insights-tab, .investments-tab) {
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 12px;
+    border-radius: 11px 11px 0 0;
   }
 
   .dashboard-home__priority-strip {
