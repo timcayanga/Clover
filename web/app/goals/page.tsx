@@ -440,11 +440,6 @@ async function GoalsPageStream({
   const heroSupport = hasGoalSelection
     ? playbook.heroSupport
     : experienceProfile.goalsSupport ?? "If onboarding skipped this step, you can define your first real monthly target right here.";
-  const shellSubtitle = hasGoalTarget
-    ? experienceProfile.goalsShellSubtitle
-    : hasGoalSelection
-      ? experienceProfile.goalsShellSubtitle
-      : "A visual, encouraging space to set a monthly goal and watch the numbers move.";
   const isEmptyWorkspace =
     resolvedWorkspace._count.accounts <= 1 && resolvedWorkspace._count.importFiles === 0 && currentWindowTransactions.length === 0;
 
@@ -1297,10 +1292,6 @@ async function GoalsPageStream({
     <CloverShell
       active="goals"
       title="Goals"
-      kicker="Goal coaching"
-      subtitle={shellSubtitle}
-      showTopbar={false}
-      hideCompactBarKickerAndSubtitleOnMobile
     >
       {isEmptyWorkspace ? (
         <div style={{ marginBottom: 20 }}>

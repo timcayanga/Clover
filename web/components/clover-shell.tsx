@@ -23,6 +23,7 @@ type CloverShellProps = {
   title: string;
   kicker?: string;
   subtitle?: string;
+  titleAddon?: ReactNode;
   actions?: ReactNode;
   showTopbar?: boolean;
   hideCompactBarCopyOnMobile?: boolean;
@@ -364,6 +365,7 @@ export function CloverShell({
   title,
   kicker,
   subtitle,
+  titleAddon,
   actions,
   showTopbar = true,
   hideCompactBarCopyOnMobile = false,
@@ -1009,7 +1011,10 @@ export function CloverShell({
               }`}
             >
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
-              <h1>{title}</h1>
+              <div className="topbar__title-row">
+                <h1>{title}</h1>
+                {titleAddon ? <div className="topbar__title-addon">{titleAddon}</div> : null}
+              </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
             </div>
             {actions ? <div className="shell-compact-bar__actions">{actions}</div> : null}
@@ -1017,9 +1022,12 @@ export function CloverShell({
         ) : null}
         {showTopbar ? (
           <header className="topbar glass">
-            <div>
+            <div className="topbar__title-wrap">
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
-              <h1>{title}</h1>
+              <div className="topbar__title-row">
+                <h1>{title}</h1>
+                {titleAddon ? <div className="topbar__title-addon">{titleAddon}</div> : null}
+              </div>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
             </div>
             <div className="topbar-actions">

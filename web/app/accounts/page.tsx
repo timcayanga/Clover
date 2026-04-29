@@ -1742,7 +1742,6 @@ function AccountsPageContent() {
     <CloverShell
       active="accounts"
       title="Accounts"
-      showTopbar={false}
       actions={
         <>
           <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
@@ -1758,24 +1757,6 @@ function AccountsPageContent() {
     >
       <div className="accounts-page">
         <div className="accounts-page__sticky">
-          <div className="accounts-page__headline">
-            <div className="accounts-page__headline-copy">
-              <h1>
-                Accounts
-              </h1>
-            </div>
-            <div className="accounts-page__headline-actions">
-              <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
-                <ActionIcon name="plus" />
-                <span>Add account</span>
-              </button>
-              <button className="button button-secondary button-small accounts-toolbar-button" type="button" onClick={() => openImportFiles()}>
-                <ActionIcon name="upload" />
-                <span>Import files</span>
-              </button>
-            </div>
-          </div>
-
           <section className="accounts-overview-grid">
             <article className="accounts-overview-card glass">
               <p className="eyebrow">
@@ -2492,7 +2473,6 @@ function AccountsPageContent() {
       <PageFileDropZone
         enabled={!importOpen}
         title="Drop statement files anywhere"
-        subtitle="Clover will catch them and open import for you."
         onFilesDropped={(files) => openImportFiles(files)}
       />
 

@@ -733,45 +733,47 @@ export default function InvestmentsPage() {
   }
 
   return (
-    <CloverShell active="investments" title="Investments" showTopbar={false} actions={renderAddInvestmentButton("mobile")}>
-      <div className="accounts-page">
-        <div className="subtabs-row subtabs-row--split">
-          <nav className="investments-tabs" aria-label="Investment sections">
-            {INVESTMENT_TABS.map((tab) => {
-              const isLocked = Boolean(tab.proOnly && !canUseProTabs);
-              const isActive = selectedTab === tab.key;
+    <CloverShell
+      active="investments"
+      title="Investments"
+      titleAddon={
+        <nav className="investments-tabs" aria-label="Investment sections">
+          {INVESTMENT_TABS.map((tab) => {
+            const isLocked = Boolean(tab.proOnly && !canUseProTabs);
+            const isActive = selectedTab === tab.key;
 
-              if (isLocked) {
-                return (
-                  <button
-                    key={tab.key}
-                    className={`investments-tab ${isActive ? "is-active" : ""} is-locked`}
-                    type="button"
-                    disabled
-                    aria-current={isActive ? "page" : undefined}
-                    aria-label={`${tab.label}, Pro only`}
-                  >
-                    <span>{tab.label}</span>
-                    <span className="investments-tab__badge">Pro</span>
-                  </button>
-                );
-              }
-
+            if (isLocked) {
               return (
-                <Link
+                <button
                   key={tab.key}
-                  className={`investments-tab ${isActive ? "is-active" : ""}`}
-                  href={buildInvestmentsHref(tab.key)}
+                  className={`investments-tab ${isActive ? "is-active" : ""} is-locked`}
+                  type="button"
+                  disabled
                   aria-current={isActive ? "page" : undefined}
+                  aria-label={`${tab.label}, Pro only`}
                 >
                   <span>{tab.label}</span>
-                </Link>
+                  <span className="investments-tab__badge">Pro</span>
+                </button>
               );
-              })}
-          </nav>
-          <div className="subtabs-row__actions">{renderAddInvestmentButton("desktop")}</div>
-        </div>
+            }
 
+            return (
+              <Link
+                key={tab.key}
+                className={`investments-tab ${isActive ? "is-active" : ""}`}
+                href={buildInvestmentsHref(tab.key)}
+                aria-current={isActive ? "page" : undefined}
+              >
+                <span>{tab.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      }
+      actions={renderAddInvestmentButton("mobile")}
+    >
+      <div className="accounts-page">
         {loading ? <p className="panel-muted">Loading investments...</p> : null}
         {!loading && message ? <p className="panel-muted">{message}</p> : null}
 

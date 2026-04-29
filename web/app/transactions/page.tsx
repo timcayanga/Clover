@@ -3759,15 +3759,14 @@ function TransactionsPageContent() {
   }
 
   return (
-    <CloverShell active="transactions" title="Transactions" showTopbar={false}>
+    <CloverShell active="transactions" title="Transactions">
       <PageFileDropZone
         enabled={!importOpen}
         title="Drop statement files anywhere"
-        subtitle="Clover will catch them and open import for you."
         onFilesDropped={(files) => openImportFiles(files)}
       />
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`}>
-        <div className="glass table-panel table-panel--full transactions-table-panel transactions-main-panel">
+        <div className="transactions-main-panel">
           <div className="transactions-topbar">
             <div className="transactions-toolbar-row transactions-toolbar-row--top">
               <div className="transactions-toolbar-spacer" aria-hidden="true" />

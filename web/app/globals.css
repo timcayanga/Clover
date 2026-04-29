@@ -8644,19 +8644,23 @@ label {
   flex-direction: column;
   gap: 8px;
   overflow: hidden;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
 }
 
 .transactions-topbar {
   display: grid;
   gap: 5px;
   padding-bottom: 4px;
-  border-bottom: 1px solid var(--stroke);
+  border-bottom: 1px solid rgba(219, 227, 232, 0.85);
   position: sticky;
   top: 0;
   z-index: 5;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .transactions-toolbar-row {

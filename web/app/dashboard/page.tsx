@@ -867,9 +867,6 @@ async function DashboardPageStream({
     <CloverShell
       active="dashboard"
       title="Dashboard"
-      subtitle={experienceProfile.dashboardSubtitle}
-      showTopbar={false}
-      hideCompactBarKickerAndSubtitleOnMobile
     >
       <Suspense fallback={<DashboardStreamFallback />}>
         <DashboardStream user={user} resolvedSearchParams={resolvedSearchParams} />

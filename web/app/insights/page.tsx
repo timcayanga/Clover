@@ -789,7 +789,6 @@ async function InsightsPageStream({
     <CloverShell
       active="insights"
       title="Insights"
-      showTopbar={false}
     >
       <PostHogEvent
         event="insight_generated"
