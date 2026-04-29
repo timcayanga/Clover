@@ -107,11 +107,19 @@ type RecurringMerchant = {
 };
 
 type ReportsRange = "30d" | "90d" | "ytd";
+type ReportsSection = "overview" | "spending" | "trends" | "advanced";
 
 const reportsRangeLabels: Record<ReportsRange, string> = {
   "30d": "30 days",
   "90d": "90 days",
   ytd: "Year to date",
+};
+
+const reportsSectionLabels: Record<ReportsSection, string> = {
+  overview: "Overview",
+  spending: "Spending",
+  trends: "Trends",
+  advanced: "Advanced",
 };
 
 const normalizeReportsRange = (value: string | undefined): ReportsRange => {
@@ -120,6 +128,14 @@ const normalizeReportsRange = (value: string | undefined): ReportsRange => {
   }
 
   return "30d";
+};
+
+const normalizeReportsSection = (value: string | undefined): ReportsSection => {
+  if (value === "spending" || value === "trends" || value === "advanced") {
+    return value;
+  }
+
+  return "overview";
 };
 
 const getReportWindow = (anchor: Date, range: ReportsRange) => {
@@ -172,6 +188,14 @@ const normalizeMerchant = (value: string) => value.trim().toLowerCase();
 const buildTransactionsHref = (params: Record<string, string>) => `/transactions?${new URLSearchParams(params).toString()}`;
 
 const isDefined = <T,>(value: T | null | undefined): value is T => value !== null && value !== undefined;
+
+function ReportTip({ label }: { label: string }) {
+  return (
+    <span className="report-tip" title={label} aria-label={label}>
+      i
+    </span>
+  );
+}
 
 const goalLabels: Record<string, string> = {
   save_more: "Save more",
@@ -228,13 +252,14 @@ async function ReportsStream({
   searchParams,
 }: {
   active?: "reports" | "insights";
-  searchParams?: { range?: string };
+  searchParams?: { range?: string; section?: string };
 }) {
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
   const selectedRange = normalizeReportsRange(searchParams?.range);
   const selectedRangeLabel = reportsRangeLabels[selectedRange];
   const rangeWindowText = selectedRangeLabel.toLowerCase();
+  const requestedSection = normalizeReportsSection(searchParams?.section);
 
   const session = await getSessionContext();
   const existingUser = await prisma.user.findUnique({
@@ -242,6 +267,8 @@ async function ReportsStream({
   });
   const user = existingUser ?? (await getOrCreateCurrentUser(session.userId));
   const isPro = user.planTier === "pro";
+  const selectedSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
+  const sectionTabs: ReportsSection[] = isPro ? ["overview", "spending", "trends", "advanced"] : ["overview", "spending", "trends"];
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
@@ -301,6 +328,14 @@ async function ReportsStream({
     }
     selectedWorkspaceId = starterWorkspaceData.id;
   }
+
+  const buildReportsHref = (overrides: { range?: ReportsRange; section?: ReportsSection } = {}) => {
+    const query = new URLSearchParams({
+      range: overrides.range ?? selectedRange,
+      section: overrides.section ?? selectedSection,
+    });
+    return `?${query.toString()}`;
+  };
 
   try {
     const now = new Date();
@@ -1218,7 +1253,7 @@ async function ReportsStream({
                   <Link
                     key={range}
                     className={`pill pill-interactive ${selectedRange === range ? "pill-is-selected" : ""}`}
-                    href={`?range=${range}`}
+                    href={buildReportsHref({ range })}
                   >
                     {reportsRangeLabels[range]}
                   </Link>
@@ -1228,30 +1263,62 @@ async function ReportsStream({
           </details>
         </div>
 
-        <section className="reports-summary-grid reports-summary-grid--highlights">
+        <nav className="reports-tabs" aria-label="Report sections">
+          {sectionTabs.map((section) => (
+            <Link
+              key={section}
+              className={`reports-tab ${selectedSection === section ? "reports-tab--active" : ""}`}
+              href={buildReportsHref({ section })}
+              aria-current={selectedSection === section ? "page" : undefined}
+            >
+              {reportsSectionLabels[section]}
+            </Link>
+          ))}
+        </nav>
+
+        {selectedSection === "overview" ? (
+          <section className="reports-summary-grid reports-summary-grid--highlights reports-overview-grid">
           <article className="metric compact metric--highlight glass">
-            <span>Income</span>
+            <div className="metric__label">
+              <span>Income</span>
+              <ReportTip label="All money coming in during the selected range." />
+            </div>
             <strong>{formatCurrency(currentSummary.income)}</strong>
           </article>
           <article className="metric compact metric--highlight glass">
-            <span>Expenses</span>
+            <div className="metric__label">
+              <span>Expenses</span>
+              <ReportTip label="All spending recorded in the selected range." />
+            </div>
             <strong>{formatCurrency(currentSummary.expense)}</strong>
           </article>
           <article className="metric compact metric--highlight glass">
-            <span>Net income</span>
+            <div className="metric__label">
+              <span>Net income</span>
+              <ReportTip label="Income minus spending for the selected range." />
+            </div>
             <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
           </article>
           <article className="metric compact metric--highlight glass">
-            <span>Savings rate</span>
+            <div className="metric__label">
+              <span>Savings rate</span>
+              <ReportTip label="The share of income left after spending." />
+            </div>
             <strong>{savingsRate === null ? "N/A" : formatPercent(savingsRate * 100)}</strong>
           </article>
-        </section>
+          </section>
+        ) : null}
 
-        {isPro ? (
+        {isPro && selectedSection === "advanced" ? (
           <>
             <section className="reports-brief-grid">
               <article className="report-ai-card report-ai-card--compact glass">
-                <p className="eyebrow">What changed</p>
+                <div className="report-card__head report-card__head--compact">
+                  <div>
+                    <h4>What changed</h4>
+                  </div>
+                  <ReportTip label="A short summary of the biggest change in your money this period." />
+                </div>
                 <h3>{aiHeadline}</h3>
                 <p>{aiSummary}</p>
                 <div className="report-ai-card__actions">
@@ -1262,7 +1329,12 @@ async function ReportsStream({
               </article>
 
               <article className="report-ai-card report-ai-card--compact glass">
-                <p className="eyebrow">Why it changed</p>
+                <div className="report-card__head report-card__head--compact">
+                  <div>
+                    <h4>Why it changed</h4>
+                  </div>
+                  <ReportTip label="The main drivers behind the change." />
+                </div>
                 <div className="report-ai-signal-grid report-ai-signal-grid--compact">
                   {aiSignals.slice(0, 3).map((signal) => (
                     <div key={signal.label} className={`report-ai-signal report-ai-signal--${signal.tone}`}>
@@ -1275,7 +1347,12 @@ async function ReportsStream({
               </article>
 
               <article className="report-ai-card report-ai-card--compact glass">
-                <p className="eyebrow">What to do next</p>
+                <div className="report-card__head report-card__head--compact">
+                  <div>
+                    <h4>What to do next</h4>
+                  </div>
+                  <ReportTip label="One action you can take right now from the report." />
+                </div>
                 <div className="report-list">
                   {aiActions.map((action) => (
                     <div key={action.title} className="report-list__item report-list__item--compact">
@@ -1337,15 +1414,16 @@ async function ReportsStream({
           </>
         ) : null}
 
+        {selectedSection === "spending" ? (
         <section className="reports-grid reports-grid--primary">
           <article className="report-card glass report-card--wide">
             <div className="report-card__head">
-              <div>
+              <div className="report-card__head-title">
                 <h4>Where your money went</h4>
+                <ReportTip label="A flow view showing how income spreads into spending categories." />
               </div>
               <div className="report-card__stat">
                 <strong>{formatCurrency(currentSummary.income)}</strong>
-                <span>how spending is split across categories</span>
               </div>
             </div>
 
@@ -1396,14 +1474,12 @@ async function ReportsStream({
 
           <article className="report-card glass">
             <div className="report-card__head">
-              <div>
+              <div className="report-card__head-title">
                 <h4>Spending by category</h4>
+                <ReportTip label="The biggest spending groups in the selected range." />
               </div>
               <div className="report-card__stat">
                 <strong>{formatCurrency(currentSpend)}</strong>
-                <span>
-                  {topCategories.length > 0 ? `${topCategories.length} leading categories · ${formatPercent(topCategoryShare ? topCategoryShare * 100 : 0)} top share` : "No spending yet"}
-                </span>
               </div>
             </div>
 
@@ -1484,18 +1560,18 @@ async function ReportsStream({
 
           </article>
         </section>
+        ) : null}
 
+        {selectedSection === "trends" ? (
         <section className="reports-grid reports-grid--free">
           <article className="report-card glass">
             <div className="report-card__head">
-              <div>
+              <div className="report-card__head-title">
                 <h4>Repeat charges</h4>
+                <ReportTip label="Merchants that appear more than once and usually repeat." />
               </div>
               <div className="report-card__stat">
                 <strong>{recurringMerchants.length}</strong>
-                <span>
-                  fixed costs surfaced · {formatCurrency(recurringSavingsPotential)} monthly savings potential
-                </span>
               </div>
             </div>
 
@@ -1544,14 +1620,12 @@ async function ReportsStream({
 
           <article className="report-card glass">
             <div className="report-card__head">
-              <div>
+              <div className="report-card__head-title">
                 <h4>Top spenders</h4>
+                <ReportTip label="Where spending is most concentrated by merchant." />
               </div>
               <div className="report-card__stat">
                 <strong>{topMerchants.length}</strong>
-                <span>
-                  where spending concentrates · {topMerchants[0] ? formatPercent((topMerchants[0].amount / Math.max(currentSpend, 1)) * 100) : "0%"} top share
-                </span>
               </div>
             </div>
 
@@ -1582,14 +1656,12 @@ async function ReportsStream({
 
           <article className="report-card glass">
             <div className="report-card__head">
-              <div>
+              <div className="report-card__head-title">
                 <h4>This month</h4>
+                <ReportTip label="A quick month-to-month snapshot of net cash flow." />
               </div>
               <div className="report-card__stat">
                 <strong className={currentMonthBucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentMonthBucket.net)}</strong>
-                <span>
-                  {currentMonthBucket.label} · {monthlyNetChange >= 0 ? "up" : "down"} vs last month
-                </span>
               </div>
             </div>
 
@@ -1622,6 +1694,7 @@ async function ReportsStream({
             </div>
           </article>
         </section>
+        ) : null}
 
         {!isPro ? (
           <div className="reports-footer-upsell">
@@ -1673,7 +1746,7 @@ async function ReportsStream({
   }
 }
 
-async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
+async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string }> }) {
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
@@ -1704,7 +1777,7 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
   );
 }
 
-export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string }> }) {
+export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string }> }) {
   return (
     <Suspense fallback={<CloverLoadingScreen label="reports" />}>
       <ReportsPageStream searchParams={searchParams} />
