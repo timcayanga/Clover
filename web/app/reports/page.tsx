@@ -1827,16 +1827,6 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
       active="reports"
       title="Reports"
       titleAddon={titleAddon}
-      actions={
-        <div className="reports-shell-actions">
-          <Link className="pill-link" href="/transactions">
-            Transactions
-          </Link>
-          <Link className="pill-link" href="/settings">
-            Settings
-          </Link>
-        </div>
-      }
     >
       <ReportsStream active="reports" searchParams={resolvedSearchParams} />
     </CloverShell>
