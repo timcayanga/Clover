@@ -1238,19 +1238,6 @@ async function ReportsStream({
         ) : null}
 
         <div className="reports-toolbar glass">
-          <nav className="reports-tabs" aria-label="Report sections">
-            {sectionTabs.map((section) => (
-              <Link
-                key={section}
-                className={`reports-tab ${selectedSection === section ? "reports-tab--active" : ""}`}
-                href={buildReportsHref({ section }, selectedRange, selectedSection)}
-                aria-current={selectedSection === section ? "page" : undefined}
-              >
-                {reportsSectionLabels[section]}
-              </Link>
-            ))}
-          </nav>
-
           <div className="reports-range-menu">
             <details>
               <summary className="reports-range-menu__summary" aria-label={`Change report range. Current range: ${selectedRangeLabel}`}>
@@ -1816,13 +1803,30 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
   }
 
   const requestedSection = normalizeReportsSection(resolvedSearchParams?.section);
+  const selectedRange = normalizeReportsRange(resolvedSearchParams?.range);
   const isPro = user.planTier === "pro";
   const selectedSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
+  const sectionTabs: ReportsSection[] = isPro ? ["overview", "spending", "trends", "advanced"] : ["overview", "spending", "trends"];
+  const titleAddon = (
+    <nav className="reports-tabs" aria-label="Report sections">
+      {sectionTabs.map((section) => (
+        <Link
+          key={section}
+          className={`reports-tab ${selectedSection === section ? "reports-tab--active" : ""}`}
+          href={buildReportsHref({ section }, selectedRange, selectedSection)}
+          aria-current={selectedSection === section ? "page" : undefined}
+        >
+          {reportsSectionLabels[section]}
+        </Link>
+      ))}
+    </nav>
+  );
 
   return (
     <CloverShell
       active="reports"
       title="Reports"
+      titleAddon={titleAddon}
       actions={
         <div className="reports-shell-actions">
           <Link className="pill-link" href="/transactions">
