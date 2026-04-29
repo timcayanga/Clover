@@ -4081,16 +4081,28 @@ label {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.reports-toolbar {
+  position: sticky;
+  top: 10px;
+  z-index: 23;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 12px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(245, 247, 249, 0.96), rgba(245, 247, 249, 0.86));
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 24px rgba(31, 41, 51, 0.05);
+}
+
 .reports-range-menu {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 4px;
-  position: sticky;
-  top: 10px;
-  z-index: 22;
-  padding: 2px 0;
-  background: linear-gradient(180deg, rgba(245, 247, 249, 0.96), rgba(245, 247, 249, 0.84));
-  backdrop-filter: blur(12px);
+  margin-bottom: 0;
+  padding: 0;
+  position: relative;
+  z-index: 1;
 }
 
 .reports-range-menu details {
@@ -4169,7 +4181,7 @@ label {
   display: flex;
   align-items: flex-end;
   gap: 4px;
-  margin-top: 6px;
+  margin-top: 0;
   padding: 0 2px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.24);
   overflow-x: auto;
@@ -4178,11 +4190,10 @@ label {
 }
 
 .reports-tabs {
-  position: sticky;
-  top: 58px;
-  z-index: 21;
-  background: linear-gradient(180deg, rgba(245, 247, 249, 0.94), rgba(245, 247, 249, 0.78));
-  backdrop-filter: blur(12px);
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  z-index: 2;
 }
 
 :is(.reports-tabs, .goals-tabs, .insights-tabs, .investments-tabs)::-webkit-scrollbar {
@@ -16825,10 +16836,16 @@ input.transaction-inline-edit--amount::placeholder {
     display: none;
   }
 
+  .reports-toolbar {
+    top: 8px;
+    padding: 10px 10px 10px;
+    gap: 10px;
+    align-items: center;
+    border-radius: 20px;
+  }
+
   .reports-tabs {
     gap: 3px;
-    margin-top: 4px;
-    top: 56px;
   }
 
   :is(.reports-tab, .insights-tab, .investments-tab) {
@@ -17174,8 +17191,6 @@ input.transaction-inline-edit--amount::placeholder {
 
   .reports-tabs {
     gap: 3px;
-    margin-top: 4px;
-    top: 52px;
   }
 
   :is(.reports-tab, .insights-tab, .investments-tab) {
