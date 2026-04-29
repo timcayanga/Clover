@@ -8,6 +8,7 @@ import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { InfoTip as InsightInfoTip } from "@/components/info-tip";
+import { InsightsTabs } from "@/components/insights-tabs";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
@@ -754,13 +755,6 @@ async function InsightsPageStream({
   const visibleRecurringInsightCards = isPro ? recurringInsightCards : recurringInsightCards.slice(0, 2);
   const visibleBehaviorInsightCards = isPro ? behaviorInsightCards : behaviorInsightCards.slice(0, 2);
 
-  const buildInsightsHref = (overrides: { tab?: InsightsTab } = {}) => {
-    const params = new URLSearchParams({
-      tab: overrides.tab ?? selectedTab,
-    });
-    return `?${params.toString()}`;
-  };
-
   const chartWidth = 520;
   const chartHeight = 150;
   const chartPadding = 18;
@@ -865,20 +859,10 @@ async function InsightsPageStream({
         </div>
       ) : null}
       <section className="insights-story">
-        <nav className="insights-tabs" aria-label="Insights sections">
-          {availableTabs.map((tab) => (
-            <Link
-              key={tab}
-              className={`insights-tab ${selectedTab === tab ? "insights-tab--active" : ""}`}
-              href={buildInsightsHref({ tab })}
-              aria-current={selectedTab === tab ? "page" : undefined}
-            >
-              {insightsTabLabels[tab]}
-            </Link>
-          ))}
-        </nav>
-
-        {selectedTab === "summary" ? (
+        <InsightsTabs
+          initialTab={selectedTab}
+          labels={insightsTabLabels}
+          summary={
           <article className="insights-snapshot insights-snapshot--hero glass">
           <div className="insights-snapshot__copy">
             <h3>{aiHeadline}</h3>
@@ -926,8 +910,9 @@ async function InsightsPageStream({
             ))}
           </div>
           </article>
-        ) : null}
-
+          }
+          spending={
+          <>
         {hasInvestmentSnapshot ? (
           <article className="insight-panel glass insights-investment-summary">
             <div className="insight-panel__head">
@@ -970,8 +955,6 @@ async function InsightsPageStream({
             </div>
           </article>
         ) : null}
-
-        {selectedTab === "spending" ? (
           <article className="insight-panel insight-panel--feature glass">
           <div className="insight-panel__head">
             <div>
@@ -1037,9 +1020,6 @@ async function InsightsPageStream({
           </div>
 
           </article>
-        ) : null}
-
-        {selectedTab === "spending" ? (
           <article className="insight-panel glass">
           <div className="insight-panel__head">
             <div>
@@ -1130,9 +1110,10 @@ async function InsightsPageStream({
             </div>
           </div>
           </article>
-        ) : null}
-
-        {selectedTab === "patterns" ? (
+          </>
+          }
+          patterns={
+          <>
           <article className="insight-panel glass">
           <div className="insight-panel__head">
             <div>
@@ -1167,9 +1148,6 @@ async function InsightsPageStream({
             )}
           </div>
           </article>
-        ) : null}
-
-        {selectedTab === "patterns" ? (
           <article className="insight-panel glass">
           <div className="insight-panel__head">
             <div>
@@ -1232,7 +1210,9 @@ async function InsightsPageStream({
             </div>
           </div>
           </article>
-        ) : null}
+          </>
+          }
+        />
 
         {!isPro ? (
           <p className="insights-free-note">
