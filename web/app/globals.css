@@ -8723,7 +8723,8 @@ label {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  width: 100%;
 }
 
 .transactions-toolbar-row--top {
@@ -8743,6 +8744,19 @@ label {
   flex-wrap: wrap;
 }
 
+.transactions-toolbar-row--single .transactions-toolbar-group {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.transactions-toolbar-row--single .transactions-toolbar-group--left {
+  flex: 0 0 auto;
+}
+
+.transactions-toolbar-row--single .transactions-toolbar-group--right {
+  flex: 1 1 auto;
+}
+
 .transactions-toolbar-group--right {
   justify-content: flex-end;
   justify-self: end;
@@ -8758,8 +8772,8 @@ label {
   border: 1px solid rgba(219, 227, 232, 0.9);
   background: rgba(255, 255, 255, 0.96);
   box-shadow: var(--shadow-soft);
-  min-width: 220px;
-  flex: 1 1 240px;
+  min-width: 180px;
+  flex: 1 1 280px;
 }
 
 .transactions-toolbar-search__icon {
@@ -16627,6 +16641,7 @@ input.transaction-inline-edit--amount::placeholder {
 
   .shell-menu-button {
     display: inline-flex;
+    order: 1;
   }
 
   .shell-compact-bar__copy--hide-mobile {
@@ -16650,12 +16665,7 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .topbar-actions {
-    align-items: center;
-    justify-content: flex-end;
-    width: auto;
-    margin-left: auto;
-    gap: 8px;
-    flex-shrink: 0;
+    display: contents;
   }
 
   .topbar-actions > * {
@@ -16664,9 +16674,18 @@ input.transaction-inline-edit--amount::placeholder {
 
   .shell-compact-bar__copy,
   .topbar__title-wrap {
+    order: 2;
     flex: 1;
     min-width: 0;
     overflow: hidden;
+  }
+
+  .topbar-actions > :not(.shell-menu-button) {
+    order: 3;
+  }
+
+  .topbar-actions > :not(.shell-menu-button):first-child {
+    margin-left: auto;
   }
 
   .topbar__title-row {
