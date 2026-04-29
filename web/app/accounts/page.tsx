@@ -204,8 +204,6 @@ type StatementCheckpoint = {
   } | null;
 };
 
-type AccountSort = "name" | "balance_desc" | "updated_desc";
-
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
   style: "currency",
   currency: "PHP",
@@ -622,7 +620,6 @@ function AccountsPageContent() {
   const [importOpen, setImportOpen] = useState(false);
   const [importSessionId, setImportSessionId] = useState(0);
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<AccountSort>("updated_desc");
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
@@ -1184,17 +1181,9 @@ function AccountsPageContent() {
 
   const visibleAccounts = useMemo(() => {
     return [...reconciledAccounts].sort((left, right) => {
-      if (sortBy === "name") {
-        return left.name.localeCompare(right.name);
-      }
-
-      if (sortBy === "balance_desc") {
-        return parseAmount(right.balance) - parseAmount(left.balance);
-      }
-
       return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
     });
-  }, [reconciledAccounts, sortBy]);
+  }, [reconciledAccounts]);
 
   const totals = useMemo(() => {
     return reconciledAccounts.reduce(
@@ -1648,7 +1637,7 @@ function AccountsPageContent() {
   const exportCsv = () => {
     const rows = [
       ["Name", "Type", "Amount", "Last updated", "Source"],
-      ...searchedAccounts.map((account) => [
+      ...visibleAccounts.map((account) => [
         account.name,
         getAccountDisplayType(account),
         currencyFormatter.format(parseAmount(account.balance)),
@@ -1689,7 +1678,7 @@ function AccountsPageContent() {
               <tr><th>Name</th><th>Type</th><th>Amount</th><th>Last updated</th></tr>
             </thead>
             <tbody>
-              ${searchedAccounts
+              ${visibleAccounts
                 .map(
                   (account) => `
                     <tr>
@@ -1796,18 +1785,6 @@ function AccountsPageContent() {
 
         <section className="accounts-main-grid">
           <div className="accounts-list-column">
-            <div className="accounts-list-head">
-              <div className="accounts-list-controls">
-                <label>
-                  <select value={sortBy} onChange={(event) => setSortBy(event.target.value as AccountSort)}>
-                    <option value="updated_desc">Latest updated</option>
-                    <option value="name">Name</option>
-                    <option value="balance_desc">Balance</option>
-                  </select>
-                </label>
-              </div>
-            </div>
-
             <div className="accounts-sections">
               {accounts.length === 0 ? (
                 <div className="empty-state accounts-empty-state">
