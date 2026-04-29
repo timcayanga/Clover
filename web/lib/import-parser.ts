@@ -459,10 +459,10 @@ const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null =
   const hasRcbcBrand = /\bRCBC\b|\bRCBC BANKARD\b|\bBANKARD\b/i.test(compact);
   const hasCreditCardShell =
     /PREVIOUS\s+BALANCE|TOTAL\s+BALANCE\s+DUE|CARDHOLDER\s+PAYMENT\s+DUE\s+DATE|PAYMENT\s+DUE\s+DATE|MINIMUM\s+AMOUNT\s+DUE|CREDIT\s+LIMIT|CURRENT\s+BALANCE|NEW\s+BALANCE|STATEMENT\s+DATE\s+PAYMENT\s+DUE\s+DATE/i.test(compact);
-  const isCreditCardStatement = hasRcbcBrand && hasCreditCardShell;
-  if (!hasRcbcBrand) {
-    return null;
-  }
+  const hasCardNumberShell =
+    /\bCARD\s+NUMBER\b/i.test(compact) && /\b\d{4}[- ]\d{4}[- ]\d{4}[- ]\d{4}\b/i.test(compact);
+  const hasCreditCardContext = /\bSTATEMENT\s+DATE\b/i.test(compact) || hasCreditCardShell;
+  const isCreditCardStatement = (hasRcbcBrand && hasCreditCardShell) || (hasCardNumberShell && hasCreditCardContext);
   if (!isSavingsStatement && !isCreditCardStatement) {
     return null;
   }
@@ -3397,6 +3397,11 @@ const stripGcashRecordNoise = (value: string) => {
   return trimmed;
 };
 
+const isGcashRecordStarter = (value: string) =>
+  /^(?:Received GCash from|Sent GCash to|Transfer from|Transfer to|Cash In|Cash Out|Add Money|Send Money|Received Money|Payment to|Bills Payment to)/i.test(
+    normalizeWhitespace(value)
+  );
+
 const guessGcashCategoryName = (description: string, type: TransactionType) => {
   const merchant = normalizeGcashMerchant(description);
   if (type === "transfer") {
@@ -3408,15 +3413,27 @@ const guessGcashCategoryName = (description: string, type: TransactionType) => {
 
 const parseGcashTransactionRecord = (record: string, institution?: string | null) => {
   const normalized = normalizeWhitespace(record);
-  const match = normalized.match(
-    /^(?<prefix>.*?)?(?<date>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s+(?<meridian>AM|PM)\s*(?<body>.*?)\s+(?<reference>\d{10,})\s+(?<amount>\d[\d,]*\.\d{2})\s+(?<balance>\d[\d,]*\.\d{2})(?:\s+(?<suffix>.*))?$/
-  );
-
-  if (!match?.groups) {
+  const dateMatch = normalized.match(/\b\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\b/);
+  if (!dateMatch || dateMatch.index === undefined) {
     return null;
   }
 
-  const description = normalizeWhitespace([match.groups.prefix, match.groups.body, match.groups.suffix].filter(Boolean).join(" "));
+  const moneyMatches = Array.from(normalized.matchAll(/\b\d[\d,]*\.\d{2}\b/g));
+  if (moneyMatches.length < 2) {
+    return null;
+  }
+
+  const amountText = moneyMatches[moneyMatches.length - 2][0];
+  const balanceText = moneyMatches[moneyMatches.length - 1][0];
+  const referenceMatch = normalized.match(/\b\d{12,}\b/);
+  const referenceNo = referenceMatch?.[0] ?? null;
+
+  let description = normalized.replace(dateMatch[0], " ");
+  if (referenceNo) {
+    description = description.replace(referenceNo, " ");
+  }
+  description = description.replace(amountText, " ").replace(balanceText, " ");
+  description = normalizeWhitespace(description);
   const merchantClean = normalizeGcashMerchant(description);
   const type: TransactionType =
     /^Received GCash from/i.test(description) ||
@@ -3435,8 +3452,8 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
         : "expense";
 
   const categoryName = guessGcashCategoryName(description, type);
-  const date = parseDateValue(match.groups.date);
-  const amount = parseMoney(match.groups.amount);
+  const date = parseDateValue(dateMatch[0]);
+  const amount = parseMoney(amountText);
   const transferMatch = description.match(/\bTransfer\s+from\s+(09\d{9})\s+to\s+(09\d{9})\b/i);
 
   if (!date || amount === null) {
@@ -3454,10 +3471,10 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
     type,
     rawPayload: {
       bank: "GCash",
-      referenceNo: match.groups.reference,
-      amountText: match.groups.amount,
-      balanceText: match.groups.balance,
-      balance: parseMoney(match.groups.balance),
+      referenceNo,
+      amountText,
+      balanceText,
+      balance: parseMoney(balanceText),
       transferFromAccountNumber: transferMatch?.[1] ?? null,
       transferToAccountNumber: transferMatch?.[2] ?? null,
       line: normalized,
@@ -3484,13 +3501,31 @@ const parseGcashImportText = (text: string) => {
   for (const line of lines) {
     if (/^GCash Transaction History$/i.test(line)) continue;
     if (/^\d{4}-\d{2}-\d{2}\s+to\s+\d{4}-\d{2}-\d{2}$/i.test(line)) continue;
-    if (/^Date and Time$/i.test(line)) continue;
+    if (/^Date and Time(?:\s+Description\s+Reference\s+No\.?\s+Debit\s+Credit\s+Balance)?$/i.test(line)) continue;
     if (/^Description$/i.test(line)) continue;
     if (/^Reference No\.?$/i.test(line)) continue;
     if (/^Debit$/i.test(line)) continue;
     if (/^Credit$/i.test(line)) continue;
     if (/^Balance$/i.test(line)) continue;
-    if (/^STARTING BALANCE$/i.test(line)) continue;
+    if (/^STARTING BALANCE(?:\s+[0-9,]+\.\d{2})?$/i.test(line)) continue;
+    if (/^ENDING BALANCE(?:\s+[0-9,]+\.\d{2})?$/i.test(line)) {
+      if (current.length > 0) {
+        records.push(current.join(" "));
+        current = [];
+        pendingPrefix = [];
+      }
+      break;
+    }
+    if (/^Total Debit(?:\s+[0-9,]+\.\d{2})?$/i.test(line)) {
+      current = [];
+      pendingPrefix = [];
+      break;
+    }
+    if (/^Total Credit(?:\s+[0-9,]+\.\d{2})?$/i.test(line)) {
+      current = [];
+      pendingPrefix = [];
+      break;
+    }
     if (/^Page\s+\d+\s+of\s+\d+$/i.test(line)) continue;
 
     const cleanedLine = stripGcashRecordNoise(line);
@@ -3499,11 +3534,36 @@ const parseGcashImportText = (text: string) => {
     }
 
     if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\b/.test(cleanedLine)) {
+      const hasMoneyTokens = /\b\d[\d,]*\.\d{2}\b/.test(cleanedLine);
+      const hasReferenceToken = /\b\d{12,}\b/.test(cleanedLine);
+      if (!hasMoneyTokens && !hasReferenceToken) {
+        if (current.length > 0) {
+          records.push(current.join(" "));
+          current = [];
+        }
+
+        pendingPrefix.push(cleanedLine);
+        continue;
+      }
+
       if (current.length > 0) {
         records.push(current.join(" "));
       }
       current = [...pendingPrefix, cleanedLine];
       pendingPrefix = [];
+      continue;
+    }
+
+    if (current.length === 0 && pendingPrefix.length > 0 && isGcashRecordStarter(cleanedLine)) {
+      current = [...pendingPrefix, cleanedLine];
+      pendingPrefix = [];
+      continue;
+    }
+
+    if (current.length > 0 && isGcashRecordStarter(cleanedLine)) {
+      records.push(current.join(" "));
+      current = [];
+      pendingPrefix = [cleanedLine];
       continue;
     }
 
