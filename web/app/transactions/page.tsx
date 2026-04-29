@@ -24,8 +24,7 @@ import {
 } from "@/components/posthog-analytics";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { getAccountBrand } from "@/lib/account-brand";
-import { guessCategoryFallback } from "@/lib/data-engine";
-import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { guessCategoryName, inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
@@ -2543,7 +2542,7 @@ function TransactionsPageContent() {
       return;
     }
 
-    const immediateSuggestionCategoryName = guessCategoryFallback(
+    const immediateSuggestionCategoryName = guessCategoryName(
       merchantText,
       manualForm.type === "credit" ? "income" : "expense"
     );
@@ -2671,7 +2670,7 @@ function TransactionsPageContent() {
       let categoryId = manualForm.categoryId || getOtherCategoryId(categories) || undefined;
 
       if ((!categoryId || categoryId === getOtherCategoryId(categories)) && merchantText.length >= 2) {
-        const immediateSuggestionCategoryName = guessCategoryFallback(
+        const immediateSuggestionCategoryName = guessCategoryName(
           merchantText,
           manualForm.type === "credit" ? "income" : "expense"
         );

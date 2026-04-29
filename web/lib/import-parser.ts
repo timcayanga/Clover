@@ -44,7 +44,7 @@ const delimiterForFile = (fileType: string, fileName: string) => {
   return ",";
 };
 
-const guessCategoryName = (text: string, type: TransactionType) => {
+export const guessCategoryName = (text: string, type: TransactionType) => {
   const lower = text.toLowerCase();
   const compact = compactWhitespace(text).toLowerCase();
   if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) return "Financial";
@@ -5763,11 +5763,6 @@ export const parseImportText = (
     return rcbcParsed.rows;
   }
 
-  const bdoParsed = parseBdoSavingsImportText(text);
-  if (bdoParsed) {
-    return bdoParsed.rows;
-  }
-
   const unionbankParsed = parseUnionBankImportText(text);
   if (unionbankParsed) {
     return unionbankParsed.rows;
@@ -5791,6 +5786,11 @@ export const parseImportText = (
   const gotymeParsed = parseGoTymeImportText(text, context);
   if (gotymeParsed && gotymeParsed.rows.length > 0) {
     return gotymeParsed.rows;
+  }
+
+  const bdoParsed = parseBdoSavingsImportText(text);
+  if (bdoParsed) {
+    return bdoParsed.rows;
   }
 
   const bpiCreditParsed = parseBpiCreditCardImportText(text);
