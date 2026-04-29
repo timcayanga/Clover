@@ -426,6 +426,214 @@ const bpiCreditCardStatementMetadata = (text: string): DetectedStatementMetadata
   };
 };
 
+const parseSecurityBankDate = (value: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = normalizeWhitespace(value).replace(/\./g, "");
+  const compact = normalized.replace(/\s+/g, "");
+  const match = compact.match(/^(\d{1,2})([A-Za-z]{3})(\d{2,4})$/i);
+  if (!match) {
+    const parsed = parseDateValue(normalized);
+    return parsed ?? null;
+  }
+
+  const monthIndex = monthIndexByAbbr[match[2].slice(0, 3).toUpperCase()];
+  if (monthIndex === undefined) {
+    return parseDateValue(normalized);
+  }
+
+  const year = match[3].length === 2 ? Number(`20${match[3]}`) : Number(match[3]);
+  return new Date(Date.UTC(year, monthIndex, Number(match[1]), 12));
+};
+
+const securityBankStatementMetadata = (text: string): DetectedStatementMetadata | null => {
+  const normalized = text.replace(/\u00a0/g, " ");
+  const compact = normalizeWhitespace(normalized);
+  if (
+    !/CUSTOMER\s+DETAILS/i.test(compact) ||
+    !/TRANSACTION\s+DETAILS/i.test(compact) ||
+    !/STATEMENT\s+OF\s+ACCOUNT/i.test(compact) ||
+    !/ACCOUNT\s+NUMBER/i.test(compact)
+  ) {
+    return null;
+  }
+
+  const accountNumber = detectAccountNumberFromText(normalized);
+  const accountName = formatSimpleBankAccountName("Security Bank", accountNumber);
+  const periodMatch = compact.match(/PERIOD\s+COVERED\s*:\s*([A-Z]{3}\s+\d{1,2}\s+\d{4})\s+TO\s+([A-Z]{3}\s+\d{1,2}\s+\d{4})/i);
+  const summaryMatch = compact.match(
+    /BEGINNING\s+BALANCE\s+TOTAL\s+CREDITS\s+TOTAL\s+DEBITS\s+ENDING\s+BALANCE\s+([0-9,.-]+)\s+([0-9,.-]+)\s+([0-9,.-]+)\s+([0-9,.-]+)/i
+  );
+  const openingBalance = summaryMatch ? parseMoney(summaryMatch[1]) : null;
+  const endingBalance = summaryMatch ? parseMoney(summaryMatch[4]) : null;
+  const startDate = parseSecurityBankDate(periodMatch?.[1] ?? null);
+  const endDate = parseSecurityBankDate(periodMatch?.[2] ?? null);
+
+  return {
+    institution: "Security Bank",
+    accountNumber,
+    accountName,
+    accountType: inferAccountTypeFromStatement("Security Bank", accountName, "bank"),
+    openingBalance,
+    endingBalance,
+    startDate: startDate ? startDate.toISOString() : null,
+    endDate: endDate ? endDate.toISOString() : null,
+    confidence: scoreMetadataConfidence({
+      institution: "Security Bank",
+      accountNumber,
+      accountName,
+      accountType: inferAccountTypeFromStatement("Security Bank", accountName, "bank"),
+      openingBalance,
+      endingBalance,
+      startDate: startDate ? startDate.toISOString() : null,
+      endDate: endDate ? endDate.toISOString() : null,
+    }),
+  };
+};
+
+const parseSecurityBankSavingsImportText = (text: string) => {
+  const normalizedText = text.replace(/\u00a0/g, " ");
+  const metadata = securityBankStatementMetadata(normalizedText);
+  if (!metadata) {
+    return null;
+  }
+
+  const lines = normalizedText.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const headerIndex = lines.findIndex((line) => /TRANSACTION\s+DATE\s+TRANSACTION\s+DESCRIPTION\s+DEBIT\s+CREDIT\s+BALANCE/i.test(line));
+  if (headerIndex < 0) {
+    return null;
+  }
+
+  const rows: ParsedImportRow[] = [];
+  let currentDate: string | null = null;
+  let previousBalance = metadata.openingBalance;
+  let pendingDescription: string | null = null;
+
+  const isCodeLine = (line: string) => /^([A-Z0-9]+[_-][A-Z0-9_-]+|\d{6,})$/i.test(line);
+  const isBoilerplateLine = (line: string) =>
+    /^BEGINNING\s+BALANCE/i.test(line) ||
+    /^TRANSACTION\s+DETAILS/i.test(line) ||
+    /^TRANSACTION\s+DATE/i.test(line) ||
+    /^CUSTOMER\s+DETAILS/i.test(line) ||
+    /^PERIOD\s+COVERED/i.test(line) ||
+    /^ACCOUNT\s+NUMBER/i.test(line) ||
+    /^CURRENCY/i.test(line) ||
+    /^STATEMENT\s+OF\s+ACCOUNT/i.test(line) ||
+    /^PAGE\s+\d+/i.test(line) ||
+    /^\+\s*-\s*=$/i.test(line) ||
+    /^NATIONAL\s+CAPITAL\s+REGION$/i.test(line) ||
+    /^MAKATI\s+\d{8}$/i.test(line) ||
+    /^EMPLOYEES\s+OF,/i.test(line) ||
+    /^INDIVIDUALS?$/i.test(line) ||
+    /^P$/i.test(line) ||
+    /^C:\\/i.test(line);
+
+  const pushRow = (description: string, dateText: string | null, amountText: string, balanceText: string) => {
+    const date = parseSecurityBankDate(dateText);
+    const amount = parseMoney(amountText);
+    const balance = parseMoney(balanceText);
+    if (!date || amount === null || balance === null) {
+      return;
+    }
+
+    const inferredType: TransactionType =
+      /fee|charge|instapay\s+fee|bank charge|withheld tax/i.test(description)
+        ? "expense"
+        : /transfer|tfr|atm\/b2c|withdrawal/i.test(description)
+          ? "transfer"
+          : /credit|payroll|deposit|salary|refund|reversal/i.test(description)
+            ? "income"
+            : previousBalance !== null
+              ? balance > previousBalance
+                ? "income"
+                : "expense"
+              : "expense";
+
+    const categoryName =
+      /fee|charge|instapay\s+fee|bank charge|withheld tax/i.test(description)
+        ? "Financial"
+        : /credit|payroll|deposit|salary|refund|reversal/i.test(description) && inferredType === "income"
+          ? "Income"
+          : /transfer|tfr|atm\/b2c|withdrawal/i.test(description)
+            ? "Transfers"
+            : guessCategoryName(description, inferredType);
+
+    const row: ParsedImportRow = {
+      date: date.toISOString().slice(0, 10),
+      amount: amount.toFixed(2),
+      merchantRaw: humanizeMerchantText(description),
+      merchantClean: summarizeMerchantText(description, "Security Bank"),
+      description,
+      categoryName,
+      accountName: metadata.accountName ?? "Security Bank",
+      institution: metadata.institution ?? "Security Bank",
+      type: inferredType,
+      rawPayload: {
+        bank: "Security Bank",
+        line: `${description} ${dateText ?? ""} ${amountText} ${balanceText}`.trim(),
+        amountText,
+        balanceText,
+        previousBalance,
+      },
+    };
+
+    rows.push(row);
+    previousBalance = balance;
+  };
+
+  for (const line of lines.slice(headerIndex + 1)) {
+    if (isBoilerplateLine(line) || isCodeLine(line)) {
+      continue;
+    }
+
+    if (/^Page\s+\d+\s+of\s+\d+/i.test(line)) {
+      break;
+    }
+
+    const datedMatch = line.match(/^(\d{1,2}[A-Za-z]{3}\d{2,4})\s+([0-9][0-9,]*\.\d{2})\s+([0-9][0-9,]*\.\d{2})$/i);
+    if (datedMatch) {
+      currentDate = datedMatch[1];
+      pushRow(pendingDescription ?? line, currentDate, datedMatch[2], datedMatch[3]);
+      pendingDescription = null;
+      continue;
+    }
+
+    const amountOnlyMatch = line.match(/^([0-9][0-9,]*\.\d{2})\s+([0-9][0-9,]*\.\d{2})$/);
+    if (amountOnlyMatch && pendingDescription && currentDate) {
+      pushRow(pendingDescription, currentDate, amountOnlyMatch[1], amountOnlyMatch[2]);
+      pendingDescription = null;
+      continue;
+    }
+
+    if (pendingDescription && /[A-Za-z]/.test(line) && /\d[\d,]*\.\d{2}/.test(line)) {
+      const amountBalance = line.match(/^([0-9][0-9,]*\.\d{2})\s+([0-9][0-9,]*\.\d{2})$/);
+      if (amountBalance && currentDate) {
+        pushRow(pendingDescription, currentDate, amountBalance[1], amountBalance[2]);
+        pendingDescription = null;
+        continue;
+      }
+    }
+
+    if (!/\d[\d,]*\.\d{2}/.test(line) && !/^\d{1,2}[A-Za-z]{3}\d{2,4}/i.test(line)) {
+      pendingDescription = line;
+    }
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return {
+    metadata: {
+      ...metadata,
+      confidence: Math.min(100, metadata.confidence + 10),
+    },
+    rows,
+  };
+};
+
 const parseRcbcDate = (value?: string | null) => {
   if (!value) return null;
 
@@ -455,8 +663,11 @@ const parseRcbcDate = (value?: string | null) => {
 const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = text.replace(/\u00a0/g, " ");
   const compact = normalizeWhitespace(normalized);
-  const isSavingsStatement = /(ACCOUNT\s+TYPE\s*CAV0?1|TOTAL\s+CREDITS|TOTAL\s+DEBITS|BALANCE\s+LAST\s+STATEMENT|BALANCE\s+THIS\s+STATEMENT)/i.test(compact);
   const hasRcbcBrand = /\bRCBC\b|\bRCBC BANKARD\b|\bBANKARD\b/i.test(compact);
+  const hasRcbcSavingsShell = /\bACCOUNT\s+TYPE\s*CAV0?1\b/i.test(compact);
+  const isSavingsStatement =
+    (hasRcbcBrand || hasRcbcSavingsShell) &&
+    /(TOTAL\s+CREDITS|TOTAL\s+DEBITS|BALANCE\s+LAST\s+STATEMENT|BALANCE\s+THIS\s+STATEMENT)/i.test(compact);
   const hasCreditCardShell =
     /PREVIOUS\s+BALANCE|TOTAL\s+BALANCE\s+DUE|CARDHOLDER\s+PAYMENT\s+DUE\s+DATE|PAYMENT\s+DUE\s+DATE|MINIMUM\s+AMOUNT\s+DUE|CREDIT\s+LIMIT|CURRENT\s+BALANCE|NEW\s+BALANCE|STATEMENT\s+DATE\s+PAYMENT\s+DUE\s+DATE/i.test(compact);
   const hasCardNumberShell =
@@ -5563,6 +5774,11 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     return metrobankMetadata.metadata;
   }
 
+  const securityBankMetadata = securityBankStatementMetadata(text);
+  if (securityBankMetadata) {
+    return securityBankMetadata;
+  }
+
   const rcbcMetadata = rcbcStatementMetadata(text);
   if (rcbcMetadata) {
     return rcbcMetadata;
@@ -5833,6 +6049,11 @@ export const parseImportText = (
   const metrobankParsed = parseMetrobankCreditCardImportText(text);
   if (metrobankParsed) {
     return metrobankParsed.rows;
+  }
+
+  const securityBankParsed = parseSecurityBankSavingsImportText(text);
+  if (securityBankParsed) {
+    return securityBankParsed.rows;
   }
 
   const rcbcSavingsParsed = parseRcbcSavingsImportText(text);
