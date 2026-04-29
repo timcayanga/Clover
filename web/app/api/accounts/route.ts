@@ -266,6 +266,7 @@ export async function POST(request: Request) {
 
     const account = await prisma.account.create({
       data: accountCreateData,
+      select: getCompatibleAccountSelect(compatibleColumns),
     });
 
     void upsertAccountRule({

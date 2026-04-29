@@ -74,16 +74,18 @@ const ensureStarterCashAccount = async (workspaceId: string) => {
   });
 
   if (!existingCashAccount) {
-    await prisma.account.create({
-      data: {
-        workspaceId,
-        name: "Cash",
-        institution: "Cash",
-        type: "cash",
-        currency: "PHP",
-        source: "manual",
-        balance: 0,
-      },
+    await prisma.account.createMany({
+      data: [
+        {
+          workspaceId,
+          name: "Cash",
+          institution: "Cash",
+          type: "cash",
+          currency: "PHP",
+          source: "manual",
+          balance: 0,
+        },
+      ],
     });
   }
 };
