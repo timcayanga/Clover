@@ -139,6 +139,18 @@ const normalizeReportsSection = (value: string | undefined): ReportsSection => {
   return "overview";
 };
 
+const buildReportsHref = (
+  overrides: { range?: ReportsRange; section?: ReportsSection } = {},
+  currentRange: ReportsRange = "30d",
+  currentSection: ReportsSection = "overview"
+) => {
+  const query = new URLSearchParams({
+    range: overrides.range ?? currentRange ?? "30d",
+    section: overrides.section ?? currentSection ?? "overview",
+  });
+  return `?${query.toString()}`;
+};
+
 const getReportWindow = (anchor: Date, range: ReportsRange) => {
   const currentStart = new Date(anchor);
   if (range === "30d") {
@@ -310,14 +322,6 @@ async function ReportsStream({
     }
     selectedWorkspaceId = starterWorkspaceData.id;
   }
-
-  const buildReportsHref = (overrides: { range?: ReportsRange; section?: ReportsSection } = {}) => {
-    const query = new URLSearchParams({
-      range: overrides.range ?? selectedRange,
-      section: overrides.section ?? selectedSection,
-    });
-    return `?${query.toString()}`;
-  };
 
   try {
     const now = new Date();
@@ -1251,7 +1255,7 @@ async function ReportsStream({
                   <Link
                     key={range}
                     className={`pill pill-interactive ${selectedRange === range ? "pill-is-selected" : ""}`}
-                    href={buildReportsHref({ range })}
+                    href={buildReportsHref({ range }, selectedRange, selectedSection)}
                   >
                     {reportsRangeLabels[range]}
                   </Link>
@@ -1806,7 +1810,7 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
         <Link
           key={section}
           className={`reports-tab ${selectedSection === section ? "reports-tab--active" : ""}`}
-          href={buildReportsHref({ section })}
+          href={buildReportsHref({ section }, selectedRange, selectedSection)}
           aria-current={selectedSection === section ? "page" : undefined}
         >
           {reportsSectionLabels[section]}
