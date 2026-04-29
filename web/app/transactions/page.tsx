@@ -4336,10 +4336,14 @@ function TransactionsPageContent() {
                   Add your first transaction to get the dashboard moving and start building your categories.
                 </p>
                 <div className="transactions-empty-state__actions">
-                  <button className="button button-primary" type="button" onClick={() => void openManualAdd()}>
+                  <button className="button button-primary button-small" type="button" onClick={() => void openManualAdd()}>
                     Add transaction
                   </button>
-                  <button className="button button-secondary transactions-empty-state__import" type="button" onClick={() => openImportFiles()}>
+                  <button
+                    className="button button-secondary button-small transactions-empty-state__import"
+                    type="button"
+                    onClick={() => openImportFiles()}
+                  >
                     Import files
                   </button>
                 </div>
@@ -4537,10 +4541,14 @@ function TransactionsPageContent() {
                   Add your first transaction to get the dashboard moving and start building your categories.
                 </p>
                 <div className="transactions-empty-state__actions">
-                  <button className="button button-primary" type="button" onClick={() => void openManualAdd()}>
+                  <button className="button button-primary button-small" type="button" onClick={() => void openManualAdd()}>
                     Add transaction
                   </button>
-                  <button className="button button-secondary transactions-empty-state__import" type="button" onClick={() => openImportFiles()}>
+                  <button
+                    className="button button-secondary button-small transactions-empty-state__import"
+                    type="button"
+                    onClick={() => openImportFiles()}
+                  >
                     Import files
                   </button>
                 </div>
