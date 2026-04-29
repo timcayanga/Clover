@@ -10,6 +10,23 @@ import { getEffectiveUserLimits } from "@/lib/user-limits";
 
 export const dynamic = "force-dynamic";
 
+let accountColumnCache: Set<string> | null = null;
+
+const getCompatibleAccountColumns = async () => {
+  if (accountColumnCache) {
+    return accountColumnCache;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'Account'
+  `;
+
+  accountColumnCache = new Set(columns.map((column) => column.column_name));
+  return accountColumnCache;
+};
+
 const serializeAccount = <T extends {
   balance: { toString: () => string } | null;
   investmentQuantity: { toString: () => string } | null;
@@ -191,26 +208,29 @@ export async function POST(request: Request) {
       }
     }
 
+    const compatibleColumns = await getCompatibleAccountColumns();
+    const accountCreateData = {
+      workspaceId,
+      name,
+      institution,
+      ...(compatibleColumns.has("accountNumber") ? { accountNumber } : {}),
+      investmentSubtype: type === "investment" ? investmentSubtype : null,
+      investmentSymbol: type === "investment" ? investmentSymbol : null,
+      investmentQuantity: type === "investment" ? investmentQuantity : null,
+      investmentCostBasis: type === "investment" ? investmentCostBasis : null,
+      investmentPrincipal: type === "investment" ? investmentPrincipal : null,
+      investmentStartDate: type === "investment" ? investmentStartDate : null,
+      investmentMaturityDate: type === "investment" ? investmentMaturityDate : null,
+      investmentInterestRate: type === "investment" ? investmentInterestRate : null,
+      investmentMaturityValue: type === "investment" ? investmentMaturityValue : null,
+      type,
+      currency: body?.currency ? String(body.currency).toUpperCase() : "PHP",
+      source: body?.source ? String(body.source) : "upload",
+      balance,
+    };
+
     const account = await prisma.account.create({
-      data: {
-        workspaceId,
-        name,
-        institution,
-        accountNumber,
-        investmentSubtype: type === "investment" ? investmentSubtype : null,
-        investmentSymbol: type === "investment" ? investmentSymbol : null,
-        investmentQuantity: type === "investment" ? investmentQuantity : null,
-        investmentCostBasis: type === "investment" ? investmentCostBasis : null,
-        investmentPrincipal: type === "investment" ? investmentPrincipal : null,
-        investmentStartDate: type === "investment" ? investmentStartDate : null,
-        investmentMaturityDate: type === "investment" ? investmentMaturityDate : null,
-        investmentInterestRate: type === "investment" ? investmentInterestRate : null,
-        investmentMaturityValue: type === "investment" ? investmentMaturityValue : null,
-        type,
-        currency: body?.currency ? String(body.currency).toUpperCase() : "PHP",
-        source: body?.source ? String(body.source) : "upload",
-        balance,
-      },
+      data: accountCreateData,
     });
 
     void upsertAccountRule({
@@ -224,7 +244,9 @@ export async function POST(request: Request) {
     }).catch(() => null);
 
     return NextResponse.json({ account: serializeAccount(account) });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to create account.";
+    const status = /unauthorized/i.test(message) ? 401 : 400;
+    return NextResponse.json({ error: message }, { status });
   }
 }
