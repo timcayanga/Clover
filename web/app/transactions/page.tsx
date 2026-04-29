@@ -952,6 +952,7 @@ const transactionsToolbarLeftStyle = {
   alignItems: "center",
   gap: "6px",
   flex: "0 0 auto",
+  width: "auto",
 } as const;
 
 const transactionsToolbarRightStyle = {
@@ -960,7 +961,8 @@ const transactionsToolbarRightStyle = {
   justifyContent: "flex-end",
   gap: "5px",
   minWidth: 0,
-  width: "100%",
+  width: "auto",
+  flex: "0 0 auto",
 } as const;
 
 const transactionsToolbarSearchStyle = {
@@ -974,8 +976,8 @@ const transactionsToolbarSearchStyle = {
   background: "rgba(255, 255, 255, 0.96)",
   boxShadow: "var(--shadow-soft)",
   minWidth: "150px",
-  maxWidth: "185px",
-  flex: "0 1 185px",
+  maxWidth: "170px",
+  flex: "0 1 170px",
 } as const;
 
 const transactionsFooterStyle = {
