@@ -11275,28 +11275,6 @@ input.transaction-inline-edit--amount::placeholder {
   padding: 0 16px;
 }
 
-.accounts-toolbar-popover {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 25;
-  display: grid;
-  gap: 12px;
-  width: min(280px, 90vw);
-  padding: 14px;
-  border-radius: 20px;
-}
-
-.accounts-toolbar-popover label {
-  gap: 6px;
-}
-
-.toggle-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
 .accounts-main-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -16479,8 +16457,7 @@ input.transaction-inline-edit--amount::placeholder {
   .accounts-group,
   .accounts-summary-column,
   .accounts-add-modal,
-  .accounts-import-modal,
-  .accounts-toolbar-popover {
+  .accounts-import-modal {
     border-radius: 22px;
   }
 

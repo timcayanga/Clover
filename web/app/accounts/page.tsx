@@ -586,7 +586,6 @@ export default function AccountsPage() {
 function AccountsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const searchQueryFromUrl = searchParams?.get("q") ?? "";
   const addRef = useRef<HTMLDivElement>(null);
   const balanceInputRef = useRef<HTMLInputElement>(null);
   const workspaceLoadSeqRef = useRef(0);
@@ -623,9 +622,7 @@ function AccountsPageContent() {
   const [importOpen, setImportOpen] = useState(false);
   const [importSessionId, setImportSessionId] = useState(0);
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState(searchQueryFromUrl);
   const [sortBy, setSortBy] = useState<AccountSort>("updated_desc");
-  const [showNeedsReviewOnly, setShowNeedsReviewOnly] = useState(false);
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
@@ -674,10 +671,6 @@ function AccountsPageContent() {
     }
   );
   const deletingAccountIdsRef = useRef(new Set<string>(getDeletingWorkspaceAccountIds(initialWorkspaceId)));
-
-  useEffect(() => {
-    setSearchQuery(searchQueryFromUrl);
-  }, [searchQueryFromUrl]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1189,16 +1182,8 @@ function AccountsPageContent() {
     [latestCheckpoint]
   );
 
-  const searchedAccounts = useMemo(() => {
-    const term = searchQuery.trim().toLowerCase();
-    const base = term
-      ? reconciledAccounts.filter((account) => {
-          const haystack = [account.name, account.institution ?? "", account.source, getEffectiveAccountType(account)].join(" ").toLowerCase();
-          return haystack.includes(term);
-        })
-      : reconciledAccounts;
-
-    return [...base].sort((left, right) => {
+  const visibleAccounts = useMemo(() => {
+    return [...reconciledAccounts].sort((left, right) => {
       if (sortBy === "name") {
         return left.name.localeCompare(right.name);
       }
@@ -1209,18 +1194,7 @@ function AccountsPageContent() {
 
       return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
     });
-  }, [reconciledAccounts, searchQuery, sortBy]);
-
-  const visibleAccounts = useMemo(() => {
-    if (!showNeedsReviewOnly) {
-      return searchedAccounts;
-    }
-
-    return searchedAccounts.filter((account) => {
-      const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
-      return Boolean(getAccountWarning(account, duplicateCounts.get(duplicateKey) ?? 0));
-    });
-  }, [duplicateCounts, searchedAccounts, showNeedsReviewOnly]);
+  }, [reconciledAccounts, sortBy]);
 
   const totals = useMemo(() => {
     return reconciledAccounts.reduce(
@@ -1824,10 +1798,6 @@ function AccountsPageContent() {
           <div className="accounts-list-column">
             <div className="accounts-list-head">
               <div className="accounts-list-controls">
-                <label className="accounts-search">
-                  <ActionIcon name="search" />
-                  <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search accounts" />
-                </label>
                 <label>
                   <select value={sortBy} onChange={(event) => setSortBy(event.target.value as AccountSort)}>
                     <option value="updated_desc">Latest updated</option>
@@ -1971,12 +1941,8 @@ function AccountsPageContent() {
                 ))
               ) : (
                 <div className="empty-state">
-                  <strong>{showNeedsReviewOnly ? "No accounts need review right now." : "No matches right now."}</strong>
-                  <p>
-                    {showNeedsReviewOnly
-                      ? "Everything visible is reconciled and ready. Turn off the filter to see the full account list."
-                      : "Try clearing your search or sorting, or open a different account group to keep browsing."}
-                  </p>
+                  <strong>No accounts to show right now.</strong>
+                  <p>Try a different sort, or add another account to keep building your picture.</p>
                 </div>
               )}
             </div>
