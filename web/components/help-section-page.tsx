@@ -78,26 +78,28 @@ export function HelpSectionPage({ section, returnTo }: HelpSectionPageProps) {
           </Link>
         </div>
 
-        <div className="help-section-page__image-wrap" aria-hidden="true">
-          <img
-            className="help-section-page__image"
-            src={getHelpSectionImageSrc(section.slug)}
-            alt=""
-            loading="lazy"
-            decoding="async"
-          />
-        </div>
+        <div className="help-section-page__hero">
+          <div className="help-section-page__image-wrap" aria-hidden="true">
+            <img
+              className="help-section-page__image"
+              src={getHelpSectionImageSrc(section.slug)}
+              alt=""
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
 
-        <label className="help-search help-search--section" htmlFor="help-section-search">
-          <span className="sr-only">Search within this help section</span>
-          <input
-            id="help-section-search"
-            type="search"
-            placeholder={`Search ${section.title.toLowerCase()}`}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </label>
+          <label className="help-search help-search--section" htmlFor="help-section-search">
+            <span className="sr-only">Search within this help section</span>
+            <input
+              id="help-section-search"
+              type="search"
+              placeholder={`Search ${section.title.toLowerCase()}`}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+        </div>
 
         <section className="help-section-faq" aria-label="Questions and answers">
           {filteredQuestions.length > 0 ? (
