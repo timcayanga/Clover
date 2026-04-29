@@ -1673,9 +1673,7 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
   return (
     <CloverShell
       active="reports"
-      kicker="Insights"
-      title="A clearer report on where your money stands."
-      subtitle="Cash flow, spending concentration, recurring costs, and review items are pulled directly from your uploaded transactions and accounts."
+      title="Reports"
       showTopbar={false}
       actions={
         <>
