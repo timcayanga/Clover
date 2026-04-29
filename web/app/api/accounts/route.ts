@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { hasCompatibleTable, loadAccountRules, normalizeAccountRuleKey, upsertAccountRule } from "@/lib/data-engine";
 import { INVESTMENT_SUBTYPES, type InvestmentSubtype } from "@/lib/investments";
 import { countNonCashAccounts } from "@/lib/plan-access";
+import { seedWorkspaceDefaults } from "@/lib/starter-data";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 
@@ -17,13 +18,18 @@ const getCompatibleAccountColumns = async () => {
     return accountColumnCache;
   }
 
-  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
-    SELECT column_name
-    FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'Account'
-  `;
+  try {
+    const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'Account'
+    `;
 
-  accountColumnCache = new Set(columns.map((column) => column.column_name));
+    accountColumnCache = new Set(columns.map((column) => column.column_name));
+  } catch {
+    accountColumnCache = new Set();
+  }
+
   return accountColumnCache;
 };
 
@@ -172,6 +178,7 @@ export async function POST(request: Request) {
     }
 
     await assertWorkspaceAccess(userId, workspaceId);
+    await seedWorkspaceDefaults(workspaceId);
 
     const existingAccounts = await prisma.account.findMany({
       where: { workspaceId },

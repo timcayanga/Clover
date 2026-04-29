@@ -5,7 +5,7 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 
 type StarterWorkspaceUser = Pick<User, "id" | "clerkUserId" | "email" | "verified" | "dataWipedAt">;
 
-const normalizeStarterCashAccount = async (workspaceId: string) => {
+const ensureStarterCashAccount = async (workspaceId: string) => {
   await prisma.account.updateMany({
     where: {
       workspaceId,
@@ -17,6 +17,28 @@ const normalizeStarterCashAccount = async (workspaceId: string) => {
       institution: "Cash",
     },
   });
+
+  const existingCashAccount = await prisma.account.findFirst({
+    where: {
+      workspaceId,
+      type: "cash",
+    },
+    select: { id: true },
+  });
+
+  if (!existingCashAccount) {
+    await prisma.account.create({
+      data: {
+        workspaceId,
+        name: "Cash",
+        institution: "Cash",
+        type: "cash",
+        currency: "PHP",
+        source: "manual",
+        balance: 0,
+      },
+    });
+  }
 };
 
 export const ensureStarterWorkspace = async (
@@ -38,7 +60,7 @@ export const ensureStarterWorkspace = async (
   });
 
   if (existing) {
-    await normalizeStarterCashAccount(existing.id);
+    await ensureStarterCashAccount(existing.id);
 
     return existing;
   }
@@ -91,22 +113,5 @@ export const seedWorkspaceDefaults = async (workspaceId: string) => {
     }
   }
 
-  const existingAccounts = await prisma.account.findMany({ where: { workspaceId } });
-  if (existingAccounts.length === 0) {
-    await prisma.account.createMany({
-      data: [
-        {
-          workspaceId,
-          name: "Cash",
-          institution: "Cash",
-          type: "cash",
-          currency: "PHP",
-          source: "manual",
-          balance: 0,
-        },
-      ],
-    });
-  }
-
-  await normalizeStarterCashAccount(workspaceId);
+  await ensureStarterCashAccount(workspaceId);
 };

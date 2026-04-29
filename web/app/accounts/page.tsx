@@ -639,6 +639,7 @@ function AccountsPageContent() {
   const [manualInvestmentInterestRate, setManualInvestmentInterestRate] = useState("");
   const [manualInvestmentMaturityValue, setManualInvestmentMaturityValue] = useState("");
   const [manualBalance, setManualBalance] = useState("");
+  const [addAccountError, setAddAccountError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [accountEditName, setAccountEditName] = useState("");
   const [accountEditInstitution, setAccountEditInstitution] = useState("");
@@ -1379,6 +1380,7 @@ function AccountsPageContent() {
       return;
     }
 
+    setAddAccountError(null);
     setAddOpen(true);
   };
 
@@ -1552,20 +1554,27 @@ function AccountsPageContent() {
 
   const createManualAccount = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setAddAccountError(null);
     if (!selectedWorkspaceId) {
-      setMessage("Select a workspace first.");
+      const nextError = "Select a workspace first.";
+      setAddAccountError(nextError);
+      setMessage(nextError);
       return;
     }
 
     const name = manualName.trim();
     if (!name) {
-      setMessage("Account name is required.");
+      const nextError = "Account name is required.";
+      setAddAccountError(nextError);
+      setMessage(nextError);
       return;
     }
 
     const hasCashAccount = accounts.some((account) => account.type === "cash");
     if (manualType === "cash" && hasCashAccount) {
-      setMessage("Cash already appears automatically in this workspace. Rename the existing Cash account instead.");
+      const nextError = "Cash already appears automatically in this workspace. Rename the existing Cash account instead.";
+      setAddAccountError(nextError);
+      setMessage(nextError);
       return;
     }
 
@@ -1619,9 +1628,11 @@ function AccountsPageContent() {
       }
 
       const data = await response.json();
-      if (data.account) {
-        setAccounts((current) => [data.account, ...current]);
+      if (!data.account) {
+        throw new Error("The account was not returned after saving.");
       }
+
+      setAccounts((current) => [data.account, ...current]);
       setManualName("");
       setManualInstitution("");
       setManualAccountNumber("");
@@ -1636,10 +1647,13 @@ function AccountsPageContent() {
       setManualInvestmentMaturityValue("");
       setManualBalance("");
       setManualType("bank");
+      setAddAccountError(null);
       setAddOpen(false);
       setMessage(`Account "${name}" created.`);
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to create account.");
+      const nextError = error instanceof Error ? error.message : "Unable to create account.";
+      setAddAccountError(nextError);
+      setMessage(nextError);
     } finally {
       setIsSaving(false);
     }
@@ -2459,6 +2473,12 @@ function AccountsPageContent() {
                 <button className="button button-primary" type="submit" disabled={isSaving || (manualType === "cash" && accounts.some((account) => account.type === "cash"))}>
                   {isSaving ? "Saving..." : "Create account"}
                 </button>
+                {addAccountError ? (
+                  <div className="accounts-drawer__notice" role="alert">
+                    <strong>Unable to save account</strong>
+                    <p>{addAccountError}</p>
+                  </div>
+                ) : null}
                 {manualType === "cash" && accounts.some((account) => account.type === "cash") ? (
                   <p className="modal-copy">Cash already appears automatically in this workspace.</p>
                 ) : null}

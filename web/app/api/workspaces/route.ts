@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { syncClerkUser } from "@/lib/clerk";
-import { ensureStarterWorkspace } from "@/lib/starter-data";
+import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/lib/user-environment";
 import { NextResponse } from "next/server";
@@ -31,6 +31,8 @@ export async function GET() {
     });
 
     if (user?.workspaces?.length) {
+      await Promise.all(user.workspaces.map((workspace) => seedWorkspaceDefaults(workspace.id)));
+
       return NextResponse.json({
         workspaces: user.workspaces,
       });
@@ -85,6 +87,8 @@ export async function POST(request: Request) {
         type: type === "shared" || type === "business" ? type : "personal",
       },
     });
+
+    await seedWorkspaceDefaults(workspace.id);
 
     const seededWorkspace = await prisma.workspace.findUnique({
       where: { id: workspace.id },
