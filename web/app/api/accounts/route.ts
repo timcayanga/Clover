@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { hasCompatibleTable, loadAccountRules, normalizeAccountRuleKey, upsertAccountRule } from "@/lib/data-engine";
@@ -10,6 +10,15 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 
 export const dynamic = "force-dynamic";
+
+const resolveAccountsRouteUserId = async () => {
+  if (await isLocalDevHost()) {
+    return "local-admin";
+  }
+
+  const { userId } = await requireAuth();
+  return userId;
+};
 
 let accountColumnCache: Set<string> | null = null;
 
@@ -108,7 +117,7 @@ const normalizeInvestmentSubtype = (value: unknown): InvestmentSubtype | null =>
 
 export async function GET(request: Request) {
   try {
-    const { userId } = await requireAuth();
+    const userId = await resolveAccountsRouteUserId();
     const { searchParams } = new URL(request.url);
     const workspaceId = searchParams.get("workspaceId");
 
@@ -182,7 +191,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { userId } = await requireAuth();
+    const userId = await resolveAccountsRouteUserId();
     const body = await request.json();
     const workspaceId = String(body?.workspaceId || "");
     const name = String(body?.name || "").trim();

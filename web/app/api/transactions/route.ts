@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -16,6 +16,15 @@ import {
 } from "@/lib/transaction-query";
 
 export const dynamic = "force-dynamic";
+
+const resolveTransactionsRouteUserId = async () => {
+  if (await isLocalDevHost()) {
+    return "local-admin";
+  }
+
+  const { userId } = await requireAuth();
+  return userId;
+};
 
 type TransactionApiRow = {
   id: string;
@@ -164,7 +173,7 @@ const transactionSchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const { userId } = await requireAuth();
+    const userId = await resolveTransactionsRouteUserId();
     const { searchParams } = new URL(request.url);
     const workspaceId = searchParams.get("workspaceId");
 
@@ -472,7 +481,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { userId } = await requireAuth();
+    const userId = await resolveTransactionsRouteUserId();
     const payload = transactionSchema.parse(await request.json());
 
     await assertWorkspaceAccess(userId, payload.workspaceId);

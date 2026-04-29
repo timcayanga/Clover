@@ -1,12 +1,21 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { classifyMerchant, loadMerchantRules, loadTrainingSignals } from "@/lib/data-engine";
 import type { TransactionType } from "@/lib/domain-types";
 
 export const dynamic = "force-dynamic";
+
+const resolveSuggestionRouteUserId = async () => {
+  if (await isLocalDevHost()) {
+    return "local-admin";
+  }
+
+  const { userId } = await requireAuth();
+  return userId;
+};
 
 const suggestionSchema = z.object({
   workspaceId: z.string().min(1),
@@ -46,7 +55,7 @@ const mapSuggestionLabel = (categoryReason: string) => {
 
 export async function POST(request: Request) {
   try {
-    const { userId } = await requireAuth();
+    const userId = await resolveSuggestionRouteUserId();
     const payload = suggestionSchema.parse(await request.json());
 
     await assertWorkspaceAccess(userId, payload.workspaceId);

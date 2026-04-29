@@ -263,6 +263,22 @@ type CategorySuggestion = {
   reason: string;
 };
 
+const isAutoApplyCategorySuggestion = (suggestion: CategorySuggestion | null): suggestion is CategorySuggestion => {
+  if (!suggestion?.categoryId) {
+    return false;
+  }
+
+  if (suggestion.categoryName.trim().toLowerCase() === "other") {
+    return false;
+  }
+
+  if (suggestion.source !== "heuristic") {
+    return true;
+  }
+
+  return suggestion.confidence >= 60;
+};
+
 type UpdateTransactionOptions = {
   recordHistory?: boolean;
   historyBefore?: Transaction | null;
@@ -2597,11 +2613,9 @@ function TransactionsPageContent() {
           setManualCategorySuggestion(suggestion);
 
           if (
-            suggestion &&
-            suggestion.source !== "heuristic" &&
+            isAutoApplyCategorySuggestion(suggestion) &&
             !manualCategoryTouched &&
-            (manualCategoryAutoApplied || !manualForm.categoryId || manualForm.categoryId === otherCategoryId) &&
-            suggestion.categoryId
+            (manualCategoryAutoApplied || !manualForm.categoryId || manualForm.categoryId === otherCategoryId)
           ) {
             setManualCategoryAutoApplied(true);
             setManualForm((current) => ({
@@ -2693,11 +2707,11 @@ function TransactionsPageContent() {
 
       if ((!categoryId || categoryId === getOtherCategoryId(categories)) && merchantText.length >= 2) {
         const suggestion =
-          manualCategorySuggestion && manualCategorySuggestion.source !== "heuristic"
+          manualCategorySuggestion && isAutoApplyCategorySuggestion(manualCategorySuggestion)
             ? manualCategorySuggestion
             : await fetchCategorySuggestion(merchantText, manualForm.type === "credit" ? "income" : "expense");
 
-        if (suggestion && suggestion.source !== "heuristic") {
+        if (isAutoApplyCategorySuggestion(suggestion)) {
           categoryId = suggestion.categoryId;
           setManualForm((current) => ({ ...current, categoryId: suggestion.categoryId }));
         }

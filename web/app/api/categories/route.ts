@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { requireAuth } from "@/lib/auth";
+import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -7,6 +7,15 @@ import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
 import type { TransactionType } from "@/lib/domain-types";
 
 export const dynamic = "force-dynamic";
+
+const resolveCategoriesRouteUserId = async () => {
+  if (await isLocalDevHost()) {
+    return "local-admin";
+  }
+
+  const { userId } = await requireAuth();
+  return userId;
+};
 
 const createCategorySchema = z.object({
   workspaceId: z.string().min(1),
@@ -17,7 +26,7 @@ const createCategorySchema = z.object({
 
 export async function GET(request: Request) {
   try {
-    const { userId } = await requireAuth();
+    const userId = await resolveCategoriesRouteUserId();
     const { searchParams } = new URL(request.url);
     const workspaceId = searchParams.get("workspaceId");
 
@@ -58,7 +67,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const { userId } = await requireAuth();
+    const userId = await resolveCategoriesRouteUserId();
     const payload = createCategorySchema.parse(await request.json());
 
     await assertWorkspaceAccess(userId, payload.workspaceId);
