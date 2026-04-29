@@ -4110,7 +4110,29 @@ const parseBpiImportText = (text: string) => {
       /DATE.*DESCRIPTION.*DEB.*AMT.*CREDIT.*AMT.*BALANCE/.test(line) ||
       /TRANSACTION.*DETAILS/.test(line)
   );
-  const transactionLines = transactionHeaderIndex >= 0 ? lines.slice(transactionHeaderIndex + 1) : lines;
+  const rawTransactionLines = transactionHeaderIndex >= 0 ? lines.slice(transactionHeaderIndex + 1) : lines;
+  const transactionLines: string[] = [];
+  let pendingStandaloneBalance: string | null = null;
+
+  for (const line of rawTransactionLines) {
+    if (/^[0-9][0-9,]*\.\d{2}$/.test(line)) {
+      pendingStandaloneBalance = line;
+      continue;
+    }
+
+    const hasDatePrefix =
+      new RegExp(`^(${monthNamePattern}\\s*\\d{1,2}|\\d{1,2}${monthNamePattern}|\\d{1,2}\\/\\d{1,2}(?:\\/\\d{2,4})?)`, "i").test(
+        compactWhitespace(line)
+      );
+    const moneyMatches = line.match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
+    if (pendingStandaloneBalance && hasDatePrefix && moneyMatches.length === 1) {
+      transactionLines.push(`${line} ${pendingStandaloneBalance}`);
+      pendingStandaloneBalance = null;
+      continue;
+    }
+
+    transactionLines.push(line);
+  }
 
   const startDate = metadata.startDate ? new Date(metadata.startDate) : null;
   const endDate = metadata.endDate ? new Date(metadata.endDate) : null;
