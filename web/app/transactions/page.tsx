@@ -947,34 +947,9 @@ const transactionsMenuStyle = {
   flex: "0 0 auto",
 } as const;
 
-const transactionsToolbarRowStyle = {
-  display: "grid",
-  gridTemplateColumns: "auto minmax(0, 1fr)",
-  alignItems: "center",
-  gap: "10px",
-  width: "100%",
-} as const;
-
 const transactionsLayoutStyle = {
-  minHeight: "calc(100dvh - 24px)",
-} as const;
-
-const transactionsToolbarLeftStyle = {
-  display: "flex",
-  alignItems: "center",
-  gap: "6px",
-  flex: "0 0 auto",
-  width: "auto",
-} as const;
-
-const transactionsToolbarRightStyle = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "flex-end",
-  gap: "5px",
-  minWidth: 0,
-  width: "auto",
-  flex: "0 0 auto",
+  flex: "1 1 auto",
+  minHeight: 0,
 } as const;
 
 const transactionsToolbarSearchStyle = {
@@ -990,6 +965,17 @@ const transactionsToolbarSearchStyle = {
   minWidth: "160px",
   maxWidth: "180px",
   flex: "0 1 180px",
+} as const;
+
+const transactionsShellActionsStyle = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  gap: "6px",
+  flexWrap: "nowrap",
+  minWidth: 0,
+  width: "auto",
+  flex: "0 0 auto",
 } as const;
 
 const transactionsFooterStyle = {
@@ -2065,50 +2051,6 @@ function TransactionsPageContent() {
 
     return count;
   }, [accountFilters.length, categoryFilters.length, dateFilterMode, expandedAccountFilters.length, query, typeFilters.length]);
-
-  const activeFilterChips = useMemo(
-    () => [
-      ...(query.trim()
-        ? [
-            {
-              key: "query",
-              label: `Search: ${query.trim()}`,
-              onClear: () => setQuery(""),
-            },
-          ]
-        : []),
-      ...(dateFilterMode !== "ltd"
-        ? [
-            {
-              key: "date",
-              label: `Date: ${getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd)}`,
-              onClear: () => {
-                setDateFilterMode("ltd");
-                setDateFilterAnchor(todayIso);
-                setCustomStart("");
-                setCustomEnd("");
-              },
-            },
-          ]
-        : []),
-      ...categoryFilters.map((categoryId) => ({
-        key: `category:${categoryId}`,
-        label: `Category: ${categoryNameById.get(categoryId) ?? "Unknown"}`,
-        onClear: () => setCategoryFilters((current) => current.filter((entry) => entry !== categoryId)),
-      })),
-      ...accountFilters.map((accountId) => ({
-        key: `account:${accountId}`,
-        label: `Account: ${accountNameById.get(accountId) ?? "Unknown"}`,
-        onClear: () => setAccountFilters((current) => current.filter((entry) => entry !== accountId)),
-      })),
-      ...typeFilters.map((type) => ({
-        key: `type:${type}`,
-        label: `Type: ${type === "credit" ? "Credit" : "Debit"}`,
-        onClear: () => setTypeFilters((current) => current.filter((entry) => entry !== type)),
-      })),
-    ],
-    [accountFilters, accountNameById, categoryFilters, categoryNameById, customStart, dateFilterAnchor, dateFilterMode, query, typeFilters]
-  );
 
   useEffect(() => {
     if (!selectAllRef.current) {
@@ -3324,7 +3266,29 @@ function TransactionsPageContent() {
             }))
           );
           setMessage("Some transactions could not be updated. Please try again.");
+          return;
         }
+
+        const updatedFields = Array.from(
+          new Set(
+            payloads.flatMap(({ payload }) =>
+              Object.keys(payload).filter((key) => payload[key as keyof typeof payload] !== undefined)
+            )
+          )
+        );
+
+        capturePostHogClientEvent("bulk_transaction_updated", {
+          workspace_id: selectedWorkspaceId || null,
+          selected_count: selected.length,
+          updated_count: selected.length - failedTransactions.length,
+          updated_fields: updatedFields.join(",") || null,
+          is_excluded: Object.prototype.hasOwnProperty.call(payloads[0]?.payload ?? {}, "isExcluded")
+            ? Boolean(payloads[0]?.payload?.isExcluded)
+            : null,
+          is_transfer: Object.prototype.hasOwnProperty.call(payloads[0]?.payload ?? {}, "isTransfer")
+            ? Boolean(payloads[0]?.payload?.isTransfer)
+            : null,
+        });
       } finally {
         setIsSaving(false);
       }
@@ -3418,7 +3382,29 @@ function TransactionsPageContent() {
             }))
           );
           setMessage("Some transactions could not be updated. Please try again.");
+          return;
         }
+
+        const updatedFields = Array.from(
+          new Set(
+            payloads.flatMap(({ payload }) =>
+              Object.keys(payload).filter((key) => payload[key as keyof typeof payload] !== undefined)
+            )
+          )
+        );
+
+        capturePostHogClientEvent("bulk_transaction_updated", {
+          workspace_id: selectedWorkspaceId || null,
+          selected_count: selected.length,
+          updated_count: selected.length - failedTransactions.length,
+          updated_fields: updatedFields.join(",") || null,
+          is_excluded: Object.prototype.hasOwnProperty.call(payloads[0]?.payload ?? {}, "isExcluded")
+            ? Boolean(payloads[0]?.payload?.isExcluded)
+            : null,
+          is_transfer: Object.prototype.hasOwnProperty.call(payloads[0]?.payload ?? {}, "isTransfer")
+            ? Boolean(payloads[0]?.payload?.isTransfer)
+            : null,
+        });
       } finally {
         setIsSaving(false);
       }
@@ -3440,6 +3426,11 @@ function TransactionsPageContent() {
       setBulkDeleteConfirmOpen(false);
       setUndoStack([]);
       setRedoStack([]);
+      capturePostHogClientEvent("bulk_transaction_deleted", {
+        workspace_id: selectedWorkspaceId || null,
+        selected_count: count,
+        deleted_count: count,
+      });
       setMessage(`${count} transaction${count === 1 ? "" : "s"} deleted.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to delete transactions.");
@@ -3743,7 +3734,144 @@ function TransactionsPageContent() {
   const hasReviewItems = warningTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
   const isTableLoading = false;
-  const hasActiveFilters = activeFilterChips.length > 0;
+  const transactionsShellActions = (
+    <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
+      <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef} style={transactionsMenuStyle}>
+        <button
+          className="button button-primary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
+          style={toolbarAddStyle}
+          type="button"
+          onClick={() => {
+            openAddMenu();
+          }}
+          title="Add transaction (A)"
+          aria-expanded={addMenuOpen}
+          aria-label="Add transaction"
+          aria-keyshortcuts="a"
+        >
+          <span className="button-icon" aria-hidden="true">
+            <ActionIcon name="plus" />
+          </span>
+          <span>Add</span>
+          <span className="button-icon" aria-hidden="true">
+            <ActionIcon name="chevron-down" />
+          </span>
+        </button>
+        <div className="transactions-add-menu__panel" hidden={!addMenuOpen}>
+          <button
+            className="transactions-add-menu__item"
+            type="button"
+            onClick={() => {
+              setAddMenuOpen(false);
+              void openManualAdd();
+            }}
+          >
+            Add transaction
+          </button>
+          <button
+            className="transactions-add-menu__item"
+            type="button"
+            onClick={() => {
+              openImportFiles();
+            }}
+          >
+            Import files
+          </button>
+        </div>
+      </div>
+
+      <label className="transactions-toolbar-search" style={transactionsToolbarSearchStyle}>
+        <span className="transactions-toolbar-search__icon" aria-hidden="true">
+          <ActionIcon name="search" />
+        </span>
+        <span className="sr-only">Search transactions</span>
+        <input
+          ref={searchInputRef}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search"
+          aria-label="Search transactions"
+          aria-keyshortcuts="/"
+        />
+      </label>
+
+      <button
+        className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+        style={toolbarChipStyle}
+        type="button"
+        title={dateFilterLabel}
+        onClick={() => setDateFilterOpen(true)}
+        aria-label="Open date filter"
+      >
+        <span className="button-icon" aria-hidden="true">
+          <ActionIcon name="calendar" />
+        </span>
+        <span>Date</span>
+      </button>
+
+      <button
+        className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+        style={toolbarChipStyle}
+        type="button"
+        title={activeFilterCount > 0 ? `Filters (F) · ${activeFilterCount} active` : "Filters (F)"}
+        onClick={toggleFiltersPanel}
+        aria-label={activeFilterCount > 0 ? `Open filters, ${activeFilterCount} active` : "Open filters"}
+        aria-expanded={filterOpen}
+        aria-keyshortcuts="f"
+      >
+        <span className="button-icon" aria-hidden="true">
+          <ActionIcon name="filters" />
+        </span>
+        <span>Filters</span>
+        {activeFilterCount > 0 ? <span className="transactions-filter-count-badge">{activeFilterCount}</span> : null}
+      </button>
+
+      <div className="transactions-download-menu" id="transactions-download-menu" ref={downloadMenuRef} style={transactionsMenuStyle}>
+        <button
+          className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-download-menu__toggle"
+          style={toolbarChipStyle}
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded={downloadMenuOpen}
+          onClick={() => {
+            openDownloadMenu();
+          }}
+          title="Download"
+          aria-label="Download transactions"
+        >
+          <span className="button-icon" aria-hidden="true">
+            <ActionIcon name="download" />
+          </span>
+          <span>Download</span>
+          <span className="button-icon" aria-hidden="true">
+            <ActionIcon name="chevron-down" />
+          </span>
+        </button>
+        <div className="transactions-download-menu__panel" hidden={!downloadMenuOpen}>
+          <button
+            className="transactions-download-menu__item"
+            type="button"
+            onClick={() => {
+              closeToolbarMenus();
+              downloadCsv();
+            }}
+          >
+            CSV
+          </button>
+          <button
+            className="transactions-download-menu__item"
+            type="button"
+            onClick={() => {
+              closeToolbarMenus();
+              downloadPdf();
+            }}
+          >
+            PDF
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   useEffect(() => {
     if (!selectedWorkspaceId || !isWorkspaceDataReady) {
@@ -3799,7 +3927,7 @@ function TransactionsPageContent() {
   }
 
   return (
-    <CloverShell active="transactions" title="Transactions">
+    <CloverShell active="transactions" title="Transactions" actions={transactionsShellActions}>
       <PageFileDropZone
         enabled={!importOpen}
         title="Drop statement files anywhere"
@@ -3807,146 +3935,6 @@ function TransactionsPageContent() {
       />
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`} style={transactionsLayoutStyle}>
         <div className="transactions-main-panel">
-          <div className="transactions-topbar">
-            <div className="transactions-toolbar-row transactions-toolbar-row--single" style={transactionsToolbarRowStyle}>
-              <div className="transactions-toolbar-group transactions-toolbar-group--left" style={transactionsToolbarLeftStyle}>
-                <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef} style={transactionsMenuStyle}>
-                  <button
-                    className="button button-primary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
-                    style={toolbarAddStyle}
-                    type="button"
-                    onClick={() => {
-                      openAddMenu();
-                    }}
-                    title="Add transaction (A)"
-                    aria-expanded={addMenuOpen}
-                    aria-label="Add transaction"
-                    aria-keyshortcuts="a"
-                  >
-                    <span className="button-icon" aria-hidden="true">
-                      <ActionIcon name="plus" />
-                    </span>
-                    <span>Add</span>
-                    <span className="button-icon" aria-hidden="true">
-                      <ActionIcon name="chevron-down" />
-                    </span>
-                  </button>
-                  <div className="transactions-add-menu__panel" hidden={!addMenuOpen}>
-                    <button
-                      className="transactions-add-menu__item"
-                      type="button"
-                      onClick={() => {
-                        setAddMenuOpen(false);
-                        void openManualAdd();
-                      }}
-                    >
-                      Add transaction
-                    </button>
-                    <button
-                      className="transactions-add-menu__item"
-                      type="button"
-                      onClick={() => {
-                        openImportFiles();
-                      }}
-                    >
-                      Import files
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="transactions-toolbar-group transactions-toolbar-group--right" style={transactionsToolbarRightStyle}>
-                <label className="transactions-toolbar-search" style={transactionsToolbarSearchStyle}>
-                  <span className="transactions-toolbar-search__icon" aria-hidden="true">
-                    <ActionIcon name="search" />
-                  </span>
-                  <span className="sr-only">Search transactions</span>
-                  <input
-                    ref={searchInputRef}
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                    placeholder="Search"
-                    aria-label="Search transactions"
-                    aria-keyshortcuts="/"
-                  />
-                </label>
-                <button
-                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
-                  style={toolbarChipStyle}
-                  type="button"
-                  title={dateFilterLabel}
-                  onClick={() => setDateFilterOpen(true)}
-                  aria-label="Open date filter"
-                >
-                  <span className="button-icon" aria-hidden="true">
-                    <ActionIcon name="calendar" />
-                  </span>
-                  <span>Date</span>
-                </button>
-                <button
-                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
-                  style={toolbarChipStyle}
-                  type="button"
-                  title={activeFilterCount > 0 ? `Filters (F) · ${activeFilterCount} active` : "Filters (F)"}
-                  onClick={toggleFiltersPanel}
-                  aria-label={activeFilterCount > 0 ? `Open filters, ${activeFilterCount} active` : "Open filters"}
-                  aria-expanded={filterOpen}
-                  aria-keyshortcuts="f"
-                >
-                  <span className="button-icon" aria-hidden="true">
-                    <ActionIcon name="filters" />
-                  </span>
-                  <span>Filters</span>
-                  {activeFilterCount > 0 ? <span className="transactions-filter-count-badge">{activeFilterCount}</span> : null}
-                </button>
-                <div className="transactions-download-menu" id="transactions-download-menu" ref={downloadMenuRef} style={transactionsMenuStyle}>
-                  <button
-                    className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-download-menu__toggle"
-                    style={toolbarChipStyle}
-                    type="button"
-                    aria-haspopup="menu"
-                    aria-expanded={downloadMenuOpen}
-                    onClick={() => {
-                      openDownloadMenu();
-                    }}
-                    title="Download"
-                    aria-label="Download transactions"
-                  >
-                    <span className="button-icon" aria-hidden="true">
-                      <ActionIcon name="download" />
-                    </span>
-                    <span>Download</span>
-                    <span className="button-icon" aria-hidden="true">
-                      <ActionIcon name="chevron-down" />
-                    </span>
-                  </button>
-                  <div className="transactions-download-menu__panel" hidden={!downloadMenuOpen}>
-                    <button
-                      className="transactions-download-menu__item"
-                      type="button"
-                      onClick={() => {
-                        closeToolbarMenus();
-                        downloadCsv();
-                      }}
-                    >
-                      CSV
-                    </button>
-                    <button
-                      className="transactions-download-menu__item"
-                      type="button"
-                      onClick={() => {
-                        closeToolbarMenus();
-                        downloadPdf();
-                      }}
-                    >
-                      PDF
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {filterOpen ? (
             <div className="transactions-inline-filters glass">
               <div className="transactions-inline-filters__head">
@@ -4026,36 +4014,6 @@ function TransactionsPageContent() {
               </div>
             </div>
           ) : null}
-
-          <div className="transactions-context-strip" aria-label="Transaction helpers">
-            <div className="transactions-context-strip__filters">
-              {activeFilterChips.length ? (
-                <>
-                  <span className="transactions-context-strip__label">Filters</span>
-                  <div className="transactions-context-strip__chips">
-                    {activeFilterChips.map((chip) => (
-                      <button
-                        key={chip.key}
-                        className="pill pill-interactive transactions-filter-pill transactions-context-strip__chip"
-                        type="button"
-                        onClick={chip.onClear}
-                        title={`Clear ${chip.label}`}
-                        aria-label={`Clear ${chip.label}`}
-                      >
-                        <span>{chip.label}</span>
-                        <span aria-hidden="true">×</span>
-                      </button>
-                    ))}
-                    <button className="transactions-context-strip__clear" type="button" onClick={clearAllTransactionFilters}>
-                      Clear all
-                    </button>
-                  </div>
-                </>
-              ) : (
-                null
-              )}
-            </div>
-          </div>
 
           {hasSelectedTransactions ? (
             <div className="transactions-status-line transactions-selection-bar" role="status" aria-live="polite">

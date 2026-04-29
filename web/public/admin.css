@@ -2077,10 +2077,18 @@ label {
   justify-content: flex-end;
 }
 
+.transactions-page .topbar-actions {
+  flex-wrap: nowrap;
+}
+
+.transactions-page .topbar__title-wrap {
+  flex: 1 1 auto;
+}
+
 .content-body {
   flex: 1;
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
   min-width: 0;
   min-height: 0;
