@@ -10599,6 +10599,25 @@ input.transaction-inline-edit--amount::placeholder {
   justify-content: flex-end;
 }
 
+.investments-page__add-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.investments-page__add-button .button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.investments-page__add-button .button-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
 .investments-market {
   display: grid;
   gap: 14px;
@@ -10857,6 +10876,36 @@ input.transaction-inline-edit--amount::placeholder {
 @media (max-width: 760px) {
   .investments-market {
     --market-axis-width: 68px;
+  }
+
+  .investments-page__header {
+    align-items: center;
+    gap: 12px;
+    flex-wrap: nowrap;
+  }
+
+  .investments-page__header-copy {
+    min-width: 0;
+  }
+
+  .investments-page__header-copy h1 {
+    font-size: 1.8rem;
+  }
+
+  .investments-page__header-actions {
+    flex-wrap: nowrap;
+    margin-left: auto;
+  }
+
+  .investments-page__add-button {
+    width: 40px;
+    min-width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .investments-page__add-button-label {
+    display: none;
   }
 
   .investments-market__controls {

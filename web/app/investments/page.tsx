@@ -639,12 +639,20 @@ export default function InvestmentsPage() {
             <h1>Investments</h1>
           </div>
           <div className="investments-page__header-actions">
-            <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
-              Add investment
+            <button
+              className="button button-primary button-small investments-page__add-button"
+              type="button"
+              onClick={() => setAddOpen(true)}
+              disabled={!selectedWorkspaceId}
+              aria-label="Add investment"
+            >
+              <span className="button-icon" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path d="M10 4v12M4 10h12" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+                </svg>
+              </span>
+              <span className="investments-page__add-button-label">Add investment</span>
             </button>
-            <Link className="button button-secondary button-small" href="/accounts">
-              View accounts
-            </Link>
           </div>
         </div>
 
