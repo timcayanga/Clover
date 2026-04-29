@@ -1215,7 +1215,6 @@ function TransactionsPageContent() {
   const manualNameInputRef = useRef<HTMLInputElement>(null);
   const addMenuRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
-  const moreMenuRef = useRef<HTMLDivElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const initialWorkspaceId = readSelectedWorkspaceId();
   const initialCachedWorkspace = getCachedTransactionsWorkspace(initialWorkspaceId);
@@ -1256,16 +1255,12 @@ function TransactionsPageContent() {
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
   const [accountFilters, setAccountFilters] = useState<string[]>([]);
   const [typeFilters, setTypeFilters] = useState<Array<"debit" | "credit">>([]);
-  const [merchantFilters, setMerchantFilters] = useState<string[]>([]);
-  const [merchantFilterInput, setMerchantFilterInput] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [message, setMessage] = useState("Select a workspace to review transactions.");
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
-  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
@@ -1463,7 +1458,6 @@ function TransactionsPageContent() {
           categoryIds: categoryFilters,
           accountIds: expandedAccountFilters,
           typeFilters,
-          merchantFilters,
           dateFilterMode,
         dateFilterAnchor,
         customStart,
@@ -1731,7 +1725,6 @@ function TransactionsPageContent() {
     categoryFilters,
     accountFilters,
     typeFilters,
-    merchantFilters,
     dateFilterMode,
     dateFilterAnchor,
     customStart,
@@ -1741,7 +1734,7 @@ function TransactionsPageContent() {
   ]);
 
   useEffect(() => {
-    if (!addMenuOpen && !downloadMenuOpen && !moreMenuOpen) {
+    if (!addMenuOpen && !downloadMenuOpen) {
       return;
     }
 
@@ -1753,22 +1746,19 @@ function TransactionsPageContent() {
 
       if (
         addMenuRef.current?.contains(target) ||
-        downloadMenuRef.current?.contains(target) ||
-        moreMenuRef.current?.contains(target)
+        downloadMenuRef.current?.contains(target)
       ) {
         return;
       }
 
       setAddMenuOpen(false);
       setDownloadMenuOpen(false);
-      setMoreMenuOpen(false);
     };
 
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         setAddMenuOpen(false);
         setDownloadMenuOpen(false);
-        setMoreMenuOpen(false);
         setImportOpen(false);
       }
     };
@@ -1779,13 +1769,7 @@ function TransactionsPageContent() {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [addMenuOpen, downloadMenuOpen, moreMenuOpen]);
-
-  useEffect(() => {
-    if (searchOpen) {
-      searchInputRef.current?.focus();
-    }
-  }, [searchOpen]);
+  }, [addMenuOpen, downloadMenuOpen]);
 
   useEffect(() => {
     if (manualOpen) {
@@ -1820,25 +1804,16 @@ function TransactionsPageContent() {
   const closeToolbarMenus = () => {
     setAddMenuOpen(false);
     setDownloadMenuOpen(false);
-    setMoreMenuOpen(false);
   };
 
   const openAddMenu = () => {
     setDownloadMenuOpen(false);
-    setMoreMenuOpen(false);
     setAddMenuOpen((current) => !current);
   };
 
   const openDownloadMenu = () => {
     setAddMenuOpen(false);
-    setMoreMenuOpen(false);
     setDownloadMenuOpen((current) => !current);
-  };
-
-  const openMoreMenu = () => {
-    setAddMenuOpen(false);
-    setDownloadMenuOpen(false);
-    setMoreMenuOpen((current) => !current);
   };
 
   const openImportFiles = (files: File[] | null = null) => {
@@ -1870,7 +1845,6 @@ function TransactionsPageContent() {
     const drilldownSignature = [
       urlSearchParams.get("q") ?? "",
       urlSearchParams.get("month") ?? "",
-      urlSearchParams.get("merchant") ?? "",
       urlSearchParams.get("category") ?? "",
       urlSearchParams.get("account") ?? "",
     ].join("|");
@@ -1881,11 +1855,10 @@ function TransactionsPageContent() {
 
     const q = urlSearchParams.get("q") ?? "";
     const month = urlSearchParams.get("month") ?? "";
-    const merchants = readSearchParamValues(urlSearchParams, "merchant");
     const categoriesFromUrl = readSearchParamValues(urlSearchParams, "category");
     const accountsFromUrl = readSearchParamValues(urlSearchParams, "account");
 
-    const hasDrilldownParams = Boolean(q || month || merchants.length > 0 || categoriesFromUrl.length > 0 || accountsFromUrl.length > 0);
+    const hasDrilldownParams = Boolean(q || month || categoriesFromUrl.length > 0 || accountsFromUrl.length > 0);
 
     if (!hasDrilldownParams) {
       if (drilldownParamRef.current === drilldownSignature) {
@@ -1897,8 +1870,6 @@ function TransactionsPageContent() {
       setCategoryFilters([]);
       setAccountFilters([]);
       setTypeFilters([]);
-      setMerchantFilters([]);
-      setMerchantFilterInput("");
       setDateFilterMode("ltd");
       setDateFilterAnchor(todayIso);
       setCustomStart("");
@@ -1921,8 +1892,6 @@ function TransactionsPageContent() {
     setCategoryFilters(nextCategoryFilters);
     setAccountFilters(nextAccountFilters);
     setTypeFilters([]);
-    setMerchantFilters(merchants);
-    setMerchantFilterInput("");
     setDateFilterMode(month ? "month" : "ltd");
     setDateFilterAnchor(month ? `${month}-01` : todayIso);
     setCustomStart("");
@@ -2028,10 +1997,9 @@ function TransactionsPageContent() {
     count += categoryFilters.length;
     count += expandedAccountFilters.length;
     count += typeFilters.length;
-    count += merchantFilters.length;
 
     return count;
-  }, [accountFilters.length, categoryFilters.length, dateFilterMode, expandedAccountFilters.length, merchantFilters.length, query, typeFilters.length]);
+  }, [accountFilters.length, categoryFilters.length, dateFilterMode, expandedAccountFilters.length, query, typeFilters.length]);
 
   const activeFilterChips = useMemo(
     () => [
@@ -2073,13 +2041,8 @@ function TransactionsPageContent() {
         label: `Type: ${type === "credit" ? "Credit" : "Debit"}`,
         onClear: () => setTypeFilters((current) => current.filter((entry) => entry !== type)),
       })),
-      ...merchantFilters.map((merchant) => ({
-        key: `merchant:${merchant}`,
-        label: `Merchant: ${merchant}`,
-        onClear: () => setMerchantFilters((current) => current.filter((entry) => entry !== merchant)),
-      })),
     ],
-    [accountFilters, accountNameById, categoryFilters, categoryNameById, customStart, dateFilterAnchor, dateFilterMode, merchantFilters, query, typeFilters]
+    [accountFilters, accountNameById, categoryFilters, categoryNameById, customStart, dateFilterAnchor, dateFilterMode, query, typeFilters]
   );
 
   useEffect(() => {
@@ -2098,7 +2061,6 @@ function TransactionsPageContent() {
     categoryFilters,
     accountFilters,
     typeFilters,
-    merchantFilters,
     dateFilterMode,
     dateFilterAnchor,
     customStart,
@@ -2363,22 +2325,9 @@ function TransactionsPageContent() {
     setBulkEditOpen(true);
   };
 
-  const openSearchModal = () => {
+  const toggleFiltersPanel = () => {
     closeToolbarMenus();
-
-    if (searchOpen) {
-      searchInputRef.current?.focus();
-      return;
-    }
-
-    setFilterOpen(false);
-    setSearchOpen(true);
-  };
-
-  const openFiltersModal = () => {
-    closeToolbarMenus();
-    setSearchOpen(false);
-    setFilterOpen(true);
+    setFilterOpen((current) => !current);
   };
 
   const clearAllTransactionFilters = () => {
@@ -2386,8 +2335,6 @@ function TransactionsPageContent() {
     setCategoryFilters([]);
     setAccountFilters([]);
     setTypeFilters([]);
-    setMerchantFilters([]);
-    setMerchantFilterInput("");
     setDateFilterMode("ltd");
     setDateFilterAnchor(todayIso);
     setCustomStart("");
@@ -2509,11 +2456,6 @@ function TransactionsPageContent() {
           return;
         }
 
-        if (searchOpen) {
-          setSearchOpen(false);
-          return;
-        }
-
         if (filterOpen) {
           setFilterOpen(false);
           return;
@@ -2538,13 +2480,13 @@ function TransactionsPageContent() {
       const key = event.key.toLowerCase();
       if (key === "/") {
         event.preventDefault();
-        openSearchModal();
+        searchInputRef.current?.focus();
         return;
       }
 
       if (key === "f") {
         event.preventDefault();
-        openFiltersModal();
+        toggleFiltersPanel();
         return;
       }
 
@@ -2578,13 +2520,11 @@ function TransactionsPageContent() {
     hasSelectedTransactions,
     manualOpen,
     merchantRenameSuggestion,
-    openFiltersModal,
-    openSearchModal,
     openBulkEdit,
     openManualAdd,
     selectedTransaction,
     transactionDeleteConfirmOpen,
-    searchOpen,
+    toggleFiltersPanel,
   ]);
 
   useEffect(() => {
@@ -3454,48 +3394,6 @@ function TransactionsPageContent() {
     }
   };
 
-  const saveView = () => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem(
-      "clover.transactions.view",
-      JSON.stringify({
-        query,
-        categoryFilters,
-        accountFilters,
-        typeFilters,
-        merchantFilters,
-      })
-    );
-    capturePostHogClientEvent("report_filtered", {
-      workspace_id: selectedWorkspaceId || null,
-      view: "transactions",
-      filter_type_count: typeFilters.length,
-      filter_category_count: categoryFilters.length,
-      filter_account_count: accountFilters.length,
-      filter_merchant_count: merchantFilters.length,
-      query_length: query.trim().length,
-      date_filter_mode: dateFilterMode,
-    });
-    setMessage("Current view saved.");
-  };
-
-  const addMerchantFilters = (value: string) => {
-    const next = splitMerchantFilters(value);
-    if (!next.length) {
-      return;
-    }
-
-    setMerchantFilters((current) => {
-      const merged = new Set(current);
-      next.forEach((merchant) => merged.add(merchant));
-      return Array.from(merged);
-    });
-    setMerchantFilterInput("");
-  };
-
   const fetchAllTransactionsForExport = async () => {
     if (!selectedWorkspaceId) {
       return [];
@@ -3508,7 +3406,6 @@ function TransactionsPageContent() {
         categoryIds: categoryFilters,
         accountIds: accountFilters,
         typeFilters,
-        merchantFilters,
         dateFilterMode,
         dateFilterAnchor,
         customStart,
@@ -3823,135 +3720,7 @@ function TransactionsPageContent() {
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`}>
         <div className="transactions-main-panel">
           <div className="transactions-topbar">
-            <div className="transactions-toolbar-row transactions-toolbar-row--top">
-              <div className="transactions-toolbar-spacer" aria-hidden="true" />
-              <div className="transactions-toolbar-group transactions-toolbar-group--right">
-                <button
-                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-search-trigger"
-                  style={toolbarChipStyle}
-                  type="button"
-                  onClick={openSearchModal}
-                  title="Search (/)"
-                  aria-label="Search transactions"
-                  aria-keyshortcuts="/"
-                >
-                  <span className="button-icon" aria-hidden="true">
-                    <ActionIcon name="search" />
-                  </span>
-                  <span>Search</span>
-                </button>
-                <button
-                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
-                  style={toolbarChipStyle}
-                  type="button"
-                  title={dateFilterLabel}
-                  onClick={() => setDateFilterOpen(true)}
-                  aria-label="Open date filter"
-                >
-                  <span className="button-icon" aria-hidden="true">
-                    <ActionIcon name="calendar" />
-                  </span>
-                  <span>Date</span>
-                </button>
-                <button
-                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
-                  style={toolbarChipStyle}
-                  type="button"
-                  title={activeFilterCount > 0 ? `Filters (F) · ${activeFilterCount} active` : "Filters (F)"}
-                  onClick={openFiltersModal}
-                  aria-label={activeFilterCount > 0 ? `Open filters, ${activeFilterCount} active` : "Open filters"}
-                  aria-keyshortcuts="f"
-                >
-                  <span className="button-icon" aria-hidden="true">
-                    <ActionIcon name="filters" />
-                  </span>
-                  <span>Filters</span>
-                  {activeFilterCount > 0 ? <span className="transactions-filter-count-badge">{activeFilterCount}</span> : null}
-                </button>
-                <div className="transactions-more-menu" id="transactions-more-menu" ref={moreMenuRef}>
-                  <button
-                    className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-more-menu__toggle"
-                    style={toolbarChipStyle}
-                    type="button"
-                    aria-haspopup="menu"
-                    aria-expanded={moreMenuOpen}
-                    onClick={openMoreMenu}
-                    title="More actions"
-                    aria-label="More actions"
-                  >
-                    <span className="button-icon" aria-hidden="true">
-                      <ActionIcon name="more" />
-                    </span>
-                  </button>
-                  <div className="transactions-more-menu__panel" hidden={!moreMenuOpen}>
-                    <button
-                      className="transactions-more-menu__item"
-                      type="button"
-                      onClick={() => {
-                        closeToolbarMenus();
-                        setSummaryOpen((current) => !current);
-                      }}
-                    >
-                      {summaryOpen ? "Hide summary" : "Show summary"}
-                    </button>
-                    <button
-                      className="transactions-more-menu__item"
-                      type="button"
-                      onClick={() => {
-                        closeToolbarMenus();
-                        void undoLastChange();
-                      }}
-                      disabled={!undoStack.length || isSaving || isApplyingHistory}
-                    >
-                      Undo
-                    </button>
-                    <button
-                      className="transactions-more-menu__item"
-                      type="button"
-                      onClick={() => {
-                        closeToolbarMenus();
-                        void redoLastChange();
-                      }}
-                      disabled={!redoStack.length || isSaving || isApplyingHistory}
-                    >
-                      Redo
-                    </button>
-                    <button
-                      className="transactions-more-menu__item"
-                      type="button"
-                      onClick={() => {
-                        closeToolbarMenus();
-                        saveView();
-                      }}
-                    >
-                      Save view
-                    </button>
-                    <button
-                      className="transactions-more-menu__item"
-                      type="button"
-                      onClick={() => {
-                        closeToolbarMenus();
-                        downloadCsv();
-                      }}
-                    >
-                      Export CSV
-                    </button>
-                    <button
-                      className="transactions-more-menu__item"
-                      type="button"
-                      onClick={() => {
-                        closeToolbarMenus();
-                        downloadPdf();
-                      }}
-                    >
-                      Export PDF
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="transactions-toolbar-row transactions-toolbar-row--bottom">
+            <div className="transactions-toolbar-row transactions-toolbar-row--single">
               <div className="transactions-toolbar-group transactions-toolbar-group--left">
                 <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef}>
                   <button
@@ -3996,53 +3765,51 @@ function TransactionsPageContent() {
                     </button>
                   </div>
                 </div>
-                <button
-                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
-                  style={toolbarChipStyle}
-                  type="button"
-                  title="Undo"
-                  disabled={!undoStack.length || isSaving || isApplyingHistory}
-                  onClick={() => {
-                    void undoLastChange();
-                  }}
-                  aria-label="Undo last change"
-                >
-                  <span className="button-icon" aria-hidden="true">
-                    <img src="/undo.svg" alt="" aria-hidden="true" />
-                  </span>
-                  <span>Undo</span>
-                </button>
-                <button
-                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
-                  style={toolbarChipStyle}
-                  type="button"
-                  title="Redo"
-                  disabled={!redoStack.length || isSaving || isApplyingHistory}
-                  onClick={() => {
-                    void redoLastChange();
-                  }}
-                  aria-label="Redo last change"
-                >
-                  <span className="button-icon" aria-hidden="true">
-                    <img src="/redo.svg" alt="" aria-hidden="true" />
-                  </span>
-                  <span>Redo</span>
-                </button>
               </div>
 
               <div className="transactions-toolbar-group transactions-toolbar-group--right">
+                <label className="transactions-toolbar-search">
+                  <span className="transactions-toolbar-search__icon" aria-hidden="true">
+                    <ActionIcon name="search" />
+                  </span>
+                  <span className="sr-only">Search transactions</span>
+                  <input
+                    ref={searchInputRef}
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    placeholder="Search"
+                    aria-label="Search transactions"
+                    aria-keyshortcuts="/"
+                  />
+                </label>
                 <button
                   className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
                   style={toolbarChipStyle}
                   type="button"
-                  onClick={saveView}
-                  title="Save view"
-                  aria-label="Save current view"
+                  title={dateFilterLabel}
+                  onClick={() => setDateFilterOpen(true)}
+                  aria-label="Open date filter"
                 >
                   <span className="button-icon" aria-hidden="true">
-                    <ActionIcon name="save" />
+                    <ActionIcon name="calendar" />
                   </span>
-                  <span>Save View</span>
+                  <span>Date</span>
+                </button>
+                <button
+                  className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+                  style={toolbarChipStyle}
+                  type="button"
+                  title={activeFilterCount > 0 ? `Filters (F) · ${activeFilterCount} active` : "Filters (F)"}
+                  onClick={toggleFiltersPanel}
+                  aria-label={activeFilterCount > 0 ? `Open filters, ${activeFilterCount} active` : "Open filters"}
+                  aria-expanded={filterOpen}
+                  aria-keyshortcuts="f"
+                >
+                  <span className="button-icon" aria-hidden="true">
+                    <ActionIcon name="filters" />
+                  </span>
+                  <span>Filters</span>
+                  {activeFilterCount > 0 ? <span className="transactions-filter-count-badge">{activeFilterCount}</span> : null}
                 </button>
                 <div className="transactions-download-menu" id="transactions-download-menu" ref={downloadMenuRef}>
                   <button
@@ -4091,6 +3858,86 @@ function TransactionsPageContent() {
               </div>
             </div>
           </div>
+
+          {filterOpen ? (
+            <div className="transactions-inline-filters glass">
+              <div className="transactions-inline-filters__head">
+                <div>
+                  <span className="transactions-context-strip__label">Filters</span>
+                  <p className="transactions-inline-filters__copy">Refine the list without leaving Transactions.</p>
+                </div>
+                <button className="icon-button" type="button" onClick={toggleFiltersPanel} aria-label="Close filters">
+                  ×
+                </button>
+              </div>
+              <div className="form-grid">
+                <MultiSelectFilterGroup
+                  label="Categories"
+                  options={categories.map((category) => ({
+                    value: category.id,
+                    label: category.name,
+                  }))}
+                  selected={categoryFilters}
+                  onToggle={(value) => setCategoryFilters((current) => toggleFilterValue(current, value))}
+                  onClear={() => setCategoryFilters([])}
+                />
+                <MultiSelectFilterGroup
+                  label="Accounts"
+                  options={accounts.map((account) => ({
+                    value: account.id,
+                    label: account.name,
+                  }))}
+                  selected={accountFilters}
+                  onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))}
+                  onClear={() => setAccountFilters([])}
+                />
+                <MultiSelectFilterGroup
+                  label="Types"
+                  options={[
+                    { value: "debit", label: "Debit" },
+                    { value: "credit", label: "Credit" },
+                  ]}
+                  selected={typeFilters}
+                  onToggle={(value) => setTypeFilters((current) => toggleTypedFilterValue(current, value as "debit" | "credit"))}
+                  onClear={() => setTypeFilters([])}
+                />
+              </div>
+              <div className="form-actions">
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={() => {
+                    clearAllTransactionFilters();
+                    capturePostHogClientEvent("report_filtered", {
+                      workspace_id: selectedWorkspaceId || null,
+                      view: "transactions",
+                      action: "filters_reset",
+                    });
+                  }}
+                >
+                  Reset
+                </button>
+                <button
+                  className="button button-primary"
+                  type="button"
+                  onClick={() => {
+                    capturePostHogClientEvent("report_filtered", {
+                      workspace_id: selectedWorkspaceId || null,
+                      view: "transactions",
+                      action: "filters_applied",
+                      filter_type_count: typeFilters.length,
+                      filter_category_count: categoryFilters.length,
+                      filter_account_count: accountFilters.length,
+                      query_length: query.trim().length,
+                    });
+                    setFilterOpen(false);
+                  }}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <div className="transactions-context-strip" aria-label="Transaction helpers">
             <div className="transactions-context-strip__filters">
@@ -4964,165 +4811,6 @@ function TransactionsPageContent() {
                   setDateFilterOpen(false);
                 }}
               >
-                Done
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {filterOpen ? (
-        <div className="modal-backdrop modal-backdrop--soft" role="presentation" onClick={() => setFilterOpen(false)}>
-          <section
-            className="modal-card modal-card--wide glass"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="transaction-filters-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="modal-head">
-              <div>
-                <p className="eyebrow">Transactions</p>
-                <h4 id="transaction-filters-title">Filters</h4>
-                <p className="modal-copy">Refine what appears in the transaction review table.</p>
-              </div>
-              <button className="icon-button" type="button" onClick={() => setFilterOpen(false)} aria-label="Close filters">
-                ×
-              </button>
-            </div>
-
-            <div className="form-grid">
-              <MerchantFilterGroup
-                merchants={merchantFilters}
-                input={merchantFilterInput}
-                onInputChange={setMerchantFilterInput}
-                onAddMerchants={addMerchantFilters}
-                onRemoveMerchant={(merchant) => setMerchantFilters((current) => current.filter((entry) => entry !== merchant))}
-                onClear={() => {
-                  setMerchantFilters([]);
-                  setMerchantFilterInput("");
-                }}
-              />
-              <MultiSelectFilterGroup
-                label="Categories"
-                options={categories.map((category) => ({
-                  value: category.id,
-                  label: category.name,
-                }))}
-                selected={categoryFilters}
-                onToggle={(value) => setCategoryFilters((current) => toggleFilterValue(current, value))}
-                onClear={() => setCategoryFilters([])}
-              />
-              <MultiSelectFilterGroup
-                label="Accounts"
-                options={accounts.map((account) => ({
-                  value: account.id,
-                  label: account.name,
-                }))}
-                selected={accountFilters}
-                onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))}
-                onClear={() => setAccountFilters([])}
-              />
-              <MultiSelectFilterGroup
-                label="Types"
-                options={[
-                  { value: "debit", label: "Debit" },
-                  { value: "credit", label: "Credit" },
-                ]}
-                selected={typeFilters}
-                onToggle={(value) => setTypeFilters((current) => toggleTypedFilterValue(current, value as "debit" | "credit"))}
-                onClear={() => setTypeFilters([])}
-              />
-            </div>
-
-            <div className="form-actions">
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={() => {
-                  clearAllTransactionFilters();
-                  capturePostHogClientEvent("report_filtered", {
-                    workspace_id: selectedWorkspaceId || null,
-                    view: "transactions",
-                    action: "filters_reset",
-                  });
-                }}
-              >
-                Reset
-              </button>
-              <button
-                className="button button-primary"
-                type="button"
-                onClick={() => {
-                  capturePostHogClientEvent("report_filtered", {
-                    workspace_id: selectedWorkspaceId || null,
-                    view: "transactions",
-                    action: "filters_applied",
-                    filter_type_count: typeFilters.length,
-                    filter_category_count: categoryFilters.length,
-                    filter_account_count: accountFilters.length,
-                    filter_merchant_count: merchantFilters.length,
-                    query_length: query.trim().length,
-                  });
-                  setFilterOpen(false);
-                }}
-              >
-                Done
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      {searchOpen ? (
-        <div
-          className="modal-backdrop modal-backdrop--soft modal-backdrop--centered-mobile"
-          role="presentation"
-          onClick={() => setSearchOpen(false)}
-        >
-          <section
-            className="modal-card modal-card--wide search-modal glass"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="transaction-search-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="modal-head">
-              <div>
-                <p className="eyebrow">Transactions</p>
-                <h4 id="transaction-search-title">Search</h4>
-                <p className="modal-copy">Search by merchant, note, alias, or amount.</p>
-              </div>
-              <button className="icon-button" type="button" onClick={() => setSearchOpen(false)} aria-label="Close search">
-                ×
-              </button>
-            </div>
-
-            <div className="search-modal__body">
-              <label className="search-modal__field">
-                Search
-                <input
-                  ref={searchInputRef}
-                  value={query}
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search by merchant, note, or alias"
-                />
-              </label>
-              <p className="search-modal__hint">Results update as you type.</p>
-            </div>
-
-            <div className="form-actions">
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={() => {
-                  setQuery("");
-                  setSearchOpen(false);
-                }}
-              >
-                Clear
-              </button>
-              <button className="button button-primary" type="button" onClick={() => setSearchOpen(false)}>
                 Done
               </button>
             </div>

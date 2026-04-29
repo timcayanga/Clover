@@ -8718,6 +8718,14 @@ label {
   gap: 5px;
 }
 
+.transactions-toolbar-row--single {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .transactions-toolbar-row--top {
   grid-template-columns: 1fr auto;
   align-items: center;
@@ -8740,6 +8748,44 @@ label {
   justify-self: end;
 }
 
+.transactions-toolbar-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(219, 227, 232, 0.9);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow-soft);
+  min-width: 220px;
+  flex: 1 1 240px;
+}
+
+.transactions-toolbar-search__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-2);
+  flex: 0 0 auto;
+}
+
+.transactions-toolbar-search input {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  background: transparent;
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 0.78rem;
+  line-height: 1;
+  outline: none;
+}
+
+.transactions-toolbar-search input::placeholder {
+  color: var(--muted-2);
+}
+
 .transactions-action-button {
   min-height: 30px;
   border-radius: 999px;
@@ -8754,11 +8800,6 @@ label {
 
 .transactions-add-menu,
 .transactions-download-menu,
-.transactions-more-menu {
-  position: relative;
-  flex: 0 0 auto;
-}
-
 .transactions-add-menu__panel,
 .transactions-download-menu__panel,
 .transactions-more-menu__panel {
@@ -9441,6 +9482,30 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--accent);
   font-size: 0.68rem;
   font-weight: 700;
+}
+
+.transactions-inline-filters {
+  margin-top: 10px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(219, 227, 232, 0.9);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 12px;
+}
+
+.transactions-inline-filters__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.transactions-inline-filters__copy {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .transaction-note-button {
