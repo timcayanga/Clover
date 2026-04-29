@@ -134,9 +134,6 @@ export default function HomePage() {
             <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
               Get started
             </Link>
-            <Link className="button button-secondary button-pill" href="/pricing" prefetch={false}>
-              Pricing
-            </Link>
             <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>
               Log in
             </Link>
