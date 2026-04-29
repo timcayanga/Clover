@@ -266,8 +266,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const parsedMetadataConfidence = Number((metadata as { confidence?: unknown } | null)?.confidence ?? 0);
       const hasExtractedText = extractedText.trim().length > 0;
       const shouldProcessInline =
-        (hasExtractedText && parsedMetadataConfidence >= 95 && bytes.length <= 8_000_000) ||
-        (!hasExtractedText && bytes.length <= 2_500_000);
+        !isPdfUpload(file.name || formFileName || "imported-file", file.type || formFileType || "") &&
+        ((hasExtractedText && parsedMetadataConfidence >= 95 && bytes.length <= 8_000_000) ||
+          (!hasExtractedText && bytes.length <= 2_500_000));
 
       if (shouldProcessInline || forceInlineProcessing) {
         stage = "processing statement text";
