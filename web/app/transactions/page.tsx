@@ -3474,7 +3474,7 @@ function TransactionsPageContent() {
   }, [importOpen, pendingImportSummary, accounts, transactions]);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 720px)");
+    const mediaQuery = window.matchMedia("(max-width: 1100px)");
     const updateViewport = () => setIsCompactViewport(mediaQuery.matches);
 
     updateViewport();
@@ -4122,7 +4122,7 @@ function TransactionsPageContent() {
                   <button className="button button-primary" type="button" onClick={() => void openManualAdd()}>
                     Add transaction
                   </button>
-                  <button className="button button-secondary" type="button" onClick={() => openImportFiles()}>
+                  <button className="button button-secondary transactions-empty-state__import" type="button" onClick={() => openImportFiles()}>
                     Import files
                   </button>
                 </div>
@@ -4323,7 +4323,7 @@ function TransactionsPageContent() {
                   <button className="button button-primary" type="button" onClick={() => void openManualAdd()}>
                     Add transaction
                   </button>
-                  <button className="button button-secondary" type="button" onClick={() => openImportFiles()}>
+                  <button className="button button-secondary transactions-empty-state__import" type="button" onClick={() => openImportFiles()}>
                     Import files
                   </button>
                 </div>

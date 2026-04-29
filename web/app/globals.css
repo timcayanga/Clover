@@ -10549,11 +10549,23 @@ input.transaction-inline-edit--amount::placeholder {
 
   .transactions-toolbar-row--top,
   .transactions-toolbar-row--bottom {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .transactions-toolbar-row--top::-webkit-scrollbar,
+  .transactions-toolbar-row--bottom::-webkit-scrollbar {
+    display: none;
   }
 
   .transactions-toolbar-group {
     gap: 6px;
+    flex-wrap: nowrap;
+    min-width: max-content;
   }
 
   .transactions-toolbar-group--right {
@@ -10586,6 +10598,10 @@ input.transaction-inline-edit--amount::placeholder {
 
   .transactions-page .transactions-toolbar-add.button-primary .button-icon:last-child,
   .transactions-page .transactions-toolbar-chip.button-secondary .button-icon:last-child {
+    display: none;
+  }
+
+  .transactions-empty-state__import {
     display: none;
   }
 
@@ -15853,11 +15869,23 @@ input.transaction-inline-edit--amount::placeholder {
 
   .transactions-toolbar-row--top,
   .transactions-toolbar-row--bottom {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .transactions-toolbar-row--top::-webkit-scrollbar,
+  .transactions-toolbar-row--bottom::-webkit-scrollbar {
+    display: none;
   }
 
   .transactions-toolbar-group {
     gap: 8px;
+    flex-wrap: nowrap;
+    min-width: max-content;
   }
 
   .transactions-context-strip {
@@ -15912,6 +15940,8 @@ input.transaction-inline-edit--amount::placeholder {
     gap: 10px;
     padding-top: 10px;
     bottom: 12px;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .transactions-pagination {
@@ -15923,11 +15953,13 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .transactions-footer-snapshot {
-    min-width: 100%;
+    min-width: 0;
+    width: 100%;
+    justify-items: stretch;
   }
 
   .transactions-footer-snapshot__metrics {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
