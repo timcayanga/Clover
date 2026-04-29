@@ -19175,10 +19175,10 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .landing-nav__mobile {
-    display: flex;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
+    column-gap: 8px;
     width: 100%;
     position: relative;
   }
@@ -19195,6 +19195,8 @@ input.transaction-inline-edit--amount::placeholder {
     background: rgba(255, 255, 255, 0.78);
     color: var(--text);
     box-shadow: var(--shadow-soft);
+    position: relative;
+    z-index: 2;
   }
 
   .landing-nav__mobile-bars {
@@ -19213,13 +19215,12 @@ input.transaction-inline-edit--amount::placeholder {
 
   .landing-brand--mobile {
     display: inline-flex;
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
+    justify-self: center;
     gap: 5px;
     font-size: 13px;
     white-space: nowrap;
+    position: relative;
+    z-index: 1;
   }
 
   .landing-brand--mobile .landing-brand__mark {
@@ -19235,6 +19236,9 @@ input.transaction-inline-edit--amount::placeholder {
     min-height: 32px;
     padding-inline: 10px;
     font-size: 13px;
+    justify-self: end;
+    position: relative;
+    z-index: 2;
   }
 
   .landing-nav__mobile-backdrop {
@@ -19253,6 +19257,8 @@ input.transaction-inline-edit--amount::placeholder {
     right: 12px;
     top: calc(100% + 10px);
     z-index: 40;
+    max-height: calc(100dvh - 120px);
+    overflow: auto;
     padding: 14px;
     border-radius: 20px;
     border: 1px solid rgba(255, 255, 255, 0.45);
