@@ -1006,6 +1006,7 @@ export function CloverShell({
               <h1>{title}</h1>
               {subtitle ? <p className="topbar-subtitle">{subtitle}</p> : null}
             </div>
+            {actions ? <div className="shell-compact-bar__actions">{actions}</div> : null}
           </div>
         ) : null}
         {showTopbar ? (

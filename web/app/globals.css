@@ -1978,6 +1978,13 @@ label {
   gap: 2px;
 }
 
+.shell-compact-bar__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .shell-compact-bar__copy h1 {
   font-size: clamp(1.2rem, 3.5vw, 1.75rem);
   line-height: 1.08;
@@ -16458,6 +16465,10 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-page__headline-copy {
+    display: none;
+  }
+
+  .accounts-page__headline-actions {
     display: none;
   }
 

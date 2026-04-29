@@ -1750,7 +1750,23 @@ function AccountsPageContent() {
   }
 
   return (
-    <CloverShell active="accounts" title="Accounts" showTopbar={false}>
+    <CloverShell
+      active="accounts"
+      title="Accounts"
+      showTopbar={false}
+      actions={
+        <>
+          <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
+            <ActionIcon name="plus" />
+            <span>Add account</span>
+          </button>
+          <button className="button button-secondary button-small accounts-toolbar-button" type="button" onClick={openImportFiles}>
+            <ActionIcon name="upload" />
+            <span>Import files</span>
+          </button>
+        </>
+      }
+    >
       <div className="accounts-page">
         <div className="accounts-page__sticky">
           <div className="accounts-page__headline">
