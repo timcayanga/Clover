@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -251,6 +252,15 @@ type MerchantRenameSuggestion = {
   sourceMerchantRaw: string;
   targetMerchantClean: string;
   matchingTransactionIds: string[];
+};
+
+type CategorySuggestion = {
+  categoryId: string;
+  categoryName: string;
+  confidence: number;
+  source: "merchant_rule" | "training_signal" | "heuristic";
+  sourceLabel: string;
+  reason: string;
 };
 
 type UpdateTransactionOptions = {
@@ -1134,8 +1144,39 @@ function MerchantFilterGroup({
             </button>
           ))}
           </div>
-        ) : null}
+      ) : null}
     </div>
+  );
+}
+
+function CategorySuggestionChip({
+  suggestion,
+  applied,
+  onApply,
+}: {
+  suggestion: CategorySuggestion;
+  applied: boolean;
+  onApply?: () => void;
+}) {
+  const chip = (
+    <>
+      <span className="transactions-suggestion-chip__label">{applied ? "Applied suggestion" : "Suggested category"}</span>
+      <strong>{suggestion.categoryName}</strong>
+      <span className="transactions-suggestion-chip__meta">
+        {suggestion.sourceLabel} · {suggestion.confidence}%
+      </span>
+    </>
+  );
+
+  if (!onApply || applied) {
+    return <div className={`transactions-suggestion-chip ${applied ? "transactions-suggestion-chip--applied" : ""}`}>{chip}</div>;
+  }
+
+  return (
+    <button className="transactions-suggestion-chip transactions-suggestion-chip--button" type="button" onClick={onApply}>
+      {chip}
+      <span className="transactions-suggestion-chip__action">Use suggestion</span>
+    </button>
   );
 }
 
@@ -1232,10 +1273,16 @@ function TransactionsPageContent() {
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
+  const [manualCategorySuggestion, setManualCategorySuggestion] = useState<CategorySuggestion | null>(null);
+  const [detailCategorySuggestion, setDetailCategorySuggestion] = useState<CategorySuggestion | null>(null);
+  const [manualCategoryTouched, setManualCategoryTouched] = useState(false);
+  const [manualCategoryAutoApplied, setManualCategoryAutoApplied] = useState(false);
   const [manualAccountMenuOpen, setManualAccountMenuOpen] = useState(false);
   const [manualCategoryMenuOpen, setManualCategoryMenuOpen] = useState(false);
   const transactionRowRefs = useRef(new Map<string, HTMLElement>());
   const transactionsLoadRequestRef = useRef(0);
+  const manualCategorySuggestionRequestRef = useRef(0);
+  const detailCategorySuggestionRequestRef = useRef(0);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
   const reviewTransactionParamRef = useRef<string | null>(null);
@@ -1274,6 +1321,14 @@ function TransactionsPageContent() {
     () => categories.find((category) => category.id === manualSelectedCategoryId) ?? null,
     [categories, manualSelectedCategoryId]
   );
+  const detailSuggestionMerchantText = useMemo(() => {
+    if (!selectedTransaction || !detailDraft) {
+      return "";
+    }
+
+    return detailDraft.merchantClean.trim() || detailDraft.merchantRaw.trim() || selectedTransaction.merchantRaw.trim();
+  }, [detailDraft?.merchantClean, detailDraft?.merchantRaw, selectedTransaction?.id, selectedTransaction?.merchantRaw]);
+  const detailSuggestionType = detailDraft?.type ?? (selectedTransaction?.type === "income" ? "credit" : "debit");
   const expandedAccountFilters = useMemo(() => {
     if (accountFilters.length === 0) {
       return accountFilters;
@@ -2248,6 +2303,7 @@ function TransactionsPageContent() {
   const closeTransactionDetail = () => {
     setSelectedTransaction(null);
     setDetailDraft(null);
+    setDetailCategorySuggestion(null);
     setTransactionDeleteConfirmOpen(false);
   };
 
@@ -2329,6 +2385,9 @@ function TransactionsPageContent() {
     try {
       const accountId = await ensureDefaultAccount(selectedWorkspaceId);
       setManualForm(createEmptyManualForm(accountId, getOtherCategoryId(categories)));
+      setManualCategoryTouched(false);
+      setManualCategoryAutoApplied(false);
+      setManualCategorySuggestion(null);
       setManualAccountMenuOpen(false);
       setManualCategoryMenuOpen(false);
       setManualOpen(true);
@@ -2336,6 +2395,35 @@ function TransactionsPageContent() {
       setMessage(error instanceof Error ? error.message : "Unable to prepare transaction form.");
     }
   };
+
+  const fetchCategorySuggestion = useCallback(
+    async (merchantText: string, type: Transaction["type"], signal?: AbortSignal) => {
+      if (!selectedWorkspaceId || merchantText.trim().length < 2) {
+        return null;
+      }
+
+      const response = await fetch("/api/transaction-category-suggestions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workspaceId: selectedWorkspaceId,
+          merchantText,
+          type,
+        }),
+        signal,
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const payload = (await response.json()) as { suggestion?: CategorySuggestion | null };
+      return payload.suggestion ?? null;
+    },
+    [selectedWorkspaceId]
+  );
 
   useEffect(() => {
     const handleKeyboardShortcuts = (event: globalThis.KeyboardEvent) => {
@@ -2447,6 +2535,109 @@ function TransactionsPageContent() {
     selectedTransaction,
     transactionDeleteConfirmOpen,
   ]);
+
+  useEffect(() => {
+    if (!manualOpen || !selectedWorkspaceId) {
+      setManualCategorySuggestion(null);
+      return;
+    }
+
+    const merchantText = manualForm.merchantRaw.trim();
+    if (merchantText.length < 2) {
+      setManualCategorySuggestion(null);
+      if (manualCategoryAutoApplied && !manualCategoryTouched) {
+        setManualCategoryAutoApplied(false);
+        setManualForm((current) => ({ ...current, categoryId: "" }));
+      }
+      return;
+    }
+
+    const requestId = manualCategorySuggestionRequestRef.current + 1;
+    manualCategorySuggestionRequestRef.current = requestId;
+    const controller = new AbortController();
+
+    const timer = window.setTimeout(() => {
+      void fetchCategorySuggestion(merchantText, manualForm.type === "credit" ? "income" : "expense", controller.signal)
+        .then((suggestion) => {
+          if (controller.signal.aborted || requestId !== manualCategorySuggestionRequestRef.current) {
+            return;
+          }
+
+          setManualCategorySuggestion(suggestion);
+
+          if (
+            suggestion &&
+            !manualCategoryTouched &&
+            (manualCategoryAutoApplied || !manualForm.categoryId) &&
+            suggestion.categoryId &&
+            suggestion.confidence >= 60
+          ) {
+            setManualCategoryAutoApplied(true);
+            setManualForm((current) => ({
+              ...current,
+              categoryId: suggestion.categoryId,
+            }));
+          }
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setManualCategorySuggestion(null);
+          }
+        });
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [
+    fetchCategorySuggestion,
+    manualCategoryAutoApplied,
+    manualCategoryTouched,
+    manualForm.categoryId,
+    manualForm.merchantRaw,
+    manualForm.type,
+    manualOpen,
+    selectedWorkspaceId,
+  ]);
+
+  useEffect(() => {
+    if (!selectedTransaction || !detailDraft || !selectedWorkspaceId) {
+      setDetailCategorySuggestion(null);
+      return;
+    }
+
+    const merchantText = detailSuggestionMerchantText;
+    if (merchantText.length < 2) {
+      setDetailCategorySuggestion(null);
+      return;
+    }
+
+    const requestId = detailCategorySuggestionRequestRef.current + 1;
+    detailCategorySuggestionRequestRef.current = requestId;
+    const controller = new AbortController();
+
+    const timer = window.setTimeout(() => {
+      void fetchCategorySuggestion(merchantText, detailSuggestionType === "credit" ? "income" : "expense", controller.signal)
+        .then((suggestion) => {
+          if (controller.signal.aborted || requestId !== detailCategorySuggestionRequestRef.current) {
+            return;
+          }
+
+          setDetailCategorySuggestion(suggestion);
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setDetailCategorySuggestion(null);
+          }
+        });
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [detailSuggestionMerchantText, detailSuggestionType, fetchCategorySuggestion, selectedTransaction?.id, selectedWorkspaceId]);
 
   const saveManualTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -5059,10 +5250,12 @@ function TransactionsPageContent() {
                                 category.id === manualSelectedCategoryId ? "is-selected" : ""
                               }`}
                               onClick={() => {
+                                setManualCategoryTouched(true);
+                                setManualCategoryAutoApplied(false);
                                 setManualForm((current) => ({ ...current, categoryId: category.id }));
                                 setManualCategoryMenuOpen(false);
                               }}
-                              >
+                            >
                               <span
                                 className="transaction-category-icon transactions-manual-picker__category-icon"
                                 style={getCategoryIconTone(category.name)}
@@ -5077,6 +5270,21 @@ function TransactionsPageContent() {
                         </div>
                       ) : null}
                     </div>
+                    {manualCategorySuggestion ? (
+                      <CategorySuggestionChip
+                        suggestion={manualCategorySuggestion}
+                        applied={manualForm.categoryId === manualCategorySuggestion.categoryId}
+                        onApply={
+                          manualForm.categoryId === manualCategorySuggestion.categoryId
+                            ? undefined
+                            : () => {
+                                setManualCategoryTouched(true);
+                                setManualCategoryAutoApplied(false);
+                                setManualForm((current) => ({ ...current, categoryId: manualCategorySuggestion.categoryId }));
+                              }
+                        }
+                      />
+                    ) : null}
                   </div>
                 </div>
 
@@ -5215,6 +5423,20 @@ function TransactionsPageContent() {
                     </option>
                   ))}
                 </select>
+                {detailCategorySuggestion ? (
+                  <CategorySuggestionChip
+                    suggestion={detailCategorySuggestion}
+                    applied={(detailDraft?.categoryId ?? otherCategoryId) === detailCategorySuggestion.categoryId}
+                    onApply={
+                      (detailDraft?.categoryId ?? otherCategoryId) === detailCategorySuggestion.categoryId
+                        ? undefined
+                        : () =>
+                            setDetailDraft((current) =>
+                              current ? { ...current, categoryId: detailCategorySuggestion.categoryId } : current
+                            )
+                    }
+                  />
+                ) : null}
               </label>
               <label>
                 Amount
