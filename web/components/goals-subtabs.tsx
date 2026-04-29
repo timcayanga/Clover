@@ -59,41 +59,31 @@ export function GoalsSubtabs({ initialSection, availableSections, beginnerMode, 
   };
 
   return (
-    <div className="goals-tabs-shell">
-      <div className="goals-tabs-shell__head">
-        <div>
-          <p className="eyebrow">Goal views</p>
-          <p className="goals-tabs-shell__lead">
-            {beginnerMode ? "One goal at a time. Start here and move down the line when you want more detail." : "Choose the lens you want right now."}
-          </p>
-        </div>
-        <p className="goals-tabs-shell__helper">
-          Overview is the starting point. Progress shows the month. Drivers stay on Pro. History keeps the story.
-        </p>
+    <>
+      <div className="subtabs-row subtabs-row--stacked">
+        <nav className="goals-tabs goals-tabs--top" aria-label="Goal sections" role="tablist">
+          {availableSections.map((section) => {
+            const isActive = section === activeSection;
+            const tabId = `goals-tab-${section}`;
+            const panelId = `goals-panel-${section}`;
+
+            return (
+              <button
+                key={section}
+                id={tabId}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                aria-controls={panelId}
+                className={`reports-tab${isActive ? " reports-tab--active" : ""}`}
+                onClick={() => selectSection(section)}
+              >
+                {section === "overview" ? "Overview" : section === "progress" ? "Progress" : section === "drivers" ? "Drivers" : "History"}
+              </button>
+            );
+          })}
+        </nav>
       </div>
-
-      <nav className="reports-tabs goals-tabs goals-tabs--top" aria-label="Goal sections" role="tablist">
-        {availableSections.map((section) => {
-          const isActive = section === activeSection;
-          const tabId = `goals-tab-${section}`;
-          const panelId = `goals-panel-${section}`;
-
-          return (
-            <button
-              key={section}
-              id={tabId}
-              type="button"
-              role="tab"
-              aria-selected={isActive}
-              aria-controls={panelId}
-              className={`reports-tab${isActive ? " reports-tab--active" : ""}`}
-              onClick={() => selectSection(section)}
-            >
-              {section === "overview" ? "Overview" : section === "progress" ? "Progress" : section === "drivers" ? "Drivers" : "History"}
-            </button>
-          );
-        })}
-      </nav>
 
       <section
         id={`goals-panel-${activeSection}`}
@@ -103,6 +93,6 @@ export function GoalsSubtabs({ initialSection, availableSections, beginnerMode, 
       >
         {children}
       </section>
-    </div>
+    </>
   );
 }

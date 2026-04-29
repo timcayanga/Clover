@@ -23,7 +23,7 @@ export function InsightsTabs({ initialTab, labels, summary, spending, patterns }
 
   return (
     <>
-      <div className="insights-tabs-shell section-tabs-shell">
+      <div className="subtabs-row subtabs-row--stacked">
         <nav className="insights-tabs" aria-label="Insights sections">
           {(Object.keys(labels) as InsightsTab[]).map((tab) => (
             <button

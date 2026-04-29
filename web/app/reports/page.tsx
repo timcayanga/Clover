@@ -1233,7 +1233,7 @@ async function ReportsStream({
           </div>
         ) : null}
 
-        <div className="reports-toolbar reports-tabs-shell section-tabs-shell">
+        <div className="subtabs-row subtabs-row--split">
           <nav className="reports-tabs" aria-label="Report sections">
             {sectionTabs.map((section) => (
               <Link

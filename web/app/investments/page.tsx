@@ -735,7 +735,7 @@ export default function InvestmentsPage() {
   return (
     <CloverShell active="investments" title="Investments" showTopbar={false} actions={renderAddInvestmentButton("mobile")}>
       <div className="accounts-page">
-        <div className="investments-tabs-shell section-tabs-shell investments-tabs-shell--row">
+        <div className="subtabs-row subtabs-row--split">
           <nav className="investments-tabs" aria-label="Investment sections">
             {INVESTMENT_TABS.map((tab) => {
               const isLocked = Boolean(tab.proOnly && !canUseProTabs);
@@ -767,9 +767,9 @@ export default function InvestmentsPage() {
                   <span>{tab.label}</span>
                 </Link>
               );
-            })}
+              })}
           </nav>
-          <div className="investments-tabs-shell__actions">{renderAddInvestmentButton("desktop")}</div>
+          <div className="subtabs-row__actions">{renderAddInvestmentButton("desktop")}</div>
         </div>
 
         {loading ? <p className="panel-muted">Loading investments...</p> : null}
