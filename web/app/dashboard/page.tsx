@@ -869,7 +869,7 @@ async function DashboardPageStream({
       title="Dashboard"
       subtitle={experienceProfile.dashboardSubtitle}
       showTopbar={false}
-      hideCompactBarCopyOnMobile
+      hideCompactBarKickerAndSubtitleOnMobile
     >
       <Suspense fallback={<DashboardStreamFallback />}>
         <DashboardStream user={user} resolvedSearchParams={resolvedSearchParams} />
