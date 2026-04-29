@@ -2591,6 +2591,7 @@ label {
   .investments-tabs-shell,
   .reports-toolbar.reports-tabs-shell,
   .reports-toolbar.section-tabs-shell {
+    width: calc(100% + 36px);
     margin: -16px -18px 14px;
     padding-inline: 18px;
   }
@@ -4211,6 +4212,7 @@ label {
 .investments-tabs-shell {
   display: grid;
   gap: 8px;
+  width: calc(100% + 40px);
   margin: -16px -20px 14px;
   padding: 8px 20px 6px;
   border-radius: 0;
@@ -4245,6 +4247,7 @@ label {
   align-items: flex-end;
   justify-content: space-between;
   gap: 12px;
+  width: calc(100% + 40px);
   padding: 8px 20px 6px;
   margin: -16px -20px 14px;
   border-radius: 0;
@@ -17237,6 +17240,7 @@ input.transaction-inline-edit--amount::placeholder {
   .investments-tabs-shell,
   .reports-toolbar.reports-tabs-shell,
   .reports-toolbar.section-tabs-shell {
+    width: calc(100% + 24px);
     margin: -12px -12px 14px;
     padding-inline: 12px;
   }
