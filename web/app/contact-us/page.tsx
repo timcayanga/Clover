@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ContactUsForm } from "@/components/contact-us-form";
+import { LandingNav } from "@/components/landing-nav";
 
 export const metadata: Metadata = {
   title: "Contact Us",
@@ -11,18 +12,9 @@ export const metadata: Metadata = {
 export default function ContactUsPage() {
   return (
     <main className="contact-page">
-      <div className="contact-page__inner">
-        <nav className="contact-page__nav" aria-label="Contact page navigation">
-          <Link className="landing-brand" href="/" aria-label="Clover home">
-            <img className="landing-brand__logo" src="/clover-logo-full.svg" alt="Clover" />
-          </Link>
-          <div className="contact-page__nav-links">
-            <Link href="/help">Help</Link>
-            <Link href="/privacy-policy">Privacy Policy</Link>
-            <Link href="/terms-of-service">Terms of Service</Link>
-          </div>
-        </nav>
+      <LandingNav />
 
+      <div className="contact-page__inner">
         <header className="contact-page__header">
           <h1>Contact us</h1>
           <p>
@@ -35,6 +27,20 @@ export default function ContactUsPage() {
           <ContactUsForm />
         </section>
       </div>
+
+      <footer className="landing-footer" aria-label="Legal links">
+        <nav className="landing-footer__nav" aria-label="Legal">
+          <Link href="/contact-us" prefetch={false}>
+            Contact Us
+          </Link>
+          <Link href="/privacy-policy" prefetch={false}>
+            Privacy Policy
+          </Link>
+          <Link href="/terms-of-service" prefetch={false}>
+            Terms of Service
+          </Link>
+        </nav>
+      </footer>
     </main>
   );
 }
