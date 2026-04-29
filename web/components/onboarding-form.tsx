@@ -1,9 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import type { ReactNode } from "react";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { analyticsOnceKey, PostHogEvent } from "@/components/posthog-analytics";
+import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import {
   getFinancialExperienceDefinition,
   getFinancialExperienceProfile,
@@ -12,6 +15,11 @@ import {
   type FinancialExperienceLevel,
   type GoalKey,
 } from "@/lib/goals";
+
+const ImportFilesModal = dynamic(
+  () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
+  { ssr: false }
+);
 
 type GoalOption = {
   value: GoalKey;
@@ -122,12 +130,21 @@ const START_OPTIONS: StartOption[] = [
 ];
 
 type OnboardingFormProps = {
+  workspaceId: string;
+  workspaceAccounts: Array<{
+    id: string;
+    name: string;
+    institution: string | null;
+    type: string;
+  }>;
   currentExperience?: string | null;
   currentGoal?: string | null;
   currentTargetAmount?: string | null;
 };
 
 export function OnboardingForm({
+  workspaceId,
+  workspaceAccounts,
   currentExperience = null,
   currentGoal = null,
   currentTargetAmount = null,
@@ -141,6 +158,8 @@ export function OnboardingForm({
   const [message, setMessage] = useState("How comfortable are you with financial management?");
   const [targetAmount, setTargetAmount] = useState(currentTargetAmount ?? "");
   const [isPending, startTransition] = useTransition();
+  const [importOpen, setImportOpen] = useState(false);
+  const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
   const selectedGoalKey: GoalKey | null = goals[0] ?? null;
   const selectedExperienceProfile = getFinancialExperienceProfile(experience);
   const selectedExperienceDefinition = getFinancialExperienceDefinition(experience);
@@ -188,8 +207,21 @@ export function OnboardingForm({
       ),
     });
 
+  const openImportFiles = (files: File[] | null = null) => {
+    setImportSeedFiles(files && files.length > 0 ? files : null);
+    setImportOpen(true);
+  };
+
   return (
-    <section className="glass onboarding-card">
+    <>
+      <PageFileDropZone
+        enabled={!importOpen}
+        title="Drop statement files anywhere"
+        subtitle="Clover will catch them and open import for you."
+        onFilesDropped={(files) => openImportFiles(files)}
+      />
+
+      <section className="glass onboarding-card">
       <PostHogEvent
         event="onboarding_started"
         onceKey={analyticsOnceKey("onboarding_started", "session")}
@@ -403,7 +435,28 @@ export function OnboardingForm({
       )}
 
       {message ? <p className="onboarding-card__message">{message}</p> : null}
+      </section>
 
-    </section>
+      <ImportFilesModal
+        open={importOpen}
+        workspaceId={workspaceId}
+        accounts={workspaceAccounts}
+        defaultAccountId={workspaceAccounts.find((account) => account.type !== "cash")?.id ?? workspaceAccounts[0]?.id ?? null}
+        initialFiles={importSeedFiles}
+        onInitialFilesConsumed={() => setImportSeedFiles(null)}
+        onClose={() => {
+          setImportOpen(false);
+          setImportSeedFiles(null);
+        }}
+        onImported={async (summary: UploadInsightsSummary) => {
+          if (summary.optimistic) {
+            return;
+          }
+
+          setMessage("Import complete. Taking you to the dashboard.");
+          router.replace("/dashboard");
+        }}
+      />
+    </>
   );
 }
