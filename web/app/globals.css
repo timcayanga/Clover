@@ -8721,7 +8721,7 @@ label {
 .transactions-toolbar-row--single {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   flex-wrap: nowrap;
   width: 100%;
@@ -8755,7 +8755,8 @@ label {
 }
 
 .transactions-toolbar-row--single .transactions-toolbar-group--right {
-  flex: 1 1 auto;
+  margin-left: auto;
+  flex: 0 1 auto;
   min-width: 0;
   display: flex;
   justify-content: flex-end;
@@ -8767,6 +8768,7 @@ label {
   flex-wrap: nowrap;
   min-width: 0;
   gap: 5px;
+  width: auto;
 }
 
 .transactions-toolbar-search {
