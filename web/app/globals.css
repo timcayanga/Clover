@@ -8823,7 +8823,14 @@ label {
 }
 
 .transactions-add-menu,
-.transactions-download-menu,
+.transactions-download-menu {
+  position: relative;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
 .transactions-add-menu__panel,
 .transactions-download-menu__panel,
 .transactions-more-menu__panel {

@@ -955,6 +955,10 @@ const transactionsToolbarRowStyle = {
   width: "100%",
 } as const;
 
+const transactionsLayoutStyle = {
+  minHeight: "calc(100dvh - 24px)",
+} as const;
+
 const transactionsToolbarLeftStyle = {
   display: "flex",
   alignItems: "center",
@@ -2299,6 +2303,12 @@ function TransactionsPageContent() {
       {
         workspace_id: selectedWorkspaceId || null,
         transaction_id: transaction.id,
+        transaction_amount: Number(transaction.amount),
+        transaction_currency: transaction.currency,
+        transaction_account: transaction.accountName,
+        transaction_category: transaction.categoryName ?? "Uncategorized",
+        merchant_raw: transaction.merchantRaw,
+        merchant_clean: transaction.merchantClean ?? transaction.merchantRaw,
         review_reason: warningReasonFor(transaction),
         review_status: patch.reviewStatus,
         is_excluded: patch.isExcluded,
@@ -2311,6 +2321,8 @@ function TransactionsPageContent() {
         workspace_id: selectedWorkspaceId || null,
         transaction_id: transaction.id,
         split_reason: "duplicate_review",
+        transaction_amount: Number(transaction.amount),
+        transaction_account: transaction.accountName,
       });
     }
 
@@ -2887,6 +2899,9 @@ function TransactionsPageContent() {
         source_merchant_raw: transaction.merchantRaw,
         target_merchant_clean: target,
         matching_count: matchingTransactionIds.length,
+        transaction_amount: Number(transaction.amount),
+        transaction_account: transaction.accountName,
+        transaction_category: transaction.categoryName ?? "Uncategorized",
       },
       analyticsOnceKey("ai_suggestion_shown", `merchant:${transaction.id}:${target}`)
     );
@@ -2935,12 +2950,15 @@ function TransactionsPageContent() {
         source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
         target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
         matching_count: transactionsToUpdate.length,
+        transaction_account: transactionsToUpdate[0]?.accountName ?? null,
+        transaction_category: transactionsToUpdate[0]?.categoryName ?? null,
       });
       capturePostHogClientEvent("transaction_merged", {
         workspace_id: selectedWorkspaceId || null,
         source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
         target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
         merged_count: transactionsToUpdate.length,
+        transaction_account: transactionsToUpdate[0]?.accountName ?? null,
       });
 
       setMerchantRenameSuggestion(null);
@@ -3179,6 +3197,15 @@ function TransactionsPageContent() {
         setUndoStack((current) => current.slice(1));
         setRedoStack((current) => [entry, ...current]);
         setMessage("Undid the last transaction change.");
+        capturePostHogClientEvent("transaction_undone", {
+          workspace_id: selectedWorkspaceId || null,
+          transaction_id: destination.id,
+          before_transaction_id: entry.after.id,
+          after_transaction_id: entry.before.id,
+          transaction_amount: Number(entry.after.amount),
+          transaction_account: entry.after.accountName,
+          transaction_category: entry.after.categoryName ?? "Uncategorized",
+        });
       } else {
         setRedoStack((current) => current.slice(1));
         setUndoStack((current) => [entry, ...current]);
@@ -3778,7 +3805,7 @@ function TransactionsPageContent() {
         title="Drop statement files anywhere"
         onFilesDropped={(files) => openImportFiles(files)}
       />
-      <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`}>
+      <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`} style={transactionsLayoutStyle}>
         <div className="transactions-main-panel">
           <div className="transactions-topbar">
             <div className="transactions-toolbar-row transactions-toolbar-row--single" style={transactionsToolbarRowStyle}>
@@ -4565,7 +4592,7 @@ function TransactionsPageContent() {
             )}
           </div>
 
-          <div className="transactions-footer" style={transactionsFooterStyle}>
+          <div className="transactions-footer" style={{ ...transactionsFooterStyle, marginTop: "auto" }}>
             <div className="table-footer__summary">
               <span className="pill pill-neutral">{transactionsSummary.totalCount} transactions</span>
               {transactionsSummary.totalCount > 0 ? (
@@ -5523,6 +5550,7 @@ function TransactionsPageContent() {
                     source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
                     source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
                     target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+                    transaction_account: null,
                   });
                   setMerchantRenameSuggestion(null);
                 }}
@@ -5551,6 +5579,7 @@ function TransactionsPageContent() {
                     source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
                     source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
                     target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+                    transaction_account: null,
                   });
                   setMerchantRenameSuggestion(null);
                 }}
