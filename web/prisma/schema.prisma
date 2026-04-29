@@ -200,6 +200,7 @@ model ContactInquiry {
   name              String
   email             String
   message           String
+  attachment        Json?
   sourcePage        String?
   userAgent         String?
   status            ContactInquiryStatus @default(open)

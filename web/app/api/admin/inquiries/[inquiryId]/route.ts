@@ -11,11 +11,12 @@ const schema = z.object({
   adminReplyBody: z.string().trim().max(5000).optional().nullable(),
 });
 
-export async function PATCH(request: Request, { params }: { params: { inquiryId: string } }) {
+export async function PATCH(request: Request, { params }: { params: Promise<{ inquiryId: string }> }) {
   try {
     const { userId } = await requireAdminAuth();
+    const resolvedParams = await params;
     const payload = schema.parse(await request.json());
-    const inquiry = await updateContactInquiry(params.inquiryId, {
+    const inquiry = await updateContactInquiry(resolvedParams.inquiryId, {
       status: payload.adminReplyBody?.trim() ? "responded" : payload.status,
       adminReplySubject: payload.adminReplySubject ?? null,
       adminReplyBody: payload.adminReplyBody ?? null,

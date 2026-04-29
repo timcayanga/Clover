@@ -19,6 +19,13 @@ const formatDate = new Intl.DateTimeFormat("en-PH", {
   timeStyle: "short",
 });
 
+type InquiryAttachment = {
+  name: string;
+  type: string;
+  size: number;
+  dataUrl: string;
+};
+
 function buildMailtoHref(inquiry: AdminContactInquiry, subject: string, body: string) {
   const params = new URLSearchParams({
     subject,
@@ -138,6 +145,7 @@ export function AdminInquiriesConsole({ inquiries }: AdminInquiriesConsoleProps)
     "Best,",
     "Clover Support",
   ].join("\n");
+  const attachment = currentSelection?.attachment as InquiryAttachment | null | undefined;
 
   return (
     <section className="admin-inquiries">
@@ -255,6 +263,16 @@ export function AdminInquiriesConsole({ inquiries }: AdminInquiriesConsoleProps)
                 <h3>Message</h3>
                 <p>{currentSelection.message}</p>
               </section>
+
+              {attachment ? (
+                <section className="admin-inquiries__attachment">
+                  <h3>Attached image</h3>
+                  <a href={attachment.dataUrl} target="_blank" rel="noreferrer" className="admin-inquiries__attachment-link">
+                    <img src={attachment.dataUrl} alt={attachment.name} className="admin-inquiries__attachment-image" />
+                    <span>{attachment.name}</span>
+                  </a>
+                </section>
+              ) : null}
 
               <section className="admin-inquiries__composer">
                 <label className="admin-inquiries__field">

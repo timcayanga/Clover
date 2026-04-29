@@ -5,6 +5,7 @@ CREATE TABLE "ContactInquiry" (
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "message" TEXT NOT NULL,
+    "attachment" JSONB,
     "sourcePage" TEXT,
     "userAgent" TEXT,
     "status" "ContactInquiryStatus" NOT NULL DEFAULT 'open',

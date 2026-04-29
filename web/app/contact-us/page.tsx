@@ -24,30 +24,15 @@ export default function ContactUsPage() {
         </nav>
 
         <header className="contact-page__header">
-          <span className="contact-page__eyebrow">Clover support</span>
           <h1>Contact us</h1>
           <p>
-            Ask a question, report a concern, or tell us what is not working. Every message is required to include your name, email, and
-            inquiry so we can route it cleanly.
+            The Clover team will get back to you within 1 to 3 days. Please fill out every required field so we can review your message
+            quickly.
           </p>
         </header>
 
         <section className="contact-page__layout">
-          <div className="contact-page__aside glass">
-            <p className="eyebrow">Where it goes</p>
-            <h2>We keep support in one place</h2>
-            <p>
-              Your message lands in the Clover admin inbox for review. The team can respond from <a href="mailto:help@clover.ph">help@clover.ph</a>{" "}
-              and track replies directly in Admin.
-            </p>
-            <ul>
-              <li>Setup and onboarding questions</li>
-              <li>Import, review, and account issues</li>
-              <li>Billing, privacy, and data concerns</li>
-            </ul>
-          </div>
-
-          <ContactUsForm helpEmail="help@clover.ph" />
+          <ContactUsForm />
         </section>
       </div>
     </main>

@@ -8,6 +8,15 @@ const schema = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(160),
   message: z.string().trim().min(10).max(4000),
+  attachment: z
+    .object({
+      name: z.string().trim().min(1).max(255),
+      type: z.string().trim().min(1).max(128),
+      size: z.number().int().nonnegative(),
+      dataUrl: z.string().trim().min(1),
+    })
+    .nullable()
+    .optional(),
   sourcePage: z.string().trim().max(255).optional().nullable(),
 });
 
@@ -18,6 +27,7 @@ export async function POST(request: Request) {
       name: payload.name,
       email: payload.email,
       message: payload.message,
+      attachment: payload.attachment ?? null,
       sourcePage: payload.sourcePage ?? request.headers.get("referer") ?? null,
       userAgent: request.headers.get("user-agent"),
     });

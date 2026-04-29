@@ -18,12 +18,20 @@ export type ContactInquiryUpdateInput = {
   adminReplyBy?: string | null;
 };
 
+export type ContactInquiryAttachment = {
+  name: string;
+  type: string;
+  size: number;
+  dataUrl: string;
+};
+
 const normalizeQuery = (value?: string) => value?.trim() ?? "";
 
 export async function createContactInquiry(input: {
   name: string;
   email: string;
   message: string;
+  attachment?: ContactInquiryAttachment | null;
   sourcePage?: string | null;
   userAgent?: string | null;
 }) {
@@ -32,6 +40,7 @@ export async function createContactInquiry(input: {
       name: input.name.trim(),
       email: input.email.trim().toLowerCase(),
       message: input.message.trim(),
+      attachment: input.attachment ? (input.attachment as Prisma.InputJsonValue) : Prisma.DbNull,
       sourcePage: input.sourcePage?.trim() ? input.sourcePage.trim().slice(0, 255) : null,
       userAgent: input.userAgent?.trim() ? input.userAgent.trim().slice(0, 255) : null,
       status: "open",

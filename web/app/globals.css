@@ -14343,6 +14343,29 @@ input.transaction-inline-edit--amount::placeholder {
   justify-content: flex-end;
 }
 
+.admin-inquiries__attachment {
+  display: grid;
+  gap: 12px;
+}
+
+.admin-inquiries__attachment-link {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(3, 168, 192, 0.12);
+  background: rgba(3, 168, 192, 0.05);
+}
+
+.admin-inquiries__attachment-image {
+  width: 100%;
+  max-width: 280px;
+  border-radius: 14px;
+  display: block;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.94);
+}
+
 .admin-users__grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
@@ -17952,9 +17975,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .contact-page__layout {
   display: grid;
-  grid-template-columns: minmax(280px, 0.86fr) minmax(0, 1.14fr);
   gap: 20px;
-  align-items: start;
 }
 
 .contact-page__aside,
@@ -18024,6 +18045,20 @@ input.transaction-inline-edit--amount::placeholder {
 
 .contact-field--full {
   grid-column: 1 / -1;
+}
+
+.contact-field--attachment input[type="file"] {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px dashed rgba(3, 168, 192, 0.22);
+  background: rgba(3, 168, 192, 0.05);
+}
+
+.contact-field--attachment small {
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .contact-form__footer {
