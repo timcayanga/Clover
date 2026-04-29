@@ -391,7 +391,7 @@ const buildBankInstructionJson = (params: {
 }) => {
   const normalized = `${params.institution ?? ""} ${params.accountType ?? ""} ${params.accountName ?? ""}`.toLowerCase();
   const base = {
-    naming: "Use simple bank name + last 4 digits when possible.",
+    naming: "If the statement shows a full account number, preserve it exactly in account_number. Use last 4 digits only for display labels when the full number is not available.",
     movement_type_rules: {
       atm_withdrawals: "transfer",
       wallet_topups: "transfer",
@@ -422,6 +422,90 @@ const buildBankInstructionJson = (params: {
         "BPI credit-card statements may use BE######## identifiers.",
         "Keep BPI account names simple; do not append product labels unless required.",
         "Treat payment lines and balance rows conservatively.",
+      ],
+    };
+  }
+
+  if (/metrobank/.test(normalized)) {
+    return {
+      ...base,
+      institution: "Metrobank",
+      notes: [
+        "Metrobank savings statements may use ledger-style summary pages or certificate-style layouts with boilerplate at the top and bottom.",
+        "Ignore PDIC, BSP, rate, fee, and summary banners that are not real transaction rows.",
+        "Preserve the account number exactly when the statement image shows it clearly.",
+      ],
+    };
+  }
+
+  if (/security bank/.test(normalized)) {
+    return {
+      ...base,
+      institution: "Security Bank",
+      notes: [
+        "Security Bank proof-of-account statements may show a CUSTOMER DETAILS page followed by a TRANSACTION DETAILS table.",
+        "Use the statement summary and running balance to keep the final balance anchored correctly.",
+        "Ignore boilerplate lines such as Member: PDIC and the bank support footer.",
+      ],
+    };
+  }
+
+  if (/landbank/.test(normalized)) {
+    return {
+      ...base,
+      institution: "Landbank",
+      notes: [
+        "Landbank statement tables may show In/Out columns and a closing balance. Use the table rows only and ignore pure balance-note lines.",
+        "Treat cash deposits, PESONet, interbank transfers, and wallet funding as transfers unless the description clearly says salary or merchant spend.",
+        "Preserve the full account number exactly when it is visible in the statement header.",
+      ],
+    };
+  }
+
+  if (/ucpb/.test(normalized)) {
+    return {
+      ...base,
+      institution: "UCPB",
+      notes: [
+        "UCPB current-account statements often include a transaction code legend. Extract the legend before final classification.",
+        "Use debit as outgoing and credit as incoming, and do not turn balance-forward or total rows into transactions.",
+        "Preserve the raw transaction code plus the expanded meaning from the legend.",
+      ],
+    };
+  }
+
+  if (/chinabank|china bank/.test(normalized)) {
+    return {
+      ...base,
+      institution: "Chinabank",
+      notes: [
+        "China Bank savings and credit-card statements may include housekeeping or reversal rows; keep those separate from normal spend.",
+        "Cash payments on credit cards should be treated as payments/transfers, not income.",
+        "Preserve the account number exactly when visible.",
+      ],
+    };
+  }
+
+  if (/psbank/.test(normalized)) {
+    return {
+      ...base,
+      institution: "PSBank",
+      notes: [
+        "PSBank savings statements are running-balance ledgers; preserve the rows with real dates and do not convert housekeeping lines into spend.",
+        "Treat transfers, fees, salary, and adjustment reversals conservatively and keep their movement type explicit.",
+        "Preserve the full account number if the statement shows it clearly.",
+      ],
+    };
+  }
+
+  if (/maribank|seabank/.test(normalized)) {
+    return {
+      ...base,
+      institution: "Maribank",
+      notes: [
+        "MariBank/SeaBank statements may split summary, transaction details, and interest/tax sections across pages.",
+        "Extract transactions only from the transaction detail sections and ignore legal boilerplate pages.",
+        "Treat internal transfers, pocket movements, and transfer fees conservatively.",
       ],
     };
   }
@@ -458,14 +542,6 @@ const buildBankInstructionJson = (params: {
     };
   }
 
-  if (/gcash/.test(normalized)) {
-    return {
-      ...base,
-      institution: "GCash",
-      notes: ["GCash rows often show cash in/out, wallet funding, transfers, and bills payment; classify them conservatively by movement type."],
-    };
-  }
-
   if (/maya/.test(normalized)) {
     return {
       ...base,
@@ -481,6 +557,17 @@ const buildBankInstructionJson = (params: {
       notes: [
         "UnionBank statements should keep the account label simple and preserve the trailing account digits when visible.",
         "If the statement shows a full account number, return it in account.account_number with all digits preserved. Use account.account_last4 only as a display fallback.",
+      ],
+    };
+  }
+
+  if (/gcash/.test(normalized)) {
+    return {
+      ...base,
+      institution: "GCash",
+      notes: [
+        "GCash statements may show transfer-from and transfer-to phone numbers inside the description. Preserve the wallet number and classify cash movement conservatively.",
+        "Use the final footer ending balance rather than a mid-statement running balance when the statement spans multiple pages.",
       ],
     };
   }
