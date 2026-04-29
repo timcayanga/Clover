@@ -8,9 +8,16 @@ type MobileCarouselProps = {
   className?: string;
   slides: ReactNode[];
   labels: string[];
+  controlsPlacement?: "overlay" | "footer";
 };
 
-export function MobileCarousel({ ariaLabel, className = "", slides, labels }: MobileCarouselProps) {
+export function MobileCarousel({
+  ariaLabel,
+  className = "",
+  slides,
+  labels,
+  controlsPlacement = "overlay",
+}: MobileCarouselProps) {
   const [activeIndex, setActiveIndex] = useState(0);
 
   const safeSlides = useMemo(() => slides.filter(Boolean), [slides]);
@@ -33,7 +40,7 @@ export function MobileCarousel({ ariaLabel, className = "", slides, labels }: Mo
     <div className={`landing-carousel ${className}`.trim()} aria-label={ariaLabel}>
       <div className="landing-carousel__viewport">
         <div className="landing-carousel__slide">{safeSlides[currentIndex]}</div>
-        {safeSlides.length > 1 ? (
+        {safeSlides.length > 1 && controlsPlacement === "overlay" ? (
           <>
             <button className="landing-carousel__button landing-carousel__button--prev" type="button" onClick={prevSlide} aria-label="Previous slide">
               <span aria-hidden="true">‹</span>
@@ -45,12 +52,29 @@ export function MobileCarousel({ ariaLabel, className = "", slides, labels }: Mo
         ) : null}
       </div>
 
-      <div className="landing-carousel__status" aria-live="polite">
-        <span>{safeLabels[currentIndex] ?? `Item ${currentIndex + 1}`}</span>
-        <span>
-          {currentIndex + 1} / {safeSlides.length}
-        </span>
-      </div>
+      {controlsPlacement === "footer" && safeSlides.length > 1 ? (
+        <div className="landing-carousel__footer">
+          <button className="landing-carousel__button landing-carousel__button--footer" type="button" onClick={prevSlide} aria-label="Previous slide">
+            <span aria-hidden="true">‹</span>
+          </button>
+          <div className="landing-carousel__status" aria-live="polite">
+            <span>{safeLabels[currentIndex] ?? `Item ${currentIndex + 1}`}</span>
+            <span>
+              {currentIndex + 1} / {safeSlides.length}
+            </span>
+          </div>
+          <button className="landing-carousel__button landing-carousel__button--footer" type="button" onClick={nextSlide} aria-label="Next slide">
+            <span aria-hidden="true">›</span>
+          </button>
+        </div>
+      ) : (
+        <div className="landing-carousel__status" aria-live="polite">
+          <span>{safeLabels[currentIndex] ?? `Item ${currentIndex + 1}`}</span>
+          <span>
+            {currentIndex + 1} / {safeSlides.length}
+          </span>
+        </div>
+      )}
 
       {safeSlides.length > 1 ? (
         <div className="landing-carousel__dots" aria-hidden="true">

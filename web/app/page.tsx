@@ -117,6 +117,7 @@ function HowItWorksCarousel() {
       className="landing-flow__mobile"
       ariaLabel="How Clover works carousel"
       labels={["Upload", "Analyze", "Plan"]}
+      controlsPlacement="footer"
       slides={[
         <article className="landing-flow__step" key="upload">
           <span className="landing-flow__icon">

@@ -19708,10 +19708,22 @@ input.transaction-inline-edit--amount::placeholder {
     right: 10px;
   }
 
+  .landing-carousel__button--footer {
+    position: static;
+    transform: none;
+  }
+
   .landing-carousel__button span {
     font-size: 26px;
     line-height: 1;
     margin-top: -2px;
+  }
+
+  .landing-carousel__footer {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    align-items: center;
+    gap: 10px;
   }
 
   .landing-carousel__status {
@@ -19728,6 +19740,7 @@ input.transaction-inline-edit--amount::placeholder {
     align-items: center;
     justify-content: center;
     gap: 6px;
+    margin-top: -2px;
   }
 
   .landing-carousel__dots span {
@@ -19779,6 +19792,16 @@ input.transaction-inline-edit--amount::placeholder {
     gap: 8px;
     padding: 12px 0 0;
     min-height: 180px;
+  }
+
+  .landing-flow__mobile .landing-carousel__viewport {
+    margin-bottom: 2px;
+  }
+
+  .landing-flow__mobile .landing-carousel__status {
+    justify-content: center;
+    gap: 8px;
+    font-size: 11px;
   }
 
   .landing-flow__icon {
