@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getAccountPath } from "@/lib/account-path";
 import { redirect } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
@@ -96,7 +97,10 @@ export default async function NotificationsPage() {
                 <div className="notification-item__time">
                   <time>{formatDate(reminder.paymentDueDate)}</time>
                   <div style={{ marginTop: 8 }}>
-                    <Link className="button button-secondary button-small" href={reminder.accountId ? `/accounts/${reminder.accountId}` : "/accounts"}>
+                    <Link
+                      className="button button-secondary button-small"
+                      href={reminder.accountId ? getAccountPath({ id: reminder.accountId, name: reminder.accountName }) : "/accounts"}
+                    >
                       Open account
                     </Link>
                   </div>

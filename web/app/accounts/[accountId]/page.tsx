@@ -8,6 +8,7 @@ import { AccountBrandMark } from "@/components/account-brand-mark";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { getAccountBrand } from "@/lib/account-brand";
 import { deriveReconciledBalance } from "@/lib/account-balance";
+import { extractAccountIdFromPathSegment, getAccountPath } from "@/lib/account-path";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { formatTransactionDirectionLabel } from "@/lib/transaction-directions";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
@@ -328,7 +329,8 @@ export default function AccountDetailPage() {
 function AccountDetailPageContent() {
   const router = useRouter();
   const params = useParams<{ accountId: string }>();
-  const accountId = params?.accountId ?? "";
+  const accountPathSegment = params?.accountId ?? "";
+  const accountId = extractAccountIdFromPathSegment(accountPathSegment);
 
   const [account, setAccount] = useState<Account | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -377,6 +379,10 @@ function AccountDetailPageContent() {
         }
 
         setAccount(nextAccount);
+        const canonicalPath = getAccountPath(nextAccount);
+        if (!cancelled && canonicalPath !== `/accounts/${accountPathSegment}`) {
+          router.replace(canonicalPath);
+        }
 
         void transactionsPromise
           .then(async (response) => {

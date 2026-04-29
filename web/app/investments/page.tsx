@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { getAccountPath } from "@/lib/account-path";
 import { InfoTip } from "@/components/info-tip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
@@ -1029,7 +1030,7 @@ export default function InvestmentsPage() {
                                     <button className="button button-secondary button-small" type="button" onClick={() => beginEditingAccount(account)}>
                                       Edit
                                     </button>
-                                    <Link className="button button-secondary button-small" href={`/accounts/${account.id}`}>
+                                    <Link className="button button-secondary button-small" href={getAccountPath(account)}>
                                       Open
                                     </Link>
                                   </>

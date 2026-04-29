@@ -12,6 +12,7 @@ import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { deriveReconciledBalance } from "@/lib/account-balance";
+import { getAccountPath } from "@/lib/account-path";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
@@ -1423,12 +1424,12 @@ function AccountsPageContent() {
     if (deletingAccountIdsSet.has(account.id)) {
       return;
     }
-    router.push(`/accounts/${account.id}`);
+    router.push(getAccountPath(account));
   };
 
   const openFullAccountPage = () => {
     if (!selectedAccount) return;
-    router.push(`/accounts/${selectedAccount.id}`);
+    router.push(getAccountPath(selectedAccount));
   };
 
   const openDrawerForWarning = (account: Account, warning: string) => {
@@ -1436,7 +1437,7 @@ function AccountsPageContent() {
     if (deletingAccountIdsSet.has(account.id)) {
       return;
     }
-    router.push(`/accounts/${account.id}`);
+    router.push(getAccountPath(account));
   };
 
   const saveAccountChanges = async (event?: FormEvent<HTMLFormElement>) => {
