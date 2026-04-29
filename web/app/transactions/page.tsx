@@ -939,6 +939,14 @@ const toolbarAddStyle = {
   boxShadow: "none",
 } as const;
 
+const transactionsMenuStyle = {
+  position: "relative",
+  zIndex: 20,
+  display: "inline-flex",
+  alignItems: "center",
+  flex: "0 0 auto",
+} as const;
+
 const transactionsToolbarRowStyle = {
   display: "grid",
   gridTemplateColumns: "auto minmax(0, 1fr)",
@@ -969,15 +977,15 @@ const transactionsToolbarSearchStyle = {
   display: "inline-flex",
   alignItems: "center",
   gap: "8px",
-  height: "30px",
-  padding: "0 9px",
+  height: "32px",
+  padding: "0 10px",
   borderRadius: "999px",
   border: "1px solid rgba(219, 227, 232, 0.9)",
   background: "rgba(255, 255, 255, 0.96)",
   boxShadow: "var(--shadow-soft)",
-  minWidth: "150px",
-  maxWidth: "170px",
-  flex: "0 1 170px",
+  minWidth: "160px",
+  maxWidth: "180px",
+  flex: "0 1 180px",
 } as const;
 
 const transactionsFooterStyle = {
@@ -3775,7 +3783,7 @@ function TransactionsPageContent() {
           <div className="transactions-topbar">
             <div className="transactions-toolbar-row transactions-toolbar-row--single" style={transactionsToolbarRowStyle}>
               <div className="transactions-toolbar-group transactions-toolbar-group--left" style={transactionsToolbarLeftStyle}>
-                <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef}>
+                <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef} style={transactionsMenuStyle}>
                   <button
                     className="button button-primary button-small transactions-action-button transactions-toolbar-add transactions-add-menu__toggle"
                     style={toolbarAddStyle}
@@ -3864,7 +3872,7 @@ function TransactionsPageContent() {
                   <span>Filters</span>
                   {activeFilterCount > 0 ? <span className="transactions-filter-count-badge">{activeFilterCount}</span> : null}
                 </button>
-                <div className="transactions-download-menu" id="transactions-download-menu" ref={downloadMenuRef}>
+                <div className="transactions-download-menu" id="transactions-download-menu" ref={downloadMenuRef} style={transactionsMenuStyle}>
                   <button
                     className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-download-menu__toggle"
                     style={toolbarChipStyle}
