@@ -11,9 +11,9 @@ export const metadata: Metadata = {
   },
   description: "Clover helps you understand your money visually, review transactions faster, and get to action with less stress.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
-    apple: "/favicon.svg",
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
   },
 };
 
