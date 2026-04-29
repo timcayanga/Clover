@@ -735,9 +735,6 @@ export default function InvestmentsPage() {
     <CloverShell active="investments" title="Investments" showTopbar={false} actions={renderAddInvestmentButton("mobile")}>
       <div className="accounts-page">
         <div className="investments-page__header">
-          <div className="investments-page__header-copy">
-            <h1>Investments</h1>
-          </div>
           <div className="investments-page__header-actions">{renderAddInvestmentButton("desktop")}</div>
         </div>
 
