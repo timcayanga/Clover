@@ -10939,20 +10939,18 @@ input.transaction-inline-edit--amount::placeholder {
 @media (max-width: 760px) {
   .investments-market {
     --market-axis-width: 68px;
+    padding: 14px;
   }
 
   .investments-page__header {
     align-items: center;
     gap: 12px;
     flex-wrap: nowrap;
+    padding-inline: 0;
   }
 
   .investments-page__header-copy {
-    min-width: 0;
-  }
-
-  .investments-page__header-copy h1 {
-    font-size: 1.8rem;
+    display: none;
   }
 
   .investments-page__header-actions {
@@ -10971,12 +10969,87 @@ input.transaction-inline-edit--amount::placeholder {
     display: none;
   }
 
+  .investments-market__head {
+    gap: 10px;
+  }
+
   .investments-market__controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .investments-market__controls > label,
+  .investments-market__ticker-field {
+    min-width: 0;
+  }
+
+  .investments-market__ticker-field {
+    grid-column: 1 / -1;
+  }
+
+  .investments-market__controls > label:nth-of-type(3) {
+    grid-column: 1 / -1;
+  }
+
+  .investments-market__range {
+    gap: 6px;
+  }
+
+  .investments-market__range-button {
+    min-height: 30px;
+    padding-inline: 10px;
+  }
+
+  .investments-filters {
     grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .investments-filters input,
+  .investments-filters select {
+    min-width: 0;
+  }
+
+  .investments-filters__actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .investments-filters__actions .button {
+    width: 100%;
+  }
+
+  .investments-filters__actions span {
+    text-align: center;
+  }
+
+  .accounts-overview-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .accounts-overview-card {
+    min-height: 84px;
+  }
+
+  .investments-allocation {
+    padding: 14px;
+  }
+
+  .investments-allocation__head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .investments-allocation__summary {
+    justify-items: start;
+    text-align: left;
   }
 
   .market-chart__canvas {
-    grid-template-columns: var(--market-axis-width) minmax(0, 1fr);
+    grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .market-chart__canvas--embed {
@@ -10984,7 +11057,8 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .market-chart__x-axis {
-    margin-left: calc(var(--market-axis-width) + 12px);
+    margin-left: 0;
+    height: 28px;
   }
 
   .market-chart__embed {

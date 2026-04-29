@@ -730,7 +730,6 @@ export default function InvestmentsPage() {
             <div>
               <p className="eyebrow">Portfolio mix</p>
               <h5>Allocation by subtype</h5>
-              <p className="panel-muted">A quick view of where the current value of your investments is concentrated.</p>
             </div>
             <div className="investments-allocation__summary">
               <span>Total value</span>
