@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ImportErrorToast } from "@/components/import-error-toast";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import { UploadInsightsToast } from "@/components/upload-insights-toast";
 import { clearImportActivity, readImportActivity, subscribeImportActivity, type ImportActivitySnapshot } from "@/lib/import-activity";
@@ -12,6 +13,21 @@ export function GlobalImportActivity() {
   const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
 
   useEffect(() => subscribeImportActivity(() => setActivity(readImportActivity())), []);
+
+  useEffect(() => {
+    if (!activity || activity.status !== "error") {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      clearImportActivity();
+      setActivity(null);
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [activity]);
 
   if (!activity || activity.surface === "modal") {
     return null;
@@ -27,18 +43,33 @@ export function GlobalImportActivity() {
   }
 
   const isError = activity.status === "error";
-  const tone = isError ? "error" : "default";
+
+  if (isError) {
+    return (
+      <ImportErrorToast
+        code={activity.errorCode ?? "I-199"}
+        title={activity.detail || "Clover hit an import snag"}
+        message={activity.errorMessage ?? "Clover wasn't able to finish this file."}
+        nextSteps={[
+          "Re-upload the original PDF or CSV.",
+          "If Clover still stalls, add the missing transactions manually in Transactions.",
+          "If the statement looks off after import, check Review before confirming anything.",
+        ]}
+        onClose={handleClose}
+      />
+    );
+  }
 
   return (
     <ImportUploadDock
       open
-      tone={tone}
+      tone="default"
       fileName={activity.fileName}
       fileIndex={activity.fileIndex}
       fileTotal={activity.fileTotal}
       completedFiles={activity.completedFiles}
       progress={activity.progress}
-      detail={activity.errorMessage ?? activity.detail}
+      detail={activity.detail}
       onClose={handleClose}
     />
   );

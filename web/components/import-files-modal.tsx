@@ -185,6 +185,67 @@ const formatImportFailureMessage = (file: File | string, errorMessage: string) =
   return errorMessage;
 };
 
+type ImportErrorStage = "validation" | "password" | "upload" | "process" | "confirm" | "background" | "monitor" | "unknown";
+
+type ImportErrorNotice = {
+  code: string;
+  title: string;
+  message: string;
+  nextSteps: string[];
+};
+
+const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null, reason?: string | null): ImportErrorNotice => {
+  const codeMap: Record<ImportErrorStage, string> = {
+    validation: "I-101",
+    password: "I-102",
+    upload: "I-103",
+    process: "I-104",
+    confirm: "I-105",
+    background: "I-106",
+    monitor: "I-107",
+    unknown: "I-199",
+  };
+
+  const titleMap: Record<ImportErrorStage, string> = {
+    validation: "That file needs a quick check",
+    password: "A password is needed",
+    upload: "Clover couldn't upload that file",
+    process: "Clover couldn't finish reading that file",
+    confirm: "Clover couldn't save that import",
+    background: "Clover couldn't finish that file in the background",
+    monitor: "Clover couldn't keep tracking that file",
+    unknown: "Clover hit an import snag",
+  };
+
+  const fileLabel = fileName ? `${fileName}` : "This file";
+  const reasonHint =
+    stage === "password"
+      ? "Unlock the file with its password and try again."
+      : stage === "validation"
+        ? "Upload a clearer PDF or a supported CSV/TSV file."
+        : "Re-upload the original statement and keep the tab open while Clover works.";
+
+  const nextSteps =
+    stage === "password"
+      ? [
+          "Unlock the file with its password, then try again.",
+          "If the password keeps failing, re-download the original statement and re-upload it.",
+          "You can always add missing transactions manually in Transactions.",
+        ]
+      : [
+          "Re-upload the original PDF or CSV.",
+          "If Clover still stalls, add the missing transactions manually in Transactions.",
+          "If the statement looks off after import, check Review before confirming anything.",
+        ];
+
+  return {
+    code: codeMap[stage],
+    title: titleMap[stage],
+    message: `${fileLabel}: Clover wasn't able to finish this import.`,
+    nextSteps: [reasonHint, ...nextSteps].filter((value, index, array) => value && array.indexOf(value) === index),
+  };
+};
+
 const normalizeStatementAccountName = (name: string, institution?: string | null) => {
   const trimmed = name.trim();
   const normalizedInstitution = (institution ?? "").trim();
@@ -664,11 +725,44 @@ export function ImportFilesModal({
       progress: Number(snapshot.progress ?? 0),
       detail: snapshot.detail ?? "",
       summary: snapshot.summary ?? null,
+      errorCode: snapshot.errorCode ?? null,
       errorMessage: snapshot.errorMessage ?? null,
       updatedAt: Date.now(),
     };
     lastImportActivityRef.current = nextSnapshot;
     setImportActivity(nextSnapshot);
+  };
+
+  const closeImportAfterError = (
+    itemId: string,
+    stage: ImportErrorStage,
+    fileName: string,
+    reason?: string | null
+  ) => {
+    const notice = buildImportErrorNotice(stage, fileName, reason);
+    updateItem(itemId, {
+      status: "error",
+      confirmationState: "staged",
+      error: notice.message,
+      progress: 0,
+      progressLabel: "Import issue",
+    });
+    publishImportActivity({
+      workspaceId,
+      surface: "background",
+      status: "error",
+      fileName,
+      fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+      fileTotal: items.length,
+      completedFiles: completedFileCount,
+      progress: 0,
+      detail: notice.title,
+      summary: null,
+      errorCode: notice.code,
+      errorMessage: notice.message,
+    });
+    setBusy(false);
+    onClose();
   };
 
   useEffect(() => {
@@ -1137,32 +1231,13 @@ export function ImportFilesModal({
           showPlanLimitNudge(limitPayload);
         }
         const confirmError = formatImportFailureMessage(summaryContext.fileName, payload.error || "Unable to confirm this import.");
-        updateItem(itemId, {
-          status: "error",
-          confirmationState: "staged",
-          error: confirmError,
-        progress: 0,
-        progressLabel: "Confirmation failed",
-      });
-        publishImportActivity({
-          workspaceId,
-          surface: importActivitySurfaceRef.current,
-          status: "error",
-          fileName: summaryContext.fileName,
-          fileIndex: items.findIndex((item) => item.id === itemId) + 1,
-          fileTotal: items.length,
-          completedFiles: completedFileCount,
-          progress: 0,
-          detail: "That file needs another try",
-          summary: null,
-          errorMessage: confirmError,
-        });
         capturePostHogClientEvent("import_failed", {
           error_stage: "confirm",
           error_code: String(payload.error ?? "unable_to_confirm"),
           file_name: summaryContext.fileName,
           workspace_id: workspaceId || null,
         });
+        closeImportAfterError(itemId, "confirm", summaryContext.fileName, confirmError);
         return { status: "error", importedRows: null, summary: null };
       }
 
@@ -1274,35 +1349,13 @@ export function ImportFilesModal({
           if (limitPayload) {
             showPlanLimitNudge(limitPayload);
           }
-          updateItem(itemId, {
-            status: "error",
-            confirmationState: "staged",
-            error: formatImportFailureMessage(
-              summaryContext.fileName,
-              processingMessage || "Import parsing failed in the background."
-            ),
-            progress: 0,
-            progressLabel: "Import failed",
-          });
-          publishImportActivity({
-            workspaceId,
-            surface: importActivitySurfaceRef.current,
-            status: "error",
-            fileName: summaryContext.fileName,
-            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
-            fileTotal: items.length,
-            completedFiles: completedFileCount,
-            progress: 0,
-            detail: "That file needs another try",
-            summary: null,
-            errorMessage: processingMessage || "Import parsing failed in the background.",
-          });
           capturePostHogClientEvent("import_failed", {
             workspace_id: workspaceId || null,
             file_name: summaryContext.fileName,
             error_stage: "background",
             error_code: processingMessage ?? "background_failure",
           });
+          closeImportAfterError(itemId, "background", summaryContext.fileName, processingMessage);
           return;
         }
 
@@ -1688,52 +1741,14 @@ export function ImportFilesModal({
           retry_reason: "background_confirmation",
           error_code: getImportErrorCode(error),
         });
-        updateItem(itemId, {
-          status: "error",
-          confirmationState: "staged",
-          error: error instanceof Error ? error.message : "Unable to monitor import.",
-          progress: 0,
-          progressLabel: "Monitoring failed",
-        });
-        publishImportActivity({
-          workspaceId,
-          surface: importActivitySurfaceRef.current,
-          status: "error",
-          fileName: summaryContext.fileName,
-          fileIndex: items.findIndex((item) => item.id === itemId) + 1,
-          fileTotal: items.length,
-          completedFiles: completedFileCount,
-          progress: 0,
-          detail: "That file needs another try",
-          summary: null,
-          errorMessage: error instanceof Error ? error.message : "Unable to monitor import.",
-        });
+        closeImportAfterError(itemId, "monitor", summaryContext.fileName, error instanceof Error ? error.message : null);
         return;
       }
 
       await sleep(600);
     }
 
-    updateItem(itemId, {
-      status: "error",
-      confirmationState: "staged",
-      error: "Timed out waiting for trusted statement identity.",
-      progress: 0,
-      progressLabel: "Waiting for statement identity",
-    });
-    publishImportActivity({
-      workspaceId,
-      surface: importActivitySurfaceRef.current,
-      status: "error",
-      fileName: summaryContext.fileName,
-      fileIndex: items.findIndex((item) => item.id === itemId) + 1,
-      fileTotal: items.length,
-      completedFiles: completedFileCount,
-      progress: 0,
-      detail: "That file needs another try",
-      summary: null,
-      errorMessage: "Timed out waiting for trusted statement identity.",
-    });
+    closeImportAfterError(itemId, "monitor", summaryContext.fileName, "Timed out waiting for trusted statement identity.");
   };
 
   const preflightPasswordProtectedFiles = async () => {
@@ -1902,7 +1917,7 @@ export function ImportFilesModal({
     let importFileId: string | null = null;
 
     if (!workspaceId) {
-      updateItem(itemId, { status: "error", error: "Select a workspace before importing files." });
+      closeImportAfterError(itemId, "validation", item?.file.name ?? "This file", "Select a workspace before importing files.");
       return { status: "error", importedRows: null, summary: null };
     }
 
@@ -2327,26 +2342,7 @@ export function ImportFilesModal({
         item.file,
         error instanceof Error ? error.message : `Unable to import ${item.file.name}.`
       );
-      updateItem(itemId, {
-        status: "error",
-        confirmationState: item.importFileId ? "staged" : "none",
-        error: processError,
-        progress: 0,
-        progressLabel: "Error",
-      });
-      publishImportActivity({
-        workspaceId,
-        surface: importActivitySurfaceRef.current,
-        status: "error",
-        fileName: item.file.name,
-        fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
-        fileTotal: items.length,
-        completedFiles: completedFileCount,
-        progress: 0,
-        detail: "That file needs another try",
-        summary: null,
-        errorMessage: processError,
-      });
+      closeImportAfterError(itemId, "process", item.file.name, processError);
       return { status: "error", importedRows: null, summary: null };
     }
   };
@@ -2415,6 +2411,7 @@ export function ImportFilesModal({
       progress: overallProgress,
       detail: nextDetail,
       summary: nextStatus === "done" ? previousSummary : null,
+      errorCode: items.some((item) => item.status === "error") ? lastImportActivityRef.current?.errorCode ?? null : null,
       errorMessage: items.find((item) => item.status === "error")?.error ?? validationNotice ?? null,
       updatedAt: Date.now(),
     };
@@ -2613,10 +2610,13 @@ export function ImportFilesModal({
         retry_reason: "confirmation_retry",
       });
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to confirm this import.");
+      if (item) {
+        closeImportAfterError(itemId, "confirm", item.file.name, error instanceof Error ? error.message : null);
+      }
+      setMessage("Clover couldn't finish the confirmation step.");
       capturePostHogClientEvent("import_retry_failed", {
-        ...fileAnalyticsBase(item.file, workspaceId),
-        import_file_id: item.importFileId,
+        ...(item ? fileAnalyticsBase(item.file, workspaceId) : {}),
+        import_file_id: item?.importFileId ?? null,
         retry_reason: "confirmation_retry",
         error_code: getImportErrorCode(error),
       });

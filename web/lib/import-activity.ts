@@ -17,6 +17,7 @@ export type ImportActivitySnapshot = {
   progress: number;
   detail: string;
   summary: UploadInsightsSummary | null;
+  errorCode: string | null;
   errorMessage: string | null;
   updatedAt: number;
 };
@@ -87,6 +88,7 @@ const readSnapshotFromStorage = (storage: Storage | null): ImportActivitySnapsho
         parsed.summary && typeof parsed.summary === "object"
           ? (parsed.summary as UploadInsightsSummary)
           : null,
+      errorCode: typeof parsed.errorCode === "string" ? parsed.errorCode : null,
       errorMessage: typeof parsed.errorMessage === "string" ? parsed.errorMessage : null,
       updatedAt: Number.isFinite(Number(parsed.updatedAt)) ? Number(parsed.updatedAt) : Date.now(),
     };
@@ -116,13 +118,20 @@ const broadcastImportActivityChange = () => {
   window.dispatchEvent(new CustomEvent(importActivityEventName));
 };
 
-export const setImportActivity = (snapshot: Omit<ImportActivitySnapshot, "updatedAt"> | ImportActivitySnapshot) => {
+export const setImportActivity = (
+  snapshot:
+    | (Omit<ImportActivitySnapshot, "updatedAt" | "errorCode"> & {
+        errorCode?: string | null;
+      })
+    | ImportActivitySnapshot
+) => {
   if (typeof window === "undefined") {
     return;
   }
 
   const nextSnapshot: ImportActivitySnapshot = {
     ...snapshot,
+    errorCode: snapshot.errorCode ?? null,
     updatedAt: "updatedAt" in snapshot && Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now(),
   };
 

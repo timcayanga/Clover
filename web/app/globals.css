@@ -10092,6 +10092,95 @@ input.transaction-inline-edit--amount::placeholder {
   box-shadow: 0 24px 44px rgba(31, 41, 51, 0.18);
 }
 
+.import-error-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 95;
+  width: min(440px, calc(100vw - 40px));
+  border-radius: 24px;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  background:
+    radial-gradient(circle at top right, rgba(248, 113, 113, 0.16), transparent 28%),
+    rgba(255, 255, 255, 0.99);
+  border: 1px solid rgba(220, 38, 38, 0.18);
+  box-shadow: 0 24px 44px rgba(31, 41, 51, 0.18);
+}
+
+.import-error-toast__eyebrow {
+  color: #b91c1c;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.import-error-toast__title-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.import-error-toast__title-row h4 {
+  margin: 0;
+  color: var(--fg);
+  font-size: 1.12rem;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+}
+
+.import-error-toast__title-row p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.import-error-toast__close {
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+
+.import-error-toast__code {
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(248, 113, 113, 0.12);
+  color: #b91c1c;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.import-error-toast__callout {
+  color: var(--fg);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.import-error-toast__list {
+  margin: 0;
+  padding: 0 0 0 18px;
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.import-error-toast__list li::marker {
+  color: #ef4444;
+}
+
+.import-error-toast__actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .upload-insights-toast__eyebrow {
   color: var(--accent);
   font-size: 0.72rem;
@@ -10343,6 +10432,20 @@ input.transaction-inline-edit--amount::placeholder {
   z-index: 76;
   width: min(280px, calc(100vw - 16px));
   pointer-events: none;
+}
+
+.import-upload-dock--error .import-upload-dock__inner {
+  border-color: rgba(239, 68, 68, 0.28);
+}
+
+.import-upload-dock--error .import-upload-dock__status {
+  border-color: rgba(239, 68, 68, 0.18);
+  background: rgba(239, 68, 68, 0.08);
+  color: #b91c1c;
+}
+
+.import-upload-dock--error .import-progress-donut {
+  --accent: #ef4444;
 }
 
 .import-upload-dock__inner {
@@ -17991,6 +18094,14 @@ input.transaction-inline-edit--amount::placeholder {
     left: 12px;
     right: 12px;
     width: auto;
+  }
+
+  .import-error-toast,
+  .upload-insights-toast {
+    left: 12px;
+    right: 12px;
+    width: auto;
+    bottom: 12px;
   }
 
   .import-upload-dock__body {
