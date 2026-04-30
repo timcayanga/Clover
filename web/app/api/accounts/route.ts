@@ -9,6 +9,7 @@ import { seedWorkspaceDefaults } from "@/lib/starter-data";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 
 export const dynamic = "force-dynamic";
 
@@ -229,11 +230,28 @@ export async function POST(request: Request) {
       null;
     if (existingAccount) {
       if (compatibleColumns.has("accountNumber") && accountNumber && (existingAccount.accountNumber ?? null) !== accountNumber) {
-        const updatedAccount = await prisma.account.update({
-          where: { id: existingAccount.id },
-          data: { accountNumber },
-          select: getCompatibleAccountSelect(compatibleColumns),
-        });
+        const accountUpdate = (data: Record<string, unknown>) =>
+          prisma.account.update({
+            where: { id: existingAccount.id },
+            data,
+            select: getCompatibleAccountSelect(compatibleColumns),
+          });
+
+        let updatedAccount;
+        try {
+          updatedAccount = await accountUpdate({ accountNumber });
+        } catch (error) {
+          if (!isMissingAccountNumberColumnError(error)) {
+            throw error;
+          }
+
+          const fallbackData = omitAccountNumberField({ accountNumber });
+          updatedAccount =
+            Object.keys(fallbackData).length === 0
+              ? existingAccount
+              : await accountUpdate(fallbackData);
+        }
+
         return NextResponse.json({
           account: serializeAccount(updatedAccount),
         });
@@ -284,10 +302,22 @@ export async function POST(request: Request) {
       balance,
     };
 
-    const account = await prisma.account.create({
-      data: accountCreateData,
-      select: getCompatibleAccountSelect(compatibleColumns),
-    });
+    let account;
+    try {
+      account = await prisma.account.create({
+        data: accountCreateData,
+        select: getCompatibleAccountSelect(compatibleColumns),
+      });
+    } catch (error) {
+      if (!isMissingAccountNumberColumnError(error)) {
+        throw error;
+      }
+
+      account = await prisma.account.create({
+        data: omitAccountNumberField(accountCreateData),
+        select: getCompatibleAccountSelect(compatibleColumns),
+      });
+    }
 
     void capturePostHogServerEvent("account_created", userId, {
       workspace_id: workspaceId,

@@ -32,6 +32,7 @@ import {
 } from "@/lib/data-engine";
 import { getTrailingBalanceFromParsedRows, inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { parseImportTextWithOpenAIFallback } from "@/lib/openai-import-parser";
+import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 
@@ -1160,11 +1161,27 @@ const resolveConfirmationAccount = async (params: {
       return account;
     }
 
-    return prisma.account.update({
-      where: { id: account.id },
-      data,
-      select: getCompatibleAccountSelect(compatibleAccountColumns),
-    });
+    const updateAccount = (nextData: Record<string, unknown>) =>
+      prisma.account.update({
+        where: { id: account.id },
+        data: nextData,
+        select: getCompatibleAccountSelect(compatibleAccountColumns),
+      });
+
+    try {
+      return await updateAccount(data);
+    } catch (error) {
+      if (Object.prototype.hasOwnProperty.call(data, "accountNumber") && isMissingAccountNumberColumnError(error)) {
+        const fallbackData = omitAccountNumberField(data);
+        if (Object.keys(fallbackData).length === 0) {
+          return account;
+        }
+
+        return updateAccount(fallbackData);
+      }
+
+      throw error;
+    }
   };
   const candidateRow =
     (typeof params.statementMetadata?.accountName === "string" && params.statementMetadata.accountName.trim()
@@ -1250,22 +1267,37 @@ const resolveConfirmationAccount = async (params: {
     }
 
     const compatibleAccountColumns = await getCompatibleAccountColumns();
-    return prisma.account.create({
-      data: {
-        workspaceId,
-        name:
-          inferredAccountName ??
-          (inferredInstitution && inferredAccountNumber ? `${inferredInstitution} ${inferredAccountNumber.slice(-4)}` : String(params.importFile.fileName ?? "Imported account").replace(/\.[^.]+$/, "").trim()),
-        institution: inferredInstitution,
-        ...(compatibleAccountColumns.has("accountNumber") && inferredAccountNumber
-          ? { accountNumber: inferredAccountNumber }
-          : {}),
-        type: inferredType,
-        currency: "PHP",
-        source: "upload",
-      },
-      select: getCompatibleAccountSelect(compatibleAccountColumns),
-    });
+    const accountData = {
+      workspaceId,
+      name:
+        inferredAccountName ??
+        (inferredInstitution && inferredAccountNumber
+          ? `${inferredInstitution} ${inferredAccountNumber.slice(-4)}`
+          : String(params.importFile.fileName ?? "Imported account").replace(/\.[^.]+$/, "").trim()),
+      institution: inferredInstitution,
+      ...(compatibleAccountColumns.has("accountNumber") && inferredAccountNumber
+        ? { accountNumber: inferredAccountNumber }
+        : {}),
+      type: inferredType,
+      currency: "PHP",
+      source: "upload",
+    };
+
+    try {
+      return await prisma.account.create({
+        data: accountData,
+        select: getCompatibleAccountSelect(compatibleAccountColumns),
+      });
+    } catch (error) {
+      if (Object.prototype.hasOwnProperty.call(accountData, "accountNumber") && isMissingAccountNumberColumnError(error)) {
+        return prisma.account.create({
+          data: omitAccountNumberField(accountData),
+          select: getCompatibleAccountSelect(compatibleAccountColumns),
+        });
+      }
+
+      throw error;
+    }
   }
 
   return null;
