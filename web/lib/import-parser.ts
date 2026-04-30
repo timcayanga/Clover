@@ -244,7 +244,10 @@ const institutionPatterns: Array<{ name: string; pattern: RegExp }> = [
   { name: "AUB", pattern: /\b(ASIA\s+UNITED\s+BANK|AUB)\b/i },
   { name: "UnionBank", pattern: /\bUNIONBANK\b/i },
   { name: "Landbank", pattern: /\bLANDBANK\b/i },
-  { name: "Chinabank", pattern: /\bCHINABANK\b/i },
+  { name: "Chinabank", pattern: /\b(CHINABANK|CHINA\s*BANK)\b/i },
+  { name: "MariBank", pattern: /\b(MARIBANK|SEABANK)\b/i },
+  { name: "PSBank", pattern: /\bPSBANK\b/i },
+  { name: "UCPB", pattern: /\b(UCPB|UNITED\s+COCONUT\s+PLANTERS\s+BANK)\b/i },
   { name: "PNB", pattern: /\b(PNB|PHILIPPINE\s+NATIONAL\s+BANK)\b/i },
   { name: "Maya", pattern: /\bMAYA\b/i },
   { name: "GoTyme", pattern: /\bGO\s*TYME|GOTYME\b/i },
@@ -4424,8 +4427,22 @@ const parseBpiImportText = (text: string) => {
 
   const rows: ParsedImportRow[] = [];
 
-  if (openingBalance !== null && startDate) {
-    rows.push({
+  for (const line of transactionLines) {
+    const parsed = parseBpiTransactionLine(line, state);
+    year = state.year;
+    previousMonthIndex = state.previousMonthIndex;
+    previousBalance = state.previousBalance;
+    if (parsed) {
+      rows.push(parsed);
+    }
+  }
+
+  if (
+    openingBalance !== null &&
+    startDate &&
+    !rows.some((row) => row.categoryName === "Opening Balance" && row.merchantRaw === "Beginning balance")
+  ) {
+    rows.unshift({
       date: startDate.toISOString().slice(0, 10),
       amount: openingBalance.toFixed(2),
       merchantRaw: "Beginning balance",
@@ -4446,16 +4463,6 @@ const parseBpiImportText = (text: string) => {
         statementEndDate: metadata.endDate,
       },
     });
-  }
-
-  for (const line of transactionLines) {
-    const parsed = parseBpiTransactionLine(line, state);
-    year = state.year;
-    previousMonthIndex = state.previousMonthIndex;
-    previousBalance = state.previousBalance;
-    if (parsed) {
-      rows.push(parsed);
-    }
   }
 
   const hasStatementTotals = transactionLines.some((line) => /BALANCE\s+THIS\s+STATEMENT|TOTAL\s+DEBIT|TOTAL\s+CREDIT/i.test(line));

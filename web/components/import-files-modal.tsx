@@ -1527,7 +1527,7 @@ export function ImportFilesModal({
                 null,
                 null,
                 summaryContext.optimisticAccountId,
-                toBalanceString(statementCheckpoint?.endingBalance),
+                null,
                 fallbackPreviewTransactions
               );
 
@@ -1644,7 +1644,7 @@ export function ImportFilesModal({
             resolvedAccountType ??
               inferAccountTypeFromStatement(resolvedIdentity.institution, resolvedIdentity.accountName, "bank"),
             summaryContext.optimisticAccountId,
-            resolvedIdentity.balance,
+            null,
             summaryContext.previewTransactions ?? []
           );
 
