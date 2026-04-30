@@ -75,16 +75,26 @@ export function PageFileDropZone({
       }
     };
 
-    window.addEventListener("dragenter", handleDragEnter);
-    window.addEventListener("dragover", handleDragOver);
-    window.addEventListener("dragleave", handleDragLeave);
-    window.addEventListener("drop", handleDrop);
+    const capture = true;
+
+    document.addEventListener("dragenter", handleDragEnter, capture);
+    document.addEventListener("dragover", handleDragOver, capture);
+    document.addEventListener("dragleave", handleDragLeave, capture);
+    document.addEventListener("drop", handleDrop, capture);
+    window.addEventListener("dragenter", handleDragEnter, capture);
+    window.addEventListener("dragover", handleDragOver, capture);
+    window.addEventListener("dragleave", handleDragLeave, capture);
+    window.addEventListener("drop", handleDrop, capture);
 
     return () => {
-      window.removeEventListener("dragenter", handleDragEnter);
-      window.removeEventListener("dragover", handleDragOver);
-      window.removeEventListener("dragleave", handleDragLeave);
-      window.removeEventListener("drop", handleDrop);
+      document.removeEventListener("dragenter", handleDragEnter, capture);
+      document.removeEventListener("dragover", handleDragOver, capture);
+      document.removeEventListener("dragleave", handleDragLeave, capture);
+      document.removeEventListener("drop", handleDrop, capture);
+      window.removeEventListener("dragenter", handleDragEnter, capture);
+      window.removeEventListener("dragover", handleDragOver, capture);
+      window.removeEventListener("dragleave", handleDragLeave, capture);
+      window.removeEventListener("drop", handleDrop, capture);
     };
   }, [enabled, onFilesDropped]);
 

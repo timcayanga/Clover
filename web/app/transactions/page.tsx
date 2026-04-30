@@ -3929,7 +3929,7 @@ function TransactionsPageContent() {
   return (
     <CloverShell active="transactions" title="Transactions" actions={transactionsShellActions}>
       <PageFileDropZone
-        enabled={!importOpen}
+        enabled
         title="Drop statement files anywhere"
         onFilesDropped={(files) => openImportFiles(files)}
       />
