@@ -16,7 +16,13 @@ import { validateImportFile } from "@/lib/import-file-validation";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import { syncImportedWorkspaceAccountCaches, syncImportedWorkspaceTransactionCaches } from "@/lib/workspace-cache";
-import { clearImportActivity, setImportActivity, type ImportActivityLocation, type ImportActivitySnapshot } from "@/lib/import-activity";
+import {
+  clearImportActivity,
+  setImportActivity,
+  type ImportActivityLocation,
+  type ImportActivitySnapshot,
+  type ImportActivityStatus,
+} from "@/lib/import-activity";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 
 type AccountOption = {
@@ -628,7 +634,15 @@ export function ImportFilesModal({
   const importActivitySurfaceRef = useRef<ImportActivityLocation>("modal");
   const lastImportActivityRef = useRef<ImportActivitySnapshot | null>(null);
 
-  const publishImportActivity = (snapshot: Omit<ImportActivitySnapshot, "updatedAt" | "workspaceId" | "surface"> | null) => {
+  const publishImportActivity = (
+    snapshot:
+      | (Partial<Omit<ImportActivitySnapshot, "updatedAt">> & {
+          status: ImportActivityStatus;
+          workspaceId?: string;
+          surface?: ImportActivityLocation;
+        })
+      | null
+  ) => {
     if (!workspaceId) {
       return;
     }
@@ -640,9 +654,9 @@ export function ImportFilesModal({
     }
 
     const nextSnapshot: ImportActivitySnapshot = {
-      workspaceId,
-      surface: importActivitySurfaceRef.current,
       ...snapshot,
+      workspaceId: snapshot.workspaceId ?? workspaceId,
+      surface: snapshot.surface ?? importActivitySurfaceRef.current,
       updatedAt: Date.now(),
     };
     lastImportActivityRef.current = nextSnapshot;
@@ -1891,6 +1905,19 @@ export function ImportFilesModal({
         progress: 0,
         progressLabel: "Password needed",
       });
+      publishImportActivity({
+        workspaceId,
+        surface: importActivitySurfaceRef.current,
+        status: "active",
+        fileName: item.file.name,
+        fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+        fileTotal: items.length,
+        completedFiles: completedFileCount,
+        progress: 0,
+        detail: "This file needs a password",
+        summary: null,
+        errorMessage: `${item.file.name} is password-protected. Enter the password to continue.`,
+      });
       return { status: "needs_password", importedRows: null, summary: null };
     }
 
@@ -2259,15 +2286,28 @@ export function ImportFilesModal({
         const needsPasswordMessage = item.password.trim()
           ? `Wrong password for ${item.file.name}.`
           : `${item.file.name} is password-protected. Enter the password to continue.`;
-        updateItem(itemId, {
-          status: "needs_password",
-          error: needsPasswordMessage,
-          password: "",
-          passwordVisible: false,
-          progress: 0,
-          progressLabel: "Password needed",
-        });
-        return { status: "needs_password", importedRows: null, summary: null };
+      updateItem(itemId, {
+        status: "needs_password",
+        error: needsPasswordMessage,
+        password: "",
+        passwordVisible: false,
+        progress: 0,
+        progressLabel: "Password needed",
+      });
+      publishImportActivity({
+        workspaceId,
+        surface: importActivitySurfaceRef.current,
+        status: "active",
+        fileName: item.file.name,
+        fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+        fileTotal: items.length,
+        completedFiles: completedFileCount,
+        progress: 0,
+        detail: "This file needs a password",
+        summary: null,
+        errorMessage: needsPasswordMessage,
+      });
+      return { status: "needs_password", importedRows: null, summary: null };
       }
 
       capturePostHogClientEvent("import_failed", {
@@ -2285,6 +2325,19 @@ export function ImportFilesModal({
         error: processError,
         progress: 0,
         progressLabel: "Error",
+      });
+      publishImportActivity({
+        workspaceId,
+        surface: importActivitySurfaceRef.current,
+        status: "error",
+        fileName: item.file.name,
+        fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+        fileTotal: items.length,
+        completedFiles: completedFileCount,
+        progress: 0,
+        detail: "That file needs another try",
+        summary: null,
+        errorMessage: processError,
       });
       return { status: "error", importedRows: null, summary: null };
     }
@@ -2337,7 +2390,8 @@ export function ImportFilesModal({
       return;
     }
 
-    const nextStatus = hasCompletedBatch && !busy ? "done" : items.some((item) => item.status === "error") ? "error" : "active";
+    const hasCompletedBatchNow = items.length > 0 && items.every((item) => item.status === "done" || item.confirmationState === "confirmed");
+    const nextStatus = hasCompletedBatchNow && !busy ? "done" : items.some((item) => item.status === "error") ? "error" : "active";
     const nextDetail = activeProgressItem
       ? friendlyImportProgressLabel(activeProgressItem.progressLabel, activeProgressItem.file.name)
       : validationNotice ?? message;
@@ -2359,7 +2413,7 @@ export function ImportFilesModal({
 
     lastImportActivityRef.current = nextSnapshot;
     setImportActivity(nextSnapshot);
-  }, [activeProgressItem, busy, completedFileCount, hasCompletedBatch, items, message, open, overallProgress, validationNotice, workspaceId]);
+  }, [activeProgressItem, busy, completedFileCount, items, message, open, overallProgress, validationNotice, workspaceId]);
   useEffect(() => {
     if (!open || passwordItems.length === 0) {
       setSelectedPasswordItemId(null);
