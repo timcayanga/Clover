@@ -309,6 +309,9 @@ const getOtherCategoryId = (categoryList: Category[]) =>
 const getCategoryIdByName = (categoryList: Category[], categoryName: string) =>
   categoryList.find((category) => category.name.trim().toLowerCase() === categoryName.trim().toLowerCase())?.id ?? "";
 
+const getCategoryNameById = (categoryList: Category[], categoryId: string | null | undefined) =>
+  categoryList.find((category) => category.id === categoryId)?.name ?? null;
+
 const normalizeCategoryName = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
 
 const isResolvedReviewStatus = (status: Transaction["reviewStatus"]) =>
@@ -2680,6 +2683,9 @@ function TransactionsPageContent() {
     }
 
     setIsSaving(true);
+    let optimisticTransactionId = "";
+    let optimisticTransactionAmount = 0;
+    let optimisticTransactionType: Transaction["type"] = "expense";
     try {
       const accountId = manualForm.accountId || (await ensureDefaultAccount(activeWorkspaceId));
       const merchantText = manualForm.merchantRaw.trim();
@@ -2700,17 +2706,46 @@ function TransactionsPageContent() {
         }
       }
 
-      if ((!categoryId || categoryId === getOtherCategoryId(categories)) && merchantText.length >= 2) {
-        const suggestion =
-          manualCategorySuggestion && isAutoApplyCategorySuggestion(manualCategorySuggestion)
-            ? manualCategorySuggestion
-            : await fetchCategorySuggestion(merchantText, manualForm.type === "credit" ? "income" : "expense");
+      const categoryName = getCategoryNameById(categories, categoryId ?? null);
+      const accountName = accounts.find((account) => account.id === accountId)?.name ?? accountId;
+      const optimisticTransaction: Transaction = {
+        id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        accountId,
+        accountName,
+        categoryId: categoryId ?? null,
+        categoryName,
+        reviewStatus: "confirmed",
+        date: manualForm.date,
+        amount: Number(manualForm.amount).toFixed(2),
+        currency: "PHP",
+        type: manualForm.type === "credit" ? "income" : "expense",
+        merchantRaw: manualForm.merchantRaw,
+        merchantClean: null,
+        description: manualForm.description.trim() || null,
+        isTransfer: false,
+        isExcluded: false,
+        source: "manual",
+        importFileId: null,
+        warningReason: null,
+      };
+      optimisticTransactionId = optimisticTransaction.id;
+      optimisticTransactionAmount = Number(optimisticTransaction.amount);
+      optimisticTransactionType = optimisticTransaction.type;
 
-        if (isAutoApplyCategorySuggestion(suggestion)) {
-          categoryId = suggestion.categoryId;
-          setManualForm((current) => ({ ...current, categoryId: suggestion.categoryId }));
-        }
-      }
+      flushSync(() => {
+        setTransactionsPage(1);
+        setTransactions((current) => [optimisticTransaction, ...current.filter((entry) => entry.id !== optimisticTransaction.id)]);
+        setTransactionsSummary((current) => ({
+          ...current,
+          totalCount: current.totalCount + 1,
+          income: current.income + (optimisticTransaction.type === "income" ? optimisticTransactionAmount : 0),
+          spending: current.spending + (optimisticTransaction.type === "expense" ? optimisticTransactionAmount : 0),
+          transfers: current.transfers + (optimisticTransaction.type === "transfer" ? optimisticTransactionAmount : 0),
+        }));
+        setUndoStack([]);
+        setRedoStack([]);
+        setManualOpen(false);
+      });
 
       const response = await fetch("/api/transactions", {
         method: "POST",
@@ -2737,16 +2772,26 @@ function TransactionsPageContent() {
         if (limitPayload) {
           setPlanLimitNudge(limitPayload);
         }
+        if (optimisticTransactionId) {
+          setTransactions((current) => current.filter((entry) => entry.id !== optimisticTransactionId));
+          setTransactionsSummary((current) => ({
+            ...current,
+            totalCount: Math.max(0, current.totalCount - 1),
+            income: current.income - (optimisticTransactionType === "income" ? optimisticTransactionAmount : 0),
+            spending: current.spending - (optimisticTransactionType === "expense" ? optimisticTransactionAmount : 0),
+            transfers: current.transfers - (optimisticTransactionType === "transfer" ? optimisticTransactionAmount : 0),
+          }));
+        }
         throw new Error(payload?.error ?? "Unable to create transaction.");
       }
 
       const payload = await response.json();
       const created = payload.transaction as Transaction;
-      setTransactionsPage(1);
-      setTransactions((current) => [created, ...current]);
-      setUndoStack([]);
-      setRedoStack([]);
-      setManualOpen(false);
+      if (optimisticTransactionId) {
+        setTransactions((current) =>
+          current.map((entry) => (entry.id === optimisticTransactionId ? created : entry))
+        );
+      }
       window.requestAnimationFrame(() => {
         window.scrollTo({ top: 0, behavior: "smooth" });
       });
@@ -2758,6 +2803,9 @@ function TransactionsPageContent() {
       });
       setMessage(`Transaction "${created.merchantRaw}" added.`);
     } catch (error) {
+      if (optimisticTransactionId) {
+        setTransactions((current) => current.filter((entry) => entry.id !== optimisticTransactionId));
+      }
       setMessage(error instanceof Error ? error.message : "Unable to create transaction.");
     } finally {
       setIsSaving(false);

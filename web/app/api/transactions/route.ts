@@ -487,9 +487,20 @@ export async function POST(request: Request) {
     await assertWorkspaceAccess(userId, payload.workspaceId);
     const user = await getOrCreateCurrentUser(userId);
     const effectiveLimits = getEffectiveUserLimits(user);
-    const transactionCount = await countWorkspaceTransactions(payload.workspaceId);
+    const transactionCountPromise =
+      effectiveLimits.transactionLimit !== null ? countWorkspaceTransactions(payload.workspaceId) : Promise.resolve(null);
+    const otherCategoryPromise =
+      payload.categoryId === undefined || payload.categoryId === null
+        ? prisma.category.findFirst({
+            where: {
+              workspaceId: payload.workspaceId,
+              name: "Other",
+            },
+          })
+        : Promise.resolve(null);
+    const [transactionCount, otherCategory] = await Promise.all([transactionCountPromise, otherCategoryPromise]);
 
-    if (effectiveLimits.transactionLimit !== null && transactionCount >= effectiveLimits.transactionLimit) {
+    if (effectiveLimits.transactionLimit !== null && transactionCount !== null && transactionCount >= effectiveLimits.transactionLimit) {
       const isFreePlan = user.planTier === "free";
       return NextResponse.json(
         {
@@ -504,17 +515,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const resolvedCategoryId =
-      payload.categoryId ??
-      (
-        await prisma.category.findFirst({
-          where: {
-            workspaceId: payload.workspaceId,
-            name: "Other",
-          },
-        })
-      )?.id ??
-      null;
+    const resolvedCategoryId = payload.categoryId ?? otherCategory?.id ?? null;
 
     const transaction = await prisma.transaction.create({
       data: {
@@ -549,6 +550,18 @@ export async function POST(request: Request) {
         },
         learnedRuleIdsApplied: [],
       },
+      include: {
+        account: {
+          select: {
+            name: true,
+          },
+        },
+        category: {
+          select: {
+            name: true,
+          },
+        },
+      },
     });
 
     if (resolvedCategoryId) {
@@ -557,7 +570,7 @@ export async function POST(request: Request) {
       });
 
       if (category) {
-        await recordTrainingSignal({
+        void recordTrainingSignal({
           workspaceId: payload.workspaceId,
           transactionId: transaction.id,
           merchantText: payload.merchantClean ?? payload.merchantRaw,
@@ -567,9 +580,24 @@ export async function POST(request: Request) {
           source: "manual_transaction_creation",
           confidence: 100,
           notes: payload.accountId ? "Manual transaction created in the app." : null,
+        }).catch(() => {
+          // Background learning should never block a user-facing save.
         });
       }
     }
+
+    void capturePostHogServerEvent("manual_transaction_created", userId, {
+      workspace_id: payload.workspaceId,
+      transaction_id: transaction.id,
+      account_id: transaction.accountId,
+      category_id: resolvedCategoryId,
+      amount: Number(transaction.amount),
+      currency: transaction.currency,
+      transaction_type: transaction.type,
+      source: "manual",
+      is_transfer: transaction.isTransfer,
+      is_excluded: transaction.isExcluded,
+    });
 
     void capturePostHogServerEvent("feature_used", userId, {
       workspace_id: payload.workspaceId,
@@ -592,6 +620,8 @@ export async function POST(request: Request) {
         date: transaction.date.toISOString(),
         createdAt: transaction.createdAt.toISOString(),
         updatedAt: transaction.updatedAt.toISOString(),
+        accountName: transaction.account.name,
+        categoryName: transaction.category?.name ?? null,
       },
     }, { status: 201 });
   } catch (error) {
