@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
+import { GlobalImportActivity } from "@/components/global-import-activity";
 import { PostHogAnalytics, PostHogClerkIdentity } from "@/components/posthog-analytics";
 import { getAppBuildInfo } from "@/lib/build-info";
 
@@ -41,11 +42,13 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
           <ClerkProvider publishableKey={publishableKey}>
             <PostHogAnalytics />
             <PostHogClerkIdentity />
+            <GlobalImportActivity />
             {children}
           </ClerkProvider>
         ) : (
           <>
             <PostHogAnalytics />
+            <GlobalImportActivity />
             {children}
           </>
         )}

@@ -654,9 +654,17 @@ export function ImportFilesModal({
     }
 
     const nextSnapshot: ImportActivitySnapshot = {
-      ...snapshot,
       workspaceId: snapshot.workspaceId ?? workspaceId,
       surface: snapshot.surface ?? importActivitySurfaceRef.current,
+      status: snapshot.status,
+      fileName: snapshot.fileName ?? null,
+      fileIndex: Number(snapshot.fileIndex ?? 0),
+      fileTotal: Number(snapshot.fileTotal ?? 0),
+      completedFiles: Number(snapshot.completedFiles ?? 0),
+      progress: Number(snapshot.progress ?? 0),
+      detail: snapshot.detail ?? "",
+      summary: snapshot.summary ?? null,
+      errorMessage: snapshot.errorMessage ?? null,
       updatedAt: Date.now(),
     };
     lastImportActivityRef.current = nextSnapshot;
