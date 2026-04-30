@@ -19,6 +19,7 @@ import {
   fetchParsedTransactionRows,
   enrichParsedRowsWithTraining,
   defaultCategoryForType,
+  getCompatibleImportFileColumns,
   insertParsedTransactionsCompat,
   hasCompatibleTable,
   recordTrainingSignal,
@@ -112,6 +113,30 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   createdAt: true,
   updatedAt: true,
 });
+
+const updateImportFileWithTxCompat = async (
+  tx: Prisma.TransactionClient,
+  importFileId: string,
+  data: Partial<Record<string, unknown>>,
+  compatibleColumns: Set<string>
+) => {
+  const entries = Object.entries(data).filter(([key, value]) => compatibleColumns.has(key) && value !== undefined);
+  if (compatibleColumns.has("updatedAt")) {
+    entries.push(["updatedAt", new Date()]);
+  }
+
+  if (entries.length === 0) {
+    return;
+  }
+
+  const setClause = entries.map(([key], index) => `"${key}" = $${index + 1}`).join(", ");
+  const values = entries.map(([, value]) => value);
+  await tx.$executeRawUnsafe(
+    `UPDATE "ImportFile" SET ${setClause} WHERE "id" = $${entries.length + 1}`,
+    ...values,
+    importFileId
+  );
+};
 
 const shouldRouteToReview = (params: { confidence: number; categoryName?: string | null; type?: string | null }) => {
   if (params.confidence < 90) {
@@ -1998,6 +2023,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     throw new Error("Account not found");
   }
   const resolvedAccountId = account.id;
+  const compatibleImportFileColumns = new Set(await getCompatibleImportFileColumns());
 
   let statementRow: Record<string, unknown> | null = null;
   let statementConfidence = 0;
@@ -2061,14 +2087,16 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       },
     });
 
-    await tx.importFile.update({
-      where: { id: importFileId },
-      data: {
+    await updateImportFileWithTxCompat(
+      tx,
+      importFileId,
+      {
         accountId: resolvedAccountId,
         confirmedAt: new Date(),
         status: "done",
       },
-    });
+      compatibleImportFileColumns
+    );
 
   const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
     ? await tx.accountStatementCheckpoint.findUnique({
@@ -2354,15 +2382,17 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     });
   }
 
-  await tx.importFile.update({
-    where: { id: importFileId },
-    data: {
-      accountId: resolvedAccountId,
-      confirmedAt: new Date(),
-      status: "done",
-      confirmedTransactionsCount: preparedTransactions.length + (openingBalanceInserted ? 1 : 0),
-    },
-  });
+    await updateImportFileWithTxCompat(
+      tx,
+      importFileId,
+      {
+        accountId: resolvedAccountId,
+        confirmedAt: new Date(),
+        status: "done",
+        confirmedTransactionsCount: preparedTransactions.length + (openingBalanceInserted ? 1 : 0),
+      },
+      compatibleImportFileColumns
+    );
 
   const analyticsDistinctId = String(importFile.workspaceId ?? "import-worker");
   for (const entry of preparedTransactions) {
