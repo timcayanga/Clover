@@ -16,6 +16,7 @@ import { validateImportFile } from "@/lib/import-file-validation";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import { syncImportedWorkspaceAccountCaches, syncImportedWorkspaceTransactionCaches } from "@/lib/workspace-cache";
+import { clearImportActivity, setImportActivity, type ImportActivityLocation, type ImportActivitySnapshot } from "@/lib/import-activity";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 
 type AccountOption = {
@@ -624,6 +625,29 @@ export function ImportFilesModal({
   const [qaErrorByItemId, setQaErrorByItemId] = useState<Record<string, string | null>>({});
   const autoLoadedQaIdsRef = useRef(new Set<string>());
   const initialFilesSignatureRef = useRef<string | null>(null);
+  const importActivitySurfaceRef = useRef<ImportActivityLocation>("modal");
+  const lastImportActivityRef = useRef<ImportActivitySnapshot | null>(null);
+
+  const publishImportActivity = (snapshot: Omit<ImportActivitySnapshot, "updatedAt" | "workspaceId" | "surface"> | null) => {
+    if (!workspaceId) {
+      return;
+    }
+
+    if (!snapshot) {
+      lastImportActivityRef.current = null;
+      clearImportActivity();
+      return;
+    }
+
+    const nextSnapshot: ImportActivitySnapshot = {
+      workspaceId,
+      surface: importActivitySurfaceRef.current,
+      ...snapshot,
+      updatedAt: Date.now(),
+    };
+    lastImportActivityRef.current = nextSnapshot;
+    setImportActivity(nextSnapshot);
+  };
 
   useEffect(() => {
     if (!open) {
@@ -645,6 +669,8 @@ export function ImportFilesModal({
       initialFilesSignatureRef.current = null;
       return;
     }
+
+    importActivitySurfaceRef.current = "modal";
 
     router.prefetch("/accounts");
     router.prefetch("/transactions");
@@ -671,6 +697,31 @@ export function ImportFilesModal({
     setMessage("Upload CSV or PDF files to import transactions and balances.");
     setValidationNotice(null);
   }, [accounts, defaultAccountId, open]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    return () => {
+      importActivitySurfaceRef.current = "background";
+      const snapshot = lastImportActivityRef.current;
+      if (!snapshot) {
+        clearImportActivity();
+        return;
+      }
+
+      if (snapshot.status === "active" || snapshot.status === "done" || snapshot.status === "error") {
+        setImportActivity({
+          ...snapshot,
+          surface: "background",
+        });
+        return;
+      }
+
+      clearImportActivity();
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open || !initialFiles || initialFiles.length === 0) {
@@ -1015,6 +1066,19 @@ export function ImportFilesModal({
         progressLabel: "Finalizing import",
         targetAccountId: resolvedAccountId,
       });
+      publishImportActivity({
+        workspaceId,
+        surface: importActivitySurfaceRef.current,
+        status: "active",
+        fileName: summaryContext.fileName,
+        fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+        fileTotal: items.length,
+        completedFiles: completedFileCount,
+        progress: finalizingProgress,
+        detail: "Clover is wrapping things up",
+        summary: null,
+        errorMessage: null,
+      });
     }, 700);
 
     updateItem(itemId, {
@@ -1022,6 +1086,19 @@ export function ImportFilesModal({
       progress: finalizingProgress,
       progressLabel: "Finalizing import",
       targetAccountId: resolvedAccountId,
+    });
+    publishImportActivity({
+      workspaceId,
+      surface: importActivitySurfaceRef.current,
+      status: "active",
+      fileName: summaryContext.fileName,
+      fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+      fileTotal: items.length,
+      completedFiles: completedFileCount,
+      progress: finalizingProgress,
+      detail: "Clover is wrapping things up",
+      summary: null,
+      errorMessage: null,
     });
 
     try {
@@ -1045,6 +1122,19 @@ export function ImportFilesModal({
         progress: 0,
         progressLabel: "Confirmation failed",
       });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "error",
+          fileName: summaryContext.fileName,
+          fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount,
+          progress: 0,
+          detail: "That file needs another try",
+          summary: null,
+          errorMessage: confirmError,
+        });
         capturePostHogClientEvent("import_failed", {
           error_stage: "confirm",
           error_code: String(payload.error ?? "unable_to_confirm"),
@@ -1093,6 +1183,19 @@ export function ImportFilesModal({
         importedRows,
         progress: 100,
         progressLabel: "Done",
+      });
+      publishImportActivity({
+        workspaceId,
+        surface: importActivitySurfaceRef.current,
+        status: "done",
+        fileName: summaryContext.fileName,
+        fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+        fileTotal: items.length,
+        completedFiles: completedFileCount + 1,
+        progress: 100,
+        detail: "All set",
+        summary,
+        errorMessage: null,
       });
       capturePostHogClientEvent("import_confirmed", {
         workspace_id: workspaceId || null,
@@ -1159,6 +1262,19 @@ export function ImportFilesModal({
             progress: 0,
             progressLabel: "Import failed",
           });
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "error",
+            fileName: summaryContext.fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: 0,
+            detail: "That file needs another try",
+            summary: null,
+            errorMessage: processingMessage || "Import parsing failed in the background.",
+          });
           capturePostHogClientEvent("import_failed", {
             workspace_id: workspaceId || null,
             file_name: summaryContext.fileName,
@@ -1178,16 +1294,46 @@ export function ImportFilesModal({
                 ? `Auto-rerun ${Number(importFile.processingAttempt ?? 0)}/${Number(importFile.processingTargetScore ?? 95)} in progress`
                 : "Parsing in background"),
           });
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "active",
+            fileName: summaryContext.fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: Math.max(90, Math.min(98, 90 + Number(importFile.processingAttempt ?? 0))),
+            detail:
+              processingMessage ??
+              (processingPhase === "auto_rerunning"
+                ? `Clover is rechecking the statement`
+                : "Clover is reading the statement"),
+            summary: null,
+            errorMessage: null,
+          });
           await sleep(600);
           continue;
         }
 
-        if (confirmedTransactionsCount > 0 || importFile?.accountId) {
+        if (confirmedTransactionsCount > 0) {
           updateItem(itemId, {
             status: "done",
             confirmationState: "confirmed",
             progress: 100,
             progressLabel: "Done",
+          });
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "done",
+            fileName: summaryContext.fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount + 1,
+            progress: 100,
+            detail: "All set",
+            summary: null,
+            errorMessage: null,
           });
           return;
         }
@@ -1317,6 +1463,19 @@ export function ImportFilesModal({
                 progressLabel: "Waiting for statement identity",
                 targetAccountId: fallbackAccountId,
               });
+              publishImportActivity({
+                workspaceId,
+                surface: importActivitySurfaceRef.current,
+                status: "active",
+                fileName: summaryContext.fileName,
+                fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+                fileTotal: items.length,
+                completedFiles: completedFileCount,
+                progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
+                detail: "Clover is reading the statement",
+                summary: null,
+                errorMessage: null,
+              });
               seedImportedWorkspaceCaches(workspaceId, fallbackSummary);
               void onImported(fallbackSummary);
             } else {
@@ -1325,6 +1484,19 @@ export function ImportFilesModal({
                 progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
                 progressLabel: "Waiting for statement identity",
                 targetAccountId: accountId,
+              });
+              publishImportActivity({
+                workspaceId,
+                surface: importActivitySurfaceRef.current,
+                status: "active",
+                fileName: summaryContext.fileName,
+                fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+                fileTotal: items.length,
+                completedFiles: completedFileCount,
+                progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
+                detail: "Clover is reading the statement",
+                summary: null,
+                errorMessage: null,
               });
             }
             await sleep(parsedRowsCount > 0 ? 300 : 600);
@@ -1371,6 +1543,19 @@ export function ImportFilesModal({
               progressLabel: "Finalizing import",
               targetAccountId: resolvedAccountId,
             });
+            publishImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "active",
+              fileName: summaryContext.fileName,
+              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount,
+              progress: Math.max(95, Math.min(98, 94 + attempt * 0.1)),
+              detail: "Clover is wrapping things up",
+              summary: null,
+              errorMessage: null,
+            });
             await sleep(600);
             continue;
           }
@@ -1394,6 +1579,19 @@ export function ImportFilesModal({
 
           seedImportedWorkspaceCaches(workspaceId, previewSummary);
           void onImported(previewSummary);
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "active",
+            fileName: summaryContext.fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: 92,
+            detail: "Clover is lining up the rest",
+            summary: null,
+            errorMessage: null,
+          });
 
           const result = await confirmItemImport(itemId, importFileId, resolvedAccountId, {
             ...summaryContext,
@@ -1406,6 +1604,19 @@ export function ImportFilesModal({
           if (result.summary) {
             seedImportedWorkspaceCaches(workspaceId, result.summary);
             void onImported(result.summary);
+            publishImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "done",
+              fileName: summaryContext.fileName,
+              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount + 1,
+              progress: 100,
+              detail: "All set",
+              summary: result.summary,
+              errorMessage: null,
+            });
           }
           capturePostHogClientEvent("statement_identity_confirmed", {
             workspace_id: workspaceId,
@@ -1430,6 +1641,19 @@ export function ImportFilesModal({
           progressLabel: "Parsing in background",
           targetAccountId: accountId,
         });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "active",
+          fileName: summaryContext.fileName,
+          fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount,
+          progress: Math.max(92, Math.min(95, 92 + attempt * 0.1)),
+          detail: "Clover is reading the statement",
+          summary: null,
+          errorMessage: null,
+        });
       } catch (error) {
         const limitPayload = parsePlanLimitMessage(error instanceof Error ? error.message : null, planTier);
         if (limitPayload) {
@@ -1449,6 +1673,19 @@ export function ImportFilesModal({
           progress: 0,
           progressLabel: "Monitoring failed",
         });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "error",
+          fileName: summaryContext.fileName,
+          fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount,
+          progress: 0,
+          detail: "That file needs another try",
+          summary: null,
+          errorMessage: error instanceof Error ? error.message : "Unable to monitor import.",
+        });
         return;
       }
 
@@ -1461,6 +1698,19 @@ export function ImportFilesModal({
       error: "Timed out waiting for trusted statement identity.",
       progress: 0,
       progressLabel: "Waiting for statement identity",
+    });
+    publishImportActivity({
+      workspaceId,
+      surface: importActivitySurfaceRef.current,
+      status: "error",
+      fileName: summaryContext.fileName,
+      fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+      fileTotal: items.length,
+      completedFiles: completedFileCount,
+      progress: 0,
+      detail: "That file needs another try",
+      summary: null,
+      errorMessage: "Timed out waiting for trusted statement identity.",
     });
   };
 
@@ -1653,6 +1903,19 @@ export function ImportFilesModal({
       });
       updateItem(itemId, { status: "importing", error: null, progress: 8, progressLabel: "Starting upload", importFileId });
       updateItem(itemId, { progress: 20, progressLabel: "Uploading the file" });
+      publishImportActivity({
+        workspaceId,
+        surface: importActivitySurfaceRef.current,
+        status: "active",
+        fileName: item.file.name,
+        fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+        fileTotal: items.length,
+        completedFiles: completedFileCount,
+        progress: 20,
+        detail: "Clover is getting your file ready",
+        summary: null,
+        errorMessage: null,
+      });
       await yieldToPaint();
       capturePostHogClientEvent("import_parsing_started", {
         file_type: fileTypeLabel(item.file),
@@ -1668,6 +1931,19 @@ export function ImportFilesModal({
           password: item.password.trim() || undefined,
         },
         (progress) => {
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "active",
+            fileName: item.file.name,
+            fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: 20 + progress * 0.45,
+            detail: `Clover is bringing in ${item.file.name}`,
+            summary: null,
+            errorMessage: null,
+          });
           updateItem(itemId, {
             progress: 20 + progress * 0.45,
             progressLabel: `Uploading ${item.file.name}`,
@@ -1741,6 +2017,19 @@ export function ImportFilesModal({
           importedRows: 0,
           progress: 100,
           progressLabel: "Already imported in this workspace",
+        });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "done",
+          fileName: item.file.name,
+          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount + 1,
+          progress: 100,
+          detail: duplicateMessage,
+          summary: null,
+          errorMessage: null,
         });
         setMessage(duplicateMessage);
         return { status: "done", importedRows: 0, summary: null };
@@ -1825,6 +2114,19 @@ export function ImportFilesModal({
           progressLabel: hasStatementIdentity || canUseOptimisticGuess ? "Queued for background processing" : "Waiting for account details",
           status: "importing",
         });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "active",
+          fileName: item.file.name,
+          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount,
+          progress: 92,
+          detail: hasStatementIdentity || canUseOptimisticGuess ? "Clover is lining up the rest" : "Clover is reading the statement",
+          summary: null,
+          errorMessage: null,
+        });
         if (optimisticSummary) {
           seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
           void onImported(optimisticSummary);
@@ -1890,6 +2192,19 @@ export function ImportFilesModal({
         confirmationState: "staged",
         progress: 92,
         progressLabel: targetAccountId ? "Finalizing in background" : "Waiting for account details",
+      });
+      publishImportActivity({
+        workspaceId,
+        surface: importActivitySurfaceRef.current,
+        status: "active",
+        fileName: item.file.name,
+        fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+        fileTotal: items.length,
+        completedFiles: completedFileCount,
+        progress: 92,
+        detail: targetAccountId ? "Clover is wrapping things up" : "Clover is reading the statement",
+        summary: null,
+        errorMessage: null,
       });
 
       if (optimisticPreviewSummary) {
@@ -2008,6 +2323,43 @@ export function ImportFilesModal({
           "For low-confidence statements, use Transactions to add anything Clover missed manually.",
           "If the import looks wrong but still completes, check Review before confirming changes.",
         ];
+
+  useEffect(() => {
+    if (!open || !workspaceId) {
+      return;
+    }
+
+    if (items.length === 0) {
+      if (!busy) {
+        clearImportActivity();
+        lastImportActivityRef.current = null;
+      }
+      return;
+    }
+
+    const nextStatus = hasCompletedBatch && !busy ? "done" : items.some((item) => item.status === "error") ? "error" : "active";
+    const nextDetail = activeProgressItem
+      ? friendlyImportProgressLabel(activeProgressItem.progressLabel, activeProgressItem.file.name)
+      : validationNotice ?? message;
+    const previousSummary = lastImportActivityRef.current?.summary ?? null;
+    const nextSnapshot: ImportActivitySnapshot = {
+      workspaceId,
+      surface: importActivitySurfaceRef.current,
+      status: nextStatus,
+      fileName: activeProgressItem?.file.name ?? items[items.length - 1]?.file.name ?? null,
+      fileIndex: activeProgressItem ? items.findIndex((item) => item.id === activeProgressItem.id) + 1 : completedFileCount,
+      fileTotal: items.length,
+      completedFiles: completedFileCount,
+      progress: overallProgress,
+      detail: nextDetail,
+      summary: nextStatus === "done" ? previousSummary : null,
+      errorMessage: items.find((item) => item.status === "error")?.error ?? validationNotice ?? null,
+      updatedAt: Date.now(),
+    };
+
+    lastImportActivityRef.current = nextSnapshot;
+    setImportActivity(nextSnapshot);
+  }, [activeProgressItem, busy, completedFileCount, hasCompletedBatch, items, message, open, overallProgress, validationNotice, workspaceId]);
   useEffect(() => {
     if (!open || passwordItems.length === 0) {
       setSelectedPasswordItemId(null);
