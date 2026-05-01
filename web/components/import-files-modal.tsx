@@ -327,7 +327,7 @@ const buildOptimisticUploadSummaryFromAccount = (
     account.institution,
     account.type as UploadAccountType,
     account.id,
-    account.balance ?? null,
+    null,
     []
   );
 
@@ -1502,10 +1502,6 @@ export function ImportFilesModal({
                 typeof previewRow?.institution === "string" && previewRow.institution.trim()
                   ? previewRow.institution.trim()
                   : summaryContext.institution;
-              const previewBalance = toBalanceString(previewStatementCheckpoint?.endingBalance);
-              if (previewBalance) {
-                resolvedIdentity.balance = previewBalance;
-              }
             }
           }
 
@@ -1517,7 +1513,7 @@ export function ImportFilesModal({
             if (parsedRowsCount > 0 && !seededFallbackSummary) {
               const fallbackAccountId = accountId && !accountId.startsWith("optimistic-")
                 ? accountId
-                : await ensureTargetAccountId(summaryContext.fallbackAccountName, null, null, summaryContext.accountNumber);
+                : await ensureTargetAccountId(summaryContext.fallbackAccountName, null, null, null);
               const fallbackPreviewTransactions =
                 summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
                   ? summaryContext.previewTransactions
@@ -1601,7 +1597,7 @@ export function ImportFilesModal({
               syncAccountName,
               syncInstitution,
               resolvedAccountType,
-              resolvedIdentity.accountNumber ?? summaryContext.accountNumber
+              null
             ).catch(() => null);
           }
 
@@ -1612,7 +1608,7 @@ export function ImportFilesModal({
               accountName,
               institution,
               resolvedAccountType,
-              resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null
+              null
             );
           }
           if (!resolvedAccountId) {
@@ -2126,7 +2122,7 @@ export function ImportFilesModal({
               statementIdentity?.accountName ?? null,
               statementIdentity?.institution ?? null,
               statementAccountType,
-              statementIdentity?.accountNumber ?? null
+              null
             )
           : canUseOptimisticGuess
             ? item.optimisticAccountId ?? null
@@ -2214,7 +2210,7 @@ export function ImportFilesModal({
             statementIdentity.accountName ?? null,
             statementIdentity.institution ?? null,
             statementAccountType,
-            statementIdentity?.accountNumber ?? null
+            null
           )
         : null;
 
