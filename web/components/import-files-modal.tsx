@@ -1501,6 +1501,7 @@ export function ImportFilesModal({
                     processingIdentity?.accountType ?? summaryContext.accountType ?? null,
                     processingIdentity?.accountNumber ?? null
                   );
+            latestResolvedAccountId = fallbackAccountId;
             const fallbackPreviewTransactions =
               summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
                 ? summaryContext.previewTransactions
@@ -1713,6 +1714,7 @@ export function ImportFilesModal({
               const fallbackAccountId = accountId && !accountId.startsWith("optimistic-")
                 ? accountId
                 : await ensureTargetAccountId(summaryContext.fallbackAccountName, null, null, null);
+              latestResolvedAccountId = fallbackAccountId;
               const fallbackPreviewTransactions =
                 summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
                   ? summaryContext.previewTransactions
