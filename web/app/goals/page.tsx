@@ -11,7 +11,9 @@ import { EmptyDataCta } from "@/components/empty-data-cta";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
+import { PostHogEvent, analyticsOnceKey } from "@/components/posthog-analytics";
 import { GoalsSubtabs } from "@/components/goals-subtabs";
+import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import {
   GOAL_OPTIONS,
   getFinancialExperienceProfile,
@@ -49,12 +51,6 @@ export const metadata = {
 
 const selectedWorkspaceKey = "clover.selected-workspace-id.v1";
 
-const currencyFormatter = new Intl.NumberFormat("en-PH", {
-  style: "currency",
-  currency: "PHP",
-  minimumFractionDigits: 2,
-});
-
 const monthFormatter = new Intl.DateTimeFormat("en-PH", {
   month: "short",
   year: "numeric",
@@ -69,12 +65,14 @@ const shortDateFormatter = new Intl.DateTimeFormat("en-PH", {
 type GoalTransaction = {
   date: Date;
   amount: unknown;
+  currency?: string | null;
   type: "income" | "expense" | "transfer";
   merchantRaw: string;
   merchantClean: string | null;
   account: {
     name: string;
     type: string;
+    currency: string | null;
   };
   category: {
     name: string;
@@ -92,6 +90,7 @@ type InvestmentAccountSnapshot = {
   investmentCostBasis: unknown;
   investmentPrincipal: unknown;
   updatedAt: Date;
+  currency: string | null;
 };
 
 type MonthBucket = {
@@ -126,8 +125,9 @@ type MerchantSummaryRow = {
   count: number | bigint | null;
 };
 
-const formatCurrency = (value: number) => currencyFormatter.format(value);
-const formatSignedCurrency = (value: number) => `${value < 0 ? "-" : ""}${currencyFormatter.format(Math.abs(value))}`;
+const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
+const formatSignedCurrency = (value: number, currency?: string | null) =>
+  `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "PHP")}`;
 const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
 const formatShortDate = (value: Date) => shortDateFormatter.format(value);
 const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -403,6 +403,7 @@ async function GoalsPageStream({
       select: {
         date: true,
         amount: true,
+        currency: true,
         type: true,
         merchantRaw: true,
         merchantClean: true,
@@ -410,6 +411,7 @@ async function GoalsPageStream({
           select: {
             name: true,
             type: true,
+            currency: true,
           },
         },
         category: {
@@ -435,6 +437,7 @@ async function GoalsPageStream({
         investmentCostBasis: true,
         investmentPrincipal: true,
         updatedAt: true,
+        currency: true,
       },
       orderBy: {
         updatedAt: "desc",
@@ -443,6 +446,21 @@ async function GoalsPageStream({
   ]);
 
   const currentWindowTransactions = currentWindowTransactionsQuery as GoalTransaction[];
+  const investmentAccounts = investmentAccountRows as InvestmentAccountSnapshot[];
+  const goalCurrencyCandidates = new Set<string>();
+  for (const transaction of currentWindowTransactions) {
+    if (typeof transaction.currency === "string" && transaction.currency.trim()) {
+      goalCurrencyCandidates.add(formatCurrencyCode(transaction.currency));
+    } else if (typeof transaction.account.currency === "string" && transaction.account.currency.trim()) {
+      goalCurrencyCandidates.add(formatCurrencyCode(transaction.account.currency));
+    }
+  }
+  for (const investment of investmentAccounts) {
+    if (typeof investment.currency === "string" && investment.currency.trim()) {
+      goalCurrencyCandidates.add(formatCurrencyCode(investment.currency));
+    }
+  }
+  const goalCurrency = goalCurrencyCandidates.size === 1 ? Array.from(goalCurrencyCandidates)[0] : "PHP";
   const selectedGoalKey = user.primaryGoal?.trim() ?? null;
   const selectedGoal = getGoalDefinition(selectedGoalKey);
   const playbook = getGoalPlaybook(selectedGoalKey);
@@ -504,7 +522,7 @@ async function GoalsPageStream({
   const suggestedGoalTarget = getSuggestedGoalAmount(selectedGoalKey as GoalKey | null, monthlyIncome);
   const latestGoalPlan = goalHistoryRows.length > 0 ? normalizeGoalPlan(goalHistoryRows[0].goalPlan, goalHistoryRows[0].primaryGoal as GoalKey | null, goalHistoryRows[0].targetAmount !== null && goalHistoryRows[0].targetAmount !== undefined ? Number(goalHistoryRows[0].targetAmount) : null) : null;
   const currentGoalPlan = normalizeGoalPlan(user.goalPlan, selectedGoalKey as GoalKey | null, goalTargetAmount) ?? latestGoalPlan;
-  const goalPlanSummary = getGoalPlanSummary(currentGoalPlan, monthlyIncome);
+  const goalPlanSummary = getGoalPlanSummary(currentGoalPlan, monthlyIncome, goalCurrency);
 
   const monthBuckets = getMonthBuckets(now);
   sixMonthSummaryRows.forEach((row) => {
@@ -577,7 +595,6 @@ async function GoalsPageStream({
 
   const recurringDrag = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0);
   const recurringShare = currentSpend > 0 ? recurringDrag / currentSpend : 0;
-  const investmentAccounts = investmentAccountRows as InvestmentAccountSnapshot[];
   const investmentHoldings = investmentAccounts
     .slice()
     .sort((left, right) => Number(right.balance ?? 0) - Number(left.balance ?? 0));
@@ -607,7 +624,7 @@ async function GoalsPageStream({
     investmentGainLoss,
     investmentFlow,
     investmentHoldings: investmentHoldingsCount,
-  });
+  }, goalCurrency);
   const goalActionSteps = playbook.weeklyFocus.length > 0 ? playbook.weeklyFocus : [goalProgress.nextAction];
   const uncategorizedShare = currentSpend > 0
     ? uncategorizedTransactions.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0) / currentSpend
@@ -695,15 +712,15 @@ async function GoalsPageStream({
       label: hasGoalTarget ? goalMoneyLabel : "Suggested target",
       value:
         hasGoalTarget && goalProgress.targetAmount !== null
-          ? `${formatCurrency(goalProgress.currentAmount)} / ${formatCurrency(goalProgress.targetAmount)}`
+          ? `${formatCurrency(goalProgress.currentAmount, goalCurrency)} / ${formatCurrency(goalProgress.targetAmount, goalCurrency)}`
           : suggestedGoalTarget !== null
-            ? formatCurrency(suggestedGoalTarget)
+            ? formatCurrency(suggestedGoalTarget, goalCurrency)
             : "Set it now",
       note: hasGoalTarget
         ? goalProgress.achieved
           ? "You crossed the line"
           : goalProgress.remainingAmount !== null
-            ? `${formatCurrency(goalProgress.remainingAmount)} remaining`
+            ? `${formatCurrency(goalProgress.remainingAmount, goalCurrency)} remaining`
             : "Keep moving"
         : "Clover can suggest a starting point",
     },
@@ -719,10 +736,10 @@ async function GoalsPageStream({
     },
     {
       label: "Investments",
-      value: investmentHoldingsCount > 0 ? currencyFormatter.format(investmentHoldingsValue) : "No holdings",
+      value: investmentHoldingsCount > 0 ? formatCurrency(investmentHoldingsValue, goalCurrency) : "No holdings",
       note:
         investmentHoldingsCount > 0
-          ? `${investmentHoldingsCount} holding${investmentHoldingsCount === 1 ? "" : "s"} · ${investmentGainLoss >= 0 ? "+" : "-"}${formatCurrency(Math.abs(investmentGainLoss))} gain/loss`
+          ? `${investmentHoldingsCount} holding${investmentHoldingsCount === 1 ? "" : "s"} · ${investmentGainLoss >= 0 ? "+" : "-"}${formatCurrency(Math.abs(investmentGainLoss), goalCurrency)} gain/loss`
           : "Connect your Investments page to make this goal feel more real",
     },
     {
@@ -818,12 +835,12 @@ async function GoalsPageStream({
           const rowGoal = getGoalDefinition(row.primaryGoal);
           const rowTarget = row.targetAmount !== null && row.targetAmount !== undefined ? Number(row.targetAmount) : null;
           const rowPlan = normalizeGoalPlan(row.goalPlan, row.primaryGoal as GoalKey | null, rowTarget);
-          const rowPlanSummary = getGoalPlanSummary(rowPlan, monthlyIncome);
+          const rowPlanSummary = getGoalPlanSummary(rowPlan, monthlyIncome, goalCurrency);
           return {
             label: formatShortDate(row.createdAt),
             detail:
               rowPlanSummary?.detail ??
-              `${rowGoal.title}${rowTarget !== null ? ` · ${formatCurrency(rowTarget)}` : " · No amount set"} · ${row.source === "onboarding" ? "Saved during onboarding" : "Updated in Goals"}`,
+              `${rowGoal.title}${rowTarget !== null ? ` · ${formatCurrency(rowTarget, goalCurrency)}` : " · No amount set"} · ${row.source === "onboarding" ? "Saved during onboarding" : "Updated in Goals"}`,
           };
         })
       : [
@@ -841,9 +858,9 @@ async function GoalsPageStream({
             ? `You reached your salary-share target. That is a real win.`
             : currentGoalPlan?.cadence === "annual"
               ? `You are on pace for your annual goal. That is a real win.`
-              : `You reached your ${formatCurrency(goalTargetAmount)} monthly target. That is a real win.`
+              : `You reached your ${formatCurrency(goalTargetAmount, goalCurrency)} monthly target. That is a real win.`
           : goalProgress.remainingAmount !== null
-            ? `${formatCurrency(goalProgress.remainingAmount)} left to go this month. Keep the rhythm steady.`
+            ? `${formatCurrency(goalProgress.remainingAmount, goalCurrency)} left to go this month. Keep the rhythm steady.`
             : goalProgress.nextAction
         : "Set a monthly target to unlock live progress tracking.",
       icon: goalProgress.achieved ? "spark" : hasGoalTarget ? "chart" : "target",
@@ -852,8 +869,8 @@ async function GoalsPageStream({
       ? {
           text:
             selectedGoalKey === "invest_better"
-              ? `Your portfolio is sitting at ${formatCurrency(investmentHoldingsValue)} across ${investmentHoldingsCount} holding${investmentHoldingsCount === 1 ? "" : "s"}.`
-              : `Your Investments page shows ${formatCurrency(investmentHoldingsValue)} in assets${topInvestmentHolding ? `, led by ${topInvestmentHolding.name}` : ""}.`,
+              ? `Your portfolio is sitting at ${formatCurrency(investmentHoldingsValue, goalCurrency)} across ${investmentHoldingsCount} holding${investmentHoldingsCount === 1 ? "" : "s"}.`
+              : `Your Investments page shows ${formatCurrency(investmentHoldingsValue, goalCurrency)} in assets${topInvestmentHolding ? `, led by ${topInvestmentHolding.name}` : ""}.`,
           icon: "chart" as const,
         }
       : {
@@ -923,7 +940,7 @@ async function GoalsPageStream({
       : goalTargetAmount !== null
         ? {
             title: `${selectedGoal.title} monthly`,
-            detail: `Aim to set aside ${formatCurrency(goalTargetAmount)} each month${goalTargetSource ? ` · tracked from ${goalTargetSource}` : ""}.`,
+            detail: `Aim to set aside ${formatCurrency(goalTargetAmount, goalCurrency)} each month${goalTargetSource ? ` · tracked from ${goalTargetSource}` : ""}.`,
             subtitle: "Legacy monthly target",
             targetAmount: goalTargetAmount,
           }
@@ -954,7 +971,7 @@ async function GoalsPageStream({
                     {goalProgress.achieved
                       ? "You already hit the current target. Time to set the next one."
                       : goalProgress.remainingAmount !== null
-                        ? `${formatCurrency(goalProgress.remainingAmount)} remains to close the gap this cycle.`
+                        ? `${formatCurrency(goalProgress.remainingAmount, goalCurrency)} remains to close the gap this cycle.`
                         : "Set a specific amount, cadence, or salary share to make the target more concrete."}
                   </small>
                 </div>
@@ -979,20 +996,20 @@ async function GoalsPageStream({
                 <div className="goals-investments__metrics">
                   <div>
                     <span>Portfolio value</span>
-                    <strong>{formatCurrency(investmentHoldingsValue)}</strong>
+                    <strong>{formatCurrency(investmentHoldingsValue, goalCurrency)}</strong>
                     <small>{investmentHoldingsCount} holding{investmentHoldingsCount === 1 ? "" : "s"} total</small>
                   </div>
                   <div>
                     <span>Gain / loss</span>
                     <strong className={investmentGainLoss >= 0 ? "positive" : "negative"}>
                       {investmentGainLoss >= 0 ? "+" : "-"}
-                      {formatCurrency(Math.abs(investmentGainLoss))}
+                      {formatCurrency(Math.abs(investmentGainLoss), goalCurrency)}
                     </strong>
                     <small>{investmentCostBasis > 0 ? `${formatPercent((investmentGainLoss / investmentCostBasis) * 100)} vs cost basis` : "No cost basis yet"}</small>
                   </div>
                   <div>
                     <span>Monthly flow</span>
-                    <strong>{formatCurrency(investmentFlow)}</strong>
+                    <strong>{formatCurrency(investmentFlow, goalCurrency)}</strong>
                     <small>Investment movement this month</small>
                   </div>
                 </div>
@@ -1007,7 +1024,7 @@ async function GoalsPageStream({
                           {account.institution ? ` · ${account.institution}` : ""}
                         </span>
                       </div>
-                      <strong>{formatCurrency(Number(account.balance ?? 0))}</strong>
+                      <strong>{formatCurrency(Number(account.balance ?? 0), account.currency ?? goalCurrency)}</strong>
                     </div>
                   ))}
                 </div>
@@ -1090,7 +1107,7 @@ async function GoalsPageStream({
             </div>
             <div className="goals-heatmap__cell is-2">
               <span>Remaining</span>
-              <strong>{goalProgress.remainingAmount === null ? "Set target" : formatCurrency(goalProgress.remainingAmount)}</strong>
+              <strong>{goalProgress.remainingAmount === null ? "Set target" : formatCurrency(goalProgress.remainingAmount, goalCurrency)}</strong>
               <small>{goalProgress.achieved ? "Target reached" : "Amount left to close the gap"}</small>
             </div>
           </div>
@@ -1126,7 +1143,7 @@ async function GoalsPageStream({
                     <div className="goals-driver__track" aria-hidden="true">
                       <div className="goals-driver__fill" style={{ width: `${clamp(share, 8, 100)}%` }} />
                     </div>
-                    <small>{formatCurrency(merchant.amount)}</small>
+                    <small>{formatCurrency(merchant.amount, goalCurrency)}</small>
                   </div>
                 );
               })
@@ -1318,6 +1335,8 @@ async function GoalsPageStream({
             eyebrow={user.dataWipedAt ? "Fresh start" : "No data yet"}
             title={experienceProfile.emptyStateTitle}
             copy={experienceProfile.emptyStateCopy}
+            illustration="/illustrations/clover-goals-progress-3d.png"
+            illustrationAlt="A 3D Clover goals progress illustration"
             importHref="/dashboard?import=1"
             accountHref="/accounts"
             transactionHref="/transactions?manual=1"
@@ -1363,9 +1382,9 @@ async function GoalsPageStream({
                 <strong>{hasGoalTarget ? goalProgress.label : "Monthly goal setup"}</strong>
                 <span>
                   {hasGoalTarget && goalProgress.targetAmount !== null
-                    ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalProgress.targetAmount)}`
+                    ? `${formatCurrency(goalProgress.currentAmount, goalCurrency)} of ${formatCurrency(goalProgress.targetAmount, goalCurrency)}`
                     : suggestedGoalTarget !== null
-                      ? `Suggested ${formatCurrency(suggestedGoalTarget)}`
+                      ? `Suggested ${formatCurrency(suggestedGoalTarget, goalCurrency)}`
                       : "No target saved yet"}
                 </span>
               </div>
@@ -1377,6 +1396,24 @@ async function GoalsPageStream({
               </div>
               <p>{hasGoalTarget ? goalProgress.coachCopy : "Set the number, then Clover will track the month with you."}</p>
             </div>
+
+            {goalProgress.achieved ? (
+              <PostHogEvent
+                event="goal_target_reached"
+                onceKey={analyticsOnceKey(
+                  "goal_target_reached",
+                  `user:${user.id}:goal:${selectedGoalKey ?? "none"}:${goalTargetAmount ?? "none"}:${goalTargetSource ?? "saved"}`
+                )}
+                properties={{
+                  user_id: user.id,
+                  primary_goal: selectedGoalKey ?? null,
+                  target_amount: goalTargetAmount ?? null,
+                  target_source: goalTargetSource ?? null,
+                  progress_percent: goalProgress.progressPercent ?? null,
+                  current_amount: goalProgress.currentAmount,
+                }}
+              />
+            ) : null}
 
             {goalProgress.achieved ? (
               <div className="goals-celebration" role="status" aria-live="polite">
@@ -1413,7 +1450,7 @@ async function GoalsPageStream({
                   <small>
                     {hasGoalTarget
                       ? goalProgress.remainingAmount !== null
-                        ? `${formatCurrency(goalProgress.remainingAmount)} left to reach the goal.`
+                        ? `${formatCurrency(goalProgress.remainingAmount, goalCurrency)} left to reach the goal.`
                         : "Goal progress is ready to track."
                       : "Once you set a number, the bar will start moving."}
                   </small>
@@ -1453,7 +1490,7 @@ async function GoalsPageStream({
                         </svg>
                         <div className="goals-hero__ring-copy">
                           <strong>{hasGoalTarget && goalProgress.progressPercent !== null ? `${Math.round(goalProgress.progressPercent)}%` : "Set it"}</strong>
-                          <span>{hasGoalTarget ? `${formatCurrency(goalProgress.currentAmount)} ${goalProgress.currentLabel.toLowerCase()}` : "No monthly target yet"}</span>
+                          <span>{hasGoalTarget ? `${formatCurrency(goalProgress.currentAmount, goalCurrency)} ${goalProgress.currentLabel.toLowerCase()}` : "No monthly target yet"}</span>
                         </div>
                       </div>
 
@@ -1549,7 +1586,7 @@ async function GoalsPageStream({
                     </svg>
                     <div className="goals-hero__ring-copy">
                       <strong>{hasGoalTarget && goalProgress.progressPercent !== null ? `${Math.round(goalProgress.progressPercent)}%` : "Set it"}</strong>
-                      <span>{hasGoalTarget ? `${formatCurrency(goalProgress.currentAmount)} ${goalProgress.currentLabel.toLowerCase()}` : "No monthly target yet"}</span>
+                      <span>{hasGoalTarget ? `${formatCurrency(goalProgress.currentAmount, goalCurrency)} ${goalProgress.currentLabel.toLowerCase()}` : "No monthly target yet"}</span>
                     </div>
                   </div>
 
@@ -1644,6 +1681,7 @@ async function GoalsPageStream({
             currentGoalPlan={currentGoalPlan}
             monthlyIncome={monthlyIncome}
             suggestedTargetAmount={suggestedGoalTarget}
+            currency={goalCurrency}
           />
         </div>
 

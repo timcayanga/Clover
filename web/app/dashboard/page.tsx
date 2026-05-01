@@ -8,9 +8,11 @@ import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
+import { buildRecurringTransactionSummaries } from "@/lib/recurring";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getFinancialExperienceProfile, getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
-import { PostHogEvent } from "@/components/posthog-analytics";
+import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
 import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +48,7 @@ type DashboardTransaction = {
   merchantClean: string | null;
   account: {
     name: string;
+    currency: string | null;
   };
   category: {
     name: string;
@@ -76,14 +79,6 @@ type VisualCategory = {
   share: number;
 };
 
-type RecurringItemSummary = {
-  name: string;
-  amount: number;
-  count: number;
-  lastSeen: Date;
-  category: string | null;
-};
-
 type WorkspaceSummary = {
   id: string;
   name: string;
@@ -105,11 +100,12 @@ type WorkspaceSummary = {
 type DashboardExperienceProfile = ReturnType<typeof getFinancialExperienceProfile>;
 
 const toAmount = (value: unknown) => Number(value ?? 0);
-const formatCurrency = (value: number) => currencyFormatter.format(value);
+const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "MIXED");
 const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
 
-const formatSignedCurrency = (value: number) => `${value < 0 ? "-" : ""}${currencyFormatter.format(Math.abs(value))}`;
+const formatSignedCurrency = (value: number, currency?: string | null) =>
+  `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "MIXED")}`;
 
 const formatRelativeDate = (value: Date, now = new Date()) => {
   const diffMinutes = Math.round((value.getTime() - now.getTime()) / 60000);
@@ -268,56 +264,6 @@ const comparePeriods = (currentTransactions: DashboardTransaction[], previousTra
   };
 };
 
-const recurringItemPattern = /(rent|internet|bill|utility|utilities|subscription|electric|water|phone|insurance|mortgage|loan|fee)/i;
-
-const summarizeRecurringItem = (transactions: DashboardTransaction[]) => {
-  const candidates = transactions.filter((transaction) => {
-    if (transaction.type !== "expense") {
-      return false;
-    }
-
-    return (
-      recurringItemPattern.test(transaction.merchantRaw) ||
-      recurringItemPattern.test(transaction.merchantClean ?? "") ||
-      recurringItemPattern.test(transaction.category?.name ?? "")
-    );
-  });
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const grouped = new Map<string, RecurringItemSummary>();
-
-  for (const transaction of candidates) {
-    const name = (transaction.merchantClean ?? transaction.merchantRaw).trim();
-    const key = name.toLowerCase();
-    const amount = Math.abs(toAmount(transaction.amount));
-    const category = transaction.category?.name ?? null;
-    const existing = grouped.get(key);
-
-    if (existing) {
-      existing.amount += amount;
-      existing.count += 1;
-      if (transaction.date > existing.lastSeen) {
-        existing.lastSeen = transaction.date;
-      }
-      continue;
-    }
-
-    grouped.set(key, {
-      name,
-      amount,
-      count: 1,
-      lastSeen: transaction.date,
-      category,
-    });
-  }
-
-  return Array.from(grouped.values()).sort(
-    (a, b) => b.count - a.count || b.lastSeen.getTime() - a.lastSeen.getTime() || b.amount - a.amount
-  )[0] ?? null;
-};
 
 function DashboardStreamFallback() {
   return (
@@ -455,8 +401,9 @@ async function DashboardStream({
 
   const accountsWithBalance = workspaceSummary.accounts.filter((account) => account.balance !== null);
   const linkedBalanceTotal = accountsWithBalance.reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
+  const cashAccountCount = workspaceSummary.accounts.filter((account) => account.type === "cash").length;
   const accountCurrencies = new Set(workspaceSummary.accounts.map((account) => account.currency).filter(Boolean));
-  const trackedBalanceCurrency = accountCurrencies.size === 1 ? workspaceSummary.accounts[0]?.currency ?? null : "mixed";
+  const trackedBalanceCurrency = accountCurrencies.size === 1 ? workspaceSummary.accounts[0]?.currency ?? null : "MIXED";
   const isEmptyWorkspace =
     workspaceSummary._count.transactions === 0 && workspaceSummary._count.importFiles === 0 && workspaceSummary._count.accounts <= 1;
   const experienceProfile = getFinancialExperienceProfile(user.financialExperience);
@@ -502,6 +449,7 @@ async function DashboardStream({
           account: {
             select: {
               name: true,
+              currency: true,
             },
           },
           category: {
@@ -518,6 +466,17 @@ async function DashboardStream({
   const [latestImport, recentTransactions] = await Promise.all([latestImportPromise, transactionsPromise]);
 
   const currentTransactions = recentTransactions as DashboardTransaction[];
+  const currencyCandidates = new Set<string>();
+  workspaceSummary.accounts.forEach((account) => currencyCandidates.add(formatCurrencyCode(account.currency)));
+  currentTransactions.forEach((transaction) => {
+    if (transaction.account.currency) {
+      currencyCandidates.add(formatCurrencyCode(transaction.account.currency));
+    }
+  });
+  const displayCurrency = currencyCandidates.size === 1 ? Array.from(currencyCandidates)[0] : "MIXED";
+  const formatCurrency = (value: number, currency: string | null = displayCurrency) => formatCurrencyAmount(value, currency);
+  const formatSignedCurrency = (value: number, currency: string | null = displayCurrency) =>
+    `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency)}`;
   const currentThirtyDayTransactions = currentTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo);
   const previousTransactionsWindow = currentTransactions.filter(
     (transaction) => transaction.date >= sixtyDaysAgo && transaction.date < thirtyDaysAgo
@@ -527,7 +486,7 @@ async function DashboardStream({
   const previousNet = currentSummary.previous.income - currentSummary.previous.expense;
   const previousSavingsRate = currentSummary.previous.income > 0 ? previousNet / currentSummary.previous.income : null;
   const spendDelta = currentSummary.current.expense - currentSummary.previous.expense;
-  const recurringItem = summarizeRecurringItem(currentTransactions);
+  const recurringItem = buildRecurringTransactionSummaries(currentTransactions)[0] ?? null;
   const uncategorizedTransactions = currentThirtyDayTransactions.filter(
     (transaction) => !transaction.category?.name || !transaction.merchantClean
   );
@@ -551,7 +510,7 @@ async function DashboardStream({
     previousSavingsRate,
     spendDelta,
     recurringShare: recurringItem ? recurringItem.amount / Math.max(currentSummary.current.expense, 1) : 0,
-  });
+  }, displayCurrency);
   const goalProgressPercent = clamp(goalProgress.progressPercent ?? 0, 0, 100);
   const confidenceScore = clamp(
     Math.round(66 + currentTransactions.length * 0.12 - reviewAttentionCount * 2.2 - uncategorizedTransactions.length * 1.4),
@@ -560,6 +519,9 @@ async function DashboardStream({
   );
   const confidenceLabel = confidenceScore >= 85 ? "High confidence" : confidenceScore >= 70 ? "Good confidence" : "Watch closely";
   const latestImportLabel = latestImport ? `${latestImport.fileName} · ${latestImport.status} · ${formatRelativeDate(latestImport.uploadedAt)}` : null;
+  const daysSinceLastImport = latestImport
+    ? Math.max(0, Math.floor((now.getTime() - latestImport.uploadedAt.getTime()) / 86400000))
+    : null;
   const topCategories = Array.from(currentSummary.current.expenseCategories.entries())
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3)
@@ -604,6 +566,23 @@ async function DashboardStream({
 
   return (
     <>
+      <PostHogPersonProperties
+        distinctId={user.clerkUserId}
+        properties={{
+          workspace_name: workspaceSummary.name,
+          account_count: workspaceSummary._count.accounts,
+          cash_account_count: cashAccountCount,
+          tracked_balance_total: Number(linkedBalanceTotal.toFixed(2)),
+          tracked_balance_currency: trackedBalanceCurrency,
+          transaction_count: workspaceSummary._count.transactions,
+          import_count: workspaceSummary._count.importFiles,
+          review_attention_count: reviewAttentionCount,
+          goal: goalKey ?? null,
+          financial_experience: user.financialExperience,
+          last_import_at: latestImport?.uploadedAt.toISOString() ?? null,
+          days_since_last_import: daysSinceLastImport,
+        }}
+      />
       <PostHogEvent
         event="dashboard_viewed"
         onceKey={analyticsOnceKey("dashboard_viewed", "session")}
@@ -620,6 +599,8 @@ async function DashboardStream({
             eyebrow="Get started"
             title={experienceProfile.emptyStateTitle}
             copy={experienceProfile.emptyStateCopy}
+            illustration="/illustrations/clover-empty-dashboard-3d.png"
+            illustrationAlt="A 3D Clover dashboard illustration"
             importHref="/dashboard?import=1"
             accountHref="/accounts"
             transactionHref="/transactions?manual=1"

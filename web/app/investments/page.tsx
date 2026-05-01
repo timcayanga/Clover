@@ -11,6 +11,7 @@ import { InfoTip } from "@/components/info-tip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
 import { getAccountBrand } from "@/lib/account-brand";
+import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import {
   chooseWorkspaceId,
   persistSelectedWorkspaceId,
@@ -54,18 +55,30 @@ type Account = {
   createdAt: string;
 };
 
-const currencyFormatter = new Intl.NumberFormat("en-PH", {
-  style: "currency",
-  currency: "PHP",
-  minimumFractionDigits: 2,
-});
-
 const percentFormatter = new Intl.NumberFormat("en-US", {
   style: "percent",
   maximumFractionDigits: 2,
 });
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
+
+const formatInvestmentAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
+
+const getCurrencyCodes = (accounts: Array<{ currency: string }>) =>
+  Array.from(new Set(accounts.map((account) => formatCurrencyCode(account.currency))));
+
+const formatInvestmentAggregate = (value: number, accounts: Array<{ currency: string }>) => {
+  const currencies = getCurrencyCodes(accounts);
+  if (currencies.length === 0) {
+    return formatInvestmentAmount(value, "PHP");
+  }
+
+  if (currencies.length === 1) {
+    return formatInvestmentAmount(value, currencies[0]);
+  }
+
+  return "Mixed currencies";
+};
 
 const parseNullableAmount = (value: string | null | undefined) => {
   if (value === null || value === undefined || value === "") {
@@ -115,14 +128,14 @@ const getInvestmentHighlights = (account: Account) => {
 
   if (isFixedIncomeInvestmentSubtype(subtype)) {
     return [
-      account.investmentPrincipal ? `Principal ${currencyFormatter.format(parseAmount(account.investmentPrincipal))}` : "Principal not set",
+      account.investmentPrincipal ? `Principal ${formatInvestmentAmount(parseAmount(account.investmentPrincipal), account.currency)}` : "Principal not set",
       account.investmentMaturityDate ? `Maturity ${formatDate(account.investmentMaturityDate)}` : "Maturity date not set",
     ];
   }
 
   return [
     account.investmentSymbol ? `Reference ${account.investmentSymbol}` : "Reference not set",
-    account.investmentCostBasis ? `Purchase value ${currencyFormatter.format(parseAmount(account.investmentCostBasis))}` : "Purchase value not set",
+    account.investmentCostBasis ? `Purchase value ${formatInvestmentAmount(parseAmount(account.investmentCostBasis), account.currency)}` : "Purchase value not set",
   ];
 };
 
@@ -174,6 +187,8 @@ const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; proOnly?: bool
   { key: "market", label: "Markets", proOnly: true },
   { key: "insights", label: "Insights", proOnly: true },
 ];
+
+const investmentsEmptyStateIllustration = "/illustrations/clover-investments-portfolio-3d.png";
 
 const normalizeInvestmentTab = (value: string | null | undefined): InvestmentTab => {
   if (value === "holdings" || value === "market" || value === "insights") {
@@ -256,6 +271,7 @@ export default function InvestmentsPage() {
   const [manualInvestmentInterestRate, setManualInvestmentInterestRate] = useState("");
   const [manualInvestmentMaturityValue, setManualInvestmentMaturityValue] = useState("");
   const [manualBalance, setManualBalance] = useState("");
+  const [manualCurrency, setManualCurrency] = useState("PHP");
   const selectedTab = requestedTab;
 
   useEffect(() => {
@@ -686,7 +702,7 @@ export default function InvestmentsPage() {
           investmentInterestRate: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentInterestRate) : null,
           investmentMaturityValue: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentMaturityValue) : null,
           type: "investment",
-          currency: "PHP",
+          currency: manualCurrency.trim().toUpperCase() || "PHP",
           source: "manual",
           balance: manualBalance ? Number(manualBalance) : 0,
         }),
@@ -713,6 +729,7 @@ export default function InvestmentsPage() {
       setManualInvestmentInterestRate("");
       setManualInvestmentMaturityValue("");
       setManualBalance("");
+      setManualCurrency("PHP");
       setAddOpen(false);
       setMessage(`Investment "${name}" created.`);
     } catch (error) {
@@ -793,21 +810,21 @@ export default function InvestmentsPage() {
                   <span>Current value</span>
                   <InfoTip label="The total value of the visible investment holdings." />
                 </div>
-                <strong>{currencyFormatter.format(totals.currentValue)}</strong>
+                <strong>{formatInvestmentAggregate(totals.currentValue, investmentAccounts)}</strong>
               </article>
               <article className="accounts-overview-card glass">
                 <div className="investments-metric__label">
                   <span>Purchase value</span>
                   <InfoTip label="The combined cost basis of the visible holdings." />
                 </div>
-                <strong>{currencyFormatter.format(totals.purchaseValue)}</strong>
+                <strong>{formatInvestmentAggregate(totals.purchaseValue, investmentAccounts)}</strong>
               </article>
               <article className="accounts-overview-card glass">
                 <div className="investments-metric__label">
                   <span>Gain / loss</span>
                   <InfoTip label="Current value minus purchase value for the visible holdings." />
                 </div>
-                <strong>{currencyFormatter.format(totals.gainLoss)}</strong>
+                <strong>{formatInvestmentAggregate(totals.gainLoss, investmentAccounts)}</strong>
               </article>
               <article className="accounts-overview-card glass">
                 <div className="investments-metric__label">
@@ -829,7 +846,7 @@ export default function InvestmentsPage() {
                 </div>
                 <div className="investments-allocation__summary">
                   <span>Total value</span>
-                  <strong>{currencyFormatter.format(totals.currentValue)}</strong>
+                  <strong>{formatInvestmentAggregate(totals.currentValue, investmentAccounts)}</strong>
                 </div>
               </div>
 
@@ -843,7 +860,7 @@ export default function InvestmentsPage() {
                           <span>{group.accounts.length} account{group.accounts.length === 1 ? "" : "s"}</span>
                         </div>
                         <div>
-                          <strong>{currencyFormatter.format(group.currentValue)}</strong>
+                          <strong>{formatInvestmentAggregate(group.currentValue, group.accounts)}</strong>
                           <span>{group.share > 0 ? percentFormatter.format(group.share) : "0%"}</span>
                         </div>
                       </div>
@@ -854,7 +871,10 @@ export default function InvestmentsPage() {
                   ))}
                 </div>
               ) : (
-                <div className="empty-state">
+                <div className="empty-state empty-state--illustrated">
+                  <div className="empty-state__art" aria-hidden="true">
+                    <img src={investmentsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
+                  </div>
                   <strong>No investments yet.</strong>
                   <p>Add an investment to see your portfolio mix.</p>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
@@ -900,7 +920,7 @@ export default function InvestmentsPage() {
                             </span>
                           </div>
                           <div>
-                            <strong>{currencyFormatter.format(item.currentValue)}</strong>
+                            <strong>{formatInvestmentAmount(item.currentValue, item.account.currency)}</strong>
                             <span className={returnPercent === null ? "" : returnPercent >= 0 ? "is-positive" : "is-negative"}>
                               {returnPercent === null ? "Return not set" : `${returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(returnPercent))}`}
                             </span>
@@ -914,7 +934,10 @@ export default function InvestmentsPage() {
                   })}
                 </div>
               ) : (
-                <div className="empty-state">
+                <div className="empty-state empty-state--illustrated">
+                  <div className="empty-state__art" aria-hidden="true">
+                    <img src={investmentsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
+                  </div>
                   <strong>No holdings yet.</strong>
                   <p>Add an investment to see your largest positions.</p>
                 </div>
@@ -981,7 +1004,7 @@ export default function InvestmentsPage() {
                           <h5>{group.label}</h5>
                           <p>
                             {group.accounts.length} account{group.accounts.length === 1 ? "" : "s"} ·{" "}
-                            {currencyFormatter.format(group.currentValue)}
+                            {formatInvestmentAggregate(group.currentValue, group.accounts)}
                           </p>
                         </div>
                         <InfoTip label={group.description} />
@@ -1104,7 +1127,7 @@ export default function InvestmentsPage() {
                                 <>
                                   <div className="accounts-account-card__balance-row">
                                     <div className="accounts-account-card__amount is-asset">
-                                      {currentValue === null ? "Not set" : currencyFormatter.format(currentValue)}
+                                      {currentValue === null ? "Not set" : formatInvestmentAmount(currentValue, account.currency)}
                                     </div>
                                     <div className="accounts-account-card__balance-meta">
                                       <span className="accounts-account-card__balance-pill is-neutral">
@@ -1117,12 +1140,12 @@ export default function InvestmentsPage() {
                                     <span>
                                       {purchaseValue === null
                                         ? "Purchase value not set"
-                                        : `${account.investmentCostBasis ? "Purchase value" : "Principal"} ${currencyFormatter.format(purchaseValue)}`}
+                                        : `${account.investmentCostBasis ? "Purchase value" : "Principal"} ${formatInvestmentAmount(purchaseValue, account.currency)}`}
                                     </span>
                                     <span>
                                       {gainLoss === null
                                         ? "Gain/Loss not set"
-                                        : `${gainLoss >= 0 ? "Gain" : "Loss"} ${currencyFormatter.format(Math.abs(gainLoss))}`}
+                                        : `${gainLoss >= 0 ? "Gain" : "Loss"} ${formatInvestmentAmount(Math.abs(gainLoss), account.currency)}`}
                                     </span>
                                   </div>
 
@@ -1191,7 +1214,7 @@ export default function InvestmentsPage() {
                 </div>
                 <div className="investments-allocation__summary">
                   <span>Total value</span>
-                  <strong>{currencyFormatter.format(totals.currentValue)}</strong>
+                  <strong>{formatInvestmentAggregate(totals.currentValue, investmentAccounts)}</strong>
                 </div>
               </div>
 
@@ -1205,7 +1228,7 @@ export default function InvestmentsPage() {
                           <span>{group.accounts.length} account{group.accounts.length === 1 ? "" : "s"}</span>
                         </div>
                         <div>
-                          <strong>{currencyFormatter.format(group.currentValue)}</strong>
+                          <strong>{formatInvestmentAggregate(group.currentValue, group.accounts)}</strong>
                           <span>{group.share > 0 ? percentFormatter.format(group.share) : "0%"}</span>
                         </div>
                       </div>
@@ -1249,7 +1272,7 @@ export default function InvestmentsPage() {
                             <span>{item.account.investmentSubtype ? getInvestmentSubtypeLabel(item.account.investmentSubtype) : "Unclassified"}</span>
                           </div>
                           <div>
-                            <strong>{currencyFormatter.format(item.currentValue)}</strong>
+                            <strong>{formatInvestmentAmount(item.currentValue, item.account.currency)}</strong>
                             <span className={returnPercent === null ? "" : returnPercent >= 0 ? "is-positive" : "is-negative"}>
                               {returnPercent === null ? "Return not set" : `${returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(returnPercent))}`}
                             </span>
@@ -1274,7 +1297,7 @@ export default function InvestmentsPage() {
                     <span>Largest position</span>
                     <InfoTip label="The holding with the highest current value." />
                   </div>
-                  <strong>{topHoldings[0] ? currencyFormatter.format(topHoldings[0].currentValue) : "—"}</strong>
+                  <strong>{topHoldings[0] ? formatInvestmentAmount(topHoldings[0].currentValue, topHoldings[0].account.currency) : "—"}</strong>
                   <span>{topHoldings[0]?.account.name ?? "No holdings yet"}</span>
                 </article>
                 <article className="accounts-overview-card glass">
@@ -1282,7 +1305,11 @@ export default function InvestmentsPage() {
                     <span>Best gain</span>
                     <InfoTip label="The holding with the largest gain in absolute currency value." />
                   </div>
-                  <strong>{bestGainHolding?.gainLoss === null || bestGainHolding?.gainLoss === undefined ? "—" : currencyFormatter.format(bestGainHolding.gainLoss)}</strong>
+                  <strong>
+                    {bestGainHolding?.gainLoss === null || bestGainHolding?.gainLoss === undefined
+                      ? "—"
+                      : formatInvestmentAmount(bestGainHolding.gainLoss, bestGainHolding.account.currency)}
+                  </strong>
                   <span>{bestGainHolding?.account.name ?? "No holdings yet"}</span>
                 </article>
                 <article className="accounts-overview-card glass">
@@ -1298,7 +1325,11 @@ export default function InvestmentsPage() {
                     <span>Worst gain</span>
                     <InfoTip label="The holding with the largest loss in absolute currency value." />
                   </div>
-                  <strong>{worstGainHolding?.gainLoss === null || worstGainHolding?.gainLoss === undefined ? "—" : currencyFormatter.format(worstGainHolding.gainLoss)}</strong>
+                  <strong>
+                    {worstGainHolding?.gainLoss === null || worstGainHolding?.gainLoss === undefined
+                      ? "—"
+                      : formatInvestmentAmount(worstGainHolding.gainLoss, worstGainHolding.account.currency)}
+                  </strong>
                   <span>{worstGainHolding?.account.name ?? "No holdings yet"}</span>
                 </article>
               </div>
@@ -1362,6 +1393,18 @@ export default function InvestmentsPage() {
                     placeholder="0.00"
                   />
                   <span className="field-help">This is the current total value of the holding, not the amount you paid to buy it.</span>
+                </label>
+                <label>
+                  Currency
+                  <input
+                    value={manualCurrency}
+                    onChange={(event) => setManualCurrency(event.target.value.toUpperCase())}
+                    placeholder="PHP, USD, BTC"
+                    maxLength={8}
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                  />
+                  <span className="field-help">Use the holding’s native currency. Crypto codes like BTC or USDT are accepted too.</span>
                 </label>
 
                 {manualInvestmentSubtype ? (

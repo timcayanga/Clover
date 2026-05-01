@@ -14,6 +14,7 @@ import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
 import { listImportFilesCompat } from "@/lib/data-engine";
 import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
+import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +66,7 @@ type MonthBucket = {
 type WorkspaceAccount = {
   name: string;
   type: string;
+  currency: string | null;
   balance: number | null;
   investmentSubtype: string | null;
   investmentSymbol: string | null;
@@ -92,8 +94,9 @@ const insightsTabLabels: Record<InsightsTab, string> = {
   patterns: "Patterns",
 };
 
-const formatCurrency = (value: number) => currencyFormatter.format(value);
-const formatSignedCurrency = (value: number) => `${value < 0 ? "-" : ""}${currencyFormatter.format(Math.abs(value))}`;
+const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "MIXED");
+const formatSignedCurrency = (value: number, currency?: string | null) =>
+  `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "MIXED")}`;
 const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
 const formatShortDate = (value: Date) => shortDateFormatter.format(value);
 const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -165,10 +168,11 @@ async function InsightsPageStream({
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
   const workspaceInclude = {
-    accounts: {
+  accounts: {
       select: {
         name: true,
         type: true,
+        currency: true,
         balance: true,
         investmentSubtype: true,
         investmentSymbol: true,
@@ -320,6 +324,7 @@ async function InsightsPageStream({
   workspaceAccounts = resolvedWorkspace.accounts.map((account) => ({
     name: account.name,
     type: account.type,
+    currency: account.currency,
     balance: account.balance === null ? null : Number(account.balance),
     investmentSubtype: account.investmentSubtype,
     investmentSymbol: account.investmentSymbol,
@@ -360,6 +365,11 @@ async function InsightsPageStream({
     </nav>
   );
   const isEmptyWorkspace = workspaceAccounts.length <= 1 && workspaceImportFiles.length === 0 && currentWindowTransactions.length === 0;
+  const currencyCandidates = new Set(workspaceAccounts.map((account) => formatCurrencyCode(account.currency)).filter((currency) => currency.length > 0));
+  const displayCurrency = currencyCandidates.size === 1 ? Array.from(currencyCandidates)[0] : "MIXED";
+  const formatCurrency = (value: number, currency: string | null = displayCurrency) => formatCurrencyAmount(value, currency);
+  const formatSignedCurrency = (value: number, currency: string | null = displayCurrency) =>
+    `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency)}`;
 
   const currentSummary = currentWindowTransactions.reduce(
     (accumulator, transaction) => {
@@ -495,7 +505,11 @@ async function InsightsPageStream({
   const incomeDelta =
     previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
   const currentGoalPlan = normalizeGoalPlan(user.goalPlan, selectedGoalValue as GoalKey | null, goalTargetAmount);
-  const goalPlanSummary = getGoalPlanSummary(currentGoalPlan, currentSummary.income > 0 ? currentSummary.income : null);
+  const goalPlanSummary = getGoalPlanSummary(
+    currentGoalPlan,
+    currentSummary.income > 0 ? currentSummary.income : null,
+    displayCurrency
+  );
 
   const topCategories = Array.from(currentSummary.expenseCategories.entries())
     .sort((a, b) => b[1] - a[1])
@@ -595,7 +609,7 @@ async function InsightsPageStream({
     previousSavingsRate,
     spendDelta,
     recurringShare: recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0) / Math.max(currentSpend, 1),
-  });
+  }, displayCurrency);
 
   const headlineDriver = topCategories[0]?.[0] ?? "No clear driver yet";
   const headlineDriverAmount = topCategories[0]?.[1] ?? 0;
@@ -866,6 +880,8 @@ async function InsightsPageStream({
             eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
             title="Import files to wake up your insights."
             copy="Clover needs a statement or account activity before it can spot patterns, trends, and habits. Import files first for the fastest way to bring this page to life."
+            illustration="/illustrations/clover-insights-analytics-3d.png"
+            illustrationAlt="A 3D Clover analytics illustration"
             importHref="/dashboard?import=1"
             accountHref="/accounts"
             transactionHref="/transactions?manual=1"

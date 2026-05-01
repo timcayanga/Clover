@@ -14,6 +14,7 @@ import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
+import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { recordAppError } from "@/lib/error-logs";
 import { Suspense } from "react";
 import { InfoTip as ReportInfoTip } from "@/components/info-tip";
@@ -175,9 +176,10 @@ const getReportWindow = (anchor: Date, range: ReportsRange) => {
   return { currentStart, previousStart };
 };
 
-const formatCurrency = (value: number) => currencyFormatter.format(value);
+const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "MIXED");
 
-const formatSignedCurrency = (value: number) => `${value < 0 ? "-" : ""}${currencyFormatter.format(Math.abs(value))}`;
+const formatSignedCurrency = (value: number, currency?: string | null) =>
+  `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "MIXED")}`;
 
 const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
 
@@ -616,12 +618,19 @@ async function ReportsStream({
               id: account.id,
               name: typeof account.name === "string" && account.name.trim().length > 0 ? account.name : "Account",
               balance: account.balance,
-              currency: typeof account.currency === "string" && account.currency.trim().length > 0 ? account.currency : "PHP",
+              currency: typeof account.currency === "string" && account.currency.trim().length > 0 ? account.currency : "MIXED",
               type: typeof account.type === "string" && account.type.trim().length > 0 ? account.type : "account",
             },
           ];
         })
       : [];
+    const currencyCandidates = new Set(
+      workspaceAccountSummaries.map((account) => formatCurrencyCode(account.currency)).filter((currency) => currency.length > 0)
+    );
+    const displayCurrency = currencyCandidates.size === 1 ? Array.from(currencyCandidates)[0] : "MIXED";
+    const formatCurrency = (value: number, currency: string | null = displayCurrency) => formatCurrencyAmount(value, currency);
+    const formatSignedCurrency = (value: number, currency: string | null = displayCurrency) =>
+      `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency)}`;
     const totalAccountBalance = Number(accountStatsSummary._sum?.balance ?? 0);
     const activeAccountCount = Number(accountStatsSummary._count?.balance ?? 0);
     const accountCount = Number(accountStatsSummary._count?.id ?? 0);
@@ -789,7 +798,11 @@ async function ReportsStream({
     const goalLabel = goalKey ? goalLabels[goalKey] ?? goalKey : null;
     const goalTargetAmount = user.goalTargetAmount ? Number(user.goalTargetAmount) : null;
     const currentGoalPlan = normalizeGoalPlan(user.goalPlan, goalKey as GoalKey | null, goalTargetAmount);
-    const goalPlanSummary = getGoalPlanSummary(currentGoalPlan, currentSummary.income > 0 ? currentSummary.income : null);
+    const goalPlanSummary = getGoalPlanSummary(
+      currentGoalPlan,
+      currentSummary.income > 0 ? currentSummary.income : null,
+      displayCurrency
+    );
 
     const merchantSpend = new Map<
       string,
@@ -911,7 +924,7 @@ async function ReportsStream({
       previousSavingsRate: previousSummary.income > 0 ? (previousSummary.income - previousSummary.expense) / previousSummary.income : null,
       spendDelta,
       recurringShare: recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0) / Math.max(currentSpend, 1),
-    });
+    }, displayCurrency);
     const topBalanceAccount = workspaceAccountSummaries.find((account) => account.balance !== null) ?? null;
     const topBalanceAccountName = topBalanceAccount?.name ?? null;
     const accountBalanceCoverage = accountCount > 0 ? activeAccountCount / accountCount : 0;
@@ -1231,6 +1244,8 @@ async function ReportsStream({
               eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
               title="Your reports are ready for new data."
               copy="Add transactions and accounts, and Clover will populate cash flow, spending, review items, and goal-aware summaries for you."
+              illustration="/illustrations/clover-reports-chart-3d.png"
+              illustrationAlt="A 3D Clover reports chart illustration"
               accountHref="/accounts"
               transactionHref="/transactions?manual=1"
             />

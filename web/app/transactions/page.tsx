@@ -73,6 +73,8 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
   };
 };
 
+const transactionsEmptyStateIllustration = "/illustrations/clover-transactions-search-3d.png";
+
 const mergeImportedPreviewTransactions = (
   currentTransactions: Transaction[],
   previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]>
@@ -4457,6 +4459,9 @@ function TransactionsPageContent() {
               })
             ) : !hasVisibleTransactions ? (
               <div className="transactions-empty-state">
+                <div className="transactions-empty-state__art" aria-hidden="true">
+                  <img src={transactionsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
+                </div>
                 <p className="transactions-empty-state__eyebrow">It is quiet in here</p>
                 <h3>No transactions yet</h3>
                 <p className="transactions-empty-state__copy">
@@ -4662,6 +4667,9 @@ function TransactionsPageContent() {
               </div>
             ) : !hasVisibleTransactions ? (
               <div className="transactions-empty-state">
+                <div className="transactions-empty-state__art" aria-hidden="true">
+                  <img src={transactionsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
+                </div>
                 <p className="transactions-empty-state__eyebrow">It is quiet in here</p>
                 <h3>No transactions yet</h3>
                 <p className="transactions-empty-state__copy">

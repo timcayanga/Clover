@@ -6,6 +6,7 @@ type PageFileDropZoneProps = {
   enabled?: boolean;
   title?: string;
   subtitle?: string;
+  illustration?: string;
   onFilesDropped: (files: File[]) => void;
 };
 
@@ -18,6 +19,7 @@ export function PageFileDropZone({
   enabled = true,
   title = "Drop files anywhere",
   subtitle = "Clover will pick them up and start importing right away.",
+  illustration = "/illustrations/clover-import-upload-3d.png",
   onFilesDropped,
 }: PageFileDropZoneProps) {
   const [dragging, setDragging] = useState(false);
@@ -109,6 +111,9 @@ export function PageFileDropZone({
       <div className="page-file-drop-zone__corner page-file-drop-zone__corner--tr" />
       <div className="page-file-drop-zone__corner page-file-drop-zone__corner--bl" />
       <div className="page-file-drop-zone__corner page-file-drop-zone__corner--br" />
+      <div className="page-file-drop-zone__art" aria-hidden="true">
+        <img src={illustration} alt="" loading="lazy" decoding="async" />
+      </div>
       <div className="page-file-drop-zone__content">
         <p className="page-file-drop-zone__eyebrow">Import files</p>
         <strong>{title}</strong>

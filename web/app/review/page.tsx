@@ -154,6 +154,8 @@ export default async function ReviewPage() {
               eyebrow="Review inbox"
               title="No rows need review right now"
               copy="The current import set looks clean. When Clover spots uncertain or low-confidence rows, this page will collect them here so you can resolve them quickly."
+              illustration="/illustrations/clover-review-checklist-3d.png"
+              illustrationAlt="A 3D Clover review checklist illustration"
               importHref="/dashboard?import=1"
               accountHref="/transactions"
               transactionHref="/transactions?manual=1"
