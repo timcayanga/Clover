@@ -2,11 +2,13 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 
 type EmptyDataCtaProps = {
+  className?: string;
   eyebrow?: string;
   title: string;
   copy: string;
   illustration?: string;
   illustrationAlt?: string;
+  artClassName?: string;
   actions?: ReactNode;
   importHref?: string;
   accountHref: string;
@@ -17,11 +19,13 @@ type EmptyDataCtaProps = {
 };
 
 export function EmptyDataCta({
+  className,
   eyebrow = "Start here",
   title,
   copy,
   illustration,
   illustrationAlt = "",
+  artClassName,
   actions,
   importHref,
   accountHref,
@@ -31,9 +35,12 @@ export function EmptyDataCta({
   transactionLabel = "Add a transaction",
 }: EmptyDataCtaProps) {
   return (
-    <section className="transactions-empty-state">
+    <section className={`transactions-empty-state transactions-empty-state--compact${className ? ` ${className}` : ""}`}>
       {illustration ? (
-        <div className="transactions-empty-state__art" aria-hidden={illustrationAlt === ""}>
+        <div
+          className={`transactions-empty-state__art${artClassName ? ` ${artClassName}` : ""}`}
+          aria-hidden={illustrationAlt === ""}
+        >
           <img src={illustration} alt={illustrationAlt} loading="lazy" decoding="async" />
         </div>
       ) : null}

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
+import { EmptyDataCta } from "@/components/empty-data-cta";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { getAccountPath } from "@/lib/account-path";
 import { InfoTip } from "@/components/info-tip";
@@ -871,21 +872,26 @@ export default function InvestmentsPage() {
                   ))}
                 </div>
               ) : (
-                <div className="empty-state empty-state--illustrated">
-                  <div className="empty-state__art" aria-hidden="true">
-                    <img src={investmentsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
-                  </div>
-                  <strong>No investments yet.</strong>
-                  <p>Add an investment to see your portfolio mix.</p>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
-                    <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
-                      Add investment
-                    </button>
-                    <Link className="button button-secondary button-small" href="/accounts">
-                      Open Accounts
-                    </Link>
-                  </div>
-                </div>
+                <EmptyDataCta
+                  className="empty-state--illustrated"
+                  eyebrow="Portfolio mix"
+                  title="No investments yet."
+                  copy="Add an investment to see your portfolio mix."
+                  illustration={investmentsEmptyStateIllustration}
+                  illustrationAlt=""
+                  accountHref="/accounts"
+                  transactionHref="/transactions?manual=1"
+                  actions={
+                    <>
+                      <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
+                        Add investment
+                      </button>
+                      <Link className="button button-secondary button-small" href="/accounts">
+                        Open Accounts
+                      </Link>
+                    </>
+                  }
+                />
               )}
             </section>
           </>
@@ -934,13 +940,26 @@ export default function InvestmentsPage() {
                   })}
                 </div>
               ) : (
-                <div className="empty-state empty-state--illustrated">
-                  <div className="empty-state__art" aria-hidden="true">
-                    <img src={investmentsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
-                  </div>
-                  <strong>No holdings yet.</strong>
-                  <p>Add an investment to see your largest positions.</p>
-                </div>
+                <EmptyDataCta
+                  className="empty-state--illustrated"
+                  eyebrow="Holdings"
+                  title="No holdings yet."
+                  copy="Add an investment to see your largest positions."
+                  illustration={investmentsEmptyStateIllustration}
+                  illustrationAlt=""
+                  accountHref="/accounts"
+                  transactionHref="/transactions?manual=1"
+                  actions={
+                    <>
+                      <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
+                        Add investment
+                      </button>
+                      <Link className="button button-secondary button-small" href="/accounts">
+                        Open Accounts
+                      </Link>
+                    </>
+                  }
+                />
               )}
             </section>
 

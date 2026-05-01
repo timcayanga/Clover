@@ -1246,8 +1246,22 @@ async function ReportsStream({
               copy="Add transactions and accounts, and Clover will populate cash flow, spending, review items, and goal-aware summaries for you."
               illustration="/illustrations/clover-reports-chart-3d.png"
               illustrationAlt="A 3D Clover reports chart illustration"
+              artClassName="transactions-empty-state__art--teal"
               accountHref="/accounts"
               transactionHref="/transactions?manual=1"
+              actions={
+                <>
+                  <Link className="button button-primary button-small" href="/accounts">
+                    Add an account
+                  </Link>
+                  <Link className="button button-secondary button-small" href="/transactions?manual=1">
+                    Add a transaction
+                  </Link>
+                  <Link className="button button-secondary button-small" href="/imports">
+                    Import files
+                  </Link>
+                </>
+              }
             />
           </div>
         ) : null}
