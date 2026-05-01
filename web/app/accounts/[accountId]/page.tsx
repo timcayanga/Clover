@@ -121,8 +121,6 @@ const ACCOUNT_DETAILS_INFO = {
   currentBalance:
     "Current balance = the latest balance Clover can derive for this account after applying its saved balance, imported transactions, and any statement checkpoint used for reconciliation.",
   accountType: "Account type controls how Clover groups this account and whether it is treated like an asset, wallet, cash balance, credit card, or investment.",
-  reconciliation:
-    "Reconciliation compares a statement ending balance with Clover's running history for this account so you can see whether the account matches the imported statement.",
   transactions: "Transactions are the money movements linked to this account. The running balance changes as each transaction is imported, edited, or excluded.",
 } as const;
 
@@ -240,44 +238,6 @@ const getCategoryIconTone = (categoryName: string | null | undefined) => {
   }
 };
 
-const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined) => {
-  if (!checkpoint) {
-    return {
-      label: "No statement checkpoint yet",
-      detail: "Import a statement to anchor this balance.",
-      tone: "neutral" as const,
-      icon: "clock" as const,
-    };
-  }
-
-  const checkpointDate = checkpoint.statementEndDate ?? checkpoint.createdAt ?? null;
-  const endingDate = checkpointDate ? formatDate(checkpointDate) : "No date";
-  if (checkpoint.status === "mismatch") {
-    return {
-      label: "Needs review",
-      detail: checkpoint.mismatchReason ?? `Mismatch detected · ${endingDate}`,
-      tone: "danger" as const,
-      icon: "warning" as const,
-    };
-  }
-
-  if (checkpoint.status === "reconciled") {
-    return {
-      label: "Reconciled",
-      detail: endingDate,
-      tone: "good" as const,
-      icon: "refresh" as const,
-    };
-  }
-
-  return {
-    label: "Checkpoint pending",
-    detail: endingDate,
-    tone: "neutral" as const,
-    icon: "calendar" as const,
-  };
-};
-
 const buildImportSummaries = (transactions: Transaction[], importFiles: ImportFile[]) => {
   const importFileNames = new Map(importFiles.map((importFile) => [importFile.id, importFile.fileName] as const));
   const groups = new Map<string, { key: string; count: number; latestDate: string; label: string }>();
@@ -313,12 +273,6 @@ const buildImportSummaries = (transactions: Transaction[], importFiles: ImportFi
   }
 
   return Array.from(groups.values()).sort((left, right) => new Date(right.latestDate).getTime() - new Date(left.latestDate).getTime());
-};
-
-const getCheckpointSymbol = (tone: "good" | "danger" | "neutral") => {
-  if (tone === "good") return "✓";
-  if (tone === "danger") return "!";
-  return "•";
 };
 
 const getTransactionTypeLabel = (type: Transaction["type"]) => {
@@ -454,6 +408,30 @@ function AccountDetailPageContent() {
           router.replace(canonicalPath);
         }
 
+        void fetch(`/api/imports?workspaceId=${nextAccount.workspaceId}`)
+          .then(async (response) => {
+            if (!response.ok || cancelled) {
+              if (!cancelled && !response.ok) {
+                setImportFiles([]);
+              }
+              return;
+            }
+
+            const importsPayload = (await response.json()) as { importFiles?: ImportFile[] } | null;
+            if (!cancelled) {
+              setImportFiles(
+                Array.isArray(importsPayload?.importFiles)
+                  ? importsPayload.importFiles.filter((importFile) => !importFile.accountId || importFile.accountId === nextAccount.id)
+                  : []
+              );
+            }
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setImportFiles([]);
+            }
+          });
+
         void transactionsPromise
           .then(async (response) => {
             if (!response.ok || cancelled) {
@@ -552,11 +530,6 @@ function AccountDetailPageContent() {
     })[0] ?? null;
   }, [accountCheckpointKey, accountId, checkpoints]);
 
-  const latestCheckpointSummary = useMemo(
-    () => getCheckpointSummary(latestCheckpoint),
-    [latestCheckpoint]
-  );
-
   const investmentSubtype = account?.investmentSubtype ?? null;
   const investmentSymbol = account?.investmentSymbol?.trim() || null;
   const investmentQuantity = useMemo(() => parseNullableNumber(account?.investmentQuantity), [account?.investmentQuantity]);
@@ -573,8 +546,8 @@ function AccountDetailPageContent() {
   );
 
   const importSummaries = useMemo(
-    () => buildImportSummaries(transactions),
-    [transactions]
+    () => buildImportSummaries(transactions, importFiles),
+    [importFiles, transactions]
   );
 
   const accountBrand = useMemo(
@@ -597,14 +570,6 @@ function AccountDetailPageContent() {
     [accountBrand.accent]
   );
 
-  const checkpointStatus = useMemo(() => {
-    return getCheckpointSummary(latestCheckpoint).label;
-  }, [latestCheckpoint]);
-
-  const checkpointBalance = useMemo(
-    () => normalizeAccountBalance(account?.type ?? null, parseAmount(latestCheckpoint?.endingBalance)),
-    [account?.type, latestCheckpoint?.endingBalance]
-  );
   const currentBalance = useMemo(
     () =>
       normalizeAccountBalance(
@@ -681,32 +646,12 @@ function AccountDetailPageContent() {
 
     return currentBalance - investmentPurchaseValue;
   }, [account?.type, currentBalance, investmentPurchaseValue]);
-  const checkpointGap =
-    latestCheckpoint && Number.isFinite(checkpointBalance) && Number.isFinite(currentBalance)
-      ? checkpointBalance - currentBalance
-      : null;
 
   const selectedWorkspaceId = readSelectedWorkspaceId();
   const deletingAccountIds = useMemo(
     () => new Set(getDeletingWorkspaceAccountIds(account?.workspaceId ?? selectedWorkspaceId ?? "")),
     [account?.workspaceId, selectedWorkspaceId]
   );
-
-  const checkpointGapLabel = useMemo(() => {
-    if (checkpointGap === null || !latestCheckpoint) {
-      return "—";
-    }
-
-    if (Math.abs(checkpointGap) < 0.005) {
-      return "Matches ledger";
-    }
-
-    if (checkpointGap > 0) {
-      return `Statement higher by ${currencyFormatter.format(checkpointGap)}`;
-    }
-
-    return `Ledger higher by ${currencyFormatter.format(Math.abs(checkpointGap))}`;
-  }, [checkpointGap, latestCheckpoint]);
 
   const visibleTransactions = useMemo(
     () => transactions.filter((transaction) => transaction.merchantRaw !== "Beginning balance"),
@@ -1056,55 +1001,6 @@ function AccountDetailPageContent() {
           )}
         </div>
 
-        {latestCheckpoint ? (
-          <div className="accounts-detail__reconciliation glass" style={{ marginTop: 20 }}>
-            <div className="accounts-detail__reconciliation-head">
-              <div>
-                <p className="eyebrow">
-                  Reconciliation
-                  <InfoTooltip label={ACCOUNT_DETAILS_INFO.reconciliation} />
-                </p>
-                <h3>Statement checkpoint</h3>
-              </div>
-              <span className={`accounts-summary-chip is-${latestCheckpointSummary.tone}`}>
-                {checkpointStatus}
-              </span>
-            </div>
-            <div className={`accounts-detail__checkpoint-hero is-${latestCheckpointSummary.tone}`}>
-              <div className={`accounts-checkpoint-badge is-${latestCheckpointSummary.tone}`}>
-                <span className="accounts-checkpoint-badge__icon" aria-hidden="true">
-                  {getCheckpointSymbol(latestCheckpointSummary.tone)}
-                </span>
-                <div>
-                  <strong>{latestCheckpointSummary.label}</strong>
-                  <span>{latestCheckpointSummary.detail}</span>
-                </div>
-              </div>
-              <div className="accounts-detail__reconciliation-grid">
-                <div className="status-card">
-                  <div className="panel-muted">Statement date</div>
-                  <strong>{formatDate(latestCheckpoint.statementEndDate ?? latestCheckpoint.createdAt)}</strong>
-                </div>
-                <div className="status-card">
-                  <div className="panel-muted">Statement balance</div>
-                  <strong>{currencyFormatter.format(checkpointBalance)}</strong>
-                </div>
-                <div className="status-card">
-                  <div className="panel-muted">Difference</div>
-                  <strong>{checkpointGapLabel}</strong>
-                </div>
-              </div>
-            </div>
-            <p className="panel-muted" style={{ margin: "12px 0 0" }}>
-              {latestCheckpoint.status === "mismatch"
-                ? latestCheckpoint.mismatchReason ?? "The statement and account history do not match yet."
-                : latestCheckpoint.status === "reconciled"
-                  ? "The checkpoint matches the account history and anchors the current balance."
-                  : "This checkpoint is waiting for confirmation."}
-            </p>
-          </div>
-        ) : null}
-
         {importSummaries.length > 0 ? (
           <div className="accounts-detail__imports glass" style={{ marginTop: 20 }}>
             <div className="accounts-detail__reconciliation-head">
@@ -1120,7 +1016,6 @@ function AccountDetailPageContent() {
                     <strong>{summary.label}</strong>
                     <span>{summary.count} rows · {formatDate(summary.latestDate)}</span>
                   </div>
-                  <strong>{currencyFormatter.format(summary.total)}</strong>
                 </div>
               ))}
             </div>
