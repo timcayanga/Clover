@@ -2,6 +2,7 @@
 
 import type { ChangeEvent } from "react";
 import { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -691,9 +692,11 @@ export function ImportFilesModal({
   const [qaLoadingByItemId, setQaLoadingByItemId] = useState<Record<string, boolean>>({});
   const [qaErrorByItemId, setQaErrorByItemId] = useState<Record<string, string | null>>({});
   const autoLoadedQaIdsRef = useRef(new Set<string>());
+  const handleStartImportRef = useRef<null | (() => Promise<void>)>(null);
   const initialFilesSignatureRef = useRef<string | null>(null);
   const importActivitySurfaceRef = useRef<ImportActivityLocation>("modal");
   const lastImportActivityRef = useRef<ImportActivitySnapshot | null>(null);
+  const autoCloseAfterStartRef = useRef(false);
 
   const publishImportActivity = (
     snapshot:
@@ -777,6 +780,7 @@ export function ImportFilesModal({
       setQaLoadingByItemId({});
       setQaErrorByItemId({});
       autoLoadedQaIdsRef.current.clear();
+      autoCloseAfterStartRef.current = false;
       accountIdByKeyRef.current.clear();
       setMessage("Upload CSV or PDF files to import transactions and balances.");
       setValidationNotice(null);
@@ -1004,7 +1008,9 @@ export function ImportFilesModal({
 
     let feedbackMessage = "";
     let validationMessage = "";
-      setItems((current) => {
+    let shouldAutoClose = false;
+      flushSync(() => {
+        setItems((current) => {
         const existing = new Set(current.map((item) => fileKey(item.file)));
         const fileQueueLimit = Math.max(0, monthlyUploadLimit);
         const availableSlots = Math.max(0, fileQueueLimit - current.length);
@@ -1040,6 +1046,7 @@ export function ImportFilesModal({
         }
 
         additionsCount += 1;
+        shouldAutoClose = true;
         const guessedIdentity = guessStatementIdentity(file.name);
         const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName);
         const optimisticAccountId = guessedIdentity && canUseOptimisticGuess ? `optimistic-${crypto.randomUUID()}` : null;
@@ -1090,7 +1097,7 @@ export function ImportFilesModal({
             optimisticAccountId,
             importedRows: null,
             progress: 1,
-            progressLabel: "Queued",
+            progressLabel: "Clover is getting your file ready",
           },
         ];
       });
@@ -1129,19 +1136,21 @@ export function ImportFilesModal({
         });
       }
 
-      return [...current, ...additions];
-    });
+          return [...current, ...additions];
+        });
+      });
 
     if (nextFiles.length > 0) {
       autoStartRef.current = true;
-      window.setTimeout(() => {
-        if (busy || !workspaceId || !autoStartRef.current) {
+      autoCloseAfterStartRef.current = shouldAutoClose;
+      queueMicrotask(() => {
+        if (busy || !workspaceId || !autoStartRef.current || !handleStartImportRef.current) {
           return;
         }
 
         autoStartRef.current = false;
-        void handleStartImport();
-      }, 0);
+        void handleStartImportRef.current();
+      });
     }
 
     if (feedbackMessage) {
@@ -1361,11 +1370,14 @@ export function ImportFilesModal({
         const checkpointIdentity = resolveStatementIdentityFromMetadata(statementMetadata);
         const processingIdentity =
           checkpointIdentity ??
-          (guessedIdentity
+          (summaryContext.accountName
             ? {
-                ...guessedIdentity,
-                accountNumber: null,
-                accountType: inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank"),
+                accountName: summaryContext.accountName,
+                institution: summaryContext.institution,
+                accountNumber: summaryContext.accountNumber,
+                accountType:
+                  summaryContext.accountType ??
+                  inferAccountTypeFromStatement(summaryContext.institution, summaryContext.accountName, "bank"),
               }
             : null);
 
@@ -2588,6 +2600,8 @@ export function ImportFilesModal({
     }
   };
 
+  handleStartImportRef.current = handleStartImport;
+
   const handleRetry = async (itemId: string) => {
     const item = items.find((entry) => entry.id === itemId);
     if (item) {
@@ -2607,7 +2621,7 @@ export function ImportFilesModal({
       status: "pending",
       error: null,
       progress: 0,
-      progressLabel: "Queued",
+      progressLabel: "Clover is getting your file ready",
     });
 
     const remainingLockedFiles = items.filter((item) => item.id !== itemId && item.status === "needs_password");
@@ -2697,6 +2711,27 @@ export function ImportFilesModal({
     autoStartRef.current = false;
     void handleStartImport();
   }, [busy, handleStartImport, items, workspaceId]);
+
+  useEffect(() => {
+    if (!open || !autoCloseAfterStartRef.current) {
+      return;
+    }
+
+    if (passwordItems.some((item) => item.status === "needs_password")) {
+      return;
+    }
+
+    const hasStartedUpload = items.some(
+      (item) => item.status === "parsing" || item.status === "importing" || item.confirmationState === "staged"
+    );
+
+    if (!hasStartedUpload) {
+      return;
+    }
+
+    autoCloseAfterStartRef.current = false;
+    onClose();
+  }, [items, onClose, open, passwordItems]);
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -2924,7 +2959,7 @@ export function ImportFilesModal({
                               ? "Parsing locally..."
                               : item.status === "needs_password"
                                 ? "Waiting for password"
-                                : "Queued"}
+                                : "Clover is getting your file ready"}
                     </span>
                     <div className="accounts-import-file__actions">
                       {showQaTools && item.importFileId ? (
