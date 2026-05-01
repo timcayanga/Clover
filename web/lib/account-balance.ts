@@ -94,44 +94,15 @@ export const deriveReconciledBalance = ({
   checkpoints = [],
 }: ReconciledBalanceInput) => {
   const storedBalance = parseBalanceValue(balance);
-  const hasStatementData = checkpoints.length > 0 || transactions.length > 0;
-  if (storedBalance !== null && (storedBalance !== 0 || !hasStatementData)) {
-    return storedBalance.toFixed(2);
-  }
-
-  const latestCheckpoint = checkpoints
-    .filter((checkpoint) => parseBalanceValue(checkpoint.endingBalance) !== null)
-    .sort((left, right) => {
-      const rightTime = Math.max(toSortTime(right.statementEndDate), toSortTime(right.createdAt));
-      const leftTime = Math.max(toSortTime(left.statementEndDate), toSortTime(left.createdAt));
-      return rightTime - leftTime;
-    })[0];
-
-  const checkpointBalance = parseBalanceValue(latestCheckpoint?.endingBalance ?? null);
-  if (checkpointBalance !== null) {
-    return checkpointBalance.toFixed(2);
-  }
-
   const orderedTransactions = [...transactions].sort((left, right) => {
     const rightTime = Math.max(toSortTime(right.date), toSortTime(right.createdAt));
     const leftTime = Math.max(toSortTime(left.date), toSortTime(left.createdAt));
     return rightTime - leftTime;
   });
 
-  const latestBalanceTransaction = orderedTransactions.find((transaction) => {
-    if (isOpeningBalanceTransaction(transaction)) {
-      return false;
-    }
+  const hasTransactionData = orderedTransactions.some((transaction) => !isOpeningBalanceTransaction(transaction));
 
-    return parseBalanceValue(transaction.rawPayload?.balance ?? null) !== null;
-  });
-
-  const directBalance = parseBalanceValue(latestBalanceTransaction?.rawPayload?.balance ?? null);
-  if (directBalance !== null) {
-    return directBalance.toFixed(2);
-  }
-
-  const openingBalanceTransaction = [...transactions]
+  const openingBalanceTransaction = orderedTransactions
     .filter(isOpeningBalanceTransaction)
     .sort((left, right) => {
       const rightTime = Math.max(toSortTime(right.date), toSortTime(right.createdAt));
@@ -148,12 +119,44 @@ export const deriveReconciledBalance = ({
     return (openingBalance + delta).toFixed(2);
   }
 
+  const latestBalanceTransaction = orderedTransactions.find((transaction) => {
+    if (isOpeningBalanceTransaction(transaction)) {
+      return false;
+    }
+
+    return parseBalanceValue(transaction.rawPayload?.balance ?? null) !== null;
+  });
+
+  const directBalance = parseBalanceValue(latestBalanceTransaction?.rawPayload?.balance ?? null);
+  if (directBalance !== null) {
+    return directBalance.toFixed(2);
+  }
+
   const netBalance = transactions
     .filter((transaction) => !isOpeningBalanceTransaction(transaction))
     .reduce((sum, transaction) => sum + getTransactionAmountDelta(transaction), 0);
 
   if (netBalance !== 0) {
     return netBalance.toFixed(2);
+  }
+
+  if (!hasTransactionData) {
+    const latestCheckpoint = checkpoints
+      .filter((checkpoint) => parseBalanceValue(checkpoint.endingBalance) !== null)
+      .sort((left, right) => {
+        const rightTime = Math.max(toSortTime(right.statementEndDate), toSortTime(right.createdAt));
+        const leftTime = Math.max(toSortTime(left.statementEndDate), toSortTime(left.createdAt));
+        return rightTime - leftTime;
+      })[0];
+
+    const checkpointBalance = parseBalanceValue(latestCheckpoint?.endingBalance ?? null);
+    if (checkpointBalance !== null) {
+      return checkpointBalance.toFixed(2);
+    }
+  }
+
+  if (storedBalance !== null) {
+    return storedBalance.toFixed(2);
   }
 
   return null;

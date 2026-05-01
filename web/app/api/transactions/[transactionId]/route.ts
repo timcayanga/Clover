@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
@@ -5,6 +6,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { recordTrainingSignal, upsertAccountRule, upsertMerchantRule } from "@/lib/data-engine";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { hasCompatibleTable } from "@/lib/data-engine";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +34,37 @@ const resolveTransactionRouteUserId = async () => {
 
   const { userId } = await requireAuth();
   return userId;
+};
+
+const isJsonObject = (value: Prisma.JsonValue | null | undefined): value is Prisma.JsonObject =>
+  !!value && typeof value === "object" && !Array.isArray(value);
+
+const sanitizeTransactionRawPayload = (
+  transaction: Pick<Prisma.TransactionGetPayload<{ select: { merchantRaw: true; rawPayload: true } }>, "merchantRaw" | "rawPayload">
+) => {
+  if (!isJsonObject(transaction.rawPayload)) {
+    return null;
+  }
+
+  const nextPayload = { ...transaction.rawPayload } as Record<string, Prisma.JsonValue>;
+  const merchantRaw = String(transaction.merchantRaw ?? "").toLowerCase();
+  const kind = typeof nextPayload.kind === "string" ? nextPayload.kind.toLowerCase() : "";
+
+  if (kind === "opening_balance" || merchantRaw === "beginning balance") {
+    if (!("balance" in nextPayload)) {
+      return null;
+    }
+
+    delete nextPayload.balance;
+    return nextPayload as Prisma.InputJsonValue;
+  }
+
+  if (!("balance" in nextPayload)) {
+    return null;
+  }
+
+  delete nextPayload.balance;
+  return nextPayload as Prisma.InputJsonValue;
 };
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ transactionId: string }> }) {
@@ -265,6 +298,51 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
         deletedAt: new Date(),
       },
     });
+
+    await prisma.account.updateMany({
+      where: { id: transaction.accountId },
+      data: {
+        balance: null,
+      },
+    });
+
+    if (await hasCompatibleTable("AccountStatementCheckpoint")) {
+      await prisma.accountStatementCheckpoint.deleteMany({
+        where: { accountId: transaction.accountId },
+      });
+    }
+
+    const siblingTransactions = await prisma.transaction.findMany({
+      where: {
+        accountId: transaction.accountId,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        merchantRaw: true,
+        rawPayload: true,
+      },
+    });
+
+    const sanitizedUpdates = siblingTransactions
+      .map((entry) => ({
+        id: entry.id,
+        rawPayload: sanitizeTransactionRawPayload(entry),
+      }))
+      .filter((entry): entry is { id: string; rawPayload: Prisma.InputJsonValue } => entry.rawPayload !== null);
+
+    if (sanitizedUpdates.length > 0) {
+      await prisma.$transaction(
+        sanitizedUpdates.map((entry) =>
+          prisma.transaction.update({
+            where: { id: entry.id },
+            data: {
+              rawPayload: entry.rawPayload,
+            },
+          })
+        )
+      );
+    }
 
     await prisma.auditLog.create({
       data: {
