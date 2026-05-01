@@ -13801,6 +13801,33 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 12px;
 }
 
+.accounts-add-schedule {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(248, 252, 255, 0.95), rgba(255, 255, 255, 0.98));
+}
+
+.accounts-add-schedule__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.accounts-add-schedule__toggle input {
+  width: 16px;
+  height: 16px;
+}
+
+.accounts-add-schedule__fields {
+  display: grid;
+  gap: 12px;
+}
+
 .field-optional {
   margin-left: 6px;
   color: var(--muted);

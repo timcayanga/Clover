@@ -47,6 +47,7 @@ import {
 import {
   ACCOUNT_TYPE_SECTIONS,
   formatAccountTypeLabel,
+  getRecurringKindSuggestionForAccountType,
   isLiabilityAccountType,
   isSpendableAccountType,
   isTrackedAssetAccountType,
@@ -60,6 +61,15 @@ const ImportFilesModal = dynamic(
   () => import("@/components/import-files-modal").then((module) => module.ImportFilesModal),
   { ssr: false }
 );
+
+const ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS = [
+  { value: "once", label: "One-time" },
+  { value: "weekly", label: "Weekly" },
+  { value: "biweekly", label: "Every 2 weeks" },
+  { value: "monthly", label: "Monthly" },
+  { value: "quarterly", label: "Quarterly" },
+  { value: "annual", label: "Yearly" },
+] as const;
 
 type Workspace = {
   id: string;
@@ -722,6 +732,12 @@ function AccountsPageContent() {
   const [manualInvestmentMaturityValue, setManualInvestmentMaturityValue] = useState("");
   const [manualBalance, setManualBalance] = useState("");
   const [manualCurrency, setManualCurrency] = useState("PHP");
+  const [manualScheduleEnabled, setManualScheduleEnabled] = useState(false);
+  const [manualScheduleDueDate, setManualScheduleDueDate] = useState("");
+  const [manualScheduleRecurrence, setManualScheduleRecurrence] =
+    useState<(typeof ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS)[number]["value"]>("monthly");
+  const [manualScheduleAmount, setManualScheduleAmount] = useState("");
+  const [manualScheduleCounterparty, setManualScheduleCounterparty] = useState("");
   const [addAccountError, setAddAccountError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [accountEditName, setAccountEditName] = useState("");
@@ -1489,6 +1505,86 @@ function AccountsPageContent() {
     return null;
   }, [manualType]);
 
+  const manualScheduleConfig = useMemo(() => {
+    if (manualType === "receivable") {
+      return {
+        kind: "receivable" as const,
+        titleSuffix: "collection",
+        toggleLabel: "Track collections in Clover",
+        helper: "Add the next collection date here and Clover will create a linked receivable reminder for this account.",
+        amountLabel: "Expected amount",
+        amountPlaceholder: "0.00",
+        counterpartyLabel: "Who owes you? (optional)",
+        counterpartyPlaceholder: "Client, friend, employer",
+        dueDateLabel: "Next collection date",
+        recurrenceDefault: "once" as const,
+      };
+    }
+
+    if (manualType === "insurance") {
+      return {
+        kind: "planned_payment" as const,
+        titleSuffix: "premium",
+        toggleLabel: "Track premiums in Clover",
+        helper: "Add the premium schedule here and Clover will create a linked reminder for this policy.",
+        amountLabel: "Premium amount",
+        amountPlaceholder: "0.00",
+        counterpartyLabel: "Provider (optional)",
+        counterpartyPlaceholder: "Insurer or broker",
+        dueDateLabel: "Next premium date",
+        recurrenceDefault: "monthly" as const,
+      };
+    }
+
+    if (manualType === "prepaid") {
+      return {
+        kind: "planned_payment" as const,
+        titleSuffix: "reload",
+        toggleLabel: "Track reloads or expiry in Clover",
+        helper: "Use this if you want Clover to remind you about reloads, renewals, or stored-value expiry.",
+        amountLabel: "Reload amount",
+        amountPlaceholder: "0.00",
+        counterpartyLabel: "Provider (optional)",
+        counterpartyPlaceholder: "Merchant or wallet provider",
+        dueDateLabel: "Next reminder date",
+        recurrenceDefault: "monthly" as const,
+      };
+    }
+
+    const suggestedKind = getRecurringKindSuggestionForAccountType(manualType);
+    if (suggestedKind === "debt") {
+      return {
+        kind: "debt" as const,
+        titleSuffix: "repayment",
+        toggleLabel: "Track repayments in Clover",
+        helper: "Add the next due date here and Clover will create a linked repayment reminder for this account.",
+        amountLabel: "Amount due",
+        amountPlaceholder: "0.00",
+        counterpartyLabel: "Lender or provider (optional)",
+        counterpartyPlaceholder: "Bank, lender, merchant",
+        dueDateLabel: "Next due date",
+        recurrenceDefault: "monthly" as const,
+      };
+    }
+
+    return null;
+  }, [manualType]);
+
+  useEffect(() => {
+    if (!manualScheduleConfig) {
+      setManualScheduleEnabled(false);
+      setManualScheduleDueDate("");
+      setManualScheduleRecurrence("monthly");
+      setManualScheduleAmount("");
+      setManualScheduleCounterparty("");
+      return;
+    }
+
+    setManualScheduleRecurrence((current) =>
+      current === manualScheduleConfig.recurrenceDefault ? current : manualScheduleConfig.recurrenceDefault
+    );
+  }, [manualScheduleConfig]);
+
   const manualAccountReference = useMemo(() => {
     if (manualType === "insurance") {
       return {
@@ -1773,6 +1869,13 @@ function AccountsPageContent() {
       return;
     }
 
+    if (manualScheduleEnabled && manualScheduleConfig && !manualScheduleDueDate) {
+      const nextError = `${manualScheduleConfig.dueDateLabel} is required when schedule tracking is turned on.`;
+      setAddAccountError(nextError);
+      setMessage(nextError);
+      return;
+    }
+
     setIsSaving(true);
     try {
       const manualIsInvestment = manualType === "investment";
@@ -1827,6 +1930,37 @@ function AccountsPageContent() {
         throw new Error("The account was not returned after saving.");
       }
 
+      let scheduleCreated = false;
+      let scheduleError: string | null = null;
+      if (manualScheduleEnabled && manualScheduleConfig) {
+        const scheduleTitle = `${name} ${manualScheduleConfig.titleSuffix}`;
+        const scheduleResponse = await fetch("/api/commitments", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId: selectedWorkspaceId,
+            kind: manualScheduleConfig.kind,
+            title: scheduleTitle,
+            counterparty: manualScheduleCounterparty.trim() || null,
+            amount: manualScheduleAmount.trim() || null,
+            currency: manualCurrency.trim().toUpperCase() || "PHP",
+            dueDate: manualScheduleDueDate,
+            recurrence: manualScheduleRecurrence,
+            nextDueDate: manualScheduleDueDate,
+            notes: `${formatAccountTypeLabel(manualType)} linked from Add account`,
+            accountId: data.account.id,
+            status: "active",
+          }),
+        });
+
+        if (!scheduleResponse.ok) {
+          const payload = await scheduleResponse.json().catch(() => null);
+          scheduleError = payload?.error ?? "The account was saved, but Clover could not add the linked schedule.";
+        } else {
+          scheduleCreated = true;
+        }
+      }
+
       setAccounts((current) => [data.account, ...current]);
       setManualName("");
       setManualInstitution("");
@@ -1842,10 +1976,21 @@ function AccountsPageContent() {
       setManualInvestmentMaturityValue("");
       setManualBalance("");
       setManualCurrency("PHP");
+      setManualScheduleEnabled(false);
+      setManualScheduleDueDate("");
+      setManualScheduleRecurrence("monthly");
+      setManualScheduleAmount("");
+      setManualScheduleCounterparty("");
       setManualType("bank");
       setAddAccountError(null);
       setAddOpen(false);
-      setMessage(`Account "${name}" created.`);
+      setMessage(
+        scheduleError
+          ? `${scheduleError} The account "${name}" was still created.`
+          : scheduleCreated
+          ? `Account "${name}" created and its schedule is now being tracked.`
+          : `Account "${name}" created.`
+      );
     } catch (error) {
       const nextError = error instanceof Error ? error.message : "Unable to create account.";
       setAddAccountError(nextError);
@@ -2615,6 +2760,69 @@ function AccountsPageContent() {
                       </label>
                     </div>
                     {manualTypeGuidance ? <p className="modal-copy">{manualTypeGuidance}</p> : null}
+                    {manualScheduleConfig ? (
+                      <div className="accounts-add-schedule">
+                        <label className="accounts-add-schedule__toggle">
+                          <input
+                            type="checkbox"
+                            checked={manualScheduleEnabled}
+                            onChange={(event) => setManualScheduleEnabled(event.target.checked)}
+                          />
+                          <span>{manualScheduleConfig.toggleLabel}</span>
+                        </label>
+                        <p className="field-help">{manualScheduleConfig.helper}</p>
+                        {manualScheduleEnabled ? (
+                          <div className="accounts-add-schedule__fields">
+                            <div className="accounts-add-fields__row">
+                              <label>
+                                {manualScheduleConfig.dueDateLabel}
+                                <input
+                                  type="date"
+                                  value={manualScheduleDueDate}
+                                  onChange={(event) => setManualScheduleDueDate(event.target.value)}
+                                />
+                              </label>
+                              <label>
+                                Repeats
+                                <select
+                                  value={manualScheduleRecurrence}
+                                  onChange={(event) =>
+                                    setManualScheduleRecurrence(
+                                      event.target.value as (typeof ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS)[number]["value"]
+                                    )
+                                  }
+                                >
+                                  {ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            </div>
+                            <div className="accounts-add-fields__row">
+                              <label>
+                                {manualScheduleConfig.amountLabel} <span className="field-optional">(optional)</span>
+                                <input
+                                  value={manualScheduleAmount}
+                                  onChange={(event) => setManualScheduleAmount(event.target.value)}
+                                  inputMode="decimal"
+                                  placeholder={manualScheduleConfig.amountPlaceholder}
+                                />
+                              </label>
+                              <label>
+                                {manualScheduleConfig.counterpartyLabel}
+                                <input
+                                  value={manualScheduleCounterparty}
+                                  onChange={(event) => setManualScheduleCounterparty(event.target.value)}
+                                  placeholder={manualScheduleConfig.counterpartyPlaceholder}
+                                />
+                              </label>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <label>
                       Currency
                       <input
