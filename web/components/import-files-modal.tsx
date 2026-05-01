@@ -302,7 +302,7 @@ const buildOptimisticUploadSummary = (
   accountName,
   institution,
   accountType,
-  balance,
+  balance: importedRows > 0 ? balance : null,
   optimistic: true,
   optimisticAccountId,
   incomeTotal: 0,

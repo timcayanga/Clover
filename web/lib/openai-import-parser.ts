@@ -9,6 +9,16 @@ import { summarizeMerchantText } from "@/lib/merchant-labels";
 
 const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v1";
 
+const GENERIC_PARSER_GUIDANCE = [
+  "Generic parser guidance:",
+  "- Use the shared Clover parser system: local rules first, OpenAI fallback for unknown banks or OCR failures, then validation.",
+  "- Preserve raw transaction text and only normalize names/categories when the statement layout makes the meaning clear.",
+  "- If the statement looks like a bank, wallet, credit card, loan, or certificate-style account but no bank-specific rule exists, still extract the rows conservatively.",
+  "- Keep account number, opening balance, ending balance, payment due date, and amount due when visible.",
+  "- Reject page headers, footers, legal text, reward banners, and summary noise as transactions.",
+  "- Lower confidence when the OCR is blurry or when a balance cannot be reconciled cleanly.",
+].join(" ");
+
 const ALLOWED_MOVEMENT_TYPES = [
   "income",
   "real_spend",
@@ -736,6 +746,7 @@ const buildOpenAIInputPayload = (params: {
     `Known institution: ${institution ?? "null"}`,
     `Known parser result: ${JSON.stringify(buildDeterministicParserSummary({ detectedMetadata: params.detectedMetadata, parsedRows: params.parsedRows }))}`,
     `Bank-specific instructions: ${JSON.stringify(bankInstructionJson)}`,
+    GENERIC_PARSER_GUIDANCE,
     "For credit card statements, capture payment due date and total amount due whenever the statement shows them.",
     "",
     ...(params.pageImages?.length

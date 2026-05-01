@@ -96,7 +96,7 @@ const fixtures: Fixture[] = [
     accountNumber: "09173009926",
     accountType: "wallet",
     minRows: 100,
-    exactRows: 187,
+    exactRows: 188,
     expectedOpeningBalance: 25882.06,
     expectedTrailingBalance: 36281.94,
     expectedStartDate: "2025-10-01",

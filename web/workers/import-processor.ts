@@ -1472,6 +1472,7 @@ export const processImportFileText = async (
     accountName: metadataForParse.accountName,
     accountNumber: metadataForParse.accountNumber,
   });
+  const hasKnownInstitution = Boolean(metadataForParse.institution && metadataForParse.institution !== "Unknown");
   const gcashSuspiciouslySparse =
     metadataForParse.institution === "GCash" &&
     parsedRows.length > 0 &&
@@ -1489,6 +1490,7 @@ export const processImportFileText = async (
       parsedRows.length === 0 ||
       (metadataForParse.confidence ?? 0) < 70 ||
       !metadataForParse.accountNumber ||
+      !hasKnownInstitution ||
       gcashSuspiciouslySparse ||
       suspiciousDateCoverage);
   let pageImages: Awaited<ReturnType<typeof readImportedPdfPageImages>> | null = null;
