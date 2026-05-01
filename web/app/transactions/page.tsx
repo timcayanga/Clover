@@ -3141,7 +3141,7 @@ function TransactionsPageContent() {
     });
   };
 
-  const deleteTransaction = async (transactionId: string) => {
+  const deleteTransactionRemote = async (transactionId: string) => {
     const response = await fetch(`/api/transactions/${transactionId}`, {
       method: "DELETE",
     });
@@ -3149,6 +3149,10 @@ function TransactionsPageContent() {
     if (!response.ok) {
       throw new Error("Unable to delete transaction.");
     }
+  };
+
+  const deleteTransaction = async (transactionId: string) => {
+    await deleteTransactionRemote(transactionId);
 
     syncAfterTransactionRemoval(transactionId);
   };
@@ -3566,22 +3570,51 @@ function TransactionsPageContent() {
       return;
     }
 
+    const transactionIds = [...selectedTransactionIds];
     const count = selectedTransactionIds.length;
     setIsSaving(true);
+    transactionIds.forEach((transactionId) => {
+      syncAfterTransactionRemoval(transactionId);
+    });
+    clearSelection();
+    setBulkDeleteConfirmOpen(false);
+    setUndoStack([]);
+    setRedoStack([]);
+    setMessage(`Deleting ${count} transaction${count === 1 ? "" : "s"}...`);
+
     try {
-      await Promise.all(selectedTransactionIds.map((transactionId) => deleteTransaction(transactionId)));
+      const results = await Promise.allSettled(transactionIds.map((transactionId) => deleteTransactionRemote(transactionId)));
+      const failedCount = results.filter((result) => result.status === "rejected").length;
+
       refreshTransactionsSummary();
-      clearSelection();
-      setBulkDeleteConfirmOpen(false);
-      setUndoStack([]);
-      setRedoStack([]);
+
       capturePostHogClientEvent("bulk_transaction_deleted", {
         workspace_id: selectedWorkspaceId || null,
         selected_count: count,
-        deleted_count: count,
+        deleted_count: count - failedCount,
       });
+
+      if (failedCount > 0) {
+        void loadTransactionsPage(selectedWorkspaceId || "", {
+          background: true,
+          pageOverride: transactionsPage,
+          pageSizeOverride: transactionsPageSize,
+          summaryMode: "full",
+        });
+        setMessage(
+          `${count - failedCount} transaction${count - failedCount === 1 ? "" : "s"} deleted. ${failedCount} could not be deleted.`
+        );
+        return;
+      }
+
       setMessage(`${count} transaction${count === 1 ? "" : "s"} deleted.`);
     } catch (error) {
+      void loadTransactionsPage(selectedWorkspaceId || "", {
+        background: true,
+        pageOverride: transactionsPage,
+        pageSizeOverride: transactionsPageSize,
+        summaryMode: "full",
+      });
       setMessage(error instanceof Error ? error.message : "Unable to delete transactions.");
     } finally {
       setIsSaving(false);
