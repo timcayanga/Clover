@@ -611,14 +611,16 @@ function AccountDetailPageContent() {
       normalizeAccountBalance(
         account?.type ?? null,
         parseAmount(
-          deriveReconciledBalance({
-            balance:
-              account?.balance && Number(account.balance) !== 0
-                ? account.balance
-                : account?.balance ?? null,
-            transactions,
-            checkpoints: latestCheckpoint ? [latestCheckpoint] : [],
-          })
+          account?.source === "upload" && typeof account.balance === "string" && account.balance.trim()
+            ? account.balance
+            : deriveReconciledBalance({
+                balance:
+                  account?.balance && Number(account.balance) !== 0
+                    ? account.balance
+                    : account?.balance ?? null,
+                transactions,
+                checkpoints: latestCheckpoint ? [latestCheckpoint] : [],
+              })
         )
       ),
     [account?.balance, account?.type, latestCheckpoint, transactions]

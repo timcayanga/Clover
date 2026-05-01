@@ -21,6 +21,7 @@ import {
   inferAccountTypeFromStatement,
   parseImportText,
 } from "@/lib/import-parser";
+import { IMPORT_IMAGE_MODES, normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import {
   getCachedAccountsWorkspace,
@@ -252,7 +253,7 @@ const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null
     stage === "password"
       ? "Unlock the file with its password and try again."
       : stage === "validation"
-        ? "Upload a clearer PDF or a supported CSV/TSV file."
+        ? "Upload a clearer PDF, CSV, TSV, or image file."
         : "Re-upload the original statement and keep the tab open while Clover works.";
 
   const nextSteps =
@@ -263,7 +264,7 @@ const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null
           "You can always add missing transactions manually in Transactions.",
         ]
       : [
-          "Re-upload the original PDF or CSV.",
+          "Re-upload the original PDF, CSV, or image.",
           "If Clover still stalls, add the missing transactions manually in Transactions.",
           "If the statement looks off after import, check Review before confirming anything.",
         ];
@@ -783,7 +784,8 @@ export function ImportFilesModal({
   const [dragActive, setDragActive] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("Upload CSV or PDF files to import transactions and balances.");
+  const [message, setMessage] = useState("Upload CSV, PDF, or image files to import transactions and balances.");
+  const [importImageMode, setImportImageMode] = useState<ImportImageMode>("statement");
   const [validationNotice, setValidationNotice] = useState<string | null>(null);
   const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
@@ -890,7 +892,8 @@ export function ImportFilesModal({
       localPreparseStartedRef.current.clear();
       autoCloseAfterStartRef.current = false;
       accountIdByKeyRef.current.clear();
-      setMessage("Upload CSV or PDF files to import transactions and balances.");
+      setMessage("Upload CSV, PDF, or image files to import transactions and balances.");
+      setImportImageMode("statement");
       setValidationNotice(null);
       initialFilesSignatureRef.current = null;
       if (!items.some((item) => item.status === "pending" || item.status === "needs_password" || item.status === "parsing" || item.status === "importing")) {
@@ -900,7 +903,7 @@ export function ImportFilesModal({
       return;
     }
 
-    importActivitySurfaceRef.current = "modal";
+    importActivitySurfaceRef.current = backgroundOnly ? "background" : "modal";
 
     router.prefetch("/accounts");
     router.prefetch("/transactions");
@@ -924,9 +927,9 @@ export function ImportFilesModal({
 
       return defaultAccountId ?? accounts[0]?.id ?? "";
     });
-    setMessage("Upload CSV or PDF files to import transactions and balances.");
+    setMessage("Upload CSV, PDF, or image files to import transactions and balances.");
     setValidationNotice(null);
-  }, [accounts, defaultAccountId, items, open]);
+  }, [accounts, backgroundOnly, defaultAccountId, items, open]);
 
   useEffect(() => {
     if (!open) {
@@ -1153,8 +1156,8 @@ export function ImportFilesModal({
         });
 
         if (validationError) {
-          if (validationError === "Import files must be 2 MB or smaller.") {
-            validationIssues.push(`${file.name} is larger than 2 MB.`);
+          if (validationError === "Import files must be 8 MB or smaller.") {
+            validationIssues.push(`${file.name} is larger than 8 MB.`);
           } else if (validationError === "Only PDF, CSV, TSV, JSON, JPEG, PNG, and WebP files are supported.") {
             validationIssues.push(`${file.name} has an invalid file extension.`);
           } else {
@@ -1845,7 +1848,18 @@ export function ImportFilesModal({
             if (parsedRowsCount > 0 && !seededFallbackSummary) {
               const fallbackAccountId = accountId && !accountId.startsWith("optimistic-")
                 ? accountId
-                : await ensureTargetAccountId(summaryContext.fallbackAccountName, null, null, null);
+                : processingIdentity?.accountNumber || summaryContext.accountNumber
+                  ? await ensureTargetAccountId(
+                      processingIdentity?.accountName ?? summaryContext.fallbackAccountName,
+                      processingIdentity?.institution ?? null,
+                      processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+                      processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
+                    )
+                  : null;
+              if (!fallbackAccountId) {
+                await sleep(600);
+                continue;
+              }
               latestResolvedAccountId = fallbackAccountId;
               const fallbackPreviewTransactions =
                 summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
@@ -2496,6 +2510,7 @@ export function ImportFilesModal({
           fileName: item.file.name,
           fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
           password: item.password.trim() || undefined,
+          importMode: importImageMode,
         },
         (progress) => {
           publishImportActivity({
@@ -2629,7 +2644,9 @@ export function ImportFilesModal({
       }
 
       if (processPayload?.queued) {
-        const hasStatementIdentity = Boolean(statementIdentity?.accountName && statementIdentity?.institution);
+        const hasStatementIdentity = Boolean(
+          statementIdentity?.accountName && statementIdentity?.institution && statementIdentity?.accountNumber
+        );
         const optimisticAccountId = hasStatementIdentity
           ? await ensureTargetAccountId(
               statementIdentity?.accountName ?? null,
@@ -2650,7 +2667,7 @@ export function ImportFilesModal({
               )
             : [];
         const optimisticIdentity =
-          statementIdentity ??
+          (statementIdentity?.accountNumber ? statementIdentity : null) ??
           (guessedIdentity
             ? {
                 ...guessedIdentity,
@@ -2909,6 +2926,7 @@ export function ImportFilesModal({
     : 0;
   const hasImportIssue = items.some((item) => item.status === "error" || item.status === "needs_password") || Boolean(validationNotice);
   const showImportHelp = hasImportIssue || items.some((item) => item.confirmationState === "staged");
+  const selectedImportMode = IMPORT_IMAGE_MODES.find((option) => option.value === importImageMode) ?? IMPORT_IMAGE_MODES[0];
   const importHelpTitle = items.some((item) => item.status === "needs_password")
     ? "Password needed"
     : items.some((item) => item.status === "error")
@@ -2921,7 +2939,7 @@ export function ImportFilesModal({
       ]
     : items.some((item) => item.status === "error")
       ? [
-          "Try uploading the original PDF or CSV again, one file at a time.",
+          "Try uploading the original PDF, CSV, or image again, one file at a time.",
           "If Clover says the file is not confident enough, add the transactions manually in Transactions.",
           "If the statement imported but still looks off, check the Review queue before confirming anything.",
         ]
@@ -3340,7 +3358,7 @@ export function ImportFilesModal({
             ref={fileInputRef}
             className="hidden-file-input"
             type="file"
-            accept=".csv,.tsv,.pdf"
+            accept=".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp"
             multiple
             onChange={handleInputChange}
           />
@@ -3354,7 +3372,22 @@ export function ImportFilesModal({
         <div className="accounts-import-footer-copy">
           {validationNotice ? <p className="accounts-import-footer-copy__warning">{validationNotice}</p> : null}
           <p className="accounts-import-footer-copy__status">{message}</p>
-          <p>Accepted files: CSV and PDF. Password-protected files are supported.</p>
+          <div className="accounts-import-target">
+            <strong>Image import mode</strong>
+            <select
+              value={importImageMode}
+              onChange={(event) => setImportImageMode(normalizeImportImageMode(event.target.value))}
+              aria-label="Image import mode"
+            >
+              {IMPORT_IMAGE_MODES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <p className="accounts-import-target__hint">{selectedImportMode.helper}</p>
+          </div>
+          <p>Accepted files: CSV, TSV, PDF, JPEG, PNG, and WebP. Password-protected PDFs are supported.</p>
           <p>We upload the file first, then parse it on the server so the workflow stays responsive.</p>
         </div>
 

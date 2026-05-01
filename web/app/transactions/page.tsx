@@ -2171,6 +2171,10 @@ function TransactionsPageContent() {
       return "Ignored from totals";
     }
 
+    if ((transaction.categoryName ?? "").trim().toLowerCase() === "other") {
+      return null;
+    }
+
     if (!transaction.categoryId) {
       return "Needs category review";
     }
