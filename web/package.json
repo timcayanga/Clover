@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\"",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
