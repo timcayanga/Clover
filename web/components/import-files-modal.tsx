@@ -12,11 +12,21 @@ import { ImportUploadDock } from "@/components/import-upload-dock";
 import { capturePostHogClientEvent, capturePostHogClientEventOnce, analyticsOnceKey } from "@/components/posthog-analytics";
 import { formatDuplicateImportMessage } from "@/lib/import-duplicate-message";
 import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
+import { extractTextFromFile } from "@/lib/import-file-text";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { validateImportFile } from "@/lib/import-file-validation";
-import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import {
+  detectStatementMetadata,
+  getTrailingBalanceFromParsedRows,
+  inferAccountTypeFromStatement,
+  parseImportText,
+} from "@/lib/import-parser";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
-import { syncImportedWorkspaceAccountCaches, syncImportedWorkspaceTransactionCaches } from "@/lib/workspace-cache";
+import {
+  getCachedAccountsWorkspace,
+  syncImportedWorkspaceAccountCaches,
+  syncImportedWorkspaceTransactionCaches,
+} from "@/lib/workspace-cache";
 import {
   clearImportActivity,
   setImportActivity,
@@ -294,15 +304,18 @@ const buildOptimisticUploadSummary = (
   accountType: UploadAccountType = null,
   optimisticAccountId: string | null,
   balance: string | null = null,
-  previewTransactions: UploadInsightsSummary["previewTransactions"] = []
+  previewTransactions: UploadInsightsSummary["previewTransactions"] = [],
+  accountNumber: string | null = null,
+  showBalanceEvenIfEmpty = false
 ): UploadInsightsSummary => ({
   fileName,
   rowsImported: importedRows,
   accountId,
   accountName,
   institution,
+  accountNumber,
   accountType,
-  balance: importedRows > 0 ? balance : null,
+  balance: showBalanceEvenIfEmpty || importedRows > 0 ? balance : null,
   optimistic: true,
   optimisticAccountId,
   incomeTotal: 0,
@@ -329,7 +342,8 @@ const buildOptimisticUploadSummaryFromAccount = (
     account.type as UploadAccountType,
     account.id,
     null,
-    []
+    [],
+    account.accountNumber ?? null
   );
 
 const toBalanceString = (value: unknown): string | null => {
@@ -370,6 +384,7 @@ const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
     optimisticAccountId: summary.optimisticAccountId ?? null,
     name: normalizedAccountName,
     institution: summary.institution,
+    accountNumber: summary.accountNumber ?? null,
     type: accountType,
     currency: "PHP",
     source: "upload",
@@ -383,6 +398,25 @@ const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsight
   const importedAccount = buildImportedWorkspaceAccount(summary);
   if (!importedAccount) {
     return;
+  }
+
+  const currentAccount = getCachedAccountsWorkspace(workspaceId)?.accounts.find((entry) => {
+    const entryId = typeof entry.id === "string" ? entry.id : "";
+    const optimisticId = typeof (entry as { optimisticAccountId?: string | null }).optimisticAccountId === "string"
+      ? (entry as { optimisticAccountId?: string | null }).optimisticAccountId
+      : "";
+    const entryName = typeof entry.name === "string" ? normalizeStatementAccountName(entry.name, typeof entry.institution === "string" ? entry.institution : null) : "";
+    const importedName = normalizeStatementAccountName(summary.accountName ?? "", summary.institution ?? null);
+    const entryInstitution = typeof entry.institution === "string" ? entry.institution : null;
+    return (
+      entryId === importedAccount.id ||
+      optimisticId === importedAccount.id ||
+      accountKey(entryName, entryInstitution) === accountKey(importedName, summary.institution ?? null)
+    );
+  });
+
+  if (!importedAccount.accountNumber && typeof currentAccount?.accountNumber === "string" && currentAccount.accountNumber.trim()) {
+    importedAccount.accountNumber = currentAccount.accountNumber.trim();
   }
 
   syncImportedWorkspaceAccountCaches(workspaceId, importedAccount);
@@ -642,6 +676,10 @@ const friendlyImportProgressLabel = (label: string, fileName?: string | null) =>
       return "Clover is matching the account";
     case "Waiting for statement identity":
       return "Clover is reading the statement";
+    case "Reading locally":
+      return "Clover is reading the statement locally";
+    case "Preview ready":
+      return "Clover found the statement";
     case "Queued for background processing":
       return "Clover is lining up the rest";
     case "Finalizing in background":
@@ -692,11 +730,17 @@ export function ImportFilesModal({
   const [qaLoadingByItemId, setQaLoadingByItemId] = useState<Record<string, boolean>>({});
   const [qaErrorByItemId, setQaErrorByItemId] = useState<Record<string, string | null>>({});
   const autoLoadedQaIdsRef = useRef(new Set<string>());
+  const localPreparseStartedRef = useRef(new Set<string>());
   const handleStartImportRef = useRef<null | (() => Promise<void>)>(null);
   const initialFilesSignatureRef = useRef<string | null>(null);
   const importActivitySurfaceRef = useRef<ImportActivityLocation>("modal");
   const lastImportActivityRef = useRef<ImportActivitySnapshot | null>(null);
   const autoCloseAfterStartRef = useRef(false);
+  const itemsRef = useRef<QueuedFile[]>([]);
+
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
 
   const publishImportActivity = (
     snapshot:
@@ -780,6 +824,7 @@ export function ImportFilesModal({
       setQaLoadingByItemId({});
       setQaErrorByItemId({});
       autoLoadedQaIdsRef.current.clear();
+      localPreparseStartedRef.current.clear();
       autoCloseAfterStartRef.current = false;
       accountIdByKeyRef.current.clear();
       setMessage("Upload CSV or PDF files to import transactions and balances.");
@@ -859,6 +904,25 @@ export function ImportFilesModal({
     addFiles(initialFiles);
     onInitialFilesConsumed?.();
   }, [initialFiles, open, onInitialFilesConsumed]);
+
+  useEffect(() => {
+    if (!open || items.length === 0 || !workspaceId) {
+      return;
+    }
+
+    for (const item of items) {
+      if (
+        localPreparseStartedRef.current.has(item.id) ||
+        item.confirmationState === "confirmed" ||
+        item.status === "done" ||
+        item.status === "error"
+      ) {
+        continue;
+      }
+
+      void preparsePendingItemLocally(item.id);
+    }
+  }, [items, open, preparsePendingItemLocally, workspaceId]);
 
   useEffect(() => {
     if (!open) {
@@ -1276,6 +1340,7 @@ export function ImportFilesModal({
             accountId: resolvedAccountId,
             accountName: summaryContext.accountName,
             institution: summaryContext.institution ?? null,
+            accountNumber: summaryContext.accountNumber ?? null,
             accountType: resolvedAccountType,
             balance: accountBalance,
             optimisticAccountId: summaryContext.optimisticAccountId ?? null,
@@ -1451,7 +1516,8 @@ export function ImportFilesModal({
               processingIdentity?.accountType ?? summaryContext.accountType ?? null,
               summaryContext.optimisticAccountId,
               toBalanceString(statementCheckpoint?.endingBalance),
-              fallbackPreviewTransactions
+              fallbackPreviewTransactions,
+              processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
             );
 
             seededFallbackSummary = true;
@@ -1591,7 +1657,8 @@ export function ImportFilesModal({
                 null,
                 summaryContext.optimisticAccountId,
                 null,
-                fallbackPreviewTransactions
+                fallbackPreviewTransactions,
+                summaryContext.accountNumber ?? null
               );
 
               seededFallbackSummary = true;
@@ -1674,7 +1741,13 @@ export function ImportFilesModal({
             throw new Error("Unable to determine the destination account for this statement.");
           }
 
-          if (confirmedTransactionsCount === 0 && shouldDeferClientConfirmation) {
+          const shouldWaitForDeferredConfirmation =
+            confirmedTransactionsCount === 0 &&
+            shouldDeferClientConfirmation &&
+            importFile?.status !== "done" &&
+            attempt < 4;
+
+          if (shouldWaitForDeferredConfirmation) {
             updateItem(itemId, {
               status: "importing",
               progress: Math.max(95, Math.min(98, 94 + attempt * 0.1)),
@@ -1708,7 +1781,8 @@ export function ImportFilesModal({
               inferAccountTypeFromStatement(resolvedIdentity.institution, resolvedIdentity.accountName, "bank"),
             summaryContext.optimisticAccountId,
             null,
-            summaryContext.previewTransactions ?? []
+            summaryContext.previewTransactions ?? [],
+            resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null
           );
 
           updateItem(itemId, {
@@ -1888,6 +1962,125 @@ export function ImportFilesModal({
 
     return createStatementAccount("Cash", "Cash", "cash", null);
   };
+
+  const resolveLocalAccountId = (
+    statementAccountName: string | null,
+    institution: string | null,
+    accountNumber: string | null
+  ) => {
+    if (statementAccountName) {
+      const normalizedStatementAccountName = normalizeStatementAccountName(statementAccountName, institution);
+      const key = accountKey(normalizedStatementAccountName, institution ?? null);
+      const existing =
+        accountIdByKeyRef.current.get(key) ?? accounts.find((account) => accountKey(account.name, account.institution) === key)?.id;
+      if (existing) {
+        return existing;
+      }
+
+      const genericMatch = hasStatementSuffix(normalizedStatementAccountName)
+        ? accounts.find((account) => isGenericSameInstitutionAccount(account, institution ?? null))
+        : null;
+      if (genericMatch) {
+        return genericMatch.id;
+      }
+
+      const rule = accountRules.find(
+        (entry) => accountRuleKey(entry.accountName, entry.institution) === accountRuleKey(normalizedStatementAccountName, institution ?? null)
+      );
+      if (rule?.accountId) {
+        const matchedAccount = accounts.find((account) => account.id === rule.accountId);
+        if (matchedAccount) {
+          return matchedAccount.id;
+        }
+      }
+    }
+
+    if (accountNumber) {
+      const matchedByNumber = accounts.find((account) => (account.accountNumber ?? null) === accountNumber);
+      if (matchedByNumber) {
+        return matchedByNumber.id;
+      }
+    }
+
+    if (selectedAccountId && accounts.some((account) => account.id === selectedAccountId)) {
+      return selectedAccountId;
+    }
+
+    return `optimistic-${crypto.randomUUID()}`;
+  };
+
+  async function preparsePendingItemLocally(itemId: string) {
+    if (localPreparseStartedRef.current.has(itemId)) {
+      return;
+    }
+
+    const item = itemsRef.current.find((entry) => entry.id === itemId);
+    if (!item || item.confirmationState === "confirmed" || item.status === "done" || item.status === "error") {
+      return;
+    }
+
+    localPreparseStartedRef.current.add(itemId);
+    updateItem(itemId, {
+      progressLabel: "Reading locally",
+    });
+
+    try {
+      const text = await extractTextFromFile(item.file, item.password.trim() || undefined);
+      const localMetadata = detectStatementMetadata(text);
+      const guessedIdentity = guessStatementIdentity(item.file.name);
+      const parsedRows = parseImportText(text, item.file.name, fileTypeLabel(item.file), {
+        institution: localMetadata?.institution ?? guessedIdentity?.institution ?? null,
+        accountName: localMetadata?.accountName ?? guessedIdentity?.accountName ?? null,
+        accountNumber: localMetadata?.accountNumber ?? null,
+      });
+
+      if (!localMetadata && parsedRows.length === 0) {
+        return;
+      }
+
+      const accountName =
+        localMetadata?.accountName ??
+        guessedIdentity?.accountName ??
+        deriveFallbackAccountNameFromFileName(item.file.name);
+      const institution = localMetadata?.institution ?? guessedIdentity?.institution ?? null;
+      const accountNumber = localMetadata?.accountNumber ?? null;
+      const accountType = (localMetadata?.accountType ??
+        inferAccountTypeFromStatement(institution, accountName, "bank")) as UploadInsightsSummary["accountType"];
+      const resolvedAccountId = resolveLocalAccountId(accountName, institution, accountNumber);
+      const endingBalance = toBalanceString(localMetadata?.endingBalance ?? getTrailingBalanceFromParsedRows(parsedRows) ?? null);
+      const optimisticAccountId = resolvedAccountId.startsWith("optimistic-") ? resolvedAccountId : null;
+
+      const currentItem = itemsRef.current.find((entry) => entry.id === itemId);
+      if (!currentItem || currentItem.status === "done" || currentItem.status === "error" || currentItem.confirmationState === "confirmed") {
+        return;
+      }
+
+      const summary = buildOptimisticUploadSummary(
+        item.file.name,
+        parsedRows.length,
+        resolvedAccountId,
+        accountName,
+        institution,
+        accountType,
+        optimisticAccountId,
+        endingBalance,
+        [],
+        accountNumber,
+        true
+      );
+
+      seedImportedWorkspaceCaches(workspaceId, summary);
+      void onImported(summary);
+      updateItem(itemId, {
+        progressLabel: parsedRows.length > 0 ? "Preview ready" : "Reading locally",
+      });
+    } catch (error) {
+      if (isPasswordError(error)) {
+        localPreparseStartedRef.current.delete(itemId);
+      }
+      // Browser-local preparse is best-effort only. The server path still finalizes the import.
+    }
+  }
 
   const removeItem = (id: string) => {
     setItems((current) => current.filter((item) => item.id !== id));
@@ -2215,7 +2408,8 @@ export function ImportFilesModal({
                 optimisticIdentity.accountType ?? statementAccountType,
                 optimisticAccountId,
                 null,
-                previewTransactions
+                previewTransactions,
+                statementIdentity?.accountNumber ?? null
               ),
             } satisfies UploadInsightsSummary)
           : null;
@@ -2282,9 +2476,9 @@ export function ImportFilesModal({
               statementIdentity?.institution ?? null
             )
           : [];
-      const optimisticPreviewSummary =
-        targetAccountId
-          ? ({
+        const optimisticPreviewSummary =
+          targetAccountId
+            ? ({
               ...buildOptimisticUploadSummary(
                 item.file.name,
                 Number(processPayload?.imported ?? 0) || 0,
@@ -2294,7 +2488,8 @@ export function ImportFilesModal({
                 statementAccountType,
                 targetAccountId,
                 null,
-                previewTransactions
+                previewTransactions,
+                statementIdentity?.accountNumber ?? null
               ),
             } satisfies UploadInsightsSummary)
           : null;
