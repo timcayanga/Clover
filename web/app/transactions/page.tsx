@@ -4346,7 +4346,11 @@ function TransactionsPageContent() {
             <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
           </div>
 
-          <div className="table-wrap transactions-table-wrap" aria-busy={isTableLoading} hidden={isCompactViewport}>
+          <div
+            className={`table-wrap transactions-table-wrap${!hasVisibleTransactions && !isTableLoading ? " transactions-table-wrap--empty" : ""}`}
+            aria-busy={isTableLoading}
+            hidden={isCompactViewport}
+          >
             {isTableLoading ? (
               <div className="transactions-loading-state" role="status" aria-live="polite" aria-label="Loading transactions">
                 <div className="transactions-loading-header">
@@ -4521,7 +4525,6 @@ function TransactionsPageContent() {
                   <img src={transactionsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
                 </div>
                 <p className="transactions-empty-state__eyebrow">It is quiet in here</p>
-                <h3>No transactions yet</h3>
                 <p className="transactions-empty-state__copy">
                   Add your first transaction to get the dashboard moving and start building your categories.
                 </p>
@@ -4543,7 +4546,10 @@ function TransactionsPageContent() {
             )}
           </div>
 
-          <div className="transactions-mobile-view" hidden={!isCompactViewport}>
+          <div
+            className={`transactions-mobile-view${!hasVisibleTransactions && !isTableLoading ? " transactions-table-wrap--empty" : ""}`}
+            hidden={!isCompactViewport}
+          >
             {isTableLoading ? (
               <div className="transactions-mobile-loading" role="status" aria-live="polite" aria-label="Loading transactions">
                 {Array.from({ length: 6 }).map((_, index) => (
@@ -4729,7 +4735,6 @@ function TransactionsPageContent() {
                   <img src={transactionsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
                 </div>
                 <p className="transactions-empty-state__eyebrow">It is quiet in here</p>
-                <h3>No transactions yet</h3>
                 <p className="transactions-empty-state__copy">
                   Add your first transaction to get the dashboard moving and start building your categories.
                 </p>
