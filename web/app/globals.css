@@ -17132,19 +17132,19 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-empty-state {
   display: grid;
-  align-content: center;
+  align-content: start;
   justify-items: center;
   align-self: stretch;
   justify-self: stretch;
-  gap: 4px;
+  gap: 2px;
   width: 100%;
   min-height: clamp(320px, 48vh, 520px);
-  padding: 24px 28px;
+  padding: 18px 28px 20px;
   border-radius: 24px;
   background:
     radial-gradient(circle at top left, rgba(3, 168, 192, 0.06), transparent 40%),
     rgba(255, 255, 255, 0.9);
-  border: 1px dashed rgba(3, 168, 192, 0.18);
+  border: 0;
   color: var(--text);
   text-align: center;
 }
@@ -17156,7 +17156,7 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-empty-state__art,
 .empty-state__art {
   width: min(100%, 220px);
-  margin-bottom: 0;
+  margin-bottom: -10px;
 }
 
 .transactions-empty-state__art img,
@@ -17172,11 +17172,14 @@ input.transaction-inline-edit--amount::placeholder {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--accent);
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .transactions-empty-state__copy {
   max-width: 42ch;
   color: var(--muted);
+  margin-top: 0;
 }
 
 .transactions-empty-state__actions {
@@ -17185,7 +17188,7 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 8px;
   width: auto;
   justify-content: center;
-  margin-top: 6px;
+  margin-top: 2px;
 }
 
 .transactions-empty-state__actions .button {

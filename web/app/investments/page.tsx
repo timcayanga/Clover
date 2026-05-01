@@ -1205,7 +1205,7 @@ export default function InvestmentsPage() {
                 </div>
               ) : (
                 <div className="empty-state">
-                  <strong>No investments yet.</strong>
+                  <strong>It's quiet in here</strong>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
                     <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
                       Add investment
