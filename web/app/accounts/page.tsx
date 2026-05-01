@@ -6,6 +6,7 @@ import { flushSync } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CloverShell, useCloverChrome } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
+import { EmptyDataCta } from "@/components/empty-data-cta";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
@@ -2124,10 +2125,27 @@ function AccountsPageContent() {
                     </article>
                 ))
               ) : (
-                <div className="empty-state">
-                  <strong>No accounts to show right now.</strong>
-                  <p>Try a different sort, or add another account to keep building your picture.</p>
-                </div>
+                <EmptyDataCta
+                  className="empty-state--illustrated"
+                  eyebrow="No accounts yet"
+                  title="No accounts to show right now."
+                  copy="Try a different sort, or add another account to keep building your picture."
+                  illustration="/illustrations/clover-empty-dashboard-3d.png"
+                  illustrationAlt="A 3D Clover dashboard illustration"
+                  importHref="/dashboard?import=1"
+                  accountHref="/accounts"
+                  transactionHref="/transactions?manual=1"
+                  actions={
+                    <>
+                      <button className="button button-primary button-small" type="button" onClick={openAddAccount}>
+                        Add account
+                      </button>
+                      <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
+                        Import files
+                      </button>
+                    </>
+                  }
+                />
               )}
             </div>
           </div>

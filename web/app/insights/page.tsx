@@ -1127,7 +1127,17 @@ async function InsightsPageStream({
                   );
                 })
               ) : (
-                <div className="empty-state">No categorized expenses yet. Import more activity or resolve uncategorized rows to reveal the spending mix.</div>
+                <EmptyDataCta
+                  className="insights-empty-state"
+                  eyebrow="Fresh start"
+                  title="No categorized expenses yet."
+                  copy="Import more activity or resolve uncategorized rows to reveal the spending mix."
+                  illustration="/illustrations/clover-insights-analytics-3d.png"
+                  illustrationAlt="A 3D Clover analytics illustration"
+                  importHref="/dashboard?import=1"
+                  accountHref="/accounts"
+                  transactionHref="/transactions?manual=1"
+                />
               )}
               <div className="insight-donut__item">
                 <span className="insight-donut__icon" aria-hidden="true">
@@ -1175,7 +1185,17 @@ async function InsightsPageStream({
                 </Link>
               ))
             ) : (
-              <div className="empty-state">No category changes surfaced yet. Clover will highlight shifts once it has enough recent activity to compare.</div>
+              <EmptyDataCta
+                className="insights-empty-state"
+                eyebrow="Fresh start"
+                title="No category changes surfaced yet."
+                copy="Clover will highlight shifts once it has enough recent activity to compare."
+                illustration="/illustrations/clover-insights-analytics-3d.png"
+                illustrationAlt="A 3D Clover analytics illustration"
+                importHref="/dashboard?import=1"
+                accountHref="/accounts"
+                transactionHref="/transactions?manual=1"
+              />
             )}
           </div>
           </article>
@@ -1210,7 +1230,17 @@ async function InsightsPageStream({
                     </Link>
                   ))
                 ) : (
-                  <div className="empty-state">No recurring merchants surfaced yet. Add more transactions and Clover will call out the fixed costs.</div>
+                  <EmptyDataCta
+                    className="insights-empty-state"
+                    eyebrow="Fresh start"
+                    title="No recurring merchants surfaced yet."
+                    copy="Add more transactions and Clover will call out the fixed costs."
+                    illustration="/illustrations/clover-insights-analytics-3d.png"
+                    illustrationAlt="A 3D Clover analytics illustration"
+                    importHref="/dashboard?import=1"
+                    accountHref="/accounts"
+                    transactionHref="/transactions?manual=1"
+                  />
                 )}
                 <div className="insight-list__item">
                   <strong>Potential savings</strong>

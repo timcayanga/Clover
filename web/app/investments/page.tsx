@@ -875,7 +875,7 @@ export default function InvestmentsPage() {
                 <EmptyDataCta
                   className="empty-state--illustrated investments-empty-state--compact"
                   eyebrow="It's quiet in here"
-                  title=""
+                  title="No allocation to show yet."
                   copy="Add an investment to bring this view to life."
                   illustration={investmentsEmptyStateIllustration}
                   illustrationAlt=""
@@ -1187,34 +1187,55 @@ export default function InvestmentsPage() {
                   </article>
                 ))
               ) : investmentAccounts.length > 0 && activeInvestmentFilters ? (
-                <div className="empty-state">
-                  <strong>No investments match these filters.</strong>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
-                    <button
-                      className="button button-primary button-small"
-                      type="button"
-                      onClick={() => {
-                        setInvestmentSearch("");
-                        setInvestmentSubtypeFilter("all");
-                        setInvestmentSortKey("value_desc");
-                      }}
-                    >
-                      Reset filters
-                    </button>
-                  </div>
-                </div>
+                <EmptyDataCta
+                  className="empty-state--illustrated investments-empty-state--compact"
+                  eyebrow="Filters active"
+                  title="No investments match these filters."
+                  copy="Reset filters to bring holdings back."
+                  illustration={investmentsEmptyStateIllustration}
+                  illustrationAlt=""
+                  accountHref="/accounts"
+                  transactionHref="/transactions?manual=1"
+                  actions={
+                    <>
+                      <button
+                        className="button button-primary button-small"
+                        type="button"
+                        onClick={() => {
+                          setInvestmentSearch("");
+                          setInvestmentSubtypeFilter("all");
+                          setInvestmentSortKey("value_desc");
+                        }}
+                      >
+                        Reset filters
+                      </button>
+                      <Link className="button button-secondary button-small" href="/accounts">
+                        Open Accounts
+                      </Link>
+                    </>
+                  }
+                />
               ) : (
-                <div className="empty-state">
-                  <strong>It's quiet in here</strong>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
-                    <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
-                      Add investment
-                    </button>
-                    <Link className="button button-secondary button-small" href="/accounts">
-                      Open Accounts
-                    </Link>
-                  </div>
-                </div>
+                <EmptyDataCta
+                  className="empty-state--illustrated investments-empty-state--compact"
+                  eyebrow="It's quiet in here"
+                  title="No investments yet."
+                  copy="Add an investment to see your portfolio mix and holdings."
+                  illustration={investmentsEmptyStateIllustration}
+                  illustrationAlt=""
+                  accountHref="/accounts"
+                  transactionHref="/transactions?manual=1"
+                  actions={
+                    <>
+                      <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
+                        Add investment
+                      </button>
+                      <Link className="button button-secondary button-small" href="/accounts">
+                        Open Accounts
+                      </Link>
+                    </>
+                  }
+                />
               )}
             </section>
           </>
@@ -1258,9 +1279,26 @@ export default function InvestmentsPage() {
                   ))}
                 </div>
               ) : (
-                <div className="empty-state">
-                  <strong>No allocation to show yet.</strong>
-                </div>
+                <EmptyDataCta
+                  className="empty-state--illustrated investments-empty-state--compact"
+                  eyebrow="Insights"
+                  title="No allocation to show yet."
+                  copy="Add an investment to see how your portfolio mix is split."
+                  illustration={investmentsEmptyStateIllustration}
+                  illustrationAlt=""
+                  accountHref="/accounts"
+                  transactionHref="/transactions?manual=1"
+                  actions={
+                    <>
+                      <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
+                        Add investment
+                      </button>
+                      <Link className="button button-secondary button-small" href="/accounts">
+                        Open Accounts
+                      </Link>
+                    </>
+                  }
+                />
               )}
             </article>
 
@@ -1305,9 +1343,26 @@ export default function InvestmentsPage() {
                   })}
                 </div>
               ) : (
-                <div className="empty-state">
-                  <strong>No holdings yet.</strong>
-                </div>
+                <EmptyDataCta
+                  className="empty-state--illustrated investments-empty-state--compact"
+                  eyebrow="Holdings"
+                  title="No holdings yet."
+                  copy="Add an investment to see your largest positions."
+                  illustration={investmentsEmptyStateIllustration}
+                  illustrationAlt=""
+                  accountHref="/accounts"
+                  transactionHref="/transactions?manual=1"
+                  actions={
+                    <>
+                      <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
+                        Add investment
+                      </button>
+                      <Link className="button button-secondary button-small" href="/accounts">
+                        Open Accounts
+                      </Link>
+                    </>
+                  }
+                />
               )}
 
               <div className="investments-insights__stats">

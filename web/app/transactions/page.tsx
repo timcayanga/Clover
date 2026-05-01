@@ -4527,9 +4527,9 @@ function TransactionsPageContent() {
             ) : !hasVisibleTransactions ? (
               <EmptyDataCta
                 className="transactions-empty-state--table"
-                eyebrow="It is quiet in here"
-                title="No transactions yet."
-                copy="Add your first transaction to get the dashboard moving and start building your categories."
+                eyebrow="No results"
+                title="No transactions match the current filters."
+                copy="Clear one filter or widen the date range to bring rows back."
                 illustration={transactionsEmptyStateIllustration}
                 illustrationAlt=""
                 importHref="/transactions?import=1"
@@ -4537,8 +4537,8 @@ function TransactionsPageContent() {
                 transactionHref="/transactions?manual=1"
                 actions={
                   <>
-                    <button className="button button-primary button-small" type="button" onClick={() => void openManualAdd()}>
-                      Add transaction
+                    <button className="button button-primary button-small" type="button" onClick={clearAllTransactionFilters}>
+                      Clear filters
                     </button>
                     <button className="button button-secondary button-small transactions-empty-state__import" type="button" onClick={() => openImportFiles()}>
                       Import files
@@ -4737,9 +4737,9 @@ function TransactionsPageContent() {
             ) : !hasVisibleTransactions ? (
               <EmptyDataCta
                 className="transactions-empty-state--table"
-                eyebrow="It is quiet in here"
-                title="No transactions yet."
-                copy="Add your first transaction to get the dashboard moving and start building your categories."
+                eyebrow="No results"
+                title="No transactions match the current filters."
+                copy="Clear one filter or widen the date range to bring rows back."
                 illustration={transactionsEmptyStateIllustration}
                 illustrationAlt=""
                 importHref="/transactions?import=1"
@@ -4747,8 +4747,8 @@ function TransactionsPageContent() {
                 transactionHref="/transactions?manual=1"
                 actions={
                   <>
-                    <button className="button button-primary button-small" type="button" onClick={() => void openManualAdd()}>
-                      Add transaction
+                    <button className="button button-primary button-small" type="button" onClick={clearAllTransactionFilters}>
+                      Clear filters
                     </button>
                     <button className="button button-secondary button-small transactions-empty-state__import" type="button" onClick={() => openImportFiles()}>
                       Import files

@@ -1544,7 +1544,17 @@ async function ReportsStream({
                     ) : null}
                   </>
                 ) : (
-                  <div className="empty-state">Add categorized spending and Clover will show where income is flowing.</div>
+                  <EmptyDataCta
+                    className="reports-empty-state"
+                    eyebrow="Fresh start"
+                    title="Add categorized spending to wake up cash flow."
+                    copy="Clover will show where income is flowing once spending has enough detail."
+                    illustration="/illustrations/clover-reports-chart-3d.png"
+                    illustrationAlt="A 3D Clover reports chart illustration"
+                    artClassName="transactions-empty-state__art--teal"
+                    accountHref="/accounts"
+                    transactionHref="/transactions?manual=1"
+                  />
                 )}
               </div>
             </div>
@@ -1622,7 +1632,17 @@ async function ReportsStream({
                     );
                   })
                 ) : (
-                  <div className="empty-state">No categorized expenses yet. Review uncategorized rows or import a fuller statement to surface the main spending groups.</div>
+                  <EmptyDataCta
+                    className="reports-empty-state"
+                    eyebrow="Fresh start"
+                    title="No categorized expenses yet."
+                    copy="Review uncategorized rows or import a fuller statement to surface the main spending groups."
+                    illustration="/illustrations/clover-reports-chart-3d.png"
+                    illustrationAlt="A 3D Clover reports chart illustration"
+                    artClassName="transactions-empty-state__art--teal"
+                    accountHref="/accounts"
+                    transactionHref="/transactions?manual=1"
+                  />
                 )}
                 {currentOtherSpend > 0 ? (
                   <div className="report-donut__legend-item">
@@ -1678,7 +1698,17 @@ async function ReportsStream({
                   </Link>
                 ))
               ) : (
-                <div className="empty-state">No repeat merchants surfaced yet. Add more transactions or imports to reveal the fixed costs Clover can track.</div>
+                <EmptyDataCta
+                  className="reports-empty-state"
+                  eyebrow="Fresh start"
+                  title="No repeat merchants surfaced yet."
+                  copy="Add more transactions or imports to reveal the fixed costs Clover can track."
+                  illustration="/illustrations/clover-reports-chart-3d.png"
+                  illustrationAlt="A 3D Clover reports chart illustration"
+                  artClassName="transactions-empty-state__art--teal"
+                  accountHref="/accounts"
+                  transactionHref="/transactions?manual=1"
+                />
               )}
             </div>
             <div className="report-subsection report-subsection--compact">
@@ -1727,7 +1757,17 @@ async function ReportsStream({
                   </Link>
                 ))
               ) : (
-                <div className="empty-state">No merchants surfaced yet. Import more activity and Clover will surface the concentration points for you.</div>
+                <EmptyDataCta
+                  className="reports-empty-state"
+                  eyebrow="Fresh start"
+                  title="No merchants surfaced yet."
+                  copy="Import more activity and Clover will surface the concentration points for you."
+                  illustration="/illustrations/clover-reports-chart-3d.png"
+                  illustrationAlt="A 3D Clover reports chart illustration"
+                  artClassName="transactions-empty-state__art--teal"
+                  accountHref="/accounts"
+                  transactionHref="/transactions?manual=1"
+                />
               )}
             </div>
           </article>
