@@ -1675,8 +1675,21 @@ export function ImportFilesModal({
           analyticsOnceKey("import_parsed_with_warnings", `queued-import:${itemId}`)
             );
           }
+          const hasParseableAccountIdentity = Boolean(
+            parsedRowsCount > 0 &&
+              (
+                resolvedIdentity.accountName ||
+                resolvedIdentity.institution ||
+                resolvedIdentity.accountNumber ||
+                summaryContext.accountName ||
+                summaryContext.institution ||
+                summaryContext.accountNumber
+              )
+          );
           const shouldDeferClientConfirmation =
-            resolvedIdentity.institution === "GCash" || resolvedAccountType === "wallet";
+            confirmedTransactionsCount === 0 &&
+            (resolvedIdentity.institution === "GCash" || resolvedAccountType === "wallet") &&
+            !hasParseableAccountIdentity;
 
           const shouldUseFallbackIdentity = !resolvedIdentity.accountName && !resolvedIdentity.institution && attempt >= 4;
           if (!resolvedIdentity.accountName && !resolvedIdentity.institution && !shouldUseFallbackIdentity) {
@@ -2495,7 +2508,7 @@ export function ImportFilesModal({
           targetAccountId: optimisticAccountId,
           confirmationState: "staged",
           progress: 92,
-          progressLabel: hasStatementIdentity || canUseOptimisticGuess ? "Queued for background processing" : "Waiting for account details",
+          progressLabel: hasStatementIdentity || canUseOptimisticGuess ? "Loading account" : "Waiting for account details",
           status: "importing",
         });
         publishImportActivity({
@@ -2507,7 +2520,7 @@ export function ImportFilesModal({
           fileTotal: items.length,
           completedFiles: completedFileCount,
           progress: 92,
-          detail: hasStatementIdentity || canUseOptimisticGuess ? "Clover is lining up the rest" : "Clover is reading the statement",
+          detail: hasStatementIdentity || canUseOptimisticGuess ? "Clover is loading your account" : "Clover is reading the statement",
           summary: null,
           errorMessage: null,
         });
@@ -2576,7 +2589,7 @@ export function ImportFilesModal({
         targetAccountId,
         confirmationState: "staged",
         progress: 92,
-        progressLabel: targetAccountId ? "Finalizing in background" : "Waiting for account details",
+        progressLabel: targetAccountId ? "Loading account" : "Waiting for account details",
       });
       publishImportActivity({
         workspaceId,
@@ -2587,7 +2600,7 @@ export function ImportFilesModal({
         fileTotal: items.length,
         completedFiles: completedFileCount,
         progress: 92,
-        detail: targetAccountId ? "Clover is wrapping things up" : "Clover is reading the statement",
+        detail: targetAccountId ? "Clover is loading your account" : "Clover is reading the statement",
         summary: null,
         errorMessage: null,
       });
