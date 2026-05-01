@@ -303,7 +303,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         }
       }
 
-      const shouldProcessInlinePdf = isPdfUpload(effectiveFileName, effectiveFileType) && hasExtractedText && parsedMetadataConfidence >= 80;
+      const shouldProcessInlinePdf =
+        isPdfUpload(effectiveFileName, effectiveFileType) &&
+        forceInlineProcessing &&
+        hasExtractedText &&
+        parsedMetadataConfidence >= 80;
       const shouldProcessInline =
         (!isPdfUpload(effectiveFileName, effectiveFileType) &&
         ((hasExtractedText && parsedMetadataConfidence >= 95 && bytes.length <= 8_000_000) ||
