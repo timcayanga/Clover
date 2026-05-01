@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -1904,80 +1905,75 @@ function AccountsPageContent() {
                                 ["--brand-accent" as string]: accountBrand.accent,
                                 ["--brand-soft" as string]: accountBrand.background,
                               }}
-                              role="button"
-                              tabIndex={0}
-                              aria-label={`Open ${account.name} account`}
-                              onClick={() => {
-                                if (!isDeleting) {
-                                  openAccountDrawer(account);
-                                }
-                              }}
-                              onKeyDown={(event) => {
-                                if ((event.key === "Enter" || event.key === " ") && !isDeleting) {
-                                  event.preventDefault();
-                                  openAccountDrawer(account);
-                                }
-                              }}
                               data-state={isDeleting ? "deleting" : undefined}
                             >
-                              <div className="accounts-account-card__head">
-                                <div className="accounts-account-card__brand">
-                                  <AccountBrandMark accountBrand={accountBrand} label={account.name} />
-                                  <div>
-                                    <strong>{account.name}</strong>
-                                    <span>
-                                      {accountBrand.label}
-                                      {account.institution && account.institution !== accountBrand.label ? ` · ${account.institution}` : ""}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="accounts-account-card__actions">
-                                  {warning ? (
-                                    <span className="accounts-warning-wrap">
-                                      <button
-                                        className="accounts-warning-icon"
-                                        type="button"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          openDrawerForWarning(account, warning);
-                                        }}
-                                        title={warning}
-                                        aria-label={warning}
-                                      >
-                                        <span aria-hidden="true">⚠</span>
-                                      </button>
-                                      <span className="accounts-warning-tooltip" role="tooltip">
-                                        {warning}
-                                      </span>
-                                    </span>
-                                  ) : null}
-                                  <button
-                                    className="button button-secondary button-small accounts-row-button"
-                                    type="button"
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      openAccountDrawer(account);
-                                    }}
-                                    aria-label={`Open ${account.name} drawer`}
-                                  >
-                                    <span aria-hidden="true">&gt;</span>
-                                  </button>
-                                </div>
-                              </div>
+                              <Link
+                                className="accounts-account-card__link-overlay"
+                                href={getAccountPath(account)}
+                                prefetch={false}
+                                aria-label={`Open ${account.name} account`}
+                              />
 
-                              <div className="accounts-account-card__body">
-                                <div className="accounts-account-card__balance-row">
-                                  <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
-                                    {currencyFormatter.format(balanceValue)}
-                                  </div>
-                                  <div className="accounts-account-card__balance-meta">
-                                    {isDeleting ? (
-                                      <span className="accounts-account-card__balance-pill is-neutral">Deleting</span>
-                                    ) : (
-                                      <span className={`accounts-account-card__balance-pill is-${isLiability ? "danger" : "good"}`}>
-                                        {isLiability ? "Outstanding" : "Spendable"}
+                              <div className="accounts-account-card__content">
+                                <div className="accounts-account-card__head">
+                                  <div className="accounts-account-card__brand">
+                                    <AccountBrandMark accountBrand={accountBrand} label={account.name} />
+                                    <div>
+                                      <strong>{account.name}</strong>
+                                      <span>
+                                        {accountBrand.label}
+                                        {account.institution && account.institution !== accountBrand.label ? ` · ${account.institution}` : ""}
                                       </span>
-                                    )}
+                                    </div>
+                                  </div>
+                                  <div className="accounts-account-card__actions">
+                                    {warning ? (
+                                      <span className="accounts-warning-wrap">
+                                        <button
+                                          className="accounts-warning-icon"
+                                          type="button"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            openDrawerForWarning(account, warning);
+                                          }}
+                                          title={warning}
+                                          aria-label={warning}
+                                        >
+                                          <span aria-hidden="true">⚠</span>
+                                        </button>
+                                        <span className="accounts-warning-tooltip" role="tooltip">
+                                          {warning}
+                                        </span>
+                                      </span>
+                                    ) : null}
+                                    <button
+                                      className="button button-secondary button-small accounts-row-button"
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openAccountDrawer(account);
+                                      }}
+                                      aria-label={`Open ${account.name} drawer`}
+                                    >
+                                      <span aria-hidden="true">&gt;</span>
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="accounts-account-card__body">
+                                  <div className="accounts-account-card__balance-row">
+                                    <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
+                                      {currencyFormatter.format(balanceValue)}
+                                    </div>
+                                    <div className="accounts-account-card__balance-meta">
+                                      {isDeleting ? (
+                                        <span className="accounts-account-card__balance-pill is-neutral">Deleting</span>
+                                      ) : (
+                                        <span className={`accounts-account-card__balance-pill is-${isLiability ? "danger" : "good"}`}>
+                                          {isLiability ? "Outstanding" : "Spendable"}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               </div>

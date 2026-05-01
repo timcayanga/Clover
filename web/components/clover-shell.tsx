@@ -523,6 +523,12 @@ export function CloverShell({
   }, []);
 
   useEffect(() => {
+    setOpenMenu(null);
+    setIsSearchOpen(false);
+    setSearchQuery("");
+  }, [pathname]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const refreshSearchWorkspace = async () => {

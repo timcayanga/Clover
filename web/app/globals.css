@@ -533,7 +533,7 @@ label {
   border-radius: 0;
   overflow-y: auto;
   position: relative;
-  z-index: 20;
+  z-index: 120;
 }
 
 .sidebar-header {
@@ -12446,6 +12446,21 @@ input.transaction-inline-edit--amount::placeholder {
   overflow: hidden;
 }
 
+.accounts-account-card__link-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+.accounts-account-card__content {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  gap: 10px;
+  pointer-events: none;
+}
+
 .accounts-account-card::before {
   content: "";
   position: absolute;
@@ -12511,6 +12526,9 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   gap: 5px;
   flex: none;
+  pointer-events: auto;
+  position: relative;
+  z-index: 3;
 }
 
 .accounts-account-card__body {
