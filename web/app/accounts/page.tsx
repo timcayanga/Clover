@@ -2330,9 +2330,16 @@ function AccountsPageContent() {
               <p className="accounts-drawer__note">This removes the account and its linked transactions from the workspace.</p>
               {accountDeleteConfirmOpen ? (
                 <div className="detail-warning-box accounts-drawer__delete-confirm">
+                  <div className="detail-warning-box__header">
+                    <span className="detail-warning-box__icon" aria-hidden="true">
+                      <ActionIcon name="warning" />
+                    </span>
+                    <strong>Delete this account?</strong>
+                  </div>
                   <p>
-                    <strong>Delete account:</strong> This cannot be undone. All linked transactions will be removed too.
+                    This will remove <strong>{selectedAccount?.name ?? "this account"}</strong> from the workspace and also delete its linked transactions.
                   </p>
+                  <p>If you change your mind later, you can always add it again or re-import the original file.</p>
                   <div className="detail-warning-actions">
                     <button
                       className="button button-secondary button-small"
@@ -2343,7 +2350,7 @@ function AccountsPageContent() {
                       Cancel
                     </button>
                     <button className="button button-danger button-small" type="button" onClick={() => void deleteAccount()} disabled={accountDeleteBusy}>
-                      {accountDeleteBusy ? "Deleting..." : "Delete account"}
+                      {accountDeleteBusy ? "Deleting..." : "Yes, delete account"}
                     </button>
                   </div>
                 </div>

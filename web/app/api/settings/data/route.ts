@@ -6,7 +6,7 @@ import { hasCompatibleTable } from "@/lib/data-engine";
 
 export const dynamic = "force-dynamic";
 
-type DeleteScope = "transactions" | "balances";
+type DeleteScope = "transactions" | "balances" | "accounts";
 
 export async function DELETE(request: Request) {
   try {
@@ -43,24 +43,82 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ deleted: result.count });
     }
 
-    if (!(await hasCompatibleTable("AccountStatementCheckpoint"))) {
+    if (scope === "balances") {
+      if (!(await hasCompatibleTable("AccountStatementCheckpoint"))) {
+        return NextResponse.json({ deleted: 0 });
+      }
+
+      const result = await prisma.accountStatementCheckpoint.deleteMany({
+        where: {
+          workspaceId,
+          OR: [
+            { statementEndDate: { lt: cutoff } },
+            {
+              statementEndDate: null,
+              createdAt: { lt: cutoff },
+            },
+          ],
+        },
+      });
+
+      return NextResponse.json({ deleted: result.count });
+    }
+
+    const accountIds = (
+      await prisma.account.findMany({
+        where: {
+          workspaceId,
+          type: { not: "cash" },
+        },
+        select: { id: true },
+      })
+    ).map((account) => account.id);
+
+    if (accountIds.length === 0) {
       return NextResponse.json({ deleted: 0 });
     }
 
-    const result = await prisma.accountStatementCheckpoint.deleteMany({
-      where: {
-        workspaceId,
-        OR: [
-          { statementEndDate: { lt: cutoff } },
-          {
-            statementEndDate: null,
-            createdAt: { lt: cutoff },
+    await prisma.$transaction(async (tx) => {
+      await tx.transaction.deleteMany({
+        where: {
+          workspaceId,
+          accountId: { in: accountIds },
+        },
+      });
+
+      await tx.importFile.updateMany({
+        where: {
+          workspaceId,
+          accountId: { in: accountIds },
+        },
+        data: { accountId: null },
+      });
+
+      if (await hasCompatibleTable("AccountStatementCheckpoint")) {
+        await tx.accountStatementCheckpoint.deleteMany({
+          where: {
+            workspaceId,
+            accountId: { in: accountIds },
           },
-        ],
-      },
+        });
+      }
+
+      await tx.accountRule.deleteMany({
+        where: {
+          workspaceId,
+          accountId: { in: accountIds },
+        },
+      });
+
+      await tx.account.deleteMany({
+        where: {
+          workspaceId,
+          id: { in: accountIds },
+        },
+      });
     });
 
-    return NextResponse.json({ deleted: result.count });
+    return NextResponse.json({ deleted: accountIds.length });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -299,7 +299,7 @@ export function SettingsHub({
     downloadBlob(blob, fileName);
   };
 
-  const runDelete = async (scope: "transactions" | "balances") => {
+  const runDelete = async (scope: "transactions" | "balances" | "accounts") => {
     const response = await fetch("/api/settings/data", {
       method: "DELETE",
       headers: {
@@ -530,7 +530,7 @@ export function SettingsHub({
                     disabled={isPending}
                     onClick={() =>
                       handleAction(async () => {
-                        if (!window.confirm("Delete transaction history before the selected date?")) {
+                        if (!window.confirm("Delete transaction history before the selected date? This only removes transactions and leaves your accounts in place.")) {
                           return;
                         }
                         const deleted = await runDelete("transactions");
@@ -545,8 +545,78 @@ export function SettingsHub({
 
               <article className="settings-action-card">
                 <div>
-                  <h5>Delete account balance history</h5>
-                  <p>Remove statement checkpoint history before the chosen date.</p>
+                  <h5>Delete accounts</h5>
+                  <p>Remove non-cash accounts in this workspace together with their linked transactions.</p>
+                </div>
+                <div className="settings-action-card__row">
+                  <button
+                    type="button"
+                    className="button button-danger button-small"
+                    disabled={isPending}
+                    onClick={() =>
+                      handleAction(async () => {
+                        if (
+                          !window.confirm(
+                            "Delete all non-cash accounts in this workspace? Their linked transactions will be removed too. Clover can recreate the default Cash account later if needed."
+                          )
+                        ) {
+                          return;
+                        }
+                        const deleted = await runDelete("accounts");
+                        setStatusMessage(`Deleted ${deleted} account${deleted === 1 ? "" : "s"} from this workspace.`);
+                      })
+                    }
+                  >
+                    Delete accounts
+                  </button>
+                </div>
+              </article>
+
+              <article className="settings-action-card">
+                <div>
+                  <h5>Delete all Clover data</h5>
+                  <p>Start fresh by removing app data across all of your workspaces while keeping your login.</p>
+                </div>
+                <div className="settings-action-card__row">
+                  <button
+                    type="button"
+                    className="button button-danger button-small"
+                    disabled={isPending}
+                    onClick={() =>
+                      handleAction(async () => {
+                        if (
+                          !window.confirm(
+                            "Delete all Clover data across every workspace? This removes your accounts, transactions, imports, and learned data, but keeps your Clover login."
+                          )
+                        ) {
+                          return;
+                        }
+
+                        const response = await fetch("/api/account/wipe-data", {
+                          method: "POST",
+                          headers: {
+                            "Content-Type": "application/json",
+                          },
+                        });
+
+                        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+                        if (!response.ok) {
+                          throw new Error(payload.error ?? "Unable to delete Clover data.");
+                        }
+
+                        window.location.assign("/dashboard");
+                      })
+                    }
+                  >
+                    Delete all data
+                  </button>
+                </div>
+              </article>
+
+              <article className="settings-action-card">
+                <div>
+                  <h5>Delete balance history</h5>
+                  <p>Remove older statement checkpoints before the chosen date without deleting the accounts themselves.</p>
                 </div>
                 <div className="settings-action-card__row">
                   <label className="settings-inline-field">
@@ -559,7 +629,7 @@ export function SettingsHub({
                     disabled={isPending}
                     onClick={() =>
                       handleAction(async () => {
-                        if (!window.confirm("Delete balance history before the selected date?")) {
+                        if (!window.confirm("Delete balance history before the selected date? This only removes old statement checkpoints.")) {
                           return;
                         }
                         const deleted = await runDelete("balances");
@@ -567,7 +637,7 @@ export function SettingsHub({
                       })
                     }
                   >
-                    Delete balances
+                    Delete balance history
                   </button>
                 </div>
               </article>

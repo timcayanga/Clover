@@ -1025,6 +1025,16 @@ function AccountDetailPageContent() {
 
         {deleteConfirmOpen ? (
           <div className="detail-warning-box accounts-detail__delete-confirm" style={{ marginTop: 20 }}>
+            <div className="detail-warning-box__header">
+              <span className="detail-warning-box__icon" aria-hidden="true">
+                <ActionIcon name="warning" />
+              </span>
+              <strong>Delete this account?</strong>
+            </div>
+            <p>
+              This will remove <strong>{account.name}</strong> from Clover and also delete any linked transactions for this account.
+            </p>
+            <p>If you still need it later, you can always add the account again or re-import its files.</p>
             <div className="detail-warning-actions">
               <button
                 className="button button-secondary button-small"
@@ -1035,7 +1045,7 @@ function AccountDetailPageContent() {
                 Cancel
               </button>
               <button className="button button-danger button-small" type="button" onClick={() => void deleteAccount()} disabled={deleteBusy}>
-                {deleteBusy ? "Deleting..." : "Delete"}
+                {deleteBusy ? "Deleting..." : "Yes, delete account"}
               </button>
             </div>
           </div>
