@@ -2465,7 +2465,6 @@ function AccountsPageContent() {
               <div>
                 <p className="eyebrow">Accounts</p>
                 <h4 id="add-account-title">Add an account</h4>
-                <p className="modal-copy">Create a manual account with a name, type, and starting balance.</p>
               </div>
               <button className="icon-button" type="button" onClick={() => setAddOpen(false)} aria-label="Close add account">
                 ×
@@ -2488,7 +2487,7 @@ function AccountsPageContent() {
                       variant="account"
                     />
                     <label className="accounts-add-fields__account-number">
-                      Account number <span className="field-optional">Optional</span>
+                      Account number <span className="field-optional">(optional)</span>
                       <input
                         value={manualAccountNumber}
                         onChange={(event) => setManualAccountNumber(event.target.value)}

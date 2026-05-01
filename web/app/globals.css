@@ -13613,7 +13613,7 @@ input.transaction-inline-edit--amount::placeholder {
   margin-left: 6px;
   color: var(--muted);
   font-size: 0.72rem;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .accounts-add-brand-tile {
