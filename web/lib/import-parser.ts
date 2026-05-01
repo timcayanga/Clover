@@ -269,7 +269,7 @@ const detectInstitutionFromText = (text: string) => {
 const detectAccountNumberFromText = (text: string) => {
   const labeledAccountSection =
     text.match(
-      /\b(?:ACCOUNT\s*(?:NO|NUMBER|#)?|ACCT\s*(?:NO|NUMBER|#)?|A\/C\s*(?:NO|NUMBER|#)?|CARD\s*(?:NO|NUMBER|#)?|NO)\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i
+      /\b(?:ACCOUNT\s*(?:NO|NUMBER|#)?|ACCT\s*(?:NO|NUMBER|#)?|A\/C\s*(?:NO|NUMBER|#)?|CARD\s*(?:NO|NUMBER|#)?|CUSTOMER\s*(?:NO|NUMBER|#)?|NO)\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i
     )?.[1] ?? "";
   const cardAccountSection =
     text.match(/\b(?:\d[\d\s-]{10,}\d)\b/g)
@@ -1547,6 +1547,43 @@ const parseBpiCreditCardImportText = (text: string) => {
       })
     )
     .filter(Boolean) as ParsedImportRow[];
+
+  const financeChargeLine = lines.find((line) => {
+    const compactLine = collapseBpiCreditCardOcrLine(line).replace(/\s+/g, "").toUpperCase();
+    return compactLine.startsWith("FINANCECHARGE");
+  });
+  const financeChargeAmount = parseMoney(
+    collapseBpiCreditCardOcrLine(financeChargeLine ?? "")
+      .match(/FINANCE\s*CHARGE\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ??
+      collapseBpiCreditCardOcrLine(financeChargeLine ?? "")
+        .match(/FINANCECHARGE\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ??
+      null
+  );
+  const hasFinanceChargeRow = rows.some((row) => /finance\s*charge/i.test(`${row.merchantRaw ?? ""} ${row.description ?? ""}`));
+  if (financeChargeAmount !== null && financeChargeAmount > 0 && !hasFinanceChargeRow) {
+    const financeChargeDate = metadata.startDate ?? metadata.endDate ?? null;
+    rows.splice(Math.min(1, rows.length), 0, {
+      date: financeChargeDate ?? new Date().toISOString().slice(0, 10),
+      amount: financeChargeAmount.toFixed(2),
+      merchantRaw: "Finance Charge",
+      merchantClean: "Finance charge",
+      description: "Finance charge",
+      categoryName: "Financial",
+      accountName: metadata.accountName ?? formatSimpleBankAccountName("BPI", metadata.accountNumber?.slice(-4) ?? "9001"),
+      institution: metadata.institution ?? "BPI",
+      type: "expense",
+      rawPayload: {
+        bank: "BPI",
+        accountName: metadata.accountName ?? null,
+        accountNumber: metadata.accountNumber,
+        statementDate: metadata.startDate,
+        paymentDueDate: metadata.endDate,
+        kind: "summary_finance_charge",
+        amountText: financeChargeAmount.toFixed(2),
+        line: "Finance Charge",
+      },
+    });
+  }
 
   if (rows.length === 0) {
     return null;

@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 export type UploadInsightsSummary = {
   fileName: string;
   rowsImported: number;
@@ -45,6 +47,16 @@ type UploadInsightsToastProps = {
 };
 
 export function UploadInsightsToast({ summary, onClose }: UploadInsightsToastProps) {
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      onClose();
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [onClose]);
+
   return (
     <aside className="upload-insights-toast glass" role="status" aria-live="polite">
       <div className="upload-insights-toast__eyebrow">Import complete</div>
@@ -55,14 +67,10 @@ export function UploadInsightsToast({ summary, onClose }: UploadInsightsToastPro
             {summary.rowsImported} row{summary.rowsImported === 1 ? "" : "s"} from {summary.fileName} are categorized and ready to review.
           </p>
         </div>
-        <button type="button" className="icon-button upload-insights-toast__close" onClick={onClose} aria-label="Close insights popup">
-          ×
-        </button>
-      </div>
-
-      <div className="upload-insights-toast__callout">
-        Accounts and Transactions update first. Insights are not part of the customer import flow.
-      </div>
+          <button type="button" className="icon-button upload-insights-toast__close" onClick={onClose} aria-label="Close insights popup">
+            ×
+          </button>
+        </div>
 
       <div className="upload-insights-toast__actions">
         <button type="button" className="button button-secondary button-small" onClick={onClose}>
