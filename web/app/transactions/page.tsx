@@ -999,6 +999,7 @@ function ActionIcon({
 }: {
   name:
     | "plus"
+    | "chevron-left"
     | "chevron-down"
     | "chevron-right"
     | "undo"
@@ -1029,6 +1030,12 @@ function ActionIcon({
         <svg {...common}>
           <path d="M12 5v14" />
           <path d="M5 12h14" />
+        </svg>
+      );
+    case "chevron-left":
+      return (
+        <svg {...common}>
+          <path d="m15 6-6 6 6 6" />
         </svg>
       );
     case "chevron-down":
@@ -2118,6 +2125,11 @@ function TransactionsPageContent() {
     return null;
   };
 
+  const detailWarningReasonFor = (transaction: Transaction) => {
+    const warningReason = warningReasonFor(transaction);
+    return warningReason === "Possible duplicate" ? null : warningReason;
+  };
+
   const isReviewableTransaction = (transaction: Transaction) => {
     return Boolean(warningReasonFor(transaction));
   };
@@ -2127,7 +2139,7 @@ function TransactionsPageContent() {
     [transactions, transactionsSummary.firstReviewTransaction]
   );
 
-  const selectedTransactionWarningReason = selectedTransaction ? warningReasonFor(selectedTransaction) : null;
+  const selectedTransactionWarningReason = selectedTransaction ? detailWarningReasonFor(selectedTransaction) : null;
   const selectedTransactionConfidenceSignals = selectedTransaction
     ? inferTransactionConfidenceSignals(selectedTransaction, selectedTransactionWarningReason)
     : [];
@@ -2136,6 +2148,25 @@ function TransactionsPageContent() {
         .filter((entry) => entry.before.id === selectedTransaction.id || entry.after.id === selectedTransaction.id)
         .slice(0, 3)
     : [];
+  const detailSelectedAccount = useMemo(
+    () => (detailDraft ? accounts.find((account) => account.id === detailDraft.accountId) ?? null : null),
+    [accounts, detailDraft]
+  );
+  const detailSelectedAccountBrand = useMemo(
+    () =>
+      detailSelectedAccount
+        ? getAccountBrand({
+            name: detailSelectedAccount.name,
+            institution: detailSelectedAccount.institution,
+            type: detailSelectedAccount.type,
+          })
+        : null,
+    [detailSelectedAccount]
+  );
+  const detailSelectedCategory = useMemo(
+    () => categories.find((category) => category.id === (detailDraft?.categoryId ?? otherCategoryId)) ?? null,
+    [categories, detailDraft?.categoryId, otherCategoryId]
+  );
 
   const nextReviewTransactionAfter = (transactionId: string) => {
     const startIndex = visibleTransactions.findIndex((transaction) => transaction.id === transactionId);
@@ -5262,182 +5293,44 @@ function TransactionsPageContent() {
       ) : null}
 
       {selectedTransaction ? (
-        <div className="modal-backdrop" role="presentation" onClick={closeTransactionDetail}>
+        <div className="modal-backdrop modal-backdrop--transaction-detail" role="presentation" onClick={closeTransactionDetail}>
           <section
-            className="modal-card modal-card--wide transaction-drawer glass"
+            className="modal-card modal-card--wide transaction-drawer transaction-drawer--sidepanel glass"
             role="dialog"
             aria-modal="true"
             aria-labelledby="transaction-notes-title"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="modal-head">
-              <div>
-                <p className="eyebrow">Transaction details</p>
-                <h4 id="transaction-notes-title">{detailDraft?.merchantClean || detailDraft?.merchantRaw || selectedTransaction.merchantRaw}</h4>
-                <p className="modal-copy">Edit the transaction, add notes, and resolve warnings in one place.</p>
+            <div className="modal-head transaction-drawer__head">
+              <div className="transaction-drawer__head-title">
+                <button
+                  className="icon-button transaction-drawer__back-button"
+                  type="button"
+                  onClick={closeTransactionDetail}
+                  aria-label="Back to transactions"
+                >
+                  <ActionIcon name="chevron-left" />
+                </button>
+                <div>
+                  <p className="eyebrow">Transaction details</p>
+                  <h4 id="transaction-notes-title">{detailDraft?.merchantClean || detailDraft?.merchantRaw || selectedTransaction.merchantRaw}</h4>
+                </div>
               </div>
-              <button className="icon-button" type="button" onClick={closeTransactionDetail} aria-label="Close notes dialog">
+              <button className="icon-button transaction-drawer__close-button" type="button" onClick={closeTransactionDetail} aria-label="Close transaction details">
                 ×
               </button>
             </div>
 
-            <div className="transaction-drawer-summary">
-              <div className="transaction-drawer-summary__row">
-                <span className="transaction-drawer-summary__label">Source</span>
-                <span className={`pill pill-neutral transaction-drawer-summary__pill transaction-drawer-summary__pill--${selectedTransaction.source ?? "unknown"}`}>
-                  {selectedTransaction.source === "manual" ? "Manual" : selectedTransaction.source === "upload" ? "Imported" : "Unknown"}
-                </span>
-                <span className="transaction-drawer-summary__label">Review</span>
-                <span
-                  className={`pill transaction-drawer-summary__pill ${
-                    selectedTransactionWarningReason
-                      ? "transaction-drawer-summary__pill--warn"
-                      : "transaction-drawer-summary__pill--clear"
-                  }`}
-                >
-                  {selectedTransactionWarningReason ?? "Clear"}
-                </span>
-              </div>
-
-              <div className="review-workbench__confidence-grid transaction-drawer-confidence-grid">
-                {selectedTransactionConfidenceSignals.map((signal) => (
-                  <div key={signal.label} className="review-workbench__confidence transaction-drawer-confidence-card">
-                    <div className="review-workbench__confidence-head">
-                      <strong>{signal.label}</strong>
-                      <span>
-                        {getConfidenceLabel(signal.value)} · {signal.value}%
-                      </span>
-                    </div>
-                    <div className="review-workbench__meter" aria-hidden="true">
-                      <span style={{ width: `${signal.value}%` }} />
-                    </div>
-                    <span className="transaction-drawer-confidence-note">{signal.note}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="transaction-drawer-summary__history">
-                <div className="transaction-drawer-summary__history-head">
-                  <span className="transactions-context-strip__label">Change history</span>
-                  <span className="transaction-drawer-summary__history-note">Only saved edits show here.</span>
-                </div>
-                {selectedTransactionHistory.length ? (
-                  <div className="transaction-drawer-summary__history-list">
-                    {selectedTransactionHistory.map((entry, index) => {
-                      const changes = summarizeTransactionChange(entry.before, entry.after, accountNameById, categoryNameById);
-                      return (
-                        <div key={`${entry.before.id}-${index}`} className="transaction-drawer-summary__history-item">
-                          <strong>{changes.length ? changes[0] : "Transaction updated"}</strong>
-                          {changes.length > 1 ? <span>{changes.slice(1).join(" · ")}</span> : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="transaction-drawer-summary__empty">No saved changes yet.</div>
-                )}
-              </div>
-            </div>
-
-            <div className="form-grid transaction-drawer-grid">
-              <label>
-                Date
-                <input
-                  type="date"
-                  value={detailDraft?.date ?? todayIso}
-                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, date: event.target.value } : current))}
-                />
-              </label>
-              <label>
-                Account
-                <select
-                  value={detailDraft?.accountId ?? ""}
-                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, accountId: event.target.value } : current))}
-                >
-                  {accounts.map((account) => (
-                    <option key={account.id} value={account.id}>
-                      {account.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Category
-                <select
-                  value={detailDraft?.categoryId ?? otherCategoryId}
-                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, categoryId: event.target.value } : current))}
-                >
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-                {detailCategorySuggestion ? (
-                  <CategorySuggestionChip
-                    suggestion={detailCategorySuggestion}
-                    applied={(detailDraft?.categoryId ?? otherCategoryId) === detailCategorySuggestion.categoryId}
-                    onApply={
-                      (detailDraft?.categoryId ?? otherCategoryId) === detailCategorySuggestion.categoryId
-                        ? undefined
-                        : () =>
-                            setDetailDraft((current) =>
-                              current ? { ...current, categoryId: detailCategorySuggestion.categoryId } : current
-                            )
-                    }
-                  />
-                ) : null}
-              </label>
-              <label>
-                Amount
-                <input
-                  type="number"
-                  step="0.01"
-                  value={detailDraft?.amount ?? selectedTransaction.amount}
-                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, amount: event.target.value } : current))}
-                />
-              </label>
-              <label>
-                Type
-                <select
-                  value={detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : "debit")}
-                  onChange={(event) =>
-                    setDetailDraft((current) =>
-                      current
-                        ? {
-                            ...current,
-                            type: event.target.value as TransactionDetailDraft["type"],
-                          }
-                        : current
-                    )
-                  }
-                >
-                  <option value="debit">Debit</option>
-                  <option value="credit">Credit</option>
-                </select>
-              </label>
-              <label className="span-2">
-                Notes
-                <textarea
-                  value={detailDraft?.description ?? ""}
-                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, description: event.target.value } : current))}
-                  placeholder="Optional context, receipt notes, or review comments"
-                />
-              </label>
-            </div>
-
             {selectedTransactionWarningReason ? (
-              <div className="detail-warning-box">
+              <div className="detail-warning-box detail-warning-box--compact">
                 <div className="detail-warning-box__header">
                   <span className="detail-warning-box__icon" aria-hidden="true">
                     <span className="warning-mark warning-mark--small" aria-hidden="true" />
                   </span>
                   <strong>Review warning</strong>
+                  <span className="detail-warning-box__reason">{selectedTransactionWarningReason}</span>
                 </div>
-                <p>
-                  <strong>Warning:</strong> {selectedTransactionWarningReason}
-                </p>
-                <div className="detail-warning-actions">
+                <div className="detail-warning-actions detail-warning-actions--compact">
                   <button
                     className="button button-primary button-small"
                     type="button"
@@ -5449,60 +5342,157 @@ function TransactionsPageContent() {
                           isTransfer: false,
                           reviewStatus: "confirmed",
                         },
-                        "Warning accepted.",
+                        "Transaction kept.",
                         "accepted"
                       );
                     }}
                   >
-                    Accept
+                    Keep transaction
                   </button>
                   <button
                     className="button button-secondary button-small detail-warning-delete"
                     type="button"
                     onClick={() => {
-                      resolveTransactionWarning(
-                        selectedTransaction,
-                        {
-                          isExcluded: true,
-                          isTransfer: selectedTransaction.isTransfer,
-                          reviewStatus: "rejected",
-                        },
-                        "Transaction ignored.",
-                        "rejected"
-                      );
+                      setTransactionDeleteConfirmOpen(true);
                     }}
                   >
-                    Ignore
+                    Delete transaction
                   </button>
                 </div>
               </div>
             ) : null}
 
+            <div className="manual-form-layout transaction-drawer-form">
+              <div className="manual-form-layout__triple transaction-drawer-form__primary-row">
+                <label>
+                  Date
+                  <input
+                    type="date"
+                    value={detailDraft?.date ?? todayIso}
+                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, date: event.target.value } : current))}
+                  />
+                </label>
+                <label>
+                  Amount
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={detailDraft?.amount ?? selectedTransaction.amount}
+                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, amount: event.target.value } : current))}
+                  />
+                </label>
+                <label>
+                  <span className="transactions-manual-type-label">
+                    <span>Type</span>
+                    <button
+                      className="transactions-manual-type-help"
+                      type="button"
+                      title="Debit means money leaving the account. Credit means money coming in."
+                      aria-label="Type help"
+                    >
+                      i
+                    </button>
+                  </span>
+                  <div className="transactions-manual-type-control transaction-drawer-type-control">
+                    <span className="transactions-manual-type-symbol" aria-hidden="true">
+                      {(detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : "debit")) === "credit" ? "+" : "-"}
+                    </span>
+                    <select
+                      value={detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : "debit")}
+                      onChange={(event) =>
+                        setDetailDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                type: event.target.value as TransactionDetailDraft["type"],
+                              }
+                            : current
+                        )
+                      }
+                    >
+                      <option value="debit">Debit</option>
+                      <option value="credit">Credit</option>
+                    </select>
+                  </div>
+                </label>
+              </div>
+
+              <div className="manual-form-layout__double transaction-drawer-form__secondary-row">
+                <label>
+                  <span className="transaction-drawer-field-label">
+                    <span>Account</span>
+                    {detailSelectedAccountBrand ? (
+                      <AccountBrandMark
+                        accountBrand={detailSelectedAccountBrand}
+                        label={detailSelectedAccount?.name ?? "Account"}
+                      />
+                    ) : null}
+                  </span>
+                  <select
+                    value={detailDraft?.accountId ?? ""}
+                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, accountId: event.target.value } : current))}
+                  >
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span className="transaction-drawer-field-label">
+                    <span>Category</span>
+                    <span
+                      className="transaction-category-icon transaction-drawer-category-icon"
+                      style={getCategoryIconTone(detailSelectedCategory?.name ?? "Other")}
+                    >
+                      <img src={getCategoryIconSrc(detailSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
+                    </span>
+                  </span>
+                  <select
+                    value={detailDraft?.categoryId ?? otherCategoryId}
+                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, categoryId: event.target.value } : current))}
+                  >
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                  {detailCategorySuggestion ? (
+                    <CategorySuggestionChip
+                      suggestion={detailCategorySuggestion}
+                      applied={(detailDraft?.categoryId ?? otherCategoryId) === detailCategorySuggestion.categoryId}
+                      onApply={
+                        (detailDraft?.categoryId ?? otherCategoryId) === detailCategorySuggestion.categoryId
+                          ? undefined
+                          : () =>
+                              setDetailDraft((current) =>
+                                current ? { ...current, categoryId: detailCategorySuggestion.categoryId } : current
+                              )
+                      }
+                    />
+                  ) : null}
+                </label>
+              </div>
+            </div>
+
             <div className="form-actions detail-actions">
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={() => {
-                  resolveTransactionWarning(
-                    selectedTransaction,
-                    {
-                      isExcluded: true,
-                      isTransfer: selectedTransaction.isTransfer,
-                      reviewStatus: "rejected",
-                    },
-                    "Transaction ignored.",
-                    "rejected"
-                  );
-                }}
-              >
-                Ignore
-              </button>
+              {!selectedTransactionWarningReason ? (
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  onClick={() => setTransactionDeleteConfirmOpen(true)}
+                >
+                  Delete transaction
+                </button>
+              ) : null}
               {transactionDeleteConfirmOpen ? (
                 <div className="detail-warning-box transaction-delete-confirm">
                   <p>
                     <strong>Delete transaction:</strong> This cannot be undone.
                   </p>
-                  <div className="detail-warning-actions">
+                  <div className="detail-warning-actions detail-warning-actions--compact">
                     <button
                       className="button button-secondary button-small"
                       type="button"
@@ -5516,16 +5506,7 @@ function TransactionsPageContent() {
                     </button>
                   </div>
                 </div>
-              ) : (
-                <button
-                  className="button button-secondary"
-                  type="button"
-                  onClick={() => setTransactionDeleteConfirmOpen(true)}
-                  disabled={isSaving}
-                >
-                  Delete transaction
-                </button>
-              )}
+              ) : null}
               <button className="button button-primary" type="button" disabled={isSaving} onClick={saveDetailDraft}>
                 {isSaving ? "Saving..." : "Save changes"}
               </button>
