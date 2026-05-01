@@ -14,6 +14,7 @@ import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { formatTransactionDirectionLabel } from "@/lib/transaction-directions";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
+  applyOptimisticWorkspaceTransactionDeletion,
   applyOptimisticWorkspaceAccountDeletion,
   clearDeletedWorkspaceAccount,
   clearDeletingWorkspaceAccount,
@@ -330,6 +331,8 @@ function AccountDetailPageContent() {
   const [message, setMessage] = useState("Loading account history...");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [transactionDeleteTarget, setTransactionDeleteTarget] = useState<Transaction | null>(null);
+  const [transactionDeleteBusy, setTransactionDeleteBusy] = useState(false);
   const [hasInitialDataLoaded, setHasInitialDataLoaded] = useState(false);
 
   useEffect(() => {
@@ -761,6 +764,36 @@ function AccountDetailPageContent() {
     }
   };
 
+  const deleteTransactionRemote = async (transactionId: string) => {
+    const response = await fetch(`/api/transactions/${transactionId}`, {
+      method: "DELETE",
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to delete transaction.");
+    }
+  };
+
+  const deleteTransaction = async (transaction: Transaction) => {
+    if (!account) {
+      return;
+    }
+
+    setTransactionDeleteBusy(true);
+    try {
+      await deleteTransactionRemote(transaction.id);
+      applyOptimisticWorkspaceTransactionDeletion(account.workspaceId, transaction.id);
+      setTransactions((current) => current.filter((entry) => entry.id !== transaction.id));
+      setTransactionTotalCount((current) => Math.max(0, current - 1));
+      setTransactionDeleteTarget(null);
+      setMessage("Transaction deleted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete transaction.");
+    } finally {
+      setTransactionDeleteBusy(false);
+    }
+  };
+
   const openTransactionsPage = () => {
     if (!account) {
       return;
@@ -1062,12 +1095,51 @@ function AccountDetailPageContent() {
                       <div className="accounts-detail__transaction-category">{transaction.categoryName || "Other"}</div>
                       <div className="accounts-detail__transaction-type">{getTransactionTypeLabel(transaction.type)}</div>
                       <div className={`accounts-detail__transaction-amount ${amountToneClass}`}>
-                        {formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}
+                        <span>{formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}</span>
+                        <button
+                          className="button button-secondary button-small accounts-detail__transaction-delete"
+                          type="button"
+                          onClick={() => setTransactionDeleteTarget(transaction)}
+                          disabled={transactionDeleteBusy}
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
                   );
                 })}
               </div>
+              {transactionDeleteTarget ? (
+                <div className="detail-warning-box accounts-detail__transaction-delete-confirm" style={{ marginTop: 16 }}>
+                  <div className="detail-warning-box__header">
+                    <span className="detail-warning-box__icon" aria-hidden="true">
+                      <ActionIcon name="warning" />
+                    </span>
+                    <strong>Delete this transaction?</strong>
+                  </div>
+                  <p>
+                    This will remove <strong>{transactionDeleteTarget.merchantClean || transactionDeleteTarget.merchantRaw}</strong> from this account and from your transactions list.
+                  </p>
+                  <div className="detail-warning-actions">
+                    <button
+                      className="button button-secondary button-small"
+                      type="button"
+                      onClick={() => setTransactionDeleteTarget(null)}
+                      disabled={transactionDeleteBusy}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="button button-danger button-small"
+                      type="button"
+                      onClick={() => void deleteTransaction(transactionDeleteTarget)}
+                      disabled={transactionDeleteBusy}
+                    >
+                      {transactionDeleteBusy ? "Deleting..." : "Yes, delete transaction"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
               {hasMoreTransactions ? (
                 <div className="accounts-detail__transactions-more">
                   <button className="button button-secondary button-small" type="button" onClick={() => void loadMoreTransactions()} disabled={transactionsLoadingMore}>

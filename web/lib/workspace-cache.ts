@@ -689,6 +689,67 @@ export const applyOptimisticWorkspaceAccountDeletion = (workspaceId: string, acc
   }
 };
 
+export const applyOptimisticWorkspaceTransactionDeletion = (workspaceId: string, transactionId: string) => {
+  if (!workspaceId || !transactionId) {
+    return;
+  }
+
+  const transactionMatches = (entry: CachedRecord) => typeof entry.id === "string" && entry.id === transactionId;
+
+  const accountsCache = readAccountsWorkspaceCache();
+  if (accountsCache?.snapshots[workspaceId]) {
+    const snapshot = accountsCache.snapshots[workspaceId];
+    const nextSnapshot: AccountsWorkspaceCacheSnapshot = {
+      ...snapshot,
+      updatedAt: Date.now(),
+      transactions: snapshot.transactions.filter((entry) => !transactionMatches(entry)),
+    };
+
+    writeJsonCache(accountsWorkspaceCacheKey, {
+      ...accountsCache,
+      snapshots: {
+        ...accountsCache.snapshots,
+        [workspaceId]: nextSnapshot,
+      },
+    } satisfies AccountsWorkspaceCacheState);
+  }
+
+  const transactionsCache = readJsonCache<TransactionsWorkspaceStateLike>(transactionsWorkspaceCacheKey);
+  if (transactionsCache?.snapshots && typeof transactionsCache.snapshots === "object" && transactionsCache.snapshots[workspaceId]) {
+    const snapshot = transactionsCache.snapshots[workspaceId];
+    const currentTransactions = Array.isArray(snapshot.transactions) ? snapshot.transactions : [];
+    const nextTransactions = currentTransactions.filter((entry) => !transactionMatches(entry as CachedRecord));
+    const removedCount = currentTransactions.length - nextTransactions.length;
+    const nextSnapshot = {
+      ...snapshot,
+      updatedAt: Date.now(),
+      transactions: nextTransactions,
+      totalCount:
+        typeof snapshot.totalCount === "number"
+          ? Math.max(0, snapshot.totalCount - removedCount)
+          : snapshot.totalCount,
+      summary:
+        snapshot.summary && typeof snapshot.summary === "object"
+          ? {
+              ...snapshot.summary,
+              totalCount:
+                typeof snapshot.summary.totalCount === "number"
+                  ? Math.max(0, snapshot.summary.totalCount - removedCount)
+                  : snapshot.summary.totalCount,
+            }
+          : snapshot.summary,
+    };
+
+    writeJsonCache(transactionsWorkspaceCacheKey, {
+      ...transactionsCache,
+      snapshots: {
+        ...transactionsCache.snapshots,
+        [workspaceId]: nextSnapshot,
+      },
+    });
+  }
+};
+
 export const clearWorkspaceCache = (workspaceId: string) => {
   if (!workspaceId) {
     return;
