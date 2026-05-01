@@ -339,8 +339,9 @@ function AccountDetailPageContent() {
           } as Account)
         : null;
       if (
-        getDeletingWorkspaceAccountIds(cachedWorkspaceId).includes(accountId) ||
-        getDeletedWorkspaceAccountIds(cachedWorkspaceId).includes(accountId)
+        !cachedAccount &&
+        (getDeletingWorkspaceAccountIds(cachedWorkspaceId).includes(accountId) ||
+          getDeletedWorkspaceAccountIds(cachedWorkspaceId).includes(accountId))
       ) {
         router.replace("/accounts");
         return;

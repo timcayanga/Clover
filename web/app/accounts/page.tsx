@@ -850,6 +850,21 @@ function AccountsPageContent() {
       if (accountsResponse.ok) {
         const payload = await accountsResponse.json();
         const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+        for (const fetchedAccount of fetchedAccounts) {
+          clearDeletedWorkspaceAccount(workspaceId, fetchedAccount.id);
+          clearDeletingWorkspaceAccount(workspaceId, fetchedAccount.id);
+        }
+        deletedAccountIdsRef.current = new Set(
+          getDeletedWorkspaceAccountIds(workspaceId).filter(
+            (deletedId) => !fetchedAccounts.some((account) => account.id === deletedId)
+          )
+        );
+        deletingAccountIdsRef.current = new Set(
+          getDeletingWorkspaceAccountIds(workspaceId).filter(
+            (deletingId) => !fetchedAccounts.some((account) => account.id === deletingId)
+          )
+        );
+        setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
         setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current, deletedAccountIdsRef.current));
         setAccountRules(Array.isArray(payload.accountRules) ? payload.accountRules : []);
         setStatementCheckpoints(Array.isArray(payload.statementCheckpoints) ? (payload.statementCheckpoints as StatementCheckpoint[]) : []);
