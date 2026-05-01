@@ -67,6 +67,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     id: optimisticAccountId,
     name: summary.accountName,
     institution: summary.institution,
+    accountNumber: summary.accountNumber ?? null,
     type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
     currency: "PHP",
     balance: summary.balance,
@@ -1313,6 +1314,7 @@ function TransactionsPageContent() {
   const [transactions, setTransactions] = useState<Transaction[]>(
     () => (initialCachedWorkspace?.transactions as Transaction[]) ?? []
   );
+  const transactionsRef = useRef<Transaction[]>(initialCachedWorkspace?.transactions as Transaction[] ?? []);
   const [imports, setImports] = useState<ImportFile[]>(
     () => (initialCachedWorkspace?.imports as ImportFile[]) ?? []
   );
@@ -1372,6 +1374,10 @@ function TransactionsPageContent() {
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
+
+  useEffect(() => {
+    transactionsRef.current = transactions;
+  }, [transactions]);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
   const [manualCategorySuggestion, setManualCategorySuggestion] = useState<CategorySuggestion | null>(null);
   const [detailCategorySuggestion, setDetailCategorySuggestion] = useState<CategorySuggestion | null>(null);
@@ -1568,18 +1574,18 @@ function TransactionsPageContent() {
       }
 
       const payload = await response.json();
-      setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
+      const fetchedTransactions = Array.isArray(payload.transactions) ? payload.transactions : [];
+      const mergedTransactions = mergeImportedWorkspaceTransactions(transactionsRef.current, fetchedTransactions);
+      setTransactions(mergedTransactions);
       setTransactionsSummary(
         payload.summary && typeof payload.summary === "object"
           ? {
               totalCount:
                 typeof payload.totalCount === "number"
-                  ? payload.totalCount
+                  ? Math.max(payload.totalCount, mergedTransactions.length)
                   : typeof payload.summary.totalCount === "number"
-                    ? payload.summary.totalCount
-                    : Array.isArray(payload.transactions)
-                      ? payload.transactions.length
-                      : 0,
+                    ? Math.max(payload.summary.totalCount, mergedTransactions.length)
+                    : fetchedTransactions.length,
               income: typeof payload.summary.income === "number" ? payload.summary.income : 0,
               spending: typeof payload.summary.spending === "number" ? payload.summary.spending : 0,
               transfers: typeof payload.summary.transfers === "number" ? payload.summary.transfers : 0,
@@ -1602,10 +1608,8 @@ function TransactionsPageContent() {
           : {
               totalCount:
                 typeof payload.totalCount === "number"
-                  ? payload.totalCount
-                  : Array.isArray(payload.transactions)
-                    ? payload.transactions.length
-                    : 0,
+                  ? Math.max(payload.totalCount, mergedTransactions.length)
+                  : mergedTransactions.length,
               income: 0,
               spending: 0,
               transfers: 0,

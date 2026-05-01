@@ -25,6 +25,7 @@ import {
   findCachedTransactionsForAccount,
   markDeletedWorkspaceAccount,
   normalizeImportedAccountKey,
+  mergeImportedWorkspaceTransactions,
 } from "@/lib/workspace-cache";
 import {
   getInvestmentFieldConfigs,
@@ -480,17 +481,12 @@ function AccountDetailPageContent() {
               const nextTransactions = Array.isArray(transactionsPayload?.transactions)
                 ? transactionsPayload.transactions
                 : [];
-              const mergedTransactions =
-                nextTransactions.length > 0
-                  ? nextTransactions
-                  : cachedTransactions.length > 0
-                    ? cachedTransactions
-                    : nextTransactions;
+              const mergedTransactions = mergeImportedWorkspaceTransactions(cachedTransactions, nextTransactions);
               setTransactions(mergedTransactions);
               setTransactionPage(typeof transactionsPayload?.page === "number" ? transactionsPayload.page : 1);
               setTransactionTotalCount(
                 typeof transactionsPayload?.totalCount === "number" && transactionsPayload.totalCount > 0
-                  ? transactionsPayload.totalCount
+                  ? Math.max(transactionsPayload.totalCount, mergedTransactions.length)
                   : mergedTransactions.length
               );
               setTransactionsError(null);

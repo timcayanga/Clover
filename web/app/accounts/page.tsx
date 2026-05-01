@@ -98,7 +98,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     id: optimisticAccountId,
     name: summary.accountName,
     institution: summary.institution,
-    accountNumber: null,
+    accountNumber: summary.accountNumber ?? null,
     investmentSubtype: null,
     investmentSymbol: null,
     investmentQuantity: null,
@@ -919,7 +919,8 @@ function AccountsPageContent() {
 
           if (transactionsResponse.ok) {
             const payload = await transactionsResponse.json();
-            setTransactions(Array.isArray(payload.transactions) ? payload.transactions : []);
+            const fetchedTransactions = Array.isArray(payload.transactions) ? payload.transactions : [];
+            setTransactions((current) => mergeImportedWorkspaceTransactions(current, fetchedTransactions));
           }
         } catch {
           // Background transaction hydration is best-effort.
