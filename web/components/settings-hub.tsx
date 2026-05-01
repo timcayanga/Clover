@@ -401,12 +401,7 @@ export function SettingsHub({
           <section className="settings-section settings-section--profile" role="tabpanel">
             <div className="settings-section__intro">
               <div>
-                <p className="eyebrow">Profile</p>
-                <h4>{[firstName, lastName].filter(Boolean).join(" ") || "Your account"}</h4>
-                <p>
-                  Manage picture, names, email, password, social sign-ins, connected accounts, and account deletion with
-                  Clerk’s built-in profile experience.
-                </p>
+                <h4>Profile</h4>
               </div>
               <div className="settings-profile-summary">
                 <span className="settings-profile-summary__label">Email</span>
@@ -426,9 +421,7 @@ export function SettingsHub({
           <section className="settings-section" role="tabpanel">
             <div className="settings-section__intro">
               <div>
-                <p className="eyebrow">Display</p>
-                <h4>Look and feel</h4>
-                <p>Choose the color mode Clover should use on this device.</p>
+                <h4>Display</h4>
               </div>
               <div className="settings-profile-summary">
                 <span className="settings-profile-summary__label">Current mode</span>
@@ -461,9 +454,7 @@ export function SettingsHub({
           <section className="settings-section" role="tabpanel">
             <div className="settings-section__intro">
               <div>
-                <p className="eyebrow">Data</p>
-                <h4>Export and cleanup</h4>
-                <p>Download your data or prune older history without touching the rest of the workspace.</p>
+                <h4>Data</h4>
               </div>
               <div className="settings-profile-summary">
                 <span className="settings-profile-summary__label">Workspace</span>
@@ -660,7 +651,6 @@ export function SettingsHub({
           <section className="settings-section" role="tabpanel">
             <div className="settings-section__intro settings-section__intro--single">
               <div>
-                <p className="eyebrow">Plan</p>
                 <h4>Plan</h4>
               </div>
             </div>
@@ -753,23 +743,23 @@ export function SettingsHub({
                         ) : isFree ? (
                           <div className="settings-plan-card__cta">
                             {option.value === "annual" && annualCheckoutReady ? (
-                            <PayPalSubscribeButton
-                              clientId={paypalClientId!}
-                              planId={paypalAnnualPlanId!}
-                              customId={workspaceId}
-                              buyerCountry={paypalBuyerCountry}
-                              className="settings-plan-card__paypal"
-                              fundingSource="card"
-                            />
-                          ) : option.value === "monthly" && monthlyCheckoutReady ? (
-                            <PayPalSubscribeButton
-                              clientId={paypalClientId!}
-                              planId={paypalMonthlyPlanId!}
-                              customId={workspaceId}
-                              buyerCountry={paypalBuyerCountry}
-                              className="settings-plan-card__paypal"
-                              fundingSource="card"
-                            />
+                              <PayPalSubscribeButton
+                                clientId={paypalClientId!}
+                                planId={paypalAnnualPlanId!}
+                                customId={workspaceId}
+                                buyerCountry={paypalBuyerCountry}
+                                className="settings-plan-card__paypal"
+                                fundingSource="card"
+                              />
+                            ) : option.value === "monthly" && monthlyCheckoutReady ? (
+                              <PayPalSubscribeButton
+                                clientId={paypalClientId!}
+                                planId={paypalMonthlyPlanId!}
+                                customId={workspaceId}
+                                buyerCountry={paypalBuyerCountry}
+                                className="settings-plan-card__paypal"
+                                fundingSource="card"
+                              />
                             ) : (
                               <p className="settings-helper">PayPal checkout is not configured yet.</p>
                             )}

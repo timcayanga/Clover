@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState, type R
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
+import { formatCurrencyAmount } from "@/lib/currency-format";
 import { persistSelectedWorkspaceId, readSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches, clearLegacyWorkspaceCaches } from "@/lib/workspace-cache";
 
@@ -31,6 +32,7 @@ type CloverShellProps = {
     | "accounts"
     | "investments"
     | "transactions"
+    | "recurring"
     | "reports"
     | "insights"
     | "goals"
@@ -55,6 +57,7 @@ type SidebarSearchAccount = {
   institution: string | null;
   type: string;
   balance: string | null;
+  currency: string | null;
   investmentSymbol: string | null;
   investmentSubtype: string | null;
 };
@@ -117,6 +120,14 @@ const sidebarSearchPages: Array<{
     icon: "transactions",
     detail: "Search, review, and categorize activity.",
     terms: ["transactions", "transaction", "activity", "spend", "spending", "review"],
+  },
+  {
+    key: "recurring",
+    title: "Recurring",
+    href: "/recurring",
+    icon: "recurring",
+    detail: "Upcoming payments, reminders, and repeating costs.",
+    terms: ["recurring", "scheduled", "upcoming", "payments", "bills", "reminders", "loans"],
   },
   {
     key: "investments",
@@ -222,16 +233,13 @@ const getSidebarSearchBlob = (account: SidebarSearchAccount) =>
     .join(" ")
     .toLowerCase();
 
-const formatSidebarMoney = new Intl.NumberFormat("en-PH", {
-  style: "currency",
-  currency: "PHP",
-  minimumFractionDigits: 2,
-});
+const formatSidebarMoney = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "MIXED");
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", key: "dashboard" as const },
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
+  { href: "/recurring", label: "Recurring", key: "recurring" as const },
   { href: "/investments", label: "Investments", key: "investments" as const },
   { href: "/reports", label: "Reports", key: "reports" as const },
   { href: "/insights", label: "Insights", key: "insights" as const },
@@ -243,6 +251,7 @@ type IconName =
   | "accounts"
   | "investments"
   | "transactions"
+  | "recurring"
   | "reports"
   | "insights"
   | "goals"
@@ -363,6 +372,15 @@ function MenuIcon({ name }: { name: IconName }) {
           <path d="M7 7l3 3" />
           <path d="M17 17l-3-3" />
           <path d="M17 17l-3 3" />
+        </svg>
+      );
+    case "recurring":
+      return (
+        <svg {...common}>
+          <path d="M7 7h10" />
+          <path d="M17 7v4" />
+          <path d="M17 7c-1.2-1.7-3.1-2.7-5.2-2.7-3.8 0-6.8 3-6.8 6.7s3 6.7 6.8 6.7c2.2 0 4.1-1 5.3-2.7" />
+          <path d="M7 17v-4" />
         </svg>
       );
     case "reports":
@@ -709,7 +727,10 @@ export function CloverShell({
             : "Account"),
         href: `/accounts?q=${encodeURIComponent(searchQuery.trim())}`,
         icon: account.type === "investment" ? "investments" : "accounts",
-        badge: account.balance && account.balance !== "0" ? `PHP ${Number(account.balance).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined,
+        badge:
+          account.balance && account.balance !== "0"
+            ? formatSidebarMoney(Number(account.balance), account.currency)
+            : undefined,
       }));
   }, [normalizedSearchQuery, searchAccounts, searchQuery]);
 
@@ -788,8 +809,8 @@ export function CloverShell({
       title: `${searchTicker.symbol} ticker`,
       detail:
         searchTicker.market === "ph"
-          ? `PH market • ${formatSidebarMoney.format(searchTicker.latest.value)}`
-          : `US market • ${formatSidebarMoney.format(searchTicker.latest.value)}`,
+          ? `PH market • ${formatSidebarMoney(searchTicker.latest.value, "PHP")}`
+          : `US market • ${formatSidebarMoney(searchTicker.latest.value, "USD")}`,
       href: `/investments?q=${encodeURIComponent(searchTicker.symbol)}`,
       icon: "investments",
       badge:
@@ -1047,28 +1068,17 @@ export function CloverShell({
                 <span className="sidebar-popover__title">{displayName}</span>
               </div>
               <div className="sidebar-popover__links sidebar-popover__links--bare">
-                <Link
-                  className="sidebar-popover__link sidebar-popover__link--bare"
+                <button
+                  className="sidebar-popover__link sidebar-popover__button sidebar-popover__link--bare"
+                  type="button"
+                  onClick={() => navigateTo("/settings")}
                   role="menuitem"
-                  href="/settings"
-                  onClick={() => setOpenMenu(null)}
                 >
                   <span className="sidebar-popover__link-icon" aria-hidden="true">
                     <MenuIcon name="settings" />
                   </span>
                   <span>Settings</span>
-                </Link>
-                <Link
-                  className="sidebar-popover__link sidebar-popover__link--bare"
-                  role="menuitem"
-                  href={pathname ? `/help?returnTo=${encodeURIComponent(pathname)}` : "/help"}
-                  onClick={() => setOpenMenu(null)}
-                >
-                  <span className="sidebar-popover__link-icon" aria-hidden="true">
-                    <MenuIcon name="help" />
-                  </span>
-                  <span>Help</span>
-                </Link>
+                </button>
                 <button
                   className="sidebar-popover__link sidebar-popover__button sidebar-popover__button--danger sidebar-popover__link--bare"
                   type="button"

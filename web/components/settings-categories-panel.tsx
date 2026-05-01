@@ -24,12 +24,269 @@ const CATEGORY_TYPE_OPTIONS: Array<{ value: TransactionType; label: string }> = 
 
 const normalizeName = (value: string) => value.trim().toLowerCase();
 
-function categoryTypeLabel(type: TransactionType) {
-  return CATEGORY_TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type;
+type CategoryIconVariant =
+  | "income"
+  | "food"
+  | "transport"
+  | "housing"
+  | "bills"
+  | "travel"
+  | "entertainment"
+  | "shopping"
+  | "health"
+  | "education"
+  | "financial"
+  | "gifts"
+  | "business"
+  | "cash"
+  | "transfer"
+  | "other"
+  | "spark"
+  | "star"
+  | "tag"
+  | "leaf";
+
+const CUSTOM_CATEGORY_ICON_VARIANTS: CategoryIconVariant[] = ["spark", "star", "tag", "leaf", "business", "shopping", "health", "travel"];
+
+const CATEGORY_ICON_STYLE_TONES = [
+  { background: "rgba(3, 168, 192, 0.12)", color: "var(--accent)" },
+  { background: "rgba(110, 231, 183, 0.18)", color: "rgb(5, 150, 105)" },
+  { background: "rgba(15, 23, 42, 0.08)", color: "rgb(71, 85, 105)" },
+  { background: "rgba(56, 189, 248, 0.14)", color: "rgb(2, 132, 199)" },
+  { background: "rgba(167, 139, 250, 0.16)", color: "rgb(109, 40, 217)" },
+  { background: "rgba(251, 191, 36, 0.16)", color: "rgb(180, 83, 9)" },
+] as const;
+
+function hashString(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash;
 }
 
-function CategoryBadge({ label, muted = false }: { label: string; muted?: boolean }) {
-  return <span className={`settings-pill${muted ? " settings-pill--muted" : ""}`}>{label}</span>;
+function getCategoryIconVariant(category: CategoryRecord): CategoryIconVariant {
+  const normalized = normalizeName(category.name);
+
+  if (!category.isSystem) {
+    return CUSTOM_CATEGORY_ICON_VARIANTS[hashString(normalized) % CUSTOM_CATEGORY_ICON_VARIANTS.length];
+  }
+
+  if (normalized === "income") return "income";
+  if (normalized === "food & dining") return "food";
+  if (normalized === "transport") return "transport";
+  if (normalized === "housing") return "housing";
+  if (normalized === "bills & utilities") return "bills";
+  if (normalized === "travel & lifestyle") return "travel";
+  if (normalized === "entertainment") return "entertainment";
+  if (normalized === "shopping") return "shopping";
+  if (normalized === "health & wellness") return "health";
+  if (normalized === "education") return "education";
+  if (normalized === "financial") return "financial";
+  if (normalized === "gifts & donations") return "gifts";
+  if (normalized === "business") return "business";
+  if (normalized === "cash & atm") return "cash";
+  if (normalized === "transfers") return "transfer";
+  return "other";
+}
+
+function getCategoryIconTone(category: CategoryRecord) {
+  const base = CATEGORY_ICON_STYLE_TONES[hashString(category.name) % CATEGORY_ICON_STYLE_TONES.length];
+  if (category.isSystem) {
+    return category.type === "income"
+      ? { background: "rgba(34, 197, 94, 0.14)", color: "rgb(22, 101, 52)" }
+      : category.type === "transfer"
+        ? { background: "rgba(99, 102, 241, 0.14)", color: "rgb(67, 56, 202)" }
+        : { background: "rgba(3, 168, 192, 0.12)", color: "var(--accent)" };
+  }
+
+  return base;
+}
+
+function CategoryIconPath({ variant }: { variant: CategoryIconVariant }) {
+  const common = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    strokeWidth: 1.8,
+  };
+
+  switch (variant) {
+    case "income":
+      return (
+        <>
+          <path d="M7 14.5 12 9.5l5 5" {...common} />
+          <path d="M12 9.5V18" {...common} />
+        </>
+      );
+    case "food":
+      return (
+        <>
+          <path d="M8 4v16" {...common} />
+          <path d="M12 4v16" {...common} />
+          <path d="M16 4v16" {...common} />
+          <path d="M7 8h6" {...common} />
+          <path d="M12 8h5" {...common} />
+        </>
+      );
+    case "transport":
+      return (
+        <>
+          <path d="M5 14h14" {...common} />
+          <path d="M7 14V9.8c0-.8.6-1.5 1.4-1.6l7-.9c1-.1 1.9.5 2.2 1.4l1.4 4.3" {...common} />
+          <circle cx="8.5" cy="15.5" r="1.25" {...common} />
+          <circle cx="15.5" cy="15.5" r="1.25" {...common} />
+        </>
+      );
+    case "housing":
+      return (
+        <>
+          <path d="M4.5 11.5 12 5l7.5 6.5" {...common} />
+          <path d="M6.5 10.8V19h11v-8.2" {...common} />
+          <path d="M10 19v-4h4v4" {...common} />
+        </>
+      );
+    case "bills":
+      return (
+        <>
+          <path d="M13.5 3.5 7 13h4l-1 7 7-10h-4l1.5-6.5Z" {...common} />
+        </>
+      );
+    case "travel":
+      return (
+        <>
+          <path d="M4.5 14.5 19.5 7l-6.5 15-2.2-6.2-6.3-1.3Z" {...common} />
+          <path d="m11.2 15.8 4.8-4.8" {...common} />
+        </>
+      );
+    case "entertainment":
+      return (
+        <>
+          <path d="m12 5 1.4 4.1L17.5 10l-4.1 1.4L12 15.5l-1.4-4.1L6.5 10l4.1-1.4L12 5Z" {...common} />
+        </>
+      );
+    case "shopping":
+      return (
+        <>
+          <path d="M6.5 8h11l-1 11h-9l-1-11Z" {...common} />
+          <path d="M9 8a3 3 0 0 1 6 0" {...common} />
+        </>
+      );
+    case "health":
+      return (
+        <>
+          <path d="M12 18 5.5 11.8A3.8 3.8 0 0 1 12 7.5a3.8 3.8 0 0 1 6.5 4.3L12 18Z" {...common} />
+        </>
+      );
+    case "education":
+      return (
+        <>
+          <path d="M5 8.5 12 5l7 3.5-7 3.5-7-3.5Z" {...common} />
+          <path d="M7.5 10v4.5c0 1.5 2 2.8 4.5 2.8s4.5-1.3 4.5-2.8V10" {...common} />
+        </>
+      );
+    case "financial":
+      return (
+        <>
+          <path d="M5 17h14" {...common} />
+          <path d="M7 15V9" {...common} />
+          <path d="M11 15V7.5" {...common} />
+          <path d="M15 15V11" {...common} />
+        </>
+      );
+    case "gifts":
+      return (
+        <>
+          <path d="M5 9h14v4H5z" {...common} />
+          <path d="M6.5 13v6h11v-6" {...common} />
+          <path d="M12 9v10" {...common} />
+          <path d="M12 9c-1.8 0-3-1-3-2.2 0-1 .8-1.8 1.8-1.8 1.7 0 3.2 2.3 3.2 4Z" {...common} />
+          <path d="M12 9c1.8 0 3-1 3-2.2 0-1-.8-1.8-1.8-1.8-1.7 0-3.2 2.3-3.2 4Z" {...common} />
+        </>
+      );
+    case "business":
+      return (
+        <>
+          <rect x="5" y="7" width="14" height="12" rx="2" {...common} />
+          <path d="M9 7V5.5h6V7" {...common} />
+          <path d="M5 12h14" {...common} />
+        </>
+      );
+    case "cash":
+      return (
+        <>
+          <rect x="4.5" y="7" width="15" height="10" rx="2" {...common} />
+          <path d="M8 12h8" {...common} />
+          <circle cx="12" cy="12" r="2" {...common} />
+        </>
+      );
+    case "transfer":
+      return (
+        <>
+          <path d="M7 7h10" {...common} />
+          <path d="M10 4 7 7l3 3" {...common} />
+          <path d="M17 17H7" {...common} />
+          <path d="M14 14 17 17l-3 3" {...common} />
+        </>
+      );
+    case "spark":
+      return (
+        <>
+          <path d="m12 4 1.3 4.1L17.5 9.5l-4.2 1.4L12 15l-1.3-4.1-4.2-1.4 4.2-1.4L12 4Z" {...common} />
+        </>
+      );
+    case "star":
+      return (
+        <>
+          <path d="m12 4 1.9 4 4.4.6-3.2 3.1.8 4.4-3.9-2.1-3.9 2.1.8-4.4-3.2-3.1 4.4-.6L12 4Z" {...common} />
+        </>
+      );
+    case "tag":
+      return (
+        <>
+          <path d="M5.5 9.5 11 4h7.5v7.5L13 17l-7.5-7.5Z" {...common} />
+          <circle cx="15.2" cy="8.2" r="1.1" {...common} />
+        </>
+      );
+    case "leaf":
+      return (
+        <>
+          <path d="M19 5c-5.5 0-10 4.5-10 10 0 2.8 1.2 4.5 1.2 4.5s1.7-.2 4.5-1.2C19.5 17 19 5 19 5Z" {...common} />
+          <path d="M9 15c1.2-1.8 3.1-3.6 6-5.2" {...common} />
+        </>
+      );
+    case "other":
+    default:
+      return (
+        <>
+          <circle cx="12" cy="12" r="4.5" {...common} />
+          <path d="M12 4.5v2" {...common} />
+          <path d="M19.5 12h-2" {...common} />
+          <path d="M12 17.5v2" {...common} />
+          <path d="M6.5 12h-2" {...common} />
+        </>
+      );
+  }
+}
+
+function CategoryIcon({ category }: { category: CategoryRecord }) {
+  const variant = getCategoryIconVariant(category);
+  const tone = getCategoryIconTone(category);
+
+  return (
+    <span className="settings-category-table__icon" aria-hidden="true" style={tone}>
+      <svg viewBox="0 0 24 24" className="settings-category-table__icon-mark">
+        <CategoryIconPath variant={variant} />
+      </svg>
+    </span>
+  );
+}
+
+function categoryTypeLabel(type: TransactionType) {
+  return CATEGORY_TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type;
 }
 
 export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }) {
@@ -99,6 +356,7 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
     () => categories.filter((category) => !category.isArchived && !category.isSystem),
     [categories]
   );
+  const activeCategories = useMemo(() => [...activeBuiltInCategories, ...activeCustomCategories], [activeBuiltInCategories, activeCustomCategories]);
   const archivedCategories = useMemo(() => categories.filter((category) => category.isArchived), [categories]);
 
   const upsertCategory = (category: CategoryRecord) => {
@@ -281,40 +539,17 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
     }
   };
 
-  const summary = useMemo(
-    () => ({
-      activeBuiltIn: activeBuiltInCategories.length,
-      activeCustom: activeCustomCategories.length,
-      archived: archivedCategories.length,
-    }),
-    [activeBuiltInCategories.length, activeCustomCategories.length, archivedCategories.length]
-  );
-
   return (
     <section className="settings-category-manager">
       <div className="settings-section__intro">
         <div>
-          <p className="eyebrow">Categories</p>
-          <h4>Workspace categories</h4>
-          <p>
-            Built-in categories stay protected. Custom categories are workspace-specific and appear in Transactions without
-            changing Clover&apos;s trained statement mappings.
-          </p>
-        </div>
-        <div className="settings-profile-summary">
-          <span className="settings-profile-summary__label">Built-in</span>
-          <strong>{summary.activeBuiltIn}</strong>
-          <span className="settings-profile-summary__label">Custom</span>
-          <strong>{summary.activeCustom}</strong>
-          <span className="settings-profile-summary__label">Archived</span>
-          <strong>{summary.archived}</strong>
+          <h4>Categories</h4>
         </div>
       </div>
 
       <article className="settings-action-card settings-category-creator">
         <div>
           <h5>Add custom category</h5>
-          <p>Create workspace-specific categories for Transactions only. Use archive instead of hard delete so old rows stay traceable.</p>
         </div>
         <div className="settings-category-creator__fields">
           <label className="settings-inline-field">
@@ -341,94 +576,79 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
         </div>
       </article>
 
-      <div className="settings-category-columns">
-        <section className="settings-category-list">
-          <div className="settings-category-list__head">
-            <h5>Built-in categories</h5>
-            <CategoryBadge label="Locked" />
-          </div>
-          <div className="settings-category-grid">
-            {isLoading ? (
-              <p className="settings-helper">Loading categories...</p>
-            ) : activeBuiltInCategories.length > 0 ? (
-              activeBuiltInCategories.map((category) => (
-                <article key={category.id} className="settings-category-card settings-category-card--locked">
-                  <div className="settings-category-card__main">
-                    <div className="settings-category-card__title">
+      <section className="settings-category-table" aria-label="Categories">
+        <div className="settings-category-table__row settings-category-table__row--head">
+          <span>Category</span>
+          <span>Type</span>
+          <span>Source</span>
+          <span>Actions</span>
+        </div>
+
+        {isLoading ? (
+          <div className="settings-category-table__empty">Loading categories...</div>
+        ) : activeCategories.length > 0 ? (
+          activeCategories.map((category) => {
+            const draft = drafts[category.id] ?? { name: category.name, type: category.type };
+            const hasChanges = normalizeName(draft.name) !== normalizeName(category.name) || draft.type !== category.type;
+            const busy = busyCategoryId === category.id;
+            const isCustom = !category.isSystem;
+
+            return (
+              <div key={category.id} className={`settings-category-table__row${category.isSystem ? " settings-category-table__row--system" : ""}`}>
+                <div className="settings-category-table__name">
+                  <CategoryIcon category={category} />
+                  <div className="settings-category-table__name-copy">
+                    {isCustom ? (
+                      <input
+                        value={draft.name}
+                        onChange={(event) =>
+                          setDrafts((current) => ({
+                            ...current,
+                            [category.id]: {
+                              ...draft,
+                              name: event.target.value,
+                            },
+                          }))
+                        }
+                        disabled={busy}
+                      />
+                    ) : (
                       <strong>{category.name}</strong>
-                      <CategoryBadge label={categoryTypeLabel(category.type)} muted />
-                    </div>
-                    <p className="settings-helper">Built-in Clover category.</p>
+                    )}
                   </div>
-                </article>
-              ))
-            ) : (
-              <p className="settings-helper">No built-in categories found.</p>
-            )}
-          </div>
-        </section>
+                </div>
 
-        <section className="settings-category-list">
-          <div className="settings-category-list__head">
-            <h5>Custom categories</h5>
-            <CategoryBadge label="Workspace" muted />
-          </div>
-          <div className="settings-category-grid">
-            {activeCustomCategories.length > 0 ? (
-              activeCustomCategories.map((category) => {
-                const draft = drafts[category.id] ?? { name: category.name, type: category.type };
-                const hasChanges = normalizeName(draft.name) !== normalizeName(category.name) || draft.type !== category.type;
-                const busy = busyCategoryId === category.id;
+                <div className="settings-category-table__type">
+                  {isCustom ? (
+                    <select
+                      value={draft.type}
+                      onChange={(event) =>
+                        setDrafts((current) => ({
+                          ...current,
+                          [category.id]: {
+                            ...draft,
+                            type: event.target.value as TransactionType,
+                          },
+                        }))
+                      }
+                      disabled={busy}
+                    >
+                      {CATEGORY_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span>{categoryTypeLabel(category.type)}</span>
+                  )}
+                </div>
 
-                return (
-                  <article key={category.id} className="settings-category-card">
-                    <div className="settings-category-card__main">
-                      <div className="settings-category-card__title">
-                        <CategoryBadge label="Custom" muted />
-                        <span className="settings-category-card__subtitle">Appears in Transactions</span>
-                      </div>
-                      <div className="settings-category-card__fields">
-                        <label className="settings-inline-field">
-                          <span>Name</span>
-                          <input
-                            value={draft.name}
-                            onChange={(event) =>
-                              setDrafts((current) => ({
-                                ...current,
-                                [category.id]: {
-                                  ...draft,
-                                  name: event.target.value,
-                                },
-                              }))
-                            }
-                            disabled={busy}
-                          />
-                        </label>
-                        <label className="settings-inline-field">
-                          <span>Type</span>
-                          <select
-                            value={draft.type}
-                            onChange={(event) =>
-                              setDrafts((current) => ({
-                                ...current,
-                                [category.id]: {
-                                  ...draft,
-                                  type: event.target.value as TransactionType,
-                                },
-                              }))
-                            }
-                            disabled={busy}
-                          >
-                            {CATEGORY_TYPE_OPTIONS.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      </div>
-                    </div>
-                    <div className="settings-category-card__actions">
+                <div className="settings-category-table__source">{category.isSystem ? "Built-in" : "Custom"}</div>
+
+                <div className="settings-category-table__actions">
+                  {isCustom ? (
+                    <>
                       <button
                         type="button"
                         className="button button-secondary button-small"
@@ -445,53 +665,53 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
                       >
                         Delete
                       </button>
-                    </div>
-                  </article>
-                );
-              })
-            ) : (
-              <p className="settings-helper">No custom categories yet.</p>
-            )}
+                    </>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          <div className="settings-category-table__empty">No categories found.</div>
+        )}
+      </section>
+
+      {archivedCategories.length > 0 ? (
+        <section className="settings-category-table settings-category-table--archived" aria-label="Archived categories">
+          <div className="settings-category-table__row settings-category-table__row--head">
+            <span>Archived</span>
+            <span>Type</span>
+            <span>Source</span>
+            <span>Actions</span>
           </div>
+          {archivedCategories.map((category) => {
+            const busy = busyCategoryId === category.id;
+
+            return (
+              <div key={category.id} className="settings-category-table__row settings-category-table__row--archived">
+                <div className="settings-category-table__name">
+                  <CategoryIcon category={category} />
+                  <div className="settings-category-table__name-copy">
+                    <strong>{category.name}</strong>
+                  </div>
+                </div>
+                <div className="settings-category-table__type">{categoryTypeLabel(category.type)}</div>
+                <div className="settings-category-table__source">{category.isSystem ? "Built-in" : "Custom"}</div>
+                <div className="settings-category-table__actions">
+                  <button
+                    type="button"
+                    className="button button-secondary button-small"
+                    onClick={() => void restoreCategory(category.id)}
+                    disabled={busy}
+                  >
+                    {busy ? "Restoring..." : "Restore"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
         </section>
-
-        {archivedCategories.length > 0 ? (
-          <section className="settings-category-list settings-category-list--archived">
-            <div className="settings-category-list__head">
-              <h5>Archived categories</h5>
-              <CategoryBadge label="Hidden" muted />
-            </div>
-            <div className="settings-category-grid">
-              {archivedCategories.map((category) => {
-                const busy = busyCategoryId === category.id;
-
-                return (
-                  <article key={category.id} className="settings-category-card settings-category-card--archived">
-                    <div className="settings-category-card__main">
-                      <div className="settings-category-card__title">
-                        <strong>{category.name}</strong>
-                        <CategoryBadge label={category.isSystem ? "Built-in" : "Custom"} muted />
-                        <CategoryBadge label={categoryTypeLabel(category.type)} muted />
-                      </div>
-                      <p className="settings-helper">Archived categories stay hidden from pickers until restored.</p>
-                    </div>
-                    <div className="settings-category-card__actions">
-                      <button
-                        type="button"
-                        className="button button-secondary button-small"
-                        onClick={() => void restoreCategory(category.id)}
-                        disabled={busy}
-                      >
-                        {busy ? "Restoring..." : "Restore"}
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          </section>
-        ) : null}
-      </div>
+      ) : null}
 
       {errorMessage ? <p className="settings-status settings-status--error">{errorMessage}</p> : null}
       {statusMessage ? <p className="settings-status">{statusMessage}</p> : null}
