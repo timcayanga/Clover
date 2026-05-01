@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { InfoIcon } from "@/components/info-icon";
 
 type InfoTooltipProps = {
   label: string;
@@ -67,11 +68,7 @@ export function InfoTooltip({ label, title, align = "right" }: InfoTooltipProps)
         onBlur={() => setIsOpen(false)}
         onClick={() => setIsOpen((current) => !current)}
       >
-        <svg aria-hidden="true" viewBox="0 0 20 20" className="info-tooltip__icon">
-          <circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" strokeWidth="1.6" />
-          <path d="M10 8.2v4.1" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-          <circle cx="10" cy="5.8" r="0.9" fill="currentColor" />
-        </svg>
+        <InfoIcon className="info-tooltip__icon" />
       </button>
       {isOpen && panelStyle
         ? createPortal(

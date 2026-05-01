@@ -1350,11 +1350,13 @@ body[data-clover-page-modal] .sidebar-backdrop {
   width: 16px;
   height: 16px;
   padding: 0;
-  border: 0;
+  border: 1px solid rgba(148, 163, 184, 0.38);
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.12);
-  color: var(--muted-2);
+  background: rgba(255, 255, 255, 0.78);
+  color: rgba(100, 116, 139, 0.92);
   cursor: help;
+  appearance: none;
+  box-shadow: none;
   transition: background-color 140ms ease, color 140ms ease;
 }
 
@@ -1366,6 +1368,32 @@ body[data-clover-page-modal] .sidebar-backdrop {
 }
 
 .info-tooltip__icon {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+.report-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  background: rgba(255, 255, 255, 0.78);
+  color: rgba(100, 116, 139, 0.92);
+  cursor: help;
+  flex: none;
+  padding: 0;
+  appearance: none;
+  box-shadow: none;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.report-tip__icon {
   width: 12px;
   height: 12px;
   flex: none;
@@ -4346,26 +4374,6 @@ body[data-clover-page-modal] .sidebar-backdrop {
   align-items: center;
   gap: 8px;
   min-width: 0;
-}
-
-.report-tip {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.38);
-  background: rgba(255, 255, 255, 0.78);
-  color: rgba(100, 116, 139, 0.92);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1;
-  cursor: help;
-  flex: none;
-  padding: 0;
-  appearance: none;
-  box-shadow: none;
 }
 
 .report-tip::before {
@@ -14787,6 +14795,13 @@ input.transaction-inline-edit--amount::placeholder {
 .admin-data-qa__training-sync-actions {
   display: flex;
   justify-content: flex-start;
+}
+
+.admin-data-qa__submit-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
 }
 
 .admin-data-qa__guidance-card {
