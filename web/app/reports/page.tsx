@@ -1239,8 +1239,9 @@ async function ReportsStream({
           }}
         />
         {isEmptyWorkspace ? (
-          <div style={{ marginBottom: 20 }}>
+          <div className="reports-empty-wrap">
             <EmptyDataCta
+              className="reports-empty-state"
               eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
               title="Your reports are ready for new data."
               copy="Add transactions and accounts, and Clover will populate cash flow, spending, review items, and goal-aware summaries for you."
