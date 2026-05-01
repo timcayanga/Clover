@@ -1487,6 +1487,54 @@ function AccountsPageContent() {
     return null;
   }, [manualType]);
 
+  const manualAccountReference = useMemo(() => {
+    if (manualType === "insurance") {
+      return {
+        label: "Policy number",
+        placeholder: "Example: POL-12345678",
+        helper: "Use a policy or member number if this insurance account has one.",
+      };
+    }
+
+    if (manualType === "prepaid") {
+      return {
+        label: "Card or reference number",
+        placeholder: "Example: GC-1024-7788",
+        helper: "Helpful for gift cards, stored-value cards, and other prepaid balances.",
+      };
+    }
+
+    if (manualType === "receivable") {
+      return {
+        label: "Invoice or reference number",
+        placeholder: "Example: INV-2026-001",
+        helper: "Use a reimbursement, invoice, or collection reference if you have one.",
+      };
+    }
+
+    if (manualType === "payable" || manualType === "bnpl") {
+      return {
+        label: "Reference number",
+        placeholder: "Example: REF-8291",
+        helper: "Use the merchant, billing, or plan reference number if it helps you track this obligation.",
+      };
+    }
+
+    if (manualType === "loan" || manualType === "mortgage" || manualType === "line_of_credit") {
+      return {
+        label: "Loan or account number",
+        placeholder: "Example: 1234 5678 9012",
+        helper: "Use the lender or account number if you want this liability easier to match later.",
+      };
+    }
+
+    return {
+      label: "Account number",
+      placeholder: "Example: 1234 5678 9012",
+      helper: null,
+    };
+  }, [manualType]);
+
   const accountEditInvestmentFieldConfigs = useMemo(
     () => getInvestmentFieldConfigs(accountEditType === "investment" ? accountEditInvestmentSubtype : null),
     [accountEditInvestmentSubtype, accountEditType]
@@ -2513,13 +2561,14 @@ function AccountsPageContent() {
                       variant="account"
                     />
                     <label className="accounts-add-fields__account-number">
-                      Account number <span className="field-optional">(optional)</span>
+                      {manualAccountReference.label} <span className="field-optional">(optional)</span>
                       <input
                         value={manualAccountNumber}
                         onChange={(event) => setManualAccountNumber(event.target.value)}
                         inputMode="numeric"
-                        placeholder="Example: 1234 5678 9012"
+                        placeholder={manualAccountReference.placeholder}
                       />
+                      {manualAccountReference.helper ? <span className="field-help">{manualAccountReference.helper}</span> : null}
                     </label>
                     <div className="accounts-add-fields__row">
                       <label>
