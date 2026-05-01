@@ -22129,6 +22129,94 @@ input.transaction-inline-edit--amount::placeholder {
   justify-content: space-between;
 }
 
+.settings-category-manager {
+  display: grid;
+  gap: 18px;
+}
+
+.settings-category-creator {
+  gap: 14px;
+}
+
+.settings-category-creator__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.settings-category-columns {
+  display: grid;
+  gap: 18px;
+}
+
+.settings-category-list {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-category-list__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-category-list__head h5 {
+  font-size: 16px;
+  letter-spacing: -0.02em;
+}
+
+.settings-category-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-category-card {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.settings-category-card--locked,
+.settings-category-card--archived {
+  background: rgba(247, 249, 250, 0.86);
+}
+
+.settings-category-card__main {
+  display: grid;
+  gap: 10px;
+}
+
+.settings-category-card__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-category-card__subtitle {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.settings-category-card__fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.7fr);
+  gap: 12px;
+}
+
+.settings-category-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .settings-inline-field {
   display: grid;
   gap: 6px;
@@ -22545,6 +22633,10 @@ input.transaction-inline-edit--amount::placeholder {
   font-weight: 500;
 }
 
+.settings-status--error {
+  color: #b45309;
+}
+
 @media (max-width: 1100px) {
   .settings-hub {
     grid-template-columns: 1fr;
@@ -22599,6 +22691,8 @@ input.transaction-inline-edit--amount::placeholder {
   .settings-choice-grid,
   .settings-data-grid,
   .settings-data-delete,
+  .settings-category-creator__fields,
+  .settings-category-card__fields,
   .settings-plan-grid,
   .settings-plan-usage,
   .admin-data-qa__sample-grid,
@@ -22630,6 +22724,11 @@ input.transaction-inline-edit--amount::placeholder {
 
   .settings-hub__brand-copy span {
     font-size: 12px;
+  }
+
+  .settings-category-creator__fields,
+  .settings-category-card__fields {
+    grid-template-columns: 1fr;
   }
 
   .line-item-header,

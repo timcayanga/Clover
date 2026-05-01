@@ -6,11 +6,12 @@ import { UserProfile } from "@clerk/nextjs";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { BillingActions } from "@/components/billing-actions";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
+import { SettingsCategoriesPanel } from "@/components/settings-categories-panel";
 import { type BillingInterval } from "@/lib/billing-plans";
 import { getPlanDisplayLabel } from "@/lib/user-limits";
 
 type ThemeMode = "light" | "dark" | "system";
-type SettingsSectionKey = "profile" | "display" | "data" | "plan";
+type SettingsSectionKey = "profile" | "display" | "data" | "categories" | "plan";
 
 type BillingSubscriptionSummary = {
   status: string;
@@ -111,6 +112,10 @@ const sectionCopy: Record<
   data: {
     title: "Data",
     icon: <SettingsIcon path="M4 6h16M6 6v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V6M9 10v6M15 10v6M10 3h4a1 1 0 0 1 1 1v2H9V4a1 1 0 0 1 1-1Z" />,
+  },
+  categories: {
+    title: "Categories",
+    icon: <SettingsIcon path="M5 6h14M5 12h14M5 18h14M8 6v12M12 6v12M16 6v12" />,
   },
   plan: {
     title: "Plan",
@@ -642,6 +647,12 @@ export function SettingsHub({
                 </div>
               </article>
             </div>
+          </section>
+        ) : null}
+
+        {activeSection === "categories" ? (
+          <section className="settings-section" role="tabpanel">
+            <SettingsCategoriesPanel workspaceId={workspaceId} />
           </section>
         ) : null}
 

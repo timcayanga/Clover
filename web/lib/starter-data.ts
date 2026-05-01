@@ -33,6 +33,8 @@ const starterCategorySelect = {
   name: true,
   type: true,
   parentCategoryId: true,
+  isSystem: true,
+  isArchived: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -132,6 +134,7 @@ export const ensureStarterWorkspace = async (
         create: DEFAULT_CATEGORY_ROWS.map((category) => ({
           name: category.name,
           type: category.type,
+          isSystem: true,
         })),
       },
     },
@@ -155,6 +158,7 @@ export const seedWorkspaceDefaults = async (workspaceId: string) => {
           workspaceId,
           name: category.name,
           type: category.type,
+          isSystem: true,
         },
       });
     }
