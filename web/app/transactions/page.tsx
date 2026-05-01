@@ -2179,10 +2179,6 @@ function TransactionsPageContent() {
       return null;
     }
 
-    if (!transaction.categoryId) {
-      return "Needs category review";
-    }
-
     return null;
   };
 
@@ -3754,12 +3750,12 @@ function TransactionsPageContent() {
           const warningReason = warningReasonFor(transaction);
           const amount = Number(transaction.amount);
           const categoryValue = transaction.categoryId ?? otherCategoryId;
-          const categoryLabel = categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+          const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
           const categoryIconSrc = new URL(
-            getCategoryIconSrc(transaction.categoryName ?? categoryLabel),
+            getCategoryIconSrc(categoryLabel),
             window.location.origin
           ).toString();
-          const categoryTone = getCategoryIconTone(transaction.categoryName ?? categoryLabel);
+          const categoryTone = getCategoryIconTone(categoryLabel);
           const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
           const merchantSummary = summarizeTransactionMerchantText(
             transaction.merchantClean ?? transaction.merchantRaw,
@@ -4400,7 +4396,7 @@ function TransactionsPageContent() {
                 const isPositive = transaction.type === "income";
                 const amountToneClass = isPositive ? "positive" : "negative";
                 const categoryValue = transaction.categoryId ?? otherCategoryId;
-                const categoryLabel = categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+                const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
                 const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
                 const merchantSummary = summarizeTransactionMerchantText(
                   transaction.merchantClean ?? transaction.merchantRaw,
@@ -4442,8 +4438,8 @@ function TransactionsPageContent() {
                       />
                     </label>
                     <div className="transaction-category-icon-cell" aria-hidden="true">
-                      <span className="transaction-category-icon" style={getCategoryIconTone(transaction.categoryName ?? categoryLabel)}>
-                        <img src={getCategoryIconSrc(transaction.categoryName ?? categoryLabel)} alt="" aria-hidden="true" />
+                      <span className="transaction-category-icon" style={getCategoryIconTone(categoryLabel)}>
+                        <img src={getCategoryIconSrc(categoryLabel)} alt="" aria-hidden="true" />
                       </span>
                     </div>
                     <div className="transaction-name-cell">
@@ -4597,7 +4593,7 @@ function TransactionsPageContent() {
                   const isPositive = transaction.type === "income";
                   const amountToneClass = isPositive ? "positive" : "negative";
                   const categoryValue = transaction.categoryId ?? otherCategoryId;
-                  const categoryLabel = categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+                  const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
                   const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
                   const merchantSummary = summarizeTransactionMerchantText(
                     transaction.merchantClean ?? transaction.merchantRaw,
@@ -4641,8 +4637,8 @@ function TransactionsPageContent() {
                           />
                         </label>
                         <span className="transaction-category-icon-cell transactions-mobile-card__icon" aria-hidden="true">
-                          <span className="transaction-category-icon" style={getCategoryIconTone(transaction.categoryName ?? categoryLabel)}>
-                            <img src={getCategoryIconSrc(transaction.categoryName ?? categoryLabel)} alt="" aria-hidden="true" />
+                          <span className="transaction-category-icon" style={getCategoryIconTone(categoryLabel)}>
+                            <img src={getCategoryIconSrc(categoryLabel)} alt="" aria-hidden="true" />
                           </span>
                         </span>
                         <div className="transactions-mobile-card__name">

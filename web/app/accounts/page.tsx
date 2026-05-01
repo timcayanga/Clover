@@ -824,18 +824,22 @@ function AccountsPageContent() {
         const accountTransactions = drawerAccountId === account.id
           ? drawerTransactions
           : transactions.filter((transaction) => transactionMatchesAccount(transaction, account));
-        const latestCheckpoint =
-          drawerAccountId === account.id
-            ? drawerStatementCheckpoints[0] ?? null
-            : getLatestCheckpointForAccount(account, statementCheckpoints);
-        const accountCheckpoints = latestCheckpoint ? [latestCheckpoint] : [];
-        const effectiveType = getEffectiveAccountType(account);
-        const reconciledBalance = deriveReconciledBalance({
-          balance: account.balance,
-          transactions: accountTransactions,
-          checkpoints: accountCheckpoints,
-        });
-        const normalizedBalance = normalizeAccountBalance(effectiveType, parseAmount(reconciledBalance ?? account.balance));
+                        const latestCheckpoint =
+                          drawerAccountId === account.id
+                            ? drawerStatementCheckpoints[0] ?? null
+                            : getLatestCheckpointForAccount(account, statementCheckpoints);
+                        const accountCheckpoints = latestCheckpoint ? [latestCheckpoint] : [];
+                        const effectiveType = getEffectiveAccountType(account);
+                        const checkpointBalance =
+                          latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance
+                            ? latestCheckpoint.endingBalance
+                            : null;
+                        const reconciledBalance = checkpointBalance ?? deriveReconciledBalance({
+                          balance: account.balance,
+                          transactions: accountTransactions,
+                          checkpoints: accountCheckpoints,
+                        });
+                        const normalizedBalance = normalizeAccountBalance(effectiveType, parseAmount(reconciledBalance ?? account.balance));
 
         return {
           ...account,

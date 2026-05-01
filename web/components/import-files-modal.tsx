@@ -157,7 +157,6 @@ const fileTypeLabel = (file: File) => {
   const lowerName = file.name.toLowerCase();
   if (lowerName.endsWith(".pdf") || file.type === "application/pdf") return "PDF";
   if (lowerName.endsWith(".csv")) return "CSV";
-  if (lowerName.endsWith(".json")) return "JSON";
   return "File";
 };
 
@@ -215,7 +214,7 @@ const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null
     stage === "password"
       ? "Unlock the file with its password and try again."
       : stage === "validation"
-        ? "Upload a clearer PDF, CSV, or JSON file."
+        ? "Upload a clearer PDF or CSV file."
         : "Re-upload the original statement and keep the tab open while Clover works.";
 
   const nextSteps =
@@ -226,7 +225,7 @@ const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null
           "You can always add missing transactions manually in Transactions.",
         ]
       : [
-          "Re-upload the original PDF, CSV, or JSON.",
+          "Re-upload the original PDF or CSV.",
           "If Clover still stalls, add the missing transactions manually in Transactions.",
           "If the statement looks off after import, check Review before confirming anything.",
         ];
@@ -730,7 +729,7 @@ export function ImportFilesModal({
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [launchInBackground, setLaunchInBackground] = useState(backgroundOnly);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("Upload CSV, PDF, or JSON files to import transactions and balances.");
+  const [message, setMessage] = useState("Upload PDF or CSV files to import transactions and balances.");
   const [validationNotice, setValidationNotice] = useState<string | null>(null);
   const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
@@ -837,7 +836,7 @@ export function ImportFilesModal({
       localPreparseStartedRef.current.clear();
       autoCloseAfterStartRef.current = false;
       accountIdByKeyRef.current.clear();
-      setMessage("Upload CSV, PDF, or JSON files to import transactions and balances.");
+      setMessage("Upload PDF or CSV files to import transactions and balances.");
       setValidationNotice(null);
       initialFilesSignatureRef.current = null;
       if (!items.some((item) => item.status === "pending" || item.status === "needs_password" || item.status === "parsing" || item.status === "importing")) {
@@ -871,7 +870,7 @@ export function ImportFilesModal({
 
       return defaultAccountId ?? "";
     });
-    setMessage("Upload CSV, PDF, or JSON files to import transactions and balances.");
+    setMessage("Upload PDF or CSV files to import transactions and balances.");
     setValidationNotice(null);
   }, [accounts, backgroundOnly, defaultAccountId, items, launchInBackground, open]);
 
@@ -1104,7 +1103,7 @@ export function ImportFilesModal({
         if (validationError) {
           if (validationError === "Import files must be 2 MB or smaller.") {
             validationIssues.push(`${file.name} is larger than 2 MB.`);
-          } else if (validationError === "Only PDF, CSV, and JSON files are supported.") {
+          } else if (validationError === "Only PDF and CSV files are supported.") {
             validationIssues.push(`${file.name} has an invalid file extension.`);
           } else {
             validationIssues.push(`${file.name} could not be added.`);
@@ -2857,7 +2856,10 @@ export function ImportFilesModal({
     }
   };
 
-  const activeItem = items.find((item) => item.status === "parsing" || item.status === "importing") ?? null;
+  const activeItem =
+    items.find((item) => item.status === "parsing" || item.status === "importing") ??
+    items.find((item) => item.status === "pending") ??
+    null;
   const activeItemIndex = activeItem ? items.findIndex((item) => item.id === activeItem.id) + 1 : null;
   const passwordItems = items.filter((item) => item.status === "needs_password");
   const activePasswordItem =
@@ -2881,7 +2883,7 @@ export function ImportFilesModal({
       ]
     : items.some((item) => item.status === "error")
       ? [
-          "Try uploading the original PDF, CSV, or JSON again, one file at a time.",
+          "Try uploading the original PDF or CSV again, one file at a time.",
           "If Clover says the file is not confident enough, add the transactions manually in Transactions.",
           "If the statement imported but still looks off, check the Review queue before confirming anything.",
         ]
@@ -3304,7 +3306,7 @@ export function ImportFilesModal({
             ref={fileInputRef}
             className="hidden-file-input"
             type="file"
-            accept=".csv,.pdf,.json"
+            accept=".csv,.pdf"
             multiple
             onChange={handleInputChange}
           />
@@ -3318,7 +3320,7 @@ export function ImportFilesModal({
         <div className="accounts-import-footer-copy">
           {validationNotice ? <p className="accounts-import-footer-copy__warning">{validationNotice}</p> : null}
           <p className="accounts-import-footer-copy__status">{message}</p>
-          <p>Accepted files: CSV, PDF, and JSON. Password-protected PDFs are supported.</p>
+          <p>Accepted files: PDF and CSV. Password-protected PDFs are supported.</p>
           <p>We upload the file first, then parse it on the server so the workflow stays responsive.</p>
         </div>
 

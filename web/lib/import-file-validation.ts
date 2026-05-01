@@ -1,12 +1,10 @@
 export const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
 
-const SUPPORTED_EXTENSIONS = [".pdf", ".csv", ".json"];
+const SUPPORTED_EXTENSIONS = [".pdf", ".csv"];
 const SUPPORTED_CONTENT_TYPES = new Set([
   "application/pdf",
   "text/csv",
   "application/csv",
-  "application/json",
-  "text/json",
 ]);
 
 const getFileExtension = (fileName: string) => {
@@ -40,7 +38,7 @@ export const validateImportFile = (params: {
   }
 
   if (!isSupportedImportFile(params.fileName, params.contentType)) {
-    return "Only PDF, CSV, and JSON files are supported.";
+    return "Only PDF and CSV files are supported.";
   }
 
   return null;
@@ -52,7 +50,7 @@ export const validateImportFileMetadata = (params: { fileName: string; contentTy
   }
 
   if (!isSupportedImportFile(params.fileName, params.contentType)) {
-    return "Only PDF, CSV, and JSON files are supported.";
+    return "Only PDF and CSV files are supported.";
   }
 
   return null;
