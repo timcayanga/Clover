@@ -13,6 +13,7 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { enqueueImportProcessing } from "@/lib/import-queue";
 import { ensureImportProcessingWorker } from "@/lib/import-worker-runtime";
 import { readImportedFileText } from "@/lib/import-file-text.server";
+import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { uploadObject } from "@/lib/s3";
 import { validateImportFile } from "@/lib/import-file-validation";
 import { countWorkspaceImportFilesThisMonth } from "@/lib/plan-access";
@@ -32,12 +33,14 @@ const upsertUploadBankHint = async (params: {
   workspaceId: string;
   bankName?: string | null;
   trainingMode?: "bank_context" | "generic_parser";
+  importMode?: ImportImageMode;
 }) => {
   const bankName = normalizeBankName(params.bankName ?? "");
   const hasBankName = Boolean(bankName && bankName !== "Unknown");
   const isGenericParserTraining = params.trainingMode === "generic_parser";
+  const hasImportMode = typeof params.importMode === "string";
 
-  if (!hasBankName && !isGenericParserTraining) {
+  if (!hasBankName && !isGenericParserTraining && !hasImportMode) {
     return;
   }
 
@@ -52,9 +55,14 @@ const upsertUploadBankHint = async (params: {
           uploadBankHint: bankName,
         }
       : {}),
-    uploadHintSource: isGenericParserTraining ? "admin_data_qa_generic_json_upload" : "admin_data_qa_bank_upload",
+    uploadHintSource: isGenericParserTraining
+      ? "admin_data_qa_generic_json_upload"
+      : hasBankName
+        ? "admin_data_qa_bank_upload"
+        : "image_import_mode",
     trainingMode: params.trainingMode ?? (hasBankName ? "bank_context" : undefined),
     genericParserTraining: isGenericParserTraining || undefined,
+    importMode: params.importMode ?? undefined,
   } as Prisma.InputJsonValue;
 
   await prisma.accountStatementCheckpoint.upsert({
@@ -100,6 +108,20 @@ const detectLimitError = (message: string | null | undefined) => {
 const isPdfUpload = (fileName: string, fileType: string) =>
   fileType === "application/pdf" || fileName.toLowerCase().endsWith(".pdf");
 
+const isImageUpload = (fileName: string, fileType: string) => {
+  const lowerName = `${fileName} ${fileType}`.toLowerCase();
+  return (
+    lowerName.includes("image/jpeg") ||
+    lowerName.includes("image/jpg") ||
+    lowerName.includes("image/png") ||
+    lowerName.includes("image/webp") ||
+    lowerName.endsWith(".jpg") ||
+    lowerName.endsWith(".jpeg") ||
+    lowerName.endsWith(".png") ||
+    lowerName.endsWith(".webp")
+  );
+};
+
 export async function POST(_request: Request, { params }: { params: Promise<{ importId: string }> }) {
   let stage = "initializing";
   let responsePlanTier: "free" | "pro" | "unknown" = "unknown";
@@ -127,6 +149,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const formBankName = typeof formData.get("bankName") === "string" ? String(formData.get("bankName")) : "";
       const formTrainingMode =
         formData.get("trainingMode") === "generic_parser" ? "generic_parser" : formData.get("trainingMode") === "bank_context" ? "bank_context" : undefined;
+      const formImportMode = normalizeImportImageMode(formData.get("importMode"));
       allowDuplicateStatement =
         String(formData.get("allowDuplicateStatement") ?? formData.get("qaMode") ?? "").toLowerCase() === "true";
       forceInlineProcessing = String(formData.get("forceInlineProcessing") ?? "").toLowerCase() === "true";
@@ -199,11 +222,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         workspaceId: String(importFile.workspaceId),
         bankName: formBankName || null,
         trainingMode: formTrainingMode,
+        importMode: formImportMode,
       });
       let metadata: Record<string, unknown> | null = null;
       let extractedText = "";
       const effectiveFileName = file.name || formFileName || "imported-file";
       const effectiveFileType = file.type || formFileType || "";
+      const imageUpload = isImageUpload(effectiveFileName, effectiveFileType);
       const shouldPreflightPdf = isPdfUpload(effectiveFileName, effectiveFileType) && bytes.length <= 1_000_000;
 
       if (shouldPreflightPdf) {
@@ -310,9 +335,46 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         parsedMetadataConfidence >= 80;
       const shouldProcessInline =
         (!isPdfUpload(effectiveFileName, effectiveFileType) &&
+        !imageUpload &&
         ((hasExtractedText && parsedMetadataConfidence >= 95 && bytes.length <= 8_000_000) ||
           (!hasExtractedText && bytes.length <= 2_500_000))) ||
         shouldProcessInlinePdf;
+
+      if (imageUpload && !forceInlineProcessing) {
+        stage = "scheduling background processing";
+        try {
+          await ensureImportProcessingWorker();
+          await enqueueImportProcessing({
+            importFileId: importId,
+            password,
+            allowDuplicateStatement,
+            bankName: formBankName || undefined,
+          });
+        } catch (error) {
+          console.error("Queued import processing failed", { importId, error: summarizeErrorForLog(error) });
+          await updateImportFileCompat(importId, {
+            status: "failed",
+          });
+          return NextResponse.json(
+            {
+              error: "Unable to queue import processing",
+              stage,
+            },
+            { status: 400 }
+          );
+        }
+
+        return NextResponse.json({
+          ok: true,
+          queued: true,
+          processed: false,
+          importedRows: 0,
+          duplicate: false,
+          status: "queued",
+          importFileId: importId,
+          metadata,
+        });
+      }
 
       if (shouldProcessInline || forceInlineProcessing) {
         stage = "processing statement text";
@@ -327,6 +389,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
           actorUserId: userId,
           qaSource: "import_processing",
           allowDuplicateStatement,
+          importMode: formImportMode,
           statementMetadataOverride: formBankName
             ? {
                 institution: formBankName,
@@ -395,11 +458,13 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       const bodyBankName = typeof body?.bankName === "string" ? String(body.bankName) : "";
       const bodyTrainingMode =
         body?.trainingMode === "generic_parser" ? "generic_parser" : body?.trainingMode === "bank_context" ? "bank_context" : undefined;
+      const bodyImportMode = normalizeImportImageMode(body?.importMode);
       await upsertUploadBankHint({
         importFileId: importId,
         workspaceId: String(importFile.workspaceId),
         bankName: bodyBankName || null,
         trainingMode: bodyTrainingMode,
+        importMode: bodyImportMode,
       });
 
       if (!text) {
@@ -419,6 +484,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         actorUserId: userId,
         qaSource: "import_processing",
         allowDuplicateStatement,
+        importMode: bodyImportMode,
         statementMetadataOverride: bodyBankName
           ? {
               institution: bodyBankName,

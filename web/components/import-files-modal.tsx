@@ -82,6 +82,7 @@ type StatementIdentity = {
 type QueuedFile = {
   id: string;
   file: File;
+  importMode: ImportImageMode | null;
   status: ImportStatus;
   confirmationState: ConfirmationState;
   error: string | null;
@@ -94,6 +95,22 @@ type QueuedFile = {
   progress: number;
   progressLabel: string;
 };
+
+function FileImagePreview({ file }: { file: File }) {
+  const [url, setUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const objectUrl = URL.createObjectURL(file);
+    setUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [file]);
+
+  if (!url) {
+    return null;
+  }
+
+  return <img className="accounts-import-file__thumbnail" src={url} alt="" loading="lazy" />;
+}
 
 type ImportProcessResult = {
   status: "done" | "needs_password" | "error" | "staged";
@@ -1195,6 +1212,7 @@ export function ImportFilesModal({
           {
             id: crypto.randomUUID(),
             file,
+            importMode: isVisionImportFile(file) ? importImageMode : null,
             status: "pending" as ImportStatus,
             confirmationState: "none" as ConfirmationState,
             error: null,
@@ -2286,6 +2304,7 @@ export function ImportFilesModal({
       return;
     }
 
+    const itemImportMode = item.importMode ?? "statement";
     localPreparseStartedRef.current.add(itemId);
     updateItem(itemId, {
       progressLabel: "Reading locally",
@@ -2301,7 +2320,7 @@ export function ImportFilesModal({
         accountNumber: localMetadata?.accountNumber ?? null,
       });
 
-      if (!localMetadata && parsedRows.length === 0) {
+      if (!localMetadata && parsedRows.length === 0 && itemImportMode === "statement") {
         return;
       }
 
@@ -2311,7 +2330,7 @@ export function ImportFilesModal({
         deriveFallbackAccountNameFromFileName(item.file.name);
       const institution = localMetadata?.institution ?? guessedIdentity?.institution ?? null;
       const accountNumber = localMetadata?.accountNumber ?? null;
-      if (!accountNumber) {
+      if (!accountNumber && itemImportMode === "statement") {
         return;
       }
       const accountType = (localMetadata?.accountType ??
@@ -2337,9 +2356,9 @@ export function ImportFilesModal({
         buildOptimisticPreviewTransactions(parsedRows, {
           importFileId: item.importFileId ?? item.id,
           accountId: resolvedAccountId,
-          accountName,
-          institution,
-        }),
+        accountName,
+        institution,
+      }),
         accountNumber,
         true
       );
@@ -2445,6 +2464,7 @@ export function ImportFilesModal({
     if (!item) return { status: "error", importedRows: null, summary: null };
     const guessedIdentity = guessStatementIdentity(item.file.name);
     const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName);
+    const itemImportMode = item.importMode ?? "statement";
     let importFileId: string | null = null;
 
     if (!workspaceId) {
@@ -2510,7 +2530,7 @@ export function ImportFilesModal({
           fileName: item.file.name,
           fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
           password: item.password.trim() || undefined,
-          importMode: importImageMode,
+          importMode: itemImportMode,
         },
         (progress) => {
           publishImportActivity({
@@ -3429,12 +3449,29 @@ export function ImportFilesModal({
                       </span>
                     </div>
                     <div className="accounts-import-file__badges">
+                      {item.importMode ? <span className="accounts-import-badge is-image">{IMPORT_IMAGE_MODES.find((mode) => mode.value === item.importMode)?.label ?? "Image"}</span> : null}
                       <span className={`accounts-import-badge is-${item.status}`}>{item.status.replaceAll("_", " ")}</span>
                       <button className="icon-button accounts-import-remove" type="button" onClick={() => removeItem(item.id)} aria-label={`Remove ${item.file.name}`}>
                         ×
                       </button>
                     </div>
                   </div>
+
+                  {isVisionImportFile(item.file) ? (
+                    <div className="accounts-import-file__image">
+                      <FileImagePreview file={item.file} />
+                      <div className="accounts-import-file__image-copy">
+                        <strong>{item.importMode === "receipt" ? "Receipt review" : item.importMode === "notes" ? "Notes review" : "Image review"}</strong>
+                        <span>
+                          {item.importMode === "receipt"
+                            ? "Check the merchant, total, and target account before Clover finalizes the match."
+                            : item.importMode === "notes"
+                              ? "Check the extracted transaction list against the note before confirming."
+                              : "Check the statement snapshot against the source image before confirming."}
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {item.error ? <p className="accounts-import-file__error">{item.error}</p> : null}
 
