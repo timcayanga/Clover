@@ -885,7 +885,9 @@ function AccountsPageContent() {
 
       void (async () => {
         try {
-          const transactionsResponse = await fetch(`/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}`);
+          const transactionsResponse = await fetch(
+            `/api/transactions?workspaceId=${encodeURIComponent(workspaceId)}&pageSize=all&summaryMode=light`
+          );
           if (workspaceLoadSeqRef.current !== loadSeq) {
             return;
           }

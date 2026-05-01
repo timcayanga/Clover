@@ -66,7 +66,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
 
     const account = await prisma.account.findUnique({
       where: { id: accountId },
-      select: { id: true, workspaceId: true },
+      select: { id: true, workspaceId: true, name: true, institution: true, type: true },
     });
 
     if (!account) {
@@ -77,7 +77,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
 
     const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const pageSize = Math.max(1, Number(searchParams.get("pageSize") ?? "25") || 25);
-    const where = buildTransactionQueryWhere(account.workspaceId, { accountIds: [accountId] });
+    const siblingAccounts = await prisma.account.findMany({
+      where: {
+        workspaceId: account.workspaceId,
+        name: account.name,
+        institution: account.institution,
+        type: account.type,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    const accountIds = siblingAccounts.length > 0 ? siblingAccounts.map((entry) => entry.id) : [accountId];
+    const where = buildTransactionQueryWhere(account.workspaceId, { accountIds });
     const skip = (page - 1) * pageSize;
 
     const [totalCount, rows] = await Promise.all([
