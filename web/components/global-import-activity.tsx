@@ -15,7 +15,7 @@ export function GlobalImportActivity() {
   useEffect(() => subscribeImportActivity(() => setActivity(readImportActivity())), []);
 
   useEffect(() => {
-    if (!activity || activity.status !== "error") {
+    if (!activity || (activity.status !== "error" && activity.status !== "done")) {
       return;
     }
 
