@@ -84,7 +84,7 @@ export const getInvestmentFieldConfigs = (subtype: string | null | undefined): I
         key: "investmentSymbol",
         label:
           subtype === "crypto"
-            ? "Token / coin"
+            ? "Token / coin code"
             : subtype === "mutual_fund" || subtype === "money_market_fund" || subtype === "uitf"
               ? "Fund code / name"
               : "Symbol / asset code",

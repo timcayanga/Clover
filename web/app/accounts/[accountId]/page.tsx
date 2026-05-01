@@ -105,6 +105,21 @@ type StatementCheckpoint = {
   } | null;
 };
 
+type InvestmentEditDraft = {
+  name: string;
+  institution: string;
+  investmentSubtype: InvestmentSubtype;
+  investmentSymbol: string;
+  investmentQuantity: string;
+  investmentCostBasis: string;
+  investmentPrincipal: string;
+  investmentStartDate: string;
+  investmentMaturityDate: string;
+  investmentInterestRate: string;
+  investmentMaturityValue: string;
+  balance: string;
+};
+
 const TRANSACTION_PAGE_SIZE = 25;
 
 const formatDate = (value: string) =>
@@ -149,6 +164,21 @@ const parseNullableNumber = (value: string | null | undefined) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
+
+const serializeInvestmentEditDraft = (account: Account): InvestmentEditDraft => ({
+  name: account.name,
+  institution: account.institution ?? "",
+  investmentSubtype: account.investmentSubtype ?? "other",
+  investmentSymbol: account.investmentSymbol ?? "",
+  investmentQuantity: account.investmentQuantity ?? "",
+  investmentCostBasis: account.investmentCostBasis ?? "",
+  investmentPrincipal: account.investmentPrincipal ?? "",
+  investmentStartDate: account.investmentStartDate ? account.investmentStartDate.slice(0, 10) : "",
+  investmentMaturityDate: account.investmentMaturityDate ? account.investmentMaturityDate.slice(0, 10) : "",
+  investmentInterestRate: account.investmentInterestRate ?? "",
+  investmentMaturityValue: account.investmentMaturityValue ?? "",
+  balance: account.balance ?? "",
+});
 
 const formatAccountAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
 
@@ -333,6 +363,9 @@ function AccountDetailPageContent() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [transactionDeleteTarget, setTransactionDeleteTarget] = useState<Transaction | null>(null);
   const [transactionDeleteBusy, setTransactionDeleteBusy] = useState(false);
+  const [investmentEditOpen, setInvestmentEditOpen] = useState(false);
+  const [investmentEditDraft, setInvestmentEditDraft] = useState<InvestmentEditDraft | null>(null);
+  const [investmentEditBusy, setInvestmentEditBusy] = useState(false);
   const [hasInitialDataLoaded, setHasInitialDataLoaded] = useState(false);
 
   useEffect(() => {
@@ -580,6 +613,10 @@ function AccountDetailPageContent() {
   const investmentStartDate = account?.investmentStartDate ?? null;
   const investmentMaturityDate = account?.investmentMaturityDate ?? null;
   const investmentFieldConfigs = useMemo(() => getInvestmentFieldConfigs(investmentSubtype), [investmentSubtype]);
+  const investmentEditingFieldConfigs = useMemo(
+    () => getInvestmentFieldConfigs(investmentEditDraft?.investmentSubtype ?? investmentSubtype),
+    [investmentEditDraft?.investmentSubtype, investmentSubtype]
+  );
   const investmentPurchaseValue = useMemo(
     () => investmentCostBasis ?? (isFixedIncomeInvestmentSubtype(investmentSubtype) ? investmentPrincipal : null),
     [investmentCostBasis, investmentPrincipal, investmentSubtype]
@@ -793,6 +830,77 @@ function AccountDetailPageContent() {
     }
   };
 
+  const beginInvestmentEditing = () => {
+    if (!account || account.type !== "investment") {
+      return;
+    }
+
+    setInvestmentEditDraft(serializeInvestmentEditDraft(account));
+    setInvestmentEditOpen(true);
+  };
+
+  const cancelInvestmentEditing = () => {
+    setInvestmentEditOpen(false);
+    setInvestmentEditDraft(null);
+  };
+
+  const updateInvestmentEditDraft = (key: keyof InvestmentEditDraft, value: string) => {
+    setInvestmentEditDraft((current) => (current ? { ...current, [key]: value } : current));
+  };
+
+  const saveInvestmentEditing = async () => {
+    if (!account || !investmentEditDraft) {
+      return;
+    }
+
+    setInvestmentEditBusy(true);
+    try {
+      const isMarket = isMarketInvestmentSubtype(investmentEditDraft.investmentSubtype);
+      const isFixedIncome = isFixedIncomeInvestmentSubtype(investmentEditDraft.investmentSubtype);
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: account.workspaceId,
+          name: investmentEditDraft.name.trim(),
+          institution: investmentEditDraft.institution.trim() || null,
+          investmentSubtype: investmentEditDraft.investmentSubtype,
+          investmentSymbol: isMarket || investmentEditDraft.investmentSubtype === "other" ? investmentEditDraft.investmentSymbol.trim() || null : null,
+          investmentQuantity: isMarket ? parseNullableNumber(investmentEditDraft.investmentQuantity) : null,
+          investmentCostBasis:
+            isMarket || investmentEditDraft.investmentSubtype === "other"
+              ? parseNullableNumber(investmentEditDraft.investmentCostBasis)
+              : null,
+          investmentPrincipal: isFixedIncome ? parseNullableNumber(investmentEditDraft.investmentPrincipal) : null,
+          investmentStartDate: isFixedIncome ? investmentEditDraft.investmentStartDate || null : null,
+          investmentMaturityDate: isFixedIncome ? investmentEditDraft.investmentMaturityDate || null : null,
+          investmentInterestRate: isFixedIncome ? parseNullableNumber(investmentEditDraft.investmentInterestRate) : null,
+          investmentMaturityValue: isFixedIncome ? parseNullableNumber(investmentEditDraft.investmentMaturityValue) : null,
+          type: "investment",
+          currency: account.currency,
+          source: account.source,
+          balance: parseNullableNumber(investmentEditDraft.balance),
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to update investment.");
+      }
+
+      const payload = await response.json();
+      if (payload.account) {
+        setAccount(payload.account as Account);
+      }
+
+      cancelInvestmentEditing();
+      setMessage("Investment updated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update investment.");
+    } finally {
+      setInvestmentEditBusy(false);
+    }
+  };
+
   const openTransactionsPage = () => {
     if (!account) {
       return;
@@ -922,6 +1030,27 @@ function AccountDetailPageContent() {
                 <p className="eyebrow">Investment details</p>
                 <h3>Holdings snapshot</h3>
               </div>
+              <div className="accounts-detail__transactions-actions">
+                {investmentEditOpen ? (
+                  <>
+                    <button className="button button-primary button-small" type="button" onClick={() => void saveInvestmentEditing()} disabled={investmentEditBusy}>
+                      {investmentEditBusy ? "Saving..." : "Save changes"}
+                    </button>
+                    <button className="button button-secondary button-small" type="button" onClick={cancelInvestmentEditing} disabled={investmentEditBusy}>
+                      Cancel
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button className="button button-secondary button-small" type="button" onClick={beginInvestmentEditing}>
+                      Edit investment
+                    </button>
+                    <button className="button button-danger button-small" type="button" onClick={() => setDeleteConfirmOpen(true)}>
+                      Delete investment
+                    </button>
+                  </>
+                )}
+              </div>
             </div>
             <div className="accounts-detail__investment-summary">
               <div className="status-card">
@@ -941,89 +1070,170 @@ function AccountDetailPageContent() {
                 <strong>{account.institution ?? accountBrand.label}</strong>
               </div>
             </div>
-            <div className="accounts-detail__investment-grid">
-              {investmentFieldConfigs.map((field) => {
-                const value =
-                  field.key === "investmentSymbol"
-                    ? investmentSymbol
-                    : field.key === "investmentQuantity"
-                      ? investmentQuantity === null
-                        ? null
-                        : String(investmentQuantity)
-                      : field.key === "investmentCostBasis"
-                        ? investmentCostBasis === null
-                          ? null
-                          : String(investmentCostBasis)
-                        : field.key === "investmentPrincipal"
-                          ? investmentPrincipal === null
-                            ? null
-                            : String(investmentPrincipal)
-                          : field.key === "investmentStartDate"
-                            ? investmentStartDate
-                            : field.key === "investmentMaturityDate"
-                              ? investmentMaturityDate
-                              : field.key === "investmentInterestRate"
-                                ? investmentInterestRate === null
-                                  ? null
-                                  : String(investmentInterestRate)
-                                : field.key === "investmentMaturityValue"
-                                  ? investmentMaturityValue === null
-                                    ? null
-                                    : String(investmentMaturityValue)
-                                  : null;
-
-                return (
-                  <div className="status-card" key={field.key}>
-                    <div className="panel-muted">{field.label}</div>
-                    <strong>
-                      {field.type === "date"
-                        ? formatNullableDate(value)
-                        : value === null
-                          ? "Not set"
-                          : field.key === "investmentSymbol"
-                            ? value
-                            : field.key === "investmentQuantity"
-                              ? value
-                              : field.key === "investmentInterestRate"
-                                ? `${value}%`
-                          : formatAccountAmount(Number(value), account.currency)}
-                    </strong>
-                    <span>
-                      {field.key === "investmentSymbol"
-                        ? "Identifier for the holding"
-                        : field.key === "investmentQuantity"
-                          ? "Quantity or units owned"
-                          : field.key === "investmentCostBasis"
-                            ? "Historical purchase value"
-                            : field.key === "investmentPrincipal"
-                              ? "Initial principal"
-                              : field.key === "investmentStartDate"
-                                ? "When the holding began"
-                                : field.key === "investmentMaturityDate"
-                                  ? "When the holding matures"
-                                  : field.key === "investmentInterestRate"
-                                    ? "Rate for this product"
-                                    : field.key === "investmentMaturityValue"
-                                      ? "Expected maturity value"
-                                      : "Investment detail"}
-                    </span>
-                  </div>
-                );
-              })}
-              <div className="status-card">
-                <div className="panel-muted">Unrealized gain / loss</div>
-                <strong>
-                  {investmentGainLoss === null ? "Not set" : formatAccountAmount(investmentGainLoss, account.currency)}
-                </strong>
-                <span>
-                  {investmentGainLoss === null
-                    ? "Add a purchase value to compare performance."
-                    : investmentGainLoss >= 0
-                      ? "Above purchase value"
-                      : "Below purchase value"}
-                </span>
+            {investmentEditOpen && investmentEditDraft ? (
+              <div className="accounts-inline-edit" style={{ marginTop: 16 }}>
+                <div className="accounts-inline-edit__grid">
+                  <label>
+                    Holding name
+                    <input value={investmentEditDraft.name} onChange={(event) => updateInvestmentEditDraft("name", event.target.value)} />
+                  </label>
+                  <label>
+                    Institution
+                    <input value={investmentEditDraft.institution} onChange={(event) => updateInvestmentEditDraft("institution", event.target.value)} />
+                  </label>
+                  <label>
+                    Investment subtype
+                    <select
+                      value={investmentEditDraft.investmentSubtype}
+                      onChange={(event) => {
+                        const nextSubtype = event.target.value as InvestmentSubtype;
+                        setInvestmentEditDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                investmentSubtype: nextSubtype,
+                              }
+                            : current
+                        );
+                      }}
+                    >
+                      {["stock", "etf", "mutual_fund", "money_market_fund", "uitf", "reit", "crypto", "bond", "time_deposit", "other"].map((subtype) => (
+                        <option key={subtype} value={subtype}>
+                          {getInvestmentSubtypeLabel(subtype)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Current value / balance
+                    <input
+                      value={investmentEditDraft.balance}
+                      onChange={(event) => updateInvestmentEditDraft("balance", event.target.value)}
+                      inputMode="decimal"
+                    />
+                  </label>
+                  {investmentEditingFieldConfigs.map((field) => (
+                    <label key={field.key}>
+                      {field.label}
+                      {field.type === "date" ? (
+                        <input
+                          type="date"
+                          value={
+                            field.key === "investmentStartDate"
+                              ? investmentEditDraft.investmentStartDate
+                              : investmentEditDraft.investmentMaturityDate
+                          }
+                          onChange={(event) => updateInvestmentEditDraft(field.key as keyof InvestmentEditDraft, event.target.value)}
+                        />
+                      ) : (
+                        <input
+                          value={
+                            field.key === "investmentSymbol"
+                              ? investmentEditDraft.investmentSymbol
+                              : field.key === "investmentQuantity"
+                                ? investmentEditDraft.investmentQuantity
+                                : field.key === "investmentCostBasis"
+                                  ? investmentEditDraft.investmentCostBasis
+                                  : field.key === "investmentPrincipal"
+                                    ? investmentEditDraft.investmentPrincipal
+                                    : field.key === "investmentInterestRate"
+                                      ? investmentEditDraft.investmentInterestRate
+                                      : investmentEditDraft.investmentMaturityValue
+                          }
+                          onChange={(event) => updateInvestmentEditDraft(field.key as keyof InvestmentEditDraft, event.target.value)}
+                          inputMode={field.inputMode}
+                          placeholder={field.placeholder}
+                        />
+                      )}
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="accounts-detail__investment-grid">
+                {investmentFieldConfigs.map((field) => {
+                  const value =
+                    field.key === "investmentSymbol"
+                      ? investmentSymbol
+                      : field.key === "investmentQuantity"
+                        ? investmentQuantity === null
+                          ? null
+                          : String(investmentQuantity)
+                        : field.key === "investmentCostBasis"
+                          ? investmentCostBasis === null
+                            ? null
+                            : String(investmentCostBasis)
+                          : field.key === "investmentPrincipal"
+                            ? investmentPrincipal === null
+                              ? null
+                              : String(investmentPrincipal)
+                              : field.key === "investmentStartDate"
+                                ? investmentStartDate
+                                : field.key === "investmentMaturityDate"
+                                  ? investmentMaturityDate
+                                  : field.key === "investmentInterestRate"
+                                    ? investmentInterestRate === null
+                                      ? null
+                                      : String(investmentInterestRate)
+                                    : field.key === "investmentMaturityValue"
+                                      ? investmentMaturityValue === null
+                                        ? null
+                                        : String(investmentMaturityValue)
+                                      : null;
+
+                  return (
+                    <div className="status-card" key={field.key}>
+                      <div className="panel-muted">{field.label}</div>
+                      <strong>
+                        {field.type === "date"
+                          ? formatNullableDate(value)
+                          : value === null
+                            ? "Not set"
+                            : field.key === "investmentSymbol"
+                              ? value
+                              : field.key === "investmentQuantity"
+                                ? value
+                                : field.key === "investmentInterestRate"
+                                  ? `${value}%`
+                                  : formatAccountAmount(Number(value), account.currency)}
+                      </strong>
+                      <span>
+                        {field.key === "investmentSymbol"
+                          ? "Identifier for the holding"
+                          : field.key === "investmentQuantity"
+                            ? "Quantity or units owned"
+                            : field.key === "investmentCostBasis"
+                              ? "Historical purchase value"
+                              : field.key === "investmentPrincipal"
+                                ? "Initial principal"
+                                : field.key === "investmentStartDate"
+                                  ? "When the holding began"
+                                  : field.key === "investmentMaturityDate"
+                                    ? "When the holding matures"
+                                    : field.key === "investmentInterestRate"
+                                      ? "Rate for this product"
+                                      : field.key === "investmentMaturityValue"
+                                        ? "Expected maturity value"
+                                        : "Investment detail"}
+                      </span>
+                    </div>
+                  );
+                })}
+                <div className="status-card">
+                  <div className="panel-muted">Unrealized gain / loss</div>
+                  <strong>
+                    {investmentGainLoss === null ? "Not set" : formatAccountAmount(investmentGainLoss, account.currency)}
+                  </strong>
+                  <span>
+                    {investmentGainLoss === null
+                      ? "Add a purchase value to compare performance."
+                      : investmentGainLoss >= 0
+                        ? "Above purchase value"
+                        : "Below purchase value"}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         ) : null}
 

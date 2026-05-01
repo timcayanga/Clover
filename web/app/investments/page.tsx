@@ -20,6 +20,12 @@ import {
 } from "@/lib/workspace-selection";
 import { getCachedAccountsWorkspace } from "@/lib/workspace-cache";
 import {
+  applyOptimisticWorkspaceAccountDeletion,
+  clearDeletedWorkspaceAccount,
+  clearDeletingWorkspaceAccount,
+  markDeletedWorkspaceAccount,
+} from "@/lib/workspace-cache";
+import {
   getInvestmentFieldConfigs,
   getInvestmentSubtypeDescription,
   getInvestmentSubtypeLabel,
@@ -37,6 +43,7 @@ type Workspace = {
 
 type Account = {
   id: string;
+  workspaceId: string;
   name: string;
   institution: string | null;
   investmentSubtype: InvestmentSubtype | null;
@@ -180,11 +187,11 @@ type InvestmentEditDraft = {
   balance: string;
 };
 
-type InvestmentTab = "overview" | "holdings" | "market" | "insights";
+type InvestmentTab = "overview" | "portfolio" | "market" | "insights";
 
 const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; proOnly?: boolean }> = [
   { key: "overview", label: "Overview" },
-  { key: "holdings", label: "Holdings" },
+  { key: "portfolio", label: "Portfolio" },
   { key: "market", label: "Markets", proOnly: true },
   { key: "insights", label: "Insights", proOnly: true },
 ];
@@ -192,11 +199,67 @@ const INVESTMENT_TABS: Array<{ key: InvestmentTab; label: string; proOnly?: bool
 const investmentsEmptyStateIllustration = "/illustrations/clover-investments-portfolio-3d.png";
 
 const normalizeInvestmentTab = (value: string | null | undefined): InvestmentTab => {
-  if (value === "holdings" || value === "market" || value === "insights") {
+  if (value === "holdings") {
+    return "portfolio";
+  }
+
+  if (value === "portfolio" || value === "market" || value === "insights") {
     return value;
   }
 
   return "overview";
+};
+
+const buildInvestmentGroups = (rows: Account[]): InvestmentGroup[] => {
+  const groupMap = new Map<string, Account[]>();
+
+  for (const account of rows) {
+    const key = account.investmentSubtype ?? "__unclassified__";
+    const bucket = groupMap.get(key) ?? [];
+    bucket.push(account);
+    groupMap.set(key, bucket);
+  }
+
+  const orderedKeys = [...INVESTMENT_SUBTYPES, null].map((subtype) => subtype ?? "__unclassified__");
+
+  return orderedKeys
+    .map((key) => {
+      const rowsForKey = groupMap.get(key) ?? [];
+      if (rowsForKey.length === 0) {
+        return null;
+      }
+
+      const subtype = key === "__unclassified__" ? null : (key as InvestmentSubtype);
+      const currentValue = rowsForKey.reduce((sum, account) => sum + parseAmount(account.balance), 0);
+      const purchaseValue = rowsForKey.reduce((sum, account) => {
+        const baseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
+        return sum + (baseValue ?? 0);
+      }, 0);
+      const gainLoss = rowsForKey.reduce((sum, account) => {
+        const current = parseNullableAmount(account.balance);
+        const purchase = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
+        if (current === null || purchase === null) {
+          return sum;
+        }
+
+        return sum + (current - purchase);
+      }, 0);
+
+      return {
+        key,
+        subtype,
+        label: subtype ? getInvestmentSubtypeLabel(subtype) : "Unclassified investments",
+        description:
+          subtype === null
+            ? "Add a subtype later to unlock tailored tracking."
+            : getInvestmentSubtypeDescription(subtype),
+        accounts: rowsForKey.slice().sort((left, right) => parseAmount(right.balance) - parseAmount(left.balance)),
+        currentValue,
+        purchaseValue,
+        gainLoss,
+      };
+    })
+    .filter((group): group is InvestmentGroup => group !== null);
 };
 
 const INVESTMENT_SORT_OPTIONS: Array<{ key: InvestmentSortKey; label: string }> = [
@@ -255,9 +318,11 @@ export default function InvestmentsPage() {
   const [investmentSearch, setInvestmentSearch] = useState(searchQueryFromUrl);
   const [investmentSubtypeFilter, setInvestmentSubtypeFilter] = useState<InvestmentSubtype | "all">("all");
   const [investmentSortKey, setInvestmentSortKey] = useState<InvestmentSortKey>("value_desc");
+  const [portfolioCurrencyFilter, setPortfolioCurrencyFilter] = useState("all");
   const [addOpen, setAddOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editingDraft, setEditingDraft] = useState<InvestmentEditDraft | null>(null);
   const [manualName, setManualName] = useState("");
@@ -282,6 +347,10 @@ export default function InvestmentsPage() {
   useEffect(() => {
     setInvestmentSearch(searchQueryFromUrl);
   }, [searchQueryFromUrl]);
+
+  useEffect(() => {
+    setPortfolioCurrencyFilter("all");
+  }, [selectedWorkspaceId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -422,57 +491,55 @@ export default function InvestmentsPage() {
     );
   }, [visibleInvestmentAccounts]);
 
-  const investmentGroups = useMemo<InvestmentGroup[]>(() => {
-    const groupMap = new Map<string, Account[]>();
+  const portfolioViewedAccounts = useMemo(
+    () =>
+      portfolioCurrencyFilter === "all"
+        ? visibleInvestmentAccounts
+        : visibleInvestmentAccounts.filter((account) => formatCurrencyCode(account.currency) === portfolioCurrencyFilter),
+    [portfolioCurrencyFilter, visibleInvestmentAccounts]
+  );
 
-    for (const account of visibleInvestmentAccounts) {
-      const key = account.investmentSubtype ?? "__unclassified__";
-      const bucket = groupMap.get(key) ?? [];
-      bucket.push(account);
-      groupMap.set(key, bucket);
-    }
-
-    const orderedKeys = [...INVESTMENT_SUBTYPES, null].map((subtype) => subtype ?? "__unclassified__");
-
-    return orderedKeys
-      .map((key) => {
-        const rows = groupMap.get(key) ?? [];
-        if (rows.length === 0) {
-          return null;
+  const portfolioTotals = useMemo(() => {
+    return portfolioViewedAccounts.reduce(
+      (accumulator, account) => {
+        const currentValue = parseNullableAmount(account.balance);
+        const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
+        if (currentValue !== null) {
+          accumulator.currentValue += currentValue;
         }
+        if (purchaseValue !== null) {
+          accumulator.purchaseValue += purchaseValue;
+        }
+        if (currentValue !== null && purchaseValue !== null) {
+          accumulator.gainLoss += currentValue - purchaseValue;
+        }
+        return accumulator;
+      },
+      { currentValue: 0, purchaseValue: 0, gainLoss: 0 }
+    );
+  }, [portfolioViewedAccounts]);
 
-        const subtype = key === "__unclassified__" ? null : (key as InvestmentSubtype);
-        const currentValue = rows.reduce((sum, account) => sum + parseAmount(account.balance), 0);
-        const purchaseValue = rows.reduce((sum, account) => {
-          const baseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
-          return sum + (baseValue ?? 0);
-        }, 0);
-        const gainLoss = rows.reduce((sum, account) => {
-          const current = parseNullableAmount(account.balance);
-          const purchase = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
-          if (current === null || purchase === null) {
-            return sum;
-          }
+  const investmentGroups = useMemo<InvestmentGroup[]>(() => buildInvestmentGroups(visibleInvestmentAccounts), [visibleInvestmentAccounts]);
+  const portfolioGroups = useMemo<InvestmentGroup[]>(() => buildInvestmentGroups(portfolioViewedAccounts), [portfolioViewedAccounts]);
 
-          return sum + (current - purchase);
-        }, 0);
+  const portfolioTableRows = useMemo(
+    () =>
+      portfolioViewedAccounts.map((account) => {
+        const currentValue = parseNullableAmount(account.balance);
+        const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
+        const gainLoss = currentValue === null || purchaseValue === null ? null : currentValue - purchaseValue;
+        const returnPercent = getReturnPercent(currentValue, purchaseValue);
 
         return {
-          key,
-          subtype,
-          label: subtype ? getInvestmentSubtypeLabel(subtype) : "Unclassified investments",
-          description:
-            subtype === null
-              ? "Add a subtype later to unlock tailored tracking."
-              : getInvestmentSubtypeDescription(subtype),
-          accounts: rows.slice().sort((left, right) => parseAmount(right.balance) - parseAmount(left.balance)),
+          account,
           currentValue,
           purchaseValue,
           gainLoss,
+          returnPercent,
         };
-      })
-      .filter((group): group is InvestmentGroup => group !== null);
-  }, [visibleInvestmentAccounts]);
+      }),
+    [portfolioViewedAccounts]
+  );
 
   const portfolioAllocation = useMemo<InvestmentAllocationRow[]>(() => {
     const totalValue = investmentGroups.reduce((sum, group) => sum + group.currentValue, 0);
@@ -546,8 +613,16 @@ export default function InvestmentsPage() {
     [manualInvestmentSubtype]
   );
 
+  const portfolioCurrencyOptions = useMemo(() => {
+    const currencies = getCurrencyCodes(investmentAccounts);
+    return ["all", ...currencies];
+  }, [investmentAccounts]);
+
   const activeInvestmentFilters = Boolean(
-    normalizeInvestmentSearchText(investmentSearch) || investmentSubtypeFilter !== "all" || investmentSortKey !== "value_desc"
+    normalizeInvestmentSearchText(investmentSearch) ||
+      investmentSubtypeFilter !== "all" ||
+      investmentSortKey !== "value_desc" ||
+      portfolioCurrencyFilter !== "all"
   );
   const canUseProTabs = planTier !== "free";
   const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "insights") && !canUseProTabs);
@@ -637,6 +712,46 @@ export default function InvestmentsPage() {
     }
   };
 
+  const deleteInvestment = async (account: Account) => {
+    if (!window.confirm(`Delete investment "${account.name}"?`)) {
+      return;
+    }
+
+    const workspaceId = selectedWorkspaceId ?? account.workspaceId;
+    if (!workspaceId) {
+      setMessage("Select a workspace first.");
+      return;
+    }
+
+    setIsDeleting(account.id);
+    try {
+      clearDeletingWorkspaceAccount(workspaceId, account.id);
+      markDeletedWorkspaceAccount(workspaceId, account.id);
+      applyOptimisticWorkspaceAccountDeletion(workspaceId, account.id);
+
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: "DELETE",
+        keepalive: true,
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to delete investment.");
+      }
+
+      setAccounts((current) => current.filter((entry) => entry.id !== account.id));
+      if (editingAccountId === account.id) {
+        cancelEditingAccount();
+      }
+      setMessage("Investment deleted.");
+    } catch (error) {
+      clearDeletedWorkspaceAccount(workspaceId, account.id);
+      clearDeletingWorkspaceAccount(workspaceId, account.id);
+      setMessage(error instanceof Error ? error.message : "Unable to delete investment.");
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
   const getManualInvestmentFieldValue = (key: string) => {
     if (key === "investmentSymbol") return manualInvestmentSymbol;
     if (key === "investmentQuantity") return manualInvestmentQuantity;
@@ -674,7 +789,7 @@ export default function InvestmentsPage() {
 
     const name = manualName.trim();
     if (!name) {
-      setMessage("Asset code / ticker is required.");
+      setMessage("Holding name is required.");
       return;
     }
 
@@ -829,7 +944,7 @@ export default function InvestmentsPage() {
               </article>
               <article className="accounts-overview-card glass">
                 <div className="investments-metric__label">
-                  <span>Holdings</span>
+                  <span>Portfolio</span>
                   <InfoTip label="The number of visible investment accounts." />
                 </div>
                 <strong>{visibleInvestmentAccounts.length}</strong>
@@ -895,74 +1010,8 @@ export default function InvestmentsPage() {
               )}
             </section>
           </>
-        ) : selectedTab === "holdings" ? (
+        ) : selectedTab === "portfolio" ? (
           <>
-            <section className="investments-allocation glass investments-holdings-chart">
-              <div className="investments-allocation__head">
-                <div className="investments-allocation__head-title">
-                  <p className="eyebrow">Holdings</p>
-                  <div className="investments-allocation__title-row">
-                    <h5>Largest positions</h5>
-                    <InfoTip label="The biggest holdings by current value." />
-                  </div>
-                </div>
-                <div className="investments-allocation__summary">
-                  <span>Top 5</span>
-                  <strong>{topHoldings.length}</strong>
-                </div>
-              </div>
-
-              {topHoldings.length > 0 ? (
-                <div className="investments-allocation__list">
-                  {topHoldings.map((item) => {
-                    const returnPercent = getReturnPercent(item.currentValue, item.purchaseValue);
-                    return (
-                      <div key={item.account.id} className="investments-allocation__row">
-                        <div className="investments-allocation__row-head">
-                          <div>
-                            <strong>{item.account.name}</strong>
-                            <span>
-                              {item.account.investmentSubtype ? getInvestmentSubtypeLabel(item.account.investmentSubtype) : "Unclassified"}
-                            </span>
-                          </div>
-                          <div>
-                            <strong>{formatInvestmentAmount(item.currentValue, item.account.currency)}</strong>
-                            <span className={returnPercent === null ? "" : returnPercent >= 0 ? "is-positive" : "is-negative"}>
-                              {returnPercent === null ? "Return not set" : `${returnPercent >= 0 ? "+" : "-"}${percentFormatter.format(Math.abs(returnPercent))}`}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="investments-allocation__bar">
-                          <span style={{ width: `${Math.max((item.currentValue / topHoldingMaxValue) * 100, 4)}%` }} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <EmptyDataCta
-                  className="empty-state--illustrated"
-                  eyebrow="Holdings"
-                  title="No holdings yet."
-                  copy="Add an investment to see your largest positions."
-                  illustration={investmentsEmptyStateIllustration}
-                  illustrationAlt=""
-                  accountHref="/accounts"
-                  transactionHref="/transactions?manual=1"
-                  actions={
-                    <>
-                      <button className="button button-primary button-small" type="button" onClick={() => setAddOpen(true)} disabled={!selectedWorkspaceId}>
-                        Add investment
-                      </button>
-                      <Link className="button button-secondary button-small" href="/accounts">
-                        Open Accounts
-                      </Link>
-                    </>
-                  }
-                />
-              )}
-            </section>
-
             <section className="investments-filters glass">
               <label>
                 Search holdings
@@ -993,6 +1042,19 @@ export default function InvestmentsPage() {
                   ))}
                 </select>
               </label>
+              <label>
+                Currency view
+                <select value={portfolioCurrencyFilter} onChange={(event) => setPortfolioCurrencyFilter(event.target.value)}>
+                  <option value="all">All assets</option>
+                  {portfolioCurrencyOptions
+                    .filter((currency) => currency !== "all")
+                    .map((currency) => (
+                      <option key={currency} value={currency}>
+                        {currency}
+                      </option>
+                    ))}
+                </select>
+              </label>
               <div className="investments-filters__actions">
                 <button
                   className="button button-secondary button-small"
@@ -1001,6 +1063,7 @@ export default function InvestmentsPage() {
                     setInvestmentSearch("");
                     setInvestmentSubtypeFilter("all");
                     setInvestmentSortKey("value_desc");
+                    setPortfolioCurrencyFilter("all");
                   }}
                   disabled={!activeInvestmentFilters}
                 >
@@ -1013,9 +1076,68 @@ export default function InvestmentsPage() {
               </div>
             </section>
 
+            <section className="investments-portfolio-table glass">
+              <div className="investments-allocation__head">
+                <div className="investments-allocation__head-title">
+                  <p className="eyebrow">Portfolio</p>
+                  <div className="investments-allocation__title-row">
+                    <h5>Asset summary</h5>
+                    <InfoTip label="A compact table of your visible investment assets." />
+                  </div>
+                </div>
+                <div className="investments-allocation__summary">
+                  <span>Total value</span>
+                  <strong>{formatInvestmentAggregate(portfolioTotals.currentValue, portfolioViewedAccounts)}</strong>
+                </div>
+              </div>
+
+              {portfolioTableRows.length > 0 ? (
+                <div className="investments-portfolio-table__table" role="table" aria-label="Portfolio assets">
+                  <div className="investments-portfolio-table__row investments-portfolio-table__row--head" role="row">
+                    <span role="columnheader">Asset</span>
+                    <span role="columnheader">Type</span>
+                    <span role="columnheader">Currency</span>
+                    <span role="columnheader">Current</span>
+                    <span role="columnheader">Purchase</span>
+                    <span role="columnheader">Gain / loss</span>
+                  </div>
+                  {portfolioTableRows.map((row) => {
+                    const returnPercent = row.returnPercent;
+                    return (
+                      <div key={row.account.id} className="investments-portfolio-table__row" role="row">
+                        <div className="investments-portfolio-table__cell investments-portfolio-table__cell--asset">
+                          <strong>{row.account.name}</strong>
+                          <span>{row.account.investmentSymbol ?? row.account.institution ?? "No code set"}</span>
+                        </div>
+                        <div className="investments-portfolio-table__cell">
+                          {row.account.investmentSubtype ? getInvestmentSubtypeLabel(row.account.investmentSubtype) : "Unclassified"}
+                        </div>
+                        <div className="investments-portfolio-table__cell">{formatCurrencyCode(row.account.currency)}</div>
+                        <div className="investments-portfolio-table__cell">
+                          {row.currentValue === null ? "Not set" : formatInvestmentAmount(row.currentValue, row.account.currency)}
+                        </div>
+                        <div className="investments-portfolio-table__cell">
+                          {row.purchaseValue === null ? "Not set" : formatInvestmentAmount(row.purchaseValue, row.account.currency)}
+                        </div>
+                        <div className={`investments-portfolio-table__cell ${row.gainLoss === null ? "" : row.gainLoss >= 0 ? "is-positive" : "is-negative"}`}>
+                          {row.gainLoss === null ? "Not set" : `${row.gainLoss >= 0 ? "+" : "-"}${formatInvestmentAmount(Math.abs(row.gainLoss), row.account.currency)}`}
+                          {returnPercent === null ? null : <span>{percentFormatter.format(Math.abs(returnPercent))}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="investments-portfolio-table__empty">
+                  <strong>{investmentAccounts.length > 0 && (activeInvestmentFilters || portfolioCurrencyFilter !== "all") ? "No portfolio assets match this view." : "No portfolio assets yet."}</strong>
+                  <p>{investmentAccounts.length > 0 && (activeInvestmentFilters || portfolioCurrencyFilter !== "all") ? "Try another currency or reset the filters." : "Add an investment to start building your portfolio."}</p>
+                </div>
+              )}
+            </section>
+
             <section className="accounts-sections" style={{ marginTop: 20 }}>
-              {investmentGroups.length > 0 ? (
-                investmentGroups.map((group) => (
+              {portfolioGroups.length > 0 ? (
+                portfolioGroups.map((group) => (
                   <article key={group.key} className="accounts-group glass">
                     <div className="accounts-group__head">
                       <div className="accounts-group__head-title">
@@ -1074,6 +1196,14 @@ export default function InvestmentsPage() {
                                     <button className="button button-secondary button-small" type="button" onClick={() => beginEditingAccount(account)}>
                                       Edit
                                     </button>
+                                    <button
+                                      className="button button-danger button-small"
+                                      type="button"
+                                      onClick={() => void deleteInvestment(account)}
+                                      disabled={isDeleting === account.id}
+                                    >
+                                      {isDeleting === account.id ? "Deleting..." : "Delete"}
+                                    </button>
                                     <Link className="button button-secondary button-small" href={getAccountPath(account)}>
                                       Open
                                     </Link>
@@ -1087,7 +1217,7 @@ export default function InvestmentsPage() {
                                 <div className="accounts-inline-edit">
                                   <div className="accounts-inline-edit__grid">
                                     <label>
-                                      Name
+                                      Holding name
                                       <input value={editingDraft.name} onChange={(event) => updateEditingDraft("name", event.target.value)} />
                                     </label>
                                     <label>
@@ -1186,41 +1316,14 @@ export default function InvestmentsPage() {
                     </div>
                   </article>
                 ))
-              ) : investmentAccounts.length > 0 && activeInvestmentFilters ? (
-                <EmptyDataCta
-                  className="empty-state--illustrated investments-empty-state--compact"
-                  eyebrow="Filters active"
-                  title="No investments match these filters."
-                  copy="Reset filters to bring holdings back."
-                  illustration={investmentsEmptyStateIllustration}
-                  illustrationAlt=""
-                  accountHref="/accounts"
-                  transactionHref="/transactions?manual=1"
-                  actions={
-                    <>
-                      <button
-                        className="button button-primary button-small"
-                        type="button"
-                        onClick={() => {
-                          setInvestmentSearch("");
-                          setInvestmentSubtypeFilter("all");
-                          setInvestmentSortKey("value_desc");
-                        }}
-                      >
-                        Reset filters
-                      </button>
-                      <Link className="button button-secondary button-small" href="/accounts">
-                        Open Accounts
-                      </Link>
-                    </>
-                  }
-                />
               ) : (
                 <EmptyDataCta
                   className="empty-state--illustrated investments-empty-state--compact"
                   eyebrow="It's quiet in here"
-                  title="No investments yet."
-                  copy="Add an investment to see your portfolio mix and holdings."
+                  title={investmentAccounts.length > 0 && (activeInvestmentFilters || portfolioCurrencyFilter !== "all") ? "No portfolio assets match this view." : "No portfolio assets yet."}
+                  copy={investmentAccounts.length > 0 && (activeInvestmentFilters || portfolioCurrencyFilter !== "all")
+                    ? "Try another currency or reset the filters."
+                    : "Add an investment to start building your portfolio."}
                   illustration={investmentsEmptyStateIllustration}
                   illustrationAlt=""
                   accountHref="/accounts"
@@ -1345,8 +1448,8 @@ export default function InvestmentsPage() {
               ) : (
                 <EmptyDataCta
                   className="empty-state--illustrated investments-empty-state--compact"
-                  eyebrow="Holdings"
-                  title="No holdings yet."
+                  eyebrow="Portfolio"
+                  title="No portfolio assets yet."
                   copy="Add an investment to see your largest positions."
                   illustration={investmentsEmptyStateIllustration}
                   illustrationAlt=""
@@ -1372,7 +1475,7 @@ export default function InvestmentsPage() {
                     <InfoTip label="The holding with the highest current value." />
                   </div>
                   <strong>{topHoldings[0] ? formatInvestmentAmount(topHoldings[0].currentValue, topHoldings[0].account.currency) : "—"}</strong>
-                  <span>{topHoldings[0]?.account.name ?? "No holdings yet"}</span>
+                  <span>{topHoldings[0]?.account.name ?? "No portfolio assets yet"}</span>
                 </article>
                 <article className="accounts-overview-card glass">
                   <div className="investments-metric__label">
@@ -1384,7 +1487,7 @@ export default function InvestmentsPage() {
                       ? "—"
                       : formatInvestmentAmount(bestGainHolding.gainLoss, bestGainHolding.account.currency)}
                   </strong>
-                  <span>{bestGainHolding?.account.name ?? "No holdings yet"}</span>
+                  <span>{bestGainHolding?.account.name ?? "No portfolio assets yet"}</span>
                 </article>
                 <article className="accounts-overview-card glass">
                   <div className="investments-metric__label">
@@ -1392,7 +1495,7 @@ export default function InvestmentsPage() {
                     <InfoTip label="The holding with the highest return percentage." />
                   </div>
                   <strong>{bestReturnHolding?.returnPercent === null || bestReturnHolding?.returnPercent === undefined ? "—" : percentFormatter.format(bestReturnHolding.returnPercent)}</strong>
-                  <span>{bestReturnHolding?.account.name ?? "No holdings yet"}</span>
+                  <span>{bestReturnHolding?.account.name ?? "No portfolio assets yet"}</span>
                 </article>
                 <article className="accounts-overview-card glass">
                   <div className="investments-metric__label">
@@ -1404,7 +1507,7 @@ export default function InvestmentsPage() {
                       ? "—"
                       : formatInvestmentAmount(worstGainHolding.gainLoss, worstGainHolding.account.currency)}
                   </strong>
-                  <span>{worstGainHolding?.account.name ?? "No holdings yet"}</span>
+                  <span>{worstGainHolding?.account.name ?? "No portfolio assets yet"}</span>
                 </article>
               </div>
             </article>
@@ -1434,10 +1537,10 @@ export default function InvestmentsPage() {
             <div className="accounts-add-grid">
               <form className="accounts-manual-form" onSubmit={createManualInvestment}>
                 <label>
-                  Asset code / ticker
-                  <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: BPI or FMETF" />
+                  Holding name
+                  <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Example: Bitcoin or BPI" />
                   <span className="field-help">
-                    Use the symbol, fund code, or short holding label here. The institution stays separate as the platform or broker.
+                    Use the human-readable holding name here. The code or token stays in the field below, and the institution stays separate as the platform or broker.
                   </span>
                 </label>
                 <InstitutionAutocomplete
@@ -1469,16 +1572,16 @@ export default function InvestmentsPage() {
                   <span className="field-help">This is the current total value of the holding, not the amount you paid to buy it.</span>
                 </label>
                 <label>
-                  Currency
+                  Value currency
                   <input
                     value={manualCurrency}
                     onChange={(event) => setManualCurrency(event.target.value.toUpperCase())}
-                    placeholder="PHP, USD, BTC"
+                    placeholder="PHP or USD"
                     maxLength={8}
                     autoCapitalize="characters"
                     spellCheck={false}
                   />
-                  <span className="field-help">Use the holding’s native currency. Crypto codes like BTC or USDT are accepted too.</span>
+                  <span className="field-help">Use the currency the holding is valued in. For crypto, this is usually PHP or USD, not the token code.</span>
                 </label>
 
                 {manualInvestmentSubtype ? (

@@ -12182,7 +12182,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .investments-filters {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(160px, 1fr) minmax(160px, 1fr);
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(160px, 1fr));
   gap: 12px;
   padding: 16px;
   border-radius: 18px;
@@ -12329,6 +12329,81 @@ input.transaction-inline-edit--amount::placeholder {
   height: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, rgba(3, 168, 192, 0.72), rgba(20, 184, 166, 0.72));
+}
+
+.investments-portfolio-table {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 22px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: var(--shadow-soft);
+}
+
+.investments-portfolio-table__table {
+  display: grid;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.investments-portfolio-table__row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.5fr) minmax(120px, 1fr) minmax(90px, 0.8fr) minmax(140px, 1fr) minmax(140px, 1fr) minmax(140px, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-width: 760px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.investments-portfolio-table__row--head {
+  padding: 0 12px 4px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.investments-portfolio-table__cell {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.investments-portfolio-table__cell--asset strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.investments-portfolio-table__cell--asset span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.investments-portfolio-table__cell.is-positive {
+  color: #15803d;
+}
+
+.investments-portfolio-table__cell.is-negative {
+  color: #b45309;
+}
+
+.investments-portfolio-table__cell span {
+  color: inherit;
+  font-size: 12px;
+}
+
+.investments-portfolio-table__empty {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 12px 6px 4px;
+  text-align: center;
 }
 
 .investments-holdings-chart {
