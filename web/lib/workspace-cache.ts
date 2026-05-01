@@ -430,6 +430,66 @@ export const getCachedTransactionsWorkspace = (workspaceId: string): Transaction
   return cache?.snapshots[workspaceId] ?? null;
 };
 
+export const findCachedImportedAccount = (accountId: string) => {
+  if (!accountId) {
+    return null;
+  }
+
+  const accountsCache = readAccountsWorkspaceCache();
+  if (!accountsCache) {
+    return null;
+  }
+
+  for (const snapshot of Object.values(accountsCache.snapshots)) {
+    const account = snapshot.accounts.find((entry) => {
+      const entryId = typeof entry.id === "string" ? entry.id : "";
+      const optimisticId = typeof (entry as ImportedWorkspaceAccount).optimisticAccountId === "string"
+        ? (entry as ImportedWorkspaceAccount).optimisticAccountId
+        : "";
+      return entryId === accountId || optimisticId === accountId;
+    });
+
+    if (account) {
+      return {
+        workspaceId: snapshot.workspaceId,
+        account,
+      };
+    }
+  }
+
+  return null;
+};
+
+export const findCachedTransactionsForAccount = (accountId: string) => {
+  if (!accountId) {
+    return null;
+  }
+
+  const transactionsCache = readTransactionsWorkspaceCache();
+  if (!transactionsCache) {
+    return null;
+  }
+
+  for (const snapshot of Object.values(transactionsCache.snapshots)) {
+    const snapshotLike = snapshot as TransactionsWorkspaceSnapshotLike & {
+      transactions: CachedRecord[];
+      totalCount?: number;
+    };
+    const transactions = snapshotLike.transactions.filter(
+      (entry) => typeof entry.accountId === "string" && entry.accountId === accountId
+    );
+    if (transactions.length > 0) {
+      return {
+        workspaceId: snapshotLike.workspaceId,
+        transactions,
+        totalCount: typeof snapshotLike.totalCount === "number" ? snapshotLike.totalCount : transactions.length,
+      };
+    }
+  }
+
+  return null;
+};
+
 export const persistTransactionsWorkspaceCache = (
   workspaceId: string,
   snapshot: Omit<TransactionsWorkspaceCacheSnapshot, "workspaceId" | "updatedAt">

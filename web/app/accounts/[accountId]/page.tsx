@@ -20,6 +20,8 @@ import {
   getCachedTransactionsWorkspace,
   getDeletedWorkspaceAccountIds,
   getDeletingWorkspaceAccountIds,
+  findCachedImportedAccount,
+  findCachedTransactionsForAccount,
   markDeletedWorkspaceAccount,
   normalizeImportedAccountKey,
 } from "@/lib/workspace-cache";
@@ -66,6 +68,14 @@ type Transaction = {
   isExcluded: boolean;
   source?: string | null;
   importFileId?: string | null;
+};
+
+type ImportFile = {
+  id: string;
+  fileName: string;
+  status: string;
+  uploadedAt: string;
+  accountId?: string | null;
 };
 
 type StatementCheckpoint = {
@@ -268,8 +278,9 @@ const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined
   };
 };
 
-const buildImportSummaries = (transactions: Transaction[]) => {
-  const groups = new Map<string, { key: string; count: number; latestDate: string; label: string; total: number }>();
+const buildImportSummaries = (transactions: Transaction[], importFiles: ImportFile[]) => {
+  const importFileNames = new Map(importFiles.map((importFile) => [importFile.id, importFile.fileName] as const));
+  const groups = new Map<string, { key: string; count: number; latestDate: string; label: string }>();
 
   for (const transaction of transactions) {
     if (transaction.merchantRaw === "Beginning balance") {
@@ -282,7 +293,6 @@ const buildImportSummaries = (transactions: Transaction[]) => {
 
     const key = transaction.importFileId ?? `${transaction.accountId}:${transaction.date.slice(0, 10)}`;
     const current = groups.get(key);
-    const amount = parseAmount(transaction.amount);
     groups.set(
       key,
       current
@@ -290,14 +300,14 @@ const buildImportSummaries = (transactions: Transaction[]) => {
             ...current,
             count: current.count + 1,
             latestDate: new Date(transaction.date) > new Date(current.latestDate) ? transaction.date : current.latestDate,
-            total: current.total + amount,
           }
         : {
             key,
             count: 1,
             latestDate: transaction.date,
-            label: transaction.importFileId ? "Imported batch" : "Uploaded statement",
-            total: amount,
+            label:
+              (transaction.importFileId ? importFileNames.get(transaction.importFileId) : null) ??
+              "Uploaded statement",
           }
     );
   }
@@ -346,6 +356,7 @@ function AccountDetailPageContent() {
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [transactionsLoadingMore, setTransactionsLoadingMore] = useState(false);
   const [transactionsError, setTransactionsError] = useState<string | null>(null);
+  const [importFiles, setImportFiles] = useState<ImportFile[]>([]);
   const [checkpoints, setCheckpoints] = useState<StatementCheckpoint[]>([]);
   const [message, setMessage] = useState("Loading account history...");
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -360,20 +371,22 @@ function AccountDetailPageContent() {
       const activeWorkspaceId = selectedWorkspaceId ?? "";
       const cachedAccountsWorkspace = getCachedAccountsWorkspace(activeWorkspaceId);
       const cachedTransactionsWorkspace = getCachedTransactionsWorkspace(activeWorkspaceId);
-      const cachedAccountEntry = cachedAccountsWorkspace?.accounts.find((entry) => {
+      const cachedAccountLookup = findCachedImportedAccount(accountId);
+      const cachedWorkspaceId = cachedAccountLookup?.workspaceId ?? activeWorkspaceId;
+      const cachedAccountEntry = (cachedAccountsWorkspace?.accounts.find((entry) => {
         const entryId = typeof entry.id === "string" ? entry.id : "";
         const optimisticId = typeof entry.optimisticAccountId === "string" ? entry.optimisticAccountId : "";
         return entryId === accountId || optimisticId === accountId;
-      }) as Account | undefined;
+      }) ?? cachedAccountLookup?.account) as Account | undefined;
       const cachedAccount = cachedAccountEntry
         ? ({
             ...cachedAccountEntry,
-            workspaceId: activeWorkspaceId,
+            workspaceId: cachedWorkspaceId,
           } as Account)
         : null;
       if (
-        getDeletingWorkspaceAccountIds(activeWorkspaceId).includes(accountId) ||
-        getDeletedWorkspaceAccountIds(activeWorkspaceId).includes(accountId)
+        getDeletingWorkspaceAccountIds(cachedWorkspaceId).includes(accountId) ||
+        getDeletedWorkspaceAccountIds(cachedWorkspaceId).includes(accountId)
       ) {
         router.replace("/accounts");
         return;
@@ -382,12 +395,19 @@ function AccountDetailPageContent() {
       if (cachedAccount) {
         if (!cancelled) {
           setAccount(cachedAccount);
+          const accountTransactionsLookup = findCachedTransactionsForAccount(cachedAccount.id);
           const cachedTransactions = Array.isArray(cachedTransactionsWorkspace?.transactions)
             ? (cachedTransactionsWorkspace.transactions as Transaction[]).filter((transaction) => transaction.accountId === cachedAccount.id)
+            : (accountTransactionsLookup?.transactions as Transaction[] | undefined) ?? [];
+          const cachedImportFiles = Array.isArray(cachedTransactionsWorkspace?.imports)
+            ? (cachedTransactionsWorkspace.imports as ImportFile[]).filter((importFile) => {
+                return !importFile.accountId || importFile.accountId === cachedAccount.id;
+              })
             : [];
           setTransactions(cachedTransactions);
+          setImportFiles(cachedImportFiles);
           setTransactionPage(1);
-          setTransactionTotalCount(cachedTransactions.length);
+          setTransactionTotalCount(accountTransactionsLookup?.totalCount ?? cachedTransactions.length);
           setTransactionsError(null);
           setTransactionsLoading(false);
           setMessage("");

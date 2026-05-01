@@ -767,9 +767,7 @@ export function ImportFilesModal({
 
   useEffect(() => {
     if (!open) {
-      setItems([]);
       setDragActive(false);
-      setBusy(false);
       setSelectedAccountId("");
       setSelectedPasswordItemId(null);
       setPlanTier("unknown");
@@ -783,6 +781,10 @@ export function ImportFilesModal({
       setMessage("Upload CSV or PDF files to import transactions and balances.");
       setValidationNotice(null);
       initialFilesSignatureRef.current = null;
+      if (!items.some((item) => item.status === "pending" || item.status === "needs_password" || item.status === "parsing" || item.status === "importing")) {
+        setItems([]);
+        setBusy(false);
+      }
       return;
     }
 
@@ -812,7 +814,7 @@ export function ImportFilesModal({
     });
     setMessage("Upload CSV or PDF files to import transactions and balances.");
     setValidationNotice(null);
-  }, [accounts, defaultAccountId, open]);
+  }, [accounts, defaultAccountId, items, open]);
 
   useEffect(() => {
     if (!open) {
@@ -1133,7 +1135,7 @@ export function ImportFilesModal({
     if (nextFiles.length > 0) {
       autoStartRef.current = true;
       window.setTimeout(() => {
-        if (!open || busy || !workspaceId || !autoStartRef.current) {
+        if (busy || !workspaceId || !autoStartRef.current) {
           return;
         }
 
@@ -2630,7 +2632,7 @@ export function ImportFilesModal({
   };
 
   useEffect(() => {
-    if (!open || busy || !workspaceId || !autoStartRef.current) {
+    if (busy || !workspaceId || !autoStartRef.current) {
       return;
     }
 
@@ -2649,7 +2651,7 @@ export function ImportFilesModal({
 
     autoStartRef.current = false;
     void handleStartImport();
-  }, [busy, handleStartImport, items, open, workspaceId]);
+  }, [busy, handleStartImport, items, workspaceId]);
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
