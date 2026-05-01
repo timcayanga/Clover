@@ -17090,6 +17090,61 @@ input.transaction-inline-edit--amount::placeholder {
   filter: saturate(1.12) hue-rotate(160deg) brightness(0.98) contrast(1.03);
 }
 
+.dashboard-empty-state {
+  width: 100%;
+  max-width: none;
+  padding: 18px 20px;
+  grid-template-columns: minmax(170px, 240px) minmax(0, 1fr);
+  gap: 10px 18px;
+  text-align: left;
+  justify-items: start;
+}
+
+.dashboard-empty-state .transactions-empty-state__art {
+  width: min(100%, 220px);
+  margin-bottom: 0;
+  grid-column: 1;
+  grid-row: 1 / span 5;
+  align-self: center;
+}
+
+.dashboard-empty-state .transactions-empty-state__eyebrow,
+.dashboard-empty-state h3,
+.dashboard-empty-state .transactions-empty-state__copy,
+.dashboard-empty-state .transactions-empty-state__actions {
+  grid-column: 2;
+}
+
+.dashboard-empty-state h3 {
+  max-width: 20ch;
+}
+
+.dashboard-empty-state .transactions-empty-state__copy {
+  max-width: 34ch;
+}
+
+@media (max-width: 767px) {
+  .dashboard-empty-state {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    text-align: center;
+    gap: 6px;
+  }
+
+  .dashboard-empty-state .transactions-empty-state__art,
+  .dashboard-empty-state .transactions-empty-state__eyebrow,
+  .dashboard-empty-state h3,
+  .dashboard-empty-state .transactions-empty-state__copy,
+  .dashboard-empty-state .transactions-empty-state__actions {
+    grid-column: auto;
+  }
+
+  .dashboard-empty-state .transactions-empty-state__art {
+    width: min(100%, 178px);
+    grid-row: auto;
+  }
+}
+
 .accounts-empty-state {
   display: grid;
   gap: 10px;

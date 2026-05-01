@@ -596,9 +596,10 @@ async function DashboardStream({
       {isEmptyWorkspace ? (
         <div style={{ marginBottom: 20 }}>
           <EmptyDataCta
+            className="dashboard-empty-state"
             eyebrow="Get started"
             title={experienceProfile.emptyStateTitle}
-            copy={experienceProfile.emptyStateCopy}
+            copy="Import files first so Clover can populate the dashboard, review queue, and goal signals right away."
             illustration="/illustrations/clover-empty-dashboard-3d.png"
             illustrationAlt="A 3D Clover dashboard illustration"
             importHref="/dashboard?import=1"
