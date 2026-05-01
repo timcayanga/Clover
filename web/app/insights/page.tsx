@@ -191,13 +191,19 @@ async function InsightsPageStream({
       ? await prisma.workspace.findFirst({
           where: {
             id: selectedWorkspaceCookieId,
-            userId: user.id,
+            user: {
+              clerkUserId: user.clerkUserId,
+            },
           },
           include: workspaceInclude,
         })
       : null) ??
     (await prisma.workspace.findFirst({
-      where: { userId: user.id },
+      where: {
+        user: {
+          clerkUserId: user.clerkUserId,
+        },
+      },
       include: workspaceInclude,
       orderBy: { createdAt: "asc" },
     }));

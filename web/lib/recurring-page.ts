@@ -38,9 +38,33 @@ export type RecurringPageData = {
   liabilityAccountCount: number;
 };
 
-export async function getRecurringWorkspaceId(userId: string, clerkUserId: string, email: string, verified: boolean) {
+export async function getRecurringWorkspaceId(
+  clerkUserId: string,
+  email: string,
+  verified: boolean,
+  preferredWorkspaceId?: string
+) {
+  if (preferredWorkspaceId) {
+    const selectedWorkspace = await prisma.workspace.findFirst({
+      where: {
+        id: preferredWorkspaceId,
+        user: {
+          clerkUserId,
+        },
+      },
+      select: { id: true },
+    });
+    if (selectedWorkspace) {
+      return selectedWorkspace.id;
+    }
+  }
+
   const selectedWorkspace = await prisma.workspace.findFirst({
-    where: { userId },
+    where: {
+      user: {
+        clerkUserId,
+      },
+    },
     orderBy: { createdAt: "asc" },
     select: { id: true },
   });

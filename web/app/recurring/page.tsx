@@ -1,8 +1,10 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { RecurringPageClient } from "@/components/recurring-page-client";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getRecurringPageData, getRecurringWorkspaceId } from "@/lib/recurring-page";
+import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +25,9 @@ export default async function RecurringPage({
 
   const params = await searchParams;
   const showAddModal = params.add === "1" || params.add === "true";
-  const workspaceId = await getRecurringWorkspaceId(user.id, user.clerkUserId, user.email, user.verified);
+  const cookieStore = await cookies();
+  const selectedWorkspaceId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
+  const workspaceId = await getRecurringWorkspaceId(user.clerkUserId, user.email, user.verified, selectedWorkspaceId);
   const recurringData = await getRecurringPageData(workspaceId);
   const { accounts: workspaceAccounts, transactions: recentTransactions, commitments } = recurringData;
 

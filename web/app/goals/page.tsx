@@ -284,13 +284,19 @@ async function GoalsPageStream({
       ? await prisma.workspace.findFirst({
           where: {
             id: selectedWorkspaceCookieId,
-            userId: user.id,
+            user: {
+              clerkUserId: user.clerkUserId,
+            },
           },
           select: workspaceSelect,
         })
       : null) ??
     (await prisma.workspace.findFirst({
-      where: { userId: user.id },
+      where: {
+        user: {
+          clerkUserId: user.clerkUserId,
+        },
+      },
       select: workspaceSelect,
       orderBy: { createdAt: "asc" },
     }));

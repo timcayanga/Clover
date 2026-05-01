@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { Suspense } from "react";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { prisma } from "@/lib/prisma";
@@ -14,6 +15,7 @@ import { getFinancialExperienceProfile, getGoalProgressSnapshot, type GoalKey } 
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
 import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
+import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -340,31 +342,51 @@ async function DashboardStream({
   user: Awaited<ReturnType<typeof getOrCreateCurrentUser>>;
   resolvedSearchParams?: { import?: string };
 }) {
-  const selectedWorkspaceData = await prisma.workspace.findFirst({
-    where: { userId: user.id },
-    orderBy: { createdAt: "asc" },
-    select: {
-      id: true,
-      name: true,
-      accounts: {
-        select: {
-          id: true,
-          name: true,
-          institution: true,
-          type: true,
-          currency: true,
-          balance: true,
-        },
-      },
-      _count: {
-        select: {
-          accounts: true,
-          importFiles: true,
-          transactions: true,
-        },
+  const cookieStore = await cookies();
+  const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
+  const workspaceSelect = {
+    id: true,
+    name: true,
+    accounts: {
+      select: {
+        id: true,
+        name: true,
+        institution: true,
+        type: true,
+        currency: true,
+        balance: true,
       },
     },
-  });
+    _count: {
+      select: {
+        accounts: true,
+        importFiles: true,
+        transactions: true,
+      },
+    },
+  } as const;
+
+  const selectedWorkspaceData =
+    (selectedWorkspaceCookieId
+      ? await prisma.workspace.findFirst({
+          where: {
+            id: selectedWorkspaceCookieId,
+            user: {
+              clerkUserId: user.clerkUserId,
+            },
+          },
+          select: workspaceSelect,
+        })
+      : null) ??
+    (await prisma.workspace.findFirst({
+      where: {
+        user: {
+          clerkUserId: user.clerkUserId,
+        },
+      },
+      orderBy: { createdAt: "asc" },
+      select: workspaceSelect,
+    }));
   let workspaceSummary = selectedWorkspaceData;
 
   if (!workspaceSummary) {

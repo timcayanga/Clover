@@ -275,13 +275,19 @@ async function ReportsStream({
         ? await prisma.workspace.findFirst({
             where: {
               id: selectedWorkspaceCookieId,
-              userId: user.id,
+              user: {
+                clerkUserId: user.clerkUserId,
+              },
             },
             select: { id: true },
           })
         : null) ??
       (await prisma.workspace.findFirst({
-        where: { userId: user.id },
+        where: {
+          user: {
+            clerkUserId: user.clerkUserId,
+          },
+        },
         select: { id: true },
         orderBy: { createdAt: "asc" },
       }))
