@@ -138,6 +138,7 @@ const PARSED_TRANSACTION_COLUMNS = [
   "accountName",
   "date",
   "amount",
+  "currency",
   "merchantRaw",
   "merchantClean",
   "type",
@@ -459,6 +460,7 @@ export const detectStatementMetadataFromText = (text: string): StatementMetadata
     accountNumber,
     accountName,
     accountType,
+    currency: metadata?.currency ?? null,
     openingBalance: metadata?.openingBalance ?? null,
     endingBalance: metadata?.endingBalance ?? null,
     paymentDueDate: metadata?.paymentDueDate ?? null,
@@ -476,6 +478,7 @@ export const mergeStatementMetadataWithTemplate = (
     accountNumber?: string | null;
     accountName?: string | null;
     accountType?: ImportedAccountType | null;
+    currency?: string | null;
     openingBalance?: number | null;
     endingBalance?: number | null;
     paymentDueDate?: string | null;
@@ -498,6 +501,7 @@ export const mergeStatementMetadataWithTemplate = (
       template.accountNumber ? 35 : 0,
       template.accountName ? 10 : 0,
       template.accountType ? 5 : 0,
+      template.currency ? 5 : 0,
       template.startDate ? 5 : 0,
       template.endDate ? 5 : 0,
       template.paymentDueDate ? 5 : 0,
@@ -524,6 +528,10 @@ export const mergeStatementMetadataWithTemplate = (
       preferTemplateIdentity && template.accountType
         ? template.accountType
         : detected.accountType ?? template.accountType ?? null,
+    currency:
+      preferTemplateIdentity && template.currency
+        ? template.currency
+        : detected.currency ?? template.currency ?? null,
     openingBalance: detected.openingBalance ?? template.openingBalance ?? null,
     endingBalance: detected.endingBalance ?? template.endingBalance ?? null,
     paymentDueDate: detected.paymentDueDate ?? template.paymentDueDate ?? null,
@@ -582,6 +590,7 @@ type StatementMetadataSnapshot = {
   accountNumber: string | null;
   accountName: string | null;
   accountType: ImportedAccountType | null;
+  currency: string | null;
   openingBalance: number | null;
   endingBalance: number | null;
   paymentDueDate?: string | null;
@@ -1055,6 +1064,7 @@ export const buildParsedTransactionInsertData = async (params: {
     if (columns.has("accountName")) record.accountName = row.accountName ?? null;
     if (columns.has("date")) record.date = parseDateValue(row.date ?? null);
     if (columns.has("amount")) record.amount = amount;
+    if (columns.has("currency")) record.currency = row.currency ?? params.metadata.currency ?? null;
     if (columns.has("merchantRaw")) record.merchantRaw = row.merchantRaw ?? null;
     if (columns.has("merchantClean")) record.merchantClean = row.merchantClean ?? row.merchantRaw ?? null;
     if (columns.has("type")) record.type = row.type ?? "expense";
@@ -1883,11 +1893,12 @@ export const applyDataQaReviewLearning = async (params: {
     .filter((part) => part.length > 0)
     .join("\n");
 
-  const fingerprintMetadata: DetectedStatementMetadata = {
+  const fingerprintMetadata: StatementMetadataSnapshot = {
     institution: bankName || (effectiveMetadata.institution ?? null),
     accountNumber: accountNumber || (effectiveMetadata.accountNumber ?? null),
     accountName: effectiveMetadata.accountName ?? null,
     accountType: accountType,
+    currency: effectiveMetadata.currency ?? null,
     openingBalance: effectiveMetadata.openingBalance ?? null,
     endingBalance: accountBalance ? parseAmountValue(accountBalance) ?? effectiveMetadata.endingBalance ?? null : effectiveMetadata.endingBalance ?? null,
     paymentDueDate: effectiveMetadata.paymentDueDate ?? null,

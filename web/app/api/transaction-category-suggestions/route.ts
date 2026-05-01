@@ -74,8 +74,8 @@ const loadSuggestionWorkspaceData = async (workspaceId: string) => {
   const [merchantRules, categories] = await Promise.all([
     loadMerchantRules(workspaceId),
     prisma.category.findMany({
-      where: { workspaceId },
-      select: { id: true, name: true },
+      where: { workspaceId, isArchived: false },
+      select: { id: true, name: true, isArchived: true },
     }),
   ]);
 

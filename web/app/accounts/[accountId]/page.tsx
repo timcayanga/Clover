@@ -8,6 +8,7 @@ import { AccountBrandMark } from "@/components/account-brand-mark";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { getAccountBrand } from "@/lib/account-brand";
 import { deriveReconciledBalance } from "@/lib/account-balance";
+import { formatCurrencyAmount } from "@/lib/currency-format";
 import { extractAccountIdFromPathSegment, getAccountPath } from "@/lib/account-path";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { formatTransactionDirectionLabel } from "@/lib/transaction-directions";
@@ -59,6 +60,7 @@ type Transaction = {
   id: string;
   accountId: string;
   amount: string;
+  currency?: string | null;
   type: "income" | "expense" | "transfer";
   date: string;
   merchantRaw: string;
@@ -96,12 +98,6 @@ type StatementCheckpoint = {
     accountNumber?: string | null;
   } | null;
 };
-
-const currencyFormatter = new Intl.NumberFormat("en-PH", {
-  style: "currency",
-  currency: "PHP",
-  minimumFractionDigits: 2,
-});
 
 const TRANSACTION_PAGE_SIZE = 25;
 
@@ -146,6 +142,8 @@ const parseNullableNumber = (value: string | null | undefined) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 };
+
+const formatAccountAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
 
 const hexToRgba = (hex: string, alpha: number) => {
   const normalized = hex.trim().replace("#", "");
@@ -341,6 +339,9 @@ function AccountDetailPageContent() {
       const cachedTransactionsWorkspace = getCachedTransactionsWorkspace(activeWorkspaceId);
       const cachedAccountLookup = findCachedImportedAccount(accountId);
       const cachedWorkspaceId = cachedAccountLookup?.workspaceId ?? activeWorkspaceId;
+      let cachedTransactions: Transaction[] = [];
+      let cachedImportFiles: ImportFile[] = [];
+      let cachedCheckpoints: StatementCheckpoint[] = [];
       const cachedAccountEntry = (cachedAccountsWorkspace?.accounts.find((entry) => {
         const entryId = typeof entry.id === "string" ? entry.id : "";
         const optimisticId = typeof entry.optimisticAccountId === "string" ? entry.optimisticAccountId : "";
@@ -363,16 +364,21 @@ function AccountDetailPageContent() {
 
       if (cachedAccount) {
         if (!cancelled) {
-          setAccount(cachedAccount);
           const accountTransactionsLookup = findCachedTransactionsForAccount(cachedAccount.id);
-          const cachedTransactions = Array.isArray(cachedTransactionsWorkspace?.transactions)
+          cachedTransactions = Array.isArray(cachedTransactionsWorkspace?.transactions)
             ? (cachedTransactionsWorkspace.transactions as Transaction[]).filter((transaction) => transaction.accountId === cachedAccount.id)
             : (accountTransactionsLookup?.transactions as Transaction[] | undefined) ?? [];
-          const cachedImportFiles = Array.isArray(cachedTransactionsWorkspace?.imports)
+          cachedImportFiles = Array.isArray(cachedTransactionsWorkspace?.imports)
             ? (cachedTransactionsWorkspace.imports as ImportFile[]).filter((importFile) => {
                 return !importFile.accountId || importFile.accountId === cachedAccount.id;
               })
             : [];
+          cachedCheckpoints = Array.isArray(cachedAccountsWorkspace?.statementCheckpoints)
+            ? (cachedAccountsWorkspace.statementCheckpoints as StatementCheckpoint[]).filter(
+                (checkpoint) => checkpoint.accountId === cachedAccount.id
+              )
+            : [];
+          setAccount(cachedAccount);
           setTransactions(cachedTransactions);
           setImportFiles(cachedImportFiles);
           setTransactionPage(1);
@@ -381,13 +387,7 @@ function AccountDetailPageContent() {
           setTransactionsLoading(false);
           setMessage("");
           setHasInitialDataLoaded(true);
-          setCheckpoints(
-            Array.isArray(cachedAccountsWorkspace?.statementCheckpoints)
-              ? (cachedAccountsWorkspace.statementCheckpoints as StatementCheckpoint[]).filter(
-                  (checkpoint) => checkpoint.accountId === cachedAccount.id
-                )
-              : []
-          );
+          setCheckpoints(cachedCheckpoints);
         }
         const canonicalPath = getAccountPath(cachedAccount);
         if (!cancelled && canonicalPath !== `/accounts/${accountPathSegment}`) {
@@ -417,8 +417,18 @@ function AccountDetailPageContent() {
           return;
         }
 
-        setAccount(nextAccount);
-        const canonicalPath = getAccountPath(nextAccount);
+        const mergedAccount =
+          cachedAccount && nextAccount.id === cachedAccount.id
+            ? ({
+                ...nextAccount,
+                balance:
+                  nextAccount.balance && Number(nextAccount.balance) !== 0
+                    ? nextAccount.balance
+                    : cachedAccount.balance ?? nextAccount.balance,
+              } as Account)
+            : nextAccount;
+        setAccount(mergedAccount);
+        const canonicalPath = getAccountPath(mergedAccount);
         if (!cancelled && canonicalPath !== `/accounts/${accountPathSegment}`) {
           router.replace(canonicalPath);
         }
@@ -465,9 +475,22 @@ function AccountDetailPageContent() {
             } | null;
 
             if (!cancelled) {
-              setTransactions(Array.isArray(transactionsPayload?.transactions) ? transactionsPayload.transactions : []);
+              const nextTransactions = Array.isArray(transactionsPayload?.transactions)
+                ? transactionsPayload.transactions
+                : [];
+              const mergedTransactions =
+                nextTransactions.length > 0
+                  ? nextTransactions
+                  : cachedTransactions.length > 0
+                    ? cachedTransactions
+                    : nextTransactions;
+              setTransactions(mergedTransactions);
               setTransactionPage(typeof transactionsPayload?.page === "number" ? transactionsPayload.page : 1);
-              setTransactionTotalCount(typeof transactionsPayload?.totalCount === "number" ? transactionsPayload.totalCount : 0);
+              setTransactionTotalCount(
+                typeof transactionsPayload?.totalCount === "number" && transactionsPayload.totalCount > 0
+                  ? transactionsPayload.totalCount
+                  : mergedTransactions.length
+              );
               setTransactionsError(null);
               setTransactionsLoading(false);
               setMessage("");
@@ -591,7 +614,10 @@ function AccountDetailPageContent() {
         account?.type ?? null,
         parseAmount(
           deriveReconciledBalance({
-            balance: account?.balance ?? null,
+            balance:
+              account?.balance && Number(account.balance) !== 0
+                ? account.balance
+                : account?.balance ?? null,
             transactions,
             checkpoints: latestCheckpoint ? [latestCheckpoint] : [],
           })
@@ -800,7 +826,7 @@ function AccountDetailPageContent() {
                   Current balance
                   <InfoTooltip label={ACCOUNT_DETAILS_INFO.currentBalance} />
                 </div>
-                <strong>{currencyFormatter.format(currentBalance)}</strong>
+                <strong>{formatAccountAmount(currentBalance, account.currency)}</strong>
               </div>
             </div>
             <div className="status-card">
@@ -809,7 +835,7 @@ function AccountDetailPageContent() {
                   {accountDetailValueCard.label}
                   <InfoTooltip label={accountDetailValueCardInfo} />
                 </div>
-                <strong>{currencyFormatter.format(accountDetailValueCard.value)}</strong>
+                <strong>{formatAccountAmount(accountDetailValueCard.value, account.currency)}</strong>
               </div>
             </div>
             <div className="status-card">
@@ -839,11 +865,11 @@ function AccountDetailPageContent() {
               </div>
               <div className="status-card">
                 <div className="panel-muted">Current value</div>
-                <strong>{currencyFormatter.format(currentBalance)}</strong>
+                <strong>{formatAccountAmount(currentBalance, account.currency)}</strong>
               </div>
               <div className="status-card">
                 <div className="panel-muted">Purchase value / principal</div>
-                <strong>{investmentPurchaseValue === null ? "Not set" : currencyFormatter.format(investmentPurchaseValue)}</strong>
+                <strong>{investmentPurchaseValue === null ? "Not set" : formatAccountAmount(investmentPurchaseValue, account.currency)}</strong>
               </div>
               <div className="status-card">
                 <div className="panel-muted">Holding note</div>
@@ -895,7 +921,7 @@ function AccountDetailPageContent() {
                               ? value
                               : field.key === "investmentInterestRate"
                                 ? `${value}%`
-                                : currencyFormatter.format(Number(value))}
+                          : formatAccountAmount(Number(value), account.currency)}
                     </strong>
                     <span>
                       {field.key === "investmentSymbol"
@@ -922,7 +948,7 @@ function AccountDetailPageContent() {
               <div className="status-card">
                 <div className="panel-muted">Unrealized gain / loss</div>
                 <strong>
-                  {investmentGainLoss === null ? "Not set" : currencyFormatter.format(investmentGainLoss)}
+                  {investmentGainLoss === null ? "Not set" : formatAccountAmount(investmentGainLoss, account.currency)}
                 </strong>
                 <span>
                   {investmentGainLoss === null
@@ -1003,7 +1029,7 @@ function AccountDetailPageContent() {
                       <div className="accounts-detail__transaction-category">{transaction.categoryName || "Other"}</div>
                       <div className="accounts-detail__transaction-type">{getTransactionTypeLabel(transaction.type)}</div>
                       <div className={`accounts-detail__transaction-amount ${amountToneClass}`}>
-                        {currencyFormatter.format(amount)}
+                        {formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}
                       </div>
                     </div>
                   );

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ChangeEvent } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createPortal } from "react-dom";
 import Link from "next/link";
@@ -387,7 +387,7 @@ const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
     institution: summary.institution,
     accountNumber: summary.accountNumber ?? null,
     type: accountType,
-    currency: "PHP",
+    currency: summary.previewTransactions?.[0]?.currency ?? "PHP",
     source: "upload",
     balance: summary.balance,
     updatedAt: new Date().toISOString(),
@@ -468,7 +468,8 @@ const buildOptimisticPreviewTransactions = (
         reviewStatus: "pending_review" as const,
         date,
         amount,
-        currency: "PHP",
+        currency:
+          typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : "PHP",
         type,
         merchantRaw,
         merchantClean,
@@ -670,11 +671,11 @@ const friendlyImportProgressLabel = (label: string, fileName?: string | null) =>
     case "Starting upload":
       return "Clover is getting your file ready";
     case "Uploading the file":
-      return `Clover is bringing in${fileSuffix}`;
+      return "Clover is uploading the file";
     case "Password needed":
       return "This file needs a password";
     case "Waiting for account details":
-      return "Clover is matching the account";
+      return "Clover is reading the bank name and account number";
     case "Waiting for statement identity":
       return "Clover is reading the statement";
     case "Reading locally":
@@ -687,7 +688,9 @@ const friendlyImportProgressLabel = (label: string, fileName?: string | null) =>
     case "Finalizing import":
       return "Clover is wrapping things up";
     case "Parsing in background":
-      return "Clover is reading the statement";
+      return "Clover is reading the bank name, balance, and transactions";
+    case "Reading statement details":
+      return "Clover is reading the bank name, balance, and transactions";
     case "Import failed":
       return "That file needs another try";
     case "Done":
@@ -1235,6 +1238,11 @@ export function ImportFilesModal({
     setValidationNotice(validationMessage || null);
   };
 
+  const addDroppedFiles = (incoming: FileList | File[]) => {
+    addFiles(incoming);
+    onClose();
+  };
+
   const updateItem = (id: string, patch: Partial<QueuedFile>) => {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   };
@@ -1404,6 +1412,34 @@ export function ImportFilesModal({
     }
   };
 
+  const getProgressDetail = useCallback(
+    (
+      resolved: {
+        accountName: string | null;
+        institution: string | null;
+        accountNumber: string | null;
+      },
+      rowsCount: number
+    ) => {
+      if (rowsCount > 0) {
+        if (resolved.accountNumber) {
+          return "Clover is reading the bank balance and transactions";
+        }
+
+        if (resolved.accountName || resolved.institution) {
+          return "Clover is reading the transactions";
+        }
+      }
+
+      if (resolved.accountName || resolved.institution || resolved.accountNumber) {
+        return "Clover is reading the account details";
+      }
+
+      return "Clover is reading the statement";
+    },
+    []
+  );
+
   const monitorQueuedImportAndConfirm = async (
     itemId: string,
     importFileId: string,
@@ -1429,31 +1465,6 @@ export function ImportFilesModal({
     const startedAt = Date.now();
     const MAX_WAIT_MS = 60_000;
     let latestResolvedAccountId: string | null = accountId && !accountId.startsWith("optimistic-") ? accountId : null;
-    const getProgressDetail = (
-      resolved: {
-      accountName: string | null;
-      institution: string | null;
-      accountNumber: string | null;
-      },
-      rowsCount: number
-    ) => {
-      if (rowsCount > 0) {
-        if (resolved.accountNumber) {
-          return "Clover is reading balance and transactions";
-        }
-
-        if (resolved.accountName || resolved.institution) {
-          return "Clover is reading transactions";
-        }
-      }
-
-      if (resolved.accountName || resolved.institution || resolved.accountNumber) {
-        return "Clover is reading the account details";
-      }
-
-      return "Clover is reading the statement";
-    };
-
     for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
         const response = await fetch(`/api/imports/${importFileId}/status`, {
@@ -1549,7 +1560,7 @@ export function ImportFilesModal({
                     parsedRowsCount
                   )),
             summary: null,
-            errorMessage: null,
+              errorMessage: null,
           });
           if (!seededFallbackSummary && (parsedRowsCount > 0 || Boolean(processingIdentity?.accountName || processingIdentity?.institution))) {
             const fallbackAccountId =
@@ -1587,6 +1598,27 @@ export function ImportFilesModal({
             seededFallbackSummary = true;
             seedImportedWorkspaceCaches(workspaceId, fallbackSummary);
             void onImported(fallbackSummary);
+            updateItem(itemId, {
+              status: "done",
+              confirmationState: "confirmed",
+              progress: 100,
+              progressLabel: "Done",
+              targetAccountId: fallbackAccountId,
+            });
+            publishImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "done",
+              fileName: summaryContext.fileName,
+              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount + 1,
+              progress: 100,
+              detail: "All set",
+              summary: fallbackSummary,
+              errorMessage: null,
+            });
+            return;
           }
           await sleep(600);
           continue;
@@ -1969,7 +2001,14 @@ export function ImportFilesModal({
             fileTotal: items.length,
             completedFiles: completedFileCount,
             progress: IMPORT_PROGRESS.loadingAccount,
-            detail: "Clover is loading your account",
+            detail: getProgressDetail(
+              {
+                accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
+                institution: resolvedIdentity.institution ?? summaryContext.institution,
+                accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber,
+              },
+              summaryContext.previewTransactions?.length ?? 0
+            ),
             summary: null,
             errorMessage: null,
           });
@@ -2421,11 +2460,11 @@ export function ImportFilesModal({
             fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
             fileTotal: items.length,
             completedFiles: completedFileCount,
-            progress: IMPORT_PROGRESS.preparing + progress * ((IMPORT_PROGRESS.uploading - IMPORT_PROGRESS.preparing) / 100),
-            detail: `Clover is bringing in ${item.file.name}`,
-            summary: null,
-            errorMessage: null,
-          });
+          progress: IMPORT_PROGRESS.preparing + progress * ((IMPORT_PROGRESS.uploading - IMPORT_PROGRESS.preparing) / 100),
+          detail: "Clover is uploading the file",
+          summary: null,
+          errorMessage: null,
+        });
           updateItem(itemId, {
             progress: IMPORT_PROGRESS.preparing + progress * ((IMPORT_PROGRESS.uploading - IMPORT_PROGRESS.preparing) / 100),
             progressLabel: `Uploading ${item.file.name}`,
@@ -2606,7 +2645,17 @@ export function ImportFilesModal({
           fileTotal: items.length,
           completedFiles: completedFileCount,
           progress: IMPORT_PROGRESS.loadingAccount,
-          detail: hasStatementIdentity || canUseOptimisticGuess ? "Clover is loading your account" : "Clover is reading the statement",
+          detail:
+            hasStatementIdentity || canUseOptimisticGuess
+              ? getProgressDetail(
+                  {
+                    accountName: statementIdentity?.accountName ?? guessedIdentity?.accountName ?? null,
+                    institution: statementIdentity?.institution ?? guessedIdentity?.institution ?? null,
+                    accountNumber: statementIdentity?.accountNumber ?? null,
+                  },
+                  previewTransactions.length
+                )
+              : "Clover is reading the statement",
           summary: null,
           errorMessage: null,
         });
@@ -2692,7 +2741,16 @@ export function ImportFilesModal({
         fileTotal: items.length,
         completedFiles: completedFileCount,
         progress: IMPORT_PROGRESS.loadingAccount,
-        detail: targetAccountId ? "Clover is loading your account" : "Clover is reading the statement",
+        detail: targetAccountId
+          ? getProgressDetail(
+              {
+                accountName: statementIdentity?.accountName ?? null,
+                institution: statementIdentity?.institution ?? null,
+                accountNumber: statementIdentity?.accountNumber ?? null,
+              },
+              previewTransactions.length
+            )
+          : "Clover is reading the statement",
         summary: null,
         errorMessage: null,
       });
@@ -3223,7 +3281,7 @@ export function ImportFilesModal({
             event.preventDefault();
             setDragActive(false);
             if (event.dataTransfer.files.length > 0) {
-              addFiles(event.dataTransfer.files);
+              addDroppedFiles(event.dataTransfer.files);
             }
           }}
           onClick={(event) => {

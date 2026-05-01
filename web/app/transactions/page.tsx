@@ -31,6 +31,7 @@ import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 
@@ -102,7 +103,10 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
 
     return {
       ...account,
-      balance: account.balance ?? optimistic.balance,
+      balance:
+        account.balance && Number(account.balance) !== 0
+          ? account.balance
+          : optimistic.balance ?? account.balance,
       source: optimistic.source ?? account.source,
     };
   });
@@ -284,14 +288,26 @@ type UpdateTransactionOptions = {
   historyBefore?: Transaction | null;
 };
 
-const currencyFormatter = new Intl.NumberFormat("en-PH", {
-  style: "currency",
-  currency: "PHP",
-  minimumFractionDigits: 2,
-});
-
 const todayIso = new Date().toISOString().slice(0, 10);
 const transactionsWorkspaceCacheKey = "clover.transactions.workspace-cache.v1";
+
+const formatTransactionAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
+
+const getCurrencyCodes = (transactions: Array<{ currency: string }>) =>
+  Array.from(new Set(transactions.map((transaction) => formatCurrencyCode(transaction.currency))));
+
+const formatTransactionAggregate = (value: number, transactions: Array<{ currency: string }>) => {
+  const currencies = getCurrencyCodes(transactions);
+  if (currencies.length === 0) {
+    return formatTransactionAmount(value, "PHP");
+  }
+
+  if (currencies.length === 1) {
+    return formatTransactionAmount(value, currencies[0]);
+  }
+
+  return "Mixed currencies";
+};
 
 const createEmptyManualForm = (accountId = "", categoryId = ""): ManualTransactionForm => ({
   date: todayIso,
@@ -899,7 +915,9 @@ const summarizeTransactionChange = (before: Transaction, after: Transaction, acc
   }
 
   if (before.amount !== after.amount) {
-    changes.push(`Amount: ${currencyFormatter.format(Number(before.amount))} → ${currencyFormatter.format(Number(after.amount))}`);
+    changes.push(
+      `Amount: ${formatTransactionAmount(Number(before.amount), before.currency)} → ${formatTransactionAmount(Number(after.amount), after.currency)}`
+    );
   }
 
   if (before.isExcluded !== after.isExcluded) {
@@ -2762,7 +2780,9 @@ function TransactionsPageContent() {
       }
 
       const categoryName = getCategoryNameById(categories, categoryId ?? null);
-      const accountName = accounts.find((account) => account.id === accountId)?.name ?? accountId;
+      const account = accounts.find((entry) => entry.id === accountId) ?? null;
+      const accountName = account?.name ?? accountId;
+      const accountCurrency = formatCurrencyCode(account?.currency ?? "PHP");
       const optimisticTransaction: Transaction = {
         id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
         accountId,
@@ -2772,7 +2792,7 @@ function TransactionsPageContent() {
         reviewStatus: "confirmed",
         date: manualForm.date,
         amount: Number(manualForm.amount).toFixed(2),
-        currency: "PHP",
+        currency: accountCurrency,
         type: manualForm.type === "credit" ? "income" : "expense",
         merchantRaw: manualForm.merchantRaw,
         merchantClean: null,
@@ -2811,7 +2831,7 @@ function TransactionsPageContent() {
           categoryId: categoryId ?? null,
           date: manualForm.date,
           amount: manualForm.amount,
-          currency: "PHP",
+          currency: accountCurrency,
           type: manualForm.type === "credit" ? "income" : "expense",
           merchantRaw: manualForm.merchantRaw,
           merchantClean: null,
@@ -3696,7 +3716,7 @@ function TransactionsPageContent() {
               <td>${escapeHtml(transaction.accountName)}</td>
               <td>${escapeHtml(categoryLabel)}</td>
               <td class="${transaction.type === "income" ? "positive" : "negative"}">${escapeHtml(
-                currencyFormatter.format(amount)
+                formatTransactionAmount(amount, transaction.currency)
               )}</td>
               <td>${escapeHtml(warningReason ?? "")}</td>
             </tr>
@@ -4330,7 +4350,7 @@ function TransactionsPageContent() {
                       selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
                     }`}
                     tabIndex={0}
-                    aria-label={`${merchantSummary}, ${formatDate(transaction.date)}, ${categoryLabel}, ${currencyFormatter.format(amount)}`}
+                    aria-label={`${merchantSummary}, ${formatDate(transaction.date)}, ${categoryLabel}, ${formatTransactionAmount(amount, transaction.currency)}`}
                     onKeyDown={(event) => handleTransactionRowKeyDown(event, transaction, index)}
                   >
                     <label className="transaction-select-cell">
@@ -4398,7 +4418,7 @@ function TransactionsPageContent() {
                     <div className={`transaction-amount-cell ${amountToneClass}`}>
                       <InlineEditableCell
                         value={transaction.amount}
-                        displayValue={currencyFormatter.format(amount)}
+                        displayValue={formatTransactionAmount(amount, transaction.currency)}
                         ariaLabel={`Edit amount for ${transaction.merchantRaw}`}
                         kind="number"
                         className={`transaction-inline-edit transaction-inline-edit--amount ${amountToneClass}`}
@@ -4521,7 +4541,7 @@ function TransactionsPageContent() {
                         selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
                       }`}
                       tabIndex={0}
-                      aria-label={`${merchantSummary}, ${formatDate(transaction.date)}, ${categoryLabel}, ${currencyFormatter.format(amount)}`}
+                      aria-label={`${merchantSummary}, ${formatDate(transaction.date)}, ${categoryLabel}, ${formatTransactionAmount(amount, transaction.currency)}`}
                       onKeyDown={(event) => handleTransactionRowKeyDown(event, transaction, index)}
                     >
                       <div className="transactions-mobile-card__top">
@@ -4552,7 +4572,7 @@ function TransactionsPageContent() {
                         <div className={`transaction-amount-cell ${amountToneClass} transactions-mobile-card__amount`}>
                           <InlineEditableCell
                             value={transaction.amount}
-                            displayValue={currencyFormatter.format(amount)}
+                            displayValue={formatTransactionAmount(amount, transaction.currency)}
                             ariaLabel={`Edit amount for ${transaction.merchantRaw}`}
                             kind="number"
                             className={`transaction-inline-edit transaction-inline-edit--amount ${amountToneClass} transactions-mobile-card__amount-edit`}
@@ -4748,19 +4768,19 @@ function TransactionsPageContent() {
                 <div className="transactions-footer-snapshot__metric">
                   <span className="transactions-footer-snapshot__metric-label">Spending</span>
                   <span className="transactions-footer-snapshot__metric-value negative">
-                    {currencyFormatter.format(transactionsSummary.spending)}
+                    {formatTransactionAggregate(transactionsSummary.spending, visibleTransactions)}
                   </span>
                 </div>
                 <div className="transactions-footer-snapshot__metric">
                   <span className="transactions-footer-snapshot__metric-label">Transfers</span>
                   <span className="transactions-footer-snapshot__metric-value">
-                    {currencyFormatter.format(transactionsSummary.transfers)}
+                    {formatTransactionAggregate(transactionsSummary.transfers, visibleTransactions)}
                   </span>
                 </div>
                 <div className="transactions-footer-snapshot__metric transactions-footer-snapshot__metric--net" style={transactionsFooterNetMetricStyle}>
                   <span className="transactions-footer-snapshot__metric-label">Net cash flow</span>
                   <span className={`transactions-footer-snapshot__metric-value ${netCashFlow >= 0 ? "positive" : "negative"}`}>
-                    {currencyFormatter.format(netCashFlow)}
+                    {formatTransactionAggregate(netCashFlow, visibleTransactions)}
                   </span>
                 </div>
               </div>
@@ -4785,19 +4805,19 @@ function TransactionsPageContent() {
             </div>
             <div>
               <dt>Income</dt>
-              <dd className="positive">{currencyFormatter.format(transactionsSummary.income)}</dd>
+              <dd className="positive">{formatTransactionAggregate(transactionsSummary.income, visibleTransactions)}</dd>
             </div>
             <div>
               <dt>Spending</dt>
-              <dd className="negative">{currencyFormatter.format(transactionsSummary.spending)}</dd>
+              <dd className="negative">{formatTransactionAggregate(transactionsSummary.spending, visibleTransactions)}</dd>
             </div>
             <div>
               <dt>Transfers</dt>
-              <dd>{currencyFormatter.format(transactionsSummary.transfers)}</dd>
+              <dd>{formatTransactionAggregate(transactionsSummary.transfers, visibleTransactions)}</dd>
             </div>
             <div>
               <dt>Net cash flow</dt>
-              <dd className={netCashFlow >= 0 ? "positive" : "negative"}>{currencyFormatter.format(netCashFlow)}</dd>
+              <dd className={netCashFlow >= 0 ? "positive" : "negative"}>{formatTransactionAggregate(netCashFlow, visibleTransactions)}</dd>
             </div>
             <div>
               <dt>Review items</dt>
@@ -4805,11 +4825,11 @@ function TransactionsPageContent() {
             </div>
             <div>
               <dt>Top category</dt>
-              <dd>{transactionsSummary.topCategory ? `${transactionsSummary.topCategory[0]} · ${currencyFormatter.format(transactionsSummary.topCategory[1])}` : "—"}</dd>
+              <dd>{transactionsSummary.topCategory ? `${transactionsSummary.topCategory[0]} · ${formatTransactionAggregate(transactionsSummary.topCategory[1], visibleTransactions)}` : "—"}</dd>
             </div>
             <div>
               <dt>Top source</dt>
-              <dd>{transactionsSummary.topAccount ? `${transactionsSummary.topAccount[0]} · ${currencyFormatter.format(transactionsSummary.topAccount[1])}` : "—"}</dd>
+              <dd>{transactionsSummary.topAccount ? `${transactionsSummary.topAccount[0]} · ${formatTransactionAggregate(transactionsSummary.topAccount[1], visibleTransactions)}` : "—"}</dd>
             </div>
             <div>
               <dt>First transaction</dt>

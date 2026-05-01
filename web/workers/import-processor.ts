@@ -1113,6 +1113,7 @@ const resolveConfirmationAccount = async (params: {
     institution?: unknown;
     accountType?: unknown;
     accountNumber?: unknown;
+    currency?: unknown;
   } | null;
   parsedRows: Array<{
     accountName?: unknown;
@@ -1132,12 +1133,15 @@ const resolveConfirmationAccount = async (params: {
       institution: string | null;
       accountNumber: string | null;
       type: AccountType;
+      source?: string | null;
+      currency: string | null;
     },
     next: {
       name?: string | null;
       institution?: string | null;
       accountNumber?: string | null;
       type?: AccountType | null;
+      currency?: string | null;
     }
   ) => {
     const data: Record<string, unknown> = {};
@@ -1155,6 +1159,9 @@ const resolveConfirmationAccount = async (params: {
     }
     if (next.type && next.type !== account.type) {
       data.type = next.type;
+    }
+    if (next.currency && next.currency !== account.currency && account.source !== "manual") {
+      data.currency = next.currency;
     }
 
     if (Object.keys(data).length === 0) {
@@ -1216,6 +1223,10 @@ const resolveConfirmationAccount = async (params: {
     ["bank", "wallet", "credit_card", "cash", "investment", "other"].includes(params.statementMetadata.accountType)
       ? (params.statementMetadata.accountType as "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other")
       : null;
+  const inferredCurrency =
+    typeof params.statementMetadata?.currency === "string" && params.statementMetadata.currency.trim()
+      ? params.statementMetadata.currency.trim().toUpperCase()
+      : null;
 
   const providedAccountId = typeof params.accountId === "string" && params.accountId.trim() ? params.accountId.trim() : null;
   const isOptimisticId = providedAccountId ? providedAccountId.startsWith("optimistic-") : false;
@@ -1231,6 +1242,7 @@ const resolveConfirmationAccount = async (params: {
       institution: inferredInstitution,
       accountNumber: inferredAccountNumber,
       type: inferredAccountType,
+      currency: inferredCurrency,
     });
   }
 
@@ -1252,6 +1264,7 @@ const resolveConfirmationAccount = async (params: {
       institution: inferredInstitution,
       accountNumber: inferredAccountNumber,
       type: inferredAccountType,
+      currency: inferredCurrency,
     });
   }
 
@@ -1279,7 +1292,7 @@ const resolveConfirmationAccount = async (params: {
         ? { accountNumber: inferredAccountNumber }
         : {}),
       type: inferredType,
-      currency: "PHP",
+      currency: inferredCurrency ?? "PHP",
       source: "upload",
     };
 
@@ -1441,26 +1454,36 @@ export const processImportFileText = async (
     existingTemplate?.metadata && typeof existingTemplate.metadata === "object" && !Array.isArray(existingTemplate.metadata)
       ? (existingTemplate.metadata as Record<string, unknown>)
       : null;
-  const mergedMetadata = mergeStatementMetadataWithTemplate(metadata, {
-    institution:
-      typeof templateMetadata?.institution === "string" && templateMetadata.institution.trim()
-        ? templateMetadata.institution.trim()
-        : null,
-    accountNumber:
-      typeof templateMetadata?.accountNumber === "string" && templateMetadata.accountNumber.trim()
-        ? templateMetadata.accountNumber.trim()
-        : null,
-    accountName:
-      typeof templateMetadata?.accountName === "string" && templateMetadata.accountName.trim()
-        ? templateMetadata.accountName.trim()
-        : null,
-    openingBalance: typeof templateMetadata?.openingBalance === "number" ? templateMetadata.openingBalance : null,
-    endingBalance: typeof templateMetadata?.endingBalance === "number" ? templateMetadata.endingBalance : null,
-    paymentDueDate: typeof templateMetadata?.paymentDueDate === "string" ? templateMetadata.paymentDueDate : null,
-    totalAmountDue: typeof templateMetadata?.totalAmountDue === "number" ? templateMetadata.totalAmountDue : null,
-    startDate: typeof templateMetadata?.startDate === "string" ? templateMetadata.startDate : null,
-    endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
-  });
+  const mergedMetadata = mergeStatementMetadataWithTemplate(
+    {
+      ...metadata,
+      currency: metadata.currency ?? null,
+    },
+    {
+      institution:
+        typeof templateMetadata?.institution === "string" && templateMetadata.institution.trim()
+          ? templateMetadata.institution.trim()
+          : null,
+      accountNumber:
+        typeof templateMetadata?.accountNumber === "string" && templateMetadata.accountNumber.trim()
+          ? templateMetadata.accountNumber.trim()
+          : null,
+      accountName:
+        typeof templateMetadata?.accountName === "string" && templateMetadata.accountName.trim()
+          ? templateMetadata.accountName.trim()
+          : null,
+      currency:
+        typeof templateMetadata?.currency === "string" && templateMetadata.currency.trim()
+          ? templateMetadata.currency.trim()
+          : null,
+      openingBalance: typeof templateMetadata?.openingBalance === "number" ? templateMetadata.openingBalance : null,
+      endingBalance: typeof templateMetadata?.endingBalance === "number" ? templateMetadata.endingBalance : null,
+      paymentDueDate: typeof templateMetadata?.paymentDueDate === "string" ? templateMetadata.paymentDueDate : null,
+      totalAmountDue: typeof templateMetadata?.totalAmountDue === "number" ? templateMetadata.totalAmountDue : null,
+      startDate: typeof templateMetadata?.startDate === "string" ? templateMetadata.startDate : null,
+      endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
+    }
+  );
   const metadataOverride = options.statementMetadataOverride ?? {};
   const metadataForParse = {
     ...mergedMetadata,
@@ -1526,26 +1549,36 @@ export const processImportFileText = async (
   });
 
   const openAiMetadata = openAiParsed
-    ? mergeStatementMetadataWithTemplate(openAiParsed.metadata, {
-        institution:
-          typeof templateMetadata?.institution === "string" && templateMetadata.institution.trim()
-            ? templateMetadata.institution.trim()
-            : null,
-        accountNumber:
-          typeof templateMetadata?.accountNumber === "string" && templateMetadata.accountNumber.trim()
-            ? templateMetadata.accountNumber.trim()
-            : null,
-        accountName:
-          typeof templateMetadata?.accountName === "string" && templateMetadata.accountName.trim()
-            ? templateMetadata.accountName.trim()
-            : null,
-        openingBalance: typeof templateMetadata?.openingBalance === "number" ? templateMetadata.openingBalance : null,
-        endingBalance: typeof templateMetadata?.endingBalance === "number" ? templateMetadata.endingBalance : null,
-        paymentDueDate: typeof templateMetadata?.paymentDueDate === "string" ? templateMetadata.paymentDueDate : null,
-        totalAmountDue: typeof templateMetadata?.totalAmountDue === "number" ? templateMetadata.totalAmountDue : null,
-        startDate: typeof templateMetadata?.startDate === "string" ? templateMetadata.startDate : null,
-        endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
-      })
+    ? mergeStatementMetadataWithTemplate(
+        {
+          ...openAiParsed.metadata,
+          currency: openAiParsed.metadata.currency ?? null,
+        },
+        {
+          institution:
+            typeof templateMetadata?.institution === "string" && templateMetadata.institution.trim()
+              ? templateMetadata.institution.trim()
+              : null,
+          accountNumber:
+            typeof templateMetadata?.accountNumber === "string" && templateMetadata.accountNumber.trim()
+              ? templateMetadata.accountNumber.trim()
+              : null,
+          accountName:
+            typeof templateMetadata?.accountName === "string" && templateMetadata.accountName.trim()
+              ? templateMetadata.accountName.trim()
+              : null,
+          currency:
+            typeof templateMetadata?.currency === "string" && templateMetadata.currency.trim()
+              ? templateMetadata.currency.trim()
+              : null,
+          openingBalance: typeof templateMetadata?.openingBalance === "number" ? templateMetadata.openingBalance : null,
+          endingBalance: typeof templateMetadata?.endingBalance === "number" ? templateMetadata.endingBalance : null,
+          paymentDueDate: typeof templateMetadata?.paymentDueDate === "string" ? templateMetadata.paymentDueDate : null,
+          totalAmountDue: typeof templateMetadata?.totalAmountDue === "number" ? templateMetadata.totalAmountDue : null,
+          startDate: typeof templateMetadata?.startDate === "string" ? templateMetadata.startDate : null,
+          endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
+        }
+      )
     : null;
 
   if (openAiParsed?.audit && options.actorUserId) {
@@ -2048,6 +2081,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         typeof statementMetadata?.accountNumber === "string" ? statementMetadata.accountNumber : null,
       accountType:
         typeof statementMetadata?.accountType === "string" ? statementMetadata.accountType : null,
+      currency:
+        typeof statementMetadata?.currency === "string" ? statementMetadata.currency : null,
     },
     parsedRows,
     accountId,
@@ -2183,12 +2218,25 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       },
     });
 
+    const hasParsedOpeningBalance = parsedRows.some((row) => {
+      const merchantRaw = typeof row.merchantRaw === "string" ? row.merchantRaw.trim() : "";
+      const merchantClean = typeof row.merchantClean === "string" ? row.merchantClean.trim() : "";
+      const categoryName = typeof row.categoryName === "string" ? row.categoryName.trim() : "";
+      return (
+        /^beginning balance$/i.test(merchantRaw) ||
+        /^beginning balance$/i.test(merchantClean) ||
+        /^opening balance$/i.test(categoryName)
+      );
+    });
+
     if (
       statementCheckpoint.openingBalance !== null &&
+      !hasParsedOpeningBalance &&
       !(await tx.transaction.findFirst({
         where: {
           accountId: resolvedAccountId,
           merchantRaw: "Beginning balance",
+          date: statementStartDate ?? undefined,
         },
       }))
     ) {
@@ -2206,6 +2254,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
             workspaceId: importFile.workspaceId,
             name: "Opening Balance",
             type: "transfer",
+            isSystem: true,
           },
         }));
 
@@ -2238,7 +2287,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           learnedRuleIdsApplied: [] as Prisma.InputJsonValue,
           date: statementStartDate ?? new Date(),
           amount: parseAmountValue(statementCheckpoint.openingBalance?.toString() ?? null) ?? 0,
-          currency: "PHP",
+          currency:
+            typeof statementCheckpoint?.sourceMetadata === "object" && statementCheckpoint?.sourceMetadata !== null
+              ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).currency ?? "PHP")
+              : "PHP",
           type: "transfer" as TransactionType,
           merchantRaw: "Beginning balance",
           merchantClean: "Beginning balance",
@@ -2334,6 +2386,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           workspaceId: importFile.workspaceId,
           name: categoryName,
           type: (rowType ?? "expense") as "income" | "expense" | "transfer",
+          isSystem: false,
         },
       });
 
@@ -2364,7 +2417,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           ? row.date
           : parseDateValue(typeof row.date === "string" ? row.date : null)) ?? new Date(),
       amount: parseAmountValue(coerceAmountToString(row.amount)) ?? 0,
-      currency: "PHP",
+      currency: typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : "PHP",
       type: (rowType ?? "expense") as TransactionType,
       merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
       merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,

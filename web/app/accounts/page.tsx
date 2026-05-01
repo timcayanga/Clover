@@ -11,6 +11,7 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
+import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { getAccountPath } from "@/lib/account-path";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
@@ -100,7 +101,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     investmentInterestRate: null,
     investmentMaturityValue: null,
     type: summary.accountType ?? inferAccountTypeFromStatement(summary.institution, summary.accountName, "bank"),
-    currency: "PHP",
+    currency: summary.previewTransactions?.[0]?.currency ?? "PHP",
     source: "upload",
     balance: summary.balance,
     updatedAt: new Date().toISOString(),
@@ -212,12 +213,6 @@ type StatementCheckpoint = {
   } | null;
 };
 
-const currencyFormatter = new Intl.NumberFormat("en-PH", {
-  style: "currency",
-  currency: "PHP",
-  minimumFractionDigits: 2,
-});
-
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", {
     day: "2-digit",
@@ -226,6 +221,24 @@ const formatDate = (value: string) =>
   });
 
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
+
+const formatAccountAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
+
+const getCurrencyCodes = (accounts: Array<{ currency: string }>) =>
+  Array.from(new Set(accounts.map((account) => formatCurrencyCode(account.currency))));
+
+const formatAggregateAmount = (value: number, accounts: Array<{ currency: string }>) => {
+  const currencies = getCurrencyCodes(accounts);
+  if (currencies.length === 0) {
+    return formatAccountAmount(value, "PHP");
+  }
+
+  if (currencies.length === 1) {
+    return formatAccountAmount(value, currencies[0]);
+  }
+
+  return "Mixed currencies";
+};
 
 const normalizeAccountBalance = (type: Account["type"], value: number) =>
   type === "credit_card" ? -Math.abs(value) : Math.abs(value);
@@ -700,6 +713,7 @@ function AccountsPageContent() {
   const [manualInvestmentInterestRate, setManualInvestmentInterestRate] = useState("");
   const [manualInvestmentMaturityValue, setManualInvestmentMaturityValue] = useState("");
   const [manualBalance, setManualBalance] = useState("");
+  const [manualCurrency, setManualCurrency] = useState("PHP");
   const [addAccountError, setAddAccountError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [accountEditName, setAccountEditName] = useState("");
@@ -1710,7 +1724,7 @@ function AccountsPageContent() {
           investmentInterestRate: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentInterestRate) : null,
           investmentMaturityValue: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentMaturityValue) : null,
           type: manualType,
-          currency: "PHP",
+          currency: manualCurrency.trim().toUpperCase() || "PHP",
           source: "manual",
           balance: manualBalance ? Number(manualBalance) : 0,
         }),
@@ -1744,6 +1758,7 @@ function AccountsPageContent() {
       setManualInvestmentInterestRate("");
       setManualInvestmentMaturityValue("");
       setManualBalance("");
+      setManualCurrency("PHP");
       setManualType("bank");
       setAddAccountError(null);
       setAddOpen(false);
@@ -1759,11 +1774,12 @@ function AccountsPageContent() {
 
   const exportCsv = () => {
     const rows = [
-      ["Name", "Type", "Amount", "Last updated", "Source"],
+      ["Name", "Type", "Amount", "Currency", "Last updated", "Source"],
       ...visibleAccounts.map((account) => [
         account.name,
         getAccountDisplayType(account),
-        currencyFormatter.format(parseAmount(account.balance)),
+        formatAccountAmount(parseAmount(account.balance), account.currency),
+        formatCurrencyCode(account.currency),
         formatDate(account.updatedAt),
         account.source,
       ]),
@@ -1795,10 +1811,10 @@ function AccountsPageContent() {
         </head>
         <body>
           <h1>${selectedWorkspace?.name ?? "Accounts"} summary</h1>
-          <p class="muted">Net worth ${currencyFormatter.format(totals.netWorth)} · Assets ${currencyFormatter.format(totals.assets)} · Liabilities ${currencyFormatter.format(totals.liabilities)}</p>
+          <p class="muted">Net worth ${formatAggregateAmount(totals.netWorth, visibleAccounts)} · Assets ${formatAggregateAmount(totals.assets, visibleAccounts)} · Liabilities ${formatAggregateAmount(totals.liabilities, visibleAccounts)}</p>
           <table>
             <thead>
-              <tr><th>Name</th><th>Type</th><th>Amount</th><th>Last updated</th></tr>
+              <tr><th>Name</th><th>Type</th><th>Amount</th><th>Currency</th><th>Last updated</th></tr>
             </thead>
             <tbody>
               ${visibleAccounts
@@ -1807,7 +1823,8 @@ function AccountsPageContent() {
                     <tr>
                       <td>${account.name}</td>
                       <td>${getAccountDisplayType(account)}</td>
-                      <td>${currencyFormatter.format(parseAmount(account.balance))}</td>
+                      <td>${formatAccountAmount(parseAmount(account.balance), account.currency)}</td>
+                      <td>${formatCurrencyCode(account.currency)}</td>
                       <td>${formatDate(account.updatedAt)}</td>
                     </tr>`
                 )
@@ -1860,28 +1877,28 @@ function AccountsPageContent() {
                 Net worth
                 <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.netWorth} />
               </p>
-              <strong className="accounts-overview-card__amount is-neutral">{currencyFormatter.format(totals.netWorth)}</strong>
+              <strong className="accounts-overview-card__amount is-neutral">{formatAggregateAmount(totals.netWorth, visibleAccounts)}</strong>
             </article>
             <article className="accounts-overview-card glass">
               <p className="eyebrow">
                 Spendable
                 <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.spendable} />
               </p>
-              <strong className="accounts-overview-card__amount is-good">{currencyFormatter.format(spendableAmount)}</strong>
+              <strong className="accounts-overview-card__amount is-good">{formatAggregateAmount(spendableAmount, visibleAccounts)}</strong>
             </article>
             <article className="accounts-overview-card glass">
               <p className="eyebrow">
                 Assets
                 <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.assets} />
               </p>
-              <strong className="accounts-overview-card__amount is-good">{currencyFormatter.format(totals.assets)}</strong>
+              <strong className="accounts-overview-card__amount is-good">{formatAggregateAmount(totals.assets, visibleAccounts)}</strong>
             </article>
             <article className="accounts-overview-card glass">
               <p className="eyebrow">
                 Liabilities
                 <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.liabilities} />
               </p>
-              <strong className="accounts-overview-card__amount is-danger">{currencyFormatter.format(totals.liabilities)}</strong>
+              <strong className="accounts-overview-card__amount is-danger">{formatAggregateAmount(totals.liabilities, visibleAccounts)}</strong>
             </article>
           </section>
         </div>
@@ -1910,7 +1927,7 @@ function AccountsPageContent() {
                         <h5>{group.title}</h5>
                         <p>
                           {group.rows.length} account{group.rows.length === 1 ? "" : "s"} ·{" "}
-                          {currencyFormatter.format(group.total)}
+                          {formatAggregateAmount(group.total, group.rows)}
                         </p>
                       </div>
                     </div>
@@ -1999,7 +2016,7 @@ function AccountsPageContent() {
                                 <div className="accounts-account-card__body">
                                   <div className="accounts-account-card__balance-row">
                                     <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
-                                      {currencyFormatter.format(balanceValue)}
+                                      {formatAccountAmount(balanceValue, account.currency)}
                                     </div>
                                     <div className="accounts-account-card__balance-meta">
                                       {isDeleting ? (
@@ -2050,7 +2067,7 @@ function AccountsPageContent() {
             <div className="accounts-drawer__overview">
               <div>
                 <span>Current balance</span>
-                <strong>{currencyFormatter.format(parseAmount(selectedAccount.balance))}</strong>
+                <strong>{formatAccountAmount(parseAmount(selectedAccount.balance), selectedAccount.currency)}</strong>
               </div>
               <div>
                 <span>Last updated</span>
@@ -2196,6 +2213,17 @@ function AccountsPageContent() {
                   Balance
                   <input value={accountEditBalance} onChange={(event) => setAccountEditBalance(event.target.value)} inputMode="decimal" placeholder="0.00" />
                 </label>
+                <label>
+                  Currency
+                  <input
+                    value={accountEditCurrency}
+                    onChange={(event) => setAccountEditCurrency(event.target.value.toUpperCase())}
+                    placeholder="PHP, USD, BTC"
+                    maxLength={8}
+                    autoCapitalize="characters"
+                    spellCheck={false}
+                  />
+                </label>
                 <button className="button button-primary" type="submit" disabled={accountEditBusy}>
                   {accountEditBusy ? "Saving..." : "Save changes"}
                 </button>
@@ -2239,7 +2267,7 @@ function AccountsPageContent() {
                 </div>
                 <div className="accounts-drawer__note">
                   <strong>{formatDate(openingBalanceEntry.date)}</strong>
-                  <span>{currencyFormatter.format(parseAmount(openingBalanceEntry.amount))}</span>
+                  <span>{formatAccountAmount(parseAmount(openingBalanceEntry.amount), selectedAccount?.currency)}</span>
                 </div>
               </section>
             ) : null}
@@ -2273,7 +2301,7 @@ function AccountsPageContent() {
                       </div>
                       <div>
                         <span>Statement balance</span>
-                        <strong>{currencyFormatter.format(parseAmount(latestCheckpoint.endingBalance))}</strong>
+                        <strong>{formatAccountAmount(parseAmount(latestCheckpoint.endingBalance), selectedAccount?.currency)}</strong>
                       </div>
                       <div>
                         <span>Difference</span>
@@ -2319,7 +2347,7 @@ function AccountsPageContent() {
                         <strong>{summary.label}</strong>
                         <span>{summary.count} rows · {formatDate(summary.latestDate)}</span>
                       </div>
-                      <strong>{currencyFormatter.format(summary.total)}</strong>
+                      <strong>{formatAccountAmount(summary.total, selectedAccount?.currency)}</strong>
                     </div>
                   ))}
                 </div>
@@ -2398,7 +2426,7 @@ function AccountsPageContent() {
                             : ""}
                         </span>
                       </div>
-                      <strong>{currencyFormatter.format(parseAmount(transaction.amount))}</strong>
+                      <strong>{formatAccountAmount(parseAmount(transaction.amount), selectedAccount?.currency ?? "PHP")}</strong>
                     </div>
                   ))
                 ) : (
@@ -2477,6 +2505,17 @@ function AccountsPageContent() {
                         />
                       </label>
                     </div>
+                    <label>
+                      Currency
+                      <input
+                        value={manualCurrency}
+                        onChange={(event) => setManualCurrency(event.target.value.toUpperCase())}
+                        placeholder="PHP, USD, BTC"
+                        maxLength={8}
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                      />
+                    </label>
                   </div>
                 </div>
                 {manualType === "investment" ? (
