@@ -21,6 +21,11 @@ enum AccountType {
   loan
   mortgage
   line_of_credit
+  receivable
+  payable
+  bnpl
+  prepaid
+  insurance
   other
 }
 

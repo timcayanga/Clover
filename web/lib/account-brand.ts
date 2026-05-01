@@ -44,6 +44,15 @@ const creditCardIcon = iconPath("credit card.png");
 const investmentIcon = iconPath("investment.png");
 const othersIcon = iconPath("others.png");
 const walletIcon = iconPath("wallet.png");
+const liabilityIcon = "/assets/icons/debt.png";
+const loanIcon = "/assets/icons/loan.png";
+const mortgageIcon = "/assets/icons/mortgage.png";
+const lineOfCreditIcon = "/assets/icons/line of credit.png";
+const receivableIcon = "/assets/icons/receivable.png";
+const payableIcon = "/assets/icons/payable.png";
+const bnplIcon = "/assets/icons/bnpl.png";
+const prepaidIcon = "/assets/icons/prepaid.png";
+const insuranceIcon = "/assets/icons/insurance.png";
 const philippinesLogo = (baseName: string) => [
   philippinesLogoPath(`${baseName}.png`),
   philippinesLogoPath(`${baseName}.jpg`),
@@ -785,7 +794,14 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
     });
   }
 
-  if (type === "credit_card" || type === "loan" || type === "mortgage" || type === "line_of_credit") {
+  if (
+    type === "credit_card" ||
+    type === "loan" ||
+    type === "mortgage" ||
+    type === "line_of_credit" ||
+    type === "payable" ||
+    type === "bnpl"
+  ) {
     return makeBrand({
       label:
         params.institution?.trim() ||
@@ -795,10 +811,27 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
             ? "Mortgage"
             : type === "line_of_credit"
               ? "Line of Credit"
+              : type === "payable"
+                ? "Payable"
+                : type === "bnpl"
+                  ? "BNPL"
               : "Credit Card"),
       logoSrc: null,
       logoSrcs: [],
-      fallbackIconSrc: creditCardIcon,
+      fallbackIconSrc:
+        type === "credit_card"
+          ? creditCardIcon
+          : type === "loan"
+          ? loanIcon
+          : type === "mortgage"
+            ? mortgageIcon
+            : type === "line_of_credit"
+              ? lineOfCreditIcon
+              : type === "payable"
+                ? payableIcon
+                : type === "bnpl"
+                  ? bnplIcon
+                  : liabilityIcon,
       accent: "#DC2626",
       background: "linear-gradient(135deg, rgba(220, 38, 38, 0.16), rgba(220, 38, 38, 0.06))",
     });
@@ -810,6 +843,39 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
       logoSrc: null,
       logoSrcs: [],
       fallbackIconSrc: investmentIcon,
+      accent: "#7C3AED",
+      background: "linear-gradient(135deg, rgba(124, 58, 237, 0.16), rgba(124, 58, 237, 0.06))",
+    });
+  }
+
+  if (type === "receivable") {
+    return makeBrand({
+      label: params.institution?.trim() || "Receivable",
+      logoSrc: null,
+      logoSrcs: [],
+      fallbackIconSrc: receivableIcon,
+      accent: "#059669",
+      background: "linear-gradient(135deg, rgba(5, 150, 105, 0.16), rgba(5, 150, 105, 0.06))",
+    });
+  }
+
+  if (type === "prepaid") {
+    return makeBrand({
+      label: params.institution?.trim() || "Prepaid",
+      logoSrc: null,
+      logoSrcs: [],
+      fallbackIconSrc: prepaidIcon,
+      accent: "#0284C7",
+      background: "linear-gradient(135deg, rgba(2, 132, 199, 0.16), rgba(2, 132, 199, 0.06))",
+    });
+  }
+
+  if (type === "insurance") {
+    return makeBrand({
+      label: params.institution?.trim() || "Insurance",
+      logoSrc: null,
+      logoSrcs: [],
+      fallbackIconSrc: insuranceIcon,
       accent: "#7C3AED",
       background: "linear-gradient(135deg, rgba(124, 58, 237, 0.16), rgba(124, 58, 237, 0.06))",
     });

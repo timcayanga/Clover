@@ -6263,6 +6263,22 @@ body[data-clover-page-modal] .sidebar-backdrop {
   gap: 12px;
 }
 
+@media (min-width: 1120px) {
+  .goals-hero__details-content {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .goals-hero__details-content > * {
+    min-width: 0;
+  }
+
+  .goals-hero__ring-card,
+  .goals-pace-card {
+    height: 100%;
+  }
+}
+
 .goal-illustration {
   padding: 16px;
   border-radius: 28px;

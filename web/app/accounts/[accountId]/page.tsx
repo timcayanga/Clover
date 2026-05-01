@@ -135,7 +135,7 @@ const ACCOUNT_DETAILS_INFO = {
   currentBalance:
     "Current balance = the latest balance Clover can derive for this account after applying its saved balance, imported transactions, and any statement checkpoint used for reconciliation.",
   accountType:
-    "Account type controls how Clover groups this account and whether it is treated like a spendable balance, an investment holding, or a liability such as a credit card, loan, mortgage, or line of credit.",
+    "Account type controls how Clover groups this account and whether it is treated like spendable cash, a tracked asset such as a receivable or insurance policy, an investment holding, or a liability such as a credit card, loan, mortgage, payable, BNPL plan, or line of credit.",
   transactions: "Transactions are the money movements linked to this account. The running balance changes as each transaction is imported, edited, or excluded.",
 } as const;
 
@@ -642,6 +642,27 @@ function AccountDetailPageContent() {
       };
     }
 
+    if (account.type === "receivable") {
+      return {
+        label: "Amount due to you",
+        value: currentBalance,
+      };
+    }
+
+    if (account.type === "prepaid") {
+      return {
+        label: "Stored value",
+        value: currentBalance,
+      };
+    }
+
+    if (account.type === "insurance") {
+      return {
+        label: "Policy value",
+        value: currentBalance,
+      };
+    }
+
     if (account.type === "investment") {
       if (isFixedIncomeInvestmentSubtype(investmentSubtype)) {
         return {
@@ -670,6 +691,18 @@ function AccountDetailPageContent() {
       return "Outstanding balance = the amount currently owed on this liability account.";
     }
 
+    if (account.type === "receivable") {
+      return "Amount due to you = money this receivable account is expected to bring back to you.";
+    }
+
+    if (account.type === "prepaid") {
+      return "Stored value = value you have already loaded or set aside for future use.";
+    }
+
+    if (account.type === "insurance") {
+      return "Policy value = the tracked value you want Clover to associate with this insurance account.";
+    }
+
     if (account.type === "investment") {
       if (isFixedIncomeInvestmentSubtype(investmentSubtype)) {
         return investmentMaturityValue !== null
@@ -680,7 +713,7 @@ function AccountDetailPageContent() {
       return "Current value = the latest tracked value of this investment holding.";
     }
 
-    return "Spendable amount = the cash-like money you can use now from this account.";
+    return "Tracked value = the latest value Clover is keeping on this account.";
   }, [account, investmentMaturityValue, investmentSubtype]);
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {

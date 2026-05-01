@@ -44,9 +44,11 @@ import {
   isMarketInvestmentSubtype,
 } from "@/lib/investments";
 import {
+  ACCOUNT_TYPE_SECTIONS,
   formatAccountTypeLabel,
   isLiabilityAccountType,
   isSpendableAccountType,
+  isTrackedAssetAccountType,
   type SupportedAccountType,
 } from "@/lib/account-types";
 import type { InstitutionSuggestion } from "@/lib/institution-suggestions";
@@ -280,7 +282,6 @@ const getAccountDisplayType = (account: Account) => {
   const effectiveType = getEffectiveAccountType(account);
   if (effectiveType === "bank" && account.institution === "Checking") return "Checking";
   if (effectiveType === "bank" && account.institution === "Savings") return "Savings";
-  if (effectiveType === "other") return "-";
   return formatAccountTypeLabel(effectiveType);
 };
 
@@ -301,9 +302,9 @@ const ACCOUNTS_OVERVIEW_COPY = {
   spendable:
     "Spendable = the sum of bank, wallet, and cash balances you can use right away. Investments and credit cards are excluded from this number.",
   assets:
-    "Assets = the total of positive balances across accounts in this workspace, including banks, wallets, cash, investments, and any other positive-value holdings.",
+    "Assets = the total of positive balances across accounts in this workspace, including banks, wallets, cash, investments, receivables, prepaid balances, insurance values, and any other positive-value holdings.",
   liabilities:
-    "Liabilities = the total amount owed across liability accounts such as credit cards, loans, mortgages, and lines of credit.",
+    "Liabilities = the total amount owed across liability accounts such as credit cards, loans, mortgages, lines of credit, payables, and BNPL plans.",
 } as const;
 
 const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined) => {
@@ -1322,7 +1323,7 @@ function AccountsPageContent() {
         tone: "assets",
         rows: visibleAccounts.filter((account) => {
           const effectiveType = getEffectiveAccountType(account);
-          return effectiveType === "bank" || effectiveType === "investment";
+          return effectiveType === "bank";
         }),
       },
       {
@@ -1331,14 +1332,19 @@ function AccountsPageContent() {
         rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "wallet"),
       },
       {
+        title: "Investments",
+        tone: "assets",
+        rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "investment"),
+      },
+      {
         title: "Liabilities",
         tone: "liability",
         rows: visibleAccounts.filter((account) => isLiabilityAccountType(getEffectiveAccountType(account))),
       },
       {
-        title: "Imported & other",
+        title: "Tracked assets",
         tone: "neutral",
-        rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "other"),
+        rows: visibleAccounts.filter((account) => isTrackedAssetAccountType(getEffectiveAccountType(account))),
       },
       {
         title: "Cash",
@@ -1460,6 +1466,26 @@ function AccountsPageContent() {
     () => getInvestmentFieldConfigs(manualType === "investment" ? manualInvestmentSubtype : null),
     [manualInvestmentSubtype, manualType]
   );
+
+  const manualTypeGuidance = useMemo(() => {
+    if (isLiabilityAccountType(manualType)) {
+      return "Use Recurring if you want Clover to track due dates, installments, or repayment reminders for this liability.";
+    }
+
+    if (manualType === "receivable") {
+      return "Use Recurring if you want Clover to follow collection dates or repayment reminders for money owed to you.";
+    }
+
+    if (manualType === "prepaid") {
+      return "Use the balance to track stored value. Add a recurring item if you want reload or expiry reminders.";
+    }
+
+    if (manualType === "insurance") {
+      return "Use the balance to track policy or cash value. Add a recurring item if you want premium or renewal reminders.";
+    }
+
+    return null;
+  }, [manualType]);
 
   const accountEditInvestmentFieldConfigs = useMemo(
     () => getInvestmentFieldConfigs(accountEditType === "investment" ? accountEditInvestmentSubtype : null),
@@ -2140,15 +2166,15 @@ function AccountsPageContent() {
                 <label>
                   Type
                   <select value={accountEditType} onChange={(event) => setAccountEditType(event.target.value as Account["type"])}>
-                    <option value="bank">Bank</option>
-                    <option value="wallet">Wallet</option>
-                    <option value="credit_card">Credit Card</option>
-                    <option value="loan">Loan</option>
-                    <option value="mortgage">Mortgage</option>
-                    <option value="line_of_credit">Line of Credit</option>
-                    <option value="cash">Cash</option>
-                    <option value="investment">Investment</option>
-                    <option value="other">Other</option>
+                    {ACCOUNT_TYPE_SECTIONS.map((section) => (
+                      <optgroup key={section.label} label={section.label}>
+                        {section.options.map((option) => (
+                          <option key={option} value={option}>
+                            {formatAccountTypeLabel(option)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
                   </select>
                 </label>
                 {accountEditType === "investment" ? (
@@ -2499,15 +2525,15 @@ function AccountsPageContent() {
                       <label>
                         Type
                         <select value={manualType} onChange={(event) => setManualType(event.target.value as Account["type"])}>
-                          <option value="bank">Bank</option>
-                          <option value="wallet">Wallet</option>
-                          <option value="credit_card">Credit Card</option>
-                          <option value="loan">Loan</option>
-                          <option value="mortgage">Mortgage</option>
-                          <option value="line_of_credit">Line of Credit</option>
-                          <option value="cash">Cash</option>
-                          <option value="investment">Investment</option>
-                          <option value="other">Other</option>
+                          {ACCOUNT_TYPE_SECTIONS.map((section) => (
+                            <optgroup key={section.label} label={section.label}>
+                              {section.options.map((option) => (
+                                <option key={option} value={option}>
+                                  {formatAccountTypeLabel(option)}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ))}
                         </select>
                       </label>
                       <label>
@@ -2520,6 +2546,7 @@ function AccountsPageContent() {
                         />
                       </label>
                     </div>
+                    {manualTypeGuidance ? <p className="modal-copy">{manualTypeGuidance}</p> : null}
                     <label>
                       Currency
                       <input
