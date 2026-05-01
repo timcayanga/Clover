@@ -875,8 +875,9 @@ async function InsightsPageStream({
         }}
       />
       {isEmptyWorkspace ? (
-        <div style={{ marginBottom: 20 }}>
+        <div className="insights-empty-wrap">
           <EmptyDataCta
+            className="insights-empty-state"
             eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
             title="Import files to wake up your insights."
             copy="Clover needs a statement or account activity before it can spot patterns, trends, and habits. Import files first for the fastest way to bring this page to life."
@@ -888,6 +889,7 @@ async function InsightsPageStream({
           />
         </div>
       ) : null}
+      {!isEmptyWorkspace ? (
       <section className="insights-story">
         <InsightsTabs
           selectedTab={selectedTab}
@@ -1249,6 +1251,7 @@ async function InsightsPageStream({
           </p>
         ) : null}
       </section>
+      ) : null}
     </CloverShell>
   );
 }
