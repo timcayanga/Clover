@@ -1132,6 +1132,14 @@ export function ImportFilesModal({
 
     if (nextFiles.length > 0) {
       autoStartRef.current = true;
+      window.setTimeout(() => {
+        if (!open || busy || !workspaceId || !autoStartRef.current) {
+          return;
+        }
+
+        autoStartRef.current = false;
+        void handleStartImport();
+      }, 0);
     }
 
     if (feedbackMessage) {
