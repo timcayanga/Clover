@@ -785,9 +785,17 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
     });
   }
 
-  if (type === "credit_card") {
+  if (type === "credit_card" || type === "loan" || type === "mortgage" || type === "line_of_credit") {
     return makeBrand({
-      label: params.institution?.trim() || "Credit Card",
+      label:
+        params.institution?.trim() ||
+        (type === "loan"
+          ? "Loan"
+          : type === "mortgage"
+            ? "Mortgage"
+            : type === "line_of_credit"
+              ? "Line of Credit"
+              : "Credit Card"),
       logoSrc: null,
       logoSrcs: [],
       fallbackIconSrc: creditCardIcon,

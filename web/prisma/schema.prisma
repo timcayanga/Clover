@@ -18,6 +18,9 @@ enum AccountType {
   credit_card
   cash
   investment
+  loan
+  mortgage
+  line_of_credit
   other
 }
 
@@ -47,6 +50,28 @@ enum StatementCheckpointStatus {
   pending
   reconciled
   mismatch
+}
+
+enum CommitmentKind {
+  planned_payment
+  debt
+  receivable
+  reminder
+}
+
+enum CommitmentRecurrence {
+  once
+  weekly
+  biweekly
+  monthly
+  quarterly
+  annual
+}
+
+enum CommitmentStatus {
+  active
+  paused
+  resolved
 }
 
 enum TrainingSignalSource {
@@ -104,33 +129,33 @@ enum ContactInquiryStatus {
 }
 
 model User {
-  id                    String                    @id @default(cuid())
-  clerkUserId           String                    @unique
-  email                 String                    @unique
-  firstName             String?
-  lastName              String?
-  verified              Boolean                   @default(false)
-  environment           String                    @default("production")
-  planTier              PlanTier                  @default(free)
-  planTierLocked        Boolean                   @default(false)
-  accountLimit          Int?
-  monthlyUploadLimit    Int?
-  transactionLimit      Int?
-  financialExperience   FinancialExperienceLevel? @default(beginner)
-  primaryGoal           String?
-  goalTargetAmount      Decimal?                  @db.Decimal(18, 2)
-  goalTargetSource      String?
-  goalPlan              Json?
-  onboardingCompletedAt DateTime?
-  dataWipedAt           DateTime?
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
-  workspaces            Workspace[]
-  goalSettings          GoalSetting[]
-  billingSubscription   BillingSubscription?
-  billingEvents         BillingEvent[]
+  id                       String                    @id @default(cuid())
+  clerkUserId              String                    @unique
+  email                    String                    @unique
+  firstName                String?
+  lastName                 String?
+  verified                 Boolean                   @default(false)
+  environment              String                    @default("production")
+  planTier                 PlanTier                  @default(free)
+  planTierLocked           Boolean                   @default(false)
+  accountLimit             Int?
+  monthlyUploadLimit       Int?
+  transactionLimit         Int?
+  financialExperience      FinancialExperienceLevel? @default(beginner)
+  primaryGoal              String?
+  goalTargetAmount         Decimal?                  @db.Decimal(18, 2)
+  goalTargetSource         String?
+  goalPlan                 Json?
+  onboardingCompletedAt    DateTime?
+  dataWipedAt              DateTime?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  workspaces               Workspace[]
+  goalSettings             GoalSetting[]
+  billingSubscription      BillingSubscription?
+  billingEvents            BillingEvent[]
   brankasStatementSessions BrankasStatementSession[]
-  appErrorLogs          AppErrorLog[]
+  appErrorLogs             AppErrorLog[]
 }
 
 model BillingSubscription {
@@ -179,28 +204,28 @@ model BillingEvent {
 }
 
 model BrankasStatementSession {
-  id                     String                         @id @default(cuid())
-  workspaceId            String
-  userId                 String?
-  externalId             String                         @unique
-  statementId            String?                        @unique
-  requestId              String?
-  country                String                         @default("PH")
-  bankCodes              Json
-  status                 BrankasStatementSessionStatus  @default(initiated)
-  redirectUri            String?
-  appRedirectUri         String
-  appRedirectErrorUri    String?
-  rawRequest             Json
-  rawResponse            Json?
+  id                      String                              @id @default(cuid())
+  workspaceId             String
+  userId                  String?
+  externalId              String                              @unique
+  statementId             String?                             @unique
+  requestId               String?
+  country                 String                              @default("PH")
+  bankCodes               Json
+  status                  BrankasStatementSessionStatus       @default(initiated)
+  redirectUri             String?
+  appRedirectUri          String
+  appRedirectErrorUri     String?
+  rawRequest              Json
+  rawResponse             Json?
   lastNotificationStatus  String?
   lastNotificationPayload Json?
-  lastNotificationAt     DateTime?
-  createdAt              DateTime                       @default(now())
-  updatedAt              DateTime                       @updatedAt
-  workspace              Workspace                      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user                   User?                          @relation(fields: [userId], references: [id], onDelete: SetNull)
-  notifications          BrankasStatementNotificationEvent[]
+  lastNotificationAt      DateTime?
+  createdAt               DateTime                            @default(now())
+  updatedAt               DateTime                            @updatedAt
+  workspace               Workspace                           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user                    User?                               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  notifications           BrankasStatementNotificationEvent[]
 
   @@index([workspaceId])
   @@index([userId])
@@ -210,18 +235,18 @@ model BrankasStatementSession {
 }
 
 model BrankasStatementNotificationEvent {
-  id                  String                    @id @default(cuid())
-  brankasSessionId    String?
-  statementId         String?
-  notificationId      String?
-  statementStatus     String?
-  url                 String?
-  payload             Json
-  httpStatus          String?
-  httpResponse        String?
-  error               String?
-  sentAt              DateTime?
-  createdAt           DateTime                  @default(now())
+  id                      String                   @id @default(cuid())
+  brankasSessionId        String?
+  statementId             String?
+  notificationId          String?
+  statementStatus         String?
+  url                     String?
+  payload                 Json
+  httpStatus              String?
+  httpResponse            String?
+  error                   String?
+  sentAt                  DateTime?
+  createdAt               DateTime                 @default(now())
   brankasStatementSession BrankasStatementSession? @relation(fields: [brankasSessionId], references: [id], onDelete: SetNull)
 
   @@index([brankasSessionId])
@@ -231,26 +256,26 @@ model BrankasStatementNotificationEvent {
 }
 
 model AppErrorLog {
-  id            String    @id @default(cuid())
-  message       String
-  name          String?
-  stack         String?
-  source        String
-  route         String?
-  url           String?
-  method        String?
-  statusCode    Int?
-  buildId       String
-  deploymentId  String?
-  environment   String
-  userAgent     String?
-  clerkUserId   String?
-  userId        String?
-  workspaceId   String?
-  metadata      Json?
-  occurredAt    DateTime  @default(now())
-  createdAt     DateTime  @default(now())
-  user          User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id           String   @id @default(cuid())
+  message      String
+  name         String?
+  stack        String?
+  source       String
+  route        String?
+  url          String?
+  method       String?
+  statusCode   Int?
+  buildId      String
+  deploymentId String?
+  environment  String
+  userAgent    String?
+  clerkUserId  String?
+  userId       String?
+  workspaceId  String?
+  metadata     Json?
+  occurredAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([occurredAt])
   @@index([buildId])
@@ -268,10 +293,10 @@ model ContactInquiry {
   sourcePage        String?
   userAgent         String?
   status            ContactInquiryStatus @default(open)
-  adminReplySubject  String?
-  adminReplyBody     String?
-  adminReplyAt       DateTime?
-  adminReplyBy       String?
+  adminReplySubject String?
+  adminReplyBody    String?
+  adminReplyAt      DateTime?
+  adminReplyBy      String?
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
 
@@ -281,56 +306,58 @@ model ContactInquiry {
 }
 
 model Workspace {
-  id                   String                       @id @default(cuid())
-  userId               String
-  name                 String
-  type                 WorkspaceType                @default(personal)
-  createdAt            DateTime                     @default(now())
-  updatedAt            DateTime                     @updatedAt
-  user                 User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accounts             Account[]
-  categories           Category[]
-  transactions         Transaction[]
-  importFiles          ImportFile[]
-  statementCheckpoints AccountStatementCheckpoint[]
-  auditLogs            AuditLog[]
-  statementTemplates   StatementTemplate[]
-  merchantRules        MerchantRule[]
-  accountRules         AccountRule[]
-  trainingSignals      TrainingSignal[]
-  dataQaRuns           DataQaRun[]
-  dataQaFindings       DataQaFinding[]
+  id                       String                       @id @default(cuid())
+  userId                   String
+  name                     String
+  type                     WorkspaceType                @default(personal)
+  createdAt                DateTime                     @default(now())
+  updatedAt                DateTime                     @updatedAt
+  user                     User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accounts                 Account[]
+  categories               Category[]
+  transactions             Transaction[]
+  importFiles              ImportFile[]
+  statementCheckpoints     AccountStatementCheckpoint[]
+  financialCommitments     FinancialCommitment[]
+  auditLogs                AuditLog[]
+  statementTemplates       StatementTemplate[]
+  merchantRules            MerchantRule[]
+  accountRules             AccountRule[]
+  trainingSignals          TrainingSignal[]
+  dataQaRuns               DataQaRun[]
+  dataQaFindings           DataQaFinding[]
   brankasStatementSessions BrankasStatementSession[]
 
   @@index([userId])
 }
 
 model Account {
-  id                     String        @id @default(cuid())
-  workspaceId            String
-  name                   String
-  institution            String?
-  accountNumber          String?
-  investmentSubtype      String?
-  investmentSymbol       String?
-  investmentQuantity     Decimal?      @db.Decimal(18, 8)
-  investmentCostBasis    Decimal?      @db.Decimal(18, 2)
-  investmentPrincipal    Decimal?      @db.Decimal(18, 2)
-  investmentStartDate    DateTime?
-  investmentMaturityDate DateTime?
-  investmentInterestRate Decimal?      @db.Decimal(9, 4)
-  investmentMaturityValue Decimal?     @db.Decimal(18, 2)
-  type                   AccountType   @default(bank)
-  currency               String        @default("PHP")
-  source                 String        @default("upload")
-  balance                Decimal?      @db.Decimal(18, 2)
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
-  workspace              Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  transactions           Transaction[]
-  importFiles            ImportFile[]
-  statementCheckpoints   AccountStatementCheckpoint[]
-  accountRules           AccountRule[]
+  id                      String                       @id @default(cuid())
+  workspaceId             String
+  name                    String
+  institution             String?
+  accountNumber           String?
+  investmentSubtype       String?
+  investmentSymbol        String?
+  investmentQuantity      Decimal?                     @db.Decimal(18, 8)
+  investmentCostBasis     Decimal?                     @db.Decimal(18, 2)
+  investmentPrincipal     Decimal?                     @db.Decimal(18, 2)
+  investmentStartDate     DateTime?
+  investmentMaturityDate  DateTime?
+  investmentInterestRate  Decimal?                     @db.Decimal(9, 4)
+  investmentMaturityValue Decimal?                     @db.Decimal(18, 2)
+  type                    AccountType                  @default(bank)
+  currency                String                       @default("PHP")
+  source                  String                       @default("upload")
+  balance                 Decimal?                     @db.Decimal(18, 2)
+  createdAt               DateTime                     @default(now())
+  updatedAt               DateTime                     @updatedAt
+  workspace               Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  transactions            Transaction[]
+  importFiles             ImportFile[]
+  statementCheckpoints    AccountStatementCheckpoint[]
+  financialCommitments    FinancialCommitment[]
+  accountRules            AccountRule[]
 
   @@index([workspaceId])
 }
@@ -354,36 +381,37 @@ model Category {
 }
 
 model Transaction {
-  id                     String           @id @default(cuid())
+  id                     String                @id @default(cuid())
   workspaceId            String
   accountId              String
   importFileId           String?
   categoryId             String?
-  reviewStatus           ReviewStatus     @default(suggested)
-  parserConfidence       Int              @default(0)
-  categoryConfidence     Int              @default(0)
-  accountMatchConfidence Int              @default(0)
-  duplicateConfidence    Int              @default(0)
-  transferConfidence     Int              @default(0)
+  reviewStatus           ReviewStatus          @default(suggested)
+  parserConfidence       Int                   @default(0)
+  categoryConfidence     Int                   @default(0)
+  accountMatchConfidence Int                   @default(0)
+  duplicateConfidence    Int                   @default(0)
+  transferConfidence     Int                   @default(0)
   rawPayload             Json?
   normalizedPayload      Json?
   learnedRuleIdsApplied  Json?
   date                   DateTime
-  amount                 Decimal          @db.Decimal(18, 2)
-  currency               String           @default("PHP")
+  amount                 Decimal               @db.Decimal(18, 2)
+  currency               String                @default("PHP")
   type                   TransactionType
   merchantRaw            String
   merchantClean          String?
   description            String?
-  isTransfer             Boolean          @default(false)
-  isExcluded             Boolean          @default(false)
+  isTransfer             Boolean               @default(false)
+  isExcluded             Boolean               @default(false)
   deletedAt              DateTime?
-  createdAt              DateTime         @default(now())
-  updatedAt              DateTime         @updatedAt
-  workspace              Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  account                Account          @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  importFile             ImportFile?      @relation(fields: [importFileId], references: [id], onDelete: SetNull)
-  category               Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  workspace              Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account                Account               @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  financialCommitments   FinancialCommitment[]
+  importFile             ImportFile?           @relation(fields: [importFileId], references: [id], onDelete: SetNull)
+  category               Category?             @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   trainingSignals        TrainingSignal[]
   dataQaFindings         DataQaFinding[]
 
@@ -430,23 +458,24 @@ model ImportFile {
 }
 
 model AccountStatementCheckpoint {
-  id                 String                    @id @default(cuid())
-  workspaceId        String
-  accountId          String?
-  importFileId       String?                   @unique
-  statementStartDate DateTime?
-  statementEndDate   DateTime?
-  openingBalance     Decimal?                  @db.Decimal(18, 2)
-  endingBalance      Decimal?                  @db.Decimal(18, 2)
-  status             StatementCheckpointStatus @default(pending)
-  mismatchReason     String?
-  sourceMetadata     Json?
-  rowCount           Int                       @default(0)
-  createdAt          DateTime                  @default(now())
-  updatedAt          DateTime                  @updatedAt
-  workspace          Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  account            Account?                  @relation(fields: [accountId], references: [id], onDelete: SetNull)
-  importFile         ImportFile?               @relation(fields: [importFileId], references: [id], onDelete: SetNull)
+  id                   String                    @id @default(cuid())
+  workspaceId          String
+  accountId            String?
+  importFileId         String?                   @unique
+  statementStartDate   DateTime?
+  statementEndDate     DateTime?
+  openingBalance       Decimal?                  @db.Decimal(18, 2)
+  endingBalance        Decimal?                  @db.Decimal(18, 2)
+  status               StatementCheckpointStatus @default(pending)
+  mismatchReason       String?
+  sourceMetadata       Json?
+  rowCount             Int                       @default(0)
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
+  workspace            Workspace                 @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account              Account?                  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  importFile           ImportFile?               @relation(fields: [importFileId], references: [id], onDelete: SetNull)
+  financialCommitments FinancialCommitment[]
 
   @@index([workspaceId])
   @@index([accountId])
@@ -518,6 +547,41 @@ model GoalSetting {
 
   @@index([userId])
   @@index([userId, createdAt])
+}
+
+model FinancialCommitment {
+  id                    String                      @id @default(cuid())
+  workspaceId           String
+  kind                  CommitmentKind
+  title                 String
+  counterparty          String?
+  amount                Decimal?                    @db.Decimal(18, 2)
+  currency              String                      @default("PHP")
+  dueDate               DateTime?
+  recurrence            CommitmentRecurrence        @default(once)
+  nextDueDate           DateTime?
+  notes                 String?
+  accountId             String?
+  transactionId         String?
+  statementCheckpointId String?
+  status                CommitmentStatus            @default(active)
+  source                String                      @default("manual")
+  confidence            Int                         @default(100)
+  createdAt             DateTime                    @default(now())
+  updatedAt             DateTime                    @updatedAt
+  workspace             Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account               Account?                    @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  transaction           Transaction?                @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  statementCheckpoint   AccountStatementCheckpoint? @relation(fields: [statementCheckpointId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([kind])
+  @@index([status])
+  @@index([dueDate])
+  @@index([nextDueDate])
+  @@index([accountId])
+  @@index([transactionId])
+  @@index([statementCheckpointId])
 }
 
 model DataQaConfig {
@@ -606,30 +670,30 @@ model TrainingSignal {
 }
 
 model DataQaRun {
-  id                String         @id @default(cuid())
-  workspaceId       String
-  importFileId      String?
-  source            String
-  stage             String?
-  status            String         @default("completed")
-  parserVersion     String?
-  parserDurationMs  Int?
-  totalDurationMs   Int?
-  score             Int            @default(0)
-  findingCount      Int            @default(0)
-  criticalCount     Int            @default(0)
-  feedbackPayload   Json?
-  manualFeedback    String?
+  id                      String          @id @default(cuid())
+  workspaceId             String
+  importFileId            String?
+  source                  String
+  stage                   String?
+  status                  String          @default("completed")
+  parserVersion           String?
+  parserDurationMs        Int?
+  totalDurationMs         Int?
+  score                   Int             @default(0)
+  findingCount            Int             @default(0)
+  criticalCount           Int             @default(0)
+  feedbackPayload         Json?
+  manualFeedback          String?
   manualFeedbackUpdatedAt DateTime?
   manualFeedbackAuthorId  String?
-  fieldReviewPayload Json?
-  fieldReviewUpdatedAt DateTime?
-  fieldReviewAuthorId String?
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  workspace         Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  importFile        ImportFile?    @relation(fields: [importFileId], references: [id], onDelete: SetNull)
-  findings          DataQaFinding[]
+  fieldReviewPayload      Json?
+  fieldReviewUpdatedAt    DateTime?
+  fieldReviewAuthorId     String?
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
+  workspace               Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  importFile              ImportFile?     @relation(fields: [importFileId], references: [id], onDelete: SetNull)
+  findings                DataQaFinding[]
 
   @@index([workspaceId])
   @@index([importFileId])
@@ -638,25 +702,25 @@ model DataQaRun {
 }
 
 model DataQaFinding {
-  id              String      @id @default(cuid())
-  workspaceId     String
-  dataQaRunId     String
-  importFileId    String?
-  transactionId   String?
-  code            String
-  severity        String
-  field           String?
-  message         String
-  observedValue   Json?
-  expectedValue   Json?
-  suggestion      String?
-  confidence      Int         @default(0)
-  metadata        Json?
-  createdAt       DateTime    @default(now())
-  workspace       Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  dataQaRun       DataQaRun   @relation(fields: [dataQaRunId], references: [id], onDelete: Cascade)
-  importFile      ImportFile? @relation(fields: [importFileId], references: [id], onDelete: SetNull)
-  transaction     Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  id            String       @id @default(cuid())
+  workspaceId   String
+  dataQaRunId   String
+  importFileId  String?
+  transactionId String?
+  code          String
+  severity      String
+  field         String?
+  message       String
+  observedValue Json?
+  expectedValue Json?
+  suggestion    String?
+  confidence    Int          @default(0)
+  metadata      Json?
+  createdAt     DateTime     @default(now())
+  workspace     Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  dataQaRun     DataQaRun    @relation(fields: [dataQaRunId], references: [id], onDelete: Cascade)
+  importFile    ImportFile?  @relation(fields: [importFileId], references: [id], onDelete: SetNull)
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
 
   @@index([workspaceId])
   @@index([dataQaRunId])

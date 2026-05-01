@@ -10,6 +10,7 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
+import { isSupportedAccountType } from "@/lib/account-types";
 
 export const dynamic = "force-dynamic";
 
@@ -199,7 +200,7 @@ export async function POST(request: Request) {
     const name = String(body?.name || "").trim();
     const institution = body?.institution ? String(body.institution) : null;
     const accountNumber = body?.accountNumber ? String(body.accountNumber).trim() || null : null;
-    const type = body?.type || "bank";
+    const type = isSupportedAccountType(body?.type) ? body.type : "bank";
     const investmentSubtype = normalizeInvestmentSubtype(body?.investmentSubtype);
     const investmentSymbol = body?.investmentSymbol ? String(body.investmentSymbol).trim() || null : null;
     const investmentQuantity = parseNullableDecimal(body?.investmentQuantity);

@@ -33,6 +33,10 @@ import {
   isFixedIncomeInvestmentSubtype,
   isMarketInvestmentSubtype,
 } from "@/lib/investments";
+import {
+  formatAccountTypeLabel,
+  isLiabilityAccountType,
+} from "@/lib/account-types";
 
 type Account = {
   id: string;
@@ -111,7 +115,7 @@ const formatDate = (value: string) =>
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
 const normalizeAccountBalance = (type: Account["type"] | null | undefined, value: number) =>
-  type === "credit_card" ? -Math.abs(value) : Math.abs(value);
+  isLiabilityAccountType(type) ? -Math.abs(value) : Math.abs(value);
 
 function ActionIcon({ name }: { name: "warning" }) {
   if (name === "warning") {
@@ -130,7 +134,8 @@ function ActionIcon({ name }: { name: "warning" }) {
 const ACCOUNT_DETAILS_INFO = {
   currentBalance:
     "Current balance = the latest balance Clover can derive for this account after applying its saved balance, imported transactions, and any statement checkpoint used for reconciliation.",
-  accountType: "Account type controls how Clover groups this account and whether it is treated like an asset, wallet, cash balance, credit card, or investment.",
+  accountType:
+    "Account type controls how Clover groups this account and whether it is treated like a spendable balance, an investment holding, or a liability such as a credit card, loan, mortgage, or line of credit.",
   transactions: "Transactions are the money movements linked to this account. The running balance changes as each transaction is imported, edited, or excluded.",
 } as const;
 
@@ -291,10 +296,7 @@ const getTransactionTypeLabel = (type: Transaction["type"]) => {
   return formatTransactionDirectionLabel(type);
 };
 
-const formatAccountType = (value: string) =>
-  value
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+const formatAccountType = (value: string) => formatAccountTypeLabel(value);
 
 export default function AccountDetailPage() {
   useEffect(() => {
@@ -633,7 +635,7 @@ function AccountDetailPageContent() {
       };
     }
 
-    if (account.type === "credit_card") {
+    if (isLiabilityAccountType(account.type)) {
       return {
         label: "Outstanding balance",
         value: Math.abs(currentBalance),
@@ -664,8 +666,8 @@ function AccountDetailPageContent() {
       return "Spendable amount = the usable cash-like balance from this account.";
     }
 
-    if (account.type === "credit_card") {
-      return "Outstanding balance = the amount currently owed on this credit card.";
+    if (isLiabilityAccountType(account.type)) {
+      return "Outstanding balance = the amount currently owed on this liability account.";
     }
 
     if (account.type === "investment") {

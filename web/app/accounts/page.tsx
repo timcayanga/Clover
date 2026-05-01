@@ -43,6 +43,12 @@ import {
   isFixedIncomeInvestmentSubtype,
   isMarketInvestmentSubtype,
 } from "@/lib/investments";
+import {
+  formatAccountTypeLabel,
+  isLiabilityAccountType,
+  isSpendableAccountType,
+  type SupportedAccountType,
+} from "@/lib/account-types";
 import type { InstitutionSuggestion } from "@/lib/institution-suggestions";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
@@ -72,7 +78,7 @@ type Account = {
   investmentMaturityDate: string | null;
   investmentInterestRate: string | null;
   investmentMaturityValue: string | null;
-  type: "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
+  type: SupportedAccountType;
   currency: string;
   source: string;
   balance: string | null;
@@ -246,7 +252,7 @@ const formatAggregateAmount = (value: number, accounts: Array<{ currency: string
 };
 
 const normalizeAccountBalance = (type: Account["type"], value: number) =>
-  type === "credit_card" ? -Math.abs(value) : Math.abs(value);
+  isLiabilityAccountType(type) ? -Math.abs(value) : Math.abs(value);
 
 const parseNullableNumberInput = (value: string) => {
   const trimmed = value.trim();
@@ -272,17 +278,13 @@ const getEffectiveAccountType = (account: Account) => account.type;
 
 const getAccountDisplayType = (account: Account) => {
   const effectiveType = getEffectiveAccountType(account);
-  if (effectiveType === "credit_card") return "Credit Card";
-  if (effectiveType === "cash") return "Cash";
-  if (effectiveType === "investment") return "Investment";
-  if (effectiveType === "wallet") return "Wallet";
   if (effectiveType === "bank" && account.institution === "Checking") return "Checking";
   if (effectiveType === "bank" && account.institution === "Savings") return "Savings";
   if (effectiveType === "other") return "-";
-  return "Bank";
+  return formatAccountTypeLabel(effectiveType);
 };
 
-const getAccountTone = (account: Account) => (getEffectiveAccountType(account) === "credit_card" ? "liability" : "asset");
+const getAccountTone = (account: Account) => (isLiabilityAccountType(getEffectiveAccountType(account)) ? "liability" : "asset");
 
 const getAccountWarning = (account: Account, duplicateCount: number) => {
   if (duplicateCount > 1) return "Possible duplicate";
@@ -290,20 +292,18 @@ const getAccountWarning = (account: Account, duplicateCount: number) => {
   return null;
 };
 
-const isSpendableAccountType = (type: Account["type"]) => type === "bank" || type === "wallet" || type === "cash";
-
 const getSpendableBalance = (account: Account) =>
   (isSpendableAccountType(getEffectiveAccountType(account)) ? normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(account.balance)) : 0);
 
 const ACCOUNTS_OVERVIEW_COPY = {
   netWorth:
-    "Net worth = total assets minus total liabilities. Clover adds positive balances from accounts like banks, wallets, cash, and investments, then subtracts owed balances such as credit cards.",
+    "Net worth = total assets minus total liabilities. Clover adds positive balances from accounts like banks, wallets, cash, and investments, then subtracts owed balances such as credit cards, loans, mortgages, and lines of credit.",
   spendable:
     "Spendable = the sum of bank, wallet, and cash balances you can use right away. Investments and credit cards are excluded from this number.",
   assets:
     "Assets = the total of positive balances across accounts in this workspace, including banks, wallets, cash, investments, and any other positive-value holdings.",
   liabilities:
-    "Liabilities = the total amount owed across negative-balance accounts, usually credit cards and other payables.",
+    "Liabilities = the total amount owed across liability accounts such as credit cards, loans, mortgages, and lines of credit.",
 } as const;
 
 const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined) => {
@@ -1331,9 +1331,9 @@ function AccountsPageContent() {
         rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "wallet"),
       },
       {
-        title: "Credit cards",
+        title: "Liabilities",
         tone: "liability",
-        rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "credit_card"),
+        rows: visibleAccounts.filter((account) => isLiabilityAccountType(getEffectiveAccountType(account))),
       },
       {
         title: "Imported & other",
@@ -1942,7 +1942,8 @@ function AccountsPageContent() {
                     <div className="accounts-card-grid" aria-label={`${group.title} accounts`}>
                       {group.rows.map((account) => {
                           const value = parseAmount(account.balance);
-                          const isLiability = getEffectiveAccountType(account) === "credit_card";
+                          const isLiability = isLiabilityAccountType(getEffectiveAccountType(account));
+                          const isSpendable = isSpendableAccountType(getEffectiveAccountType(account));
                           const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
                           const warning = getAccountWarning(account, duplicateCounts.get(duplicateKey) ?? 0);
                           const isDeleting = deletingAccountIdsSet.has(account.id);
@@ -2033,8 +2034,8 @@ function AccountsPageContent() {
                                       ) : isLoading ? (
                                         <span className="accounts-account-card__balance-pill is-neutral">Loading</span>
                                       ) : (
-                                        <span className={`accounts-account-card__balance-pill is-${isLiability ? "danger" : "good"}`}>
-                                          {isLiability ? "Outstanding" : "Spendable"}
+                                        <span className={`accounts-account-card__balance-pill is-${isLiability ? "danger" : isSpendable ? "good" : "neutral"}`}>
+                                          {isLiability ? "Outstanding" : isSpendable ? "Spendable" : "Tracked"}
                                         </span>
                                       )}
                                     </div>
@@ -2142,6 +2143,9 @@ function AccountsPageContent() {
                     <option value="bank">Bank</option>
                     <option value="wallet">Wallet</option>
                     <option value="credit_card">Credit Card</option>
+                    <option value="loan">Loan</option>
+                    <option value="mortgage">Mortgage</option>
+                    <option value="line_of_credit">Line of Credit</option>
                     <option value="cash">Cash</option>
                     <option value="investment">Investment</option>
                     <option value="other">Other</option>
@@ -2499,6 +2503,9 @@ function AccountsPageContent() {
                           <option value="bank">Bank</option>
                           <option value="wallet">Wallet</option>
                           <option value="credit_card">Credit Card</option>
+                          <option value="loan">Loan</option>
+                          <option value="mortgage">Mortgage</option>
+                          <option value="line_of_credit">Line of Credit</option>
                           <option value="cash">Cash</option>
                           <option value="investment">Investment</option>
                           <option value="other">Other</option>

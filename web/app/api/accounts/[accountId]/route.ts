@@ -5,6 +5,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { upsertAccountRule } from "@/lib/data-engine";
 import { INVESTMENT_SUBTYPES, type InvestmentSubtype } from "@/lib/investments";
+import { capturePostHogServerEvent } from "@/lib/analytics";
+import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
+import { ACCOUNT_TYPES } from "@/lib/account-types";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +79,7 @@ const accountPatchSchema = z.object({
   investmentMaturityDate: z.union([z.string(), z.number(), z.null()]).optional(),
   investmentInterestRate: z.union([z.string(), z.number(), z.null()]).optional(),
   investmentMaturityValue: z.union([z.string(), z.number(), z.null()]).optional(),
-  type: z.enum(["bank", "wallet", "credit_card", "cash", "investment", "other"]).optional(),
+  type: z.enum(ACCOUNT_TYPES).optional(),
   currency: z.string().optional(),
   source: z.string().optional(),
   balance: z.union([z.string(), z.number(), z.null()]).optional(),
@@ -165,9 +168,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
 
     await assertWorkspaceAccess(userId, payload.workspaceId);
 
-    const account = await prisma.account.update({
-      where: { id: accountId },
-      data: {
+    const accountUpdateData = {
         name: payload.name?.trim() ?? undefined,
         institution: payload.institution === undefined ? undefined : payload.institution?.trim() || null,
         ...(compatibleColumns.has("accountNumber")
@@ -198,8 +199,36 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
         currency: payload.currency ? payload.currency.toUpperCase() : undefined,
         source: payload.source,
         balance: payload.balance === undefined ? undefined : payload.balance === null || payload.balance === "" ? null : payload.balance.toString(),
-      },
-      select: getCompatibleAccountSelect(compatibleColumns),
+      };
+
+    let account;
+    try {
+      account = await prisma.account.update({
+        where: { id: accountId },
+        data: accountUpdateData,
+        select: getCompatibleAccountSelect(compatibleColumns),
+      });
+    } catch (error) {
+      if (!isMissingAccountNumberColumnError(error)) {
+        throw error;
+      }
+
+      account = await prisma.account.update({
+        where: { id: accountId },
+        data: omitAccountNumberField(accountUpdateData),
+        select: getCompatibleAccountSelect(compatibleColumns),
+      });
+    }
+
+    void capturePostHogServerEvent("account_updated", userId, {
+      workspace_id: account.workspaceId,
+      account_id: account.id,
+      account_name: account.name,
+      account_institution: account.institution,
+      account_type: account.type,
+      account_currency: account.currency,
+      account_source: account.source,
+      is_cash: account.type === "cash",
     });
 
     void upsertAccountRule({
