@@ -1,4 +1,4 @@
-export const MAX_IMPORT_FILE_SIZE = 8 * 1024 * 1024;
+export const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
 
 const SUPPORTED_EXTENSIONS = [".pdf", ".csv", ".json"];
 const SUPPORTED_CONTENT_TYPES = new Set([
@@ -36,7 +36,7 @@ export const validateImportFile = (params: {
   }
 
   if (params.fileSize > MAX_IMPORT_FILE_SIZE) {
-    return "Import files must be 8 MB or smaller.";
+    return "Import files must be 2 MB or smaller.";
   }
 
   if (!isSupportedImportFile(params.fileName, params.contentType)) {

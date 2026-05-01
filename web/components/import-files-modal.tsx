@@ -334,23 +334,6 @@ const buildOptimisticUploadSummary = (
   previewTransactions,
 });
 
-const buildOptimisticUploadSummaryFromAccount = (
-  fileName: string,
-  account: AccountOption & { balance?: string | null }
-): UploadInsightsSummary =>
-  buildOptimisticUploadSummary(
-    fileName,
-    0,
-    account.id,
-    account.name,
-    account.institution,
-    account.type as UploadAccountType,
-    account.id,
-    null,
-    [],
-    account.accountNumber ?? null
-  );
-
 const toBalanceString = (value: unknown): string | null => {
   if (value === null || value === undefined) {
     return null;
@@ -1119,8 +1102,8 @@ export function ImportFilesModal({
         });
 
         if (validationError) {
-          if (validationError === "Import files must be 8 MB or smaller.") {
-            validationIssues.push(`${file.name} is larger than 8 MB.`);
+          if (validationError === "Import files must be 2 MB or smaller.") {
+            validationIssues.push(`${file.name} is larger than 2 MB.`);
           } else if (validationError === "Only PDF, CSV, and JSON files are supported.") {
             validationIssues.push(`${file.name} has an invalid file extension.`);
           } else {
@@ -1143,17 +1126,11 @@ export function ImportFilesModal({
         const guessedIdentity = guessStatementIdentity(file.name);
         const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName);
         const optimisticAccountId = guessedIdentity && canUseOptimisticGuess ? `optimistic-${crypto.randomUUID()}` : null;
-        const selectedAccount = selectedAccountId ? accounts.find((account) => account.id === selectedAccountId) : null;
         capturePostHogClientEvent("file_upload_started", {
           ...fileAnalyticsBase(file, workspaceId),
-          selected_account_id: selectedAccount?.id ?? null,
-          selected_account_type: selectedAccount?.type ?? null,
+          selected_account_id: selectedAccountId || null,
+          selected_account_type: selectedAccountId ? accounts.find((account) => account.id === selectedAccountId)?.type ?? null : null,
         });
-        if (selectedAccount) {
-          const optimisticSummary = buildOptimisticUploadSummaryFromAccount(file.name, selectedAccount);
-          seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
-          void onImported(optimisticSummary);
-        }
         return [
           {
             id: crypto.randomUUID(),
@@ -2236,10 +2213,6 @@ export function ImportFilesModal({
       if (matchedByNumber) {
         return matchedByNumber.id;
       }
-    }
-
-    if (selectedAccountId && accounts.some((account) => account.id === selectedAccountId)) {
-      return selectedAccountId;
     }
 
     return `optimistic-${crypto.randomUUID()}`;
