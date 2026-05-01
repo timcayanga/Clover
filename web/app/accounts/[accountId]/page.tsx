@@ -117,6 +117,20 @@ const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 const normalizeAccountBalance = (type: Account["type"] | null | undefined, value: number) =>
   type === "credit_card" ? -Math.abs(value) : Math.abs(value);
 
+function ActionIcon({ name }: { name: "warning" }) {
+  if (name === "warning") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3.75 20 19H4l8-15.25Z" />
+        <path d="M12 9v4.75" />
+        <path d="M12 16.5h.01" />
+      </svg>
+    );
+  }
+
+  return null;
+}
+
 const ACCOUNT_DETAILS_INFO = {
   currentBalance:
     "Current balance = the latest balance Clover can derive for this account after applying its saved balance, imported transactions, and any statement checkpoint used for reconciliation.",
