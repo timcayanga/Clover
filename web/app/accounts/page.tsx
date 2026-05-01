@@ -684,6 +684,7 @@ function AccountsPageContent() {
   const [importOpen, setImportOpen] = useState(false);
   const [importSessionId, setImportSessionId] = useState(0);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
+  const [importBackgroundOnly, setImportBackgroundOnly] = useState(false);
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null);
   const [manualType, setManualType] = useState<Account["type"]>("bank");
   const [manualName, setManualName] = useState("");
@@ -1471,7 +1472,7 @@ function AccountsPageContent() {
     });
   };
 
-  const openImportFiles = (files: File[] | null = null) => {
+  const openImportFiles = (files: File[] | null = null, backgroundOnly = false) => {
     flushSync(() => {
       closeChrome();
     });
@@ -1489,6 +1490,7 @@ function AccountsPageContent() {
     flushSync(() => {
       setPendingImportSummary(null);
       setAddOpen(false);
+      setImportBackgroundOnly(backgroundOnly);
       setImportSessionId((current) => current + 1);
       setImportSeedFiles(files && files.length > 0 ? files : null);
       setImportOpen(true);
@@ -1496,13 +1498,13 @@ function AccountsPageContent() {
   };
 
   useEffect(() => {
-    const active = addOpen || importOpen;
+    const active = addOpen || (importOpen && !importBackgroundOnly);
     document.body.toggleAttribute("data-clover-page-modal", active);
 
     return () => {
       document.body.removeAttribute("data-clover-page-modal");
     };
-  }, [addOpen, importOpen]);
+  }, [addOpen, importBackgroundOnly, importOpen]);
 
   const applyManualNameSuggestion = (suggestion: InstitutionSuggestion) => {
     if (suggestion.category === "investment_platform") {
@@ -2579,7 +2581,7 @@ function AccountsPageContent() {
       <PageFileDropZone
         enabled
         title="Drop statement files anywhere"
-        onFilesDropped={(files) => openImportFiles(files)}
+        onFilesDropped={(files) => openImportFiles(files, true)}
       />
 
       <PlanLimitNudge payload={planLimitNudge} onDismiss={() => setPlanLimitNudge(null)} />
@@ -2593,9 +2595,11 @@ function AccountsPageContent() {
         defaultAccountId={selectedAccount?.id ?? accounts[0]?.id ?? null}
         initialFiles={importSeedFiles}
         onInitialFilesConsumed={() => setImportSeedFiles(null)}
+        backgroundOnly={importBackgroundOnly}
         onClose={() => {
           setImportOpen(false);
           setImportSeedFiles(null);
+          setImportBackgroundOnly(false);
         }}
         onImported={async (summary) => {
           setPendingImportSummary(summary);

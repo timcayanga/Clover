@@ -60,6 +60,7 @@ type ImportFilesModalProps = {
   showQaTools?: boolean;
   initialFiles?: File[] | null;
   onInitialFilesConsumed?: () => void;
+  backgroundOnly?: boolean;
   onClose: () => void;
   onImported: (summary: UploadInsightsSummary) => Promise<void> | void;
 };
@@ -718,6 +719,7 @@ export function ImportFilesModal({
   showQaTools = false,
   initialFiles = null,
   onInitialFilesConsumed,
+  backgroundOnly = false,
   onClose,
   onImported,
 }: ImportFilesModalProps) {
@@ -3133,6 +3135,10 @@ export function ImportFilesModal({
   const readyToImport = items.some((item) => item.status === "pending" || (item.status === "needs_password" && item.password.trim()) || item.confirmationState === "staged");
 
   if (!open) {
+    return null;
+  }
+
+  if (backgroundOnly) {
     return null;
   }
 

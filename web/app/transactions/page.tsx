@@ -1278,7 +1278,7 @@ function TransactionsPageContent() {
   const addMenuRef = useRef<HTMLDivElement>(null);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
-  const initialWorkspaceId = readSelectedWorkspaceId();
+  const initialWorkspaceId = urlSearchParams.get("workspaceId") || readSelectedWorkspaceId();
   const initialCachedWorkspace = getCachedTransactionsWorkspace(initialWorkspaceId);
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -1325,6 +1325,7 @@ function TransactionsPageContent() {
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
+  const [importBackgroundOnly, setImportBackgroundOnly] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [bulkEditOpen, setBulkEditOpen] = useState(false);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
@@ -1882,24 +1883,25 @@ function TransactionsPageContent() {
     });
   };
 
-  const openImportFiles = (files: File[] | null = null) => {
+  const openImportFiles = (files: File[] | null = null, backgroundOnly = false) => {
     flushSync(() => {
       closeChrome();
       setPendingImportSummary(null);
       closeToolbarMenus();
+      setImportBackgroundOnly(backgroundOnly);
       setImportSeedFiles(files && files.length > 0 ? files : null);
       setImportOpen(true);
     });
   };
 
   useEffect(() => {
-    const active = importOpen || manualOpen;
+    const active = manualOpen || (importOpen && !importBackgroundOnly);
     document.body.toggleAttribute("data-clover-page-modal", active);
 
     return () => {
       document.body.removeAttribute("data-clover-page-modal");
     };
-  }, [addMenuOpen, downloadMenuOpen, importOpen, manualOpen]);
+  }, [addMenuOpen, downloadMenuOpen, importBackgroundOnly, importOpen, manualOpen]);
 
   useEffect(() => {
     if (urlSearchParams.get("import") === "1") {
@@ -4032,7 +4034,7 @@ function TransactionsPageContent() {
       <PageFileDropZone
         enabled
         title="Drop statement files anywhere"
-        onFilesDropped={(files) => openImportFiles(files)}
+        onFilesDropped={(files) => openImportFiles(files, true)}
       />
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`} style={transactionsLayoutStyle}>
         <div className="transactions-main-panel">
@@ -5624,9 +5626,11 @@ function TransactionsPageContent() {
         defaultAccountId={accounts[0]?.id ?? null}
         initialFiles={importSeedFiles}
         onInitialFilesConsumed={() => setImportSeedFiles(null)}
+        backgroundOnly={importBackgroundOnly}
         onClose={() => {
           setImportOpen(false);
           setImportSeedFiles(null);
+          setImportBackgroundOnly(false);
         }}
         onImported={async (summary) => {
           const previewTransactions = summary.previewTransactions ?? [];
