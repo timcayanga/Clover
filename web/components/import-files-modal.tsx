@@ -790,7 +790,7 @@ export function ImportFilesModal({
     updateItem(itemId, {
       status: "error",
       confirmationState: "staged",
-      error: notice.message,
+      error: `${notice.code}: ${notice.message}`,
       progress: 0,
       progressLabel: "Import issue",
     });
@@ -809,7 +809,7 @@ export function ImportFilesModal({
       errorMessage: notice.message,
     });
     setBusy(false);
-    onClose();
+    autoCloseAfterStartRef.current = false;
   };
 
   useEffect(() => {
@@ -1411,6 +1411,9 @@ export function ImportFilesModal({
   ) => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
     let seededFallbackSummary = false;
+    const startedAt = Date.now();
+    const MAX_WAIT_MS = 60_000;
+    let latestResolvedAccountId: string | null = accountId && !accountId.startsWith("optimistic-") ? accountId : null;
 
     for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
@@ -1548,6 +1551,77 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
+          return;
+        }
+
+        if (Date.now() - startedAt >= MAX_WAIT_MS) {
+          const canFinalizePartial =
+            parsedRowsCount > 0 && Boolean(latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-")) &&
+            Boolean(processingIdentity?.accountName || processingIdentity?.institution || summaryContext.accountName || summaryContext.institution);
+
+          if (canFinalizePartial) {
+            const fallbackAccountId =
+              latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-")
+                ? latestResolvedAccountId
+                : await ensureTargetAccountId(
+                    processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName,
+                    processingIdentity?.institution ?? summaryContext.institution ?? null,
+                    processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+                    processingIdentity?.accountNumber ?? null
+                  );
+
+            const fallbackPreviewTransactions =
+              summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
+                ? summaryContext.previewTransactions
+                : await loadOptimisticPreviewTransactions(
+                    importFileId,
+                    fallbackAccountId,
+                    processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName,
+                    processingIdentity?.institution ?? summaryContext.institution ?? null
+                  ).catch(() => []);
+
+            const fallbackSummary = buildOptimisticUploadSummary(
+              summaryContext.fileName,
+              parsedRowsCount || 0,
+              fallbackAccountId,
+              processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName,
+              processingIdentity?.institution ?? summaryContext.institution ?? null,
+              processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+              summaryContext.optimisticAccountId,
+              toBalanceString(statementCheckpoint?.endingBalance),
+              fallbackPreviewTransactions
+            );
+
+            seedImportedWorkspaceCaches(workspaceId, fallbackSummary);
+            void onImported(fallbackSummary);
+            updateItem(itemId, {
+              status: "done",
+              confirmationState: "confirmed",
+              progress: 100,
+              progressLabel: "Done",
+              targetAccountId: fallbackAccountId,
+            });
+            publishImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "done",
+              fileName: summaryContext.fileName,
+              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount + 1,
+              progress: 100,
+              detail: "All set",
+              summary: fallbackSummary,
+              errorMessage: null,
+            });
+            return;
+          }
+
+          const timeoutMessage =
+            parsedRowsCount > 0
+              ? "Clover could read some rows, but couldn't finish assigning the statement. Add the account manually, then try again or add the missing rows in Transactions."
+              : "Timed out after 60 seconds while Clover was still reading the statement.";
+          closeImportAfterError(itemId, "monitor", summaryContext.fileName, timeoutMessage);
           return;
         }
 
@@ -1740,6 +1814,7 @@ export function ImportFilesModal({
           if (!resolvedAccountId) {
             throw new Error("Unable to determine the destination account for this statement.");
           }
+          latestResolvedAccountId = resolvedAccountId;
 
           const shouldWaitForDeferredConfirmation =
             confirmedTransactionsCount === 0 &&
