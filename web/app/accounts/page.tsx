@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CloverShell } from "@/components/clover-shell";
+import { CloverShell, useCloverChrome } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { InfoTooltip } from "@/components/info-tooltip";
@@ -644,6 +644,7 @@ export default function AccountsPage() {
 function AccountsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { closeChrome } = useCloverChrome();
   const addRef = useRef<HTMLDivElement>(null);
   const balanceInputRef = useRef<HTMLInputElement>(null);
   const workspaceLoadSeqRef = useRef(0);
@@ -1445,6 +1446,7 @@ function AccountsPageContent() {
   };
 
   const openAddAccount = () => {
+    closeChrome();
     if (planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
       showPlanLimitNudge({
         planTier,
@@ -1460,6 +1462,7 @@ function AccountsPageContent() {
   };
 
   const openImportFiles = (files: File[] | null = null) => {
+    closeChrome();
     if (planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
       showPlanLimitNudge({
         planTier,
@@ -1498,11 +1501,13 @@ function AccountsPageContent() {
     if (deletingAccountIdsSet.has(account.id)) {
       return;
     }
+    closeChrome();
     window.location.assign(getAccountPath(account));
   };
 
   const openFullAccountPage = () => {
     if (!selectedAccount) return;
+    closeChrome();
     window.location.assign(getAccountPath(selectedAccount));
   };
 
@@ -1511,6 +1516,7 @@ function AccountsPageContent() {
     if (deletingAccountIdsSet.has(account.id)) {
       return;
     }
+    closeChrome();
     window.location.assign(getAccountPath(account));
   };
 

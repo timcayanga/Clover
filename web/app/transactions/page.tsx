@@ -12,7 +12,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { useSearchParams } from "next/navigation";
-import { CloverShell } from "@/components/clover-shell";
+import { CloverShell, useCloverChrome } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
@@ -1270,6 +1270,7 @@ export default function TransactionsPage() {
 }
 
 function TransactionsPageContent() {
+  const { closeChrome } = useCloverChrome();
   const searchParams = useSearchParams();
   const urlSearchParams = useMemo(() => searchParams ?? new URLSearchParams(), [searchParams]);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -1868,6 +1869,7 @@ function TransactionsPageContent() {
   };
 
   const openAddMenu = () => {
+    closeChrome();
     setDownloadMenuOpen(false);
     setAddMenuOpen((current) => !current);
   };
@@ -1878,6 +1880,7 @@ function TransactionsPageContent() {
   };
 
   const openImportFiles = (files: File[] | null = null) => {
+    closeChrome();
     setPendingImportSummary(null);
     closeToolbarMenus();
     setImportSeedFiles(files && files.length > 0 ? files : null);
@@ -2391,6 +2394,7 @@ function TransactionsPageContent() {
   };
 
   const openManualAdd = async () => {
+    closeChrome();
     setAddMenuOpen(false);
 
     const activeWorkspaceId = selectedWorkspaceId || readTransactionsWorkspaceCache()?.selectedWorkspaceId || workspaces[0]?.id || null;

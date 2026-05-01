@@ -1,11 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { persistSelectedWorkspaceId, readSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches, clearLegacyWorkspaceCaches } from "@/lib/workspace-cache";
+
+type CloverChromeActions = {
+  closeChrome: () => void;
+};
+
+const CloverChromeContext = createContext<CloverChromeActions | null>(null);
+
+export const useCloverChrome = () => {
+  const context = useContext(CloverChromeContext);
+
+  if (!context) {
+    return {
+      closeChrome: () => {},
+    };
+  }
+
+  return context;
+};
 
 type CloverShellProps = {
   active:
@@ -439,6 +457,11 @@ export function CloverShell({
   const isProfileActive = active === "profile" || pathname?.startsWith("/profile");
   const isNotificationsActive = openMenu === "notifications";
   const isProfileMenuOpen = openMenu === "profile";
+  const closeChrome = () => {
+    setOpenMenu(null);
+    setIsSearchOpen(false);
+    setIsSidebarOpen(false);
+  };
 
   useEffect(() => {
     setIsSidebarOpen(false);
@@ -764,9 +787,7 @@ export function CloverShell({
 
   const notificationCount = notifications.length;
   const navigateTo = (href: string) => {
-    setOpenMenu(null);
-    setIsSearchOpen(false);
-    setIsSidebarOpen(false);
+    closeChrome();
     window.location.assign(href);
   };
 
@@ -781,7 +802,8 @@ export function CloverShell({
   };
 
   return (
-    <div className={`app-shell ${isSidebarOpen ? "is-sidebar-open" : ""}`} ref={shellRef}>
+    <CloverChromeContext.Provider value={{ closeChrome }}>
+      <div className={`app-shell ${isSidebarOpen ? "is-sidebar-open" : ""}`} ref={shellRef}>
       <div
         className="sidebar-backdrop"
         role="presentation"
@@ -1042,7 +1064,14 @@ export function CloverShell({
         </div>
       </aside>
 
-      <main className="content">
+      <main
+        className="content"
+        onClickCapture={() => {
+          if (isSidebarOpen) {
+            setIsSidebarOpen(false);
+          }
+        }}
+      >
         {!showTopbar ? (
           <div className="shell-compact-bar glass">
             <button
@@ -1104,6 +1133,7 @@ export function CloverShell({
 
         <div className="content-body">{children}</div>
       </main>
-    </div>
+      </div>
+    </CloverChromeContext.Provider>
   );
 }
