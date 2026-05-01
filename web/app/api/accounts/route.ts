@@ -1,9 +1,10 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { NextResponse } from "next/server";
 import { hasCompatibleTable, loadAccountRules, normalizeAccountRuleKey, upsertAccountRule } from "@/lib/data-engine";
-import { INVESTMENT_SUBTYPES, type InvestmentSubtype } from "@/lib/investments";
+import { INVESTMENT_SUBTYPES, isFixedIncomeInvestmentSubtype, type InvestmentSubtype } from "@/lib/investments";
 import { countNonCashAccounts } from "@/lib/plan-access";
 import { seedWorkspaceDefaults } from "@/lib/starter-data";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
@@ -113,6 +114,18 @@ const parseNullableDate = (value: unknown) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
+const parseNullableText = (value: unknown) => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const text = String(value).trim();
+  return text || null;
+};
+
+const getInvestmentSummaryField = (subtype: string | null) =>
+  isFixedIncomeInvestmentSubtype(subtype) ? "investmentPrincipal" : "investmentCostBasis";
+
 const normalizeInvestmentSubtype = (value: unknown): InvestmentSubtype | null => {
   const subtype = typeof value === "string" ? value.trim() : "";
   return INVESTMENT_SUBTYPES.includes(subtype as InvestmentSubtype) ? (subtype as InvestmentSubtype) : null;
@@ -210,6 +223,11 @@ export async function POST(request: Request) {
     const investmentMaturityDate = parseNullableDate(body?.investmentMaturityDate);
     const investmentInterestRate = parseNullableDecimal(body?.investmentInterestRate);
     const investmentMaturityValue = parseNullableDecimal(body?.investmentMaturityValue);
+    const investmentPurchaseDate = parseNullableDate(body?.investmentPurchaseDate);
+    const investmentDividendDate = parseNullableDate(body?.investmentDividendDate);
+    const investmentDividendAmount = parseNullableDecimal(body?.investmentDividendAmount);
+    const investmentPurchaseNote = parseNullableText(body?.investmentPurchaseNote);
+    const investmentDividendNote = parseNullableText(body?.investmentDividendNote);
     const balance = parseNullableDecimal(body?.balance);
 
     if (!workspaceId || !name) {
@@ -229,6 +247,73 @@ export async function POST(request: Request) {
       existingAccounts.find((account) => account.type === type && normalizeAccountRuleKey(account.name, account.institution) === candidateKey) ??
       existingAccounts.find((account) => account.type === type && account.name === name && account.institution === institution) ??
       null;
+    const hasInitialPurchaseHistory =
+      type === "investment" &&
+      investmentPurchaseDate !== null &&
+      (investmentCostBasis !== null || investmentPrincipal !== null);
+    const hasInitialDividend =
+      type === "investment" &&
+      investmentDividendDate !== null &&
+      investmentDividendAmount !== null;
+
+    const createInitialInvestmentHistory = async (
+      accountId: string,
+      accountSubtype: string | null,
+      adjustSummary: boolean
+    ) => {
+      if (type !== "investment") {
+        return;
+      }
+
+      await prisma.$transaction(async (tx) => {
+        if (hasInitialPurchaseHistory) {
+          const purchaseTotal = getInvestmentSummaryField(accountSubtype) === "investmentPrincipal" ? investmentPrincipal : investmentCostBasis;
+          if (purchaseTotal !== null) {
+            await tx.investmentPurchase.create({
+              data: {
+                accountId,
+                purchasedAt: investmentPurchaseDate ?? new Date(),
+                quantity: investmentQuantity,
+                totalCost: purchaseTotal,
+                currency: body?.currency ? String(body.currency).toUpperCase() : "PHP",
+                note: investmentPurchaseNote ?? investmentSymbol,
+              },
+            });
+
+            if (adjustSummary) {
+              const summaryField = getInvestmentSummaryField(accountSubtype);
+              const currentSummary = Number(
+                summaryField === "investmentPrincipal"
+                  ? (existingAccount?.investmentPrincipal?.toString() ?? 0)
+                  : (existingAccount?.investmentCostBasis?.toString() ?? 0)
+              );
+              const nextSummary = new Prisma.Decimal(currentSummary).plus(new Prisma.Decimal(purchaseTotal));
+
+              await tx.account.update({
+                where: { id: accountId },
+                data:
+                  summaryField === "investmentPrincipal"
+                    ? { investmentPrincipal: nextSummary.toString() }
+                    : { investmentCostBasis: nextSummary.toString() },
+              });
+            }
+          }
+        }
+
+        if (hasInitialDividend) {
+          await tx.investmentDividend.create({
+            data: {
+              accountId,
+              paidAt: investmentDividendDate ?? new Date(),
+              amount: investmentDividendAmount,
+              currency: body?.currency ? String(body.currency).toUpperCase() : "PHP",
+              note: investmentDividendNote,
+            },
+          });
+        }
+      });
+    };
+
     if (existingAccount) {
       if (compatibleColumns.has("accountNumber") && accountNumber && (existingAccount.accountNumber ?? null) !== accountNumber) {
         const accountUpdate = (data: Record<string, unknown>) =>
@@ -253,12 +338,31 @@ export async function POST(request: Request) {
               : await accountUpdate(fallbackData);
         }
 
+        await createInitialInvestmentHistory(updatedAccount.id, updatedAccount.investmentSubtype, true);
+
+        const refreshedAccount = hasInitialPurchaseHistory
+          ? await prisma.account.findUnique({
+              where: { id: updatedAccount.id },
+              select: getCompatibleAccountSelect(compatibleColumns),
+            })
+          : updatedAccount;
+
         return NextResponse.json({
-          account: serializeAccount(updatedAccount),
+          account: serializeAccount(refreshedAccount ?? updatedAccount),
         });
       }
+
+      await createInitialInvestmentHistory(existingAccount.id, existingAccount.investmentSubtype, true);
+
+      const refreshedAccount = hasInitialPurchaseHistory
+        ? await prisma.account.findUnique({
+            where: { id: existingAccount.id },
+            select: getCompatibleAccountSelect(compatibleColumns),
+          })
+        : existingAccount;
+
       return NextResponse.json({
-        account: serializeAccount(existingAccount),
+        account: serializeAccount(refreshedAccount ?? existingAccount),
       });
     }
 
@@ -319,6 +423,8 @@ export async function POST(request: Request) {
         select: getCompatibleAccountSelect(compatibleColumns),
       });
     }
+
+    await createInitialInvestmentHistory(account.id, account.investmentSubtype, false);
 
     void capturePostHogServerEvent("account_created", userId, {
       workspace_id: workspaceId,

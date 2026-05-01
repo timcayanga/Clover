@@ -9206,9 +9206,7 @@ body[data-clover-page-modal] .sidebar-backdrop {
 }
 
 .transactions-mobile-card--warning {
-  background:
-    linear-gradient(180deg, rgba(245, 158, 11, 0.07), rgba(255, 255, 255, 0.96)),
-    rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .transactions-mobile-card.is-muted {
@@ -9335,7 +9333,7 @@ body[data-clover-page-modal] .sidebar-backdrop {
   border-bottom: 1px solid rgba(215, 228, 233, 0.82);
   font-size: 0.88rem;
   position: relative;
-  border-radius: 18px;
+  border-radius: 0;
   transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
@@ -9368,12 +9366,7 @@ body[data-clover-page-modal] .sidebar-backdrop {
 }
 
 .line-item--warning {
-  background: rgba(245, 158, 11, 0.05);
-}
-
-.line-item--warning:hover,
-.line-item--warning:focus-visible {
-  background: rgba(245, 158, 11, 0.08);
+  background: rgba(255, 255, 255, 0.92);
 }
 
 .line-item--clear {
@@ -9386,6 +9379,59 @@ body[data-clover-page-modal] .sidebar-backdrop {
 
 .line-item.is-selected.line-item--manual {
   box-shadow: inset 3px 0 0 rgba(34, 197, 94, 0.28), inset 0 0 0 1px rgba(3, 168, 192, 0.14);
+}
+
+.transaction-warning-wrap {
+  position: relative;
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+.transaction-warning-popover {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 10;
+  display: grid;
+  gap: 10px;
+  min-width: 220px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition:
+    opacity 160ms ease,
+    transform 160ms ease;
+}
+
+.transaction-warning-wrap:hover .transaction-warning-popover,
+.transaction-warning-wrap:focus-within .transaction-warning-popover,
+.transaction-warning-wrap.is-open .transaction-warning-popover {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.transaction-warning-popover__reason {
+  margin: 0;
+  color: #92400e;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.transaction-warning-popover__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.transaction-warning-popover__actions .button {
+  min-height: 28px;
 }
 
 .transaction-select-cell {
@@ -9952,19 +9998,19 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: stretch;
   justify-content: flex-end;
   padding: 0;
-  background: rgba(9, 15, 20, 0.12);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .transaction-drawer--sidepanel {
-  width: min(560px, 100vw);
+  width: min(480px, 100vw);
   height: 100dvh;
   max-height: none;
   margin-left: auto;
-  border-radius: 28px 0 0 28px;
+  border-radius: 24px 0 0 24px;
   border-right: 0;
-  box-shadow: -24px 0 44px rgba(31, 41, 51, 0.18);
+  box-shadow: -18px 0 36px rgba(31, 41, 51, 0.16);
   overflow: auto;
 }
 
@@ -10000,6 +10046,16 @@ input.transaction-inline-edit--amount::placeholder {
   margin-top: 14px;
 }
 
+.transaction-drawer-form--single {
+  display: grid;
+  gap: 12px;
+}
+
+.transaction-drawer-form--single > label {
+  display: grid;
+  gap: 6px;
+}
+
 .transaction-drawer-form__primary-row,
 .transaction-drawer-form__secondary-row {
   gap: 12px;
@@ -10017,6 +10073,55 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.transaction-drawer-field-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.transaction-drawer-select {
+  position: relative;
+}
+
+.transaction-drawer-select select {
+  width: 100%;
+  padding-left: 42px;
+}
+
+.transaction-drawer-select__icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.transaction-drawer-select__icon .accounts-brand-mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+}
+
+.transaction-drawer-select__icon .accounts-brand-mark__logo,
+.transaction-drawer-select__icon .accounts-brand-mark__fallback,
+.transaction-drawer-select__icon .accounts-brand-mark__logo-fallback {
+  width: 13px;
+  height: 13px;
+}
+
+.transaction-drawer-select__icon .transaction-drawer-category-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.transaction-drawer-select__icon .transaction-drawer-category-icon img {
+  width: 13px;
+  height: 13px;
 }
 
 .transaction-drawer-category-icon {
@@ -10041,8 +10146,12 @@ input.transaction-inline-edit--amount::placeholder {
 
 .detail-warning-box--compact {
   margin-top: 10px;
-  padding: 12px 14px;
-  gap: 10px;
+  padding: 10px 12px;
+  gap: 8px;
+}
+
+.transaction-drawer-warning {
+  margin-top: 2px;
 }
 
 .detail-warning-box__reason {
@@ -10055,6 +10164,10 @@ input.transaction-inline-edit--amount::placeholder {
 
 .detail-warning-actions--compact {
   justify-content: flex-start;
+}
+
+.detail-warning-actions--compact .button {
+  min-height: 28px;
 }
 
 .transaction-drawer-grid {
@@ -11385,6 +11498,56 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-bulk-toggle-group {
   grid-column: span 2;
+}
+
+.transactions-selection-menu {
+  position: relative;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+}
+
+.transactions-selection-menu__toggle {
+  justify-content: center;
+}
+
+.transactions-selection-menu__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 12;
+  display: grid;
+  gap: 4px;
+  min-width: 150px;
+  padding: 6px;
+  border-radius: 14px;
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: var(--shadow-soft);
+}
+
+.transactions-selection-menu__item {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.transactions-selection-menu__item:hover,
+.transactions-selection-menu__item:focus-visible {
+  background: rgba(3, 168, 192, 0.08);
+  outline: none;
+}
+
+.transactions-selection-menu__item--danger {
+  color: #b91c1c;
 }
 
 .transactions-bulk-toggle-group__label {
@@ -14022,6 +14185,20 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 12px;
 }
 
+.accounts-manual-form__optional-block {
+  display: grid;
+  gap: 10px;
+  grid-column: 1 / -1;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  background: rgba(3, 168, 192, 0.05);
+}
+
+.accounts-manual-form__optional-block .eyebrow {
+  margin-bottom: -2px;
+}
+
 .accounts-manual-form button {
   justify-self: start;
 }
@@ -14059,6 +14236,73 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+
+.accounts-detail__autosave-state {
+  align-self: start;
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+}
+
+.accounts-detail__history-stack {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 14px;
+}
+
+.accounts-detail__history-section {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--stroke);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.accounts-detail__history-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.accounts-detail__history-form label {
+  min-width: 0;
+}
+
+.accounts-detail__history-form-note {
+  grid-column: span 2;
+}
+
+.accounts-detail__history-table {
+  display: grid;
+  gap: 8px;
+}
+
+.accounts-detail__history-row {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr 1fr 0.8fr 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid rgba(203, 213, 225, 0.72);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.accounts-detail__history-row--header {
+  border-style: none;
+  background: transparent;
+  color: var(--muted-2);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  padding: 0 12px;
+}
+
+.accounts-detail__history-row--header div {
+  font-weight: 600;
 }
 
 .accounts-detail__investment-grid {
@@ -19001,6 +19245,30 @@ input.transaction-inline-edit--amount::placeholder {
 
   .accounts-detail__investment-grid {
     grid-template-columns: 1fr;
+  }
+
+  .accounts-detail__investment-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .accounts-detail__history-stack {
+    grid-template-columns: 1fr;
+  }
+
+  .accounts-detail__history-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .accounts-detail__history-form-note {
+    grid-column: span 2;
+  }
+
+  .accounts-detail__history-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .accounts-detail__history-row--header {
+    display: none;
   }
 
   .transactions-topbar {

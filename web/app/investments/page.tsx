@@ -26,6 +26,8 @@ import {
   markDeletedWorkspaceAccount,
 } from "@/lib/workspace-cache";
 import {
+  canTrackInvestmentDividends,
+  canTrackInvestmentPurchaseHistory,
   getInvestmentFieldConfigs,
   getInvestmentSubtypeDescription,
   getInvestmentSubtypeLabel,
@@ -336,6 +338,9 @@ export default function InvestmentsPage() {
   const [manualInvestmentMaturityDate, setManualInvestmentMaturityDate] = useState("");
   const [manualInvestmentInterestRate, setManualInvestmentInterestRate] = useState("");
   const [manualInvestmentMaturityValue, setManualInvestmentMaturityValue] = useState("");
+  const [manualPurchaseDate, setManualPurchaseDate] = useState("");
+  const [manualDividendDate, setManualDividendDate] = useState("");
+  const [manualDividendAmount, setManualDividendAmount] = useState("");
   const [manualBalance, setManualBalance] = useState("");
   const [manualCurrency, setManualCurrency] = useState("PHP");
   const selectedTab = requestedTab;
@@ -612,6 +617,8 @@ export default function InvestmentsPage() {
     () => getInvestmentFieldConfigs(manualInvestmentSubtype),
     [manualInvestmentSubtype]
   );
+  const manualCanTrackPurchases = canTrackInvestmentPurchaseHistory(manualInvestmentSubtype);
+  const manualCanTrackDividends = canTrackInvestmentDividends(manualInvestmentSubtype);
 
   const portfolioCurrencyOptions = useMemo(() => {
     const currencies = getCurrencyCodes(investmentAccounts);
@@ -817,6 +824,11 @@ export default function InvestmentsPage() {
           investmentMaturityDate: manualIsFixedIncome ? parseNullableDateInput(manualInvestmentMaturityDate) : null,
           investmentInterestRate: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentInterestRate) : null,
           investmentMaturityValue: manualIsFixedIncome ? parseNullableNumberInput(manualInvestmentMaturityValue) : null,
+          investmentPurchaseDate: manualCanTrackPurchases && manualPurchaseDate ? manualPurchaseDate : null,
+          investmentPurchaseNote: null,
+          investmentDividendDate: manualCanTrackDividends && manualDividendDate ? manualDividendDate : null,
+          investmentDividendAmount: manualCanTrackDividends ? parseNullableNumberInput(manualDividendAmount) : null,
+          investmentDividendNote: null,
           type: "investment",
           currency: manualCurrency.trim().toUpperCase() || "PHP",
           source: "manual",
@@ -844,6 +856,9 @@ export default function InvestmentsPage() {
       setManualInvestmentMaturityDate("");
       setManualInvestmentInterestRate("");
       setManualInvestmentMaturityValue("");
+      setManualPurchaseDate("");
+      setManualDividendDate("");
+      setManualDividendAmount("");
       setManualBalance("");
       setManualCurrency("PHP");
       setAddOpen(false);
@@ -1581,7 +1596,7 @@ export default function InvestmentsPage() {
                     autoCapitalize="characters"
                     spellCheck={false}
                   />
-                  <span className="field-help">Use the currency the holding is valued in. For crypto, this is usually PHP or USD, not the token code.</span>
+                  <span className="field-help">Use a fiat currency such as PHP or USD. Keep BTC, USDT, and similar codes in the asset field above.</span>
                 </label>
 
                 {manualInvestmentSubtype ? (
@@ -1618,13 +1633,40 @@ export default function InvestmentsPage() {
                             type={field.type}
                           />
                           {field.key === "investmentCostBasis" ? (
-                            <span className="field-help">
-                              Enter the total purchase value for this holding. If you bought the same asset at different times, use the combined total or create separate lots.
-                            </span>
-                          ) : null}
+                          <span className="field-help">
+                            Enter the total purchase value for this holding. If you bought the same asset at different times, use the combined total or create separate lots.
+                          </span>
+                        ) : null}
+                      </label>
+                    );
+                  })}
+                    {manualCanTrackPurchases ? (
+                      <div className="accounts-manual-form__optional-block">
+                        <p className="eyebrow">Purchase history</p>
+                        <label>
+                          Purchase date
+                          <input type="date" value={manualPurchaseDate} onChange={(event) => setManualPurchaseDate(event.target.value)} />
                         </label>
-                      );
-                    })}
+                      </div>
+                    ) : null}
+                    {manualCanTrackDividends ? (
+                      <div className="accounts-manual-form__optional-block">
+                        <p className="eyebrow">Dividends</p>
+                        <label>
+                          Dividend date
+                          <input type="date" value={manualDividendDate} onChange={(event) => setManualDividendDate(event.target.value)} />
+                        </label>
+                        <label>
+                          Dividend amount
+                          <input
+                            value={manualDividendAmount}
+                            onChange={(event) => setManualDividendAmount(event.target.value)}
+                            inputMode="decimal"
+                            placeholder="0.00"
+                          />
+                        </label>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 

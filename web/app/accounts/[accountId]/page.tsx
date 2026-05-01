@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
@@ -30,6 +30,8 @@ import {
 } from "@/lib/workspace-cache";
 import {
   getInvestmentFieldConfigs,
+  canTrackInvestmentDividends,
+  canTrackInvestmentPurchaseHistory,
   getInvestmentSubtypeLabel,
   type InvestmentSubtype,
   isFixedIncomeInvestmentSubtype,
@@ -118,6 +120,29 @@ type InvestmentEditDraft = {
   investmentInterestRate: string;
   investmentMaturityValue: string;
   balance: string;
+};
+
+type InvestmentPurchase = {
+  id: string;
+  accountId: string;
+  purchasedAt: string;
+  quantity: string | null;
+  totalCost: string | null;
+  currency: string;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type InvestmentDividend = {
+  id: string;
+  accountId: string;
+  paidAt: string;
+  amount: string | null;
+  currency: string;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 const TRANSACTION_PAGE_SIZE = 25;
@@ -363,10 +388,32 @@ function AccountDetailPageContent() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [transactionDeleteTarget, setTransactionDeleteTarget] = useState<Transaction | null>(null);
   const [transactionDeleteBusy, setTransactionDeleteBusy] = useState(false);
-  const [investmentEditOpen, setInvestmentEditOpen] = useState(false);
   const [investmentEditDraft, setInvestmentEditDraft] = useState<InvestmentEditDraft | null>(null);
-  const [investmentEditBusy, setInvestmentEditBusy] = useState(false);
+  const [investmentAutosaveState, setInvestmentAutosaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [investmentPurchases, setInvestmentPurchases] = useState<InvestmentPurchase[]>([]);
+  const [investmentDividends, setInvestmentDividends] = useState<InvestmentDividend[]>([]);
+  const [purchaseDraft, setPurchaseDraft] = useState({
+    purchasedAt: "",
+    quantity: "",
+    totalCost: "",
+    currency: "PHP",
+    note: "",
+  });
+  const [dividendDraft, setDividendDraft] = useState({
+    paidAt: "",
+    amount: "",
+    currency: "PHP",
+    note: "",
+  });
+  const [purchaseBusy, setPurchaseBusy] = useState(false);
+  const [dividendBusy, setDividendBusy] = useState(false);
+  const [purchaseDeleteBusy, setPurchaseDeleteBusy] = useState<string | null>(null);
+  const [dividendDeleteBusy, setDividendDeleteBusy] = useState<string | null>(null);
   const [hasInitialDataLoaded, setHasInitialDataLoaded] = useState(false);
+
+  useEffect(() => {
+    document.title = account?.type === "investment" ? "Clover | Asset Details" : "Clover | Account";
+  }, [account?.type]);
 
   useEffect(() => {
     let cancelled = false;
@@ -468,6 +515,47 @@ function AccountDetailPageContent() {
               } as Account)
             : nextAccount;
         setAccount(mergedAccount);
+        if (mergedAccount.type === "investment") {
+          void Promise.all([
+            fetch(`/api/accounts/${mergedAccount.id}/investment-purchases`),
+            fetch(`/api/accounts/${mergedAccount.id}/investment-dividends`),
+          ])
+            .then(async ([purchaseResponse, dividendResponse]) => {
+              if (!cancelled) {
+                if (purchaseResponse.ok) {
+                  const purchasePayload = (await purchaseResponse.json()) as { purchases?: InvestmentPurchase[] } | null;
+                  setInvestmentPurchases(Array.isArray(purchasePayload?.purchases) ? purchasePayload.purchases : []);
+                } else {
+                  setInvestmentPurchases([]);
+                }
+
+                if (dividendResponse.ok) {
+                  const dividendPayload = (await dividendResponse.json()) as { dividends?: InvestmentDividend[] } | null;
+                  setInvestmentDividends(Array.isArray(dividendPayload?.dividends) ? dividendPayload.dividends : []);
+                } else {
+                  setInvestmentDividends([]);
+                }
+
+                setPurchaseDraft((current) => ({
+                  ...current,
+                  currency: mergedAccount.currency ?? "PHP",
+                }));
+                setDividendDraft((current) => ({
+                  ...current,
+                  currency: mergedAccount.currency ?? "PHP",
+                }));
+              }
+            })
+            .catch(() => {
+              if (!cancelled) {
+                setInvestmentPurchases([]);
+                setInvestmentDividends([]);
+              }
+            });
+        } else {
+          setInvestmentPurchases([]);
+          setInvestmentDividends([]);
+        }
         const canonicalPath = getAccountPath(mergedAccount);
         if (!cancelled && canonicalPath !== `/accounts/${accountPathSegment}`) {
           router.replace(canonicalPath);
@@ -612,15 +700,48 @@ function AccountDetailPageContent() {
   const investmentMaturityValue = useMemo(() => parseNullableNumber(account?.investmentMaturityValue), [account?.investmentMaturityValue]);
   const investmentStartDate = account?.investmentStartDate ?? null;
   const investmentMaturityDate = account?.investmentMaturityDate ?? null;
-  const investmentFieldConfigs = useMemo(() => getInvestmentFieldConfigs(investmentSubtype), [investmentSubtype]);
   const investmentEditingFieldConfigs = useMemo(
     () => getInvestmentFieldConfigs(investmentEditDraft?.investmentSubtype ?? investmentSubtype),
     [investmentEditDraft?.investmentSubtype, investmentSubtype]
   );
   const investmentPurchaseValue = useMemo(
-    () => investmentCostBasis ?? (isFixedIncomeInvestmentSubtype(investmentSubtype) ? investmentPrincipal : null),
-    [investmentCostBasis, investmentPrincipal, investmentSubtype]
+    () => {
+      if (investmentPurchases.length > 0) {
+        return investmentPurchases.reduce((sum, purchase) => sum + parseAmount(purchase.totalCost), 0);
+      }
+
+      return investmentCostBasis ?? (isFixedIncomeInvestmentSubtype(investmentSubtype) ? investmentPrincipal : null);
+    },
+    [investmentCostBasis, investmentPrincipal, investmentPurchases, investmentSubtype]
   );
+  const investmentDividendTotal = useMemo(
+    () => investmentDividends.reduce((sum, dividend) => sum + parseAmount(dividend.amount), 0),
+    [investmentDividends]
+  );
+  const canShowInvestmentPurchases = account?.type === "investment" || canTrackInvestmentPurchaseHistory(investmentSubtype);
+  const canShowInvestmentDividends = canTrackInvestmentDividends(investmentSubtype);
+
+  useEffect(() => {
+    if (account?.type !== "investment") {
+      setInvestmentEditDraft(null);
+      return;
+    }
+
+    setInvestmentEditDraft(serializeInvestmentEditDraft(account));
+  }, [account]);
+
+  useEffect(() => {
+    if (account?.type === "investment") {
+      setPurchaseDraft((current) => ({
+        ...current,
+        currency: account.currency ?? current.currency ?? "PHP",
+      }));
+      setDividendDraft((current) => ({
+        ...current,
+        currency: account.currency ?? current.currency ?? "PHP",
+      }));
+    }
+  }, [account?.currency, account?.type]);
 
   const importSummaries = useMemo(
     () => buildImportSummaries(transactions, importFiles),
@@ -830,34 +951,199 @@ function AccountDetailPageContent() {
     }
   };
 
-  const beginInvestmentEditing = () => {
+  const updateInvestmentSummaryFromPurchase = (totalCost: string, direction: "add" | "subtract") => {
+    const delta = Number(totalCost);
+    if (!Number.isFinite(delta)) {
+      return;
+    }
+
+    setAccount((current) => {
+      if (!current || current.type !== "investment") {
+        return current;
+      }
+
+      const summaryField = isFixedIncomeInvestmentSubtype(current.investmentSubtype) ? "investmentPrincipal" : "investmentCostBasis";
+      const currentValue = Number(summaryField === "investmentPrincipal" ? current.investmentPrincipal ?? 0 : current.investmentCostBasis ?? 0);
+      const nextValue = Math.max(0, direction === "add" ? currentValue + delta : currentValue - delta);
+
+      return summaryField === "investmentPrincipal"
+        ? { ...current, investmentPrincipal: nextValue.toString() }
+        : { ...current, investmentCostBasis: nextValue.toString() };
+    });
+  };
+
+  const createInvestmentPurchase = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (!account || account.type !== "investment") {
       return;
     }
 
-    setInvestmentEditDraft(serializeInvestmentEditDraft(account));
-    setInvestmentEditOpen(true);
+    if (!purchaseDraft.purchasedAt || !purchaseDraft.totalCost) {
+      setMessage("Purchase date and total cost are required.");
+      return;
+    }
+
+    setPurchaseBusy(true);
+    try {
+      const response = await fetch(`/api/accounts/${account.id}/investment-purchases`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          purchasedAt: purchaseDraft.purchasedAt,
+          quantity: purchaseDraft.quantity || null,
+          totalCost: purchaseDraft.totalCost,
+          currency: purchaseDraft.currency || account.currency,
+          note: purchaseDraft.note || null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to add purchase.");
+      }
+
+      const payload = (await response.json()) as { purchase?: InvestmentPurchase } | null;
+      if (payload?.purchase) {
+        setInvestmentPurchases((current) => [payload.purchase as InvestmentPurchase, ...current]);
+        updateInvestmentSummaryFromPurchase(String(payload.purchase.totalCost ?? purchaseDraft.totalCost), "add");
+      }
+
+      setPurchaseDraft({
+        purchasedAt: "",
+        quantity: "",
+        totalCost: "",
+        currency: account.currency,
+        note: "",
+      });
+      setMessage("Purchase added.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to add purchase.");
+    } finally {
+      setPurchaseBusy(false);
+    }
   };
 
-  const cancelInvestmentEditing = () => {
-    setInvestmentEditOpen(false);
-    setInvestmentEditDraft(null);
+  const deleteInvestmentPurchase = async (purchase: InvestmentPurchase) => {
+    if (!account) {
+      return;
+    }
+
+    setPurchaseDeleteBusy(purchase.id);
+    try {
+      const response = await fetch(`/api/accounts/${account.id}/investment-purchases/${purchase.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to delete purchase.");
+      }
+
+      setInvestmentPurchases((current) => current.filter((entry) => entry.id !== purchase.id));
+      updateInvestmentSummaryFromPurchase(String(purchase.totalCost ?? 0), "subtract");
+      setMessage("Purchase deleted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete purchase.");
+    } finally {
+      setPurchaseDeleteBusy(null);
+    }
+  };
+
+  const createInvestmentDividend = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!account || account.type !== "investment") {
+      return;
+    }
+
+    if (!dividendDraft.paidAt || !dividendDraft.amount) {
+      setMessage("Dividend date and amount are required.");
+      return;
+    }
+
+    setDividendBusy(true);
+    try {
+      const response = await fetch(`/api/accounts/${account.id}/investment-dividends`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          paidAt: dividendDraft.paidAt,
+          amount: dividendDraft.amount,
+          currency: dividendDraft.currency || account.currency,
+          note: dividendDraft.note || null,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to add dividend.");
+      }
+
+      const payload = (await response.json()) as { dividend?: InvestmentDividend } | null;
+      if (payload?.dividend) {
+        setInvestmentDividends((current) => [payload.dividend as InvestmentDividend, ...current]);
+      }
+
+      setDividendDraft({
+        paidAt: "",
+        amount: "",
+        currency: account.currency,
+        note: "",
+      });
+      setMessage("Dividend added.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to add dividend.");
+    } finally {
+      setDividendBusy(false);
+    }
+  };
+
+  const deleteInvestmentDividend = async (dividend: InvestmentDividend) => {
+    if (!account) {
+      return;
+    }
+
+    setDividendDeleteBusy(dividend.id);
+    try {
+      const response = await fetch(`/api/accounts/${account.id}/investment-dividends/${dividend.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to delete dividend.");
+      }
+
+      setInvestmentDividends((current) => current.filter((entry) => entry.id !== dividend.id));
+      setMessage("Dividend deleted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to delete dividend.");
+    } finally {
+      setDividendDeleteBusy(null);
+    }
   };
 
   const updateInvestmentEditDraft = (key: keyof InvestmentEditDraft, value: string) => {
     setInvestmentEditDraft((current) => (current ? { ...current, [key]: value } : current));
   };
 
-  const saveInvestmentEditing = async () => {
-    if (!account || !investmentEditDraft) {
+  useEffect(() => {
+    if (!account || account.type !== "investment" || !investmentEditDraft) {
+      setInvestmentAutosaveState("idle");
       return;
     }
 
-    setInvestmentEditBusy(true);
-    try {
+    const currentSnapshot = serializeInvestmentEditDraft(account);
+    const hasChanges = Object.keys(currentSnapshot).some((key) => {
+      const draftKey = key as keyof InvestmentEditDraft;
+      return investmentEditDraft[draftKey] !== currentSnapshot[draftKey];
+    });
+
+    if (!hasChanges) {
+      setInvestmentAutosaveState("idle");
+      return;
+    }
+
+    setInvestmentAutosaveState("saving");
+    const timeout = window.setTimeout(() => {
       const isMarket = isMarketInvestmentSubtype(investmentEditDraft.investmentSubtype);
       const isFixedIncome = isFixedIncomeInvestmentSubtype(investmentEditDraft.investmentSubtype);
-      const response = await fetch(`/api/accounts/${account.id}`, {
+      void fetch(`/api/accounts/${account.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -881,25 +1167,27 @@ function AccountDetailPageContent() {
           source: account.source,
           balance: parseNullableNumber(investmentEditDraft.balance),
         }),
-      });
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error("Unable to update asset.");
+          }
 
-      if (!response.ok) {
-        throw new Error("Unable to update investment.");
-      }
+          const payload = await response.json();
+          if (payload.account) {
+            setAccount(payload.account as Account);
+          }
 
-      const payload = await response.json();
-      if (payload.account) {
-        setAccount(payload.account as Account);
-      }
+          setInvestmentAutosaveState("saved");
+        })
+        .catch((error) => {
+          setInvestmentAutosaveState("error");
+          setMessage(error instanceof Error ? error.message : "Unable to update asset.");
+        });
+    }, 450);
 
-      cancelInvestmentEditing();
-      setMessage("Investment updated.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to update investment.");
-    } finally {
-      setInvestmentEditBusy(false);
-    }
-  };
+    return () => window.clearTimeout(timeout);
+  }, [account, investmentEditDraft]);
 
   const openTransactionsPage = () => {
     if (!account) {
@@ -959,8 +1247,12 @@ function AccountDetailPageContent() {
     <CloverShell
       active="accounts"
       title={account?.name ?? "Account"}
-      kicker="Account history"
-      subtitle="View the full statement history for a single account."
+      kicker={account?.type === "investment" ? "Asset history" : "Account history"}
+      subtitle={
+        account?.type === "investment"
+          ? "View the full history for a single investment asset."
+          : "View the full statement history for a single account."
+      }
       hideCompactBarKickerAndSubtitleOnMobile
       showTopbar={false}
     >
@@ -969,7 +1261,7 @@ function AccountDetailPageContent() {
           <div className="accounts-detail__headline">
             {account ? <AccountBrandMark accountBrand={accountBrand} label={account.name} /> : null}
             <div>
-              <p className="eyebrow">Account details</p>
+              <p className="eyebrow">{account?.type === "investment" ? "Asset details" : "Account details"}</p>
               <h2>
                 {account?.name ?? "Account"}
               </h2>
@@ -1027,29 +1319,19 @@ function AccountDetailPageContent() {
           <div className="accounts-detail__investment glass" style={{ marginTop: 20 }}>
             <div className="accounts-detail__reconciliation-head">
               <div>
-                <p className="eyebrow">Investment details</p>
-                <h3>Holdings snapshot</h3>
+                <p className="eyebrow">Asset details</p>
+                <h3>Portfolio snapshot</h3>
               </div>
               <div className="accounts-detail__transactions-actions">
-                {investmentEditOpen ? (
-                  <>
-                    <button className="button button-primary button-small" type="button" onClick={() => void saveInvestmentEditing()} disabled={investmentEditBusy}>
-                      {investmentEditBusy ? "Saving..." : "Save changes"}
-                    </button>
-                    <button className="button button-secondary button-small" type="button" onClick={cancelInvestmentEditing} disabled={investmentEditBusy}>
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button className="button button-secondary button-small" type="button" onClick={beginInvestmentEditing}>
-                      Edit investment
-                    </button>
-                    <button className="button button-danger button-small" type="button" onClick={() => setDeleteConfirmOpen(true)}>
-                      Delete investment
-                    </button>
-                  </>
-                )}
+                <span className="accounts-detail__autosave-state">
+                  {investmentAutosaveState === "saving"
+                    ? "Saving..."
+                    : investmentAutosaveState === "saved"
+                      ? "Saved"
+                      : investmentAutosaveState === "error"
+                        ? "Needs attention"
+                        : "Autosaves as you edit"}
+                </span>
               </div>
             </div>
             <div className="accounts-detail__investment-summary">
@@ -1066,11 +1348,16 @@ function AccountDetailPageContent() {
                 <strong>{investmentPurchaseValue === null ? "Not set" : formatAccountAmount(investmentPurchaseValue, account.currency)}</strong>
               </div>
               <div className="status-card">
-                <div className="panel-muted">Holding note</div>
-                <strong>{account.institution ?? accountBrand.label}</strong>
+                <div className="panel-muted">Dividends</div>
+                <strong>{formatAccountAmount(investmentDividendTotal, account.currency)}</strong>
+              </div>
+              <div className="status-card">
+                <div className="panel-muted">Gain / loss</div>
+                <strong>{investmentGainLoss === null ? "Not set" : formatAccountAmount(investmentGainLoss, account.currency)}</strong>
               </div>
             </div>
-            {investmentEditOpen && investmentEditDraft ? (
+
+            {investmentEditDraft ? (
               <div className="accounts-inline-edit" style={{ marginTop: 16 }}>
                 <div className="accounts-inline-edit__grid">
                   <label>
@@ -1106,11 +1393,7 @@ function AccountDetailPageContent() {
                   </label>
                   <label>
                     Current value / balance
-                    <input
-                      value={investmentEditDraft.balance}
-                      onChange={(event) => updateInvestmentEditDraft("balance", event.target.value)}
-                      inputMode="decimal"
-                    />
+                    <input value={investmentEditDraft.balance} onChange={(event) => updateInvestmentEditDraft("balance", event.target.value)} inputMode="decimal" />
                   </label>
                   {investmentEditingFieldConfigs.map((field) => (
                     <label key={field.key}>
@@ -1149,91 +1432,177 @@ function AccountDetailPageContent() {
                   ))}
                 </div>
               </div>
-            ) : (
-              <div className="accounts-detail__investment-grid">
-                {investmentFieldConfigs.map((field) => {
-                  const value =
-                    field.key === "investmentSymbol"
-                      ? investmentSymbol
-                      : field.key === "investmentQuantity"
-                        ? investmentQuantity === null
-                          ? null
-                          : String(investmentQuantity)
-                        : field.key === "investmentCostBasis"
-                          ? investmentCostBasis === null
-                            ? null
-                            : String(investmentCostBasis)
-                          : field.key === "investmentPrincipal"
-                            ? investmentPrincipal === null
-                              ? null
-                              : String(investmentPrincipal)
-                              : field.key === "investmentStartDate"
-                                ? investmentStartDate
-                                : field.key === "investmentMaturityDate"
-                                  ? investmentMaturityDate
-                                  : field.key === "investmentInterestRate"
-                                    ? investmentInterestRate === null
-                                      ? null
-                                      : String(investmentInterestRate)
-                                    : field.key === "investmentMaturityValue"
-                                      ? investmentMaturityValue === null
-                                        ? null
-                                        : String(investmentMaturityValue)
-                                      : null;
+            ) : null}
 
-                  return (
-                    <div className="status-card" key={field.key}>
-                      <div className="panel-muted">{field.label}</div>
-                      <strong>
-                        {field.type === "date"
-                          ? formatNullableDate(value)
-                          : value === null
-                            ? "Not set"
-                            : field.key === "investmentSymbol"
-                              ? value
-                              : field.key === "investmentQuantity"
-                                ? value
-                                : field.key === "investmentInterestRate"
-                                  ? `${value}%`
-                                  : formatAccountAmount(Number(value), account.currency)}
-                      </strong>
-                      <span>
-                        {field.key === "investmentSymbol"
-                          ? "Identifier for the holding"
-                          : field.key === "investmentQuantity"
-                            ? "Quantity or units owned"
-                            : field.key === "investmentCostBasis"
-                              ? "Historical purchase value"
-                              : field.key === "investmentPrincipal"
-                                ? "Initial principal"
-                                : field.key === "investmentStartDate"
-                                  ? "When the holding began"
-                                  : field.key === "investmentMaturityDate"
-                                    ? "When the holding matures"
-                                    : field.key === "investmentInterestRate"
-                                      ? "Rate for this product"
-                                      : field.key === "investmentMaturityValue"
-                                        ? "Expected maturity value"
-                                        : "Investment detail"}
-                      </span>
-                    </div>
-                  );
-                })}
-                <div className="status-card">
-                  <div className="panel-muted">Unrealized gain / loss</div>
-                  <strong>
-                    {investmentGainLoss === null ? "Not set" : formatAccountAmount(investmentGainLoss, account.currency)}
-                  </strong>
-                  <span>
-                    {investmentGainLoss === null
-                      ? "Add a purchase value to compare performance."
-                      : investmentGainLoss >= 0
-                        ? "Above purchase value"
-                        : "Below purchase value"}
-                  </span>
+            {canShowInvestmentPurchases ? (
+              <div className="accounts-detail__history-stack" style={{ marginTop: 20 }}>
+              <section className="accounts-detail__history-section glass">
+                <div className="accounts-detail__reconciliation-head">
+                  <div>
+                    <p className="eyebrow">Purchases</p>
+                    <h4>Purchase history</h4>
+                  </div>
                 </div>
-              </div>
-            )}
+                <form className="accounts-detail__history-form" onSubmit={createInvestmentPurchase}>
+                  <label>
+                    Date
+                    <input
+                      type="date"
+                      value={purchaseDraft.purchasedAt}
+                      onChange={(event) => setPurchaseDraft((current) => ({ ...current, purchasedAt: event.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    Units / shares
+                    <input
+                      inputMode="decimal"
+                      value={purchaseDraft.quantity}
+                      onChange={(event) => setPurchaseDraft((current) => ({ ...current, quantity: event.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    Total cost
+                    <input
+                      inputMode="decimal"
+                      value={purchaseDraft.totalCost}
+                      onChange={(event) => setPurchaseDraft((current) => ({ ...current, totalCost: event.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    Currency
+                    <input
+                      value={purchaseDraft.currency}
+                      onChange={(event) => setPurchaseDraft((current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
+                    />
+                  </label>
+                  <label className="accounts-detail__history-form-note">
+                    Note
+                    <input
+                      value={purchaseDraft.note}
+                      onChange={(event) => setPurchaseDraft((current) => ({ ...current, note: event.target.value }))}
+                    />
+                  </label>
+                  <button className="button button-primary button-small" type="submit" disabled={purchaseBusy}>
+                    {purchaseBusy ? "Adding..." : "Add purchase"}
+                  </button>
+                </form>
+                {investmentPurchases.length > 0 ? (
+                  <div className="accounts-detail__history-table" role="table" aria-label="Purchase history">
+                    <div className="accounts-detail__history-row accounts-detail__history-row--header" role="row">
+                      <div role="columnheader">Date</div>
+                      <div role="columnheader">Units</div>
+                      <div role="columnheader">Total cost</div>
+                      <div role="columnheader">Currency</div>
+                      <div role="columnheader">Note</div>
+                      <div role="columnheader" aria-hidden="true" />
+                    </div>
+                    {investmentPurchases.map((purchase) => (
+                      <div key={purchase.id} className="accounts-detail__history-row" role="row">
+                        <div role="cell">{formatNullableDate(purchase.purchasedAt)}</div>
+                        <div role="cell">{purchase.quantity ?? "—"}</div>
+                        <div role="cell">{purchase.totalCost === null ? "—" : formatAccountAmount(Number(purchase.totalCost), purchase.currency)}</div>
+                        <div role="cell">{purchase.currency}</div>
+                        <div role="cell">{purchase.note ?? "—"}</div>
+                        <div role="cell">
+                          <button
+                            className="button button-secondary button-small"
+                            type="button"
+                            onClick={() => void deleteInvestmentPurchase(purchase)}
+                            disabled={purchaseDeleteBusy === purchase.id}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="panel-muted" style={{ marginTop: 12 }}>
+                    No purchases logged yet.
+                  </p>
+                )}
+              </section>
+
+              {canShowInvestmentDividends ? (
+                <section className="accounts-detail__history-section glass">
+                  <div className="accounts-detail__reconciliation-head">
+                    <div>
+                      <p className="eyebrow">Dividends</p>
+                      <h4>Dividend history</h4>
+                    </div>
+                  </div>
+                  <form className="accounts-detail__history-form" onSubmit={createInvestmentDividend}>
+                    <label>
+                      Date
+                      <input
+                        type="date"
+                        value={dividendDraft.paidAt}
+                        onChange={(event) => setDividendDraft((current) => ({ ...current, paidAt: event.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      Amount
+                      <input
+                        inputMode="decimal"
+                        value={dividendDraft.amount}
+                        onChange={(event) => setDividendDraft((current) => ({ ...current, amount: event.target.value }))}
+                      />
+                    </label>
+                    <label>
+                      Currency
+                      <input
+                        value={dividendDraft.currency}
+                        onChange={(event) => setDividendDraft((current) => ({ ...current, currency: event.target.value.toUpperCase() }))}
+                      />
+                    </label>
+                    <label className="accounts-detail__history-form-note">
+                      Note
+                      <input
+                        value={dividendDraft.note}
+                        onChange={(event) => setDividendDraft((current) => ({ ...current, note: event.target.value }))}
+                      />
+                    </label>
+                    <button className="button button-primary button-small" type="submit" disabled={dividendBusy}>
+                      {dividendBusy ? "Adding..." : "Add dividend"}
+                    </button>
+                  </form>
+                  {investmentDividends.length > 0 ? (
+                    <div className="accounts-detail__history-table" role="table" aria-label="Dividend history">
+                      <div className="accounts-detail__history-row accounts-detail__history-row--header" role="row">
+                        <div role="columnheader">Date</div>
+                        <div role="columnheader">Amount</div>
+                        <div role="columnheader">Currency</div>
+                        <div role="columnheader">Note</div>
+                        <div role="columnheader" aria-hidden="true" />
+                      </div>
+                      {investmentDividends.map((dividend) => (
+                        <div key={dividend.id} className="accounts-detail__history-row" role="row">
+                          <div role="cell">{formatNullableDate(dividend.paidAt)}</div>
+                          <div role="cell">{dividend.amount === null ? "—" : formatAccountAmount(Number(dividend.amount), dividend.currency)}</div>
+                          <div role="cell">{dividend.currency}</div>
+                          <div role="cell">{dividend.note ?? "—"}</div>
+                          <div role="cell">
+                            <button
+                              className="button button-secondary button-small"
+                              type="button"
+                              onClick={() => void deleteInvestmentDividend(dividend)}
+                              disabled={dividendDeleteBusy === dividend.id}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="panel-muted" style={{ marginTop: 12 }}>
+                      No dividends logged yet.
+                    </p>
+                  )}
+                </section>
+              ) : null}
+            </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -1389,12 +1758,12 @@ function AccountDetailPageContent() {
               <span className="detail-warning-box__icon" aria-hidden="true">
                 <ActionIcon name="warning" />
               </span>
-              <strong>Delete this account?</strong>
+              <strong>Delete this asset?</strong>
             </div>
             <p>
-              This will remove <strong>{account?.name ?? "this account"}</strong> from Clover and also delete any linked transactions for this account.
+              This will remove <strong>{account?.name ?? "this asset"}</strong> from Clover and also delete any linked transactions for this asset.
             </p>
-            <p>If you still need it later, you can always add the account again or re-import its files.</p>
+            <p>If you still need it later, you can always add the asset again or re-import its files.</p>
             <div className="detail-warning-actions">
               <button
                 className="button button-secondary button-small"
@@ -1405,19 +1774,19 @@ function AccountDetailPageContent() {
                 Cancel
               </button>
               <button className="button button-danger button-small" type="button" onClick={() => void deleteAccount()} disabled={deleteBusy}>
-                {deleteBusy ? "Deleting..." : "Yes, delete account"}
+                {deleteBusy ? "Deleting..." : "Yes, delete asset"}
               </button>
             </div>
           </div>
         ) : (
           <div style={{ marginTop: 20 }}>
             <button
-              className="button button-secondary button-small accounts-drawer__delete"
+              className="button button-danger button-small accounts-drawer__delete"
               type="button"
               onClick={() => setDeleteConfirmOpen(true)}
               disabled={deleteBusy}
             >
-              Delete
+              Delete Asset
             </button>
           </div>
         )}

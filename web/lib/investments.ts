@@ -23,12 +23,19 @@ export type InvestmentFieldConfig = {
 
 const MARKET_SUBTYPES = new Set<InvestmentSubtype>(["stock", "etf", "mutual_fund", "money_market_fund", "uitf", "reit", "crypto"]);
 const FIXED_INCOME_SUBTYPES = new Set<InvestmentSubtype>(["bond", "time_deposit"]);
+const DIVIDEND_SUBTYPES = new Set<InvestmentSubtype>(["stock", "etf", "mutual_fund", "money_market_fund", "uitf", "reit"]);
 
 export const isMarketInvestmentSubtype = (value: string | null | undefined): value is InvestmentSubtype =>
   !!value && MARKET_SUBTYPES.has(value as InvestmentSubtype);
 
 export const isFixedIncomeInvestmentSubtype = (value: string | null | undefined): value is InvestmentSubtype =>
   !!value && FIXED_INCOME_SUBTYPES.has(value as InvestmentSubtype);
+
+export const canTrackInvestmentPurchaseHistory = (value: string | null | undefined) =>
+  isMarketInvestmentSubtype(value) || isFixedIncomeInvestmentSubtype(value) || value === "other";
+
+export const canTrackInvestmentDividends = (value: string | null | undefined) =>
+  !!value && DIVIDEND_SUBTYPES.has(value as InvestmentSubtype);
 
 export const getInvestmentSubtypeLabel = (value: string | null | undefined) => {
   switch (value) {
@@ -87,7 +94,7 @@ export const getInvestmentFieldConfigs = (subtype: string | null | undefined): I
             ? "Token / coin code"
             : subtype === "mutual_fund" || subtype === "money_market_fund" || subtype === "uitf"
               ? "Fund code / name"
-              : "Symbol / asset code",
+              : "Ticker / asset code",
         placeholder:
           subtype === "crypto"
             ? "Example: BTC"
@@ -118,7 +125,7 @@ export const getInvestmentFieldConfigs = (subtype: string | null | undefined): I
   }
 
   return [
-    { key: "investmentSymbol", label: "Symbol / reference", placeholder: "Example: FMETF" },
+    { key: "investmentSymbol", label: "Ticker / reference", placeholder: "Example: FMETF" },
     { key: "investmentCostBasis", label: "Purchase value", placeholder: "0.00", inputMode: "decimal" },
   ];
 };
