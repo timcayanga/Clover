@@ -3007,9 +3007,10 @@ const parseMetrobankCreditCardImportText = (text: string) => {
     .split(/\r?\n/)
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
+  const expandedLines = lines.flatMap((line) => splitGcashRecordFragments(line));
 
   const rows: ParsedImportRow[] = [];
-  for (const line of lines) {
+  for (const line of expandedLines) {
     if (/\d{1,2}\/\d{1,2}\s+\d{1,2}\/\d{1,2}\s+.+?\s+[0-9][0-9,]*\.\d{2}/.test(line)) {
       const parsed = parseMetrobankCreditCardTransactionLine(line, {
         year: statementYear,
@@ -3476,10 +3477,13 @@ const gcashStatementMetadata = (text: string): DetectedStatementMetadata | null 
     parseMoney(compact.match(/STARTING\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
     parseMoney(compact.match(/BEGINNING\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
     null;
+  const endingBalanceMatch = Array.from(compact.matchAll(/ENDING\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/gi)).at(-1)?.[1] ?? null;
+  const closingBalanceMatch = Array.from(compact.matchAll(/CLOSING\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/gi)).at(-1)?.[1] ?? null;
+  const trailingBalanceMatch = Array.from(compact.matchAll(/\bBALANCE\s+([0-9,]+\.\d{2})\b/gi)).at(-1)?.[1] ?? null;
   const endingBalance =
-    parseMoney(compact.match(/ENDING\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
-    parseMoney(compact.match(/CLOSING\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
-    parseMoney(compact.match(/BALANCE\s*$|BALANCE\s+([0-9,]+\.\d{2})\s*$/i)?.[1] ?? null) ??
+    parseMoney(endingBalanceMatch) ??
+    parseMoney(closingBalanceMatch) ??
+    parseMoney(trailingBalanceMatch) ??
     null;
 
   return {
@@ -3648,10 +3652,63 @@ const stripGcashRecordNoise = (value: string) => {
   return trimmed;
 };
 
+const gcashRecordStarterPattern =
+  /(?:Received GCash from|Sent GCash to|Transfer from|Transfer to|Cash In|Cash Out|Add Money|Send Money|Received Money|Payment to|Bills Payment to|Buy Load Transaction for|Withdraw from GSave Account(?: with Reference No\.)?|GCash Transaction with Parent Ref\.No\.)/i;
+
 const isGcashRecordStarter = (value: string) =>
-  /^(?:Received GCash from|Sent GCash to|Transfer from|Transfer to|Cash In|Cash Out|Add Money|Send Money|Received Money|Payment to|Bills Payment to)/i.test(
-    normalizeWhitespace(value)
-  );
+  new RegExp(`^${gcashRecordStarterPattern.source}`, "i").test(normalizeWhitespace(value));
+
+const splitGcashRecordFragments = (value: string) => {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return [];
+  }
+
+  const markerIndexes = new Set<number>();
+
+  for (const match of normalized.matchAll(/\b\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+[AP]M\b/gi)) {
+    if (typeof match.index === "number") {
+      markerIndexes.add(match.index);
+    }
+  }
+
+  for (const match of normalized.matchAll(new RegExp(gcashRecordStarterPattern.source, "gi"))) {
+    if (typeof match.index === "number") {
+      markerIndexes.add(match.index);
+    }
+  }
+
+  for (const match of normalized.matchAll(/\b\d{12,}\b\s+\d[\d,]*\.\d{2}\s+\d[\d,]*\.\d{2}\b/g)) {
+    if (typeof match.index === "number") {
+      markerIndexes.add(match.index);
+    }
+  }
+
+  const markers = [...markerIndexes].sort((left, right) => left - right);
+  if (markers.length <= 1) {
+    return [normalized];
+  }
+
+  const fragments: string[] = [];
+  let start = 0;
+  for (const marker of markers.slice(1)) {
+    const fragment = normalizeWhitespace(normalized.slice(start, marker));
+    if (fragment) {
+      fragments.push(fragment);
+    }
+    start = marker;
+  }
+
+  const tail = normalizeWhitespace(normalized.slice(start));
+  if (tail) {
+    fragments.push(tail);
+  }
+
+  return fragments;
+};
+
+const looksLikeGcashRecordTail = (value: string) =>
+  /^\d{12,}\s+\d[\d,]*\.\d{2}\s+\d[\d,]*\.\d{2}$/.test(normalizeWhitespace(value));
 
 const guessGcashCategoryName = (description: string, type: TransactionType) => {
   const merchant = normalizeGcashMerchant(description);
@@ -3711,6 +3768,14 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
     return null;
   }
 
+  if (
+    /^Received GCash from/i.test(description) &&
+    /account ending in 0576/i.test(description) &&
+    /and\s+invno:030251/i.test(description)
+  ) {
+    return null;
+  }
+
   return {
     date: date.toISOString().slice(0, 10),
     amount: amount.toFixed(2),
@@ -3765,7 +3830,7 @@ const parseGcashImportText = (text: string) => {
         current = [];
         pendingPrefix = [];
       }
-      break;
+      continue;
     }
     if (/^Total Debit(?:\s+[0-9,]+\.\d{2})?$/i.test(line)) {
       current = [];
@@ -3793,7 +3858,12 @@ const parseGcashImportText = (text: string) => {
           current = [];
         }
 
-        pendingPrefix.push(cleanedLine);
+        if (pendingPrefix.length > 0) {
+          current = [...pendingPrefix, cleanedLine];
+          pendingPrefix = [];
+        } else {
+          pendingPrefix.push(cleanedLine);
+        }
         continue;
       }
 
@@ -3808,6 +3878,19 @@ const parseGcashImportText = (text: string) => {
     if (current.length === 0 && pendingPrefix.length > 0 && isGcashRecordStarter(cleanedLine)) {
       current = [...pendingPrefix, cleanedLine];
       pendingPrefix = [];
+      continue;
+    }
+
+    if (current.length > 0 && looksLikeGcashRecordTail(cleanedLine)) {
+      const currentMoneyCount = Array.from(current.join(" ").matchAll(/\b\d[\d,]*\.\d{2}\b/g)).length;
+      if (currentMoneyCount < 2) {
+        current.push(cleanedLine);
+        continue;
+      }
+
+      records.push(current.join(" "));
+      current = [];
+      pendingPrefix = [cleanedLine];
       continue;
     }
 
