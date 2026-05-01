@@ -763,6 +763,13 @@ export function CloverShell({
     "/dashboard";
 
   const notificationCount = notifications.length;
+  const navigateTo = (href: string) => {
+    setOpenMenu(null);
+    setIsSearchOpen(false);
+    setIsSidebarOpen(false);
+    window.location.assign(href);
+  };
+
   const handleSignOut = () => {
     persistSelectedWorkspaceId("");
     clearAllWorkspaceCaches();
@@ -912,18 +919,18 @@ export function CloverShell({
 
         <nav className="sidebar-nav" aria-label="Primary" id="primary-navigation">
           {navItems.map((item) => (
-            <Link
+            <button
               key={item.key}
               className={`nav-link ${active === item.key ? "is-active" : ""}`}
-              href={item.href}
+              type="button"
               aria-current={active === item.key ? "page" : undefined}
-              prefetch={false}
+              onClick={() => navigateTo(item.href)}
             >
               <span className="nav-link__icon" aria-hidden="true">
                 <MenuIcon name={item.key} />
               </span>
               {item.label}
-            </Link>
+            </button>
           ))}
         </nav>
 

@@ -1,7 +1,6 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -1499,12 +1498,12 @@ function AccountsPageContent() {
     if (deletingAccountIdsSet.has(account.id)) {
       return;
     }
-    router.push(getAccountPath(account));
+    window.location.assign(getAccountPath(account));
   };
 
   const openFullAccountPage = () => {
     if (!selectedAccount) return;
-    router.push(getAccountPath(selectedAccount));
+    window.location.assign(getAccountPath(selectedAccount));
   };
 
   const openDrawerForWarning = (account: Account, warning: string) => {
@@ -1512,7 +1511,7 @@ function AccountsPageContent() {
     if (deletingAccountIdsSet.has(account.id)) {
       return;
     }
-    router.push(getAccountPath(account));
+    window.location.assign(getAccountPath(account));
   };
 
   const saveAccountChanges = async (event?: FormEvent<HTMLFormElement>) => {
@@ -1907,10 +1906,10 @@ function AccountsPageContent() {
                               }}
                               data-state={isDeleting ? "deleting" : undefined}
                             >
-                              <Link
+                              <button
                                 className="accounts-account-card__link-overlay"
-                                href={getAccountPath(account)}
-                                prefetch={false}
+                                type="button"
+                                onClick={() => openAccountDrawer(account)}
                                 aria-label={`Open ${account.name} account`}
                               />
 

@@ -792,10 +792,11 @@ label {
 }
 
 .nav-link {
+  appearance: none;
   display: flex;
   align-items: center;
   gap: 12px;
-  border: 1px solid transparent;
+  border: 0;
   background: transparent;
   color: var(--muted);
   text-align: left;
@@ -12447,10 +12448,15 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-account-card__link-overlay {
+  appearance: none;
+  border: 0;
+  background: transparent;
   position: absolute;
   inset: 0;
   z-index: 1;
   border-radius: inherit;
+  padding: 0;
+  cursor: pointer;
 }
 
 .accounts-account-card__content {
