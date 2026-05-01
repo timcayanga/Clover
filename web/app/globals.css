@@ -533,6 +533,7 @@ label {
   border-radius: 0;
   overflow-y: auto;
   position: relative;
+  z-index: 20;
 }
 
 .sidebar-header {

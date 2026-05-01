@@ -13,12 +13,17 @@ export const slugifyAccountName = (value: string | null | undefined) => {
   return slug || "account";
 };
 
-export const getAccountPath = ({ id, name }: AccountPathInput) => `/accounts/${slugifyAccountName(name)}-${id}`;
+export const getAccountPath = ({ id, name }: AccountPathInput) => `/accounts/${slugifyAccountName(name)}--${id}`;
 
 export const extractAccountIdFromPathSegment = (segment: string | null | undefined) => {
   const trimmed = (segment ?? "").trim();
   if (!trimmed) {
     return "";
+  }
+
+  const doubleDashIndex = trimmed.lastIndexOf("--");
+  if (doubleDashIndex !== -1) {
+    return trimmed.slice(doubleDashIndex + 2);
   }
 
   const lastDashIndex = trimmed.lastIndexOf("-");
