@@ -88,9 +88,17 @@ const extractLastFourDigits = (value?: string | null) => {
   return digits.slice(-4);
 };
 
-export const normalizeImportedAccountKey = (accountName?: string | null, institution?: string | null) =>
+export const normalizeImportedAccountKey = (
+  accountName?: string | null,
+  institution?: string | null,
+  accountNumber?: string | null
+) =>
   normalizeMerchantText(
-    `${institution ?? ""} ${extractLastFourDigits(accountName) ?? normalizeWhitespace(String(accountName ?? ""))}`
+    `${institution ?? ""} ${
+      extractLastFourDigits(accountNumber) ??
+      extractLastFourDigits(accountName) ??
+      normalizeWhitespace(String(accountName ?? ""))
+    }`
   );
 
 const getSessionStorage = () => {
@@ -206,13 +214,15 @@ const mergeImportedAccount = <T extends CachedRecord>(items: T[], account: Impor
   const idsToReplace = createImportedAccountCandidates(account);
   const accountKey = normalizeImportedAccountKey(
     typeof account.name === "string" ? account.name : null,
-    typeof account.institution === "string" ? account.institution : null
+    typeof account.institution === "string" ? account.institution : null,
+    typeof account.accountNumber === "string" ? account.accountNumber : null
   );
   const filtered = items.filter((entry) => {
     const id = typeof entry.id === "string" ? entry.id : "";
     const entryKey = normalizeImportedAccountKey(
       typeof entry.name === "string" ? entry.name : null,
-      typeof entry.institution === "string" ? entry.institution : null
+      typeof entry.institution === "string" ? entry.institution : null,
+      typeof entry.accountNumber === "string" ? entry.accountNumber : null
     );
     return !idsToReplace.has(id) && entryKey !== accountKey;
   });

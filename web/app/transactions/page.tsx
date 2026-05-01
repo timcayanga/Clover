@@ -50,6 +50,7 @@ type Account = {
   id: string;
   name: string;
   institution: string | null;
+  accountNumber?: string | null;
   type: "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other";
   currency: string;
   source?: string;
@@ -86,16 +87,16 @@ const mergeImportedPreviewTransactions = (
 const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentAccounts: Account[]) => {
   const fetchedById = new Map(fetchedAccounts.map((account) => [account.id, account] as const));
   const fetchedByKey = new Map(
-    fetchedAccounts.map((account) => [normalizeImportedAccountKey(account.name, account.institution), account] as const)
+    fetchedAccounts.map((account) => [normalizeImportedAccountKey(account.name, account.institution, account.accountNumber), account] as const)
   );
   const mergedFetchedAccounts = fetchedAccounts.map((account) => {
-    const accountKey = normalizeImportedAccountKey(account.name, account.institution);
+    const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber);
     const optimistic = currentAccounts.find((currentAccount) => {
       if (currentAccount.source !== "upload") {
         return false;
       }
 
-      return normalizeImportedAccountKey(currentAccount.name, currentAccount.institution) === accountKey;
+      return normalizeImportedAccountKey(currentAccount.name, currentAccount.institution, currentAccount.accountNumber) === accountKey;
     });
     if (!optimistic) {
       return account;
@@ -116,7 +117,7 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
       return false;
     }
 
-    const accountKey = normalizeImportedAccountKey(account.name, account.institution);
+    const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber);
     return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
   });
 
@@ -126,7 +127,7 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
 const accountMatchesTransaction = (transaction: Transaction, account: Account) =>
   transaction.accountId === account.id ||
   normalizeImportedAccountKey(transaction.accountName, account.institution) ===
-    normalizeImportedAccountKey(account.name, account.institution);
+    normalizeImportedAccountKey(account.name, account.institution, account.accountNumber);
 
 type Category = {
   id: string;
@@ -1395,7 +1396,10 @@ function TransactionsPageContent() {
   );
   const accountNameById = useMemo(() => new Map(accounts.map((account) => [account.id, account.name] as const)), [accounts]);
   const accountKeyById = useMemo(
-    () => new Map(accounts.map((account) => [account.id, normalizeImportedAccountKey(account.name, account.institution)] as const)),
+    () =>
+      new Map(
+        accounts.map((account) => [account.id, normalizeImportedAccountKey(account.name, account.institution, account.accountNumber)] as const)
+      ),
     [accounts]
   );
   const manualSelectedAccount = useMemo(
@@ -1440,7 +1444,7 @@ function TransactionsPageContent() {
     }
 
     return accounts
-      .filter((account) => selectedKeys.has(normalizeImportedAccountKey(account.name, account.institution)))
+      .filter((account) => selectedKeys.has(normalizeImportedAccountKey(account.name, account.institution, account.accountNumber)))
       .map((account) => account.id);
   }, [accountFilters, accountKeyById, accounts]);
   const categoryNameById = useMemo(
@@ -5656,7 +5660,7 @@ function TransactionsPageContent() {
           const previewTransactions = summary.previewTransactions ?? [];
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
-          const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution);
+          const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution, summary.accountNumber ?? null);
 
           setPendingImportSummary(summary);
 
@@ -5671,7 +5675,7 @@ function TransactionsPageContent() {
                   }
 
                   if (account.source === "upload") {
-                    return normalizeImportedAccountKey(account.name, account.institution) !== importedAccountKey;
+                    return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber) !== importedAccountKey;
                   }
 
                   return true;
@@ -5697,12 +5701,18 @@ function TransactionsPageContent() {
                     return true;
                   }
 
-                  return normalizeImportedAccountKey(account.name, account.institution) !== importedAccountKey;
+                  return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber) !== importedAccountKey;
                 });
                 const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
                 if (existingIndex >= 0) {
                   return withoutMatchingUploads.map((account) =>
-                    account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account
+                    account.id === optimisticAccount.id
+                      ? {
+                          ...account,
+                          ...optimisticAccount,
+                          balance: optimisticAccount.balance ?? account.balance,
+                        }
+                      : account
                   );
                 }
                 return [optimisticAccount, ...withoutMatchingUploads];

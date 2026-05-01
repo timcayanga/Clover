@@ -109,6 +109,9 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
   };
 };
 
+const getImportedAccountKey = (name: string | null, institution: string | null, accountNumber?: string | null) =>
+  normalizeImportedAccountKey(name, institution, accountNumber ?? null);
+
 const mergeImportedPreviewTransactions = (
   currentTransactions: Transaction[],
   previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]>
@@ -134,16 +137,18 @@ const mergeAccountsWithOptimisticImports = (
   const visibleCurrentAccounts = currentAccounts.filter((account) => !deletedAccountIds.has(account.id));
   const fetchedById = new Map(visibleFetchedAccounts.map((account) => [account.id, account] as const));
   const fetchedByKey = new Map(
-    visibleFetchedAccounts.map((account) => [normalizeImportedAccountKey(account.name, account.institution), account] as const)
+    visibleFetchedAccounts.map((account) => [getImportedAccountKey(account.name, account.institution, account.accountNumber), account] as const)
   );
   const mergedFetchedAccounts = visibleFetchedAccounts.map((account) => {
-    const accountKey = normalizeImportedAccountKey(account.name, account.institution);
+    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber);
     const optimistic = visibleCurrentAccounts.find((currentAccount) => {
       if (currentAccount.source !== "upload") {
         return false;
       }
 
-      return normalizeImportedAccountKey(currentAccount.name, currentAccount.institution) === accountKey;
+      return (
+        getImportedAccountKey(currentAccount.name, currentAccount.institution, currentAccount.accountNumber) === accountKey
+      );
     });
     if (!optimistic) {
       return account;
@@ -164,7 +169,7 @@ const mergeAccountsWithOptimisticImports = (
       return false;
     }
 
-    const accountKey = normalizeImportedAccountKey(account.name, account.institution);
+    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber);
     return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
   });
 
@@ -407,7 +412,8 @@ const getCheckpointTrustLabel = (checkpoint: StatementCheckpoint | null | undefi
 const getCheckpointIdentityKey = (checkpoint: StatementCheckpoint) =>
   normalizeImportedAccountKey(
     typeof checkpoint.sourceMetadata?.accountName === "string" ? checkpoint.sourceMetadata.accountName : null,
-    typeof checkpoint.sourceMetadata?.institution === "string" ? checkpoint.sourceMetadata.institution : null
+    typeof checkpoint.sourceMetadata?.institution === "string" ? checkpoint.sourceMetadata.institution : null,
+    typeof checkpoint.sourceMetadata?.accountNumber === "string" ? checkpoint.sourceMetadata.accountNumber : null
   );
 
 const getLastFourDigits = (value?: string | null) => {
@@ -451,7 +457,7 @@ const getLatestCheckpointForAccount = (
 ) => {
   let latestCheckpoint: StatementCheckpoint | null = null;
   let latestTime = -1;
-  const identityKey = normalizeImportedAccountKey(account.name, account.institution);
+  const identityKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber);
 
   for (const checkpoint of statementCheckpoints) {
     const checkpointInstitution =
@@ -1942,7 +1948,9 @@ function AccountsPageContent() {
                           const isDeleting = deletingAccountIdsSet.has(account.id);
                           const latestCheckpoint =
                             latestCheckpoints.checkpointsByAccountId.get(account.id) ??
-                            latestCheckpoints.checkpointsByAccountKey.get(normalizeImportedAccountKey(account.name, account.institution)) ??
+                            latestCheckpoints.checkpointsByAccountKey.get(
+                              normalizeImportedAccountKey(account.name, account.institution, account.accountNumber)
+                            ) ??
                             null;
                           const isLoading = account.source === "upload" && latestCheckpoint?.status === "pending";
                           const accountBrand = getAccountBrand({
@@ -2646,7 +2654,7 @@ function AccountsPageContent() {
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
           const previewTransactions = summary.previewTransactions ?? [];
           const optimisticAccount = buildOptimisticImportedAccount(summary);
-          const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution);
+          const importedAccountKey = getImportedAccountKey(summary.accountName, summary.institution, summary.accountNumber ?? null);
 
           flushSync(() => {
             setAccountsLoading(false);
@@ -2658,7 +2666,9 @@ function AccountsPageContent() {
                   }
 
                   if (account.source === "upload") {
-                    return normalizeImportedAccountKey(account.name, account.institution) !== importedAccountKey;
+                    return (
+                      getImportedAccountKey(account.name, account.institution, account.accountNumber) !== importedAccountKey
+                    );
                   }
 
                   return true;
@@ -2684,12 +2694,18 @@ function AccountsPageContent() {
                     return true;
                   }
 
-                  return normalizeImportedAccountKey(account.name, account.institution) !== importedAccountKey;
+                  return getImportedAccountKey(account.name, account.institution, account.accountNumber) !== importedAccountKey;
                 });
                 const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
                 if (existingIndex >= 0) {
                   return withoutMatchingUploads.map((account) =>
-                    account.id === optimisticAccount.id ? { ...account, ...optimisticAccount } : account
+                    account.id === optimisticAccount.id
+                      ? {
+                          ...account,
+                          ...optimisticAccount,
+                          balance: optimisticAccount.balance ?? account.balance,
+                        }
+                      : account
                   );
                 }
                 return [optimisticAccount, ...withoutMatchingUploads];

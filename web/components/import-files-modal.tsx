@@ -293,8 +293,12 @@ const formatImportedAccountName = (name: string | null, institution: string | nu
   return alreadyHasSuffix ? normalizedName : `${normalizedName} ${accountSuffix}`.trim();
 };
 
-const accountKey = (name: string, institution: string | null) =>
-  `${normalizeStatementAccountName(name, institution).toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
+const accountKey = (name: string, institution: string | null, accountNumber?: string | null) =>
+  `${normalizeStatementAccountName(name, institution).toLowerCase()}::${(institution ?? "").trim().toLowerCase()}::${(
+    accountNumber ?? ""
+  )
+    .replace(/\D/g, "")
+    .slice(-4)}`;
 
 const extractLastFourDigits = (value?: string | null) => {
   if (!value) return null;
@@ -305,6 +309,13 @@ const extractLastFourDigits = (value?: string | null) => {
 
 const accountRuleKey = (name: string, institution: string | null) =>
   `${(institution ?? "").trim().toLowerCase()}::${extractLastFourDigits(name) ?? name.trim().toLowerCase()}`;
+
+const importedAccountIdentityKey = (name: string | null, institution: string | null, accountNumber?: string | null) =>
+  `${normalizeStatementAccountName(name ?? "", institution).toLowerCase()}::${(institution ?? "").trim().toLowerCase()}::${(
+    accountNumber ?? ""
+  )
+    .replace(/\D/g, "")
+    .slice(-4)}`;
 
 const PDF_ENCRYPTION_MARKERS = ["/Encrypt", "/Standard", "/V 2", "/V 4", "/V 5"];
 
@@ -421,15 +432,23 @@ const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsight
     const entryName = typeof entry.name === "string" ? normalizeStatementAccountName(entry.name, typeof entry.institution === "string" ? entry.institution : null) : "";
     const importedName = normalizeStatementAccountName(summary.accountName ?? "", summary.institution ?? null);
     const entryInstitution = typeof entry.institution === "string" ? entry.institution : null;
+    const entryAccountNumber = typeof (entry as { accountNumber?: unknown }).accountNumber === "string" ? (entry as { accountNumber?: string }).accountNumber : null;
     return (
       entryId === importedAccount.id ||
       optimisticId === importedAccount.id ||
-      accountKey(entryName, entryInstitution) === accountKey(importedName, summary.institution ?? null)
+      importedAccountIdentityKey(entryName, entryInstitution, entryAccountNumber) ===
+        importedAccountIdentityKey(importedName, summary.institution ?? null, summary.accountNumber ?? null)
     );
   });
 
   if (!importedAccount.accountNumber && typeof currentAccount?.accountNumber === "string" && currentAccount.accountNumber.trim()) {
     importedAccount.accountNumber = currentAccount.accountNumber.trim();
+  }
+  if ((!importedAccount.balance || importedAccount.balance.trim() === "") && typeof currentAccount?.balance === "string") {
+    const currentBalance = currentAccount.balance.trim();
+    if (currentBalance) {
+      importedAccount.balance = currentBalance;
+    }
   }
 
   syncImportedWorkspaceAccountCaches(workspaceId, importedAccount);
@@ -876,7 +895,7 @@ export function ImportFilesModal({
 
     const map = new Map<string, string>();
     for (const account of accounts) {
-      map.set(accountKey(account.name, account.institution), account.id);
+      map.set(accountKey(account.name, account.institution, account.accountNumber), account.id);
     }
     accountIdByKeyRef.current = map;
 
@@ -1026,7 +1045,7 @@ export function ImportFilesModal({
       throw new Error("The account could not be created.");
     }
 
-    accountIdByKeyRef.current.set(accountKey(name, institution), accountId);
+    accountIdByKeyRef.current.set(accountKey(name, institution, accountNumber?.trim() || null), accountId);
     return accountId;
   };
 
@@ -1576,14 +1595,16 @@ export function ImportFilesModal({
           });
           if (!seededFallbackSummary && (parsedRowsCount > 0 || Boolean(processingIdentity?.accountName || processingIdentity?.institution))) {
             const fallbackAccountId =
-              accountId && !accountId.startsWith("optimistic-")
-                ? accountId
-                : await ensureTargetAccountId(
-                    processingIdentity?.accountName ?? summaryContext.fallbackAccountName,
-                    processingIdentity?.institution ?? null,
-                    processingIdentity?.accountType ?? summaryContext.accountType ?? null,
-                    processingIdentity?.accountNumber ?? null
-                  );
+              summaryContext.optimisticAccountId && summaryContext.optimisticAccountId.trim()
+                ? summaryContext.optimisticAccountId
+                : accountId && !accountId.startsWith("optimistic-")
+                  ? accountId
+                  : await ensureTargetAccountId(
+                      processingIdentity?.accountName ?? summaryContext.fallbackAccountName,
+                      processingIdentity?.institution ?? null,
+                      processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+                      processingIdentity?.accountNumber ?? null
+                    );
             latestResolvedAccountId = fallbackAccountId;
             const fallbackPreviewTransactions =
               summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
@@ -2144,8 +2165,10 @@ export function ImportFilesModal({
   ) => {
     if (statementAccountName) {
       const normalizedStatementAccountName = normalizeStatementAccountName(statementAccountName, institution ?? null);
-      const key = accountKey(normalizedStatementAccountName, institution ?? null);
-      const existing = accountIdByKeyRef.current.get(key) ?? accounts.find((account) => accountKey(account.name, account.institution) === key)?.id;
+      const key = accountKey(normalizedStatementAccountName, institution ?? null, accountNumber ?? null);
+      const existing =
+        accountIdByKeyRef.current.get(key) ??
+        accounts.find((account) => accountKey(account.name, account.institution, account.accountNumber) === key)?.id;
       if (existing) {
         accountIdByKeyRef.current.set(key, existing);
         await syncStatementAccountIdentity(existing, normalizedStatementAccountName, institution ?? null, accountType, accountNumber);
@@ -2157,7 +2180,10 @@ export function ImportFilesModal({
           ? accounts.find((account) => isGenericSameInstitutionAccount(account, institution ?? null))
           : null;
       if (genericMatch) {
-        accountIdByKeyRef.current.set(accountKey(genericMatch.name, genericMatch.institution), genericMatch.id);
+        accountIdByKeyRef.current.set(
+          accountKey(genericMatch.name, genericMatch.institution, genericMatch.accountNumber),
+          genericMatch.id
+        );
         await syncStatementAccountIdentity(genericMatch.id, normalizedStatementAccountName, institution ?? null, accountType, accountNumber);
         return genericMatch.id;
       }
@@ -2168,7 +2194,10 @@ export function ImportFilesModal({
       if (rule?.accountId) {
         const matchedAccount = accounts.find((account) => account.id === rule.accountId);
         if (matchedAccount) {
-          accountIdByKeyRef.current.set(accountKey(matchedAccount.name, matchedAccount.institution), matchedAccount.id);
+          accountIdByKeyRef.current.set(
+            accountKey(matchedAccount.name, matchedAccount.institution, matchedAccount.accountNumber),
+            matchedAccount.id
+          );
           await syncStatementAccountIdentity(matchedAccount.id, normalizedStatementAccountName, institution ?? null, accountType, accountNumber);
           return matchedAccount.id;
         }
@@ -2197,9 +2226,10 @@ export function ImportFilesModal({
   ) => {
     if (statementAccountName) {
       const normalizedStatementAccountName = normalizeStatementAccountName(statementAccountName, institution);
-      const key = accountKey(normalizedStatementAccountName, institution ?? null);
+      const key = accountKey(normalizedStatementAccountName, institution ?? null, accountNumber ?? null);
       const existing =
-        accountIdByKeyRef.current.get(key) ?? accounts.find((account) => accountKey(account.name, account.institution) === key)?.id;
+        accountIdByKeyRef.current.get(key) ??
+        accounts.find((account) => accountKey(account.name, account.institution, account.accountNumber) === key)?.id;
       if (existing) {
         return existing;
       }
@@ -2291,7 +2321,12 @@ export function ImportFilesModal({
         accountType,
         optimisticAccountId,
         endingBalance,
-        [],
+        buildOptimisticPreviewTransactions(parsedRows, {
+          importFileId: item.importFileId ?? item.id,
+          accountId: resolvedAccountId,
+          accountName,
+          institution,
+        }),
         accountNumber,
         true
       );
