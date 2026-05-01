@@ -701,41 +701,36 @@ function AccountDetailPageContent() {
       if (workspaceId) {
         markDeletingWorkspaceAccount(workspaceId, accountId);
       }
-
-      const deleteRequest = fetch(`/api/accounts/${accountId}`, {
+      const response = await fetch(`/api/accounts/${accountId}`, {
         method: "DELETE",
+        keepalive: true,
       });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "Unable to delete account.");
+      }
+
+      const payload = (await response.json().catch(() => null)) as { account?: { workspaceId?: string | null } } | null;
+      const resolvedWorkspaceId = payload?.account?.workspaceId ?? workspaceId;
+      if (resolvedWorkspaceId) {
+        clearDeletingWorkspaceAccount(resolvedWorkspaceId, accountId);
+        markDeletedWorkspaceAccount(resolvedWorkspaceId, accountId);
+        clearWorkspaceCache(resolvedWorkspaceId);
+      }
 
       const deleteRedirectSearchParams = new URLSearchParams();
       deleteRedirectSearchParams.set("deletingAccountId", accountId);
-      if (workspaceId) {
-        deleteRedirectSearchParams.set("deletingWorkspaceId", workspaceId);
+      if (resolvedWorkspaceId) {
+        deleteRedirectSearchParams.set("deletingWorkspaceId", resolvedWorkspaceId);
       }
 
       router.replace(`/accounts?${deleteRedirectSearchParams.toString()}`);
-      void deleteRequest
-        .then(async (response) => {
-          if (!response.ok) {
-            if (workspaceId) {
-              clearDeletingWorkspaceAccount(workspaceId, accountId);
-            }
-            return;
-          }
-
-          const payload = (await response.json().catch(() => null)) as { account?: { workspaceId?: string | null } } | null;
-          const resolvedWorkspaceId = payload?.account?.workspaceId ?? workspaceId;
-          if (resolvedWorkspaceId) {
-            clearDeletingWorkspaceAccount(resolvedWorkspaceId, accountId);
-            markDeletedWorkspaceAccount(resolvedWorkspaceId, accountId);
-            clearWorkspaceCache(resolvedWorkspaceId);
-          }
-        })
-        .catch(() => {
-          if (workspaceId) {
-            clearDeletingWorkspaceAccount(workspaceId, accountId);
-          }
-        });
     } catch (error) {
+      const workspaceId = account?.workspaceId ?? selectedWorkspaceId ?? readSelectedWorkspaceId() ?? null;
+      if (workspaceId) {
+        clearDeletingWorkspaceAccount(workspaceId, accountId);
+      }
       setMessage(error instanceof Error ? error.message : "Unable to delete account.");
       setDeleteConfirmOpen(false);
     } finally {

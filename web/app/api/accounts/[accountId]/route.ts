@@ -249,7 +249,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
     });
     const shouldMergeWithTarget = existingAccount.source !== "upload" && Boolean(mergeTarget);
 
-    const account = await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx) => {
       if (shouldMergeWithTarget && mergeTarget) {
         await tx.transaction.updateMany({
           where: { accountId },
@@ -270,34 +270,15 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ a
           where: { accountId },
           data: { accountId: mergeTarget.id },
         });
-      } else {
-        await tx.transaction.deleteMany({
-          where: { accountId },
-        });
-
-        await tx.importFile.updateMany({
-          where: { accountId },
-          data: { accountId: null },
-        });
-
-        await tx.accountStatementCheckpoint.updateMany({
-          where: { accountId },
-          data: { accountId: null },
-        });
-
-        await tx.accountRule.updateMany({
-          where: { accountId },
-          data: { accountId: null },
-        });
       }
 
-      return tx.account.delete({
+      // Let the database relations handle cascade / set-null cleanup for the normal delete path.
+      await tx.account.delete({
         where: { id: accountId },
-        select: getCompatibleAccountSelect(compatibleColumns),
       });
     });
 
-    return NextResponse.json({ account: serializeAccount(account) });
+    return NextResponse.json({ account: serializeAccount(existingAccount) });
   } catch (error) {
     return NextResponse.json(
       {
