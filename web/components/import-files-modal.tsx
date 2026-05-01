@@ -1353,6 +1353,21 @@ export function ImportFilesModal({
         const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
         const processingPhase = typeof importFile?.processingPhase === "string" ? importFile.processingPhase : null;
         const processingMessage = typeof importFile?.processingMessage === "string" ? importFile.processingMessage : null;
+        const statementCheckpoint = payload.statementCheckpoint && typeof payload.statementCheckpoint === "object" ? payload.statementCheckpoint : null;
+        const statementMetadata =
+          statementCheckpoint?.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object"
+            ? (statementCheckpoint.sourceMetadata as Record<string, unknown>)
+            : null;
+        const checkpointIdentity = resolveStatementIdentityFromMetadata(statementMetadata);
+        const processingIdentity =
+          checkpointIdentity ??
+          (guessedIdentity
+            ? {
+                ...guessedIdentity,
+                accountNumber: null,
+                accountType: inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank"),
+              }
+            : null);
 
         if (importFile?.status === "failed") {
           const limitPayload = parsePlanLimitMessage(processingMessage, planTier);
@@ -1394,8 +1409,43 @@ export function ImportFilesModal({
                 ? `Clover is rechecking the statement`
                 : "Clover is reading the statement"),
             summary: null,
-            errorMessage: null,
-          });
+              errorMessage: null,
+            });
+          if (!seededFallbackSummary && (parsedRowsCount > 0 || Boolean(processingIdentity?.accountName || processingIdentity?.institution))) {
+            const fallbackAccountId =
+              accountId && !accountId.startsWith("optimistic-")
+                ? accountId
+                : await ensureTargetAccountId(
+                    processingIdentity?.accountName ?? summaryContext.fallbackAccountName,
+                    processingIdentity?.institution ?? null,
+                    processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+                    processingIdentity?.accountNumber ?? null
+                  );
+            const fallbackPreviewTransactions =
+              summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
+                ? summaryContext.previewTransactions
+                : await loadOptimisticPreviewTransactions(
+                    importFileId,
+                    fallbackAccountId,
+                    processingIdentity?.accountName ?? summaryContext.fallbackAccountName,
+                    processingIdentity?.institution ?? null
+                  ).catch(() => []);
+            const fallbackSummary = buildOptimisticUploadSummary(
+              summaryContext.fileName,
+              parsedRowsCount || 0,
+              fallbackAccountId,
+              processingIdentity?.accountName ?? summaryContext.fallbackAccountName,
+              processingIdentity?.institution ?? null,
+              processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+              summaryContext.optimisticAccountId,
+              toBalanceString(statementCheckpoint?.endingBalance),
+              fallbackPreviewTransactions
+            );
+
+            seededFallbackSummary = true;
+            seedImportedWorkspaceCaches(workspaceId, fallbackSummary);
+            void onImported(fallbackSummary);
+          }
           await sleep(600);
           continue;
         }
@@ -1424,11 +1474,6 @@ export function ImportFilesModal({
         }
 
         if (importFile?.status === "done" || parsedRowsCount > 0) {
-          const statementCheckpoint = payload.statementCheckpoint && typeof payload.statementCheckpoint === "object" ? payload.statementCheckpoint : null;
-          const statementMetadata =
-            statementCheckpoint?.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object"
-              ? (statementCheckpoint.sourceMetadata as Record<string, unknown>)
-              : null;
           const statementConfidence = Number(statementMetadata?.confidence ?? 0);
           const trustStatementIdentity = statementConfidence >= 70;
           const resolvedIdentity = {
