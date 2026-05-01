@@ -11506,6 +11506,41 @@ input.transaction-inline-edit--amount::placeholder {
   border-color: transparent;
 }
 
+.recurring-topbar-add.button-primary {
+  background: var(--brand-gradient);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: none;
+  font-weight: 600;
+  font-size: 0.78rem;
+  min-height: 32px;
+  border-radius: 999px;
+  padding-inline: 10px;
+  gap: 5px;
+}
+
+.recurring-topbar-add.button-primary:hover,
+.recurring-topbar-add.button-primary:focus {
+  background: var(--brand-gradient-alt);
+  border-color: transparent;
+}
+
+.recurring-topbar-add .button-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.recurring-topbar-add .button-icon svg {
+  display: block;
+  width: 13px;
+  height: 13px;
+}
+
+.recurring-topbar-add > span:not(.button-icon) {
+  display: inline;
+}
+
 @media (max-width: 1100px) {
   .transactions-topbar {
     gap: 10px;
@@ -16331,6 +16366,37 @@ input.transaction-inline-edit--amount::placeholder {
 .empty-state--illustrated p {
   max-width: 36ch;
   color: var(--muted);
+}
+
+.investments-empty-state--compact {
+  width: min(100%, 360px);
+  min-height: 0;
+  padding: 8px 12px 12px;
+  gap: 2px;
+}
+
+.investments-empty-state--compact .transactions-empty-state__art {
+  width: min(100%, 132px);
+  margin-top: -2px;
+  margin-bottom: -2px;
+}
+
+.investments-empty-state--compact .transactions-empty-state__eyebrow {
+  margin-top: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  text-transform: none;
+}
+
+.investments-empty-state--compact .transactions-empty-state__copy {
+  max-width: 28ch;
+}
+
+.investments-empty-state--compact .transactions-empty-state__actions {
+  margin-top: 4px;
+  gap: 6px;
 }
 
 @media (max-width: 1024px) {

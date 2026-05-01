@@ -873,10 +873,10 @@ export default function InvestmentsPage() {
                 </div>
               ) : (
                 <EmptyDataCta
-                  className="empty-state--illustrated"
-                  eyebrow="Portfolio mix"
-                  title="No investments yet."
-                  copy="Add an investment to see your portfolio mix."
+                  className="empty-state--illustrated investments-empty-state--compact"
+                  eyebrow="It's quiet in here"
+                  title=""
+                  copy="Add an investment to bring this view to life."
                   illustration={investmentsEmptyStateIllustration}
                   illustrationAlt=""
                   accountHref="/accounts"
