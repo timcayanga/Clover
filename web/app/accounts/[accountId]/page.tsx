@@ -13,12 +13,14 @@ import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { formatTransactionDirectionLabel } from "@/lib/transaction-directions";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
-  clearWorkspaceCache,
+  applyOptimisticWorkspaceAccountDeletion,
+  clearDeletedWorkspaceAccount,
   clearDeletingWorkspaceAccount,
+  getCachedAccountsWorkspace,
+  getCachedTransactionsWorkspace,
   getDeletedWorkspaceAccountIds,
   getDeletingWorkspaceAccountIds,
   markDeletedWorkspaceAccount,
-  markDeletingWorkspaceAccount,
   normalizeImportedAccountKey,
 } from "@/lib/workspace-cache";
 import {
@@ -356,12 +358,52 @@ function AccountDetailPageContent() {
     const load = async () => {
       const selectedWorkspaceId = readSelectedWorkspaceId();
       const activeWorkspaceId = selectedWorkspaceId ?? "";
+      const cachedAccountsWorkspace = getCachedAccountsWorkspace(activeWorkspaceId);
+      const cachedTransactionsWorkspace = getCachedTransactionsWorkspace(activeWorkspaceId);
+      const cachedAccountEntry = cachedAccountsWorkspace?.accounts.find((entry) => {
+        const entryId = typeof entry.id === "string" ? entry.id : "";
+        const optimisticId = typeof entry.optimisticAccountId === "string" ? entry.optimisticAccountId : "";
+        return entryId === accountId || optimisticId === accountId;
+      }) as Account | undefined;
+      const cachedAccount = cachedAccountEntry
+        ? ({
+            ...cachedAccountEntry,
+            workspaceId: activeWorkspaceId,
+          } as Account)
+        : null;
       if (
         getDeletingWorkspaceAccountIds(activeWorkspaceId).includes(accountId) ||
         getDeletedWorkspaceAccountIds(activeWorkspaceId).includes(accountId)
       ) {
         router.replace("/accounts");
         return;
+      }
+
+      if (cachedAccount) {
+        if (!cancelled) {
+          setAccount(cachedAccount);
+          const cachedTransactions = Array.isArray(cachedTransactionsWorkspace?.transactions)
+            ? (cachedTransactionsWorkspace.transactions as Transaction[]).filter((transaction) => transaction.accountId === cachedAccount.id)
+            : [];
+          setTransactions(cachedTransactions);
+          setTransactionPage(1);
+          setTransactionTotalCount(cachedTransactions.length);
+          setTransactionsError(null);
+          setTransactionsLoading(false);
+          setMessage("");
+          setHasInitialDataLoaded(true);
+          setCheckpoints(
+            Array.isArray(cachedAccountsWorkspace?.statementCheckpoints)
+              ? (cachedAccountsWorkspace.statementCheckpoints as StatementCheckpoint[]).filter(
+                  (checkpoint) => checkpoint.accountId === cachedAccount.id
+                )
+              : []
+          );
+        }
+        const canonicalPath = getAccountPath(cachedAccount);
+        if (!cancelled && canonicalPath !== `/accounts/${accountPathSegment}`) {
+          router.replace(canonicalPath);
+        }
       }
 
       try {
@@ -371,6 +413,9 @@ function AccountDetailPageContent() {
 
         const accountResponse = await accountPromise;
         if (!accountResponse.ok) {
+          if (cachedAccount) {
+            return;
+          }
           throw new Error("Unable to load this account.");
         }
 
@@ -699,36 +744,25 @@ function AccountDetailPageContent() {
     try {
       const workspaceId = account?.workspaceId ?? selectedWorkspaceId ?? readSelectedWorkspaceId() ?? null;
       if (workspaceId) {
-        markDeletingWorkspaceAccount(workspaceId, accountId);
+        clearDeletingWorkspaceAccount(workspaceId, accountId);
+        markDeletedWorkspaceAccount(workspaceId, accountId);
+        applyOptimisticWorkspaceAccountDeletion(workspaceId, accountId);
       }
-      const response = await fetch(`/api/accounts/${accountId}`, {
+
+      router.replace("/accounts");
+      void fetch(`/api/accounts/${accountId}`, {
         method: "DELETE",
         keepalive: true,
+      }).catch(() => {
+        if (workspaceId) {
+          clearDeletedWorkspaceAccount(workspaceId, accountId);
+          clearDeletingWorkspaceAccount(workspaceId, accountId);
+        }
       });
-
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? "Unable to delete account.");
-      }
-
-      const payload = (await response.json().catch(() => null)) as { account?: { workspaceId?: string | null } } | null;
-      const resolvedWorkspaceId = payload?.account?.workspaceId ?? workspaceId;
-      if (resolvedWorkspaceId) {
-        clearDeletingWorkspaceAccount(resolvedWorkspaceId, accountId);
-        markDeletedWorkspaceAccount(resolvedWorkspaceId, accountId);
-        clearWorkspaceCache(resolvedWorkspaceId);
-      }
-
-      const deleteRedirectSearchParams = new URLSearchParams();
-      deleteRedirectSearchParams.set("deletingAccountId", accountId);
-      if (resolvedWorkspaceId) {
-        deleteRedirectSearchParams.set("deletingWorkspaceId", resolvedWorkspaceId);
-      }
-
-      router.replace(`/accounts?${deleteRedirectSearchParams.toString()}`);
     } catch (error) {
       const workspaceId = account?.workspaceId ?? selectedWorkspaceId ?? readSelectedWorkspaceId() ?? null;
       if (workspaceId) {
+        clearDeletedWorkspaceAccount(workspaceId, accountId);
         clearDeletingWorkspaceAccount(workspaceId, accountId);
       }
       setMessage(error instanceof Error ? error.message : "Unable to delete account.");

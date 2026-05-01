@@ -36,6 +36,22 @@ export type TransactionsWorkspaceCacheState = {
   snapshots: Record<string, TransactionsWorkspaceCacheSnapshot>;
 };
 
+type TransactionsWorkspaceSnapshotLike = {
+  workspaceId: string;
+  accounts?: CachedRecord[];
+  categories?: CachedRecord[];
+  transactions?: CachedRecord[];
+  imports?: CachedRecord[];
+  summary?: Record<string, unknown>;
+  totalCount?: number;
+  updatedAt?: number;
+};
+
+type TransactionsWorkspaceStateLike = {
+  selectedWorkspaceId?: string;
+  snapshots?: Record<string, TransactionsWorkspaceSnapshotLike>;
+};
+
 export type ImportedWorkspaceAccount = CachedRecord & {
   id: string;
   optimisticAccountId?: string | null;
@@ -254,6 +270,30 @@ export const markDeletedWorkspaceAccount = (workspaceId: string, accountId: stri
       ...(cache?.snapshots ?? {}),
       [workspaceId]: Array.from(nextDeletedIds),
     },
+  } satisfies DeletedAccountsWorkspaceCacheState);
+};
+
+export const clearDeletedWorkspaceAccount = (workspaceId: string, accountId: string) => {
+  if (!workspaceId || !accountId) {
+    return;
+  }
+
+  const cache = readDeletedAccountsWorkspaceCache();
+  if (!cache?.snapshots[workspaceId]) {
+    return;
+  }
+
+  const nextDeletedIds = cache.snapshots[workspaceId].filter((id) => id !== accountId);
+  const nextSnapshots = { ...cache.snapshots };
+
+  if (nextDeletedIds.length === 0) {
+    delete nextSnapshots[workspaceId];
+  } else {
+    nextSnapshots[workspaceId] = nextDeletedIds;
+  }
+
+  writeJsonCache(deletedAccountsWorkspaceCacheKey, {
+    snapshots: nextSnapshots,
   } satisfies DeletedAccountsWorkspaceCacheState);
 };
 
@@ -501,6 +541,82 @@ export const syncImportedWorkspaceTransactionCaches = (
       [workspaceId]: nextTransactionsSnapshot,
     },
   } satisfies TransactionsWorkspaceCacheState);
+};
+
+export const applyOptimisticWorkspaceAccountDeletion = (workspaceId: string, accountId: string) => {
+  if (!workspaceId || !accountId) {
+    return;
+  }
+
+  const accountMatches = (entry: CachedRecord) => typeof entry.id === "string" && entry.id === accountId;
+  const transactionMatches = (entry: CachedRecord) => typeof entry.accountId === "string" && entry.accountId === accountId;
+  const importMatches = (entry: CachedRecord) => typeof entry.accountId === "string" && entry.accountId === accountId;
+
+  const accountsCache = readAccountsWorkspaceCache();
+  if (accountsCache?.snapshots[workspaceId]) {
+    const snapshot = accountsCache.snapshots[workspaceId];
+    const nextSnapshot: AccountsWorkspaceCacheSnapshot = {
+      ...snapshot,
+      updatedAt: Date.now(),
+      accounts: snapshot.accounts.filter((entry) => !accountMatches(entry)),
+      accountRules: snapshot.accountRules.filter((entry) => !transactionMatches(entry)),
+      transactions: snapshot.transactions.filter((entry) => !transactionMatches(entry)),
+      statementCheckpoints: snapshot.statementCheckpoints.filter((entry) => !transactionMatches(entry)),
+    };
+
+    writeJsonCache(accountsWorkspaceCacheKey, {
+      ...accountsCache,
+      snapshots: {
+        ...accountsCache.snapshots,
+        [workspaceId]: nextSnapshot,
+      },
+    } satisfies AccountsWorkspaceCacheState);
+  }
+
+  const transactionsCache = readJsonCache<TransactionsWorkspaceStateLike>(transactionsWorkspaceCacheKey);
+  if (transactionsCache?.snapshots && typeof transactionsCache.snapshots === "object" && transactionsCache.snapshots[workspaceId]) {
+    const snapshot = transactionsCache.snapshots[workspaceId];
+    const nextTransactions = Array.isArray(snapshot.transactions)
+      ? snapshot.transactions.filter((entry) => !transactionMatches(entry as CachedRecord))
+      : [];
+    const nextSnapshot = {
+      ...snapshot,
+      updatedAt: Date.now(),
+      accounts: Array.isArray(snapshot.accounts)
+        ? snapshot.accounts.filter((entry) => !accountMatches(entry as CachedRecord))
+        : [],
+      transactions: nextTransactions,
+      imports: Array.isArray(snapshot.imports)
+        ? snapshot.imports.filter((entry) => !importMatches(entry as CachedRecord))
+        : [],
+      totalCount:
+        typeof snapshot.totalCount === "number"
+          ? Math.max(0, snapshot.totalCount - (Array.isArray(snapshot.transactions) ? snapshot.transactions.length - nextTransactions.length : 0))
+          : snapshot.totalCount,
+      summary:
+        snapshot.summary && typeof snapshot.summary === "object"
+          ? {
+              ...snapshot.summary,
+              totalCount:
+                typeof snapshot.summary.totalCount === "number"
+                  ? Math.max(
+                      0,
+                      snapshot.summary.totalCount -
+                        (Array.isArray(snapshot.transactions) ? snapshot.transactions.length - nextTransactions.length : 0)
+                    )
+                  : snapshot.summary.totalCount,
+            }
+          : snapshot.summary,
+    };
+
+    writeJsonCache(transactionsWorkspaceCacheKey, {
+      ...transactionsCache,
+      snapshots: {
+        ...transactionsCache.snapshots,
+        [workspaceId]: nextSnapshot,
+      },
+    });
+  }
 };
 
 export const clearWorkspaceCache = (workspaceId: string) => {

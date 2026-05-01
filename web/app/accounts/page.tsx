@@ -16,8 +16,9 @@ import { getAccountPath } from "@/lib/account-path";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
-  clearWorkspaceCache,
+  applyOptimisticWorkspaceAccountDeletion,
   accountsWorkspaceCacheKey,
+  clearDeletedWorkspaceAccount,
   deletedAccountsWorkspaceCacheKey,
   getCachedAccountsWorkspace,
   getDeletedWorkspaceAccountIds,
@@ -1566,41 +1567,32 @@ function AccountsPageContent() {
     const accountToDelete = selectedAccount;
     setAccountDeleteBusy(true);
     try {
-      markDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
-      deletingAccountIdsRef.current.add(accountToDelete.id);
+      clearDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
+      deletingAccountIdsRef.current.delete(accountToDelete.id);
       setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
+      markDeletedWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
+      deletedAccountIdsRef.current.add(accountToDelete.id);
+      applyOptimisticWorkspaceAccountDeletion(selectedWorkspaceId, accountToDelete.id);
       flushSync(() => {
         setAccounts((current) => current.filter((account) => account.id !== accountToDelete.id));
         setTransactions((current) => current.filter((transaction) => transaction.accountId !== accountToDelete.id));
         setAccountRules((current) => current.filter((rule) => rule.accountId !== accountToDelete.id));
         setDrawerAccountId(null);
         setAccountDeleteConfirmOpen(false);
-        setMessage(`Deleting account "${accountToDelete.name}"...`);
-      });
-
-      const response = await fetch(`/api/accounts/${accountToDelete.id}`, {
-        method: "DELETE",
-      });
-
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        throw new Error(payload?.error ?? "Unable to delete account.");
-      }
-
-      deletedAccountIdsRef.current.add(accountToDelete.id);
-      clearDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
-      deletingAccountIdsRef.current.delete(accountToDelete.id);
-      setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
-      markDeletedWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
-      flushSync(() => {
-        setDrawerAccountId(null);
-        setAccountDeleteConfirmOpen(false);
         setMessage(`Account "${accountToDelete.name}" deleted.`);
       });
-      clearWorkspaceCache(selectedWorkspaceId);
-      workspaceLoadSeqRef.current += 1;
-      void loadWorkspaceData(selectedWorkspaceId, { silent: true });
+
+      void fetch(`/api/accounts/${accountToDelete.id}`, {
+        method: "DELETE",
+        keepalive: true,
+      }).catch(() => {
+        clearDeletedWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
+        deletedAccountIdsRef.current.delete(accountToDelete.id);
+        void loadWorkspaceData(selectedWorkspaceId, { silent: true });
+      });
     } catch (error) {
+      clearDeletedWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
+      deletedAccountIdsRef.current.delete(accountToDelete.id);
       clearDeletingWorkspaceAccount(selectedWorkspaceId, accountToDelete.id);
       deletingAccountIdsRef.current.delete(accountToDelete.id);
       setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
