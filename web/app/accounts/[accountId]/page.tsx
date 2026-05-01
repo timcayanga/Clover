@@ -427,6 +427,7 @@ function AccountDetailPageContent() {
           cachedAccount && nextAccount.id === cachedAccount.id
             ? ({
                 ...nextAccount,
+                source: cachedAccount.source ?? nextAccount.source,
                 balance:
                   nextAccount.balance && Number(nextAccount.balance) !== 0
                     ? nextAccount.balance
@@ -614,16 +615,14 @@ function AccountDetailPageContent() {
       normalizeAccountBalance(
         account?.type ?? null,
         parseAmount(
-          account?.source === "upload" && typeof account.balance === "string" && account.balance.trim()
-            ? account.balance
-            : deriveReconciledBalance({
-                balance:
-                  account?.balance && Number(account.balance) !== 0
-                    ? account.balance
-                    : account?.balance ?? null,
-                transactions,
-                checkpoints: latestCheckpoint ? [latestCheckpoint] : [],
-              })
+          deriveReconciledBalance({
+            balance:
+              account?.balance && Number(account.balance) !== 0
+                ? account.balance
+                : account?.balance ?? null,
+            transactions,
+            checkpoints: latestCheckpoint ? [latestCheckpoint] : [],
+          })
         )
       ),
     [account?.balance, account?.type, latestCheckpoint, transactions]

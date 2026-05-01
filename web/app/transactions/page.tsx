@@ -30,8 +30,11 @@ import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labe
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
-import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
-import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import {
+  applyOptimisticWorkspaceTransactionDeletion,
+  mergeImportedWorkspaceTransactions,
+  normalizeImportedAccountKey,
+} from "@/lib/workspace-cache";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
@@ -2415,6 +2418,9 @@ function TransactionsPageContent() {
   };
 
   const syncAfterTransactionRemoval = (transactionId: string) => {
+    if (selectedWorkspaceId) {
+      applyOptimisticWorkspaceTransactionDeletion(selectedWorkspaceId, transactionId);
+    }
     setTransactions((current) => current.filter((entry) => entry.id !== transactionId));
     setSelectedTransactionIds((current) => current.filter((entryId) => entryId !== transactionId));
     setSelectedTransaction((current) => (current?.id === transactionId ? null : current));
@@ -5736,7 +5742,7 @@ function TransactionsPageContent() {
         open={importOpen}
         workspaceId={selectedWorkspaceId}
         accounts={accounts}
-        defaultAccountId={accounts[0]?.id ?? null}
+        defaultAccountId={null}
         initialFiles={importSeedFiles}
         onInitialFilesConsumed={() => setImportSeedFiles(null)}
         backgroundOnly={importBackgroundOnly}

@@ -2949,7 +2949,7 @@ function AccountsPageContent() {
         workspaceId={selectedWorkspaceId}
         accounts={accounts}
         accountRules={accountRules}
-        defaultAccountId={selectedAccount?.id ?? accounts[0]?.id ?? null}
+        defaultAccountId={selectedAccount?.id ?? null}
         initialFiles={importSeedFiles}
         onInitialFilesConsumed={() => setImportSeedFiles(null)}
         backgroundOnly={importBackgroundOnly}

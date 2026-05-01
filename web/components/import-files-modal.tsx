@@ -21,7 +21,6 @@ import {
   inferAccountTypeFromStatement,
   parseImportText,
 } from "@/lib/import-parser";
-import { IMPORT_IMAGE_MODES, normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import {
   getCachedAccountsWorkspace,
@@ -82,7 +81,6 @@ type StatementIdentity = {
 type QueuedFile = {
   id: string;
   file: File;
-  importMode: ImportImageMode | null;
   status: ImportStatus;
   confirmationState: ConfirmationState;
   error: string | null;
@@ -95,22 +93,6 @@ type QueuedFile = {
   progress: number;
   progressLabel: string;
 };
-
-function FileImagePreview({ file }: { file: File }) {
-  const [url, setUrl] = useState<string | null>(null);
-
-  useEffect(() => {
-    const objectUrl = URL.createObjectURL(file);
-    setUrl(objectUrl);
-    return () => URL.revokeObjectURL(objectUrl);
-  }, [file]);
-
-  if (!url) {
-    return null;
-  }
-
-  return <img className="accounts-import-file__thumbnail" src={url} alt="" loading="lazy" />;
-}
 
 type ImportProcessResult = {
   status: "done" | "needs_password" | "error" | "staged";
@@ -175,18 +157,7 @@ const fileTypeLabel = (file: File) => {
   const lowerName = file.name.toLowerCase();
   if (lowerName.endsWith(".pdf") || file.type === "application/pdf") return "PDF";
   if (lowerName.endsWith(".csv")) return "CSV";
-  if (lowerName.endsWith(".tsv")) return "TSV";
-  if (
-    lowerName.endsWith(".jpg") ||
-    lowerName.endsWith(".jpeg") ||
-    lowerName.endsWith(".png") ||
-    lowerName.endsWith(".webp") ||
-    file.type === "image/jpeg" ||
-    file.type === "image/jpg" ||
-    file.type === "image/png" ||
-    file.type === "image/webp"
-  )
-    return "Image";
+  if (lowerName.endsWith(".json")) return "JSON";
   return "File";
 };
 
@@ -205,33 +176,7 @@ const getImportErrorCode = (error: unknown) => {
   return "unknown_error";
 };
 
-const isVisionImportFile = (file: File | string) =>
-  typeof file === "string"
-    ? /\.(pdf|jpg|jpeg|png|webp)$/i.test(file) || /image\/(jpeg|png|webp)|application\/pdf/i.test(file)
-    : file.type === "application/pdf" ||
-      file.type === "image/jpeg" ||
-      file.type === "image/jpg" ||
-      file.type === "image/png" ||
-      file.type === "image/webp" ||
-      /\.(pdf|jpg|jpeg|png|webp)$/i.test(file.name);
-
-const lowQualityImportWarning = (fileName: string) =>
-  `${fileName} looks too blurry for Clover to read. Please upload a clearer image or a higher-resolution PDF.`;
-
-const isLowQualityImportFailure = (file: File | string, errorMessage: string) =>
-  isVisionImportFile(file) &&
-  /blurry|low[- ]?resolution|unreadable|cannot read|can't read|could not read|failed to extract text|text layer is missing|ocr/i.test(
-    errorMessage
-  );
-
-const formatImportFailureMessage = (file: File | string, errorMessage: string) => {
-  if (isLowQualityImportFailure(file, errorMessage)) {
-    const fileName = typeof file === "string" ? file : file.name;
-    return lowQualityImportWarning(fileName || "This file");
-  }
-
-  return errorMessage;
-};
+const formatImportFailureMessage = (_file: File | string, errorMessage: string) => errorMessage;
 
 type ImportErrorStage = "validation" | "password" | "upload" | "process" | "confirm" | "background" | "monitor" | "unknown";
 
@@ -270,7 +215,7 @@ const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null
     stage === "password"
       ? "Unlock the file with its password and try again."
       : stage === "validation"
-        ? "Upload a clearer PDF, CSV, TSV, or image file."
+        ? "Upload a clearer PDF, CSV, or JSON file."
         : "Re-upload the original statement and keep the tab open while Clover works.";
 
   const nextSteps =
@@ -281,7 +226,7 @@ const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null
           "You can always add missing transactions manually in Transactions.",
         ]
       : [
-          "Re-upload the original PDF, CSV, or image.",
+          "Re-upload the original PDF, CSV, or JSON.",
           "If Clover still stalls, add the missing transactions manually in Transactions.",
           "If the statement looks off after import, check Review before confirming anything.",
         ];
@@ -800,9 +745,9 @@ export function ImportFilesModal({
   const [items, setItems] = useState<QueuedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [launchInBackground, setLaunchInBackground] = useState(backgroundOnly);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("Upload CSV, PDF, or image files to import transactions and balances.");
-  const [importImageMode, setImportImageMode] = useState<ImportImageMode>("statement");
+  const [message, setMessage] = useState("Upload CSV, PDF, or JSON files to import transactions and balances.");
   const [validationNotice, setValidationNotice] = useState<string | null>(null);
   const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
@@ -909,8 +854,7 @@ export function ImportFilesModal({
       localPreparseStartedRef.current.clear();
       autoCloseAfterStartRef.current = false;
       accountIdByKeyRef.current.clear();
-      setMessage("Upload CSV, PDF, or image files to import transactions and balances.");
-      setImportImageMode("statement");
+      setMessage("Upload CSV, PDF, or JSON files to import transactions and balances.");
       setValidationNotice(null);
       initialFilesSignatureRef.current = null;
       if (!items.some((item) => item.status === "pending" || item.status === "needs_password" || item.status === "parsing" || item.status === "importing")) {
@@ -920,7 +864,7 @@ export function ImportFilesModal({
       return;
     }
 
-    importActivitySurfaceRef.current = backgroundOnly ? "background" : "modal";
+    importActivitySurfaceRef.current = backgroundOnly || launchInBackground ? "background" : "modal";
 
     router.prefetch("/accounts");
     router.prefetch("/transactions");
@@ -942,14 +886,15 @@ export function ImportFilesModal({
         return current;
       }
 
-      return defaultAccountId ?? accounts[0]?.id ?? "";
+      return defaultAccountId ?? "";
     });
-    setMessage("Upload CSV, PDF, or image files to import transactions and balances.");
+    setMessage("Upload CSV, PDF, or JSON files to import transactions and balances.");
     setValidationNotice(null);
-  }, [accounts, backgroundOnly, defaultAccountId, items, open]);
+  }, [accounts, backgroundOnly, defaultAccountId, items, launchInBackground, open]);
 
   useEffect(() => {
     if (!open) {
+      setLaunchInBackground(backgroundOnly);
       return;
     }
 
@@ -1149,13 +1094,14 @@ export function ImportFilesModal({
     }
   };
 
-  const addFiles = (incoming: FileList | File[]) => {
+  const addFiles = (incoming: FileList | File[], options?: { launchInBackground?: boolean }) => {
     const nextFiles = Array.from(incoming);
     if (nextFiles.length === 0) return;
 
     let feedbackMessage = "";
     let validationMessage = "";
     let shouldAutoClose = false;
+    const shouldLaunchInBackground = Boolean(options?.launchInBackground || backgroundOnly || launchInBackground);
       flushSync(() => {
         setItems((current) => {
         const existing = new Set(current.map((item) => fileKey(item.file)));
@@ -1175,7 +1121,7 @@ export function ImportFilesModal({
         if (validationError) {
           if (validationError === "Import files must be 8 MB or smaller.") {
             validationIssues.push(`${file.name} is larger than 8 MB.`);
-          } else if (validationError === "Only PDF, CSV, TSV, JSON, JPEG, PNG, and WebP files are supported.") {
+          } else if (validationError === "Only PDF, CSV, and JSON files are supported.") {
             validationIssues.push(`${file.name} has an invalid file extension.`);
           } else {
             validationIssues.push(`${file.name} could not be added.`);
@@ -1193,7 +1139,7 @@ export function ImportFilesModal({
         }
 
         additionsCount += 1;
-        shouldAutoClose = true;
+        shouldAutoClose = !shouldLaunchInBackground;
         const guessedIdentity = guessStatementIdentity(file.name);
         const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName);
         const optimisticAccountId = guessedIdentity && canUseOptimisticGuess ? `optimistic-${crypto.randomUUID()}` : null;
@@ -1212,7 +1158,6 @@ export function ImportFilesModal({
           {
             id: crypto.randomUUID(),
             file,
-            importMode: isVisionImportFile(file) ? importImageMode : null,
             status: "pending" as ImportStatus,
             confirmationState: "none" as ConfirmationState,
             error: null,
@@ -1269,6 +1214,10 @@ export function ImportFilesModal({
     if (nextFiles.length > 0) {
       autoStartRef.current = true;
       autoCloseAfterStartRef.current = shouldAutoClose;
+      if (shouldLaunchInBackground) {
+        setLaunchInBackground(true);
+        importActivitySurfaceRef.current = "background";
+      }
       queueMicrotask(() => {
         if (busy || !workspaceId || !autoStartRef.current || !handleStartImportRef.current) {
           return;
@@ -1287,8 +1236,7 @@ export function ImportFilesModal({
   };
 
   const addDroppedFiles = (incoming: FileList | File[]) => {
-    addFiles(incoming);
-    onClose();
+    addFiles(incoming, { launchInBackground: true });
   };
 
   const updateItem = (id: string, patch: Partial<QueuedFile>) => {
@@ -2238,13 +2186,16 @@ export function ImportFilesModal({
       return selectedAccountId;
     }
 
-    const fallback = accounts[0]?.id;
+    const fallback = accounts.find((account) => {
+      const accountType = (account.type ?? "").toLowerCase();
+      return accountType !== "cash" && accountType !== "other";
+    })?.id;
     if (fallback) {
       setSelectedAccountId(fallback);
       return fallback;
     }
 
-    return createStatementAccount("Cash", "Cash", "cash", null);
+    return null;
   };
 
   const resolveLocalAccountId = (
@@ -2304,7 +2255,7 @@ export function ImportFilesModal({
       return;
     }
 
-    const itemImportMode = item.importMode ?? "statement";
+    const itemImportMode = "statement";
     localPreparseStartedRef.current.add(itemId);
     updateItem(itemId, {
       progressLabel: "Reading locally",
@@ -2464,7 +2415,7 @@ export function ImportFilesModal({
     if (!item) return { status: "error", importedRows: null, summary: null };
     const guessedIdentity = guessStatementIdentity(item.file.name);
     const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName);
-    const itemImportMode = item.importMode ?? "statement";
+    const itemImportMode = "statement";
     let importFileId: string | null = null;
 
     if (!workspaceId) {
@@ -2530,7 +2481,6 @@ export function ImportFilesModal({
           fileName: item.file.name,
           fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
           password: item.password.trim() || undefined,
-          importMode: itemImportMode,
         },
         (progress) => {
           publishImportActivity({
@@ -2946,7 +2896,6 @@ export function ImportFilesModal({
     : 0;
   const hasImportIssue = items.some((item) => item.status === "error" || item.status === "needs_password") || Boolean(validationNotice);
   const showImportHelp = hasImportIssue || items.some((item) => item.confirmationState === "staged");
-  const selectedImportMode = IMPORT_IMAGE_MODES.find((option) => option.value === importImageMode) ?? IMPORT_IMAGE_MODES[0];
   const importHelpTitle = items.some((item) => item.status === "needs_password")
     ? "Password needed"
     : items.some((item) => item.status === "error")
@@ -2959,7 +2908,7 @@ export function ImportFilesModal({
       ]
     : items.some((item) => item.status === "error")
       ? [
-          "Try uploading the original PDF, CSV, or image again, one file at a time.",
+          "Try uploading the original PDF, CSV, or JSON again, one file at a time.",
           "If Clover says the file is not confident enough, add the transactions manually in Transactions.",
           "If the statement imported but still looks off, check the Review queue before confirming anything.",
         ]
@@ -3238,7 +3187,7 @@ export function ImportFilesModal({
   }, [busy, handleStartImport, items, workspaceId]);
 
   useEffect(() => {
-    if (!open || !autoCloseAfterStartRef.current) {
+    if (!open || !autoCloseAfterStartRef.current || backgroundOnly || launchInBackground) {
       return;
     }
 
@@ -3256,7 +3205,7 @@ export function ImportFilesModal({
 
     autoCloseAfterStartRef.current = false;
     onClose();
-  }, [items, onClose, open, passwordItems]);
+  }, [backgroundOnly, items, launchInBackground, onClose, open, passwordItems]);
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
@@ -3286,6 +3235,10 @@ export function ImportFilesModal({
 
   const portalTarget = typeof document === "undefined" ? null : document.body;
   if (!portalTarget) {
+    return null;
+  }
+
+  if (backgroundOnly || launchInBackground) {
     return null;
   }
 
@@ -3378,7 +3331,7 @@ export function ImportFilesModal({
             ref={fileInputRef}
             className="hidden-file-input"
             type="file"
-            accept=".csv,.tsv,.pdf,.jpg,.jpeg,.png,.webp"
+            accept=".csv,.pdf,.json"
             multiple
             onChange={handleInputChange}
           />
@@ -3392,22 +3345,7 @@ export function ImportFilesModal({
         <div className="accounts-import-footer-copy">
           {validationNotice ? <p className="accounts-import-footer-copy__warning">{validationNotice}</p> : null}
           <p className="accounts-import-footer-copy__status">{message}</p>
-          <div className="accounts-import-target">
-            <strong>Image import mode</strong>
-            <select
-              value={importImageMode}
-              onChange={(event) => setImportImageMode(normalizeImportImageMode(event.target.value))}
-              aria-label="Image import mode"
-            >
-              {IMPORT_IMAGE_MODES.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            <p className="accounts-import-target__hint">{selectedImportMode.helper}</p>
-          </div>
-          <p>Accepted files: CSV, TSV, PDF, JPEG, PNG, and WebP. Password-protected PDFs are supported.</p>
+          <p>Accepted files: CSV, PDF, and JSON. Password-protected PDFs are supported.</p>
           <p>We upload the file first, then parse it on the server so the workflow stays responsive.</p>
         </div>
 
@@ -3449,29 +3387,12 @@ export function ImportFilesModal({
                       </span>
                     </div>
                     <div className="accounts-import-file__badges">
-                      {item.importMode ? <span className="accounts-import-badge is-image">{IMPORT_IMAGE_MODES.find((mode) => mode.value === item.importMode)?.label ?? "Image"}</span> : null}
                       <span className={`accounts-import-badge is-${item.status}`}>{item.status.replaceAll("_", " ")}</span>
                       <button className="icon-button accounts-import-remove" type="button" onClick={() => removeItem(item.id)} aria-label={`Remove ${item.file.name}`}>
                         ×
                       </button>
                     </div>
                   </div>
-
-                  {isVisionImportFile(item.file) ? (
-                    <div className="accounts-import-file__image">
-                      <FileImagePreview file={item.file} />
-                      <div className="accounts-import-file__image-copy">
-                        <strong>{item.importMode === "receipt" ? "Receipt review" : item.importMode === "notes" ? "Notes review" : "Image review"}</strong>
-                        <span>
-                          {item.importMode === "receipt"
-                            ? "Check the merchant, total, and target account before Clover finalizes the match."
-                            : item.importMode === "notes"
-                              ? "Check the extracted transaction list against the note before confirming."
-                              : "Check the statement snapshot against the source image before confirming."}
-                        </span>
-                      </div>
-                    </div>
-                  ) : null}
 
                   {item.error ? <p className="accounts-import-file__error">{item.error}</p> : null}
 
