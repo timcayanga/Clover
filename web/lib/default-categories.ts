@@ -14,6 +14,7 @@ export const DEFAULT_CATEGORY_ROWS = [
   { name: "Financial", type: "expense" },
   { name: "Gifts & Donations", type: "expense" },
   { name: "Business", type: "expense" },
+  { name: "Cash & ATM", type: "expense" },
   { name: "Transfers", type: "transfer" },
   { name: "Other", type: "expense" },
 ] as const satisfies ReadonlyArray<{ name: string; type: TransactionType }>;

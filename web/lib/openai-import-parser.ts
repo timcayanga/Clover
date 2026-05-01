@@ -19,6 +19,68 @@ const GENERIC_PARSER_GUIDANCE = [
   "- Lower confidence when the OCR is blurry or when a balance cannot be reconciled cleanly.",
 ].join(" ");
 
+const GENERIC_NORMALIZATION_GUIDANCE = [
+  "Generic normalization guidance:",
+  "- Keep raw_name separate from normalized_name and preserve the original statement text when it carries useful detail.",
+  "- Normalize only when the merchant or code is clearly the same canonical entity.",
+  "- Use these canonical categories when they fit the row: Income, Transfers, Food & Dining, Transport, Housing, Bills & Utilities, Travel & Lifestyle, Entertainment, Shopping, Health & Wellness, Education, Gifts & Donations, Business, Financial, Cash & ATM, Opening Balance, Other.",
+  "- Common merchant/code normalizations include ATM WDL/ATMWD/W/D FR SAV/ET WDL/Cash Withdrawal/ATM Cash Withdrawal -> ATM Withdrawal; IBFT/Instapay/InstaPay/Interbank Fund Transfer/PESONet -> Bank Transfer; Cash Payment/Payment - Thank You/Card Payment -> Credit Card Payment; Service Charge/Finance Charge -> Service Charge or Finance Charge; Credit Interest -> Interest Earned.",
+  "- If a row is real but the category is ambiguous, prefer Other with lower confidence rather than guessing.",
+].join(" ");
+
+const GENERIC_FEW_SHOT_EXAMPLES = [
+  {
+    source: "03/18/24 CASH PAYMENT 5,244.14-",
+    parsed: {
+      transactionName: "CASH PAYMENT",
+      normalizedName: "Credit Card Payment",
+      amount: 5244.14,
+      type: "Credit",
+      categoryName: "Financial",
+    },
+  },
+  {
+    source: "02/28/2022 ET IBFT SVCHG 25.00 14,075.00",
+    parsed: {
+      transactionName: "ET IBFT SVCHG",
+      normalizedName: "Service Charge",
+      amount: 25.0,
+      type: "Debit",
+      categoryName: "Financial",
+    },
+  },
+  {
+    source: "Credit Interest account PHP 0.96",
+    parsed: {
+      transactionName: "Credit Interest account",
+      normalizedName: "Interest Earned",
+      amount: 0.96,
+      type: "Credit",
+      categoryName: "Income",
+    },
+  },
+  {
+    source: "REVERSAL - RCBC ATM WITHDRAWAL 2,700.00",
+    parsed: {
+      transactionName: "REVERSAL - RCBC ATM WITHDRAWAL",
+      normalizedName: "ATM Reversal",
+      amount: 2700.0,
+      type: "Credit",
+      categoryName: "Transfers",
+    },
+  },
+  {
+    source: "Penalty Due 320.53",
+    parsed: {
+      transactionName: "Penalty Due",
+      normalizedName: "Penalty Due",
+      amount: 320.53,
+      type: "Debit",
+      categoryName: "Financial",
+    },
+  },
+].map((example) => JSON.stringify(example)).join("\n");
+
 const ALLOWED_MOVEMENT_TYPES = [
   "income",
   "real_spend",
@@ -35,6 +97,7 @@ const ALLOWED_CATEGORIES = [
   "Business",
   "Education",
   "Financial",
+  "Cash & ATM",
   "Food & Dining",
   "Gifts & Donations",
   "Health & Wellness",
@@ -747,6 +810,9 @@ const buildOpenAIInputPayload = (params: {
     `Known parser result: ${JSON.stringify(buildDeterministicParserSummary({ detectedMetadata: params.detectedMetadata, parsedRows: params.parsedRows }))}`,
     `Bank-specific instructions: ${JSON.stringify(bankInstructionJson)}`,
     GENERIC_PARSER_GUIDANCE,
+    GENERIC_NORMALIZATION_GUIDANCE,
+    "Generic few-shot examples:",
+    GENERIC_FEW_SHOT_EXAMPLES,
     "For credit card statements, capture payment due date and total amount due whenever the statement shows them.",
     "",
     ...(params.pageImages?.length
