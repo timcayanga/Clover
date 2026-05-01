@@ -12,6 +12,8 @@ const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/sign-up(.*)",
   "/sso-callback(.*)",
+  "/ph(.*)",
+  "/sse(.*)",
   "/api/market-history(.*)",
   "/api/fx-rate(.*)",
 ]);

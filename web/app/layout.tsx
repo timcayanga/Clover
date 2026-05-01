@@ -39,7 +39,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         data-environment={buildInfo.environment}
       >
         {publishableKey ? (
-          <ClerkProvider publishableKey={publishableKey}>
+          <ClerkProvider publishableKey={publishableKey} signInUrl="/sign-in" signUpUrl="/sign-up">
             <PostHogAnalytics />
             <PostHogClerkIdentity />
             <GlobalImportActivity />
