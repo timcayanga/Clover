@@ -1870,7 +1870,6 @@ function TransactionsPageContent() {
 
   const openAddMenu = () => {
     flushSync(() => {
-      closeChrome();
       setDownloadMenuOpen(false);
       setAddMenuOpen((current) => !current);
     });
@@ -1894,7 +1893,7 @@ function TransactionsPageContent() {
   };
 
   useEffect(() => {
-    const active = addMenuOpen || downloadMenuOpen || importOpen || manualOpen;
+    const active = importOpen || manualOpen;
     document.body.toggleAttribute("data-clover-page-modal", active);
 
     return () => {
