@@ -1400,6 +1400,10 @@ export function ImportFilesModal({
     summaryContext: {
       fileName: string;
       fallbackAccountName: string;
+      guessedAccountName?: string | null;
+      guessedInstitution?: string | null;
+      guessedAccountNumber?: string | null;
+      guessedAccountType?: UploadInsightsSummary["accountType"];
       accountName: string | null;
       institution: string | null;
       accountNumber: string | null;
@@ -1414,6 +1418,30 @@ export function ImportFilesModal({
     const startedAt = Date.now();
     const MAX_WAIT_MS = 60_000;
     let latestResolvedAccountId: string | null = accountId && !accountId.startsWith("optimistic-") ? accountId : null;
+    const getProgressDetail = (
+      resolved: {
+      accountName: string | null;
+      institution: string | null;
+      accountNumber: string | null;
+      },
+      rowsCount: number
+    ) => {
+      if (rowsCount > 0) {
+        if (resolved.accountNumber) {
+          return "Clover is reading balance and transactions";
+        }
+
+        if (resolved.accountName || resolved.institution) {
+          return "Clover is reading transactions";
+        }
+      }
+
+      if (resolved.accountName || resolved.institution || resolved.accountNumber) {
+        return "Clover is reading the account details";
+      }
+
+      return "Clover is reading the statement";
+    };
 
     for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
@@ -1438,6 +1466,20 @@ export function ImportFilesModal({
         const checkpointIdentity = resolveStatementIdentityFromMetadata(statementMetadata);
         const processingIdentity =
           checkpointIdentity ??
+          (summaryContext.guessedAccountName
+            ? {
+                accountName: summaryContext.guessedAccountName,
+                institution: summaryContext.guessedInstitution ?? null,
+                accountNumber: summaryContext.guessedAccountNumber ?? null,
+                accountType:
+                  summaryContext.guessedAccountType ??
+                  inferAccountTypeFromStatement(
+                    summaryContext.guessedInstitution ?? null,
+                    summaryContext.guessedAccountName,
+                    "bank"
+                  ),
+              }
+            : null) ??
           (summaryContext.accountName
             ? {
                 accountName: summaryContext.accountName,
@@ -1487,10 +1529,17 @@ export function ImportFilesModal({
               processingMessage ??
               (processingPhase === "auto_rerunning"
                 ? `Clover is rechecking the statement`
-                : "Clover is reading the statement"),
+                : getProgressDetail(
+                    {
+                      accountName: processingIdentity?.accountName ?? summaryContext.accountName,
+                      institution: processingIdentity?.institution ?? summaryContext.institution,
+                      accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber,
+                    },
+                    parsedRowsCount
+                  )),
             summary: null,
-              errorMessage: null,
-            });
+            errorMessage: null,
+          });
           if (!seededFallbackSummary && (parsedRowsCount > 0 || Boolean(processingIdentity?.accountName || processingIdentity?.institution))) {
             const fallbackAccountId =
               accountId && !accountId.startsWith("optimistic-")
@@ -1676,20 +1725,18 @@ export function ImportFilesModal({
             );
           }
           const hasParseableAccountIdentity = Boolean(
-            parsedRowsCount > 0 &&
-              (
-                resolvedIdentity.accountName ||
-                resolvedIdentity.institution ||
-                resolvedIdentity.accountNumber ||
-                summaryContext.accountName ||
-                summaryContext.institution ||
-                summaryContext.accountNumber
-              )
+            resolvedIdentity.accountName ||
+              resolvedIdentity.institution ||
+              resolvedIdentity.accountNumber ||
+              summaryContext.accountName ||
+              summaryContext.institution ||
+              summaryContext.accountNumber
           );
           const shouldDeferClientConfirmation =
             confirmedTransactionsCount === 0 &&
             (resolvedIdentity.institution === "GCash" || resolvedAccountType === "wallet") &&
-            !hasParseableAccountIdentity;
+            !hasParseableAccountIdentity &&
+            parsedRowsCount === 0;
 
           const shouldUseFallbackIdentity = !resolvedIdentity.accountName && !resolvedIdentity.institution && attempt >= 4;
           if (!resolvedIdentity.accountName && !resolvedIdentity.institution && !shouldUseFallbackIdentity) {
@@ -1754,7 +1801,7 @@ export function ImportFilesModal({
               updateItem(itemId, {
                 status: "importing",
                 progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
-                progressLabel: "Waiting for statement identity",
+                progressLabel: "Reading account details",
                 targetAccountId: fallbackAccountId,
               });
               publishImportActivity({
@@ -1766,7 +1813,14 @@ export function ImportFilesModal({
                 fileTotal: items.length,
                 completedFiles: completedFileCount,
                 progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
-                detail: "Clover is reading the statement",
+                detail: getProgressDetail(
+                  {
+                    accountName: summaryContext.fallbackAccountName,
+                    institution: null,
+                    accountNumber: summaryContext.accountNumber,
+                  },
+                  parsedRowsCount
+                ),
                 summary: null,
                 errorMessage: null,
               });
@@ -1776,7 +1830,7 @@ export function ImportFilesModal({
               updateItem(itemId, {
                 status: "importing",
                 progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
-                progressLabel: "Waiting for statement identity",
+                progressLabel: "Reading account details",
                 targetAccountId: accountId,
               });
               publishImportActivity({
@@ -1788,7 +1842,14 @@ export function ImportFilesModal({
                 fileTotal: items.length,
                 completedFiles: completedFileCount,
                 progress: Math.max(92, Math.min(95, 84 + attempt * 0.1)),
-                detail: "Clover is reading the statement",
+                detail: getProgressDetail(
+                  {
+                    accountName: summaryContext.accountName,
+                    institution: summaryContext.institution,
+                    accountNumber: summaryContext.accountNumber,
+                  },
+                  parsedRowsCount
+                ),
                 summary: null,
                 errorMessage: null,
               });
@@ -1853,7 +1914,14 @@ export function ImportFilesModal({
               fileTotal: items.length,
               completedFiles: completedFileCount,
               progress: Math.max(95, Math.min(98, 94 + attempt * 0.1)),
-              detail: "Clover is wrapping things up",
+              detail: getProgressDetail(
+                {
+                  accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
+                  institution: resolvedIdentity.institution ?? summaryContext.institution,
+                  accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber,
+                },
+                parsedRowsCount
+              ),
               summary: null,
               errorMessage: null,
             });
@@ -1952,7 +2020,14 @@ export function ImportFilesModal({
           fileTotal: items.length,
           completedFiles: completedFileCount,
           progress: Math.max(92, Math.min(95, 92 + attempt * 0.1)),
-          detail: "Clover is reading the statement",
+          detail: getProgressDetail(
+            {
+              accountName: summaryContext.accountName,
+              institution: summaryContext.institution,
+              accountNumber: summaryContext.accountNumber,
+            },
+            parsedRowsCount
+          ),
           summary: null,
           errorMessage: null,
         });
@@ -2532,6 +2607,12 @@ export function ImportFilesModal({
         void monitorQueuedImportAndConfirm(itemId, importFileId, optimisticAccountId, {
           fileName: item.file.name,
           fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
+          guessedAccountName: guessedIdentity?.accountName ?? null,
+          guessedInstitution: guessedIdentity?.institution ?? null,
+          guessedAccountNumber: null,
+          guessedAccountType: guessedIdentity
+            ? inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank")
+            : null,
           accountName: statementIdentity?.accountName ?? null,
           institution: statementIdentity?.institution ?? null,
           accountNumber: statementIdentity?.accountNumber ?? null,
@@ -2625,10 +2706,16 @@ export function ImportFilesModal({
             void onImported(result.summary);
           }
         });
-      } else {
-        void monitorQueuedImportAndConfirm(itemId, importFileId, null, {
+        } else {
+          void monitorQueuedImportAndConfirm(itemId, importFileId, null, {
           fileName: item.file.name,
           fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
+          guessedAccountName: guessedIdentity?.accountName ?? null,
+          guessedInstitution: guessedIdentity?.institution ?? null,
+          guessedAccountNumber: null,
+          guessedAccountType: guessedIdentity
+            ? inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank")
+            : null,
           accountName: statementIdentity?.accountName ?? null,
           institution: statementIdentity?.institution ?? null,
           accountNumber: statementIdentity?.accountNumber ?? null,

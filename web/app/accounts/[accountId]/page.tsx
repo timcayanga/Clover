@@ -788,6 +788,12 @@ function AccountDetailPageContent() {
 
         {account ? (
           <div className="accounts-detail__summary">
+            {latestCheckpoint?.status === "pending" ? (
+              <div className="accounts-detail__loading-chip-wrap">
+                <span className="accounts-summary-chip is-neutral">Loading</span>
+                <p className="panel-muted">Clover is still reading this statement and filling in the rest.</p>
+              </div>
+            ) : null}
             <div className="status-card">
               <div>
                 <div className="panel-muted">
@@ -1046,7 +1052,7 @@ function AccountDetailPageContent() {
               <strong>Delete this account?</strong>
             </div>
             <p>
-              This will remove <strong>{account.name}</strong> from Clover and also delete any linked transactions for this account.
+              This will remove <strong>{account?.name ?? "this account"}</strong> from Clover and also delete any linked transactions for this account.
             </p>
             <p>If you still need it later, you can always add the account again or re-import its files.</p>
             <div className="detail-warning-actions">

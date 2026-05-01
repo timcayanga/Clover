@@ -150,7 +150,10 @@ const mergeAccountsWithOptimisticImports = (
 
     return {
       ...account,
-      balance: account.balance ?? optimistic.balance,
+      balance:
+        account.balance && Number(account.balance) !== 0
+          ? account.balance
+          : optimistic.balance ?? account.balance,
       source: optimistic.source ?? account.source,
     };
   });
@@ -1917,6 +1920,11 @@ function AccountsPageContent() {
                           const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
                           const warning = getAccountWarning(account, duplicateCounts.get(duplicateKey) ?? 0);
                           const isDeleting = deletingAccountIdsSet.has(account.id);
+                          const latestCheckpoint =
+                            latestCheckpoints.checkpointsByAccountId.get(account.id) ??
+                            latestCheckpoints.checkpointsByAccountKey.get(normalizeImportedAccountKey(account.name, account.institution)) ??
+                            null;
+                          const isLoading = account.source === "upload" && latestCheckpoint?.status === "pending";
                           const accountBrand = getAccountBrand({
                             institution: account.institution,
                             name: account.name,
@@ -1994,6 +2002,8 @@ function AccountsPageContent() {
                                     <div className="accounts-account-card__balance-meta">
                                       {isDeleting ? (
                                         <span className="accounts-account-card__balance-pill is-neutral">Deleting</span>
+                                      ) : isLoading ? (
+                                        <span className="accounts-account-card__balance-pill is-neutral">Loading</span>
                                       ) : (
                                         <span className={`accounts-account-card__balance-pill is-${isLiability ? "danger" : "good"}`}>
                                           {isLiability ? "Outstanding" : "Spendable"}
@@ -2050,18 +2060,20 @@ function AccountsPageContent() {
                   <strong>{selectedAccount.institution ?? "No institution"}</strong>
                 </div>
               ) : null}
-              <div>
-                <span>Status</span>
-                <strong>
-                  {deletingAccountIdsSet.has(selectedAccount.id)
-                    ? "Deleting"
-                    : getAccountWarning(
-                        selectedAccount,
-                        duplicateCounts.get(`${selectedAccount.name.trim().toLowerCase()}::${(selectedAccount.institution ?? "").trim().toLowerCase()}`) ?? 0
-                      ) ?? "Ready"}
-                </strong>
+                <div>
+                  <span>Status</span>
+                  <strong>
+                    {deletingAccountIdsSet.has(selectedAccount.id)
+                      ? "Deleting"
+                      : (latestCheckpoint?.status === "pending" ? "Loading" : null) ??
+                        getAccountWarning(
+                          selectedAccount,
+                          duplicateCounts.get(`${selectedAccount.name.trim().toLowerCase()}::${(selectedAccount.institution ?? "").trim().toLowerCase()}`) ?? 0
+                        ) ??
+                        "Ready"}
+                  </strong>
+                </div>
               </div>
-            </div>
 
             <div className="accounts-drawer__guide">
               <strong>Balance guide</strong>
