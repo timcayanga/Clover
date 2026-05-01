@@ -1,14 +1,20 @@
 export const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
 
-const SUPPORTED_EXTENSIONS = [".pdf", ".csv", ".tsv"];
+const SUPPORTED_EXTENSIONS = [".pdf", ".csv", ".tsv", ".json", ".jpg", ".jpeg", ".png", ".webp"];
 const SUPPORTED_CONTENT_TYPES = new Set([
   "application/pdf",
   "text/csv",
   "application/csv",
   "text/tab-separated-values",
   "text/plain",
+  "application/json",
+  "text/json",
   "application/vnd.ms-excel",
   "application/octet-stream",
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
 ]);
 
 const getFileExtension = (fileName: string) => {
@@ -42,7 +48,7 @@ export const validateImportFile = (params: {
   }
 
   if (!isSupportedImportFile(params.fileName, params.contentType)) {
-    return "Only PDF, CSV, and TSV files are supported.";
+    return "Only PDF, CSV, TSV, JSON, JPEG, PNG, and WebP files are supported.";
   }
 
   return null;
@@ -54,7 +60,7 @@ export const validateImportFileMetadata = (params: { fileName: string; contentTy
   }
 
   if (!isSupportedImportFile(params.fileName, params.contentType)) {
-    return "Only PDF, CSV, and TSV files are supported.";
+    return "Only PDF, CSV, TSV, JSON, JPEG, PNG, and WebP files are supported.";
   }
 
   return null;

@@ -158,6 +158,17 @@ const fileTypeLabel = (file: File) => {
   if (lowerName.endsWith(".pdf") || file.type === "application/pdf") return "PDF";
   if (lowerName.endsWith(".csv")) return "CSV";
   if (lowerName.endsWith(".tsv")) return "TSV";
+  if (
+    lowerName.endsWith(".jpg") ||
+    lowerName.endsWith(".jpeg") ||
+    lowerName.endsWith(".png") ||
+    lowerName.endsWith(".webp") ||
+    file.type === "image/jpeg" ||
+    file.type === "image/jpg" ||
+    file.type === "image/png" ||
+    file.type === "image/webp"
+  )
+    return "Image";
   return "File";
 };
 
@@ -176,14 +187,21 @@ const getImportErrorCode = (error: unknown) => {
   return "unknown_error";
 };
 
-const isPdfImportFile = (file: File | string) =>
-  typeof file === "string" ? /\.pdf$/i.test(file) : file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+const isVisionImportFile = (file: File | string) =>
+  typeof file === "string"
+    ? /\.(pdf|jpg|jpeg|png|webp)$/i.test(file) || /image\/(jpeg|png|webp)|application\/pdf/i.test(file)
+    : file.type === "application/pdf" ||
+      file.type === "image/jpeg" ||
+      file.type === "image/jpg" ||
+      file.type === "image/png" ||
+      file.type === "image/webp" ||
+      /\.(pdf|jpg|jpeg|png|webp)$/i.test(file.name);
 
 const lowQualityImportWarning = (fileName: string) =>
   `${fileName} looks too blurry for Clover to read. Please upload a clearer image or a higher-resolution PDF.`;
 
 const isLowQualityImportFailure = (file: File | string, errorMessage: string) =>
-  isPdfImportFile(file) &&
+  isVisionImportFile(file) &&
   /blurry|low[- ]?resolution|unreadable|cannot read|can't read|could not read|failed to extract text|text layer is missing|ocr/i.test(
     errorMessage
   );
@@ -1137,7 +1155,7 @@ export function ImportFilesModal({
         if (validationError) {
           if (validationError === "Import files must be 2 MB or smaller.") {
             validationIssues.push(`${file.name} is larger than 2 MB.`);
-          } else if (validationError === "Only PDF, CSV, TSV, and JSON files are supported.") {
+          } else if (validationError === "Only PDF, CSV, TSV, JSON, JPEG, PNG, and WebP files are supported.") {
             validationIssues.push(`${file.name} has an invalid file extension.`);
           } else {
             validationIssues.push(`${file.name} could not be added.`);
@@ -1167,28 +1185,6 @@ export function ImportFilesModal({
         });
         if (selectedAccount) {
           const optimisticSummary = buildOptimisticUploadSummaryFromAccount(file.name, selectedAccount);
-          seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
-          void onImported(optimisticSummary);
-        } else if (guessedIdentity && optimisticAccountId) {
-          const optimisticSummary = {
-            fileName: file.name,
-            rowsImported: 0,
-            accountId: optimisticAccountId,
-            accountName: guessedIdentity.accountName,
-            institution: guessedIdentity.institution,
-            accountType: inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank"),
-            balance: null,
-            incomeTotal: 0,
-            expenseTotal: 0,
-            netTotal: 0,
-            topCategoryName: null,
-            topCategoryAmount: null,
-            topCategoryShare: null,
-            topMerchantName: null,
-            topMerchantCount: null,
-            optimistic: true,
-            optimisticAccountId,
-          } satisfies UploadInsightsSummary;
           seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
           void onImported(optimisticSummary);
         }
@@ -2301,6 +2297,9 @@ export function ImportFilesModal({
         deriveFallbackAccountNameFromFileName(item.file.name);
       const institution = localMetadata?.institution ?? guessedIdentity?.institution ?? null;
       const accountNumber = localMetadata?.accountNumber ?? null;
+      if (!accountNumber) {
+        return;
+      }
       const accountType = (localMetadata?.accountType ??
         inferAccountTypeFromStatement(institution, accountName, "bank")) as UploadInsightsSummary["accountType"];
       const resolvedAccountId = resolveLocalAccountId(accountName, institution, accountNumber);
@@ -2636,7 +2635,7 @@ export function ImportFilesModal({
               statementIdentity?.accountName ?? null,
               statementIdentity?.institution ?? null,
               statementAccountType,
-              null
+              statementIdentity?.accountNumber ?? null
             )
           : canUseOptimisticGuess
             ? item.optimisticAccountId ?? null
@@ -2741,7 +2740,7 @@ export function ImportFilesModal({
             statementIdentity.accountName ?? null,
             statementIdentity.institution ?? null,
             statementAccountType,
-            null
+            statementIdentity.accountNumber ?? null
           )
         : null;
 
