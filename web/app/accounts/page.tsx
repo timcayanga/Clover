@@ -1356,6 +1356,7 @@ function AccountsPageContent() {
     () => reconciledAccounts.find((account) => account.id === drawerAccountId) ?? null,
     [drawerAccountId, reconciledAccounts]
   );
+  const selectedAccountCurrency = selectedAccount?.currency ?? "PHP";
 
   useEffect(() => {
     if (!selectedAccount) {
@@ -2426,7 +2427,7 @@ function AccountsPageContent() {
                             : ""}
                         </span>
                       </div>
-                      <strong>{formatAccountAmount(parseAmount(transaction.amount), selectedAccount?.currency ?? "PHP")}</strong>
+                      <strong>{formatAccountAmount(parseAmount(transaction.amount), selectedAccountCurrency)}</strong>
                     </div>
                   ))
                 ) : (

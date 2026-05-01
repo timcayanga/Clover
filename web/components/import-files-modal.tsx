@@ -281,6 +281,18 @@ const normalizeStatementAccountName = (name: string, institution?: string | null
   return normalizedInstitution;
 };
 
+const formatImportedAccountName = (name: string | null, institution: string | null, accountNumber: string | null) => {
+  const normalizedName = normalizeStatementAccountName(name ?? "", institution);
+  const accountDigits = (accountNumber ?? "").replace(/\D/g, "");
+  const accountSuffix = accountDigits.length >= 4 ? accountDigits.slice(-4) : "";
+  if (!accountSuffix) {
+    return normalizedName;
+  }
+
+  const alreadyHasSuffix = new RegExp(`\\b${accountSuffix}$`).test(normalizedName.replace(/\s+/g, " "));
+  return alreadyHasSuffix ? normalizedName : `${normalizedName} ${accountSuffix}`.trim();
+};
+
 const accountKey = (name: string, institution: string | null) =>
   `${normalizeStatementAccountName(name, institution).toLowerCase()}::${(institution ?? "").trim().toLowerCase()}`;
 
@@ -375,7 +387,7 @@ const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
     return null;
   }
 
-  const normalizedAccountName = normalizeStatementAccountName(summary.accountName, summary.institution);
+  const normalizedAccountName = formatImportedAccountName(summary.accountName, summary.institution, summary.accountNumber ?? null);
   const accountType =
     summary.accountType ??
     inferAccountTypeFromStatement(summary.institution, normalizedAccountName, "bank");
