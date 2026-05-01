@@ -10211,6 +10211,11 @@ input.transaction-inline-edit--amount::placeholder {
   z-index: 80;
 }
 
+.modal-backdrop--transactions-content {
+  left: 236px;
+  width: calc(100vw - 236px);
+}
+
 .modal-backdrop--soft {
   background: rgba(9, 15, 20, 0.1);
   backdrop-filter: none;
@@ -18730,6 +18735,11 @@ input.transaction-inline-edit--amount::placeholder {
   .modal-backdrop {
     align-items: flex-end;
     padding: 0;
+  }
+
+  .modal-backdrop--transactions-content {
+    left: 0;
+    width: 100vw;
   }
 
   .modal-backdrop--centered-mobile {

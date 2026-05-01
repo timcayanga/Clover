@@ -226,13 +226,14 @@ type TransactionDetailDraft = {
   accountId: string;
   categoryId: string;
   amount: string;
+  currency: string;
   type: "debit" | "credit";
   description: string;
   isExcluded: boolean;
   isTransfer: boolean;
 };
 
-type EditableTransactionField = "name" | "date" | "accountId" | "categoryId" | "amount";
+type EditableTransactionField = "name" | "date" | "accountId" | "categoryId" | "amount" | "currency";
 
 type InlineEditableCellProps = {
   value: string;
@@ -924,6 +925,10 @@ const summarizeTransactionChange = (before: Transaction, after: Transaction, acc
     );
   }
 
+  if (before.currency !== after.currency) {
+    changes.push(`Currency: ${before.currency} → ${after.currency}`);
+  }
+
   if (before.isExcluded !== after.isExcluded) {
     changes.push(after.isExcluded ? "Excluded from totals" : "Included in totals");
   }
@@ -942,6 +947,7 @@ const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => 
   accountId: transaction.accountId,
   categoryId: transaction.categoryId ?? "",
   amount: transaction.amount,
+  currency: transaction.currency,
   type: transaction.type === "income" ? "credit" : "debit",
   description: normalizeTransactionNotes(transaction.description),
   isExcluded: transaction.isExcluded,
@@ -2908,6 +2914,7 @@ function TransactionsPageContent() {
     description: transaction.description ?? null,
     date: transaction.date.slice(0, 10),
     amount: transaction.amount,
+    currency: transaction.currency,
   });
 
   const updateTransaction = async (
@@ -3065,6 +3072,7 @@ function TransactionsPageContent() {
         accountId: patch.accountId ?? current.accountId,
         categoryId: patch.categoryId ?? current.categoryId,
         amount: patch.amount ?? current.amount,
+        currency: patch.currency ?? current.currency,
         type:
           patch.type === "income"
             ? "credit"
@@ -3119,6 +3127,7 @@ function TransactionsPageContent() {
         accountId: patch.accountId ?? current.accountId,
         categoryId: patch.categoryId ?? current.categoryId,
         amount: patch.amount ?? current.amount,
+        currency: patch.currency ?? current.currency,
         type:
           patch.type === "income"
             ? "credit"
@@ -3187,6 +3196,8 @@ function TransactionsPageContent() {
       payload.accountId = value;
     } else if (field === "categoryId") {
       payload.categoryId = value || otherCategoryId || null;
+    } else if (field === "currency") {
+      payload.currency = value.trim().toUpperCase();
     } else if (field === "amount") {
       payload.amount = value;
     }
@@ -3202,6 +3213,7 @@ function TransactionsPageContent() {
         accountName: transaction.accountName,
         categoryId: transaction.categoryId,
         categoryName: transaction.categoryName,
+        currency: transaction.currency,
       };
 
       if (field === "accountId") {
@@ -3217,6 +3229,10 @@ function TransactionsPageContent() {
           categories.find((category) => category.id === value)?.name ?? (value ? transaction.categoryName : null);
         rollbackPatch.accountId = transaction.accountId;
         rollbackPatch.accountName = transaction.accountName;
+      }
+
+      if (field === "currency") {
+        nextPatch.currency = value.trim().toUpperCase();
       }
 
       applyTransactionPatchLocally(transaction.id, nextPatch);
@@ -3586,6 +3602,7 @@ function TransactionsPageContent() {
         accountId: detailDraft.accountId,
         categoryId: detailDraft.categoryId || null,
         amount: detailDraft.amount,
+        currency: detailDraft.currency.trim().toUpperCase() || selectedTransaction.currency,
         type: detailDraftTypeToTransactionType(detailDraft.type),
         description: detailDraft.description || null,
         isExcluded: detailDraft.isExcluded,
@@ -4204,7 +4221,11 @@ function TransactionsPageContent() {
           ) : null}
 
           {bulkDeleteConfirmOpen ? (
-            <div className="modal-backdrop" role="presentation" onClick={() => setBulkDeleteConfirmOpen(false)}>
+            <div
+              className="modal-backdrop modal-backdrop--transactions-content"
+              role="presentation"
+              onClick={() => setBulkDeleteConfirmOpen(false)}
+            >
               <section
                 className="modal-card glass"
                 role="dialog"
@@ -5535,6 +5556,19 @@ function TransactionsPageContent() {
                   ) : null}
                 </label>
               </div>
+
+              <label className="transaction-drawer-form__currency">
+                Currency
+                <input
+                  value={detailDraft?.currency ?? selectedTransaction.currency}
+                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, currency: event.target.value.toUpperCase() } : current))}
+                  placeholder="PHP, USD, BTC"
+                  maxLength={8}
+                  autoCapitalize="characters"
+                  spellCheck={false}
+                />
+                <span className="field-help">Change this if the transaction should display in a different currency than the account.</span>
+              </label>
             </div>
 
             <div className="form-actions detail-actions">
