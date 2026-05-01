@@ -16653,18 +16653,41 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-empty-state {
   display: grid;
-  justify-items: start;
+  align-content: start;
+  justify-items: center;
   align-self: start;
-  justify-self: start;
-  gap: 8px;
-  width: min(100%, 540px);
-  padding: 16px 18px;
-  border-radius: 20px;
-  background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.06), transparent 40%),
-    rgba(255, 255, 255, 0.9);
-  border: 1px dashed rgba(3, 168, 192, 0.18);
+  justify-self: center;
+  gap: 4px;
+  width: min(100%, 480px);
+  min-height: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
   color: var(--text);
+  text-align: center;
+}
+
+.transactions-empty-state h3 {
+  font-family: var(--font-heading);
+  font-size: 1.08rem;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: var(--accent);
+}
+
+.transactions-empty-state__art,
+.empty-state__art {
+  width: min(100%, 172px);
+  margin-bottom: 0;
+  transform: translateY(-8px);
+}
+
+.transactions-empty-state__art img,
+.empty-state__art img {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .transactions-empty-state__eyebrow {
@@ -16673,18 +16696,23 @@ input.transaction-inline-edit--amount::placeholder {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--accent);
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .transactions-empty-state__copy {
-  max-width: 42ch;
+  max-width: 36ch;
   color: var(--muted);
+  margin-top: 0;
 }
 
 .transactions-empty-state__actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   width: auto;
+  justify-content: center;
+  margin-top: 0;
 }
 
 .transactions-empty-state__actions .button {
@@ -16693,7 +16721,23 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-empty-state__manual-link {
-  justify-self: start;
+  justify-self: center;
+}
+
+.transactions-empty-state__art--teal img {
+  filter: saturate(1.12) hue-rotate(160deg) brightness(0.98) contrast(1.03);
+}
+
+.transactions-table-wrap--empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.transactions-table-wrap--empty .transactions-empty-state {
+  max-width: none;
+  margin-inline: 0;
 }
 
 .accounts-empty-state {

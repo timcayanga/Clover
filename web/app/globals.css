@@ -4441,32 +4441,31 @@ body[data-clover-page-modal] .sidebar-backdrop {
 .reports-empty-wrap {
   display: flex;
   justify-content: center;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .reports-empty-wrap .reports-empty-state {
-  max-width: 560px;
+  max-width: 520px;
 }
 
 .reports-empty-state {
   min-height: 0;
-  padding: 20px 24px 18px;
-  gap: 2px;
+  padding: 0;
+  gap: 4px;
   align-content: start;
   justify-items: center;
-  border-style: solid;
-  background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.04), transparent 40%),
-    rgba(255, 255, 255, 0.92);
+  border: 0;
+  background: transparent;
 }
 
 .reports-empty-state .transactions-empty-state__art {
-  width: min(100%, 180px);
+  width: min(100%, 172px);
   margin-bottom: 0;
 }
 
 .reports-empty-state .transactions-empty-state__eyebrow {
-  margin-top: 2px;
+  margin-top: 0;
+  margin-bottom: 0;
 }
 
 .reports-empty-state .transactions-empty-state__copy {
@@ -5250,30 +5249,30 @@ body[data-clover-page-modal] .sidebar-backdrop {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding-top: 4px;
+  padding-top: 0;
 }
 
 .insights-empty-state {
   min-height: 0;
   max-width: 520px;
   width: 100%;
-  padding: 4px 8px 0;
+  padding: 0;
   background: transparent;
   border: 0;
   border-radius: 0;
   box-shadow: none;
   outline: none;
-  gap: 0;
+  gap: 4px;
 }
 
 .insights-empty-state .transactions-empty-state__art {
   width: min(100%, 168px);
-  margin-bottom: -2px;
+  margin-bottom: 0;
 }
 
 .insights-empty-state .transactions-empty-state__eyebrow {
   margin-top: 0;
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .insights-empty-state .transactions-empty-state__copy {
@@ -16507,27 +16506,26 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   justify-items: center;
   align-content: start;
-  gap: 6px;
+  gap: 4px;
   width: min(100%, 480px);
   margin-inline: auto;
-  padding: 14px 16px 16px;
-  border-radius: 20px;
-  background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.06), transparent 40%),
-    rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(3, 168, 192, 0.12);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
   color: var(--text);
   text-align: center;
 }
 
 .empty-state--illustrated .empty-state__art {
-  width: min(100%, 188px);
-  margin-bottom: 2px;
+  width: min(100%, 172px);
+  margin-bottom: 0;
+  transform: translateY(-8px);
 }
 
 .empty-state--illustrated strong {
   font-family: var(--font-heading);
-  font-size: 1.12rem;
+  font-size: 1.08rem;
   letter-spacing: -0.03em;
   line-height: 1.15;
 }
@@ -16541,8 +16539,8 @@ input.transaction-inline-edit--amount::placeholder {
   width: min(100%, 320px);
   min-height: 0;
   margin-inline: auto;
-  padding: 4px 8px 8px;
-  gap: 0;
+  padding: 0;
+  gap: 4px;
   border: 0;
   background: transparent;
   box-shadow: none;
@@ -16550,9 +16548,9 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .investments-empty-state--compact .transactions-empty-state__art {
-  width: min(100%, 124px);
+  width: min(100%, 132px);
   margin-top: 0;
-  margin-bottom: -2px;
+  margin-bottom: 0;
 }
 
 .investments-empty-state--compact .transactions-empty-state__eyebrow {
@@ -17310,30 +17308,30 @@ input.transaction-inline-edit--amount::placeholder {
   justify-items: center;
   align-self: start;
   justify-self: center;
-  gap: 6px;
+  gap: 4px;
   width: min(100%, 480px);
   min-height: 0;
-  padding: 14px 16px 16px;
-  border-radius: 20px;
-  background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.06), transparent 40%),
-    rgba(255, 255, 255, 0.9);
-  border: 1px dashed rgba(3, 168, 192, 0.18);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  border: 0;
   color: var(--text);
   text-align: center;
 }
 
 .transactions-empty-state h3 {
   font-family: var(--font-heading);
-  font-size: 1.12rem;
+  font-size: 1.08rem;
   line-height: 1.15;
   letter-spacing: -0.03em;
+  color: var(--accent);
 }
 
 .transactions-empty-state__art,
 .empty-state__art {
-  width: min(100%, 188px);
-  margin-bottom: 2px;
+  width: min(100%, 172px);
+  margin-bottom: 0;
+  transform: translateY(-8px);
 }
 
 .transactions-empty-state__art img,
@@ -17385,7 +17383,7 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 0 8px;
+  padding: 0;
 }
 
 .transactions-mobile-view.transactions-table-wrap--empty {
@@ -17398,56 +17396,53 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .dashboard-empty-state {
-  width: 100%;
-  max-width: none;
-  padding: 18px 20px;
-  grid-template-columns: minmax(170px, 240px) minmax(0, 1fr);
-  gap: 10px 18px;
-  text-align: left;
-  justify-items: start;
+  width: min(100%, 520px);
+  padding: 0;
+  grid-template-columns: none;
+  gap: 4px;
+  text-align: center;
+  justify-items: center;
 }
 
 .dashboard-empty-state .transactions-empty-state__art {
-  width: min(100%, 220px);
+  width: min(100%, 188px);
   margin-bottom: 0;
-  grid-column: 1;
-  grid-row: 1 / span 5;
-  align-self: center;
+  grid-column: auto;
+  grid-row: auto;
+  align-self: start;
 }
 
 .dashboard-empty-state .transactions-empty-state__eyebrow,
-.dashboard-empty-state h3,
 .dashboard-empty-state .transactions-empty-state__copy,
 .dashboard-empty-state .transactions-empty-state__actions {
-  grid-column: 2;
+  grid-column: auto;
 }
 
 .dashboard-empty-state h3 {
-  max-width: 20ch;
+  max-width: 26ch;
 }
 
 .dashboard-empty-state .transactions-empty-state__copy {
-  max-width: 34ch;
+  max-width: 36ch;
 }
 
 @media (max-width: 767px) {
   .dashboard-empty-state {
-    grid-template-columns: 1fr;
+    grid-template-columns: none;
     justify-items: center;
     text-align: center;
-    gap: 6px;
+    gap: 4px;
   }
 
   .dashboard-empty-state .transactions-empty-state__art,
   .dashboard-empty-state .transactions-empty-state__eyebrow,
-  .dashboard-empty-state h3,
   .dashboard-empty-state .transactions-empty-state__copy,
   .dashboard-empty-state .transactions-empty-state__actions {
     grid-column: auto;
   }
 
   .dashboard-empty-state .transactions-empty-state__art {
-    width: min(100%, 178px);
+    width: min(100%, 172px);
     grid-row: auto;
   }
 }

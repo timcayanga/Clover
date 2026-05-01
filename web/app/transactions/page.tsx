@@ -4316,7 +4316,9 @@ function TransactionsPageContent() {
             </div>
           ) : null}
 
-          <div className="line-item-header" role="row" aria-label="Transaction columns" hidden={isCompactViewport}>
+          {!isCompactViewport ? (
+            <>
+          <div className="line-item-header" role="row" aria-label="Transaction columns">
             <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
               <input
                 ref={selectAllRef}
@@ -4360,7 +4362,6 @@ function TransactionsPageContent() {
           <div
             className={`table-wrap transactions-table-wrap${!hasVisibleTransactions && !isTableLoading ? " transactions-table-wrap--empty" : ""}`}
             aria-busy={isTableLoading}
-            hidden={isCompactViewport}
           >
             {isTableLoading ? (
               <div className="transactions-loading-state" role="status" aria-live="polite" aria-label="Loading transactions">
@@ -4556,10 +4557,12 @@ function TransactionsPageContent() {
               <div className="empty-state">No transactions match the current filters. Clear one filter or widen the date range to bring rows back.</div>
             )}
           </div>
+            </>
+          ) : null}
 
+          {isCompactViewport ? (
           <div
             className={`transactions-mobile-view${!hasVisibleTransactions && !isTableLoading ? " transactions-table-wrap--empty" : ""}`}
-            hidden={!isCompactViewport}
           >
             {isTableLoading ? (
               <div className="transactions-mobile-loading" role="status" aria-live="polite" aria-label="Loading transactions">
@@ -4766,6 +4769,7 @@ function TransactionsPageContent() {
               <div className="empty-state">No transactions match the current filters. Clear one filter or widen the date range to bring rows back.</div>
             )}
           </div>
+          ) : null}
 
           <div className="transactions-footer" style={{ ...transactionsFooterStyle, marginTop: "auto" }}>
             <div className="table-footer__summary">
