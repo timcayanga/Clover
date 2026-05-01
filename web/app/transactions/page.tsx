@@ -15,6 +15,7 @@ import { useSearchParams } from "next/navigation";
 import { CloverShell, useCloverChrome } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import {
@@ -4524,27 +4525,27 @@ function TransactionsPageContent() {
                 );
               })
             ) : !hasVisibleTransactions ? (
-              <div className="transactions-empty-state">
-                <div className="transactions-empty-state__art" aria-hidden="true">
-                  <img src={transactionsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
-                </div>
-                <p className="transactions-empty-state__eyebrow">It is quiet in here</p>
-                <p className="transactions-empty-state__copy">
-                  Add your first transaction to get the dashboard moving and start building your categories.
-                </p>
-                <div className="transactions-empty-state__actions">
-                  <button className="button button-primary button-small" type="button" onClick={() => void openManualAdd()}>
-                    Add transaction
-                  </button>
-                  <button
-                    className="button button-secondary button-small transactions-empty-state__import"
-                    type="button"
-                    onClick={() => openImportFiles()}
-                  >
-                    Import files
-                  </button>
-                </div>
-              </div>
+              <EmptyDataCta
+                className="transactions-empty-state--table"
+                eyebrow="It is quiet in here"
+                title="No transactions yet."
+                copy="Add your first transaction to get the dashboard moving and start building your categories."
+                illustration={transactionsEmptyStateIllustration}
+                illustrationAlt=""
+                importHref="/transactions?import=1"
+                accountHref="/accounts"
+                transactionHref="/transactions?manual=1"
+                actions={
+                  <>
+                    <button className="button button-primary button-small" type="button" onClick={() => void openManualAdd()}>
+                      Add transaction
+                    </button>
+                    <button className="button button-secondary button-small transactions-empty-state__import" type="button" onClick={() => openImportFiles()}>
+                      Import files
+                    </button>
+                  </>
+                }
+              />
             ) : (
               <div className="empty-state">No transactions match the current filters. Clear one filter or widen the date range to bring rows back.</div>
             )}
@@ -4734,27 +4735,27 @@ function TransactionsPageContent() {
                 })}
               </div>
             ) : !hasVisibleTransactions ? (
-              <div className="transactions-empty-state">
-                <div className="transactions-empty-state__art" aria-hidden="true">
-                  <img src={transactionsEmptyStateIllustration} alt="" loading="lazy" decoding="async" />
-                </div>
-                <p className="transactions-empty-state__eyebrow">It is quiet in here</p>
-                <p className="transactions-empty-state__copy">
-                  Add your first transaction to get the dashboard moving and start building your categories.
-                </p>
-                <div className="transactions-empty-state__actions">
-                  <button className="button button-primary button-small" type="button" onClick={() => void openManualAdd()}>
-                    Add transaction
-                  </button>
-                  <button
-                    className="button button-secondary button-small transactions-empty-state__import"
-                    type="button"
-                    onClick={() => openImportFiles()}
-                  >
-                    Import files
-                  </button>
-                </div>
-              </div>
+              <EmptyDataCta
+                className="transactions-empty-state--table"
+                eyebrow="It is quiet in here"
+                title="No transactions yet."
+                copy="Add your first transaction to get the dashboard moving and start building your categories."
+                illustration={transactionsEmptyStateIllustration}
+                illustrationAlt=""
+                importHref="/transactions?import=1"
+                accountHref="/accounts"
+                transactionHref="/transactions?manual=1"
+                actions={
+                  <>
+                    <button className="button button-primary button-small" type="button" onClick={() => void openManualAdd()}>
+                      Add transaction
+                    </button>
+                    <button className="button button-secondary button-small transactions-empty-state__import" type="button" onClick={() => openImportFiles()}>
+                      Import files
+                    </button>
+                  </>
+                }
+              />
             ) : (
               <div className="empty-state">No transactions match the current filters. Clear one filter or widen the date range to bring rows back.</div>
             )}
