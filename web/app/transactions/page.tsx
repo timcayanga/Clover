@@ -1869,23 +1869,38 @@ function TransactionsPageContent() {
   };
 
   const openAddMenu = () => {
-    closeChrome();
-    setDownloadMenuOpen(false);
-    setAddMenuOpen((current) => !current);
+    flushSync(() => {
+      closeChrome();
+      setDownloadMenuOpen(false);
+      setAddMenuOpen((current) => !current);
+    });
   };
 
   const openDownloadMenu = () => {
-    setAddMenuOpen(false);
-    setDownloadMenuOpen((current) => !current);
+    flushSync(() => {
+      setAddMenuOpen(false);
+      setDownloadMenuOpen((current) => !current);
+    });
   };
 
   const openImportFiles = (files: File[] | null = null) => {
-    closeChrome();
-    setPendingImportSummary(null);
-    closeToolbarMenus();
-    setImportSeedFiles(files && files.length > 0 ? files : null);
-    setImportOpen(true);
+    flushSync(() => {
+      closeChrome();
+      setPendingImportSummary(null);
+      closeToolbarMenus();
+      setImportSeedFiles(files && files.length > 0 ? files : null);
+      setImportOpen(true);
+    });
   };
+
+  useEffect(() => {
+    const active = addMenuOpen || downloadMenuOpen || importOpen || manualOpen;
+    document.body.toggleAttribute("data-clover-page-modal", active);
+
+    return () => {
+      document.body.removeAttribute("data-clover-page-modal");
+    };
+  }, [addMenuOpen, downloadMenuOpen, importOpen, manualOpen]);
 
   useEffect(() => {
     if (urlSearchParams.get("import") === "1") {
@@ -2394,8 +2409,10 @@ function TransactionsPageContent() {
   };
 
   const openManualAdd = async () => {
-    closeChrome();
-    setAddMenuOpen(false);
+    flushSync(() => {
+      closeChrome();
+      setAddMenuOpen(false);
+    });
 
     const activeWorkspaceId = selectedWorkspaceId || readTransactionsWorkspaceCache()?.selectedWorkspaceId || workspaces[0]?.id || null;
 
@@ -2418,13 +2435,15 @@ function TransactionsPageContent() {
       return;
     }
 
-    setManualForm(createEmptyManualForm("", getOtherCategoryId(categories)));
-    setManualCategoryTouched(false);
-    setManualCategoryAutoApplied(false);
-    setManualCategorySuggestion(null);
-    setManualAccountMenuOpen(false);
-    setManualCategoryMenuOpen(false);
-    setManualOpen(true);
+    flushSync(() => {
+      setManualForm(createEmptyManualForm("", getOtherCategoryId(categories)));
+      setManualCategoryTouched(false);
+      setManualCategoryAutoApplied(false);
+      setManualCategorySuggestion(null);
+      setManualAccountMenuOpen(false);
+      setManualCategoryMenuOpen(false);
+      setManualOpen(true);
+    });
 
     try {
       const accountId = await ensureDefaultAccount(activeWorkspaceId);

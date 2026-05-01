@@ -1,7 +1,5 @@
 "use client";
 
-import { pdfjs } from "@/lib/pdfjs";
-
 type ProgressCallback = (progress: {
   pageNumber: number;
   totalPages: number;
@@ -16,11 +14,12 @@ export const extractTextFromFile = async (
 ) => {
   const lowerName = file.name.toLowerCase();
 
-  if (lowerName.endsWith(".csv") || lowerName.endsWith(".tsv") || lowerName.endsWith(".txt")) {
+  if (lowerName.endsWith(".csv") || lowerName.endsWith(".tsv") || lowerName.endsWith(".txt") || lowerName.endsWith(".json")) {
     return file.text();
   }
 
   if (lowerName.endsWith(".pdf")) {
+    const { pdfjs } = await import("@/lib/pdfjs");
     const data = new Uint8Array(await file.arrayBuffer());
     const options = password ? { data, password } : { data };
     const loadingTask = pdfjs.getDocument(options as any);
@@ -59,5 +58,5 @@ export const extractTextFromFile = async (
     return pages.join("\n");
   }
 
-  throw new Error("Only CSV, TSV, TXT, and PDF files are supported.");
+  throw new Error("Only CSV, TSV, TXT, JSON, and PDF files are supported.");
 };

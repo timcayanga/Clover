@@ -1446,7 +1446,10 @@ function AccountsPageContent() {
   };
 
   const openAddAccount = () => {
-    closeChrome();
+    flushSync(() => {
+      closeChrome();
+    });
+
     if (planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
       showPlanLimitNudge({
         planTier,
@@ -1457,12 +1460,17 @@ function AccountsPageContent() {
       return;
     }
 
-    setAddAccountError(null);
-    setAddOpen(true);
+    flushSync(() => {
+      setAddAccountError(null);
+      setAddOpen(true);
+    });
   };
 
   const openImportFiles = (files: File[] | null = null) => {
-    closeChrome();
+    flushSync(() => {
+      closeChrome();
+    });
+
     if (planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
       showPlanLimitNudge({
         planTier,
@@ -1473,12 +1481,23 @@ function AccountsPageContent() {
       return;
     }
 
-    setPendingImportSummary(null);
-    setAddOpen(false);
-    setImportSessionId((current) => current + 1);
-    setImportSeedFiles(files && files.length > 0 ? files : null);
-    setImportOpen(true);
+    flushSync(() => {
+      setPendingImportSummary(null);
+      setAddOpen(false);
+      setImportSessionId((current) => current + 1);
+      setImportSeedFiles(files && files.length > 0 ? files : null);
+      setImportOpen(true);
+    });
   };
+
+  useEffect(() => {
+    const active = addOpen || importOpen;
+    document.body.toggleAttribute("data-clover-page-modal", active);
+
+    return () => {
+      document.body.removeAttribute("data-clover-page-modal");
+    };
+  }, [addOpen, importOpen]);
 
   const applyManualNameSuggestion = (suggestion: InstitutionSuggestion) => {
     if (suggestion.category === "investment_platform") {

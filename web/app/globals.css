@@ -203,6 +203,15 @@ label {
     linear-gradient(180deg, #ffffff 0%, #f5f8fa 100%);
 }
 
+body[data-clover-page-modal="true"] .app-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+body[data-clover-page-modal="true"] .sidebar,
+body[data-clover-page-modal="true"] .sidebar-backdrop {
+  display: none;
+}
+
 .sidebar-backdrop {
   display: none;
 }

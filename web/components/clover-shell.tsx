@@ -617,6 +617,52 @@ export function CloverShell({
     };
   }, [searchWorkspaceId]);
 
+  useEffect(() => {
+    const reloadOnceForChunkFailure = () => {
+      const storageKey = "clover.chunk-reload.v1";
+      if (window.sessionStorage.getItem(storageKey) === "1") {
+        return;
+      }
+
+      window.sessionStorage.setItem(storageKey, "1");
+      window.location.reload();
+    };
+
+    const shouldReload = (message: string) =>
+      /Loading chunk|ChunkLoadError|Failed to fetch dynamically imported module|Importing a module script failed/i.test(message);
+
+    const handleError = (event: ErrorEvent) => {
+      const message = [event.message, event.error instanceof Error ? event.error.message : ""].join(" ");
+      if (shouldReload(message)) {
+        reloadOnceForChunkFailure();
+      }
+    };
+
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      const message =
+        typeof reason === "string"
+          ? reason
+          : reason instanceof Error
+            ? reason.message
+            : typeof reason === "object" && reason !== null && "message" in reason
+              ? String((reason as { message?: unknown }).message ?? "")
+              : "";
+
+      if (shouldReload(message)) {
+        reloadOnceForChunkFailure();
+      }
+    };
+
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleRejection);
+
+    return () => {
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleRejection);
+    };
+  }, []);
+
   const normalizedSearchQuery = normalizeSidebarSearch(searchQuery);
   const shouldShowSearchResults = isSearchOpen || normalizedSearchQuery.length > 0;
   const pageSearchResults = useMemo<SidebarSearchResult[]>(() => {
