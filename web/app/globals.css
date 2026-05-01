@@ -5238,6 +5238,46 @@ body[data-clover-page-modal] .sidebar-backdrop {
   gap: 10px;
 }
 
+.insights-empty-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding-top: 4px;
+}
+
+.insights-empty-state {
+  min-height: 0;
+  max-width: 520px;
+  width: 100%;
+  padding: 4px 8px 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  outline: none;
+  gap: 0;
+}
+
+.insights-empty-state .transactions-empty-state__art {
+  width: min(100%, 168px);
+  margin-bottom: -2px;
+}
+
+.insights-empty-state .transactions-empty-state__eyebrow {
+  margin-top: 0;
+  margin-bottom: 2px;
+}
+
+.insights-empty-state .transactions-empty-state__copy {
+  max-width: 28ch;
+  margin-top: 0;
+  text-align: center;
+}
+
+.insights-empty-state .transactions-empty-state__actions {
+  margin-top: 6px;
+}
+
 .insights-snapshot {
   padding: 24px;
   border: 1px solid var(--stroke);
