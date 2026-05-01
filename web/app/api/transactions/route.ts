@@ -69,6 +69,7 @@ type TransactionSummaryRow = {
   currency: string;
   description: string | null;
   category: { name: string } | null;
+  categoryName: string | null;
   account: { name: string } | null;
   createdAt: Date;
   isTransfer: boolean;
@@ -95,7 +96,8 @@ const getTransactionWarningReason = (transaction: TransactionSummaryRow, duplica
     return "Ignored from totals";
   }
 
-  if (!transaction.categoryId) {
+  const categoryName = transaction.category?.name ?? transaction.categoryName ?? null;
+  if (!transaction.categoryId && !(categoryName ?? "").trim()) {
     return "Needs category review";
   }
 
@@ -113,6 +115,7 @@ const mapTransactionRow = (transaction: {
   account: { name: string };
   categoryId: string | null;
   category: { name: string } | null;
+  categoryName: string | null;
   reviewStatus: string | null;
   createdAt: Date;
   parserConfidence: number;
@@ -136,7 +139,7 @@ const mapTransactionRow = (transaction: {
   accountId: transaction.accountId,
   accountName: transaction.account.name,
   categoryId: transaction.categoryId,
-  categoryName: transaction.category?.name ?? null,
+  categoryName: transaction.category?.name ?? transaction.categoryName ?? null,
   reviewStatus: transaction.reviewStatus,
   parserConfidence: transaction.parserConfidence,
   categoryConfidence: transaction.categoryConfidence,
@@ -236,6 +239,7 @@ export async function GET(request: Request) {
             transferConfidence: true,
             currency: true,
             description: true,
+            categoryName: true,
             category: {
               select: {
                 name: true,
@@ -306,6 +310,7 @@ export async function GET(request: Request) {
           merchantRaw: transaction.merchantRaw,
           merchantClean: transaction.merchantClean,
           description: transaction.description,
+          categoryName: transaction.categoryName,
           isTransfer: transaction.isTransfer,
           isExcluded: transaction.isExcluded,
           createdAt: transaction.createdAt,
@@ -353,6 +358,7 @@ export async function GET(request: Request) {
         transferConfidence: true,
         currency: true,
         description: true,
+        categoryName: true,
         category: {
           select: {
             name: true,
@@ -399,7 +405,7 @@ export async function GET(request: Request) {
     summaryRows.forEach((transaction, index) => {
       const warningReason = getTransactionWarningReason(transaction, duplicateCounts);
       const amount = Math.abs(Number(transaction.amount));
-      const categoryName = transaction.category?.name ?? "Other";
+      const categoryName = transaction.category?.name ?? transaction.categoryName ?? "Other";
       const accountName = transaction.account?.name ?? "";
       const mappedTransaction = mapTransactionRow({
         id: transaction.id,
@@ -421,6 +427,7 @@ export async function GET(request: Request) {
         merchantRaw: transaction.merchantRaw,
         merchantClean: transaction.merchantClean,
         description: transaction.description,
+        categoryName: transaction.categoryName,
         isTransfer: transaction.isTransfer,
         isExcluded: transaction.isExcluded,
         createdAt: transaction.createdAt,

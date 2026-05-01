@@ -132,9 +132,7 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
 };
 
 const accountMatchesTransaction = (transaction: Transaction, account: Account) =>
-  transaction.accountId === account.id ||
-  normalizeImportedAccountKey(transaction.accountName, account.institution) ===
-    normalizeImportedAccountKey(account.name, account.institution, account.accountNumber);
+  transaction.accountId === account.id;
 
 type Category = {
   id: string;
@@ -218,9 +216,6 @@ type BulkEditForm = {
   accountId: string;
   categoryId: string;
   type: "" | "income" | "expense" | "transfer";
-  description: string;
-  isExcluded: "" | "include" | "exclude";
-  isTransfer: "" | "true" | "false";
 };
 
 type TransactionDetailDraft = {
@@ -661,9 +656,6 @@ const createEmptyBulkEditForm = (): BulkEditForm => ({
   accountId: "",
   categoryId: "",
   type: "",
-  description: "",
-  isExcluded: "",
-  isTransfer: "",
 });
 
 const normalizeFilterValue = (value: string) => value.trim().toLowerCase();
@@ -1356,6 +1348,7 @@ function TransactionsPageContent() {
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  const [selectionMenuOpen, setSelectionMenuOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [importSeedFiles, setImportSeedFiles] = useState<File[] | null>(null);
   const [importBackgroundOnly, setImportBackgroundOnly] = useState(false);
@@ -1390,20 +1383,21 @@ function TransactionsPageContent() {
   }, [transactions]);
   const [merchantRenameBusy, setMerchantRenameBusy] = useState(false);
   const [manualCategorySuggestion, setManualCategorySuggestion] = useState<CategorySuggestion | null>(null);
-  const [detailCategorySuggestion, setDetailCategorySuggestion] = useState<CategorySuggestion | null>(null);
   const [manualCategoryTouched, setManualCategoryTouched] = useState(false);
   const [manualCategoryAutoApplied, setManualCategoryAutoApplied] = useState(false);
   const [manualAccountMenuOpen, setManualAccountMenuOpen] = useState(false);
   const [manualCategoryMenuOpen, setManualCategoryMenuOpen] = useState(false);
   const transactionRowRefs = useRef(new Map<string, HTMLElement>());
+  const warningPopoverRefs = useRef(new Map<string, HTMLDivElement | null>());
+  const selectionActionsMenuRef = useRef<HTMLDivElement | null>(null);
   const transactionsLoadRequestRef = useRef(0);
   const manualCategorySuggestionRequestRef = useRef(0);
-  const detailCategorySuggestionRequestRef = useRef(0);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
   const reviewTransactionParamRef = useRef<string | null>(null);
   const drilldownParamRef = useRef<string | null>(null);
   const [isCompactViewport, setIsCompactViewport] = useState(false);
+  const [activeWarningTransactionId, setActiveWarningTransactionId] = useState<string | null>(null);
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const workspaceTransactionCount = transactions.length;
@@ -1440,14 +1434,6 @@ function TransactionsPageContent() {
     () => categories.find((category) => category.id === manualSelectedCategoryId) ?? null,
     [categories, manualSelectedCategoryId]
   );
-  const detailSuggestionMerchantText = useMemo(() => {
-    if (!selectedTransaction || !detailDraft) {
-      return "";
-    }
-
-    return detailDraft.merchantClean.trim() || detailDraft.merchantRaw.trim() || selectedTransaction.merchantRaw.trim();
-  }, [detailDraft?.merchantClean, detailDraft?.merchantRaw, selectedTransaction?.id, selectedTransaction?.merchantRaw]);
-  const detailSuggestionType = detailDraft?.type ?? (selectedTransaction?.type === "income" ? "credit" : "debit");
   const expandedAccountFilters = useMemo(() => {
     if (accountFilters.length === 0) {
       return accountFilters;
@@ -2164,6 +2150,10 @@ function TransactionsPageContent() {
 
   const warningReasonFor = (transaction: Transaction) => {
     if (transaction.warningReason) {
+      if (transaction.warningReason === "Possible duplicate") {
+        return null;
+      }
+
       return transaction.warningReason;
     }
 
@@ -2183,8 +2173,7 @@ function TransactionsPageContent() {
   };
 
   const detailWarningReasonFor = (transaction: Transaction) => {
-    const warningReason = warningReasonFor(transaction);
-    return warningReason === "Possible duplicate" ? null : warningReason;
+    return warningReasonFor(transaction);
   };
 
   const isReviewableTransaction = (transaction: Transaction) => {
@@ -2307,7 +2296,8 @@ function TransactionsPageContent() {
     } else {
       focusTransactionById(transaction.id);
     }
-    openTransactionDetail(transaction);
+    setActiveWarningTransactionId(transaction.id);
+    setTransactionDeleteConfirmOpen(false);
     const warningReason = warningReasonFor(transaction);
     if (warningReason) {
       capturePostHogClientEventOnce(
@@ -2379,6 +2369,7 @@ function TransactionsPageContent() {
       setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
     });
 
+    setActiveWarningTransactionId(null);
     if (nextReviewTransaction) {
       window.requestAnimationFrame(() => {
         openTransactionReview(nextReviewTransaction);
@@ -2392,7 +2383,6 @@ function TransactionsPageContent() {
   const closeTransactionDetail = () => {
     setSelectedTransaction(null);
     setDetailDraft(null);
-    setDetailCategorySuggestion(null);
     setTransactionDeleteConfirmOpen(false);
   };
 
@@ -2725,44 +2715,6 @@ function TransactionsPageContent() {
     otherCategoryId,
     selectedWorkspaceId,
   ]);
-
-  useEffect(() => {
-    if (!selectedTransaction || !detailDraft || !selectedWorkspaceId) {
-      setDetailCategorySuggestion(null);
-      return;
-    }
-
-    const merchantText = detailSuggestionMerchantText;
-    if (merchantText.length < 2) {
-      setDetailCategorySuggestion(null);
-      return;
-    }
-
-    const requestId = detailCategorySuggestionRequestRef.current + 1;
-    detailCategorySuggestionRequestRef.current = requestId;
-    const controller = new AbortController();
-
-    const timer = window.setTimeout(() => {
-      void fetchCategorySuggestion(merchantText, detailSuggestionType === "credit" ? "income" : "expense", controller.signal)
-        .then((suggestion) => {
-          if (controller.signal.aborted || requestId !== detailCategorySuggestionRequestRef.current) {
-            return;
-          }
-
-          setDetailCategorySuggestion(suggestion);
-        })
-        .catch(() => {
-          if (!controller.signal.aborted) {
-            setDetailCategorySuggestion(null);
-          }
-        });
-    }, 250);
-
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, [detailSuggestionMerchantText, detailSuggestionType, fetchCategorySuggestion, selectedTransaction?.id, selectedWorkspaceId]);
 
   const saveManualTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -3358,35 +3310,27 @@ function TransactionsPageContent() {
       payload: {
         accountId: bulkEditForm.accountId || undefined,
         categoryId: bulkEditForm.categoryId || undefined,
-        isExcluded:
-          bulkEditForm.isExcluded === ""
-            ? undefined
-            : bulkEditForm.isExcluded === "exclude",
-        isTransfer:
-          bulkEditForm.isTransfer === ""
-            ? undefined
-            : bulkEditForm.isTransfer === "true",
+        type: bulkEditForm.type || undefined,
       },
     }));
 
     applyTransactionPatchesLocally(
       payloads.map(({ transaction, payload }) => ({
         transactionId: transaction.id,
-        patch: {
-          ...(payload.accountId
-            ? {
-                accountId: payload.accountId,
-                accountName: accountNames.get(payload.accountId) ?? transaction.accountName,
+          patch: {
+            ...(payload.accountId
+              ? {
+                  accountId: payload.accountId,
+                  accountName: accountNames.get(payload.accountId) ?? transaction.accountName,
               }
             : {}),
-          ...(payload.categoryId
-            ? {
-                categoryId: payload.categoryId,
-                categoryName: categoryNames.get(payload.categoryId) ?? transaction.categoryName,
-              }
-            : {}),
-          ...(payload.isExcluded !== undefined ? { isExcluded: payload.isExcluded } : {}),
-          ...(payload.isTransfer !== undefined ? { isTransfer: payload.isTransfer } : {}),
+            ...(payload.categoryId
+              ? {
+                  categoryId: payload.categoryId,
+                  categoryName: categoryNames.get(payload.categoryId) ?? transaction.categoryName,
+                }
+              : {}),
+          ...(payload.type !== undefined ? { type: payload.type } : {}),
         },
       }))
     );

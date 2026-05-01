@@ -40,6 +40,7 @@ const mapTransactionRow = (transaction: {
   merchantRaw: string;
   merchantClean: string | null;
   category: { name: string } | null;
+  categoryName: string | null;
   description: string | null;
   isExcluded: boolean;
   importFileId: string | null;
@@ -51,7 +52,7 @@ const mapTransactionRow = (transaction: {
   date: transaction.date.toISOString(),
   merchantRaw: transaction.merchantRaw,
   merchantClean: transaction.merchantClean,
-  categoryName: transaction.category?.name ?? null,
+  categoryName: transaction.category?.name ?? transaction.categoryName ?? null,
   description: transaction.description,
   isExcluded: transaction.isExcluded,
   importFileId: transaction.importFileId,
@@ -66,7 +67,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
 
     const account = await prisma.account.findUnique({
       where: { id: accountId },
-      select: { id: true, workspaceId: true, name: true, institution: true, type: true },
+      select: { id: true, workspaceId: true, name: true, institution: true, type: true, accountNumber: true },
     });
 
     if (!account) {
@@ -77,19 +78,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
 
     const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const pageSize = Math.max(1, Number(searchParams.get("pageSize") ?? "25") || 25);
-    const siblingAccounts = await prisma.account.findMany({
-      where: {
-        workspaceId: account.workspaceId,
-        name: account.name,
-        institution: account.institution,
-        type: account.type,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    const accountIds = siblingAccounts.length > 0 ? siblingAccounts.map((entry) => entry.id) : [accountId];
+    const accountIds = [accountId];
     const where = buildTransactionQueryWhere(account.workspaceId, { accountIds });
     const skip = (page - 1) * pageSize;
 
@@ -105,6 +94,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
           type: true,
           merchantRaw: true,
           merchantClean: true,
+          categoryName: true,
           description: true,
           isExcluded: true,
           category: {

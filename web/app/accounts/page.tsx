@@ -143,9 +143,7 @@ const mergeImportedPreviewTransactions = (
 };
 
 const transactionMatchesAccount = (transaction: Transaction, account: Account) =>
-  transaction.accountId === account.id ||
-  normalizeImportedAccountKey(transaction.accountName ?? null, account.institution) ===
-    normalizeImportedAccountKey(account.name, account.institution);
+  transaction.accountId === account.id;
 
 const mergeAccountsWithOptimisticImports = (
   fetchedAccounts: Account[],
