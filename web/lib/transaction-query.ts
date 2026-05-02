@@ -6,6 +6,7 @@ export type TransactionSortDirection = "asc" | "desc";
 
 export type TransactionQueryFilters = {
   query?: string;
+  currencyFilter?: string;
   categoryIds?: string[];
   accountIds?: string[];
   typeFilters?: Array<"debit" | "credit">;
@@ -94,6 +95,7 @@ const splitFilterValues = (value: string) =>
 
 export const parseTransactionQueryFilters = (searchParams: Pick<URLSearchParams, "get" | "getAll">) => {
   const query = searchParams.get("query") ?? searchParams.get("q") ?? "";
+  const currencyFilter = searchParams.get("currency") ?? "";
   const categoryIds = [
     ...searchParams.getAll("category"),
     ...searchParams.getAll("categoryId"),
@@ -136,6 +138,7 @@ export const parseTransactionQueryFilters = (searchParams: Pick<URLSearchParams,
 
   return {
     query,
+    currencyFilter,
     categoryIds,
     accountIds,
     typeFilters,
@@ -161,6 +164,10 @@ export const buildTransactionQuerySearchParams = (
 
   if (filters.query?.trim()) {
     params.set("query", filters.query.trim());
+  }
+
+  if (filters.currencyFilter?.trim()) {
+    params.set("currency", filters.currencyFilter.trim().toUpperCase());
   }
 
   filters.categoryIds?.filter(Boolean).forEach((value) => params.append("category", value));
@@ -245,6 +252,11 @@ export const buildTransactionQueryWhere = (workspaceId: string, filters: Transac
       { merchantClean: { contains: query, mode: "insensitive" } },
       { description: { contains: query, mode: "insensitive" } },
     ];
+  }
+
+  const currencyFilter = filters.currencyFilter?.trim().toUpperCase();
+  if (currencyFilter) {
+    where.currency = currencyFilter;
   }
 
   if (categoryIds.length > 0) {

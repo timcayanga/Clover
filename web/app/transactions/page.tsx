@@ -1035,6 +1035,7 @@ function ActionIcon({
     | "redo"
     | "search"
     | "calendar"
+    | "currency"
     | "filters"
     | "summary"
     | "save"
@@ -1107,6 +1108,13 @@ function ActionIcon({
           <path d="M8 3v4" />
           <path d="M16 3v4" />
           <path d="M4 9h16" />
+        </svg>
+      );
+    case "currency":
+      return (
+        <svg {...common}>
+          <path d="M12 5v14" />
+          <path d="M15.5 8c0-1.7-1.6-3-3.5-3s-3.5 1.3-3.5 3 1.6 2.5 3.5 3 3.5 1.3 3.5 3-1.6 3-3.5 3-3.5-1.3-3.5-3" />
         </svg>
       );
     case "filters":
@@ -1344,6 +1352,7 @@ function TransactionsPageContent() {
   const [transactionsPageSize, setTransactionsPageSize] = useState(25);
   const [transactionsPage, setTransactionsPage] = useState(1);
   const [query, setQuery] = useState("");
+  const [currencyFilter, setCurrencyFilter] = useState("");
   const [sortField, setSortField] = useState<TransactionSortField>("date");
   const [sortDirection, setSortDirection] = useState<TransactionSortDirection>("desc");
   const [amountMin, setAmountMin] = useState("");
@@ -1386,6 +1395,27 @@ function TransactionsPageContent() {
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
+  const currencyFilterOptions = useMemo(() => {
+    const values = new Set<string>();
+
+    transactions.forEach((transaction) => {
+      values.add(formatCurrencyCode(transaction.currency));
+    });
+
+    accounts.forEach((account) => {
+      values.add(formatCurrencyCode(account.currency));
+    });
+
+    if (currencyFilter) {
+      values.add(formatCurrencyCode(currencyFilter));
+    }
+
+    if (!values.size) {
+      currencyCatalogCodes.forEach((code) => values.add(code));
+    }
+
+    return Array.from(values).filter(Boolean).sort((a, b) => a.localeCompare(b));
+  }, [accounts, currencyCatalogCodes, currencyFilter, transactions]);
 
   useEffect(() => {
     transactionsRef.current = transactions;
@@ -1407,7 +1437,7 @@ function TransactionsPageContent() {
   const drilldownParamRef = useRef<string | null>(null);
   const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [activeWarningTransactionId, setActiveWarningTransactionId] = useState<string | null>(null);
-  const [headerMenuOpen, setHeaderMenuOpen] = useState<TransactionSortField | null>(null);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState<TransactionSortField | "currency" | null>(null);
   const [headerMenuPosition, setHeaderMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
   const detailAutosaveTimerRef = useRef<number | null>(null);
@@ -1557,6 +1587,7 @@ function TransactionsPageContent() {
       workspaceId,
       {
         query,
+        currencyFilter,
         categoryIds: categoryFilters,
         accountIds: expandedAccountFilters,
         typeFilters,
@@ -1826,6 +1857,7 @@ function TransactionsPageContent() {
   }, [
     selectedWorkspaceId,
     query,
+    currencyFilter,
     categoryFilters,
     accountFilters,
     typeFilters,
@@ -1988,6 +2020,7 @@ function TransactionsPageContent() {
       urlSearchParams.get("month") ?? "",
       urlSearchParams.get("category") ?? "",
       urlSearchParams.get("account") ?? "",
+      urlSearchParams.get("currency") ?? "",
     ].join("|");
 
     if (drilldownParamRef.current === drilldownSignature) {
@@ -1998,8 +2031,9 @@ function TransactionsPageContent() {
     const month = urlSearchParams.get("month") ?? "";
     const categoriesFromUrl = readSearchParamValues(urlSearchParams, "category");
     const accountsFromUrl = readSearchParamValues(urlSearchParams, "account");
+    const currencyFromUrl = urlSearchParams.get("currency") ?? "";
 
-    const hasDrilldownParams = Boolean(q || month || categoriesFromUrl.length > 0 || accountsFromUrl.length > 0);
+    const hasDrilldownParams = Boolean(q || month || categoriesFromUrl.length > 0 || accountsFromUrl.length > 0 || currencyFromUrl);
 
     if (!hasDrilldownParams) {
       if (drilldownParamRef.current === drilldownSignature) {
@@ -2008,6 +2042,7 @@ function TransactionsPageContent() {
 
       drilldownParamRef.current = drilldownSignature;
       setQuery("");
+      setCurrencyFilter("");
       setCategoryFilters([]);
       setAccountFilters([]);
       setTypeFilters([]);
@@ -2031,6 +2066,7 @@ function TransactionsPageContent() {
       .filter(Boolean);
 
     setQuery(q);
+    setCurrencyFilter(currencyFromUrl ? formatCurrencyCode(currencyFromUrl) : "");
     setCategoryFilters(nextCategoryFilters);
     setAccountFilters(nextAccountFilters);
     setTypeFilters([]);
@@ -2133,6 +2169,10 @@ function TransactionsPageContent() {
       count += 1;
     }
 
+    if (currencyFilter.trim()) {
+      count += 1;
+    }
+
     if (dateFilterMode !== "ltd") {
       count += 1;
     }
@@ -2145,7 +2185,7 @@ function TransactionsPageContent() {
     }
 
     return count;
-  }, [accountFilters.length, amountMax, amountMin, categoryFilters.length, dateFilterMode, expandedAccountFilters.length, query, typeFilters.length]);
+  }, [accountFilters.length, amountMax, amountMin, categoryFilters.length, currencyFilter, dateFilterMode, expandedAccountFilters.length, query, typeFilters.length]);
 
   useEffect(() => {
     if (!selectAllRef.current) {
@@ -2160,6 +2200,7 @@ function TransactionsPageContent() {
   }, [
     selectedWorkspaceId,
     query,
+    currencyFilter,
     categoryFilters,
     accountFilters,
     typeFilters,
@@ -2521,10 +2562,7 @@ function TransactionsPageContent() {
     setHeaderMenuPosition(null);
   };
 
-  const openHeaderMenu = (
-    field: TransactionSortField,
-    event: ReactMouseEvent<HTMLButtonElement>
-  ) => {
+  const openHeaderMenu = (field: TransactionSortField | "currency", event: ReactMouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const menuWidth = field === "category" ? 380 : field === "amount" ? 340 : field === "date" ? 360 : 320;
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
@@ -2542,6 +2580,7 @@ function TransactionsPageContent() {
 
   const clearAllTransactionFilters = () => {
     setQuery("");
+    setCurrencyFilter("");
     setCategoryFilters([]);
     setAccountFilters([]);
     setTypeFilters([]);
@@ -3640,6 +3679,7 @@ function TransactionsPageContent() {
       selectedWorkspaceId,
       {
         query,
+        currencyFilter,
         categoryIds: categoryFilters,
         accountIds: accountFilters,
         typeFilters,
@@ -3904,8 +3944,10 @@ function TransactionsPageContent() {
           ? "Filter account"
           : headerMenuOpen === "category"
             ? "Filter category"
-            : headerMenuOpen === "amount"
-              ? "Sort by amount"
+          : headerMenuOpen === "amount"
+            ? "Sort by amount"
+            : headerMenuOpen === "currency"
+              ? "Filter currency"
               : "";
   const headerMenuPanel = headerMenuOpen && headerMenuPosition ? (
     <div
@@ -4109,6 +4151,35 @@ function TransactionsPageContent() {
         </div>
       ) : null}
 
+      {headerMenuOpen === "currency" ? (
+        <div className="transactions-column-menu__section">
+          <div className="transactions-column-menu__sort">
+            <button
+              type="button"
+              className={`button button-secondary button-small transactions-column-menu__button ${currencyFilter ? "" : "is-active"}`}
+              onClick={() => setCurrencyFilter("")}
+            >
+              All currencies
+            </button>
+          </div>
+          <div className="transactions-column-menu__fields transactions-column-menu__fields--currency">
+            {currencyFilterOptions.map((code) => (
+              <button
+                key={code}
+                type="button"
+                className={`button button-secondary button-small transactions-column-menu__button ${
+                  currencyFilter === code ? "is-active" : ""
+                }`}
+                onClick={() => setCurrencyFilter(code)}
+              >
+                {code}
+              </button>
+            ))}
+          </div>
+          <div className="transactions-column-menu__hint">Show only transactions in the selected currency.</div>
+        </div>
+      ) : null}
+
       <div className="form-actions form-actions--compact">
         <button
           className="button button-secondary"
@@ -4211,11 +4282,26 @@ function TransactionsPageContent() {
         onClick={(event) => openHeaderMenu("date", event)}
         aria-label="Open date filter"
         aria-expanded={headerMenuOpen === "date"}
+        >
+          <span className="button-icon" aria-hidden="true">
+            <ActionIcon name="calendar" />
+          </span>
+          <span>Date</span>
+        </button>
+
+      <button
+        className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+        style={toolbarChipStyle}
+        type="button"
+        title={currencyFilter ? `Currency · ${currencyFilter}` : "Currency"}
+        onClick={(event) => openHeaderMenu("currency", event)}
+        aria-label={currencyFilter ? `Open currency filter, currently ${currencyFilter}` : "Open currency filter"}
+        aria-expanded={headerMenuOpen === "currency"}
       >
         <span className="button-icon" aria-hidden="true">
-          <ActionIcon name="calendar" />
+          <ActionIcon name="currency" />
         </span>
-        <span>Date</span>
+        <span>{currencyFilter ? currencyFilter : "Currency"}</span>
       </button>
 
       <button
