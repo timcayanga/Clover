@@ -1,4 +1,4 @@
-import type { AccountBrand } from "@/lib/account-brand";
+import { getAccountBrand, type AccountBrand } from "@/lib/account-brand";
 import { isFixedIncomeInvestmentSubtype, isMarketInvestmentSubtype, type InvestmentSubtype } from "@/lib/investments";
 
 type InvestmentAssetBrandInput = {
@@ -6,6 +6,7 @@ type InvestmentAssetBrandInput = {
   name?: string | null;
   subtype?: InvestmentSubtype | null;
   currency?: string | null;
+  institution?: string | null;
 };
 
 const INVESTMENT_IMAGE_FOLDERS = {
@@ -91,11 +92,23 @@ export const getInvestmentAssetBrand = (params: InvestmentAssetBrandInput): Acco
   const label = params.symbol?.trim() || params.name?.trim() || "Investment";
   const isCrypto = params.subtype === "crypto";
   const isFixedIncome = isFixedIncomeInvestmentSubtype(params.subtype);
+  const institutionBrand = params.institution
+    ? getAccountBrand({
+        institution: params.institution,
+        name: params.name ?? null,
+        type: "investment",
+      })
+    : null;
+  const logoSrcs = uniqueValues([
+    ...getInvestmentAssetLogoCandidates(params),
+    ...(institutionBrand?.logoSrcs ?? []),
+    ...(institutionBrand?.logoSrc ? [institutionBrand.logoSrc] : []),
+  ]);
 
   return {
     label,
     logoSrc: null,
-    logoSrcs: getInvestmentAssetLogoCandidates(params),
+    logoSrcs,
     fallbackIconSrc: assetIconPath,
     accent: isCrypto ? "#22c55e" : isFixedIncome ? "#2563eb" : "#14b8a6",
     background: isCrypto

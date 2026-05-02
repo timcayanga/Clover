@@ -1127,6 +1127,7 @@ export default function InvestmentsPage() {
                               name: row.account.name,
                               subtype: row.account.investmentSubtype,
                               currency: row.account.currency,
+                              institution: row.account.institution,
                             })}
                             label={row.account.investmentSymbol ?? row.account.name}
                           />
@@ -1185,6 +1186,7 @@ export default function InvestmentsPage() {
                           name: account.name,
                           subtype: account.investmentSubtype,
                           currency: account.currency,
+                          institution: account.institution,
                         });
                         const currentValue = parseNullableAmount(account.balance);
                         const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
@@ -1455,6 +1457,7 @@ export default function InvestmentsPage() {
                       name: item.account.name,
                       subtype: item.account.investmentSubtype,
                       currency: item.account.currency,
+                      institution: item.account.institution,
                     });
                     const returnPercent = getReturnPercent(item.currentValue, item.purchaseValue);
                     return (
@@ -1520,6 +1523,7 @@ export default function InvestmentsPage() {
                             name: topHoldings[0].account.name,
                             subtype: topHoldings[0].account.investmentSubtype,
                             currency: topHoldings[0].account.currency,
+                            institution: topHoldings[0].account.institution,
                           })}
                           label={topHoldings[0].account.investmentSymbol ?? topHoldings[0].account.name}
                         />

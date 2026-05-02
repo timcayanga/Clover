@@ -757,6 +757,7 @@ function AccountDetailPageContent() {
           name: account.name,
           subtype: account.investmentSubtype,
           currency: account.currency,
+          institution: account.institution,
         });
       }
 
