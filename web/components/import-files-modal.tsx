@@ -745,6 +745,7 @@ export function ImportFilesModal({
   const importActivitySurfaceRef = useRef<ImportActivityLocation>("modal");
   const lastImportActivityRef = useRef<ImportActivitySnapshot | null>(null);
   const autoCloseAfterStartRef = useRef(false);
+  const wasOpenRef = useRef(open);
   const itemsRef = useRef<QueuedFile[]>([]);
 
   useEffect(() => {
@@ -822,7 +823,14 @@ export function ImportFilesModal({
   };
 
   useEffect(() => {
+    const wasOpen = wasOpenRef.current;
+    wasOpenRef.current = open;
+
     if (!open) {
+      if (!wasOpen) {
+        return;
+      }
+
       setDragActive(false);
       setSelectedAccountId("");
       setSelectedPasswordItemId(null);
@@ -1552,15 +1560,15 @@ export function ImportFilesModal({
                 ? summaryContext.previewTransactions
                 : await loadOptimisticPreviewTransactions(
                     importFileId,
-                    fallbackAccountId,
-                    processingIdentity?.accountName ?? summaryContext.fallbackAccountName,
+                    fallbackAccountId ?? "",
+                    (processingIdentity?.accountName ?? summaryContext.fallbackAccountName ?? "").trim(),
                     processingIdentity?.institution ?? null
                   ).catch(() => []);
             const fallbackSummary = buildOptimisticUploadSummary(
               summaryContext.fileName,
               parsedRowsCount || 0,
               fallbackAccountId,
-              processingIdentity?.accountName ?? summaryContext.fallbackAccountName,
+              processingIdentity?.accountName ?? summaryContext.fallbackAccountName ?? "",
               processingIdentity?.institution ?? null,
               processingIdentity?.accountType ?? summaryContext.accountType ?? null,
               summaryContext.optimisticAccountId,
@@ -1642,8 +1650,8 @@ export function ImportFilesModal({
                 ? summaryContext.previewTransactions
                 : await loadOptimisticPreviewTransactions(
                     importFileId,
-                    fallbackAccountId,
-                    processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName,
+                    fallbackAccountId ?? "",
+                    processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName ?? "",
                     processingIdentity?.institution ?? summaryContext.institution ?? null
                   ).catch(() => []);
 
@@ -1651,7 +1659,7 @@ export function ImportFilesModal({
               summaryContext.fileName,
               parsedRowsCount || 0,
               fallbackAccountId,
-              processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName,
+              processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName ?? "",
               processingIdentity?.institution ?? summaryContext.institution ?? null,
               processingIdentity?.accountType ?? summaryContext.accountType ?? null,
               summaryContext.optimisticAccountId,
@@ -1806,12 +1814,12 @@ export function ImportFilesModal({
               const fallbackPreviewTransactions =
                 summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
                   ? summaryContext.previewTransactions
-                  : await loadOptimisticPreviewTransactions(
-                      importFileId,
-                      fallbackAccountId,
-                      summaryContext.fallbackAccountName,
-                      null
-                    ).catch(() => []);
+                : await loadOptimisticPreviewTransactions(
+                    importFileId,
+                    fallbackAccountId ?? "",
+                    summaryContext.fallbackAccountName ?? "",
+                    null
+                  ).catch(() => []);
               const fallbackSummary = buildOptimisticUploadSummary(
                 summaryContext.fileName,
                 0,
@@ -2604,7 +2612,7 @@ export function ImportFilesModal({
             ? await loadOptimisticPreviewTransactions(
                 importFileId,
                 optimisticAccountId,
-                statementIdentity.accountName,
+                statementIdentity.accountName ?? "",
                 statementIdentity?.institution ?? null
               )
             : [];
@@ -2708,7 +2716,7 @@ export function ImportFilesModal({
           ? await loadOptimisticPreviewTransactions(
               importFileId,
               targetAccountId,
-              statementIdentity.accountName,
+              statementIdentity.accountName ?? "",
               statementIdentity?.institution ?? null
             )
           : [];

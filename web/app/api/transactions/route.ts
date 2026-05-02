@@ -61,7 +61,7 @@ type TransactionSummaryRow = {
   merchantRaw: string;
   merchantClean: string | null;
   categoryId: string | null;
-  categoryName: string | null;
+  rawPayload: Prisma.JsonValue;
   reviewStatus: string | null;
   parserConfidence: number;
   categoryConfidence: number;
@@ -82,6 +82,16 @@ const isResolvedReviewStatus = (status: string | null) =>
 
 const normalizeTransactionKey = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
 
+const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const candidate = payload.categoryName ?? payload.category ?? payload.normalizedCategory;
+  return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
+};
+
 const getTransactionWarningReason = (transaction: TransactionSummaryRow, duplicateCounts: Map<string, number>) => {
   if (isResolvedReviewStatus(transaction.reviewStatus)) {
     return null;
@@ -97,7 +107,7 @@ const getTransactionWarningReason = (transaction: TransactionSummaryRow, duplica
     return "Ignored from totals";
   }
 
-  const categoryName = transaction.categoryName ?? transaction.category?.name ?? null;
+  const categoryName = transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null;
   if ((categoryName ?? "").trim().toLowerCase() === "other") {
     return null;
   }
@@ -119,8 +129,8 @@ const mapTransactionRow = (transaction: {
   accountId: string;
   account: { name: string };
   categoryId: string | null;
+  rawPayload: Prisma.JsonValue;
   category: { name: string } | null;
-  categoryName: string | null;
   reviewStatus: string | null;
   createdAt: Date;
   parserConfidence: number;
@@ -144,7 +154,7 @@ const mapTransactionRow = (transaction: {
   accountId: transaction.accountId,
   accountName: transaction.account.name,
   categoryId: transaction.categoryId,
-  categoryName: transaction.categoryName ?? transaction.category?.name ?? null,
+  categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
   reviewStatus: transaction.reviewStatus,
   parserConfidence: transaction.parserConfidence,
   categoryConfidence: transaction.categoryConfidence,
@@ -237,7 +247,7 @@ export async function GET(request: Request) {
             merchantRaw: true,
             merchantClean: true,
             categoryId: true,
-            categoryName: true,
+            rawPayload: true,
             reviewStatus: true,
             parserConfidence: true,
             categoryConfidence: true,
@@ -302,6 +312,7 @@ export async function GET(request: Request) {
           accountId: transaction.accountId,
           account: transaction.account,
           categoryId: transaction.categoryId,
+          rawPayload: transaction.rawPayload,
           category: transaction.category,
           reviewStatus: transaction.reviewStatus,
           parserConfidence: transaction.parserConfidence,
@@ -316,7 +327,6 @@ export async function GET(request: Request) {
           merchantRaw: transaction.merchantRaw,
           merchantClean: transaction.merchantClean,
           description: transaction.description,
-          categoryName: transaction.categoryName ?? transaction.category?.name ?? null,
           isTransfer: transaction.isTransfer,
           isExcluded: transaction.isExcluded,
           createdAt: transaction.createdAt,
@@ -356,7 +366,7 @@ export async function GET(request: Request) {
         merchantRaw: true,
         merchantClean: true,
         categoryId: true,
-        categoryName: true,
+        rawPayload: true,
         reviewStatus: true,
         parserConfidence: true,
         categoryConfidence: true,
@@ -411,7 +421,7 @@ export async function GET(request: Request) {
     summaryRows.forEach((transaction, index) => {
       const warningReason = getTransactionWarningReason(transaction, duplicateCounts);
       const amount = Math.abs(Number(transaction.amount));
-      const categoryName = transaction.categoryName ?? transaction.category?.name ?? "Other";
+      const categoryName = transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? "Other";
       const accountName = transaction.account?.name ?? "";
       const mappedTransaction = mapTransactionRow({
         id: transaction.id,
@@ -419,6 +429,7 @@ export async function GET(request: Request) {
         accountId: transaction.accountId,
         account: transaction.account,
         categoryId: transaction.categoryId,
+        rawPayload: transaction.rawPayload,
         category: transaction.category,
         reviewStatus: transaction.reviewStatus,
         parserConfidence: transaction.parserConfidence,
@@ -433,7 +444,6 @@ export async function GET(request: Request) {
         merchantRaw: transaction.merchantRaw,
         merchantClean: transaction.merchantClean,
         description: transaction.description,
-        categoryName: transaction.categoryName ?? transaction.category?.name ?? null,
         isTransfer: transaction.isTransfer,
         isExcluded: transaction.isExcluded,
         createdAt: transaction.createdAt,
@@ -634,7 +644,7 @@ export async function POST(request: Request) {
         createdAt: transaction.createdAt.toISOString(),
         updatedAt: transaction.updatedAt.toISOString(),
         accountName: transaction.account.name,
-        categoryName: transaction.category?.name ?? null,
+        categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
       },
     }, { status: 201 });
   } catch (error) {

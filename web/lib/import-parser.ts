@@ -101,7 +101,7 @@ export const inferAccountTypeFromStatement = (
     return "credit_card";
   }
 
-  if (/(invest|investment|broker|stocks?|fund)/.test(normalized)) {
+  if (/(invest|investment|broker|stocks?|fund|atram|ab capital|investatrade|gcrypto|pdax)/.test(normalized)) {
     return "investment";
   }
 
@@ -347,6 +347,7 @@ const institutionPatterns: Array<{ name: string; pattern: RegExp }> = [
   { name: "BDO", pattern: /\b(BDO|BANCO DE ORO)\b/i },
   { name: "Metrobank", pattern: /\b(METROBANK|METROPOLITAN BANK)\b/i },
   { name: "Security Bank", pattern: /\bSECURITY BANK\b/i },
+  { name: "HSBC", pattern: /\bHSBC\b/i },
   { name: "EastWest", pattern: /\b(EASTWEST|EAST WEST)\b/i },
   { name: "CIMB", pattern: /\b(CIMB|GSAVE)\b/i },
   { name: "RCBC", pattern: /\bRCBC\b/i },
@@ -359,6 +360,10 @@ const institutionPatterns: Array<{ name: string; pattern: RegExp }> = [
   { name: "UCPB", pattern: /\b(UCPB|UNITED\s+COCONUT\s+PLANTERS\s+BANK)\b/i },
   { name: "PNB", pattern: /\b(PNB|PHILIPPINE\s+NATIONAL\s+BANK)\b/i },
   { name: "Maya", pattern: /\bMAYA\b/i },
+  { name: "UNO Digital Bank", pattern: /\b(UNO\s+DIGITAL\s+BANK|UNO\s+BANK|UNO)\b/i },
+  { name: "AB Capital Securities", pattern: /\b(AB\s+CAPITAL\s+SECURITIES|AB\s+CAPITAL|INVESTATRADE)\b/i },
+  { name: "ATRAM", pattern: /\bATRAM\b/i },
+  { name: "GCrypto", pattern: /\b(GCRYPTO|G\s*CRYPTO|PDAX)\b/i },
   { name: "GoTyme", pattern: /\bGO\s*TYME|GOTYME\b/i },
   { name: "GCash", pattern: /\bGCASH\b/i },
   { name: "Wise", pattern: /\bWISE\b/i },
@@ -3195,9 +3200,38 @@ const parseBdoSavingsImportText = (text: string) => {
     mergedBlocks.push(pendingBlock);
   }
 
-  const rows = mergedBlocks
+  const splitBdoTransactionBlock = (block: string[]) => {
+    const segments: string[][] = [];
+    let current: string[] = [];
+
+    for (const line of block) {
+      if (current.length > 0 && isBdoTransactionStartLine(line)) {
+        segments.push(current);
+        current = [line];
+        continue;
+      }
+
+      current.push(line);
+    }
+
+    if (current.length > 0) {
+      segments.push(current);
+    }
+
+    return segments.filter((segment) => segment.some((line) => isBdoTransactionStartLine(line)));
+  };
+
+  const mergedRows = mergedBlocks
+    .flatMap((block) => splitBdoTransactionBlock(block))
     .map((block) => parseBdoSavingsTransactionBlock(block, metadata))
     .filter(Boolean) as ParsedImportRow[];
+
+  const fallbackRows = blocks
+    .flatMap((block) => splitBdoTransactionBlock(block))
+    .map((block) => parseBdoSavingsTransactionBlock(block, metadata))
+    .filter(Boolean) as ParsedImportRow[];
+
+  const rows = fallbackRows.length > mergedRows.length ? fallbackRows : mergedRows;
 
   if (rows.length === 0) {
     return null;

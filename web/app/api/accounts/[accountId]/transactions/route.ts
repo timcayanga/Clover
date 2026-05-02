@@ -39,8 +39,8 @@ const mapTransactionRow = (transaction: {
   type: "income" | "expense" | "transfer";
   merchantRaw: string;
   merchantClean: string | null;
+  rawPayload: Prisma.JsonValue;
   category: { name: string } | null;
-  categoryName: string | null;
   description: string | null;
   isExcluded: boolean;
   importFileId: string | null;
@@ -52,12 +52,22 @@ const mapTransactionRow = (transaction: {
   date: transaction.date.toISOString(),
   merchantRaw: transaction.merchantRaw,
   merchantClean: transaction.merchantClean,
-  categoryName: transaction.category?.name ?? transaction.categoryName ?? null,
+  categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
   description: transaction.description,
   isExcluded: transaction.isExcluded,
   importFileId: transaction.importFileId,
   source: transaction.importFileId ? "upload" : "manual",
 });
+
+const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const candidate = payload.categoryName ?? payload.category ?? payload.normalizedCategory;
+  return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
+};
 
 export async function GET(request: Request, { params }: { params: Promise<{ accountId: string }> }) {
   try {
@@ -94,7 +104,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
           type: true,
           merchantRaw: true,
           merchantClean: true,
-          categoryName: true,
+          rawPayload: true,
           description: true,
           isExcluded: true,
           category: {
