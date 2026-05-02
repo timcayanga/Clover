@@ -91,14 +91,15 @@ const extractLastFourDigits = (value?: string | null) => {
 export const normalizeImportedAccountKey = (
   accountName?: string | null,
   institution?: string | null,
-  accountNumber?: string | null
+  accountNumber?: string | null,
+  accountType?: string | null
 ) =>
   normalizeMerchantText(
     `${institution ?? ""} ${
       extractLastFourDigits(accountNumber) ??
       extractLastFourDigits(accountName) ??
       normalizeWhitespace(String(accountName ?? ""))
-    }`
+    } ${normalizeWhitespace(String(accountType ?? ""))}`
   );
 
 const getSessionStorage = () => {
@@ -210,39 +211,210 @@ const createImportedAccountCandidates = (account: ImportedWorkspaceAccount) => {
   return ids;
 };
 
+const normalizeCategoryName = (value?: string | null) => normalizeMerchantText(value);
+
+const isGenericCategoryName = (value?: string | null) => {
+  const normalized = normalizeCategoryName(value);
+  return (
+    !normalized ||
+    normalized === "other" ||
+    normalized === "uncategorized" ||
+    normalized === "needs category review"
+  );
+};
+
+const mergeJsonPayload = (preferred: unknown, fallback: unknown) => {
+  const preferredIsObject = preferred && typeof preferred === "object" && !Array.isArray(preferred);
+  const fallbackIsObject = fallback && typeof fallback === "object" && !Array.isArray(fallback);
+
+  if (preferredIsObject && fallbackIsObject) {
+    return {
+      ...(fallback as Record<string, unknown>),
+      ...(preferred as Record<string, unknown>),
+    };
+  }
+
+  if (preferredIsObject) {
+    return preferred as Record<string, unknown>;
+  }
+
+  if (fallbackIsObject) {
+    return fallback as Record<string, unknown>;
+  }
+
+  return preferred ?? fallback ?? null;
+};
+
 const mergeImportedAccount = <T extends CachedRecord>(items: T[], account: ImportedWorkspaceAccount) => {
   const idsToReplace = createImportedAccountCandidates(account);
   const accountKey = normalizeImportedAccountKey(
     typeof account.name === "string" ? account.name : null,
     typeof account.institution === "string" ? account.institution : null,
-    typeof account.accountNumber === "string" ? account.accountNumber : null
+    typeof account.accountNumber === "string" ? account.accountNumber : null,
+    typeof account.type === "string" ? account.type : null
   );
-  const filtered = items.filter((entry) => {
+  const matchIndex = items.findIndex((entry) => {
     const id = typeof entry.id === "string" ? entry.id : "";
     const entryKey = normalizeImportedAccountKey(
       typeof entry.name === "string" ? entry.name : null,
       typeof entry.institution === "string" ? entry.institution : null,
-      typeof entry.accountNumber === "string" ? entry.accountNumber : null
+      typeof entry.accountNumber === "string" ? entry.accountNumber : null,
+      typeof entry.type === "string" ? entry.type : null
     );
-    return !idsToReplace.has(id) && entryKey !== accountKey;
+    return idsToReplace.has(id) || entryKey === accountKey;
   });
 
-  return [account as T, ...filtered];
+  if (matchIndex < 0) {
+    return [account as T, ...items];
+  }
+
+  const current = items[matchIndex] as ImportedWorkspaceAccount & CachedRecord;
+  const currentName = typeof current.name === "string" ? current.name.trim() : "";
+  const incomingName = typeof account.name === "string" ? account.name.trim() : "";
+  const currentInstitution = typeof current.institution === "string" ? current.institution.trim() : "";
+  const incomingInstitution = typeof account.institution === "string" ? account.institution.trim() : "";
+  const currentAccountNumber = typeof current.accountNumber === "string" ? current.accountNumber.trim() : "";
+  const incomingAccountNumber = typeof account.accountNumber === "string" ? account.accountNumber.trim() : "";
+  const currentBalance = typeof current.balance === "string" ? current.balance.trim() : "";
+  const incomingBalance = typeof account.balance === "string" ? account.balance.trim() : "";
+  const hasMeaningfulBalance = (value: string) => {
+    if (!value) return false;
+    const normalized = value.replace(/[^0-9.-]/g, "");
+    if (!normalized) return false;
+    const numeric = Number(normalized);
+    return Number.isFinite(numeric);
+  };
+  const currentIsUpload = typeof current.source === "string" && current.source.trim() === "upload";
+  const incomingIsUpload = typeof account.source === "string" && account.source.trim() === "upload";
+
+  const merged: CachedRecord = {
+    ...current,
+    ...account,
+    name: incomingName || currentName || account.name || current.name,
+    institution: incomingInstitution || currentInstitution || account.institution || current.institution,
+    accountNumber: incomingAccountNumber || currentAccountNumber || account.accountNumber || current.accountNumber,
+    balance: currentIsUpload && hasMeaningfulBalance(currentBalance)
+      ? current.balance
+      : hasMeaningfulBalance(incomingBalance) && Number(incomingBalance.replace(/[^0-9.-]/g, "")) !== 0
+        ? account.balance
+        : hasMeaningfulBalance(currentBalance) && (!incomingIsUpload || !hasMeaningfulBalance(incomingBalance))
+          ? current.balance
+          : account.balance ?? current.balance ?? null,
+    source:
+      typeof account.source === "string" && account.source.trim()
+        ? account.source
+        : typeof current.source === "string" && current.source.trim()
+          ? current.source
+          : account.source ?? current.source,
+    optimisticAccountId:
+      typeof account.optimisticAccountId === "string" && account.optimisticAccountId.trim()
+        ? account.optimisticAccountId
+        : typeof current.optimisticAccountId === "string" && current.optimisticAccountId.trim()
+          ? current.optimisticAccountId
+          : account.optimisticAccountId ?? current.optimisticAccountId ?? null,
+    type: account.type ?? current.type,
+    rawPayload: mergeJsonPayload(account.rawPayload, current.rawPayload),
+  };
+
+  const nextItems = [...items];
+  nextItems.splice(matchIndex, 1, merged as T);
+  return nextItems;
+};
+
+const mergeImportedTransactionRecord = <T extends CachedRecord>(current: T, incoming: ImportedWorkspaceTransaction) => {
+  const currentCategoryName = typeof current.categoryName === "string" ? current.categoryName.trim() : "";
+  const incomingCategoryName = typeof incoming.categoryName === "string" ? incoming.categoryName.trim() : "";
+  const useCurrentCategory = !isGenericCategoryName(currentCategoryName) && isGenericCategoryName(incomingCategoryName);
+
+  const currentCategoryId = typeof current.categoryId === "string" && current.categoryId.trim() ? current.categoryId.trim() : null;
+  const incomingCategoryId = typeof incoming.categoryId === "string" && incoming.categoryId.trim() ? incoming.categoryId.trim() : null;
+  const mergedRawPayload = useCurrentCategory
+    ? mergeJsonPayload(current.rawPayload, incoming.rawPayload)
+    : mergeJsonPayload(incoming.rawPayload, current.rawPayload);
+
+  const merged: CachedRecord = {
+    ...current,
+    ...incoming,
+    categoryName:
+      useCurrentCategory
+        ? currentCategoryName
+        : incomingCategoryName || currentCategoryName || null,
+    categoryId:
+      useCurrentCategory
+        ? currentCategoryId
+        : incomingCategoryId ?? currentCategoryId,
+    rawPayload: mergedRawPayload,
+    warningReason:
+      typeof incoming.warningReason === "string" && incoming.warningReason.trim()
+        ? incoming.warningReason
+        : current.warningReason ?? null,
+    reviewStatus: incoming.reviewStatus ?? (current.reviewStatus as CachedRecord["reviewStatus"] | undefined) ?? null,
+  };
+
+  if (typeof current.accountName === "string" && current.accountName.trim() && (!merged.accountName || !String(merged.accountName).trim())) {
+    merged.accountName = current.accountName;
+  }
+
+  if (typeof current.merchantRaw === "string" && current.merchantRaw.trim()) {
+    merged.merchantRaw = current.merchantRaw;
+  }
+
+  if (typeof current.merchantClean === "string" && current.merchantClean.trim() && isGenericCategoryName(String(merged.merchantClean ?? ""))) {
+    merged.merchantClean = current.merchantClean;
+  }
+
+  if (typeof current.description === "string" && current.description.trim() && (!merged.description || !String(merged.description).trim())) {
+    merged.description = current.description;
+  }
+
+  if (typeof current.source === "string" && current.source.trim() && !String(merged.source ?? "").trim()) {
+    merged.source = current.source;
+  }
+
+  return merged as T;
 };
 
 const mergeImportedTransactions = <T extends CachedRecord>(items: T[], transactions: ImportedWorkspaceTransaction[]) => {
-  const idsToReplace = new Set(transactions.map((transaction) => transaction.id));
-  const importFileIdsToReplace = new Set(
-    transactions.map((transaction) => (typeof transaction.importFileId === "string" ? transaction.importFileId : "")).filter(Boolean)
-  );
+  if (transactions.length === 0) {
+    return items;
+  }
 
-  const filtered = items.filter((entry) => {
-    const id = typeof entry.id === "string" ? entry.id : "";
-    const importFileId = typeof entry.importFileId === "string" ? entry.importFileId : "";
-    return !idsToReplace.has(id) && !importFileIdsToReplace.has(importFileId);
+  const matchedIds = new Set<string>();
+  const matchedImportFileIds = new Set<string>();
+  const nextTransactions: T[] = transactions.map((incoming) => {
+    const incomingId = typeof incoming.id === "string" ? incoming.id : "";
+    const incomingImportFileId = typeof incoming.importFileId === "string" ? incoming.importFileId : "";
+    const match = items.find((entry) => {
+      const entryId = typeof entry.id === "string" ? entry.id : "";
+      const entryImportFileId = typeof entry.importFileId === "string" ? entry.importFileId : "";
+      return (
+        entryId === incomingId ||
+        (incomingImportFileId && entryImportFileId === incomingImportFileId)
+      );
+    });
+
+    if (match) {
+      const entryId = typeof match.id === "string" ? match.id : "";
+      const entryImportFileId = typeof match.importFileId === "string" ? match.importFileId : "";
+      if (entryId) {
+        matchedIds.add(entryId);
+      }
+      if (entryImportFileId) {
+        matchedImportFileIds.add(entryImportFileId);
+      }
+      return mergeImportedTransactionRecord(match, incoming);
+    }
+
+    return incoming as T;
   });
 
-  return [...(transactions as T[]), ...filtered];
+  const remaining = items.filter((entry) => {
+    const id = typeof entry.id === "string" ? entry.id : "";
+    const importFileId = typeof entry.importFileId === "string" ? entry.importFileId : "";
+    return !matchedIds.has(id) && !matchedImportFileIds.has(importFileId);
+  });
+
+  return [...nextTransactions, ...remaining];
 };
 
 export const mergeImportedWorkspaceTransactions = <T extends CachedRecord>(
@@ -470,7 +642,16 @@ export const findCachedImportedAccount = (accountId: string) => {
   return null;
 };
 
-export const findCachedTransactionsForAccount = (accountId: string) => {
+export const findCachedTransactionsForAccount = (
+  accountId: string,
+  accountIdentity?: {
+    optimisticAccountId?: string | null;
+    name?: string | null;
+    institution?: string | null;
+    accountNumber?: string | null;
+    type?: string | null;
+  }
+) => {
   if (!accountId) {
     return null;
   }
@@ -485,9 +666,60 @@ export const findCachedTransactionsForAccount = (accountId: string) => {
       transactions: CachedRecord[];
       totalCount?: number;
     };
-    const transactions = snapshotLike.transactions.filter(
-      (entry) => typeof entry.accountId === "string" && entry.accountId === accountId
-    );
+    const snapshotAccounts = Array.isArray(snapshotLike.accounts) ? snapshotLike.accounts : [];
+    const identityKey =
+      accountIdentity?.name || accountIdentity?.institution || accountIdentity?.accountNumber
+        ? normalizeImportedAccountKey(
+            accountIdentity.name ?? null,
+            accountIdentity.institution ?? null,
+            accountIdentity.accountNumber ?? null,
+            accountIdentity.type ?? null
+          )
+        : null;
+    const accountIds = new Set<string>([accountId]);
+    if (typeof accountIdentity?.optimisticAccountId === "string" && accountIdentity.optimisticAccountId.trim()) {
+      accountIds.add(accountIdentity.optimisticAccountId.trim());
+    }
+    const matchingSnapshotAccount = snapshotAccounts.find((entry) => {
+      const snapshotAccount = entry as Partial<ImportedWorkspaceAccount> & CachedRecord;
+      const entryId = typeof snapshotAccount.id === "string" ? snapshotAccount.id : "";
+      const optimisticId = typeof snapshotAccount.optimisticAccountId === "string" ? snapshotAccount.optimisticAccountId : "";
+      const entryKey = normalizeImportedAccountKey(
+        typeof snapshotAccount.name === "string" ? snapshotAccount.name : null,
+        typeof snapshotAccount.institution === "string" ? snapshotAccount.institution : null,
+        typeof snapshotAccount.accountNumber === "string" ? snapshotAccount.accountNumber : null,
+        typeof snapshotAccount.type === "string" ? snapshotAccount.type : null
+      );
+      return accountIds.has(entryId) || accountIds.has(optimisticId) || (identityKey !== null && entryKey === identityKey);
+    });
+    if (matchingSnapshotAccount) {
+      const snapshotAccount = matchingSnapshotAccount as Partial<ImportedWorkspaceAccount> & CachedRecord;
+      if (typeof snapshotAccount.id === "string" && snapshotAccount.id.trim()) {
+        accountIds.add(snapshotAccount.id.trim());
+      }
+      if (typeof snapshotAccount.optimisticAccountId === "string" && snapshotAccount.optimisticAccountId.trim()) {
+        accountIds.add(snapshotAccount.optimisticAccountId.trim());
+      }
+    }
+
+    const transactions = snapshotLike.transactions.filter((entry) => {
+      const entryAccountId = typeof entry.accountId === "string" ? entry.accountId : "";
+      if (accountIds.has(entryAccountId)) {
+        return true;
+      }
+
+      if (!identityKey) {
+        return false;
+      }
+
+      const entryKey = normalizeImportedAccountKey(
+        typeof entry.accountName === "string" ? entry.accountName : null,
+        typeof (entry as { institution?: string | null }).institution === "string" ? (entry as { institution?: string | null }).institution ?? null : null,
+        typeof (entry as { accountNumber?: string | null }).accountNumber === "string" ? (entry as { accountNumber?: string | null }).accountNumber ?? null : null,
+        typeof (entry as { type?: string | null }).type === "string" ? (entry as { type?: string | null }).type ?? null : null
+      );
+      return entryKey === identityKey;
+    });
     if (transactions.length > 0) {
       return {
         workspaceId: snapshotLike.workspaceId,

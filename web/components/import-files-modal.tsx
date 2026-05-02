@@ -68,7 +68,7 @@ type ImportFilesModalProps = {
 
 type ImportStatus = "pending" | "needs_password" | "parsing" | "importing" | "done" | "error";
 
-type ConfirmationState = "none" | "staged" | "confirmed";
+type ConfirmationState = "none" | "pending" | "staged" | "confirmed";
 
 type UploadAccountType = "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other" | null;
 
@@ -159,7 +159,14 @@ const fileTypeLabel = (file: File) => {
   const lowerName = file.name.toLowerCase();
   if (lowerName.endsWith(".pdf") || file.type === "application/pdf") return "PDF";
   if (lowerName.endsWith(".csv")) return "CSV";
-  if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".png") || lowerName.endsWith(".webp")) {
+  if (
+    lowerName.endsWith(".jpg") ||
+    lowerName.endsWith(".jpeg") ||
+    lowerName.endsWith(".png") ||
+    lowerName.endsWith(".webp") ||
+    lowerName.endsWith(".heic") ||
+    lowerName.endsWith(".heif")
+  ) {
     return "Image";
   }
   return "File";
@@ -530,7 +537,7 @@ const guessStatementIdentity = (fileName: string) => {
   const lowerName = fileName.toLowerCase();
 
   if (lowerName.includes("gcash")) {
-    return { accountName: "GCash", institution: "GCash" };
+    return { accountName: "GCash", institution: "GCash", accountNumber: null };
   }
 
   if (lowerName.includes("rcbc")) {
@@ -538,15 +545,16 @@ const guessStatementIdentity = (fileName: string) => {
     return {
       accountName: match ? `RCBC ${match[1]}` : "RCBC",
       institution: "RCBC",
+      accountNumber: null,
     };
   }
 
   if (lowerName.includes("unionbank") || lowerName.includes("union bank")) {
-    return { accountName: "UnionBank", institution: "UnionBank" };
+    return { accountName: "UnionBank", institution: "UnionBank", accountNumber: null };
   }
 
   if (lowerName.includes("bpi")) {
-    return { accountName: "BPI", institution: "BPI" };
+    return { accountName: "BPI", institution: "BPI", accountNumber: null };
   }
 
   if (lowerName.includes("metrobank") || lowerName.includes("mb-online") || lowerName.includes("msoa")) {
@@ -554,6 +562,7 @@ const guessStatementIdentity = (fileName: string) => {
     return {
       accountName: match ? `Metrobank ${match[1]}` : "Metrobank",
       institution: "Metrobank",
+      accountNumber: null,
     };
   }
 
@@ -735,7 +744,7 @@ export function ImportFilesModal({
   const selectedImportMode: ImportImageMode = "statement";
   const [launchInBackground, setLaunchInBackground] = useState(backgroundOnly);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("Upload PDF, CSV, and screenshot files to import documents and transactions.");
+  const [message, setMessage] = useState("Upload PDF, CSV, or image files to import documents and transactions.");
   const [validationNotice, setValidationNotice] = useState<string | null>(null);
   const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
@@ -850,7 +859,7 @@ export function ImportFilesModal({
       localPreparseStartedRef.current.clear();
       autoCloseAfterStartRef.current = false;
       accountIdByKeyRef.current.clear();
-      setMessage("Upload PDF, CSV, and screenshot files to import documents and transactions.");
+      setMessage("Upload PDF, CSV, or image files to import documents and transactions.");
       setValidationNotice(null);
       initialFilesSignatureRef.current = null;
       if (!items.some((item) => item.status === "pending" || item.status === "needs_password" || item.status === "parsing" || item.status === "importing")) {
@@ -884,7 +893,7 @@ export function ImportFilesModal({
 
       return defaultAccountId ?? "";
     });
-    setMessage("Upload PDF, CSV, and screenshot files to import documents and transactions.");
+    setMessage("Upload PDF, CSV, or image files to import documents and transactions.");
     setValidationNotice(null);
   }, [accounts, backgroundOnly, defaultAccountId, items, launchInBackground, open]);
 
@@ -1119,7 +1128,7 @@ export function ImportFilesModal({
         if (validationError) {
           if (validationError === "Import files must be 2 MB or smaller.") {
             validationIssues.push(`${file.name} is larger than 2 MB.`);
-          } else if (validationError === "Only PDF and CSV files are supported.") {
+          } else if (validationError === "Only PDF, CSV, and common image files are supported.") {
             validationIssues.push(`${file.name} has an invalid file extension.`);
           } else {
             validationIssues.push(`${file.name} could not be added.`);
@@ -1638,7 +1647,7 @@ export function ImportFilesModal({
                 {
                   accountName: fallbackSummary.accountName,
                   institution: fallbackSummary.institution,
-                  accountNumber: fallbackSummary.accountNumber,
+                  accountNumber: fallbackSummary.accountNumber ?? null,
                 },
                 parsedRowsCount
               ),
@@ -1650,7 +1659,9 @@ export function ImportFilesModal({
           continue;
         }
 
-        if (confirmedTransactionsCount > 0 || (importFile?.status === "done" && Boolean(importFile?.accountId))) {
+        const hasSettledRows = confirmedTransactionsCount > 0 || parsedRowsCount > 0;
+
+        if (hasSettledRows) {
           updateItem(itemId, {
             status: "done",
             confirmationState: "confirmed",
@@ -1671,6 +1682,44 @@ export function ImportFilesModal({
             errorMessage: null,
           });
           return;
+        }
+
+        if (importFile?.status === "done" && !hasSettledRows) {
+          updateItem(itemId, {
+            status: "importing",
+            confirmationState: "pending",
+            progress: Math.max(
+              IMPORT_PROGRESS.loadingAccount,
+              Math.min(92, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
+            ),
+            progressLabel: "Loading transactions",
+            targetAccountId: latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-") ? latestResolvedAccountId : null,
+          });
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "active",
+            fileName: summaryContext.fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: Math.max(
+              IMPORT_PROGRESS.loadingAccount,
+              Math.min(92, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
+            ),
+            detail: getProgressDetail(
+              {
+                accountName: processingIdentity?.accountName ?? summaryContext.accountName,
+                institution: processingIdentity?.institution ?? summaryContext.institution,
+                accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber,
+              },
+              parsedRowsCount
+            ),
+            summary: null,
+            errorMessage: null,
+          });
+          await sleep(600);
+          continue;
         }
 
         if (Date.now() - startedAt >= MAX_WAIT_MS) {
@@ -3502,7 +3551,7 @@ export function ImportFilesModal({
             ref={fileInputRef}
             className="hidden-file-input"
             type="file"
-            accept=".csv,.pdf,.jpg,.jpeg,.png,.webp"
+            accept=".csv,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
             multiple
             onChange={handleInputChange}
           />
@@ -3517,8 +3566,8 @@ export function ImportFilesModal({
           {validationNotice ? <p className="accounts-import-footer-copy__warning">{validationNotice}</p> : null}
           <p className="accounts-import-footer-copy__status">{message}</p>
           <p>
-            Accepted files: PDF, CSV, and common image formats. Password-protected PDFs are supported. CSVs work best
-            with statement imports.
+            Accepted files: PDF, CSV, JPG, JPEG, PNG, WEBP, HEIC, and HEIF. Password-protected PDFs are supported.
+            CSVs work best with statement imports.
           </p>
           <p>We upload the file first, then parse it on the server so the workflow stays responsive.</p>
         </div>

@@ -19,13 +19,17 @@ import {
   fetchParsedTransactionRows,
   enrichParsedRowsWithTraining,
   defaultCategoryForType,
+  replaceDocumentImportPagesCompat,
+  upsertDocumentImportCompat,
+  upsertInvestmentSnapshotCompat,
+  replaceInvestmentHoldingsCompat,
+  upsertReceiptDocumentCompat,
   getCompatibleImportFileColumns,
   insertParsedTransactionsCompat,
   hasCompatibleTable,
   recordTrainingSignal,
   loadStatementTemplate,
   mergeStatementMetadataWithTemplate,
-  normalizeAccountRuleKey,
   updateImportFileCompat,
   upsertAccountRule,
   upsertStatementTemplate,
@@ -36,6 +40,7 @@ import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib
 import { toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
+import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 
 type ImportInsightSummary = {
   incomeTotal: number;
@@ -76,6 +81,8 @@ type ProcessImportResult = {
   imported: number;
   duplicate: boolean;
   metadata: ReturnType<typeof detectStatementMetadataFromText>;
+  accountId?: string | null;
+  confirmedTransactionsCount?: number | null;
   insightSummary?: ImportInsightSummary;
   accountBalance?: string | null;
 };
@@ -276,10 +283,14 @@ const isImageImportFile = (fileType: string | null | undefined, fileName: string
     lowerName.includes("image/jpg") ||
     lowerName.includes("image/png") ||
     lowerName.includes("image/webp") ||
+    lowerName.includes("image/heic") ||
+    lowerName.includes("image/heif") ||
     lowerName.endsWith(".jpg") ||
     lowerName.endsWith(".jpeg") ||
     lowerName.endsWith(".png") ||
-    lowerName.endsWith(".webp")
+    lowerName.endsWith(".webp") ||
+    lowerName.endsWith(".heic") ||
+    lowerName.endsWith(".heif")
   );
 };
 
@@ -1265,9 +1276,13 @@ const resolveConfirmationAccount = async (params: {
     });
   }
 
-  const candidateKey = normalizeAccountRuleKey(
+  const accountIdentityType =
+    inferredAccountType ?? inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank");
+  const candidateKey = normalizeImportedAccountKey(
     inferredAccountName || inferredAccountNumber || String(params.importFile.fileName ?? null),
-    inferredInstitution
+    inferredInstitution,
+    inferredAccountNumber,
+    accountIdentityType
   );
 
   const workspaceAccounts = await prisma.account.findMany({
@@ -1275,24 +1290,21 @@ const resolveConfirmationAccount = async (params: {
     select: getCompatibleAccountSelect(compatibleAccountColumns),
   });
   const existingByKey = workspaceAccounts.find(
-    (account) => normalizeAccountRuleKey(account.name, account.institution) === candidateKey
+    (account) => normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === candidateKey
   );
   if (existingByKey) {
     return updateAccountIdentity(existingByKey, {
       name: inferredAccountName,
       institution: inferredInstitution,
       accountNumber: inferredAccountNumber,
-      type: inferredAccountType,
+      type: accountIdentityType,
       currency: inferredCurrency,
     });
   }
 
   if (inferredAccountName || inferredAccountNumber) {
     const nonCashAccountCount = countNonCashAccounts(workspaceAccounts);
-    const inferredType =
-      inferredAccountType ?? inferAccountTypeFromStatement(inferredInstitution, inferredAccountName ?? inferredAccountNumber, "bank");
-
-    if (params.planLimits?.accountLimit != null && inferredType !== "cash" && nonCashAccountCount >= params.planLimits.accountLimit) {
+    if (params.planLimits?.accountLimit != null && accountIdentityType !== "cash" && nonCashAccountCount >= params.planLimits.accountLimit) {
       throw new Error(
         `Free plan includes up to ${params.planLimits.accountLimit} non-cash accounts. Upgrade to Pro to add more accounts from imports.`
       );
@@ -1310,7 +1322,7 @@ const resolveConfirmationAccount = async (params: {
       ...(compatibleAccountColumns.has("accountNumber") && inferredAccountNumber
         ? { accountNumber: inferredAccountNumber }
         : {}),
-      type: inferredType,
+      type: accountIdentityType,
       currency: inferredCurrency ?? "PHP",
       source: "upload",
     };
@@ -1370,7 +1382,6 @@ const buildTransactionInsertRecord = (params: {
     workspaceId: params.workspaceId,
     accountId: params.accountId,
     categoryId: params.categoryId ?? null,
-    categoryName: params.categoryName ?? null,
     reviewStatus: params.reviewStatus ?? "suggested",
     parserConfidence: params.parserConfidence ?? 0,
     categoryConfidence: params.categoryConfidence ?? 0,
@@ -1398,6 +1409,46 @@ const buildTransactionInsertRecord = (params: {
   }
 
   return record;
+};
+
+const isWiseReviewOnlyTransaction = (params: {
+  institution: string | null | undefined;
+  row: {
+    merchantRaw?: string | null;
+    merchantClean?: string | null;
+    description?: string | null;
+    rawPayload?: Prisma.JsonValue | null;
+  };
+}) => {
+  if (!params.institution || !/wise/i.test(params.institution)) {
+    return false;
+  }
+
+  const rawPayload = params.row.rawPayload;
+  const payloadStatus =
+    rawPayload && typeof rawPayload === "object" && !Array.isArray(rawPayload)
+      ? [
+          (rawPayload as Record<string, unknown>).status,
+          (rawPayload as Record<string, unknown>).transactionStatus,
+          (rawPayload as Record<string, unknown>).state,
+        ]
+      : [];
+
+  const text = [
+    params.row.merchantRaw,
+    params.row.merchantClean,
+    params.row.description,
+    ...payloadStatus,
+  ]
+    .map((value) => String(value ?? "").replace(/\s+/g, " ").trim().toLowerCase())
+    .filter(Boolean)
+    .join(" | ");
+
+  if (!text) {
+    return false;
+  }
+
+  return /\b(cancelled?|canceled|card checked|checked|failed|withdrawn)\b/.test(text);
 };
 
 export const processImportFileText = async (
@@ -1442,6 +1493,7 @@ export const processImportFileText = async (
       }).catch(() => null)
     : null;
   const importMode = readCheckpointImportMode(statementCheckpoint?.sourceMetadata) ?? options.importMode ?? "statement";
+  const isNonTransactionDocument = importMode === "portfolio" || importMode === "account_detail";
 
   await updateImportFileCompat(importFileId, {
     status: "processing",
@@ -1492,7 +1544,7 @@ export const processImportFileText = async (
   }
 
   const metadata = detectStatementMetadataFromText(text);
-  const statementFingerprint = buildStatementFingerprint(text, metadata, importFile.fileName, importFile.fileType);
+  const statementFingerprint = buildStatementFingerprint(text, metadata, importFile.fileName, importFile.fileType, importMode);
   const existingTemplate = await loadStatementTemplate({
     workspaceId: String(importFile.workspaceId),
     fingerprint: statementFingerprint,
@@ -1660,10 +1712,10 @@ export const processImportFileText = async (
   }
 
   const useOpenAiParse =
-    Boolean(openAiParsed?.rows.length) &&
     Boolean(openAiParsed?.audit.schemaValidated) &&
     (openAiPrimaryMode ||
       Boolean(pageImages?.length) ||
+      isNonTransactionDocument ||
       (openAiMetadata
         ? (openAiMetadata?.confidence ?? 0) >= (metadataForParse.confidence ?? 0)
         : parsedRows.length === 0));
@@ -1674,6 +1726,14 @@ export const processImportFileText = async (
     ...effectiveMetadataSource,
     endingBalance: effectiveMetadataSource.endingBalance ?? parsedEndingBalance,
   };
+  let confirmedImportResult:
+    | {
+        imported: number;
+        accountId: string;
+        insightSummary: ImportInsightSummary;
+        accountBalance: string | null;
+      }
+    | null = null;
   const duplicateImportFileId = await findExistingImportedStatement({
     workspaceId: importFile.workspaceId,
     statementFingerprint,
@@ -1722,6 +1782,195 @@ export const processImportFileText = async (
     parsedRowsCount: rows.length,
   });
 
+  const documentImportSourceMetadata = {
+    importMode,
+    documentType: importMode,
+    statementFingerprint,
+    fileName,
+    fileType,
+    rowCount: rows.length,
+    pageCount: pageImages?.length ?? 0,
+    usedVisionFallback: Boolean(pageImages?.length),
+    usedOpenAiFallback: Boolean(useOpenAiParse),
+    usedDeterministicParser: !useOpenAiParse,
+  } as Prisma.InputJsonValue;
+  const documentImportExtractedPayload = {
+    metadata: resolvedMetadata,
+    rowCount: rows.length,
+    sampleRows: rows.slice(0, 12).map((row) => ({
+      date: row.date ?? null,
+      amount: row.amount ?? null,
+      merchantRaw: row.merchantRaw ?? null,
+      merchantClean: row.merchantClean ?? null,
+      categoryName: row.categoryName ?? null,
+      type: row.type ?? null,
+      confidence: row.confidence ?? null,
+    })),
+    openAiAudit: openAiParsed?.audit
+      ? {
+          model: openAiParsed.model,
+          promptVersion: openAiParsed.promptVersion,
+          confidence: openAiParsed.audit.confidence,
+          schemaValidated: openAiParsed.audit.schemaValidated,
+          schemaValidationResult: openAiParsed.audit.schemaValidationResult,
+        }
+      : null,
+  } as Prisma.InputJsonValue;
+  const documentImportRecord = await upsertDocumentImportCompat({
+    workspaceId: String(importFile.workspaceId),
+    importFileId,
+    accountId: importFile.account?.id ?? null,
+    documentFamily: importMode,
+    documentSubtype:
+      importMode === "receipt"
+        ? "receipt"
+        : importMode === "portfolio"
+          ? resolvedMetadata.accountType ?? resolvedMetadata.accountName ?? "portfolio"
+          : importMode === "account_detail"
+            ? resolvedMetadata.accountType ?? resolvedMetadata.accountName ?? "account_detail"
+            : importMode === "notes"
+              ? "notes"
+              : "statement",
+    institution: resolvedMetadata.institution ?? null,
+    accountName: resolvedMetadata.accountName ?? null,
+    accountNumber: resolvedMetadata.accountNumber ?? null,
+    currency: resolvedMetadata.currency ?? null,
+    pageCount: pageImages?.length ?? 0,
+    confidence: resolvedMetadata.confidence ?? 0,
+    sourceMetadata: documentImportSourceMetadata,
+    rawPayload: documentImportExtractedPayload,
+    extractedPayload: documentImportExtractedPayload,
+  });
+
+  if (documentImportRecord && pageImages?.length) {
+    await replaceDocumentImportPagesCompat({
+      documentImportId: documentImportRecord.id,
+      pages: pageImages.map(({ page }) => ({
+        pageNumber: page,
+        imageName: `${fileName || "import"}-page-${page}`,
+        pageType:
+          importMode === "receipt"
+            ? "receipt_page"
+            : importMode === "portfolio"
+              ? "portfolio_page"
+              : importMode === "account_detail"
+                ? "account_detail_page"
+                : importMode === "notes"
+                  ? "notes_page"
+                  : "statement_page",
+        visibleTitle:
+          importMode === "receipt"
+            ? "Receipt"
+            : importMode === "portfolio"
+              ? resolvedMetadata.accountName ?? resolvedMetadata.institution ?? "Portfolio"
+              : importMode === "account_detail"
+                ? resolvedMetadata.accountName ?? resolvedMetadata.institution ?? "Account details"
+                : importMode === "notes"
+                  ? "Notes"
+                  : resolvedMetadata.accountName ?? resolvedMetadata.institution ?? "Statement",
+        visibleDate: resolvedMetadata.endDate ?? resolvedMetadata.paymentDueDate ?? null,
+        visibleCurrency: resolvedMetadata.currency ?? null,
+        layoutNotes: `Imported ${importMode} page ${page}`,
+        confidence: resolvedMetadata.confidence ?? 0,
+        rawPayload: {
+          pageNumber: page,
+          importMode,
+          fileName,
+          fileType,
+        } as Prisma.InputJsonValue,
+      })),
+    });
+  }
+
+  if (documentImportRecord && importMode === "receipt") {
+    const receiptDetails = openAiParsed?.receiptDetails ?? null;
+    const receiptAccountMatch = openAiParsed?.receiptAccountMatch ?? null;
+    await upsertReceiptDocumentCompat({
+      workspaceId: String(importFile.workspaceId),
+      documentImportId: documentImportRecord.id,
+      accountId: importFile.account?.id ?? null,
+      transactionId: null,
+      merchantRaw: receiptDetails?.merchant_raw ?? null,
+      merchantClean: receiptDetails?.merchant_clean ?? null,
+      transactionDate: parseDateValue(receiptDetails?.transaction_date ?? resolvedMetadata.endDate ?? null),
+      transactionTime: receiptDetails?.transaction_time ?? null,
+      currency: receiptDetails?.currency ?? resolvedMetadata.currency ?? null,
+      subtotal: receiptDetails?.subtotal ?? null,
+      tax: receiptDetails?.tax ?? null,
+      total: receiptDetails?.total ?? resolvedMetadata.endingBalance ?? resolvedMetadata.totalAmountDue ?? null,
+      paymentMethod: receiptDetails?.payment_method ?? null,
+      accountMatch: receiptAccountMatch
+        ? {
+            account_name: receiptAccountMatch.account_name,
+            account_last4: receiptAccountMatch.account_last4,
+            confidence: receiptAccountMatch.confidence,
+            reason: receiptAccountMatch.reason,
+          }
+        : null,
+      confidence: resolvedMetadata.confidence ?? 0,
+      rawPayload: {
+        documentType: importMode,
+        metadata: resolvedMetadata,
+        receiptAccountMatch,
+        receiptDetails,
+        rowCount: rows.length,
+        pageCount: pageImages?.length ?? 0,
+      } as Prisma.InputJsonValue,
+    });
+  }
+
+  if (documentImportRecord && (importMode === "portfolio" || importMode === "account_detail")) {
+    const investmentSnapshot = await upsertInvestmentSnapshotCompat({
+      workspaceId: String(importFile.workspaceId),
+      documentImportId: documentImportRecord.id,
+      accountId: importFile.account?.id ?? null,
+      snapshotDate: parseDateValue(resolvedMetadata.endDate ?? null),
+      portfolioName: resolvedMetadata.accountName ?? resolvedMetadata.institution ?? null,
+      currency: resolvedMetadata.currency ?? null,
+      totalValue: resolvedMetadata.endingBalance ?? resolvedMetadata.totalAmountDue ?? null,
+      costBasis: resolvedMetadata.openingBalance ?? null,
+      gainLossValue: null,
+      gainLossPercent: null,
+      confidence: resolvedMetadata.confidence ?? 0,
+      rawPayload: {
+        documentType: importMode,
+        metadata: resolvedMetadata,
+        rowCount: rows.length,
+        pageCount: pageImages?.length ?? 0,
+      } as Prisma.InputJsonValue,
+    });
+
+    if (investmentSnapshot && openAiParsed?.holdings?.length) {
+      await replaceInvestmentHoldingsCompat({
+        workspaceId: String(importFile.workspaceId),
+        investmentSnapshotId: investmentSnapshot.id,
+        documentImportId: documentImportRecord.id,
+        accountId: importFile.account?.id ?? null,
+        holdings: openAiParsed.holdings.map((holding, index) => ({
+          rowIndex: index + 1,
+          assetName: holding.asset_name,
+          assetSymbol: holding.asset_symbol,
+          assetType: holding.asset_type,
+          quantity: holding.quantity,
+          unitPrice: holding.unit_price,
+          costBasis: holding.cost_basis,
+          marketValue: holding.market_value,
+          currentValue: holding.current_value,
+          gainLossValue: holding.gain_loss_value,
+          gainLossPercent: holding.gain_loss_percent,
+          currency: holding.currency ?? resolvedMetadata.currency ?? "PHP",
+          status: holding.status,
+          confidence: holding.confidence_score,
+          rawPayload: {
+            parserEvidence: holding.parser_evidence,
+            source: "openai",
+            documentType: importMode,
+          } as Prisma.InputJsonValue,
+        })),
+      });
+    }
+  }
+
   let template: Awaited<ReturnType<typeof upsertStatementTemplate>> | null = null;
   try {
     template = await upsertStatementTemplate({
@@ -1757,6 +2006,11 @@ export const processImportFileText = async (
     try {
       const metadataStartDate = metadata.startDate ? new Date(metadata.startDate) : null;
       const metadataEndDate = resolvedMetadata.endDate ? new Date(resolvedMetadata.endDate) : null;
+      const checkpointSourceMetadata = {
+        ...resolvedMetadata,
+        importMode,
+        documentType: importMode,
+      } as Prisma.InputJsonValue;
       await prisma.accountStatementCheckpoint.upsert({
         where: { importFileId },
         update: {
@@ -1767,7 +2021,7 @@ export const processImportFileText = async (
           endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
           status: "pending",
           mismatchReason: null,
-          sourceMetadata: resolvedMetadata as Prisma.InputJsonValue,
+          sourceMetadata: checkpointSourceMetadata,
           rowCount: rows.length,
         },
         create: {
@@ -1778,7 +2032,7 @@ export const processImportFileText = async (
           openingBalance: resolvedMetadata.openingBalance === null ? null : resolvedMetadata.openingBalance.toString(),
           endingBalance: resolvedMetadata.endingBalance === null ? null : resolvedMetadata.endingBalance.toString(),
           status: "pending",
-          sourceMetadata: resolvedMetadata as Prisma.InputJsonValue,
+          sourceMetadata: checkpointSourceMetadata,
           rowCount: rows.length,
         },
       });
@@ -1798,6 +2052,7 @@ export const processImportFileText = async (
       fileName: String(importFile.fileName ?? "imported-file"),
       fileType: String(importFile.fileType ?? "unknown"),
       parserVersion: DATA_ENGINE_VERSION,
+      documentType: importMode,
       parsedRows: rows as unknown as DataQaParsedRow[],
       metadata: resolvedMetadata,
       timings: {
@@ -1833,6 +2088,14 @@ export const processImportFileText = async (
       recentRuns.every(
         (run) => run.score === qaRunResult.evaluation.score && run.findingCount === qaRunResult.evaluation.findings.length
       );
+
+    const hasCriticalFindings = qaRunResult.evaluation.findings.some((finding) => finding.severity === "critical");
+    const hasUsableParsedRows = rows.length > 0;
+    const canFinalizeWithWarnings =
+      hasUsableParsedRows &&
+      !hasCriticalFindings &&
+      qaRunResult.evaluation.score >= 90 &&
+      qaRunResult.evaluation.score < AUTO_REPARSE_SCORE_TARGET;
 
     const shouldAutoRerun =
       autoRerunEnabled &&
@@ -1936,19 +2199,35 @@ export const processImportFileText = async (
       });
     }
 
+    const shouldMarkDone = qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET || canFinalizeWithWarnings;
+    if (shouldMarkDone) {
+      try {
+        confirmedImportResult = await confirmImportFile(importFileId, null);
+      } catch (error) {
+        await updateImportFileCompat(importFileId, {
+          status: "failed",
+          processingPhase: "needs_retry",
+          processingMessage: "Clover couldn't finish saving the import.",
+        });
+        throw error;
+      }
+    }
+
     await updateImportFileCompat(importFileId, {
-      status: qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET ? "done" : "failed",
+      status: shouldMarkDone ? "done" : "failed",
       processingPhase:
-        qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET
+        shouldMarkDone
           ? "complete"
           : plateaued
             ? "plateaued"
             : "needs_retry",
       processingCurrentScore: qaRunResult.evaluation.score,
       processingMessage:
-        qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET
+        shouldMarkDone
           ? autoRerunEnabled && autoRerunAttempt > 0
-            ? `Auto-rerun ${autoRerunAttempt}/${AUTO_REPARSE_MAX_ATTEMPTS} complete. Final score ${qaRunResult.evaluation.score}.`
+            ? plateaued && canFinalizeWithWarnings
+              ? `Automatic reruns plateaued at score ${qaRunResult.evaluation.score}, but Clover finalized the import with the available statement data.`
+              : `Auto-rerun ${autoRerunAttempt}/${AUTO_REPARSE_MAX_ATTEMPTS} complete. Final score ${qaRunResult.evaluation.score}.`
             : null
           : plateaued
             ? `Automatic reruns plateaued at score ${qaRunResult.evaluation.score}. Manual parser fixes are needed before rerunning again.`
@@ -1961,7 +2240,15 @@ export const processImportFileText = async (
     });
   }
 
-  return { imported: rows.length, duplicate: false, metadata: resolvedMetadata, insightSummary: undefined, accountBalance: undefined };
+  return {
+    imported: rows.length,
+    duplicate: false,
+    metadata: resolvedMetadata,
+    accountId: confirmedImportResult?.accountId ?? null,
+    confirmedTransactionsCount: confirmedImportResult?.imported ?? null,
+    insightSummary: confirmedImportResult?.insightSummary ?? undefined,
+    accountBalance: confirmedImportResult?.accountBalance ?? undefined,
+  };
 };
 
 const normalizeImportMerchant = (transaction: {
@@ -2098,17 +2385,29 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
 
   const planLimits = await getWorkspaceOwnerLimits(String(importFile.workspaceId));
 
-  let parsedRows: Array<Record<string, unknown>> = await fetchParsedTransactionRows(importFileId);
-  if (parsedRows.length === 0) {
+  let parsedRows: Array<Record<string, unknown>> = [];
+  const MAX_WAIT_MS = 30_000;
+  while (Date.now() - startedAt < MAX_WAIT_MS) {
+    parsedRows = await fetchParsedTransactionRows(importFileId);
+    if (parsedRows.length > 0) {
+      break;
+    }
+
     try {
       await processImportFileText(importFileId, { actorUserId: null });
-      parsedRows = await fetchParsedTransactionRows(importFileId);
     } catch (error) {
       console.warn("Unable to recover parsed rows before confirmation", {
         importFileId,
         error,
       });
     }
+
+    parsedRows = await fetchParsedTransactionRows(importFileId);
+    if (parsedRows.length > 0) {
+      break;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
   if (parsedRows.length === 0) {
@@ -2315,8 +2614,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           },
         }));
 
-      await tx.transaction.create({
-        data: buildTransactionInsertRecord({
+      const openingBalanceInsertRow = buildTransactionInsertRecord({
           workspaceId: String(importFile.workspaceId),
           accountId: resolvedAccountId,
           importFileId,
@@ -2354,7 +2652,11 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           description: statementCheckpoint.openingBalance !== null ? `Opening balance for statement ending ${statementEndDate?.toISOString().slice(0, 10) ?? "unknown"}` : "Opening balance",
           isTransfer: false,
           isExcluded: true,
-        }) as Prisma.TransactionCreateInput,
+        });
+      const { categoryName: _openingBalanceCategoryName, ...openingBalanceTransactionRow } =
+        openingBalanceInsertRow as Record<string, unknown>;
+      await tx.transaction.create({
+        data: openingBalanceTransactionRow as Prisma.TransactionCreateInput,
       });
       openingBalanceInserted = true;
     }
@@ -2365,6 +2667,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     typeof statementCheckpoint?.sourceMetadata === "object" && statementCheckpoint?.sourceMetadata !== null
       ? Number((statementCheckpoint.sourceMetadata as Record<string, unknown>).confidence ?? 0)
       : 0;
+  const statementInstitution =
+    typeof statementCheckpoint?.sourceMetadata === "object" && statementCheckpoint?.sourceMetadata !== null
+      ? ((statementCheckpoint.sourceMetadata as Record<string, unknown>).institution as string | null | undefined) ?? null
+      : null;
 
   const latestExplicitBalance = [...parsedRows]
     .reverse()
@@ -2455,13 +2761,26 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       (typeof row.merchantClean === "string" && row.merchantClean) ||
       (typeof row.merchantRaw === "string" && row.merchantRaw) ||
       "Imported transaction";
+    const reviewOnlyRow = isWiseReviewOnlyTransaction({
+      institution: statementInstitution,
+      row: {
+        merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : null,
+        merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : null,
+        description: extractHumanReadableDescription(row.rawPayload ?? null),
+        rawPayload: row.rawPayload ?? null,
+      },
+    });
     const insertRow = buildTransactionInsertRecord({
       workspaceId: String(importFile.workspaceId),
       accountId: resolvedAccountId,
       importFileId,
       categoryId,
       categoryName,
-      reviewStatus: shouldRouteToReview({ confidence: rowConfidence, categoryName, type: rowType }) ? "pending_review" : "confirmed",
+      reviewStatus: reviewOnlyRow
+        ? "rejected"
+        : shouldRouteToReview({ confidence: rowConfidence, categoryName, type: rowType })
+          ? "pending_review"
+          : "confirmed",
       parserConfidence: rowParserConfidence,
       categoryConfidence: rowCategoryConfidence,
       accountMatchConfidence: rowAccountMatchConfidence,
@@ -2481,7 +2800,9 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,
       description: extractHumanReadableDescription(row.rawPayload ?? null),
       isTransfer: rowType === "transfer",
-      isExcluded: typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance",
+      isExcluded:
+        reviewOnlyRow ||
+        (typeof row.rawPayload === "object" && row.rawPayload !== null && (row.rawPayload as Record<string, unknown>).kind === "opening_balance"),
     });
     const transactionId = String(insertRow.id ?? crypto.randomUUID());
 
@@ -2666,7 +2987,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       }
     : null;
 
-    return { imported: transactions.length, insightSummary, accountBalance: reconciledAccountBalance };
+    return {
+      imported: transactions.length,
+      accountId: resolvedAccountId,
+      insightSummary,
+      accountBalance: reconciledAccountBalance,
+    };
   });
 
   if (qaMetadataForRun && qaAccountForRun) {
