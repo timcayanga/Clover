@@ -377,10 +377,12 @@ function MenuIcon({ name }: { name: IconName }) {
     case "recurring":
       return (
         <svg {...common}>
-          <path d="M7 7h10" />
-          <path d="M17 7v4" />
-          <path d="M17 7c-1.2-1.7-3.1-2.7-5.2-2.7-3.8 0-6.8 3-6.8 6.7s3 6.7 6.8 6.7c2.2 0 4.1-1 5.3-2.7" />
-          <path d="M7 17v-4" />
+          <path d="M7.4 8.5A7 7 0 0 1 12 5.8c2.3 0 4.4 1 5.9 2.7" />
+          <path d="M16.8 5.8h1.1v4.1" />
+          <path d="M17.9 5.8 15.7 8" />
+          <path d="M16.6 15.5A7 7 0 0 1 12 18.2c-2.3 0-4.4-1-5.9-2.7" />
+          <path d="M7.2 18.2H6.1v-4.1" />
+          <path d="M6.1 18.2 8.3 16" />
         </svg>
       );
     case "reports":
@@ -879,15 +881,20 @@ export function CloverShell({
       />
       <aside className="sidebar" aria-label="Primary">
         <div className="sidebar-header">
-          <Link
-            href="/dashboard"
+          <button
+            type="button"
             aria-label="Clover home"
-            prefetch={false}
+            aria-current={pathname === "/dashboard" ? "page" : undefined}
             className="sidebar-brand-link sidebar-brand-link--centered"
+            onClick={() => {
+              if (pathname !== "/dashboard") {
+                navigateTo("/dashboard");
+              }
+            }}
           >
             <img src="/clover-mark.svg" alt="" aria-hidden="true" className="sidebar-brand-link__mark" />
             <img src="/clover-name-teal.svg" alt="Clover" className="sidebar-brand-link__wordmark" />
-          </Link>
+          </button>
         </div>
 
         <div className="sidebar-search-wrap" ref={searchWrapRef}>
