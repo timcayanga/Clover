@@ -1439,7 +1439,7 @@ function AccountDetailPageContent() {
 
         {account ? (
           <div className="accounts-detail__summary">
-            {latestCheckpoint?.status === "pending" ? (
+            {account?.source === "upload" && (!latestCheckpoint || latestCheckpoint.status !== "reconciled") ? (
               <div className="accounts-detail__loading-chip-wrap">
                 <span className="accounts-summary-chip is-neutral">Loading</span>
                 <p className="panel-muted">Clover is still reading this {latestCheckpointFamily?.pendingLabel ?? "statement"} and filling in the rest.</p>

@@ -2381,7 +2381,8 @@ function AccountsPageContent() {
                               normalizeImportedAccountKey(account.name, account.institution, account.accountNumber)
                             ) ??
                             null;
-                          const isLoading = account.source === "upload" && latestCheckpoint?.status === "pending";
+                          const isLoading =
+                            account.source === "upload" && (!latestCheckpoint || latestCheckpoint.status !== "reconciled");
                           const accountBrand = getAccountBrand({
                             institution: account.institution,
                             name: account.name,

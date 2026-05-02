@@ -1252,7 +1252,7 @@ export function ImportFilesModal({
   };
 
   const addDroppedFiles = (incoming: FileList | File[]) => {
-    addFiles(incoming, { launchInBackground: true });
+    addFiles(incoming);
   };
 
   const updateItem = (id: string, patch: Partial<QueuedFile>) => {
