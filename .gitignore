@@ -4,6 +4,10 @@ node_modules/
 web/node_modules/
 web/.next/
 .next/
+tmp/
+web/tmp/
+*.tsbuildinfo
+.env.vercel*
 .env.local
 web/.env.local
 *.log
