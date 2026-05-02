@@ -1305,6 +1305,13 @@ async function ReportsStream({
 
         {selectedSection === "overview" && !isEmptyWorkspace ? (
           <>
+            <section className="reports-overview-intro glass">
+              <div>
+                <p className="eyebrow">Start here</p>
+                <p>Summary gives the quick picture. Use Spend and Patterns only if you want more detail.</p>
+              </div>
+            </section>
+
             <section className="reports-summary-grid reports-summary-grid--highlights reports-overview-grid">
               <article className="metric compact metric--highlight glass">
                 <div className="metric__label">
@@ -1887,7 +1894,7 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
     <CloverShell
       active="reports"
       title="Reports"
-      subtitle="Start with Summary. Then check Spend and Patterns."
+      subtitle="Summary is the quickest read. Spend and Patterns are there when you want a closer look."
     >
       <ReportsStream active="reports" searchParams={resolvedSearchParams} />
     </CloverShell>
