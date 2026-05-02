@@ -105,6 +105,8 @@ type StatementCheckpoint = {
     accountName?: string | null;
     institution?: string | null;
     accountNumber?: string | null;
+    importMode?: string | null;
+    documentType?: string | null;
   } | null;
 };
 
@@ -223,6 +225,41 @@ const hexToRgba = (hex: string, alpha: number) => {
 };
 
 const formatNullableDate = (value: string | null | undefined) => (value ? formatDate(value) : "Not set");
+
+const getCheckpointDocumentFamily = (checkpoint: StatementCheckpoint | null | undefined) => {
+  const rawDocumentType =
+    typeof checkpoint?.sourceMetadata?.documentType === "string" && checkpoint.sourceMetadata.documentType.trim()
+      ? checkpoint.sourceMetadata.documentType.trim().toLowerCase()
+      : typeof checkpoint?.sourceMetadata?.importMode === "string" && checkpoint.sourceMetadata.importMode.trim()
+        ? checkpoint.sourceMetadata.importMode.trim().toLowerCase()
+        : "statement";
+
+  if (rawDocumentType === "portfolio") {
+    return {
+      label: "Latest portfolio snapshot",
+      pendingLabel: "portfolio snapshot",
+    };
+  }
+
+  if (rawDocumentType === "account_detail") {
+    return {
+      label: "Latest account snapshot",
+      pendingLabel: "account snapshot",
+    };
+  }
+
+  if (rawDocumentType === "receipt" || rawDocumentType === "notes") {
+    return {
+      label: "Latest image checkpoint",
+      pendingLabel: "image checkpoint",
+    };
+  }
+
+  return {
+    label: "Latest statement checkpoint",
+    pendingLabel: "statement",
+  };
+};
 
 const getCategoryIconSrc = (categoryName: string | null | undefined) => {
   switch ((categoryName ?? "").trim().toLowerCase()) {
@@ -451,10 +488,11 @@ function AccountDetailPageContent() {
 
       if (cachedAccount) {
         if (!cancelled) {
-          const accountTransactionsLookup = findCachedTransactionsForAccount(cachedAccount.id);
-          cachedTransactions = Array.isArray(cachedTransactionsWorkspace?.transactions)
-            ? (cachedTransactionsWorkspace.transactions as Transaction[]).filter((transaction) => transaction.accountId === cachedAccount.id)
-            : (accountTransactionsLookup?.transactions as Transaction[] | undefined) ?? [];
+          const accountTransactionsLookup = findCachedTransactionsForAccount(cachedAccount.id, cachedAccount);
+          cachedTransactions = (accountTransactionsLookup?.transactions as Transaction[] | undefined) ?? [];
+          if (cachedTransactions.length === 0 && Array.isArray(cachedTransactionsWorkspace?.transactions)) {
+            cachedTransactions = (cachedTransactionsWorkspace.transactions as Transaction[]).filter((transaction) => transaction.accountId === cachedAccount.id);
+          }
           cachedImportFiles = Array.isArray(cachedTransactionsWorkspace?.imports)
             ? (cachedTransactionsWorkspace.imports as ImportFile[]).filter((importFile) => {
                 return !importFile.accountId || importFile.accountId === cachedAccount.id;
@@ -719,6 +757,7 @@ function AccountDetailPageContent() {
     () => investmentDividends.reduce((sum, dividend) => sum + parseAmount(dividend.amount), 0),
     [investmentDividends]
   );
+  const latestCheckpointFamily = latestCheckpoint ? getCheckpointDocumentFamily(latestCheckpoint) : null;
   const canShowInvestmentPurchases = account?.type === "investment" || canTrackInvestmentPurchaseHistory(investmentSubtype);
   const canShowInvestmentDividends = canTrackInvestmentDividends(investmentSubtype);
 
@@ -786,10 +825,7 @@ function AccountDetailPageContent() {
         account?.type ?? null,
         parseAmount(
           deriveReconciledBalance({
-            balance:
-              account?.balance && Number(account.balance) !== 0
-                ? account.balance
-                : account?.balance ?? null,
+            balance: account?.balance ?? null,
             transactions,
             checkpoints: latestCheckpoint ? [latestCheckpoint] : [],
           })
@@ -1406,7 +1442,7 @@ function AccountDetailPageContent() {
             {latestCheckpoint?.status === "pending" ? (
               <div className="accounts-detail__loading-chip-wrap">
                 <span className="accounts-summary-chip is-neutral">Loading</span>
-                <p className="panel-muted">Clover is still reading this statement and filling in the rest.</p>
+                <p className="panel-muted">Clover is still reading this {latestCheckpointFamily?.pendingLabel ?? "statement"} and filling in the rest.</p>
               </div>
             ) : null}
             <div className="status-card">

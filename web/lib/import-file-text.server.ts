@@ -311,7 +311,10 @@ export const readUploadedFileText = async (file: File | ImportFileLike, password
   const lowerName = String(file.name ?? "").toLowerCase();
   const lowerType = String(file.type ?? "").toLowerCase();
 
-  if (lowerName.endsWith(".csv") || lowerName.endsWith(".tsv") || lowerName.endsWith(".txt") || lowerType.includes("text/")) {
+  if (
+    lowerName.endsWith(".csv") ||
+    lowerType.includes("csv")
+  ) {
     if (typeof file.text === "function") {
       return file.text();
     }
@@ -332,7 +335,7 @@ export const readUploadedFileText = async (file: File | ImportFileLike, password
     return extractTextFromPdfBytes(data, password);
   }
 
-  throw new Error("Only CSV, TSV, TXT, and PDF files are supported.");
+  throw new Error("Only PDF and CSV files are supported.");
 };
 
 export const readImportedFileText = async (
@@ -342,7 +345,10 @@ export const readImportedFileText = async (
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
   const bytes = await downloadImportObject(params.storageKey);
 
-  if (lowerName.endsWith(".csv") || lowerName.endsWith(".tsv") || lowerName.endsWith(".txt") || /csv|tsv|txt/.test(lowerName)) {
+  if (
+    lowerName.endsWith(".csv") ||
+    /csv/.test(lowerName)
+  ) {
     return new TextDecoder().decode(bytes);
   }
 
@@ -380,10 +386,27 @@ export const readImportedPdfPageImages = async (
   return renderPdfPageImagesFromBytes(bytes, password, maxPages, scale);
 };
 
+export const readImportedFileImageDataUrls = async (params: { storageKey: string; fileType: string; fileName: string }) => {
+  const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
+  if (!/\.(png|jpe?g|webp|gif|bmp|avif)$/.test(lowerName) && !/^image\//.test(String(params.fileType ?? "").toLowerCase())) {
+    return [];
+  }
+
+  const bytes = await downloadImportObject(params.storageKey);
+  const mimeType = String(params.fileType ?? "").trim() || "image/png";
+  return [
+    {
+      page: 1,
+      dataUrl: `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`,
+    },
+  ];
+};
+
 export default {
   downloadImportObject,
   readUploadedFileText,
   readImportedFileText,
   readUploadedFilePdfPageImages,
+  readImportedFileImageDataUrls,
   readImportedPdfPageImages,
 };

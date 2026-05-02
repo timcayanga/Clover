@@ -2237,6 +2237,10 @@ function TransactionsPageContent() {
   }, [imports]);
 
   const warningReasonFor = (transaction: Transaction) => {
+    if ((transaction.categoryName ?? "").trim().toLowerCase() === "other") {
+      return null;
+    }
+
     if (transaction.warningReason) {
       if (transaction.warningReason === "Possible duplicate") {
         return null;
@@ -2251,10 +2255,6 @@ function TransactionsPageContent() {
 
     if (transaction.isExcluded) {
       return "Ignored from totals";
-    }
-
-    if ((transaction.categoryName ?? "").trim().toLowerCase() === "other") {
-      return null;
     }
 
     return null;

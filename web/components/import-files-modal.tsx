@@ -15,6 +15,7 @@ import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { extractTextFromFile } from "@/lib/import-file-text";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { validateImportFile } from "@/lib/import-file-validation";
+import { IMPORT_IMAGE_MODES, normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 import {
   detectStatementMetadata,
   getTrailingBalanceFromParsedRows,
@@ -81,6 +82,7 @@ type StatementIdentity = {
 type QueuedFile = {
   id: string;
   file: File;
+  importMode: ImportImageMode;
   status: ImportStatus;
   confirmationState: ConfirmationState;
   error: string | null;
@@ -157,6 +159,9 @@ const fileTypeLabel = (file: File) => {
   const lowerName = file.name.toLowerCase();
   if (lowerName.endsWith(".pdf") || file.type === "application/pdf") return "PDF";
   if (lowerName.endsWith(".csv")) return "CSV";
+  if (lowerName.endsWith(".jpg") || lowerName.endsWith(".jpeg") || lowerName.endsWith(".png") || lowerName.endsWith(".webp")) {
+    return "Image";
+  }
   return "File";
 };
 
@@ -214,8 +219,8 @@ const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null
     stage === "password"
       ? "Unlock the file with its password and try again."
       : stage === "validation"
-        ? "Upload a clearer PDF or CSV file."
-        : "Re-upload the original statement and keep the tab open while Clover works.";
+        ? "Upload a clearer PDF, CSV, or image file."
+        : "Re-upload the original file and keep the tab open while Clover works.";
 
   const nextSteps =
     stage === "password"
@@ -671,20 +676,20 @@ const friendlyImportProgressLabel = (label: string, fileName?: string | null) =>
     case "Waiting for account details":
       return "Clover is reading the bank name and account number";
     case "Waiting for statement identity":
-      return "Clover is reading the statement";
+      return "Clover is reading the document";
     case "Reading locally":
-      return "Clover is reading the statement locally";
+      return "Clover is reading the document locally";
     case "Preview ready":
-      return "Clover found the statement";
+      return "Clover found a document";
     case "Queued for background processing":
       return "Clover is lining up the rest";
     case "Finalizing in background":
     case "Finalizing import":
       return "Clover is wrapping things up";
     case "Parsing in background":
-      return "Clover is reading the bank name, balance, and transactions";
+      return "Clover is reading the account details, balances, and transactions";
     case "Reading statement details":
-      return "Clover is reading the bank name, balance, and transactions";
+      return "Clover is reading the account details, balances, and transactions";
     case "Import failed":
       return "That file needs another try";
     case "Done":
@@ -727,9 +732,10 @@ export function ImportFilesModal({
   const [items, setItems] = useState<QueuedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [selectedImportMode, setSelectedImportMode] = useState<ImportImageMode>("statement");
   const [launchInBackground, setLaunchInBackground] = useState(backgroundOnly);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("Upload PDF or CSV files to import transactions and balances.");
+  const [message, setMessage] = useState("Upload PDF, CSV, and screenshot files to import documents and transactions.");
   const [validationNotice, setValidationNotice] = useState<string | null>(null);
   const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
@@ -833,6 +839,7 @@ export function ImportFilesModal({
 
       setDragActive(false);
       setSelectedAccountId("");
+      setSelectedImportMode("statement");
       setSelectedPasswordItemId(null);
       setPlanTier("unknown");
       setMonthlyUploadLimit(10);
@@ -844,7 +851,7 @@ export function ImportFilesModal({
       localPreparseStartedRef.current.clear();
       autoCloseAfterStartRef.current = false;
       accountIdByKeyRef.current.clear();
-      setMessage("Upload PDF or CSV files to import transactions and balances.");
+      setMessage("Upload PDF, CSV, and screenshot files to import documents and transactions.");
       setValidationNotice(null);
       initialFilesSignatureRef.current = null;
       if (!items.some((item) => item.status === "pending" || item.status === "needs_password" || item.status === "parsing" || item.status === "importing")) {
@@ -878,7 +885,8 @@ export function ImportFilesModal({
 
       return defaultAccountId ?? "";
     });
-    setMessage("Upload PDF or CSV files to import transactions and balances.");
+    setSelectedImportMode("statement");
+    setMessage("Upload PDF, CSV, and screenshot files to import documents and transactions.");
     setValidationNotice(null);
   }, [accounts, backgroundOnly, defaultAccountId, items, launchInBackground, open]);
 
@@ -1009,7 +1017,7 @@ export function ImportFilesModal({
     });
 
     if (!response.ok) {
-      throw new Error("Unable to create an account for this statement.");
+      throw new Error("Unable to create an account for this document.");
     }
 
     const payload = await response.json();
@@ -1091,6 +1099,7 @@ export function ImportFilesModal({
     let feedbackMessage = "";
     let validationMessage = "";
     let shouldAutoClose = false;
+    let additions: QueuedFile[] = [];
     const shouldLaunchInBackground = Boolean(options?.launchInBackground || backgroundOnly || launchInBackground);
       flushSync(() => {
         setItems((current) => {
@@ -1101,11 +1110,12 @@ export function ImportFilesModal({
       let additionsCount = 0;
       const validationIssues: string[] = [];
 
-      const additions = nextFiles.flatMap((file) => {
+      additions = nextFiles.flatMap((file) => {
         const validationError = validateImportFile({
           fileName: file.name,
           fileSize: file.size,
           contentType: file.type,
+          importMode: selectedImportMode,
         });
 
         if (validationError) {
@@ -1120,6 +1130,11 @@ export function ImportFilesModal({
         }
 
         if (existing.has(fileKey(file))) {
+          return [];
+        }
+
+        if (selectedImportMode !== "statement" && file.name.toLowerCase().endsWith(".csv")) {
+          validationIssues.push(`${file.name} is a CSV file, so it should be uploaded as a statement instead.`);
           return [];
         }
 
@@ -1147,6 +1162,7 @@ export function ImportFilesModal({
             error: null,
             password: "",
             passwordVisible: false,
+            importMode: selectedImportMode,
             importFileId: null,
             targetAccountId: null,
             optimisticAccountId,
@@ -1202,6 +1218,22 @@ export function ImportFilesModal({
         setLaunchInBackground(true);
         importActivitySurfaceRef.current = "background";
       }
+      const firstAddedFile = additions[0]?.file ?? nextFiles[0] ?? null;
+      if (firstAddedFile) {
+        publishImportActivity({
+          workspaceId,
+          surface: shouldLaunchInBackground ? "background" : importActivitySurfaceRef.current,
+          status: "active",
+          fileName: firstAddedFile.name,
+          fileIndex: 1,
+          fileTotal: additions.length || nextFiles.length,
+          completedFiles: completedFileCount,
+          progress: IMPORT_PROGRESS.preparing,
+          detail: "Clover is getting your file ready",
+          summary: null,
+          errorMessage: null,
+        });
+      }
       queueMicrotask(() => {
         if (busy || !workspaceId || !autoStartRef.current || !handleStartImportRef.current) {
           return;
@@ -1252,7 +1284,7 @@ export function ImportFilesModal({
           );
 
     if (!resolvedAccountId) {
-      throw new Error("Unable to determine the destination account for this statement.");
+      throw new Error("Unable to determine the destination account for this document.");
     }
 
     let finalizingProgress = 92;
@@ -1415,7 +1447,7 @@ export function ImportFilesModal({
         return "Clover is reading the account details";
       }
 
-      return "Clover is reading the statement";
+      return "Clover is reading the document";
     },
     []
   );
@@ -1530,7 +1562,7 @@ export function ImportFilesModal({
             detail:
               processingMessage ??
               (processingPhase === "auto_rerunning"
-                ? `Clover is rechecking the statement`
+                ? `Clover is rechecking the document`
                 : getProgressDetail(
                     {
                       accountName: processingIdentity?.accountName ?? summaryContext.accountName,
@@ -1694,8 +1726,8 @@ export function ImportFilesModal({
 
           const timeoutMessage =
             parsedRowsCount > 0
-              ? "Clover could read some rows, but couldn't finish assigning the statement. Add the account manually, then try again or add the missing rows in Transactions."
-              : "Timed out after 60 seconds while Clover was still reading the statement.";
+              ? "Clover could read some rows, but couldn't finish assigning the document. Add the account manually, then try again or add the missing rows in Transactions."
+              : "Timed out after 60 seconds while Clover was still reading the document.";
           closeImportAfterError(itemId, "monitor", summaryContext.fileName, timeoutMessage);
           return;
         }
@@ -1924,7 +1956,7 @@ export function ImportFilesModal({
             );
           }
           if (!resolvedAccountId) {
-            throw new Error("Unable to determine the destination account for this statement.");
+            throw new Error("Unable to determine the destination account for this document.");
           }
           latestResolvedAccountId = resolvedAccountId;
 
@@ -2166,19 +2198,6 @@ export function ImportFilesModal({
       return createStatementAccount(normalizedStatementAccountName, institution ?? null, accountType, accountNumber);
     }
 
-    if (selectedAccountId) {
-      return selectedAccountId;
-    }
-
-    const fallback = accounts.find((account) => {
-      const accountType = (account.type ?? "").toLowerCase();
-      return accountType !== "cash" && accountType !== "other";
-    })?.id;
-    if (fallback) {
-      setSelectedAccountId(fallback);
-      return fallback;
-    }
-
     return null;
   };
 
@@ -2235,7 +2254,6 @@ export function ImportFilesModal({
       return;
     }
 
-    const itemImportMode = "statement";
     localPreparseStartedRef.current.add(itemId);
     updateItem(itemId, {
       progressLabel: "Reading locally",
@@ -2245,13 +2263,17 @@ export function ImportFilesModal({
       const text = await extractTextFromFile(item.file, item.password.trim() || undefined);
       const localMetadata = detectStatementMetadata(text);
       const guessedIdentity = guessStatementIdentity(item.file.name);
+      const itemImportMode = item.importMode ?? "statement";
+      if (itemImportMode !== "statement") {
+        return;
+      }
       const parsedRows = parseImportText(text, item.file.name, fileTypeLabel(item.file), {
         institution: localMetadata?.institution ?? guessedIdentity?.institution ?? null,
         accountName: localMetadata?.accountName ?? guessedIdentity?.accountName ?? null,
         accountNumber: localMetadata?.accountNumber ?? null,
       });
 
-      if (!localMetadata && parsedRows.length === 0 && itemImportMode === "statement") {
+      if (!localMetadata && parsedRows.length === 0) {
         return;
       }
 
@@ -2261,7 +2283,7 @@ export function ImportFilesModal({
         deriveFallbackAccountNameFromFileName(item.file.name);
       const institution = localMetadata?.institution ?? guessedIdentity?.institution ?? null;
       const accountNumber = localMetadata?.accountNumber ?? null;
-      if (!accountNumber && itemImportMode === "statement") {
+      if (!accountNumber) {
         return;
       }
       const accountType = (localMetadata?.accountType ??
@@ -2395,7 +2417,8 @@ export function ImportFilesModal({
     if (!item) return { status: "error", importedRows: null, summary: null };
     const guessedIdentity = guessStatementIdentity(item.file.name);
     const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName);
-    const itemImportMode = "statement";
+    const itemImportMode = item.importMode ?? "statement";
+    const isDocumentImport = itemImportMode !== "statement";
     let importFileId: string | null = null;
 
     if (!workspaceId) {
@@ -2432,6 +2455,7 @@ export function ImportFilesModal({
       capturePostHogClientEvent("import_started", {
         file_type: fileTypeLabel(item.file),
         file_size_bytes: item.file.size,
+        import_mode: itemImportMode,
       });
       updateItem(itemId, { status: "importing", error: null, progress: IMPORT_PROGRESS.preparing, progressLabel: "Starting upload", importFileId });
       updateItem(itemId, { progress: IMPORT_PROGRESS.preparing, progressLabel: "Uploading the file" });
@@ -2452,6 +2476,7 @@ export function ImportFilesModal({
       capturePostHogClientEvent("import_parsing_started", {
         file_type: fileTypeLabel(item.file),
         file_size_bytes: item.file.size,
+        import_mode: itemImportMode,
       });
       const processResponse = await postFileWithProgress(
         `/api/imports/${importFileId}/process`,
@@ -2461,6 +2486,8 @@ export function ImportFilesModal({
           fileName: item.file.name,
           fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
           password: item.password.trim() || undefined,
+          importMode: itemImportMode,
+          forceInlineProcessing: isDocumentImport ? "true" : undefined,
         },
         (progress) => {
           publishImportActivity({
@@ -2486,6 +2513,7 @@ export function ImportFilesModal({
       capturePostHogClientEvent("file_uploaded", {
         file_type: fileTypeLabel(item.file),
         file_size_bytes: item.file.size,
+        import_mode: itemImportMode,
       });
 
       if (!processResponse.ok) {
@@ -2504,6 +2532,49 @@ export function ImportFilesModal({
       }
 
       const processPayload = await processResponse.json().catch(() => ({}));
+      if (isDocumentImport) {
+        const importedLabel =
+          itemImportMode === "receipt"
+            ? "Receipt imported"
+            : itemImportMode === "portfolio"
+              ? "Portfolio screenshot imported"
+              : itemImportMode === "account_detail"
+                ? "Account details imported"
+                : itemImportMode === "notes"
+                  ? "Notes screenshot imported"
+                  : "Screenshot imported";
+        updateItem(itemId, {
+          status: "done",
+          confirmationState: "confirmed",
+          error: null,
+          importFileId,
+          targetAccountId: null,
+          importedRows: Number(processPayload?.imported ?? 0) || 0,
+          progress: 100,
+          progressLabel: importedLabel,
+        });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "done",
+          fileName: item.file.name,
+          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount + 1,
+          progress: 100,
+          detail: importedLabel,
+          summary: null,
+          errorMessage: null,
+        });
+        setMessage(`Imported ${item.file.name}.`);
+        router.refresh();
+        return {
+          status: "done",
+          importedRows: Number(processPayload?.imported ?? 0) || 0,
+          summary: null,
+        };
+      }
+
       const payloadIdentity = resolveStatementIdentityFromMetadata(processPayload?.metadata);
       const statementIdentity: StatementIdentity | null =
         payloadIdentity ??
@@ -2571,6 +2642,7 @@ export function ImportFilesModal({
         ...fileAnalyticsBase(item.file, workspaceId),
         transaction_count: Number(processPayload?.imported ?? 0) || undefined,
         institution: statementIdentity?.institution ?? null,
+        import_mode: itemImportMode,
         parsing_mode: processPayload?.queued ? "queued" : "inline",
         confidence: Number(processPayload?.metadata?.confidence ?? 0) || null,
       });
@@ -2668,7 +2740,7 @@ export function ImportFilesModal({
                   },
                   previewTransactions.length
                 )
-              : "Clover is reading the statement",
+              : "Clover is reading the document",
           summary: null,
           errorMessage: null,
         });
@@ -2763,7 +2835,7 @@ export function ImportFilesModal({
               },
               previewTransactions.length
             )
-          : "Clover is reading the statement",
+          : "Clover is reading the document",
         summary: null,
         errorMessage: null,
       });
@@ -2955,7 +3027,7 @@ export function ImportFilesModal({
 
     setBusy(true);
     setValidationNotice(null);
-    setMessage("Clover is lining up your statements...");
+    setMessage("Clover is lining up your files...");
     capturePostHogClientEventOnce(
       "first_import_started",
       {
@@ -3106,7 +3178,11 @@ export function ImportFilesModal({
         import_file_id: item.importFileId,
         retry_reason: "confirmation_retry",
       });
-      const accountId = item.targetAccountId || selectedAccountId || (await ensureTargetAccountId());
+      const accountId = item.targetAccountId;
+      if (!accountId) {
+        setMessage("Clover still needs a matching account before this import can be confirmed.");
+        return;
+      }
       const result = await confirmItemImport(itemId, item.importFileId, accountId, {
         fileName: item.file.name,
         accountName: null,
@@ -3310,11 +3386,34 @@ export function ImportFilesModal({
             }
           }}
         >
+          <div className="accounts-import-document-family">
+            <label className="accounts-import-document-family__label">
+              <span>Document family</span>
+              <select value={selectedImportMode} onChange={(event) => setSelectedImportMode(normalizeImportImageMode(event.target.value))}>
+                {IMPORT_IMAGE_MODES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <p>
+              {selectedImportMode === "statement"
+                ? "Use this for statement PDFs, CSVs, and statement screenshots."
+                : selectedImportMode === "receipt"
+                  ? "Use this for receipt photos, screenshots, and payment proofs."
+                  : selectedImportMode === "portfolio"
+                    ? "Use this for investment holdings and portfolio screenshots."
+                    : selectedImportMode === "account_detail"
+                      ? "Use this for account summary and balance detail screenshots."
+                      : "Use this for notes-app screenshots that contain transaction lists."}
+            </p>
+          </div>
           <input
             ref={fileInputRef}
             className="hidden-file-input"
             type="file"
-            accept=".csv,.pdf"
+            accept=".csv,.pdf,.jpg,.jpeg,.png,.webp"
             multiple
             onChange={handleInputChange}
           />
@@ -3328,7 +3427,10 @@ export function ImportFilesModal({
         <div className="accounts-import-footer-copy">
           {validationNotice ? <p className="accounts-import-footer-copy__warning">{validationNotice}</p> : null}
           <p className="accounts-import-footer-copy__status">{message}</p>
-          <p>Accepted files: PDF and CSV. Password-protected PDFs are supported.</p>
+          <p>
+            Accepted files: PDF, CSV, and common image formats. Password-protected PDFs are supported. CSVs work best
+            with statement imports.
+          </p>
           <p>We upload the file first, then parse it on the server so the workflow stays responsive.</p>
         </div>
 

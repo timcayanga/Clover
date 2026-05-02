@@ -235,6 +235,8 @@ type StatementCheckpoint = {
     accountName?: string | null;
     institution?: string | null;
     accountNumber?: string | null;
+    importMode?: string | null;
+    documentType?: string | null;
   } | null;
 };
 
@@ -344,7 +346,6 @@ const getAccountTone = (account: Account) => (isLiabilityAccountType(getEffectiv
 
 const getAccountWarning = (account: Account, duplicateCount: number) => {
   if (duplicateCount > 1) return "Possible duplicate";
-  if (account.source === "imported" && !account.institution) return "Needs category";
   return null;
 };
 
@@ -445,6 +446,45 @@ const getCheckpointTone = (status?: StatementCheckpoint["status"] | null) => {
   if (status === "reconciled") return "good";
   if (status === "mismatch") return "danger";
   return "neutral";
+};
+
+const getCheckpointDocumentFamily = (checkpoint: StatementCheckpoint | null | undefined) => {
+  const rawDocumentType =
+    typeof checkpoint?.sourceMetadata?.documentType === "string" && checkpoint.sourceMetadata.documentType.trim()
+      ? checkpoint.sourceMetadata.documentType.trim().toLowerCase()
+      : typeof checkpoint?.sourceMetadata?.importMode === "string" && checkpoint.sourceMetadata.importMode.trim()
+        ? checkpoint.sourceMetadata.importMode.trim().toLowerCase()
+        : "statement";
+
+  if (rawDocumentType === "portfolio") {
+    return {
+      label: "Latest portfolio snapshot",
+      dateLabel: "Snapshot date",
+      balanceLabel: "Portfolio value",
+    };
+  }
+
+  if (rawDocumentType === "account_detail") {
+    return {
+      label: "Latest account snapshot",
+      dateLabel: "Snapshot date",
+      balanceLabel: "Balance",
+    };
+  }
+
+  if (rawDocumentType === "receipt" || rawDocumentType === "notes") {
+    return {
+      label: "Latest image checkpoint",
+      dateLabel: "Capture date",
+      balanceLabel: "Amount",
+    };
+  }
+
+  return {
+    label: "Latest statement checkpoint",
+    dateLabel: "Statement date",
+    balanceLabel: "Statement balance",
+  };
 };
 
 const getCheckpointTrustLabel = (checkpoint: StatementCheckpoint | null | undefined) => {
@@ -730,29 +770,21 @@ function AccountsPageContent() {
   const initialWorkspaceId = readSelectedWorkspaceId();
   const deletingAccountIdFromQuery = searchParams?.get("deletingAccountId");
   const deletingWorkspaceIdFromQuery = searchParams?.get("deletingWorkspaceId");
-  const initialCachedWorkspace = getCachedAccountsWorkspace(initialWorkspaceId);
+  const initialCachedWorkspace = null;
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
   const [selectedCurrency, setSelectedCurrency] = useState("PHP");
-  const [accounts, setAccounts] = useState<Account[]>(
-    () => (initialCachedWorkspace?.accounts as Account[]) ?? []
-  );
-  const [accountRules, setAccountRules] = useState<AccountRule[]>(
-    () => (initialCachedWorkspace?.accountRules as AccountRule[]) ?? []
-  );
-  const [transactions, setTransactions] = useState<Transaction[]>(
-    () => (initialCachedWorkspace?.transactions as Transaction[]) ?? []
-  );
-  const [statementCheckpoints, setStatementCheckpoints] = useState<StatementCheckpoint[]>(
-    () => (initialCachedWorkspace?.statementCheckpoints as StatementCheckpoint[]) ?? []
-  );
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [accountRules, setAccountRules] = useState<AccountRule[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [statementCheckpoints, setStatementCheckpoints] = useState<StatementCheckpoint[]>([]);
   const [drawerTransactions, setDrawerTransactions] = useState<Transaction[]>([]);
   const [drawerStatementCheckpoints, setDrawerStatementCheckpoints] = useState<StatementCheckpoint[]>([]);
   const [message, setMessage] = useState("Select a workspace to review accounts.");
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [accountsLoading, setAccountsLoading] = useState(false);
-  const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(Boolean(initialCachedWorkspace));
+  const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(false);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
@@ -874,13 +906,9 @@ function AccountsPageContent() {
                           drawerAccountId === account.id
                             ? drawerStatementCheckpoints[0] ?? null
                             : getLatestCheckpointForAccount(account, statementCheckpoints);
-                        const accountCheckpoints = latestCheckpoint ? [latestCheckpoint] : [];
                         const effectiveType = getEffectiveAccountType(account);
-                        const checkpointBalance =
-                          latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance
-                            ? latestCheckpoint.endingBalance
-                            : null;
-                        const reconciledBalance = checkpointBalance ?? deriveReconciledBalance({
+                        const accountCheckpoints = latestCheckpoint ? [latestCheckpoint] : [];
+                        const reconciledBalance = deriveReconciledBalance({
                           balance: account.balance,
                           transactions: accountTransactions,
                           checkpoints: accountCheckpoints,
@@ -2722,7 +2750,7 @@ function AccountsPageContent() {
             {latestCheckpoint ? (
               <section className="accounts-drawer__section">
                 <div className="accounts-drawer__section-head">
-                  <h5>Latest statement checkpoint</h5>
+                  <h5>{getCheckpointDocumentFamily(latestCheckpoint).label}</h5>
                   <ActionIcon name="calendar" />
                 </div>
                 <div className="accounts-drawer__checkpoint">
@@ -2743,11 +2771,11 @@ function AccountsPageContent() {
                     </div>
                     <div className="accounts-drawer__checkpoint-grid">
                       <div>
-                        <span>Statement date</span>
+                        <span>{getCheckpointDocumentFamily(latestCheckpoint).dateLabel}</span>
                         <strong>{formatDate(latestCheckpoint.statementEndDate ?? latestCheckpoint.createdAt)}</strong>
                       </div>
                       <div>
-                        <span>Statement balance</span>
+                        <span>{getCheckpointDocumentFamily(latestCheckpoint).balanceLabel}</span>
                         <strong>{formatAccountAmount(parseAmount(latestCheckpoint.endingBalance), selectedAccount?.currency)}</strong>
                       </div>
                       <div>
