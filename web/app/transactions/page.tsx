@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type MouseEvent as ReactMouseEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { flushSync } from "react-dom";
@@ -15,6 +16,7 @@ import { useSearchParams } from "next/navigation";
 import { CloverShell, useCloverChrome } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { CurrencySelector } from "@/components/currency-selector";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
@@ -36,6 +38,7 @@ import {
   normalizeImportedAccountKey,
 } from "@/lib/workspace-cache";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 
@@ -201,6 +204,8 @@ type TransactionsWorkspaceCacheState = {
 };
 
 type DateFilterMode = "ltd" | "day" | "week" | "month" | "quarter" | "year" | "custom";
+type TransactionSortField = "date" | "name" | "account" | "category" | "amount";
+type TransactionSortDirection = "asc" | "desc";
 
 type ManualTransactionForm = {
   date: string;
@@ -1339,10 +1344,13 @@ function TransactionsPageContent() {
   const [transactionsPageSize, setTransactionsPageSize] = useState(25);
   const [transactionsPage, setTransactionsPage] = useState(1);
   const [query, setQuery] = useState("");
+  const [sortField, setSortField] = useState<TransactionSortField>("date");
+  const [sortDirection, setSortDirection] = useState<TransactionSortDirection>("desc");
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
   const [accountFilters, setAccountFilters] = useState<string[]>([]);
   const [typeFilters, setTypeFilters] = useState<Array<"debit" | "credit">>([]);
-  const [dateFilterOpen, setDateFilterOpen] = useState(false);
   const [filterOpen, setFilterOpen] = useState(false);
   const [message, setMessage] = useState("Select a workspace to review transactions.");
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -1377,6 +1385,7 @@ function TransactionsPageContent() {
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
+  const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
 
   useEffect(() => {
     transactionsRef.current = transactions;
@@ -1398,6 +1407,9 @@ function TransactionsPageContent() {
   const drilldownParamRef = useRef<string | null>(null);
   const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [activeWarningTransactionId, setActiveWarningTransactionId] = useState<string | null>(null);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState<TransactionSortField | null>(null);
+  const [headerMenuPosition, setHeaderMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  const headerMenuRef = useRef<HTMLDivElement | null>(null);
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const workspaceTransactionCount = transactions.length;
@@ -1542,15 +1554,19 @@ function TransactionsPageContent() {
 
     const searchParams = buildTransactionQuerySearchParams(
       workspaceId,
-        {
-          query,
-          categoryIds: categoryFilters,
-          accountIds: expandedAccountFilters,
-          typeFilters,
-          dateFilterMode,
+      {
+        query,
+        categoryIds: categoryFilters,
+        accountIds: expandedAccountFilters,
+        typeFilters,
+        dateFilterMode,
         dateFilterAnchor,
         customStart,
         customEnd,
+        sortField,
+        sortDirection,
+        amountMin,
+        amountMax,
       },
       {
         page: options?.pageOverride ?? transactionsPage,
@@ -1821,7 +1837,7 @@ function TransactionsPageContent() {
   ]);
 
   useEffect(() => {
-    if (!addMenuOpen && !downloadMenuOpen && !selectionMenuOpen && !activeWarningTransactionId) {
+    if (!addMenuOpen && !downloadMenuOpen && !selectionMenuOpen && !activeWarningTransactionId && !headerMenuOpen) {
       return;
     }
 
@@ -1835,6 +1851,7 @@ function TransactionsPageContent() {
         addMenuRef.current?.contains(target) ||
         downloadMenuRef.current?.contains(target) ||
         selectionActionsMenuRef.current?.contains(target) ||
+        headerMenuRef.current?.contains(target) ||
         (activeWarningTransactionId ? warningPopoverRefs.current.get(activeWarningTransactionId)?.contains(target) : false)
       ) {
         return;
@@ -1844,6 +1861,8 @@ function TransactionsPageContent() {
       setDownloadMenuOpen(false);
       setSelectionMenuOpen(false);
       setActiveWarningTransactionId(null);
+      setHeaderMenuOpen(null);
+      setHeaderMenuPosition(null);
     };
 
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -1852,6 +1871,8 @@ function TransactionsPageContent() {
         setDownloadMenuOpen(false);
         setSelectionMenuOpen(false);
         setActiveWarningTransactionId(null);
+        setHeaderMenuOpen(null);
+        setHeaderMenuPosition(null);
         setImportOpen(false);
       }
     };
@@ -1862,7 +1883,7 @@ function TransactionsPageContent() {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [activeWarningTransactionId, addMenuOpen, downloadMenuOpen, selectionMenuOpen]);
+  }, [activeWarningTransactionId, addMenuOpen, downloadMenuOpen, headerMenuOpen, selectionMenuOpen]);
 
   useEffect(() => {
     if (manualOpen) {
@@ -1898,12 +1919,16 @@ function TransactionsPageContent() {
     setAddMenuOpen(false);
     setDownloadMenuOpen(false);
     setSelectionMenuOpen(false);
+    setHeaderMenuOpen(null);
+    setHeaderMenuPosition(null);
   };
 
   const openAddMenu = () => {
     flushSync(() => {
       setDownloadMenuOpen(false);
       setSelectionMenuOpen(false);
+      setHeaderMenuOpen(null);
+      setHeaderMenuPosition(null);
       setAddMenuOpen((current) => !current);
     });
   };
@@ -1912,6 +1937,8 @@ function TransactionsPageContent() {
     flushSync(() => {
       setAddMenuOpen(false);
       setSelectionMenuOpen(false);
+      setHeaderMenuOpen(null);
+      setHeaderMenuPosition(null);
       setDownloadMenuOpen((current) => !current);
     });
   };
@@ -1988,7 +2015,8 @@ function TransactionsPageContent() {
       setCustomStart("");
       setCustomEnd("");
       setFilterOpen(false);
-      setDateFilterOpen(false);
+      setHeaderMenuOpen(null);
+      setHeaderMenuPosition(null);
       return;
     }
 
@@ -2010,7 +2038,8 @@ function TransactionsPageContent() {
     setCustomStart("");
     setCustomEnd("");
     setFilterOpen(false);
-    setDateFilterOpen(false);
+    setHeaderMenuOpen(null);
+    setHeaderMenuPosition(null);
   }, [accounts, categories, isWorkspaceDataReady, searchParams]);
 
   const ensureDefaultAccount = async (workspaceId: string) => {
@@ -2110,9 +2139,12 @@ function TransactionsPageContent() {
     count += categoryFilters.length;
     count += expandedAccountFilters.length;
     count += typeFilters.length;
+    if (amountMin.trim() || amountMax.trim()) {
+      count += 1;
+    }
 
     return count;
-  }, [accountFilters.length, categoryFilters.length, dateFilterMode, expandedAccountFilters.length, query, typeFilters.length]);
+  }, [accountFilters.length, amountMax, amountMin, categoryFilters.length, dateFilterMode, expandedAccountFilters.length, query, typeFilters.length]);
 
   useEffect(() => {
     if (!selectAllRef.current) {
@@ -2134,6 +2166,10 @@ function TransactionsPageContent() {
     dateFilterAnchor,
     customStart,
     customEnd,
+    sortField,
+    sortDirection,
+    amountMin,
+    amountMax,
     transactionsPageSize,
   ]);
 
@@ -2446,6 +2482,30 @@ function TransactionsPageContent() {
     setFilterOpen((current) => !current);
   };
 
+  const closeHeaderMenu = () => {
+    setHeaderMenuOpen(null);
+    setHeaderMenuPosition(null);
+  };
+
+  const openHeaderMenu = (
+    field: TransactionSortField,
+    event: ReactMouseEvent<HTMLButtonElement>
+  ) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuWidth = field === "category" ? 380 : field === "amount" ? 340 : field === "date" ? 360 : 320;
+    const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
+    setAddMenuOpen(false);
+    setDownloadMenuOpen(false);
+    setSelectionMenuOpen(false);
+    setFilterOpen(false);
+    setHeaderMenuOpen((current) => (current === field ? null : field));
+    setHeaderMenuPosition((current) => (current && current.left === left && current.width === menuWidth ? current : {
+      top: rect.bottom + 10,
+      left,
+      width: menuWidth,
+    }));
+  };
+
   const clearAllTransactionFilters = () => {
     setQuery("");
     setCategoryFilters([]);
@@ -2455,6 +2515,8 @@ function TransactionsPageContent() {
     setDateFilterAnchor(todayIso);
     setCustomStart("");
     setCustomEnd("");
+    setAmountMin("");
+    setAmountMax("");
   };
 
   const openManualAdd = async () => {
@@ -2582,8 +2644,9 @@ function TransactionsPageContent() {
           return;
         }
 
-        if (dateFilterOpen) {
-          setDateFilterOpen(false);
+        if (headerMenuOpen) {
+          setHeaderMenuOpen(null);
+          setHeaderMenuPosition(null);
           return;
         }
 
@@ -2635,8 +2698,8 @@ function TransactionsPageContent() {
     addMenuOpen,
     bulkDeleteConfirmOpen,
     bulkEditOpen,
-    dateFilterOpen,
     downloadMenuOpen,
+    headerMenuOpen,
     filterOpen,
     hasSelectedTransactions,
     manualOpen,
@@ -3546,6 +3609,10 @@ function TransactionsPageContent() {
         dateFilterAnchor,
         customStart,
         customEnd,
+        sortField,
+        sortDirection,
+        amountMin,
+        amountMax,
       },
       {
         pageSize: "all",
@@ -3790,6 +3857,252 @@ function TransactionsPageContent() {
   const warningTransactionCount = transactionsSummary.review;
   const hasReviewItems = warningTransactionCount > 0;
   const dateFilterLabel = getDateFilterLabel(dateFilterMode, dateFilterAnchor, customStart, customEnd);
+  const headerMenuTitle =
+    headerMenuOpen === "name"
+      ? "Sort by name"
+      : headerMenuOpen === "date"
+        ? "Filter date"
+        : headerMenuOpen === "account"
+          ? "Filter account"
+          : headerMenuOpen === "category"
+            ? "Filter category"
+            : headerMenuOpen === "amount"
+              ? "Sort by amount"
+              : "";
+  const headerMenuPanel = headerMenuOpen && headerMenuPosition ? (
+    <div
+      className="transactions-column-menu glass"
+      ref={headerMenuRef}
+      style={{
+        top: `${headerMenuPosition.top}px`,
+        left: `${headerMenuPosition.left}px`,
+        width: `${headerMenuPosition.width}px`,
+      }}
+      role="dialog"
+      aria-label={headerMenuTitle}
+    >
+      <div className="transactions-column-menu__head">
+        <div>
+          <p className="eyebrow">Transactions</p>
+          <h4>{headerMenuTitle}</h4>
+        </div>
+        <button className="icon-button" type="button" onClick={closeHeaderMenu} aria-label={`Close ${headerMenuTitle.toLowerCase()}`}>
+          ×
+        </button>
+      </div>
+
+      {headerMenuOpen === "name" ? (
+        <div className="transactions-column-menu__section">
+          <div className="transactions-column-menu__sort">
+            {[
+              ["asc", "A-Z"],
+              ["desc", "Z-A"],
+            ].map(([direction, label]) => (
+              <button
+                key={direction}
+                type="button"
+                className={`button button-secondary button-small transactions-column-menu__button ${
+                  sortField === "name" && sortDirection === direction ? "is-active" : ""
+                }`}
+                onClick={() => {
+                  setSortField("name");
+                  setSortDirection(direction as TransactionSortDirection);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="transactions-column-menu__hint">Sort names alphabetically.</div>
+        </div>
+      ) : null}
+
+      {headerMenuOpen === "date" ? (
+        <div className="transactions-column-menu__section">
+          <div className="transactions-column-menu__sort">
+            {[
+              ["desc", "Newest"],
+              ["asc", "Oldest"],
+            ].map(([direction, label]) => (
+              <button
+                key={direction}
+                type="button"
+                className={`button button-secondary button-small transactions-column-menu__button ${
+                  sortField === "date" && sortDirection === direction ? "is-active" : ""
+                }`}
+                onClick={() => {
+                  setSortField("date");
+                  setSortDirection(direction as TransactionSortDirection);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="transactions-column-menu__fields">
+            <label className="transactions-column-menu__field">
+              <span>Start</span>
+              <input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} />
+            </label>
+            <label className="transactions-column-menu__field">
+              <span>End</span>
+              <input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} />
+            </label>
+          </div>
+          <div className="transactions-column-menu__hint">Use the start and end dates to filter the table inline.</div>
+        </div>
+      ) : null}
+
+      {headerMenuOpen === "account" ? (
+        <div className="transactions-column-menu__section">
+          <div className="transactions-column-menu__sort">
+            {[
+              ["asc", "A-Z"],
+              ["desc", "Z-A"],
+            ].map(([direction, label]) => (
+              <button
+                key={direction}
+                type="button"
+                className={`button button-secondary button-small transactions-column-menu__button ${
+                  sortField === "account" && sortDirection === direction ? "is-active" : ""
+                }`}
+                onClick={() => {
+                  setSortField("account");
+                  setSortDirection(direction as TransactionSortDirection);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <MultiSelectFilterGroup
+            label="Accounts"
+            options={accounts.map((account) => ({
+              value: account.id,
+              label: account.name,
+            }))}
+            selected={accountFilters}
+            onToggle={(value) => setAccountFilters((current) => toggleFilterValue(current, value))}
+            onClear={() => setAccountFilters([])}
+          />
+        </div>
+      ) : null}
+
+      {headerMenuOpen === "category" ? (
+        <div className="transactions-column-menu__section">
+          <div className="transactions-column-menu__sort">
+            {[
+              ["asc", "A-Z"],
+              ["desc", "Z-A"],
+            ].map(([direction, label]) => (
+              <button
+                key={direction}
+                type="button"
+                className={`button button-secondary button-small transactions-column-menu__button ${
+                  sortField === "category" && sortDirection === direction ? "is-active" : ""
+                }`}
+                onClick={() => {
+                  setSortField("category");
+                  setSortDirection(direction as TransactionSortDirection);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <MultiSelectFilterGroup
+            label="Categories"
+            options={categories.map((category) => ({
+              value: category.id,
+              label: category.name,
+            }))}
+            selected={categoryFilters}
+            onToggle={(value) => setCategoryFilters((current) => toggleFilterValue(current, value))}
+            onClear={() => setCategoryFilters([])}
+          />
+        </div>
+      ) : null}
+
+      {headerMenuOpen === "amount" ? (
+        <div className="transactions-column-menu__section">
+          <div className="transactions-column-menu__sort">
+            {[
+              ["asc", "Ascending"],
+              ["desc", "Descending"],
+            ].map(([direction, label]) => (
+              <button
+                key={direction}
+                type="button"
+                className={`button button-secondary button-small transactions-column-menu__button ${
+                  sortField === "amount" && sortDirection === direction ? "is-active" : ""
+                }`}
+                onClick={() => {
+                  setSortField("amount");
+                  setSortDirection(direction as TransactionSortDirection);
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="transactions-column-menu__fields">
+            <label className="transactions-column-menu__field">
+              <span>Min amount</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={amountMin}
+                onChange={(event) => setAmountMin(event.target.value)}
+                placeholder="0.00"
+              />
+            </label>
+            <label className="transactions-column-menu__field">
+              <span>Max amount</span>
+              <input
+                type="number"
+                inputMode="decimal"
+                value={amountMax}
+                onChange={(event) => setAmountMax(event.target.value)}
+                placeholder="0.00"
+              />
+            </label>
+          </div>
+          <div className="transactions-column-menu__hint">Filter amounts by a specific range.</div>
+        </div>
+      ) : null}
+
+      <div className="form-actions form-actions--compact">
+        <button
+          className="button button-secondary"
+          type="button"
+          onClick={() => {
+            if (headerMenuOpen === "date") {
+              setDateFilterMode("ltd");
+              setDateFilterAnchor(todayIso);
+              setCustomStart("");
+              setCustomEnd("");
+            } else if (headerMenuOpen === "account") {
+              setAccountFilters([]);
+            } else if (headerMenuOpen === "category") {
+              setCategoryFilters([]);
+            } else if (headerMenuOpen === "amount") {
+              setAmountMin("");
+              setAmountMax("");
+            } else if (headerMenuOpen === "name") {
+              setSortField("date");
+              setSortDirection("desc");
+            }
+            closeHeaderMenu();
+          }}
+        >
+          Reset
+        </button>
+        <button className="button button-primary" type="button" onClick={closeHeaderMenu}>
+          Done
+        </button>
+      </div>
+    </div>
+  ) : null;
   const isTableLoading = false;
   const transactionsShellActions = (
     <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
@@ -3857,8 +4170,9 @@ function TransactionsPageContent() {
         style={toolbarChipStyle}
         type="button"
         title={dateFilterLabel}
-        onClick={() => setDateFilterOpen(true)}
+        onClick={(event) => openHeaderMenu("date", event)}
         aria-label="Open date filter"
+        aria-expanded={headerMenuOpen === "date"}
       >
         <span className="button-icon" aria-hidden="true">
           <ActionIcon name="calendar" />
@@ -4178,53 +4492,80 @@ function TransactionsPageContent() {
             </div>
           ) : null}
 
+          {headerMenuPanel}
+
           {!isCompactViewport ? (
             <>
-          <div className="line-item-header" role="row" aria-label="Transaction columns">
-            <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
-              <input
-                ref={selectAllRef}
-                type="checkbox"
-                checked={allVisibleSelected}
-                onChange={(event) => {
-                  const shouldSelect = event.target.checked;
-                  setSelectedTransactionIds((current) => {
-                    const next = new Set(current);
-                    if (shouldSelect) {
-                      visibleTransactionIds.forEach((transactionId) => next.add(transactionId));
-                    } else {
-                      visibleTransactionIds.forEach((transactionId) => next.delete(transactionId));
-                    }
-                    return Array.from(next);
-                  });
-                }}
-                aria-label="Select all transactions on this page"
-              />
-            </label>
-            <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
-            <button className="line-item-header-cell line-item-header-cell--name" type="button">
-              Name
-            </button>
-            <button className="line-item-header-cell" type="button">
-              Date
-            </button>
-            <button className="line-item-header-cell" type="button">
-              Account
-            </button>
-            <button className="line-item-header-cell" type="button">
-              Category
-            </button>
-            <button className="line-item-header-cell line-item-header-cell--amount" type="button">
-              Amount
-            </button>
-            <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
-            <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
-          </div>
+            <div className="line-item-header" role="row" aria-label="Transaction columns">
+              <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={(event) => {
+                    const shouldSelect = event.target.checked;
+                    setSelectedTransactionIds((current) => {
+                      const next = new Set(current);
+                      if (shouldSelect) {
+                        visibleTransactionIds.forEach((transactionId) => next.add(transactionId));
+                      } else {
+                        visibleTransactionIds.forEach((transactionId) => next.delete(transactionId));
+                      }
+                      return Array.from(next);
+                    });
+                  }}
+                  aria-label="Select all transactions on this page"
+                />
+              </label>
+              <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
+              <button
+                className="line-item-header-cell line-item-header-cell--name"
+                type="button"
+                onClick={(event) => openHeaderMenu("name", event)}
+                aria-expanded={headerMenuOpen === "name"}
+              >
+                Name
+              </button>
+              <button
+                className="line-item-header-cell"
+                type="button"
+                onClick={(event) => openHeaderMenu("date", event)}
+                aria-expanded={headerMenuOpen === "date"}
+              >
+                Date
+              </button>
+              <button
+                className="line-item-header-cell"
+                type="button"
+                onClick={(event) => openHeaderMenu("account", event)}
+                aria-expanded={headerMenuOpen === "account"}
+              >
+                Account
+              </button>
+              <button
+                className="line-item-header-cell"
+                type="button"
+                onClick={(event) => openHeaderMenu("category", event)}
+                aria-expanded={headerMenuOpen === "category"}
+              >
+                Category
+              </button>
+              <button
+                className="line-item-header-cell line-item-header-cell--amount"
+                type="button"
+                onClick={(event) => openHeaderMenu("amount", event)}
+                aria-expanded={headerMenuOpen === "amount"}
+              >
+                Amount
+              </button>
+              <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
+              <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
+            </div>
 
-          <div
-            className={`table-wrap transactions-table-wrap${!hasVisibleTransactions && !isTableLoading ? " transactions-table-wrap--empty" : ""}`}
-            aria-busy={isTableLoading}
-          >
+            <div
+              className={`table-wrap transactions-table-wrap${!hasVisibleTransactions && !isTableLoading ? " transactions-table-wrap--empty" : ""}`}
+              aria-busy={isTableLoading}
+            >
             {isTableLoading ? (
               <div className="transactions-loading-state" role="status" aria-live="polite" aria-label="Loading transactions">
                 <div className="transactions-loading-header">
@@ -4893,153 +5234,6 @@ function TransactionsPageContent() {
         </aside>
       </section>
 
-      {dateFilterOpen ? (
-        <div className="modal-backdrop" role="presentation" onClick={() => setDateFilterOpen(false)}>
-          <section
-            className="modal-card modal-card--wide date-filter-card glass"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="date-filter-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="modal-head">
-              <div>
-                <p className="eyebrow">Transactions</p>
-                <h4 id="date-filter-title">Date filter</h4>
-                <p className="modal-copy">{dateFilterLabel}</p>
-              </div>
-              <button className="icon-button" type="button" onClick={() => setDateFilterOpen(false)} aria-label="Close date filter">
-                ×
-              </button>
-            </div>
-
-            <div className="date-filter-tabs" role="tablist" aria-label="Date filter mode">
-              {[
-                ["ltd", "Lifetime"],
-                ["day", "Today"],
-                ["week", "Week"],
-                ["month", "Month"],
-                ["quarter", "Quarter"],
-                ["year", "Year"],
-                ["custom", "Custom"],
-              ].map(([mode, label]) => (
-                <button
-                  key={mode}
-                  className={`date-filter-tab ${dateFilterMode === mode ? "is-active" : ""}`}
-                  type="button"
-                  onClick={() => setDateFilterMode(mode as DateFilterMode)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-
-            <div className="date-filter-panel">
-              {dateFilterMode === "ltd" ? (
-                <div className="date-filter-empty">Lifetime to date includes every transaction up to today.</div>
-              ) : null}
-              {dateFilterMode === "day" ? (
-                <label className="date-filter-field">
-                  <span>On</span>
-                  <input type="date" value={dateFilterAnchor} onChange={(event) => setDateFilterAnchor(event.target.value)} />
-                </label>
-              ) : null}
-              {dateFilterMode === "week" ? (
-                <div className="date-filter-fields date-filter-fields--two">
-                  <label className="date-filter-field">
-                    <span>Anchor</span>
-                    <input type="date" value={dateFilterAnchor} onChange={(event) => setDateFilterAnchor(event.target.value)} />
-                  </label>
-                  <div className="date-filter-empty">
-                    {formatDate(startOfWeekIso(dateFilterAnchor))} - {formatDate(endOfWeekIso(dateFilterAnchor))}
-                  </div>
-                </div>
-              ) : null}
-              {dateFilterMode === "month" ? (
-                <div className="date-filter-fields date-filter-fields--two">
-                  <label className="date-filter-field">
-                    <span>Anchor</span>
-                    <input type="date" value={dateFilterAnchor} onChange={(event) => setDateFilterAnchor(event.target.value)} />
-                  </label>
-                  <div className="date-filter-empty">
-                    {formatDate(startOfMonthIso(dateFilterAnchor))} - {formatDate(endOfMonthIso(dateFilterAnchor))}
-                  </div>
-                </div>
-              ) : null}
-              {dateFilterMode === "quarter" ? (
-                <div className="date-filter-fields date-filter-fields--two">
-                  <label className="date-filter-field">
-                    <span>Anchor</span>
-                    <input type="date" value={dateFilterAnchor} onChange={(event) => setDateFilterAnchor(event.target.value)} />
-                  </label>
-                  <div className="date-filter-empty">
-                    {formatDate(startOfQuarterIso(dateFilterAnchor))} - {formatDate(endOfQuarterIso(dateFilterAnchor))}
-                  </div>
-                </div>
-              ) : null}
-              {dateFilterMode === "year" ? (
-                <div className="date-filter-fields date-filter-fields--two">
-                  <label className="date-filter-field">
-                    <span>Anchor</span>
-                    <input type="date" value={dateFilterAnchor} onChange={(event) => setDateFilterAnchor(event.target.value)} />
-                  </label>
-                  <div className="date-filter-empty">
-                    {formatDate(startOfYearIso(dateFilterAnchor))} - {formatDate(endOfYearIso(dateFilterAnchor))}
-                  </div>
-                </div>
-              ) : null}
-              {dateFilterMode === "custom" ? (
-                <div className="date-filter-fields date-filter-fields--two">
-                  <label className="date-filter-field">
-                    <span>Start</span>
-                    <input type="date" value={customStart} onChange={(event) => setCustomStart(event.target.value)} />
-                  </label>
-                  <label className="date-filter-field">
-                    <span>End</span>
-                    <input type="date" value={customEnd} onChange={(event) => setCustomEnd(event.target.value)} />
-                  </label>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="form-actions date-filter-actions">
-              <button
-                className="button button-secondary"
-                type="button"
-                onClick={() => {
-                  setDateFilterMode("ltd");
-                  setDateFilterAnchor(todayIso);
-                  setCustomStart("");
-                  setCustomEnd("");
-                  capturePostHogClientEvent("report_filtered", {
-                    workspace_id: selectedWorkspaceId || null,
-                    view: "transactions",
-                    action: "date_filter_reset",
-                  });
-                }}
-              >
-                Reset
-              </button>
-              <button
-                className="button button-primary"
-                type="button"
-                onClick={() => {
-                  capturePostHogClientEvent("report_filtered", {
-                    workspace_id: selectedWorkspaceId || null,
-                    view: "transactions",
-                    action: "date_filter_applied",
-                    date_filter_mode: dateFilterMode,
-                  });
-                  setDateFilterOpen(false);
-                }}
-              >
-                Done
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
       {bulkEditOpen ? (
         <div className="modal-backdrop" role="presentation" onClick={() => setBulkEditOpen(false)}>
           <section
@@ -5476,6 +5670,21 @@ function TransactionsPageContent() {
                     ))}
                   </select>
                 </div>
+              </label>
+
+              <label className="transaction-drawer-form__currency">
+                <span className="sr-only">Currency</span>
+                <CurrencySelector
+                  value={detailDraft?.currency ?? selectedTransaction.currency}
+                  onChange={(value) => setDetailDraft((current) => (current ? { ...current, currency: value } : current))}
+                  options={currencyCatalogCodes}
+                  ariaLabel="Select transaction currency"
+                  className="transaction-drawer-form__currency-selector"
+                  buttonClassName="transaction-drawer-form__currency-button"
+                  menuClassName="transaction-drawer-form__currency-menu"
+                  optionClassName="transaction-drawer-form__currency-option"
+                />
+                <span className="field-help">Change this if the transaction should display in a different currency than the account.</span>
               </label>
 
               <label className="transaction-drawer-form__notes">

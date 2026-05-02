@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CurrencySelector } from "@/components/currency-selector";
 import {
   commitmentKindLabels,
   commitmentKindOptions,
@@ -12,6 +13,7 @@ import {
   type FinancialCommitmentSummary,
 } from "@/lib/commitments";
 import { getAccountPath } from "@/lib/account-path";
+import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { formatAccountTypeLabel, getRecurringKindSuggestionForAccountType, isLiabilityAccountType } from "@/lib/account-types";
 
 type CommitmentAccountOption = {
@@ -187,6 +189,7 @@ export function CommitmentsPanel({
   }, [groupedCommitments]);
 
   const recentTransactions = transactions.slice(0, 24);
+  const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
   const selectedAccount = useMemo(
     () => accounts.find((account) => account.id === accountId) ?? null,
     [accountId, accounts]
@@ -527,12 +530,16 @@ export function CommitmentsPanel({
                 }}
               >
                 <label className="settings-field">
-                  <span>Currency</span>
-                  <input
-                    className="settings-input"
+                  <span className="sr-only">Currency</span>
+                  <CurrencySelector
                     value={currency}
-                    onChange={(event) => setCurrency(event.target.value)}
-                    placeholder="PHP"
+                    onChange={setCurrency}
+                    options={currencyCatalogCodes}
+                    ariaLabel="Select commitment currency"
+                    className="settings-currency-field__selector"
+                    buttonClassName="settings-currency-field__button"
+                    menuClassName="settings-currency-field__menu"
+                    optionClassName="settings-currency-field__option"
                   />
                 </label>
 

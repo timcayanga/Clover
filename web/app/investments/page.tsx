@@ -7,11 +7,13 @@ import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { CurrencySelector } from "@/components/currency-selector";
 import { getAccountPath } from "@/lib/account-path";
 import { InfoTip } from "@/components/info-tip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import {
   chooseWorkspaceId,
@@ -187,6 +189,7 @@ type InvestmentEditDraft = {
   investmentInterestRate: string;
   investmentMaturityValue: string;
   balance: string;
+  currency: string;
 };
 
 type InvestmentTab = "overview" | "portfolio" | "market" | "insights";
@@ -301,6 +304,7 @@ const serializeInvestmentEditDraft = (account: Account): InvestmentEditDraft => 
   investmentInterestRate: account.investmentInterestRate ?? "",
   investmentMaturityValue: account.investmentMaturityValue ?? "",
   balance: account.balance ?? "",
+  currency: account.currency ?? "PHP",
 });
 
 export default function InvestmentsPage() {
@@ -624,6 +628,7 @@ export default function InvestmentsPage() {
     const currencies = getCurrencyCodes(investmentAccounts);
     return ["all", ...currencies];
   }, [investmentAccounts]);
+  const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
 
   const activeInvestmentFilters = Boolean(
     normalizeInvestmentSearchText(investmentSearch) ||
@@ -695,7 +700,7 @@ export default function InvestmentsPage() {
           investmentInterestRate: isFixedIncome ? parseNullableNumberInput(editingDraft.investmentInterestRate) : null,
           investmentMaturityValue: isFixedIncome ? parseNullableNumberInput(editingDraft.investmentMaturityValue) : null,
           type: "investment",
-          currency: editingAccount.currency,
+          currency: editingDraft.currency.trim().toUpperCase() || editingAccount.currency,
           source: editingAccount.source,
           balance: parseNullableNumberInput(editingDraft.balance),
         }),
@@ -1057,19 +1062,22 @@ export default function InvestmentsPage() {
                   ))}
                 </select>
               </label>
-              <label>
-                Currency view
-                <select value={portfolioCurrencyFilter} onChange={(event) => setPortfolioCurrencyFilter(event.target.value)}>
-                  <option value="all">All assets</option>
-                  {portfolioCurrencyOptions
-                    .filter((currency) => currency !== "all")
-                    .map((currency) => (
-                      <option key={currency} value={currency}>
-                        {currency}
-                      </option>
-                    ))}
-                </select>
-              </label>
+              <div className="investments-currency-filter">
+                <span className="sr-only">Currency view</span>
+                <CurrencySelector
+                  value={portfolioCurrencyFilter}
+                  onChange={setPortfolioCurrencyFilter}
+                  options={portfolioCurrencyOptions.filter((currency) => currency !== "all")}
+                  includeAllOption
+                  allLabel="All assets"
+                  ariaLabel="Select portfolio currency"
+                  className="investments-currency-filter__selector"
+                  buttonClassName="investments-currency-filter__button"
+                  menuClassName="investments-currency-filter__menu"
+                  optionClassName="investments-currency-filter__option"
+                  compact
+                />
+              </div>
               <div className="investments-filters__actions">
                 <button
                   className="button button-secondary button-small"
@@ -1280,6 +1288,19 @@ export default function InvestmentsPage() {
                                       Current value / balance
                                       <input value={editingDraft.balance} onChange={(event) => updateEditingDraft("balance", event.target.value)} inputMode="decimal" />
                                     </label>
+                                    <div className="accounts-form-currency-field">
+                                      <span className="sr-only">Currency</span>
+                                      <CurrencySelector
+                                        value={editingDraft.currency}
+                                        onChange={(value) => updateEditingDraft("currency", value)}
+                                        options={currencyCatalogCodes}
+                                        ariaLabel="Select investment currency"
+                                        className="accounts-form-currency-field__selector"
+                                        buttonClassName="accounts-form-currency-field__button"
+                                        menuClassName="accounts-form-currency-field__menu"
+                                        optionClassName="accounts-form-currency-field__option"
+                                      />
+                                    </div>
                                     {editFieldConfigs.map((field) => (
                                       <label key={field.key}>
                                         {field.label}
@@ -1628,18 +1649,20 @@ export default function InvestmentsPage() {
                   />
                   <span className="field-help">This is the current total value of the holding, not the amount you paid to buy it.</span>
                 </label>
-                <label>
-                  Value currency
-                  <input
+                <div className="accounts-form-currency-field">
+                  <span className="sr-only">Currency</span>
+                  <CurrencySelector
                     value={manualCurrency}
-                    onChange={(event) => setManualCurrency(event.target.value.toUpperCase())}
-                    placeholder="PHP or USD"
-                    maxLength={8}
-                    autoCapitalize="characters"
-                    spellCheck={false}
+                    onChange={setManualCurrency}
+                    options={currencyCatalogCodes}
+                    ariaLabel="Select investment currency"
+                    className="accounts-form-currency-field__selector"
+                    buttonClassName="accounts-form-currency-field__button"
+                    menuClassName="accounts-form-currency-field__menu"
+                    optionClassName="accounts-form-currency-field__option"
                   />
                   <span className="field-help">Use a fiat currency such as PHP or USD. Keep BTC, USDT, and similar codes in the asset field above.</span>
-                </label>
+                </div>
 
                 {manualInvestmentSubtype ? (
                   <div className="accounts-investment-fields">

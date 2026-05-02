@@ -8,6 +8,7 @@ import { CloverShell, useCloverChrome } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { CurrencySelector } from "@/components/currency-selector";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
@@ -17,6 +18,7 @@ import { deriveReconciledBalance } from "@/lib/account-balance";
 import { getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path";
 import { countNonCashAccounts } from "@/lib/account-limit-count";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
+import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceAccountDeletion,
@@ -1474,6 +1476,7 @@ function AccountsPageContent() {
     () => reconciledAccounts.find((account) => account.id === drawerAccountId) ?? null,
     [drawerAccountId, reconciledAccounts]
   );
+  const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
   const selectedAccountCurrency = selectedAccount?.currency ?? "PHP";
 
   useEffect(() => {
@@ -2184,16 +2187,16 @@ function AccountsPageContent() {
       title="Accounts"
       actions={
         <>
-          <label className="accounts-currency-filter" aria-label="Select currency">
-            <span>Currency</span>
-            <select value={selectedCurrency} onChange={(event) => setSelectedCurrency(event.target.value)}>
-              {availableCurrencies.map((currency) => (
-                <option key={currency} value={currency}>
-                  {currency}
-                </option>
-              ))}
-            </select>
-          </label>
+          <CurrencySelector
+            value={selectedCurrency}
+            onChange={setSelectedCurrency}
+            options={availableCurrencies}
+            ariaLabel="Select account currency"
+            className="accounts-currency-filter"
+            buttonClassName="accounts-currency-filter__button"
+            menuClassName="accounts-currency-filter__menu"
+            optionClassName="accounts-currency-filter__option"
+          />
           <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
             <ActionIcon name="plus" />
             <span>Add account</span>
@@ -2651,17 +2654,19 @@ function AccountsPageContent() {
                   Balance
                   <input value={accountEditBalance} onChange={(event) => setAccountEditBalance(event.target.value)} inputMode="decimal" placeholder="0.00" />
                 </label>
-                <label>
-                  Currency
-                  <input
+                <div className="accounts-form-currency-field">
+                  <span className="sr-only">Currency</span>
+                  <CurrencySelector
                     value={accountEditCurrency}
-                    onChange={(event) => setAccountEditCurrency(event.target.value.toUpperCase())}
-                    placeholder="PHP, USD, BTC"
-                    maxLength={8}
-                    autoCapitalize="characters"
-                    spellCheck={false}
+                    onChange={setAccountEditCurrency}
+                    options={currencyCatalogCodes}
+                    ariaLabel="Select account currency"
+                    className="accounts-form-currency-field__selector"
+                    buttonClassName="accounts-form-currency-field__button"
+                    menuClassName="accounts-form-currency-field__menu"
+                    optionClassName="accounts-form-currency-field__option"
                   />
-                </label>
+                </div>
                 <button className="button button-primary" type="submit" disabled={accountEditBusy}>
                   {accountEditBusy ? "Saving..." : "Save changes"}
                 </button>
@@ -3010,17 +3015,19 @@ function AccountsPageContent() {
                         ) : null}
                       </div>
                     ) : null}
-                    <label>
-                      Currency
-                      <input
+                    <div className="accounts-form-currency-field">
+                      <span className="sr-only">Currency</span>
+                      <CurrencySelector
                         value={manualCurrency}
-                        onChange={(event) => setManualCurrency(event.target.value.toUpperCase())}
-                        placeholder="PHP, USD, BTC"
-                        maxLength={8}
-                        autoCapitalize="characters"
-                        spellCheck={false}
+                        onChange={setManualCurrency}
+                        options={currencyCatalogCodes}
+                        ariaLabel="Select account currency"
+                        className="accounts-form-currency-field__selector"
+                        buttonClassName="accounts-form-currency-field__button"
+                        menuClassName="accounts-form-currency-field__menu"
+                        optionClassName="accounts-form-currency-field__option"
                       />
-                    </label>
+                    </div>
                   </div>
                 </div>
                 {manualType === "investment" ? (
