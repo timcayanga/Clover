@@ -11707,9 +11707,15 @@ input.transaction-inline-edit--amount::placeholder {
   min-width: 0;
 }
 
+.manual-form-layout__currency {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
 .manual-form-top-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(150px, 210px);
+  grid-template-columns: minmax(0, 1fr) minmax(138px, 184px) minmax(150px, 210px);
   gap: 12px;
   align-items: end;
 }
@@ -13454,10 +13460,17 @@ input.transaction-inline-edit--amount::placeholder {
   min-height: 34px;
 }
 
-.currency-selector__trigger-code,
+.currency-selector__trigger-token,
 .currency-selector__trigger-all {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
   white-space: nowrap;
   letter-spacing: 0.02em;
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .currency-selector__chevron {
@@ -13474,20 +13487,39 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .currency-selector__menu {
-  position: absolute;
+  position: fixed;
   left: 0;
   top: calc(100% + 8px);
   z-index: 35;
-  width: min(380px, 92vw);
-  max-height: 320px;
+  width: min(420px, calc(100vw - 24px));
+  max-height: min(70vh, 420px);
   overflow: auto;
   display: grid;
-  gap: 2px;
-  padding: 6px;
-  border-radius: 18px;
-  border: 1px solid rgba(3, 168, 192, 0.16);
+  gap: 8px;
+  padding: 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(3, 168, 192, 0.14);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: var(--shadow-soft);
+}
+
+.currency-selector__section {
+  display: grid;
+  gap: 8px;
+}
+
+.currency-selector__section-label {
+  padding: 0 2px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.currency-selector__section-list {
+  display: grid;
+  gap: 4px;
 }
 
 .currency-selector__option {
@@ -13495,10 +13527,10 @@ input.transaction-inline-edit--amount::placeholder {
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
+  gap: 12px;
+  padding: 10px 12px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 14px;
   background: transparent;
   color: var(--text);
   text-align: left;
@@ -13515,20 +13547,20 @@ input.transaction-inline-edit--amount::placeholder {
 
 .currency-selector__option-text {
   display: grid;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
   flex: 1;
 }
 
 .currency-selector__option-text strong {
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   letter-spacing: -0.02em;
   line-height: 1.15;
 }
 
 .currency-selector__option-text span {
   color: var(--muted);
-  font-size: 0.64rem;
+  font-size: 0.66rem;
   line-height: 1.1;
 }
 
@@ -13537,52 +13569,6 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--accent);
   font-size: 0.82rem;
   font-weight: 700;
-}
-
-.currency-avatar {
-  position: relative;
-  display: inline-grid;
-  place-items: center;
-  flex: none;
-  border-radius: 999px;
-  overflow: hidden;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
-}
-
-.currency-avatar--small {
-  width: 22px;
-  height: 22px;
-}
-
-.currency-avatar--medium {
-  width: 26px;
-  height: 26px;
-}
-
-.currency-avatar__logo {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-}
-
-.currency-avatar__fallback {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 2px;
-  color: var(--accent);
-  font-size: 0.52rem;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.06em;
-}
-
-.currency-avatar--all {
-  background: rgba(3, 168, 192, 0.12);
-  color: var(--accent);
 }
 
 .accounts-form-currency-field__selector,
@@ -15091,7 +15077,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-add-fields__row--amount {
-  grid-template-columns: minmax(0, 1fr) 148px;
+  grid-template-columns: 148px minmax(0, 1fr);
   align-items: end;
 }
 
@@ -20303,7 +20289,7 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-add-fields__row--amount {
-    grid-template-columns: minmax(0, 1fr) 116px;
+    grid-template-columns: 116px minmax(0, 1fr);
   }
 
   .accounts-add-brand-tile {

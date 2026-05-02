@@ -12,7 +12,7 @@ import { getAccountPath } from "@/lib/account-path";
 import { InfoTip } from "@/components/info-tip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
-import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import {
@@ -20,7 +20,6 @@ import {
   persistSelectedWorkspaceId,
   readSelectedWorkspaceId,
 } from "@/lib/workspace-selection";
-import { getCachedAccountsWorkspace } from "@/lib/workspace-cache";
 import {
   applyOptimisticWorkspaceAccountDeletion,
   clearDeletedWorkspaceAccount,
@@ -65,6 +64,55 @@ type Account = {
   balance: string | null;
   updatedAt: string;
   createdAt: string;
+};
+
+type InvestmentSnapshotHolding = {
+  id: string;
+  rowIndex: number | null;
+  assetName: string;
+  assetSymbol: string | null;
+  assetType: string | null;
+  quantity: string | null;
+  unitPrice: string | null;
+  costBasis: string | null;
+  marketValue: string | null;
+  currentValue: string | null;
+  gainLossValue: string | null;
+  gainLossPercent: string | null;
+  currency: string;
+  status: string | null;
+  confidence: number;
+};
+
+type InvestmentSnapshot = {
+  id: string;
+  snapshotDate: string | null;
+  portfolioName: string | null;
+  currency: string;
+  totalValue: string | null;
+  costBasis: string | null;
+  gainLossValue: string | null;
+  gainLossPercent: string | null;
+  confidence: number;
+  account: {
+    id: string;
+    name: string;
+    institution: string | null;
+    type: string;
+  } | null;
+  documentImport: {
+    id: string;
+    documentFamily: string;
+    documentSubtype: string | null;
+    institution: string | null;
+    accountName: string | null;
+    accountNumber: string | null;
+    currency: string;
+    pageCount: number;
+    confidence: number;
+    createdAt: string;
+  } | null;
+  holdings: InvestmentSnapshotHolding[];
 };
 
 const percentFormatter = new Intl.NumberFormat("en-US", {
@@ -309,16 +357,18 @@ const serializeInvestmentEditDraft = (account: Account): InvestmentEditDraft => 
 
 export default function InvestmentsPage() {
   const initialWorkspaceId = readSelectedWorkspaceId();
-  const initialCachedWorkspace = getCachedAccountsWorkspace(initialWorkspaceId);
+  const initialCachedWorkspace = null;
   const searchParams = useSearchParams();
   const urlSearchParams = useMemo(() => new URLSearchParams(searchParams?.toString() ?? ""), [searchParams]);
   const searchQueryFromUrl = urlSearchParams.get("q") ?? "";
   const requestedTab = normalizeInvestmentTab(urlSearchParams.get("tab"));
 
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
-  const [accounts, setAccounts] = useState<Account[]>(() => (initialCachedWorkspace?.accounts as Account[]) ?? []);
-  const [loading, setLoading] = useState(!initialCachedWorkspace);
-  const [hasLoaded, setHasLoaded] = useState(Boolean(initialCachedWorkspace));
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [investmentSnapshots, setInvestmentSnapshots] = useState<InvestmentSnapshot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [snapshotLoading, setSnapshotLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [message, setMessage] = useState("");
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [investmentSearch, setInvestmentSearch] = useState(searchQueryFromUrl);
@@ -408,33 +458,90 @@ export default function InvestmentsPage() {
     let cancelled = false;
 
     const loadAccounts = async () => {
+      setLoading(true);
       if (!selectedWorkspaceId) {
-        setAccounts([]);
-        setLoading(false);
-        setHasLoaded(true);
+        if (!cancelled) {
+          setAccounts([]);
+          setLoading(false);
+          setHasLoaded(true);
+        }
         return;
       }
 
-      setLoading(true);
-      const response = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`);
-      if (!response.ok || cancelled) {
+      try {
+        const response = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`);
+        if (!response.ok || cancelled) {
+          if (!cancelled) {
+            setMessage("");
+          }
+          return;
+        }
+
+        const payload = await response.json();
+        if (cancelled) {
+          return;
+        }
+
+        const nextAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+        setAccounts(nextAccounts);
+        persistSelectedWorkspaceId(selectedWorkspaceId);
+      } catch {
         if (!cancelled) {
           setMessage("");
         }
-        setLoading(false);
-        setHasLoaded(true);
-        return;
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          setHasLoaded(true);
+        }
       }
-
-      const payload = await response.json();
-      const nextAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
-      setAccounts(nextAccounts);
-      setLoading(false);
-      setHasLoaded(true);
-      persistSelectedWorkspaceId(selectedWorkspaceId);
     };
 
     void loadAccounts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedWorkspaceId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadSnapshots = async () => {
+      setSnapshotLoading(true);
+
+      if (!selectedWorkspaceId) {
+        if (!cancelled) {
+          setInvestmentSnapshots([]);
+          setSnapshotLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/investments?workspaceId=${encodeURIComponent(selectedWorkspaceId)}`);
+        if (!response.ok || cancelled) {
+          return;
+        }
+
+        const payload = await response.json();
+        if (cancelled) {
+          return;
+        }
+
+        setInvestmentSnapshots(Array.isArray(payload.snapshots) ? (payload.snapshots as InvestmentSnapshot[]) : []);
+      } catch {
+        if (!cancelled) {
+          setInvestmentSnapshots([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setSnapshotLoading(false);
+        }
+      }
+    };
+
+    void loadSnapshots();
 
     return () => {
       cancelled = true;
@@ -639,6 +746,10 @@ export default function InvestmentsPage() {
   const canUseProTabs = planTier !== "free";
   const canAccessSelectedTab = !((selectedTab === "market" || selectedTab === "insights") && !canUseProTabs);
   const editingAccount = editingAccountId ? visibleInvestmentAccounts.find((account) => account.id === editingAccountId) ?? accounts.find((account) => account.id === editingAccountId) ?? null : null;
+  const visibleSnapshots = useMemo(
+    () => investmentSnapshots.filter((snapshot) => snapshot.documentImport?.documentFamily === "portfolio" || snapshot.documentImport?.documentFamily === "account_detail"),
+    [investmentSnapshots]
+  );
 
   const renderAddInvestmentButton = (variant: "desktop" | "mobile") => (
     <button
@@ -974,6 +1085,65 @@ export default function InvestmentsPage() {
             <section className="investments-allocation glass">
               <div className="investments-allocation__head">
                 <div className="investments-allocation__head-title">
+                  <p className="eyebrow">Imported screenshots</p>
+                  <div className="investments-allocation__title-row">
+                    <h5>Portfolio snapshots</h5>
+                    <InfoTip label="Investment screenshots parsed into snapshot records." />
+                  </div>
+                </div>
+                <div className="investments-allocation__summary">
+                  <span>Snapshots</span>
+                  <strong>{snapshotLoading ? "…" : visibleSnapshots.length}</strong>
+                </div>
+              </div>
+
+              {snapshotLoading ? (
+                <div className="investments-portfolio-table__empty">
+                  <strong>Loading imported snapshots...</strong>
+                </div>
+              ) : visibleSnapshots.length > 0 ? (
+                <div className="investments-allocation__list">
+                  {visibleSnapshots.slice(0, 4).map((snapshot) => {
+                    const totalValue = snapshot.totalValue ? formatInvestmentAmount(Number(snapshot.totalValue), snapshot.currency) : "Value not set";
+                    const gainLossValue = snapshot.gainLossValue === null ? null : formatInvestmentAmount(Math.abs(Number(snapshot.gainLossValue)), snapshot.currency);
+                    const gainTone = snapshot.gainLossValue === null ? "" : Number(snapshot.gainLossValue) >= 0 ? "is-positive" : "is-negative";
+
+                    return (
+                      <article key={snapshot.id} className="recurring-patterns__item">
+                        <div className="recurring-patterns__item-head">
+                          <strong>{snapshot.portfolioName ?? snapshot.account?.name ?? "Imported snapshot"}</strong>
+                          <span>
+                            {snapshot.documentImport?.documentFamily ?? "portfolio"}
+                            {snapshot.documentImport?.pageCount ? ` · ${snapshot.documentImport.pageCount} pages` : ""}
+                          </span>
+                        </div>
+                        <div className="recurring-patterns__item-meta">
+                          <span>{totalValue}</span>
+                          <span className={gainTone}>
+                            {gainLossValue === null ? "Gain / loss not set" : `${Number(snapshot.gainLossValue) >= 0 ? "+" : "-"}${gainLossValue}`}
+                          </span>
+                          <span>{snapshot.account?.institution ?? snapshot.documentImport?.institution ?? "No institution"}</span>
+                        </div>
+                        <div className="recurring-patterns__item-meta">
+                          <span>Snapshot: {snapshot.snapshotDate ? new Date(snapshot.snapshotDate).toLocaleDateString("en-PH") : "Unknown"}</span>
+                          <span>Holdings: {snapshot.holdings.length}</span>
+                          <span>Confidence {snapshot.confidence}%</span>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="investments-portfolio-table__empty">
+                  <strong>No imported snapshots yet.</strong>
+                  <p>When Clover parses investment screenshots, they will appear here without changing your manual holdings.</p>
+                </div>
+              )}
+            </section>
+
+            <section className="investments-allocation glass">
+              <div className="investments-allocation__head">
+                <div className="investments-allocation__head-title">
                   <p className="eyebrow">Portfolio mix</p>
                   <div className="investments-allocation__title-row">
                     <h5>Allocation by subtype</h5>
@@ -1119,7 +1289,7 @@ export default function InvestmentsPage() {
                   <div className="investments-portfolio-table__row investments-portfolio-table__row--head" role="row">
                     <span role="columnheader">Asset</span>
                     <span role="columnheader">Type</span>
-                    <span role="columnheader">Currency</span>
+                    <span role="columnheader">Symbol</span>
                     <span role="columnheader">Current</span>
                     <span role="columnheader">Purchase</span>
                     <span role="columnheader">Gain / loss</span>
@@ -1147,7 +1317,7 @@ export default function InvestmentsPage() {
                         <div className="investments-portfolio-table__cell">
                           {row.account.investmentSubtype ? getInvestmentSubtypeLabel(row.account.investmentSubtype) : "Unclassified"}
                         </div>
-                        <div className="investments-portfolio-table__cell">{formatCurrencyCode(row.account.currency)}</div>
+                        <div className="investments-portfolio-table__cell">{formatCurrencySymbol(row.account.currency)}</div>
                         <div className="investments-portfolio-table__cell">
                           {row.currentValue === null ? "Not set" : formatInvestmentAmount(row.currentValue, row.account.currency)}
                         </div>

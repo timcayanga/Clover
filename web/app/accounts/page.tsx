@@ -13,7 +13,7 @@ import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
-import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path";
 import { countNonCashAccounts } from "@/lib/account-limit-count";
@@ -131,8 +131,12 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
   };
 };
 
-const getImportedAccountKey = (name: string | null, institution: string | null, accountNumber?: string | null) =>
-  normalizeImportedAccountKey(name, institution, accountNumber ?? null);
+const getImportedAccountKey = (
+  name: string | null,
+  institution: string | null,
+  accountNumber?: string | null,
+  accountType?: string | null
+) => normalizeImportedAccountKey(name, institution, accountNumber ?? null, accountType ?? null);
 
 const mergeImportedPreviewTransactions = (
   currentTransactions: Transaction[],
@@ -157,17 +161,20 @@ const mergeAccountsWithOptimisticImports = (
   const visibleCurrentAccounts = currentAccounts.filter((account) => !deletedAccountIds.has(account.id));
   const fetchedById = new Map(visibleFetchedAccounts.map((account) => [account.id, account] as const));
   const fetchedByKey = new Map(
-    visibleFetchedAccounts.map((account) => [getImportedAccountKey(account.name, account.institution, account.accountNumber), account] as const)
+    visibleFetchedAccounts.map(
+      (account) => [getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type), account] as const
+    )
   );
   const mergedFetchedAccounts = visibleFetchedAccounts.map((account) => {
-    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber);
+    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
     const optimistic = visibleCurrentAccounts.find((currentAccount) => {
       if (currentAccount.source !== "upload") {
         return false;
       }
 
       return (
-        getImportedAccountKey(currentAccount.name, currentAccount.institution, currentAccount.accountNumber) === accountKey
+        getImportedAccountKey(currentAccount.name, currentAccount.institution, currentAccount.accountNumber, currentAccount.type) ===
+        accountKey
       );
     });
     if (!optimistic) {
@@ -189,7 +196,7 @@ const mergeAccountsWithOptimisticImports = (
       return false;
     }
 
-    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber);
+    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
     return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
   });
 
@@ -509,7 +516,8 @@ const getCheckpointIdentityKey = (checkpoint: StatementCheckpoint) =>
   normalizeImportedAccountKey(
     typeof checkpoint.sourceMetadata?.accountName === "string" ? checkpoint.sourceMetadata.accountName : null,
     typeof checkpoint.sourceMetadata?.institution === "string" ? checkpoint.sourceMetadata.institution : null,
-    typeof checkpoint.sourceMetadata?.accountNumber === "string" ? checkpoint.sourceMetadata.accountNumber : null
+    typeof checkpoint.sourceMetadata?.accountNumber === "string" ? checkpoint.sourceMetadata.accountNumber : null,
+    typeof checkpoint.sourceMetadata?.accountType === "string" ? checkpoint.sourceMetadata.accountType : null
   );
 
 const getLastFourDigits = (value?: string | null) => {
@@ -553,7 +561,7 @@ const getLatestCheckpointForAccount = (
 ) => {
   let latestCheckpoint: StatementCheckpoint | null = null;
   let latestTime = -1;
-  const identityKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber);
+  const identityKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
 
   for (const checkpoint of statementCheckpoints) {
     const checkpointInstitution =
@@ -2175,7 +2183,7 @@ function AccountsPageContent() {
           <p class="muted">Net worth ${formatAggregateAmount(totals.netWorth, visibleAccounts)} · Assets ${formatAggregateAmount(totals.assets, visibleAccounts)} · Liabilities ${formatAggregateAmount(totals.liabilities, visibleAccounts)}</p>
           <table>
             <thead>
-              <tr><th>Name</th><th>Type</th><th>Amount</th><th>Currency</th><th>Last updated</th></tr>
+              <tr><th>Name</th><th>Type</th><th>Amount</th><th>Symbol</th><th>Last updated</th></tr>
             </thead>
             <tbody>
               ${visibleAccounts
@@ -2185,7 +2193,7 @@ function AccountsPageContent() {
                       <td>${account.name}</td>
                       <td>${getAccountDisplayType(account)}</td>
                       <td>${formatAccountAmount(parseAmount(account.balance), account.currency)}</td>
-                      <td>${formatCurrencyCode(account.currency)}</td>
+                      <td>${formatCurrencySymbol(account.currency)}</td>
                       <td>${formatDate(account.updatedAt)}</td>
                     </tr>`
                 )
@@ -2372,13 +2380,15 @@ function AccountsPageContent() {
                           const value = parseAmount(account.balance);
                           const isLiability = isLiabilityAccountType(getEffectiveAccountType(account));
                           const isSpendable = isSpendableAccountType(getEffectiveAccountType(account));
-                          const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
+                          const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}::${String(
+                            account.type ?? ""
+                          ).trim().toLowerCase()}`;
                           const warning = getAccountWarning(account, duplicateCounts.get(duplicateKey) ?? 0);
                           const isDeleting = deletingAccountIdsSet.has(account.id);
                           const latestCheckpoint =
                             latestCheckpoints.checkpointsByAccountId.get(account.id) ??
                             latestCheckpoints.checkpointsByAccountKey.get(
-                              normalizeImportedAccountKey(account.name, account.institution, account.accountNumber)
+                              normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)
                             ) ??
                             null;
                           const isLoading =
@@ -2455,7 +2465,7 @@ function AccountsPageContent() {
                                 <div className="accounts-account-card__body">
                                   <div className="accounts-account-card__balance-row">
                                     <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
-                                      {formatAccountAmount(balanceValue, account.currency)}
+                                      {isLoading ? "Loading" : formatAccountAmount(balanceValue, account.currency)}
                                     </div>
                                     <div className="accounts-account-card__balance-meta">
                                       {isDeleting ? (
@@ -2480,8 +2490,8 @@ function AccountsPageContent() {
               ) : (
                 accounts.length > 0 ? (
                   <div className="empty-state accounts-empty-state">
-                    <strong>No accounts in {selectedCurrency} yet.</strong>
-                    <p>Pick another currency or add/import an account in {selectedCurrency} to keep this view focused.</p>
+                    <strong>No accounts in {formatCurrencySymbol(selectedCurrency)} yet.</strong>
+                    <p>Pick another currency or add/import an account in {formatCurrencySymbol(selectedCurrency)} to keep this view focused.</p>
                     <div className="accounts-empty-state__actions">
                       <button className="button button-primary button-small" type="button" onClick={openAddAccount}>
                         Add account
@@ -2950,19 +2960,9 @@ function AccountsPageContent() {
                       variant="account"
                     />
                     <div className="accounts-add-fields__row accounts-add-fields__row--amount">
-                      <label className="accounts-add-fields__balance">
-                        Amount
-                        <input
-                          value={manualBalance}
-                          onChange={(event) => setManualBalance(event.target.value)}
-                          inputMode="decimal"
-                          placeholder="0.00"
-                        />
-                      </label>
                       <label className="accounts-add-fields__currency">
-                        Currency
+                        <span className="sr-only">Currency</span>
                         <div className="accounts-form-currency-field accounts-form-currency-field--inline">
-                          <span className="sr-only">Currency</span>
                           <CurrencySelector
                             value={manualCurrency}
                             onChange={setManualCurrency}
@@ -2975,6 +2975,15 @@ function AccountsPageContent() {
                             compact
                           />
                         </div>
+                      </label>
+                      <label className="accounts-add-fields__balance">
+                        Amount
+                        <input
+                          value={manualBalance}
+                          onChange={(event) => setManualBalance(event.target.value)}
+                          inputMode="decimal"
+                          placeholder="0.00"
+                        />
                       </label>
                     </div>
                     <button
@@ -3184,7 +3193,7 @@ function AccountsPageContent() {
       ) : null}
 
       <PageFileDropZone
-        enabled
+        enabled={!importOpen}
         title="Drop statement files anywhere"
         onFilesDropped={(files) => openImportFiles(files, true)}
       />
@@ -3211,7 +3220,12 @@ function AccountsPageContent() {
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
           const previewTransactions = summary.previewTransactions ?? [];
           const optimisticAccount = buildOptimisticImportedAccount(summary);
-          const importedAccountKey = getImportedAccountKey(summary.accountName, summary.institution, summary.accountNumber ?? null);
+          const importedAccountKey = getImportedAccountKey(
+            summary.accountName,
+            summary.institution,
+            summary.accountNumber ?? null,
+            summary.accountType ?? null
+          );
 
           flushSync(() => {
             setAccountsLoading(false);
@@ -3224,7 +3238,7 @@ function AccountsPageContent() {
 
                   if (account.source === "upload") {
                     return (
-                      getImportedAccountKey(account.name, account.institution, account.accountNumber) !== importedAccountKey
+                      getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) !== importedAccountKey
                     );
                   }
 
@@ -3251,7 +3265,7 @@ function AccountsPageContent() {
                     return true;
                   }
 
-                  return getImportedAccountKey(account.name, account.institution, account.accountNumber) !== importedAccountKey;
+                  return getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) !== importedAccountKey;
                 });
                 const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
                 if (existingIndex >= 0) {

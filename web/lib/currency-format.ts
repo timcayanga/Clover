@@ -1,3 +1,5 @@
+import { getCurrencySymbol } from "@/lib/currencies";
+
 const DEFAULT_LOCALE = "en-PH";
 
 const normalizeCurrencyCode = (value?: string | null) => {
@@ -5,34 +7,29 @@ const normalizeCurrencyCode = (value?: string | null) => {
   return normalized || "PHP";
 };
 
-const isLikelyIsoCurrency = (currency: string) => /^[A-Z]{3}$/.test(currency) && !["BTC", "ETH", "USDT", "USDC", "SOL", "XRP", "ADA", "BNB", "DOGE", "MIXED"].includes(currency);
-
 const formatPlainAmount = (value: number, locale = DEFAULT_LOCALE) =>
   new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(value);
 
+const shouldUseSpacing = (symbol: string) => symbol.length > 2 && !symbol.endsWith("$");
+
 export const makeCurrencyFormatter = (currency?: string | null, locale = DEFAULT_LOCALE) => {
   const normalized = normalizeCurrencyCode(currency);
 
-  if (normalized === "MIXED" || !isLikelyIsoCurrency(normalized)) {
+  if (normalized === "MIXED") {
     return {
-      format: (value: number) => (normalized === "MIXED" ? formatPlainAmount(value, locale) : `${formatPlainAmount(value, locale)} ${normalized}`),
+      format: (value: number) => formatPlainAmount(value, locale),
     };
   }
 
-  try {
-    return new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency: normalized,
-      minimumFractionDigits: 2,
-    });
-  } catch {
-    return {
-      format: (value: number) => `${formatPlainAmount(value, locale)} ${normalized}`,
-    };
-  }
+  const symbol = getCurrencySymbol(normalized);
+  const spacer = shouldUseSpacing(symbol) ? " " : "";
+
+  return {
+    format: (value: number) => `${symbol}${spacer}${formatPlainAmount(value, locale)}`,
+  };
 };
 
 export const formatCurrencyAmount = (value: number, currency?: string | null, locale = DEFAULT_LOCALE) =>
@@ -42,3 +39,5 @@ export const formatSignedCurrencyAmount = (value: number, currency?: string | nu
   `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency, locale)}`;
 
 export const formatCurrencyCode = (currency?: string | null) => normalizeCurrencyCode(currency);
+
+export const formatCurrencySymbol = (currency?: string | null) => getCurrencySymbol(currency);

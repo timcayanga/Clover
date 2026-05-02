@@ -37,7 +37,7 @@ import {
   mergeImportedWorkspaceTransactions,
   normalizeImportedAccountKey,
 } from "@/lib/workspace-cache";
-import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
@@ -97,16 +97,19 @@ const mergeImportedPreviewTransactions = (
 const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentAccounts: Account[]) => {
   const fetchedById = new Map(fetchedAccounts.map((account) => [account.id, account] as const));
   const fetchedByKey = new Map(
-    fetchedAccounts.map((account) => [normalizeImportedAccountKey(account.name, account.institution, account.accountNumber), account] as const)
+    fetchedAccounts.map((account) => [normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type), account] as const)
   );
   const mergedFetchedAccounts = fetchedAccounts.map((account) => {
-    const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber);
+    const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
     const optimistic = currentAccounts.find((currentAccount) => {
       if (currentAccount.source !== "upload") {
         return false;
       }
 
-      return normalizeImportedAccountKey(currentAccount.name, currentAccount.institution, currentAccount.accountNumber) === accountKey;
+      return (
+        normalizeImportedAccountKey(currentAccount.name, currentAccount.institution, currentAccount.accountNumber, currentAccount.type) ===
+        accountKey
+      );
     });
     if (!optimistic) {
       return account;
@@ -127,7 +130,7 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
       return false;
     }
 
-    const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber);
+    const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
     return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
   });
 
@@ -1452,7 +1455,7 @@ function TransactionsPageContent() {
   const accountKeyById = useMemo(
     () =>
       new Map(
-        accounts.map((account) => [account.id, normalizeImportedAccountKey(account.name, account.institution, account.accountNumber)] as const)
+        accounts.map((account) => [account.id, normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)] as const)
       ),
     [accounts]
   );
@@ -1490,7 +1493,7 @@ function TransactionsPageContent() {
     }
 
     return accounts
-      .filter((account) => selectedKeys.has(normalizeImportedAccountKey(account.name, account.institution, account.accountNumber)))
+      .filter((account) => selectedKeys.has(normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)))
       .map((account) => account.id);
   }, [accountFilters, accountKeyById, accounts]);
   const categoryNameById = useMemo(
@@ -2121,7 +2124,7 @@ function TransactionsPageContent() {
   const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);
   const pageStartIndex = (currentTransactionPage - 1) * transactionsPageSize;
   const pageEndIndex = pageStartIndex + transactionsPageSize;
-  const visibleTransactions = transactions;
+  const visibleTransactions = useMemo(() => transactions.filter((transaction) => !transaction.isExcluded), [transactions]);
   const hasVisibleTransactions = transactionsSummary.totalCount > 0;
   const visibleTransactionIds = useMemo(() => visibleTransactions.map((transaction) => transaction.id), [visibleTransactions]);
   const allVisibleSelected =
@@ -2237,7 +2240,12 @@ function TransactionsPageContent() {
   }, [imports]);
 
   const warningReasonFor = (transaction: Transaction) => {
-    if ((transaction.categoryName ?? "").trim().toLowerCase() === "other") {
+    const normalizedCategoryName = (transaction.categoryName ?? "").trim().toLowerCase();
+    if (normalizedCategoryName === "other" || normalizedCategoryName === "needs category review") {
+      return null;
+    }
+
+    if (transaction.isExcluded) {
       return null;
     }
 
@@ -2246,15 +2254,15 @@ function TransactionsPageContent() {
         return null;
       }
 
+      if (transaction.warningReason === "Needs category review") {
+        return null;
+      }
+
       return transaction.warningReason;
     }
 
     if (isResolvedReviewStatus(transaction.reviewStatus)) {
       return null;
-    }
-
-    if (transaction.isExcluded) {
-      return "Ignored from totals";
     }
 
     return null;
@@ -4244,15 +4252,15 @@ function TransactionsPageContent() {
         className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
         style={toolbarChipStyle}
         type="button"
-        title={currencyFilter ? `Currency · ${currencyFilter}` : "Currency"}
+        title={currencyFilter ? formatCurrencySymbol(currencyFilter) : "All currencies"}
         onClick={(event) => openHeaderMenu("currency", event)}
-        aria-label={currencyFilter ? `Open currency filter, currently ${currencyFilter}` : "Open currency filter"}
+        aria-label={currencyFilter ? `Open currency filter, currently ${formatCurrencySymbol(currencyFilter)}` : "Open currency filter"}
         aria-expanded={headerMenuOpen === "currency"}
       >
         <span className="button-icon" aria-hidden="true">
           <ActionIcon name="currency" />
         </span>
-        <span>{currencyFilter ? currencyFilter : "Currency"}</span>
+        <span>{currencyFilter ? formatCurrencySymbol(currencyFilter) : "All"}</span>
       </button>
 
       <button
@@ -4375,7 +4383,7 @@ function TransactionsPageContent() {
   return (
     <CloverShell active="transactions" title="Transactions" actions={transactionsShellActions}>
       <PageFileDropZone
-        enabled
+        enabled={!importOpen}
         title="Drop statement files anywhere"
         onFilesDropped={(files) => openImportFiles(files, true)}
       />
@@ -5405,6 +5413,20 @@ function TransactionsPageContent() {
                     </button>
                   </div>
 
+                  <label className="manual-form-layout__currency">
+                    <span className="sr-only">Currency</span>
+                    <CurrencySelector
+                      value={manualForm.currency}
+                      onChange={(value) => setManualForm((current) => ({ ...current, currency: value }))}
+                      options={currencyCatalogCodes}
+                      ariaLabel="Select transaction currency"
+                      className="transactions-manual-currency"
+                      buttonClassName="transactions-manual-currency__button"
+                      menuClassName="transactions-manual-currency__menu"
+                      optionClassName="transactions-manual-currency__option"
+                    />
+                  </label>
+
                   <label className="manual-form-layout__amount">
                     Amount
                     <input
@@ -5557,20 +5579,6 @@ function TransactionsPageContent() {
                         </div>
                       </div>
                     </div>
-
-                    <label className="manual-form-layout__full">
-                      Currency
-                      <CurrencySelector
-                        value={manualForm.currency}
-                        onChange={(value) => setManualForm((current) => ({ ...current, currency: value }))}
-                        options={currencyCatalogCodes}
-                        ariaLabel="Select transaction currency"
-                        className="transactions-manual-currency"
-                        buttonClassName="transactions-manual-currency__button"
-                        menuClassName="transactions-manual-currency__menu"
-                        optionClassName="transactions-manual-currency__option"
-                      />
-                    </label>
 
                     <label className="manual-form-layout__full">
                       Notes
@@ -5939,7 +5947,7 @@ function TransactionsPageContent() {
           const previewTransactions = summary.previewTransactions ?? [];
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
-          const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution, summary.accountNumber ?? null);
+          const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution, summary.accountNumber ?? null, summary.accountType ?? null);
 
           setPendingImportSummary(summary);
 
@@ -5954,7 +5962,7 @@ function TransactionsPageContent() {
                   }
 
                   if (account.source === "upload") {
-                    return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber) !== importedAccountKey;
+                    return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) !== importedAccountKey;
                   }
 
                   return true;
@@ -5980,7 +5988,7 @@ function TransactionsPageContent() {
                     return true;
                   }
 
-                  return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber) !== importedAccountKey;
+                  return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) !== importedAccountKey;
                 });
                 const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
                 if (existingIndex >= 0) {
