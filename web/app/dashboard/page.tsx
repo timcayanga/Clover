@@ -6,12 +6,11 @@ import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
-import { EmptyDataCta } from "@/components/empty-data-cta";
 import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { buildRecurringTransactionSummaries } from "@/lib/recurring";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
-import { getFinancialExperienceProfile, getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
+import { getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
 import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
@@ -32,9 +31,8 @@ const relativeTimeFormatter = new Intl.RelativeTimeFormat("en-PH", {
   numeric: "auto",
 });
 
-const monthFormatter = new Intl.DateTimeFormat("en-PH", {
-  month: "short",
-  year: "numeric",
+const weekdayFormatter = new Intl.DateTimeFormat("en-PH", {
+  weekday: "short",
 });
 
 type DashboardTransaction = {
@@ -67,18 +65,22 @@ type AggregatedTransactionTotals = {
   expenseMerchants: Map<string, { amount: number; count: number; lastSeen: Date }>;
 };
 
-type MonthBucket = {
-  key: string;
+type WindowSummary = {
   label: string;
   income: number;
   expense: number;
   net: number;
+  transactions: number;
+  activeDays: number;
 };
 
-type VisualCategory = {
-  name: string;
-  amount: number;
-  share: number;
+type DailyActivityPoint = {
+  key: string;
+  label: string;
+  count: number;
+  income: number;
+  expense: number;
+  net: number;
 };
 
 type WorkspaceSummary = {
@@ -99,12 +101,8 @@ type WorkspaceSummary = {
   };
 };
 
-type DashboardExperienceProfile = ReturnType<typeof getFinancialExperienceProfile>;
-
 const toAmount = (value: unknown) => Number(value ?? 0);
 const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "MIXED");
-const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-const toMonthLabel = (date: Date) => monthFormatter.format(date);
 
 const formatSignedCurrency = (value: number, currency?: string | null) =>
   `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "MIXED")}`;
@@ -125,50 +123,63 @@ const formatRelativeDate = (value: Date, now = new Date()) => {
   return relativeTimeFormatter.format(diffDays, "day");
 };
 
-const getMonthBuckets = (anchor: Date, count = 6) => {
-  const buckets: MonthBucket[] = [];
-  for (let offset = count - 1; offset >= 0; offset -= 1) {
-    const date = new Date(anchor.getFullYear(), anchor.getMonth() - offset, 1);
-    buckets.push({
-      key: toIsoMonth(date),
-      label: toMonthLabel(date),
-      income: 0,
-      expense: 0,
-      net: 0,
-    });
-  }
-  return buckets;
-};
+const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
-const getMonthBucket = (date: Date, buckets: MonthBucket[]) => buckets.find((bucket) => bucket.key === toIsoMonth(date));
+const toIsoDay = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
-const buildLinePath = (buckets: MonthBucket[], width: number, height: number, padding: number) => {
-  const values = buckets.map((bucket: any) => bucket.net);
-  const max = Math.max(...values);
-  const min = Math.min(...values);
-  const range = Math.max(max - min, 1);
-  const xSpan = width - padding * 2;
-  const ySpan = height - padding * 2;
-  const points = buckets.map((bucket: any, index: number) => {
-    const x = padding + (index / Math.max(buckets.length - 1, 1)) * xSpan;
-    const normalized = (bucket.net - min) / range;
-    const y = padding + (1 - normalized) * ySpan;
-    return { ...bucket, x, y };
-  });
+const toDayStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-  const linePath = points.map((point: any, index: number) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
-
+const summarizeWindow = (transactions: DashboardTransaction[], label: string): WindowSummary => {
+  const totals = summarizeTransactions(transactions);
   return {
-    points,
-    linePath,
-    min,
-    max,
+    label,
+    income: totals.income,
+    expense: totals.expense,
+    net: totals.income - totals.expense,
+    transactions: transactions.length,
+    activeDays: new Set(transactions.map((transaction) => toIsoDay(transaction.date))).size,
   };
 };
 
-const formatCompactPercentage = (value: number) => `${Math.round(value)}%`;
+const buildDailyActivitySeries = (transactions: DashboardTransaction[], days: number) => {
+  const today = new Date();
+  const series: DailyActivityPoint[] = [];
+  const pointByKey = new Map<string, DailyActivityPoint>();
 
-const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+  for (let offset = days - 1; offset >= 0; offset -= 1) {
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - offset);
+    const point: DailyActivityPoint = {
+      key: toIsoDay(date),
+      label: weekdayFormatter.format(date),
+      count: 0,
+      income: 0,
+      expense: 0,
+      net: 0,
+    };
+
+    series.push(point);
+    pointByKey.set(point.key, point);
+  }
+
+  transactions.forEach((transaction) => {
+    const point = pointByKey.get(toIsoDay(transaction.date));
+    if (!point) {
+      return;
+    }
+
+    const amount = Math.abs(toAmount(transaction.amount));
+    point.count += 1;
+    if (transaction.type === "income") {
+      point.income += amount;
+    } else if (transaction.type === "expense") {
+      point.expense += amount;
+    }
+    point.net = point.income - point.expense;
+  });
+
+  return series;
+};
 
 const summarizeTransactions = (transactions: DashboardTransaction[]): AggregatedTransactionTotals => {
   return transactions.reduce<AggregatedTransactionTotals>(
@@ -270,66 +281,87 @@ const comparePeriods = (currentTransactions: DashboardTransaction[], previousTra
 function DashboardStreamFallback() {
   return (
     <section className="dashboard-home" aria-label="Loading dashboard content">
-      <article className="dashboard-home__hero glass">
-        <div className="dashboard-home__copy">
-          <div className="dashboard-home__kicker-row">
-            <span className="pill pill-subtle">Loading</span>
-            <span className="pill pill-subtle">Goals</span>
-            <span className="pill pill-subtle">Reports</span>
-            <span className="pill pill-subtle">Insights</span>
+      <article className="dashboard-home__hero glass dashboard-home__hero--balance">
+        <div className="dashboard-home__hero-copy">
+          <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 108 }} />
+          <span className="skeleton-block skeleton-block--line" style={{ width: "min(100%, 340px)", height: 38, borderRadius: 999 }} />
+          <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 380px)" }} />
+          <div className="dashboard-home__hero-badges">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <span key={index} className="skeleton-block" style={{ width: index === 2 ? 118 : 138, height: 28, borderRadius: 999 }} />
+            ))}
           </div>
-          <h3>Pulling your money briefing together</h3>
-          <p>Goals, reports, and insights are loading in a lighter first pass so the page can settle faster.</p>
         </div>
-        <div className="dashboard-home__hero-visual dashboard-home__hero-visual--loading">
-          <div className="dashboard-home__ring dashboard-home__ring--loading">
-            <div className="dashboard-home__ring-inner">
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+        <div className="dashboard-home__hero-side">
+          <div className="dashboard-home__goal-card dashboard-home__goal-card--loading">
+            <div className="dashboard-home__ring dashboard-home__ring--compact dashboard-home__ring--loading">
+              <div className="dashboard-home__ring-inner">
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+              </div>
             </div>
-          </div>
-          <div className="dashboard-home__hero-visual-grid">
-            <div className="dashboard-home__mini-card dashboard-home__mini-card--loading">
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
-            </div>
-            <div className="dashboard-home__mini-card dashboard-home__mini-card--loading">
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
-            </div>
-            <div className="dashboard-home__mini-card dashboard-home__mini-card--loading">
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+            <div className="dashboard-home__goal-card-copy">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 92 }} />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 220px)" }} />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 180px)" }} />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 160 }} />
             </div>
           </div>
         </div>
       </article>
 
-      <section className="dashboard-home__summary-grid dashboard-home__summary-grid--visual">
+      <section className="dashboard-home__movement-grid">
         {Array.from({ length: 3 }).map((_, index) => (
-          <article key={index} className="dashboard-home__summary-card glass dashboard-home__summary-card--loading">
-            <div className="dashboard-home__summary-card-head">
+          <article key={index} className="dashboard-home__movement-card glass">
+            <div className="dashboard-home__movement-card-head">
               <div className="dashboard-home__summary-card-title">
-                <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
-                <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 72 }} />
+                <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: 92, height: 24 }} />
               </div>
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 54 }} />
             </div>
-            <div className="dashboard-home__summary-card-body">
-              <span className="skeleton-block dashboard-home__summary-card-chart" />
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
-            </div>
+            <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 200px)" }} />
+            <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: "min(100%, 180px)" }} />
+            <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 112 }} />
           </article>
         ))}
       </section>
 
+      <article className="dashboard-home__activity-card glass">
+        <div className="dashboard-home__summary-card-head">
+          <div className="dashboard-home__summary-card-title">
+            <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 72 }} />
+            <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: 180, height: 24 }} />
+          </div>
+          <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 128 }} />
+        </div>
+        <div className="dashboard-home__activity-chart">
+          {Array.from({ length: 7 }).map((_, index) => (
+            <div key={index} className="dashboard-home__activity-bar">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 16 }} />
+              <span className="skeleton-block dashboard-home__activity-bar-track" />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 24 }} />
+            </div>
+          ))}
+        </div>
+        <div className="dashboard-home__activity-metrics">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="dashboard-home__mini-card dashboard-home__mini-card--loading">
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 78 }} />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: 112 }} />
+              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 148 }} />
+            </div>
+          ))}
+        </div>
+      </article>
+
       <article className="dashboard-home__review-strip glass">
         <div className="dashboard-home__review-copy">
-          <span className="eyebrow">Loading</span>
-          <strong>Waiting for the review strip</strong>
-          <span>The main summary is loading first so Clover can feel faster to understand.</span>
+          <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 84 }} />
+          <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 240px)", height: 18 }} />
+          <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 320px)" }} />
         </div>
+        <span className="skeleton-block" style={{ width: 118, height: 34, borderRadius: 999 }} />
       </article>
     </section>
   );
@@ -428,11 +460,13 @@ async function DashboardStream({
   const trackedBalanceCurrency = accountCurrencies.size === 1 ? workspaceSummary.accounts[0]?.currency ?? null : "MIXED";
   const isEmptyWorkspace =
     workspaceSummary._count.transactions === 0 && workspaceSummary._count.importFiles === 0 && workspaceSummary._count.accounts <= 1;
-  const experienceProfile = getFinancialExperienceProfile(user.financialExperience);
 
   const now = new Date();
-  const thirtyDaysAgo = new Date(now);
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const todayStart = toDayStart(now);
+  const sevenDaysAgo = new Date(todayStart);
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  const thirtyDaysAgo = new Date(todayStart);
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29);
   const sixtyDaysAgo = new Date(now);
   sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
   const ninetyDaysAgo = new Date(now);
@@ -499,11 +533,23 @@ async function DashboardStream({
   const formatCurrency = (value: number, currency: string | null = displayCurrency) => formatCurrencyAmount(value, currency);
   const formatSignedCurrency = (value: number, currency: string | null = displayCurrency) =>
     `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency)}`;
+  const todayTransactions = currentTransactions.filter((transaction) => transaction.date >= todayStart);
+  const currentSevenDayTransactions = currentTransactions.filter((transaction) => transaction.date >= sevenDaysAgo);
   const currentThirtyDayTransactions = currentTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo);
   const previousTransactionsWindow = currentTransactions.filter(
     (transaction) => transaction.date >= sixtyDaysAgo && transaction.date < thirtyDaysAgo
   );
   const currentSummary = comparePeriods(currentThirtyDayTransactions, previousTransactionsWindow);
+  const todaySummary = summarizeWindow(todayTransactions, "Today");
+  const weekSummary = summarizeWindow(currentSevenDayTransactions, "This week");
+  const monthSummary = summarizeWindow(currentThirtyDayTransactions, "This month");
+  const activitySeries = buildDailyActivitySeries(currentSevenDayTransactions, 7);
+  const peakActivityDay = activitySeries.reduce<DailyActivityPoint | null>((peak, point) => {
+    if (!peak || point.count > peak.count || (point.count === peak.count && point.key > peak.key)) {
+      return point;
+    }
+    return peak;
+  }, null);
   const currentSavingsRate = currentSummary.current.income > 0 ? currentSummary.net / currentSummary.current.income : null;
   const previousNet = currentSummary.previous.income - currentSummary.previous.expense;
   const previousSavingsRate = currentSummary.previous.income > 0 ? previousNet / currentSummary.previous.income : null;
@@ -544,33 +590,6 @@ async function DashboardStream({
   const daysSinceLastImport = latestImport
     ? Math.max(0, Math.floor((now.getTime() - latestImport.uploadedAt.getTime()) / 86400000))
     : null;
-  const topCategories = Array.from(currentSummary.current.expenseCategories.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .map(([name, amount]) => ({
-      name,
-      amount,
-      share: currentSummary.current.expense > 0 ? (amount / currentSummary.current.expense) * 100 : 0,
-    }));
-  const chartWidth = 420;
-  const chartHeight = 160;
-  const chartPadding = 20;
-  const reportsBuckets = getMonthBuckets(now, 3);
-  currentTransactions.forEach((transaction) => {
-    const bucket = getMonthBucket(transaction.date, reportsBuckets);
-    if (!bucket || transaction.isExcluded) {
-      return;
-    }
-
-    const amount = Math.abs(toAmount(transaction.amount));
-    if (transaction.type === "income") {
-      bucket.income += amount;
-    } else if (transaction.type === "expense") {
-      bucket.expense += amount;
-    }
-    bucket.net = bucket.income - bucket.expense;
-  });
-  const { points: monthPoints, linePath } = buildLinePath(reportsBuckets, chartWidth, chartHeight, chartPadding);
   const goalAction = goalProgress.nextAction;
   const goalProgressLabel = goalProgress.progressPercent === null ? "Set a target" : `${Math.round(goalProgress.progressPercent)}%`;
   const topDriver = currentSummary.topCategory?.[0] ?? "No clear driver yet";
@@ -579,12 +598,66 @@ async function DashboardStream({
       ? `${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} need review`
       : "No items need review";
   const goalSummaryLabel = goalTargetAmount !== null ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}` : goalProgress.currentLabel;
-  const reportDirectionLabel = currentSummary.net >= currentSummary.previousNet ? "Improving" : "Softening";
-  const reportNetLabel = formatSignedCurrency(currentSummary.net);
-  const reportIncomeLabel = formatSignedCurrency(currentSummary.current.income);
-  const reportExpenseLabel = formatSignedCurrency(currentSummary.current.expense);
-  const reportSparkPath =
-    monthPoints.length > 1 ? linePath : `M ${chartPadding} ${chartHeight / 2} L ${chartWidth - chartPadding} ${chartHeight / 2}`;
+  const totalBalanceLabel = formatCurrency(linkedBalanceTotal, trackedBalanceCurrency);
+  const heroSupportCopy = isEmptyWorkspace
+    ? "Import a statement to unlock your balance, movement, and goal snapshot."
+    : "Your balance, movement, and goals in one calm view.";
+  const heroBadgeLabels = [
+    weekSummary.transactions > 0 ? `${formatSignedCurrency(weekSummary.net)} this week` : "No activity this week",
+    monthSummary.transactions > 0 ? `${monthSummary.transactions} transactions this month` : "No transactions this month",
+    latestImport ? `Updated ${formatRelativeDate(latestImport.uploadedAt)}` : "No imports yet",
+  ];
+  const goalHeroHeading = goalKey ? "Goal progress" : "Goals are optional";
+  const goalHeroCopy = goalKey
+    ? goalProgress.coachCopy
+    : "Set a goal later if you want a progress view. Clover stays useful even without one.";
+  const goalHeroActionLabel = goalKey ? "Open goals" : "Set a goal";
+  const goalHeroActionHref = "/goals";
+  const movementWindows = [
+    {
+      label: "Today",
+      summary: todaySummary,
+      valueLabel: todaySummary.transactions > 0 ? formatSignedCurrency(todaySummary.net) : "No activity yet",
+      detailLabel:
+        todaySummary.transactions > 0
+          ? `${formatCurrency(todaySummary.income)} in · ${formatCurrency(todaySummary.expense)} out`
+          : "Import a statement to see today’s movement",
+      footLabel: todaySummary.transactions > 0 ? `${todaySummary.transactions} transaction${todaySummary.transactions === 1 ? "" : "s"}` : "0 transactions",
+    },
+    {
+      label: "7 days",
+      summary: weekSummary,
+      valueLabel: weekSummary.transactions > 0 ? formatSignedCurrency(weekSummary.net) : "No movement yet",
+      detailLabel:
+        weekSummary.transactions > 0
+          ? `${formatCurrency(weekSummary.income)} in · ${formatCurrency(weekSummary.expense)} out`
+          : "Seven-day movement will appear here",
+      footLabel:
+        weekSummary.transactions > 0
+          ? `${weekSummary.transactions} transaction${weekSummary.transactions === 1 ? "" : "s"} · ${weekSummary.activeDays} active day${weekSummary.activeDays === 1 ? "" : "s"}`
+          : "0 transactions",
+    },
+    {
+      label: "30 days",
+      summary: monthSummary,
+      valueLabel: monthSummary.transactions > 0 ? formatSignedCurrency(monthSummary.net) : "No movement yet",
+      detailLabel:
+        monthSummary.transactions > 0
+          ? `${formatCurrency(monthSummary.income)} in · ${formatCurrency(monthSummary.expense)} out`
+          : "Monthly movement will appear here",
+      footLabel:
+        monthSummary.transactions > 0
+          ? `${monthSummary.transactions} transaction${monthSummary.transactions === 1 ? "" : "s"} · ${monthSummary.activeDays} active day${monthSummary.activeDays === 1 ? "" : "s"}`
+          : "0 transactions",
+    },
+  ];
+  const maxActivityCount = Math.max(...activitySeries.map((point) => point.count), 1);
+  const activitySummaryLabel =
+    peakActivityDay && peakActivityDay.count > 0
+      ? `${peakActivityDay.label} was busiest with ${peakActivityDay.count} transaction${peakActivityDay.count === 1 ? "" : "s"}`
+      : "No daily activity yet";
+  const attentionActionHref = reviewAttentionCount > 0 ? "/review" : isEmptyWorkspace ? "/dashboard?import=1" : "/reports";
+  const attentionActionLabel = reviewAttentionCount > 0 ? "Open review" : isEmptyWorkspace ? "Import files" : "View reports";
 
   return (
     <>
@@ -615,85 +688,39 @@ async function DashboardStream({
           import_count: workspaceSummary._count.importFiles,
         }}
       />
-      {isEmptyWorkspace ? (
-        <div style={{ marginBottom: 20 }}>
-          <EmptyDataCta
-            className="dashboard-empty-state"
-            eyebrow="Get started"
-            title={experienceProfile.emptyStateTitle}
-            copy="Import files first so Clover can populate the dashboard, review queue, and goal signals right away."
-            illustration="/illustrations/clover-empty-dashboard-3d.png"
-            illustrationAlt="A 3D Clover dashboard illustration"
-            importHref="/dashboard?import=1"
-            accountHref="/accounts"
-            transactionHref="/transactions?manual=1"
-          />
-        </div>
-      ) : null}
       <section className="dashboard-home">
-        <article className="dashboard-home__hero glass">
-          <div className="dashboard-home__copy">
-            <h3>{user.financialExperience === "beginner" ? "Your money, in one simple view." : goalKey ? "How close are you to your goal?" : "Your finances at a glance."}</h3>
-            <p>
-              {user.financialExperience === "beginner"
-                ? "The cards below show your goal, your month, and the biggest pattern. The small review note stays tucked away until you need it."
-                : goalProgress.coachCopy}
-            </p>
+        <article className="dashboard-home__hero glass dashboard-home__hero--balance">
+          <div className="dashboard-home__hero-copy">
+            <p className="eyebrow">Total balance</p>
+            <h3>{totalBalanceLabel}</h3>
+            <p>{heroSupportCopy}</p>
 
-            <div className="dashboard-home__hero-metrics">
-              <div className="dashboard-home__mini-card">
-                <span>Goal</span>
-                <strong>{goalProgressLabel}</strong>
-                <small>{goalSummaryLabel}</small>
-              </div>
-              <div className="dashboard-home__mini-card">
-                <span>This month</span>
-                <strong>{reportNetLabel}</strong>
-                <small>
-                  {reportIncomeLabel} in · {reportExpenseLabel} out
-                </small>
-              </div>
+            <div className="dashboard-home__hero-badges">
+              {heroBadgeLabels.map((label) => (
+                <span key={label} className="pill pill-subtle">
+                  {label}
+                </span>
+              ))}
             </div>
           </div>
 
-          <div className="dashboard-home__hero-visual">
-            <div
-              className="dashboard-home__ring"
-              style={{
-                background: `conic-gradient(var(--accent) 0 ${goalProgressPercent}%, rgba(15, 23, 42, 0.08) ${goalProgressPercent}% 100%)`,
-              }}
-            >
-              <div className="dashboard-home__ring-inner">
-                <strong>{goalProgress.progressPercent === null ? "Set" : `${Math.round(goalProgress.progressPercent)}%`}</strong>
-                <span>{goalProgress.bandLabel}</span>
+          <div className="dashboard-home__hero-side">
+            {isEmptyWorkspace ? (
+              <div className="dashboard-home__starter-card">
+                <p className="eyebrow">Get started</p>
+                <strong>Import files to unlock your dashboard.</strong>
+                <p>Bring in a statement and Clover will populate balance, movement, and optional goal progress in one place.</p>
+                <div className="dashboard-home__starter-actions">
+                  <Link className="button button-primary button-small" href="/dashboard?import=1">
+                    Import files
+                  </Link>
+                  <Link className="button button-secondary button-small" href="/accounts">
+                    Add an account
+                  </Link>
+                </div>
               </div>
-            </div>
-            <div className="dashboard-home__hero-visual-grid">
-              <div className="dashboard-home__mini-card">
-                <span>Goal next</span>
-                <strong>{goalSummaryLabel}</strong>
-                <small>{goalAction}</small>
-              </div>
-              <div className="dashboard-home__mini-card">
-                <span>Month</span>
-                <strong>{reportNetLabel}</strong>
-                <small>{reportDirectionLabel}</small>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <section className="dashboard-home__summary-grid dashboard-home__summary-grid--visual">
-          <article className="dashboard-home__summary-card glass">
-            <div className="dashboard-home__summary-card-head">
-              <div>
-                <p className="eyebrow">Goals</p>
-                <h4>{goalKey ? "How close are you to your goal?" : "Set a goal to make this dashboard more useful"}</h4>
-              </div>
-              <span className="dashboard-visual-pill">{goalProgressLabel}</span>
-            </div>
-            <div className="dashboard-home__summary-card-body">
-              <div className="dashboard-home__goal-ring-row">
+            ) : goalKey ? (
+              <div className="dashboard-home__goal-card">
                 <div
                   className="dashboard-home__ring dashboard-home__ring--compact"
                   style={{
@@ -701,138 +728,109 @@ async function DashboardStream({
                   }}
                 >
                   <div className="dashboard-home__ring-inner">
-                    <strong>{goalProgress.progressPercent === null ? "—" : `${Math.round(goalProgress.progressPercent)}%`}</strong>
-                    <span>{goalProgress.bandTone === "positive" ? "On track" : goalProgress.bandLabel}</span>
+                    <strong>{goalProgress.progressPercent === null ? "Set" : `${Math.round(goalProgress.progressPercent)}%`}</strong>
+                    <span>{goalProgress.bandLabel}</span>
                   </div>
                 </div>
-                <div className="dashboard-home__mini-card dashboard-home__mini-card--stacked">
-                  <strong>{goalProgress.label}</strong>
-                  <span>
-                    {goalSummaryLabel}
-                    {goalTargetAmount !== null ? ` · target ${formatCurrency(goalTargetAmount)}` : ""}
-                  </span>
-                  <small>{goalAction}</small>
-                </div>
+                <div className="dashboard-home__goal-card-copy">
+                  <p className="eyebrow">Goal progress</p>
+            <strong>{goalSummaryLabel}</strong>
+            <p>{goalHeroCopy}</p>
+            <small>{goalProgressLabel} complete · {goalAction}</small>
+            <Link className="button button-secondary button-small" href={goalHeroActionHref}>
+              {goalHeroActionLabel}
+            </Link>
+          </div>
               </div>
-            </div>
-          </article>
+            ) : (
+              <div className="dashboard-home__goal-card dashboard-home__goal-card--empty">
+                <p className="eyebrow">Goals are optional</p>
+                <strong>{goalHeroHeading}</strong>
+                <p>{goalHeroCopy}</p>
+                <Link className="button button-secondary button-small" href={goalHeroActionHref}>
+                  {goalHeroActionLabel}
+                </Link>
+              </div>
+            )}
+          </div>
+        </article>
 
-          <article className="dashboard-home__summary-card glass">
-            <div className="dashboard-home__summary-card-head">
-              <div>
-                <p className="eyebrow">Reports</p>
-                <h4>How the last three months moved</h4>
-              </div>
-              <span className={`dashboard-visual-pill ${currentSummary.net >= currentSummary.previousNet ? "positive" : "negative"}`}>
-                {reportDirectionLabel}
-              </span>
-            </div>
-            <div className="dashboard-home__summary-card-body">
-              <div className="dashboard-line-chart dashboard-line-chart--compact" role="img" aria-label="Net cash flow over the last three months">
-                <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
-                  <defs>
-                    <linearGradient id="dashboard-flow-gradient" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="rgba(3, 168, 192, 0.34)" />
-                      <stop offset="100%" stopColor="rgba(3, 168, 192, 0.03)" />
-                    </linearGradient>
-                  </defs>
-                  <path
-                    d={`${reportSparkPath} L ${chartWidth - chartPadding} ${chartHeight - chartPadding} L ${chartPadding} ${chartHeight - chartPadding} Z`}
-                    fill="url(#dashboard-flow-gradient)"
-                  />
-                  <path d={reportSparkPath} fill="none" stroke="var(--accent)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-                  {monthPoints.map((point) => (
-                    <circle key={point.key} cx={point.x} cy={point.y} r="4.5" fill="white" stroke="var(--accent)" strokeWidth="3" />
-                  ))}
-                </svg>
-              </div>
-              <div className="dashboard-home__reports-grid">
-                <div className="dashboard-home__mini-card">
-                  <span>Net position</span>
-                  <strong>{reportNetLabel}</strong>
-                  <small>{currentSummary.net >= currentSummary.previousNet ? "Up versus the prior window" : "Down versus the prior window"}</small>
+        <section className="dashboard-home__movement-grid">
+          {movementWindows.map((window) => (
+            <article key={window.label} className="dashboard-home__movement-card glass">
+              <div className="dashboard-home__movement-card-head">
+                <div>
+                  <p className="eyebrow">{window.label}</p>
+                  <strong>{window.valueLabel}</strong>
                 </div>
-                <div className="dashboard-home__mini-card">
-                  <span>Income</span>
-                  <strong>{reportIncomeLabel}</strong>
-                  <small>{currentSummary.current.income > currentSummary.previous.income ? "Higher than last window" : "Lower than last window"}</small>
-                </div>
-                <div className="dashboard-home__mini-card">
-                  <span>Spending</span>
-                  <strong>{reportExpenseLabel}</strong>
-                  <small>{currentSummary.current.expense > currentSummary.previous.expense ? "More than last window" : "Less than last window"}</small>
-                </div>
+                <span className={`dashboard-visual-pill ${window.summary.net >= 0 ? "positive" : "negative"}`}>
+                  {window.summary.net >= 0 ? "Up" : "Down"}
+                </span>
               </div>
-            </div>
-          </article>
-
-          <article className="dashboard-home__summary-card glass">
-            <div className="dashboard-home__summary-card-head">
-              <div>
-                <p className="eyebrow">Insights</p>
-                <h4>What stands out</h4>
+              <p className="dashboard-home__movement-copy">{window.detailLabel}</p>
+              <div className="dashboard-home__movement-footer">
+                <span>{window.footLabel}</span>
               </div>
-              <span className="dashboard-visual-pill">{confidenceLabel}</span>
-            </div>
-            <div className="dashboard-home__summary-card-body">
-              <div className="dashboard-home__mini-card dashboard-home__mini-card--stacked">
-                <span>Biggest pattern</span>
-                <strong>{topDriver}</strong>
-                <small>
-                  {formatCurrency(currentSummary.topCategory?.[1] ?? 0)} this month
-                </small>
-              </div>
-              <div className="dashboard-home__insight-bars">
-                {topCategories.length > 0 ? (
-                  topCategories.map((category, index) => (
-                    <div key={category.name} className="dashboard-home__insight-bar">
-                      <div className="dashboard-home__insight-bar-meta">
-                        <strong>{category.name}</strong>
-                        <span>
-                          {formatCurrency(category.amount)} · {formatCompactPercentage(category.share)}
-                        </span>
-                      </div>
-                      <div className="dashboard-home__insight-track" aria-hidden="true">
-                        <div className={`dashboard-home__insight-fill dashboard-home__insight-fill--${index % 4}`} style={{ width: `${Math.max(category.share, 10)}%` }} />
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="dashboard-home__item dashboard-home__item--empty">
-                    <strong>No insight signal yet</strong>
-                    <span>Import a statement or add transactions to surface the strongest pattern.</span>
-                  </div>
-                )}
-              </div>
-              <div className="dashboard-home__insight-footer">
-                <div className="dashboard-home__mini-card">
-                  <span>Recurring item</span>
-                  <strong>{recurringItem ? recurringItem.name : "Nothing repeating yet"}</strong>
-                  <small>
-                    {recurringItem
-                      ? `${formatCurrency(recurringItem.amount / recurringItem.count)} per transaction · last seen ${formatRelativeDate(recurringItem.lastSeen)}`
-                      : "Clover will surface repeating bills here"}
-                  </small>
-                </div>
-                <div className="dashboard-home__mini-card">
-                  <span>Trust</span>
-                  <strong>{Math.round(confidenceScore)}%</strong>
-                  <small>{reviewCoverageText}</small>
-                </div>
-              </div>
-            </div>
-          </article>
+            </article>
+          ))}
         </section>
+
+        <article className="dashboard-home__activity-card glass">
+          <div className="dashboard-home__summary-card-head">
+            <div>
+              <p className="eyebrow">Activity</p>
+              <h4>Transactions per day</h4>
+            </div>
+            <span className="dashboard-visual-pill">{activitySummaryLabel}</span>
+          </div>
+          <div className="dashboard-home__activity-chart" aria-label="Transactions per day over the last seven days">
+            {activitySeries.map((point) => {
+              const height = Math.max((point.count / maxActivityCount) * 100, point.count > 0 ? 16 : 6);
+              return (
+                <div key={point.key} className="dashboard-home__activity-bar">
+                  <span className="dashboard-home__activity-bar-count">{point.count > 0 ? point.count : ""}</span>
+                  <div className="dashboard-home__activity-bar-track" aria-hidden="true">
+                    <div className="dashboard-home__activity-bar-fill" style={{ height: `${height}%` }} />
+                  </div>
+                  <span className="dashboard-home__activity-bar-label">{point.label}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="dashboard-home__activity-metrics">
+            <div className="dashboard-home__mini-card">
+              <span>Top spend</span>
+              <strong>{topDriver}</strong>
+              <small>{formatCurrency(currentSummary.topCategory?.[1] ?? 0)} this month</small>
+            </div>
+            <div className="dashboard-home__mini-card">
+              <span>Recurring</span>
+              <strong>{recurringItem ? recurringItem.name : "Nothing repeating yet"}</strong>
+              <small>
+                {recurringItem
+                  ? `${formatCurrency(recurringItem.amount / recurringItem.count)} per transaction · last seen ${formatRelativeDate(recurringItem.lastSeen)}`
+                  : "Clover will surface repeating bills here"}
+              </small>
+            </div>
+            <div className="dashboard-home__mini-card">
+              <span>Trust</span>
+              <strong>{Math.round(confidenceScore)}%</strong>
+              <small>
+                {confidenceLabel} · {reviewCoverageText}
+              </small>
+            </div>
+          </div>
+        </article>
 
         <article className="dashboard-home__review-strip glass">
           <div className="dashboard-home__review-copy">
             <p className="eyebrow">Small follow-up</p>
             <strong>{reviewAttentionText}</strong>
-            <span>{reviewCoverageText}</span>
+            <span>{isEmptyWorkspace ? "Import a statement to unlock balance, movement, and goal progress." : latestImportLabel ?? reviewCoverageText}</span>
           </div>
           <div className="dashboard-home__review-actions">
-            <Link className="button button-primary button-small" href={reviewAttentionCount > 0 ? "/review" : "/goals"}>
-              {reviewAttentionCount > 0 ? "Open review" : "See goal"}
+            <Link className="button button-primary button-small" href={attentionActionHref}>
+              {attentionActionLabel}
             </Link>
           </div>
         </article>
@@ -864,8 +862,6 @@ async function DashboardPageStream({
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
-
-  const experienceProfile = getFinancialExperienceProfile(user.financialExperience);
 
   return (
     <CloverShell
