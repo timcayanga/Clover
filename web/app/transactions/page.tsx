@@ -1410,6 +1410,7 @@ function TransactionsPageContent() {
   const [headerMenuOpen, setHeaderMenuOpen] = useState<TransactionSortField | null>(null);
   const [headerMenuPosition, setHeaderMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
+  const detailAutosaveTimerRef = useRef<number | null>(null);
 
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const workspaceTransactionCount = transactions.length;
@@ -2250,6 +2251,29 @@ function TransactionsPageContent() {
   }, [detailDraft, otherCategoryId, selectedTransaction]);
 
   useEffect(() => {
+    if (detailAutosaveTimerRef.current) {
+      window.clearTimeout(detailAutosaveTimerRef.current);
+      detailAutosaveTimerRef.current = null;
+    }
+
+    if (!selectedTransaction || !detailDraft || !hasDetailDraftChanges || isSaving || isApplyingHistory) {
+      return;
+    }
+
+    detailAutosaveTimerRef.current = window.setTimeout(() => {
+      detailAutosaveTimerRef.current = null;
+      void persistDetailDraft({ closeAfterSave: false });
+    }, 500);
+
+    return () => {
+      if (detailAutosaveTimerRef.current) {
+        window.clearTimeout(detailAutosaveTimerRef.current);
+        detailAutosaveTimerRef.current = null;
+      }
+    };
+  }, [detailDraft, hasDetailDraftChanges, isApplyingHistory, isSaving, selectedTransaction]);
+
+  useEffect(() => {
     if (!activeWarningTransactionId || !isWorkspaceDataReady) {
       return;
     }
@@ -2432,6 +2456,16 @@ function TransactionsPageContent() {
   };
 
   const closeTransactionDetail = () => {
+    if (detailAutosaveTimerRef.current) {
+      window.clearTimeout(detailAutosaveTimerRef.current);
+      detailAutosaveTimerRef.current = null;
+    }
+
+    if (selectedTransaction && detailDraft && hasDetailDraftChanges && !isSaving && !isApplyingHistory) {
+      void persistDetailDraft({ closeAfterSave: true });
+      return;
+    }
+
     setSelectedTransaction(null);
     setDetailDraft(null);
     setTransactionDeleteConfirmOpen(false);
@@ -3560,7 +3594,7 @@ function TransactionsPageContent() {
     }
   };
 
-  const saveDetailDraft = async () => {
+  const persistDetailDraft = async ({ closeAfterSave = true }: { closeAfterSave?: boolean } = {}) => {
     if (!selectedTransaction || !detailDraft) {
       return;
     }
@@ -3586,8 +3620,10 @@ function TransactionsPageContent() {
         workspace_id: selectedWorkspaceId || null,
         feature_name: "transaction_detail_edit",
       });
-      setMessage("Transaction details updated.");
-      closeTransactionDetail();
+      if (closeAfterSave) {
+        setMessage("Transaction details updated.");
+        closeTransactionDetail();
+      }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
     } finally {
@@ -5769,11 +5805,6 @@ function TransactionsPageContent() {
                     </button>
                   </div>
                 </div>
-              ) : null}
-              {hasDetailDraftChanges ? (
-                <button className="button button-primary" type="button" disabled={isSaving} onClick={saveDetailDraft}>
-                  {isSaving ? "Saving..." : "Save changes"}
-                </button>
               ) : null}
             </div>
           </section>
