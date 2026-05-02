@@ -9,8 +9,7 @@ import { PlanFeatureItem } from "@/components/plan-feature-item";
 import { SettingsCategoriesPanel } from "@/components/settings-categories-panel";
 import { type BillingInterval } from "@/lib/billing-plans";
 import { getPlanDisplayLabel } from "@/lib/user-limits";
-
-type ThemeMode = "light" | "dark" | "system";
+import { applyThemeMode, readStoredThemeMode, THEME_STORAGE_KEY, type ThemeMode } from "@/lib/theme-preference";
 type SettingsSectionKey = "profile" | "display" | "data" | "categories" | "plan";
 
 type BillingSubscriptionSummary = {
@@ -130,7 +129,7 @@ const themeOptions: Array<{
 }> = [
   { value: "light", label: "Light", helper: "Bright, high-contrast workspace view." },
   { value: "dark", label: "Dark", helper: "Muted contrast for low-light sessions." },
-  { value: "system", label: "Match system", helper: "Follows the device preference automatically." },
+  { value: "system", label: "System preferences", helper: "Follows the device preference automatically." },
 ];
 
 const planCards = [
@@ -190,18 +189,6 @@ const planCards = [
     ],
   },
 ] as const;
-
-function getResolvedTheme(mode: ThemeMode) {
-  if (mode !== "system") {
-    return mode;
-  }
-
-  if (typeof window === "undefined") {
-    return "light";
-  }
-
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-}
 
 function downloadBlob(blob: Blob, fileName: string) {
   const url = window.URL.createObjectURL(blob);
@@ -269,26 +256,21 @@ export function SettingsHub({
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    const savedTheme = window.localStorage.getItem("clover.settings-theme") as ThemeMode | null;
-    const initialTheme: ThemeMode = savedTheme === "light" || savedTheme === "dark" || savedTheme === "system" ? savedTheme : "system";
+    const initialTheme = readStoredThemeMode();
     setThemeMode(initialTheme);
-    document.documentElement.dataset.theme = getResolvedTheme(initialTheme);
+    applyThemeMode(initialTheme);
   }, []);
 
   useEffect(() => {
-    const applyTheme = () => {
-      document.documentElement.dataset.theme = getResolvedTheme(themeMode);
-    };
-
-    window.localStorage.setItem("clover.settings-theme", themeMode);
-    applyTheme();
+    window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+    applyThemeMode(themeMode);
 
     if (themeMode !== "system") {
       return;
     }
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const handleChange = () => applyTheme();
+    const handleChange = () => applyThemeMode("system");
     mediaQuery.addEventListener("change", handleChange);
 
     return () => mediaQuery.removeEventListener("change", handleChange);
@@ -425,7 +407,7 @@ export function SettingsHub({
               </div>
               <div className="settings-profile-summary">
                 <span className="settings-profile-summary__label">Current mode</span>
-                <strong>{themeMode === "system" ? "Match system" : themeMode === "light" ? "Light" : "Dark"}</strong>
+                <strong>{themeMode === "system" ? "System preferences" : themeMode === "light" ? "Light" : "Dark"}</strong>
               </div>
             </div>
 

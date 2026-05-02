@@ -10935,7 +10935,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .modal-card--manual {
-  width: min(760px, 100%);
+  width: min(560px, 100%);
 }
 
 .accounts-import-modal {
@@ -11740,7 +11740,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .manual-form-compact-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, 160px) minmax(0, 3fr);
+  grid-template-columns: minmax(48px, 56px) minmax(120px, 1fr) minmax(0, 3fr);
   gap: 10px;
   align-items: end;
 }
@@ -11750,115 +11750,69 @@ input.transaction-inline-edit--amount::placeholder {
   min-width: 0;
 }
 
-.transactions-manual-category-row,
-.transactions-manual-account-row {
+.transactions-manual-category-button,
+.transactions-manual-account-button {
   width: 100%;
-  min-height: 42px;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 11px;
-  border-radius: 14px;
-  border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.96);
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.transactions-manual-category-row:hover,
-.transactions-manual-category-row:focus-visible,
-.transactions-manual-account-row:hover,
-.transactions-manual-account-row:focus-visible {
-  border-color: rgba(3, 168, 192, 0.34);
-  box-shadow: 0 0 0 3px rgba(3, 168, 192, 0.1);
-  outline: none;
-}
-
-.transactions-manual-category-row__icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 auto;
-}
-
-.transactions-manual-category-row__icon img {
-  width: 14px;
-  height: 14px;
-}
-
-.transactions-manual-category-row__label {
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  flex: 0 0 auto;
-}
-
-.transactions-manual-category-row__value {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 0.92rem;
-  font-weight: 700;
-}
-
-.transactions-manual-category-row__chevron,
-.transactions-manual-account-row__chevron {
-  color: var(--muted-2);
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
-}
-
-.transactions-manual-category-row__chevron svg,
-.transactions-manual-account-row__chevron svg {
-  width: 14px;
-  height: 14px;
-}
-
-.transactions-manual-account-row__brand {
-  width: 28px;
-  height: 28px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
   border-radius: 999px;
-  overflow: hidden;
-  flex: 0 0 auto;
+  transition:
+    box-shadow 160ms ease,
+    transform 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease;
 }
 
-.transactions-manual-account-row__brand .accounts-brand-mark {
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
+.transactions-manual-category-button:hover,
+.transactions-manual-category-button:focus-visible,
+.transactions-manual-account-button:hover,
+.transactions-manual-account-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(3, 168, 192, 0.12);
+  transform: translateY(-1px);
 }
 
-.transactions-manual-account-row__brand .accounts-brand-mark__logo,
-.transactions-manual-account-row__brand .accounts-brand-mark__fallback,
-.transactions-manual-account-row__brand .accounts-brand-mark__logo-fallback {
-  width: 14px;
-  height: 14px;
-}
-
-.transactions-manual-account-row__fallback {
-  width: 28px;
-  height: 28px;
+.transactions-manual-category-button__icon,
+.transactions-manual-account-button__brand,
+.transactions-manual-account-button__fallback {
+  width: 42px;
+  height: 42px;
   border-radius: 999px;
   display: inline-grid;
   place-items: center;
-  background: rgba(3, 168, 192, 0.12);
-  color: var(--accent);
-  font-size: 0.8rem;
-  font-weight: 700;
   flex: 0 0 auto;
 }
 
-.transactions-manual-account-row__text {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-size: 0.9rem;
+.transactions-manual-category-button__icon img {
+  width: 16px;
+  height: 16px;
+}
+
+.transactions-manual-account-button__brand .accounts-brand-mark {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+}
+
+.transactions-manual-account-button__brand .accounts-brand-mark__logo,
+.transactions-manual-account-button__brand .accounts-brand-mark__fallback,
+.transactions-manual-account-button__brand .accounts-brand-mark__logo-fallback {
+  width: 16px;
+  height: 16px;
+}
+
+.transactions-manual-account-button__fallback {
+  background: rgba(3, 168, 192, 0.12);
+  color: var(--accent);
+  font-size: 0.8rem;
   font-weight: 700;
 }
 
@@ -11878,6 +11832,14 @@ input.transaction-inline-edit--amount::placeholder {
   justify-content: space-between;
   gap: 12px;
   margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.manual-form-actions__left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .manual-form-actions__right {
@@ -11911,6 +11873,12 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 0.88rem;
   font-weight: 700;
   cursor: pointer;
+  transition:
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
 }
 
 .transactions-manual-type-toggle__button.is-active {
@@ -20930,12 +20898,12 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .modal-card--manual {
-    width: min(640px, 100%);
+    width: min(560px, 100%);
   }
 
   .modal-backdrop--centered-mobile .modal-card,
   .modal-backdrop--centered-mobile .modal-card--wide {
-    width: min(640px, 100%);
+    width: min(560px, 100%);
     max-height: calc(100dvh - 24px);
     border-radius: 26px;
   }
@@ -25281,4 +25249,421 @@ input.transaction-inline-edit--amount::placeholder {
   .admin-data-qa-bank-detail__table-actions {
     grid-column: auto;
   }
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #08111e;
+  --surface: #0e1725;
+  --surface-2: #101b2c;
+  --surface-3: #18263a;
+  --stroke: rgba(148, 163, 184, 0.18);
+  --stroke-strong: rgba(148, 163, 184, 0.3);
+  --text: #e7eef7;
+  --muted: #9aa9bc;
+  --muted-2: #708298;
+  --accent: #47d7e8;
+  --accent-hover: #6fe4f2;
+  --accent-light: #86e9d1;
+  --accent-mint: #7ef0c0;
+  --accent-soft: rgba(71, 215, 232, 0.12);
+  --accent-strong: rgba(71, 215, 232, 0.22);
+  --brand-gradient: linear-gradient(135deg, #47d7e8, #7ef0c0);
+  --brand-gradient-alt: linear-gradient(135deg, #47d7e8, #86e9d1);
+  --good: #4ade80;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --shadow: 0 18px 42px rgba(0, 0, 0, 0.38);
+  --shadow-soft: 0 8px 18px rgba(0, 0, 0, 0.22);
+  --page-shell: rgba(10, 16, 28, 0.94);
+}
+
+html[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at top left, rgba(71, 215, 232, 0.14), transparent 30%),
+    radial-gradient(circle at 20% 0%, rgba(126, 240, 192, 0.1), transparent 24%),
+    linear-gradient(180deg, #08111e 0%, #0a1524 100%);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .glass {
+  background: rgba(14, 23, 37, 0.84);
+  border-color: rgba(148, 163, 184, 0.14);
+  box-shadow: var(--shadow);
+}
+
+html[data-theme="dark"] .sidebar {
+  background:
+    radial-gradient(circle at top, rgba(71, 215, 232, 0.08), transparent 26%),
+    linear-gradient(180deg, rgba(13, 20, 34, 0.98), rgba(9, 14, 24, 0.98));
+  box-shadow: inset -1px 0 0 rgba(148, 163, 184, 0.12);
+}
+
+html[data-theme="dark"] .topbar,
+html[data-theme="dark"] .shell-compact-bar {
+  background: rgba(14, 23, 37, 0.86);
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+html[data-theme="dark"] .sidebar-search-panel,
+html[data-theme="dark"] .sidebar-popover,
+html[data-theme="dark"] .sidebar-search-results__item,
+html[data-theme="dark"] .settings-hub__menu-list,
+html[data-theme="dark"] .settings-hub__panel,
+html[data-theme="dark"] .settings-profile-summary,
+html[data-theme="dark"] .settings-clerk-frame,
+html[data-theme="dark"] .settings-choice-card,
+html[data-theme="dark"] .settings-action-card,
+html[data-theme="dark"] .settings-category-table,
+html[data-theme="dark"] .settings-plan-card,
+html[data-theme="dark"] .settings-plan-panel,
+html[data-theme="dark"] .settings-plan-usage__card,
+html[data-theme="dark"] .sidebar-footer,
+html[data-theme="dark"] .sidebar-profile,
+html[data-theme="dark"] .sidebar-icon-button {
+  background-color: rgba(14, 23, 37, 0.86);
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+html[data-theme="dark"] .sidebar-search-panel {
+  box-shadow: var(--shadow);
+}
+
+html[data-theme="dark"] .sidebar-search-panel .sidebar-search input,
+html[data-theme="dark"] .sidebar-search-results__item,
+html[data-theme="dark"] input,
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea {
+  background: rgba(9, 15, 27, 0.96);
+  border-color: rgba(148, 163, 184, 0.22);
+  color: var(--text);
+}
+
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder {
+  color: rgba(154, 169, 188, 0.75);
+}
+
+html[data-theme="dark"] .nav-link {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .nav-link strong,
+html[data-theme="dark"] .sidebar-popover__title,
+html[data-theme="dark"] .sidebar-popover__link,
+html[data-theme="dark"] .sidebar-popover__item,
+html[data-theme="dark"] .settings-hub__menu-item strong,
+html[data-theme="dark"] .settings-category-table__name-copy strong,
+html[data-theme="dark"] .settings-category-table__type,
+html[data-theme="dark"] .settings-category-table__source,
+html[data-theme="dark"] .settings-plan-card__band-title,
+html[data-theme="dark"] .settings-plan-card__band-price,
+html[data-theme="dark"] .settings-plan-usage__head strong,
+html[data-theme="dark"] .topbar h1,
+html[data-theme="dark"] .shell-compact-bar h1,
+html[data-theme="dark"] .topbar-subtitle,
+html[data-theme="dark"] .settings-section__intro h4,
+html[data-theme="dark"] .settings-action-card h5 {
+  color: var(--text);
+}
+
+html[data-theme="dark"] .nav-link:hover,
+html[data-theme="dark"] .nav-link.is-active,
+html[data-theme="dark"] .sidebar-icon-button:hover,
+html[data-theme="dark"] .sidebar-icon-button.is-active,
+html[data-theme="dark"] .sidebar-profile:hover,
+html[data-theme="dark"] .sidebar-profile.is-active,
+html[data-theme="dark"] .sidebar-search-trigger:hover,
+html[data-theme="dark"] .sidebar-search-trigger:focus-visible,
+html[data-theme="dark"] .sidebar-search-trigger[aria-expanded="true"],
+html[data-theme="dark"] .settings-hub__menu-item:hover,
+html[data-theme="dark"] .settings-hub__menu-item.is-active {
+  background: rgba(71, 215, 232, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(71, 215, 232, 0.18), 0 10px 22px rgba(0, 0, 0, 0.18);
+}
+
+html[data-theme="dark"] .sidebar-search-results__label,
+html[data-theme="dark"] .settings-profile-summary__label,
+html[data-theme="dark"] .settings-helper,
+html[data-theme="dark"] .settings-category-table__empty,
+html[data-theme="dark"] .settings-plan-card__renewal,
+html[data-theme="dark"] .settings-plan-usage__renewal span,
+html[data-theme="dark"] .sidebar-popover__subtitle,
+html[data-theme="dark"] .sidebar-search-results__copy span,
+html[data-theme="dark"] .sidebar-popover__item span,
+html[data-theme="dark"] .sidebar-popover__item small {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .settings-category-table__row {
+  border-bottom-color: rgba(148, 163, 184, 0.14);
+}
+
+html[data-theme="dark"] .settings-category-table__row--head {
+  background: rgba(10, 16, 28, 0.86);
+}
+
+html[data-theme="dark"] .settings-category-table__icon {
+  background: rgba(71, 215, 232, 0.12);
+}
+
+html[data-theme="dark"] .settings-plan-card--free {
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .settings-plan-card--free .settings-plan-card__band,
+html[data-theme="dark"] .settings-plan-card__body,
+html[data-theme="dark"] .settings-plan-panel,
+html[data-theme="dark"] .settings-category-table__row--archived,
+html[data-theme="dark"] .settings-category-table__row:not(.settings-category-table__row--head) {
+  background: rgba(14, 23, 37, 0.9);
+}
+
+html[data-theme="dark"] .settings-plan-card--annual .settings-plan-card__band {
+  background: linear-gradient(145deg, rgba(4, 164, 184, 0.92), rgba(54, 211, 198, 0.88));
+}
+
+html[data-theme="dark"] .settings-plan-card--monthly .settings-plan-card__band {
+  background: linear-gradient(145deg, rgba(48, 193, 153, 0.92), rgba(126, 240, 192, 0.88));
+}
+
+html[data-theme="dark"] .settings-choice-card.is-selected {
+  background: rgba(71, 215, 232, 0.12);
+}
+
+html[data-theme="dark"] .button-secondary,
+html[data-theme="dark"] .button-primary,
+html[data-theme="dark"] .button-danger {
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+html[data-theme="dark"] .button-secondary {
+  background: rgba(15, 23, 42, 0.88);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .button-secondary:hover:not(:disabled),
+html[data-theme="dark"] .button-secondary:focus:not(:disabled) {
+  background: rgba(71, 215, 232, 0.12);
+}
+
+html[data-theme="dark"] .button-danger {
+  background: rgba(127, 29, 29, 0.34);
+  color: #fecaca;
+}
+
+html[data-theme="dark"] .button-danger:hover:not(:disabled),
+html[data-theme="dark"] .button-danger:focus:not(:disabled) {
+  background: rgba(153, 27, 27, 0.42);
+}
+
+html[data-theme="dark"] .sidebar-popover__link--bare:hover,
+html[data-theme="dark"] .sidebar-popover__link:hover {
+  background: rgba(71, 215, 232, 0.12);
+}
+
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .status-card,
+html[data-theme="dark"] .list-row,
+html[data-theme="dark"] .modal-card,
+html[data-theme="dark"] .report-card,
+html[data-theme="dark"] .report-ai-card,
+html[data-theme="dark"] .reports-hero__copy,
+html[data-theme="dark"] .reports-next,
+html[data-theme="dark"] .dashboard-home__hero,
+html[data-theme="dark"] .dashboard-home__movement-card,
+html[data-theme="dark"] .dashboard-home__activity-card,
+html[data-theme="dark"] .dashboard-home__review-strip,
+html[data-theme="dark"] .dashboard-home__mini-card,
+html[data-theme="dark"] .accounts-group,
+html[data-theme="dark"] .accounts-account-card,
+html[data-theme="dark"] .accounts-detail__history-section,
+html[data-theme="dark"] .accounts-detail__imports,
+html[data-theme="dark"] .accounts-detail__transactions,
+html[data-theme="dark"] .accounts-import-summary div,
+html[data-theme="dark"] .accounts-import-security,
+html[data-theme="dark"] .institution-detail-hero,
+html[data-theme="dark"] .institution-detail-panel,
+html[data-theme="dark"] .investments-pro-gate,
+html[data-theme="dark"] .accounts-overview-card,
+html[data-theme="dark"] .investments-allocation,
+html[data-theme="dark"] .investments-insights-panel,
+html[data-theme="dark"] .investments-filters,
+html[data-theme="dark"] .investments-portfolio-table,
+html[data-theme="dark"] .plan-limit-nudge,
+html[data-theme="dark"] .upload-insights-toast,
+html[data-theme="dark"] .import-error-toast,
+html[data-theme="dark"] .import-upload-dock__inner,
+html[data-theme="dark"] .import-progress-modal {
+  background: rgba(14, 23, 37, 0.92);
+  border-color: rgba(148, 163, 184, 0.16);
+  box-shadow: var(--shadow);
+}
+
+html[data-theme="dark"] .dashboard-home__hero,
+html[data-theme="dark"] .reports-hero__copy,
+html[data-theme="dark"] .reports-next,
+html[data-theme="dark"] .accounts-group,
+html[data-theme="dark"] .accounts-detail__history-section,
+html[data-theme="dark"] .accounts-detail__imports,
+html[data-theme="dark"] .accounts-detail__transactions,
+html[data-theme="dark"] .investments-allocation,
+html[data-theme="dark"] .investments-insights-panel,
+html[data-theme="dark"] .investments-filters,
+html[data-theme="dark"] .investments-portfolio-table,
+html[data-theme="dark"] .institution-detail-hero,
+html[data-theme="dark"] .institution-detail-panel,
+html[data-theme="dark"] .modal-card,
+html[data-theme="dark"] .panel {
+  color: var(--text);
+}
+
+html[data-theme="dark"] .status-card,
+html[data-theme="dark"] .list-row,
+html[data-theme="dark"] .accounts-import-summary div {
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .accounts-account-card {
+  background:
+    linear-gradient(180deg, rgba(14, 23, 37, 0.96), rgba(12, 18, 31, 0.94)),
+    rgba(14, 23, 37, 0.9);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .accounts-account-card__brand span,
+html[data-theme="dark"] .accounts-account-card__balance-pill,
+html[data-theme="dark"] .accounts-account-card__amount,
+html[data-theme="dark"] .accounts-import-summary span,
+html[data-theme="dark"] .accounts-import-security p,
+html[data-theme="dark"] .accounts-group__head p,
+html[data-theme="dark"] .accounts-group__tone,
+html[data-theme="dark"] .investments-allocation__row-head span,
+html[data-theme="dark"] .investments-allocation__summary span,
+html[data-theme="dark"] .investments-allocation__summary small,
+html[data-theme="dark"] .report-card__stat span,
+html[data-theme="dark"] .report-ai-card p,
+html[data-theme="dark"] .dashboard-home__hero-copy p,
+html[data-theme="dark"] .dashboard-home__movement-card p,
+html[data-theme="dark"] .dashboard-home__activity-card p,
+html[data-theme="dark"] .dashboard-home__review-strip p,
+html[data-theme="dark"] .dashboard-home__mini-card p,
+html[data-theme="dark"] .institution-detail-hero__brand span,
+html[data-theme="dark"] .institution-detail-panel p,
+html[data-theme="dark"] .panel-muted,
+html[data-theme="dark"] .modal-copy,
+html[data-theme="dark"] .import-password-file span,
+html[data-theme="dark"] .import-upload-dock__header p,
+html[data-theme="dark"] .import-upload-dock__meta span,
+html[data-theme="dark"] .import-progress-copy p,
+html[data-theme="dark"] .plan-limit-nudge__body,
+html[data-theme="dark"] .upload-insights-toast__title-row p,
+html[data-theme="dark"] .upload-insights-toast__list,
+html[data-theme="dark"] .import-error-toast__title-row p,
+html[data-theme="dark"] .import-error-toast__list,
+html[data-theme="dark"] .reports-next p {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .accounts-account-card__balance-pill,
+html[data-theme="dark"] .accounts-group__tone,
+html[data-theme="dark"] .accounts-import-summary div,
+html[data-theme="dark"] .import-upload-dock__status,
+html[data-theme="dark"] .import-progress-status,
+html[data-theme="dark"] .date-filter-tab,
+html[data-theme="dark"] .settings-category-table__row--head,
+html[data-theme="dark"] .settings-category-card,
+html[data-theme="dark"] .settings-category-table__row,
+html[data-theme="dark"] .settings-plan-card__body,
+html[data-theme="dark"] .settings-plan-usage__card,
+html[data-theme="dark"] .settings-plan-usage__card--plan {
+  background: rgba(14, 23, 37, 0.88);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .settings-category-card--locked,
+html[data-theme="dark"] .settings-category-card--archived,
+html[data-theme="dark"] .settings-category-table__row--archived {
+  background: rgba(9, 15, 27, 0.94);
+}
+
+html[data-theme="dark"] .accounts-detail__history-row,
+html[data-theme="dark"] .investments-portfolio-table__row,
+html[data-theme="dark"] .report-flow-map__row,
+html[data-theme="dark"] .reports-summary-grid .metric,
+html[data-theme="dark"] .reports-summary-grid .glass {
+  background: rgba(14, 23, 37, 0.9);
+  border-color: rgba(148, 163, 184, 0.14);
+}
+
+html[data-theme="dark"] .accounts-detail__history-row--header,
+html[data-theme="dark"] .investments-portfolio-table__row--head,
+html[data-theme="dark"] .report-flow-map__row--head,
+html[data-theme="dark"] .settings-category-table__row--head {
+  background: rgba(9, 15, 27, 0.96);
+  color: var(--muted-2);
+}
+
+html[data-theme="dark"] .accounts-detail__history-row,
+html[data-theme="dark"] .investments-portfolio-table__row,
+html[data-theme="dark"] .accounts-detail__import-row {
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .accounts-detail__imports .status-card,
+html[data-theme="dark"] .dashboard-home__movement-card,
+html[data-theme="dark"] .dashboard-home__activity-card,
+html[data-theme="dark"] .dashboard-home__review-strip,
+html[data-theme="dark"] .dashboard-home__mini-card,
+html[data-theme="dark"] .report-card,
+html[data-theme="dark"] .report-ai-card,
+html[data-theme="dark"] .investments-pro-gate,
+html[data-theme="dark"] .accounts-overview-card,
+html[data-theme="dark"] .accounts-detail__investment,
+html[data-theme="dark"] .accounts-detail__imports,
+html[data-theme="dark"] .accounts-detail__transactions {
+  color: var(--text);
+}
+
+html[data-theme="dark"] .date-filter-tab {
+  color: var(--text);
+}
+
+html[data-theme="dark"] .date-filter-tab.is-active {
+  color: #04262d;
+}
+
+html[data-theme="dark"] .transaction-drawer,
+html[data-theme="dark"] .transactions-manual-currency__menu,
+html[data-theme="dark"] .transactions-manual-picker__menu,
+html[data-theme="dark"] .sidebar-search-results__item,
+html[data-theme="dark"] .sidebar-search-panel {
+  background: rgba(14, 23, 37, 0.96);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+html[data-theme="dark"] .transactions-manual-category-row,
+html[data-theme="dark"] .transactions-manual-account-row,
+html[data-theme="dark"] .transactions-manual-type-toggle__button,
+html[data-theme="dark"] .transactions-manual-currency__button,
+html[data-theme="dark"] .transactions-manual-picker__button,
+html[data-theme="dark"] .transactions-suggestion-chip {
+  background: rgba(9, 15, 27, 0.94);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+html[data-theme="dark"] .page-file-drop-zone__frame {
+  background: linear-gradient(180deg, rgba(71, 215, 232, 0.08), rgba(9, 15, 27, 0.22));
+  border-color: rgba(71, 215, 232, 0.24);
+}
+
+html[data-theme="dark"] .detail-warning-box {
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.06));
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
+html[data-theme="dark"] .upload-insights-toast,
+html[data-theme="dark"] .plan-limit-nudge,
+html[data-theme="dark"] .import-error-toast {
+  color: var(--text);
 }
