@@ -1983,8 +1983,7 @@ function AccountsPageContent() {
     }
   };
 
-  const createManualAccount = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const saveManualAccount = async ({ keepOpen }: { keepOpen: boolean }) => {
     setAddAccountError(null);
     if (!selectedWorkspaceId) {
       const nextError = "Select a workspace first.";
@@ -2121,10 +2120,12 @@ function AccountsPageContent() {
       setManualScheduleRecurrence("monthly");
       setManualScheduleAmount("");
       setManualScheduleCounterparty("");
-      setManualType("bank");
-      setManualMoreOpen(false);
       setAddAccountError(null);
-      setAddOpen(false);
+      if (!keepOpen) {
+        setManualType("bank");
+        setManualMoreOpen(false);
+        setAddOpen(false);
+      }
       setMessage(
         scheduleError
           ? `${scheduleError} The account "${name}" was still created.`
@@ -2139,6 +2140,15 @@ function AccountsPageContent() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const createManualAccount = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await saveManualAccount({ keepOpen: false });
+  };
+
+  const createAnotherManualAccount = async () => {
+    await saveManualAccount({ keepOpen: true });
   };
 
   const exportCsv = () => {
@@ -2949,10 +2959,11 @@ function AccountsPageContent() {
             <div className="accounts-add-grid">
               <form className="accounts-manual-form" onSubmit={createManualAccount}>
                 <div className="accounts-add-layout">
-                  <aside className="accounts-add-brand-tile" aria-label="Account logo preview">
-                    <AccountBrandMark accountBrand={manualAccountBrand} label={manualName || manualInstitution || "Account"} />
-                  </aside>
                   <div className="accounts-add-fields">
+                    <div className="accounts-add-fields__name-row">
+                      <span className="accounts-add-brand-inline" aria-label="Account logo preview">
+                        <AccountBrandMark accountBrand={manualAccountBrand} label={manualName || manualInstitution || "Account"} />
+                      </span>
                     <InstitutionAutocomplete
                       label="Name"
                       value={manualName}
@@ -2961,7 +2972,17 @@ function AccountsPageContent() {
                       placeholder={manualType === "investment" ? "Example: FMETF" : "Example: BDO"}
                       variant="account"
                     />
+                    </div>
                     <div className="accounts-add-fields__row accounts-add-fields__row--amount">
+                      <label className="accounts-add-fields__balance">
+                        Amount
+                        <input
+                          value={manualBalance}
+                          onChange={(event) => setManualBalance(event.target.value)}
+                          inputMode="decimal"
+                          placeholder="0.00"
+                        />
+                      </label>
                       <label className="accounts-add-fields__currency">
                         <span className="sr-only">Currency</span>
                         <div className="accounts-form-currency-field accounts-form-currency-field--inline">
@@ -2979,24 +3000,7 @@ function AccountsPageContent() {
                           />
                         </div>
                       </label>
-                      <label className="accounts-add-fields__balance">
-                        Amount
-                        <input
-                          value={manualBalance}
-                          onChange={(event) => setManualBalance(event.target.value)}
-                          inputMode="decimal"
-                          placeholder="0.00"
-                        />
-                      </label>
                     </div>
-                    <button
-                      className="button button-secondary button-small accounts-add-more-toggle"
-                      type="button"
-                      onClick={() => setManualMoreOpen((current) => !current)}
-                      aria-expanded={manualMoreOpen}
-                    >
-                      {manualMoreOpen ? "Less options" : "More options"}
-                    </button>
                     {manualMoreOpen ? (
                       <div className="accounts-add-advanced">
                         <div className="accounts-add-fields__row">
@@ -3177,9 +3181,29 @@ function AccountsPageContent() {
                     </div>
                   </>
                 ) : null}
-                <button className="button button-primary" type="submit" disabled={isSaving || (manualType === "cash" && accounts.some((account) => account.type === "cash"))}>
-                  {isSaving ? "Saving..." : "Create account"}
-                </button>
+                <div className="accounts-add-actions">
+                  <button
+                    className="accounts-add-more-link"
+                    type="button"
+                    onClick={() => setManualMoreOpen((current) => !current)}
+                    aria-expanded={manualMoreOpen}
+                  >
+                    <span>More</span>
+                    <span aria-hidden="true">{manualMoreOpen ? "▾" : "▸"}</span>
+                  </button>
+                  <div className="accounts-add-actions__buttons">
+                    <button className="button button-secondary" type="button" onClick={() => void createAnotherManualAccount()} disabled={isSaving}>
+                      {isSaving ? "Saving..." : "Add another"}
+                    </button>
+                    <button
+                      className="button button-primary"
+                      type="submit"
+                      disabled={isSaving || (manualType === "cash" && accounts.some((account) => account.type === "cash"))}
+                    >
+                      {isSaving ? "Saving..." : "Create account"}
+                    </button>
+                  </div>
+                </div>
                 {addAccountError ? (
                   <div className="accounts-drawer__notice" role="alert">
                     <strong>Unable to save account</strong>
