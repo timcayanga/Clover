@@ -1,6 +1,9 @@
 import type { UserLimits } from "@/lib/user-limits";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { prisma } from "@/lib/prisma";
+import { countNonCashAccounts } from "@/lib/account-limit-count";
+
+export { countNonCashAccounts } from "@/lib/account-limit-count";
 
 type PlanLimitSource = {
   planTier: "free" | "pro";
@@ -11,8 +14,6 @@ type PlanLimitSource = {
 
 export const getMonthStart = (referenceDate = new Date()) =>
   new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
-
-export const countNonCashAccounts = (accounts: Array<{ type: string }>) => accounts.filter((account) => account.type !== "cash").length;
 
 export const countWorkspaceTransactions = (workspaceId: string) =>
   prisma.transaction.count({

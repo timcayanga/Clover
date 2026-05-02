@@ -12,6 +12,7 @@ import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-conte
 import { getUserBillingSubscription } from "@/lib/paypal-billing";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
+import { countNonCashAccounts } from "@/lib/account-limit-count";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -66,11 +67,16 @@ async function SettingsPageStream() {
 
   const currentDate = new Date();
   const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-  const [accountCount, cashAccountCount, monthlyUploadCount, transactionCount] = await Promise.all([
-    prisma.account.count({
+  const [accountsForPlanUsage, cashAccountCount, monthlyUploadCount, transactionCount] = await Promise.all([
+    prisma.account.findMany({
       where: {
         workspaceId: selectedWorkspace.id,
         type: { not: "cash" },
+      },
+      select: {
+        type: true,
+        name: true,
+        institution: true,
       },
     }),
     prisma.account.count({
@@ -92,6 +98,7 @@ async function SettingsPageStream() {
     }),
   ]);
 
+  const accountCount = countNonCashAccounts(accountsForPlanUsage);
   const billingSubscription = await getUserBillingSubscription(user.id);
   const planLimits = getEffectiveUserLimits(user);
 

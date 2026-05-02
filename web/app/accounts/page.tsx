@@ -15,6 +15,7 @@ import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path";
+import { countNonCashAccounts } from "@/lib/account-limit-count";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
@@ -854,7 +855,7 @@ function AccountsPageContent() {
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
     [selectedWorkspaceId, workspaces]
   );
-  const nonCashAccountCount = useMemo(() => accounts.filter((account) => account.type !== "cash").length, [accounts]);
+  const nonCashAccountCount = useMemo(() => countNonCashAccounts(accounts), [accounts]);
 
   const showPlanLimitNudge = (payload: PlanLimitPayload) => {
     setPlanLimitNudge(payload);
