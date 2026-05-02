@@ -11,6 +11,10 @@ export function getResolvedTheme(mode: ThemeMode) {
     return mode;
   }
 
+  return getSystemTheme();
+}
+
+export function getSystemTheme() {
   if (typeof window === "undefined") {
     return "light";
   }
@@ -36,4 +40,3 @@ export function applyThemeMode(mode: ThemeMode) {
   document.documentElement.dataset.theme = resolved;
   document.documentElement.style.colorScheme = resolved;
 }
-

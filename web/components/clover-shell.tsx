@@ -1087,6 +1087,17 @@ export function CloverShell({
                   <span>Settings</span>
                 </button>
                 <button
+                  className="sidebar-popover__link sidebar-popover__button sidebar-popover__link--bare"
+                  type="button"
+                  onClick={() => navigateTo("/help")}
+                  role="menuitem"
+                >
+                  <span className="sidebar-popover__link-icon" aria-hidden="true">
+                    <MenuIcon name="help" />
+                  </span>
+                  <span>Help</span>
+                </button>
+                <button
                   className="sidebar-popover__link sidebar-popover__button sidebar-popover__button--danger sidebar-popover__link--bare"
                   type="button"
                   onClick={handleSignOut}
