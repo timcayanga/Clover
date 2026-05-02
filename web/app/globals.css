@@ -25531,9 +25531,9 @@ html[data-theme="dark"] .settings-hub__menu-item.is-active {
 
 html[data-theme="dark"] .nav-link:hover .nav-link__icon,
 html[data-theme="dark"] .nav-link.is-active .nav-link__icon {
-  background: rgba(9, 15, 27, 0.96);
-  color: var(--accent-hover);
-  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(241, 245, 249, 0.94);
+  color: #334155;
+  border: 1px solid rgba(148, 163, 184, 0.14);
 }
 
 html[data-theme="dark"] .sidebar-icon-button:hover,
@@ -26057,4 +26057,255 @@ html[data-theme="dark"] .commitments-detail-panel .notification-item__main p,
 html[data-theme="dark"] .commitments-detail-panel .notification-item__time,
 html[data-theme="dark"] .recurring-patterns__item-meta span {
   color: var(--muted) !important;
+}
+
+html[data-theme="dark"] .goals-hero,
+html[data-theme="dark"] .goals-beginner-guide,
+html[data-theme="dark"] .goals-hero__focus-card,
+html[data-theme="dark"] .goal-illustration,
+html[data-theme="dark"] .goals-hero__ring-card,
+html[data-theme="dark"] .goals-stat,
+html[data-theme="dark"] .goals-pace-card,
+html[data-theme="dark"] .goals-action-plan,
+html[data-theme="dark"] .goals-action-plan__lead,
+html[data-theme="dark"] .goals-action-plan__step,
+html[data-theme="dark"] .goals-action-plan__item,
+html[data-theme="dark"] .goals-heatmap,
+html[data-theme="dark"] .goals-drivers,
+html[data-theme="dark"] .goals-lane,
+html[data-theme="dark"] .goals-lane__metrics > div,
+html[data-theme="dark"] .goals-action,
+html[data-theme="dark"] .goals-editor,
+html[data-theme="dark"] .goals-editor__card,
+html[data-theme="dark"] .goals-editor__amount,
+html[data-theme="dark"] .goals-editor__mode select,
+html[data-theme="dark"] .goals-editor__purpose input,
+html[data-theme="dark"] .goals-editor__purpose-chip,
+html[data-theme="dark"] .goals-plan,
+html[data-theme="dark"] .goals-investments,
+html[data-theme="dark"] .goals-history,
+html[data-theme="dark"] .goals-milestones,
+html[data-theme="dark"] .goals-weekly,
+html[data-theme="dark"] .goals-checklist,
+html[data-theme="dark"] .goals-alerts,
+html[data-theme="dark"] .goals-history__item,
+html[data-theme="dark"] .goals-milestone,
+html[data-theme="dark"] .goals-weekly__card,
+html[data-theme="dark"] .goals-checklist__item,
+html[data-theme="dark"] .goals-alerts__item,
+html[data-theme="dark"] .goals-hero__setup-note,
+html[data-theme="dark"] .goals-hero__details summary,
+html[data-theme="dark"] .goals-hero__summary,
+html[data-theme="dark"] .goal-illustration__metrics > div,
+html[data-theme="dark"] .goal-illustration__badge,
+html[data-theme="dark"] .goals-milestone__icon,
+html[data-theme="dark"] .goals-lane__icon,
+html[data-theme="dark"] .goals-driver__icon,
+html[data-theme="dark"] .goals-checklist__checkbox {
+  color: var(--text);
+}
+
+html[data-theme="dark"] .goals-hero,
+html[data-theme="dark"] .goals-beginner-guide,
+html[data-theme="dark"] .goals-hero__focus-card,
+html[data-theme="dark"] .goal-illustration,
+html[data-theme="dark"] .goals-hero__ring-card,
+html[data-theme="dark"] .goals-stat,
+html[data-theme="dark"] .goals-pace-card,
+html[data-theme="dark"] .goals-action-plan,
+html[data-theme="dark"] .goals-action-plan__lead,
+html[data-theme="dark"] .goals-action-plan__step,
+html[data-theme="dark"] .goals-action-plan__item,
+html[data-theme="dark"] .goals-heatmap,
+html[data-theme="dark"] .goals-drivers,
+html[data-theme="dark"] .goals-lane,
+html[data-theme="dark"] .goals-lane__metrics > div,
+html[data-theme="dark"] .goals-action,
+html[data-theme="dark"] .goals-editor,
+html[data-theme="dark"] .goals-editor__card,
+html[data-theme="dark"] .goals-editor__amount,
+html[data-theme="dark"] .goals-editor__mode select,
+html[data-theme="dark"] .goals-editor__purpose input,
+html[data-theme="dark"] .goals-editor__purpose-chip,
+html[data-theme="dark"] .goals-plan,
+html[data-theme="dark"] .goals-investments,
+html[data-theme="dark"] .goals-history,
+html[data-theme="dark"] .goals-milestones,
+html[data-theme="dark"] .goals-weekly,
+html[data-theme="dark"] .goals-checklist,
+html[data-theme="dark"] .goals-alerts,
+html[data-theme="dark"] .goals-history__item,
+html[data-theme="dark"] .goals-milestone,
+html[data-theme="dark"] .goals-weekly__card,
+html[data-theme="dark"] .goals-checklist__item,
+html[data-theme="dark"] .goals-alerts__item,
+html[data-theme="dark"] .goal-illustration__metrics > div {
+  background: rgba(14, 23, 37, 0.94);
+  border-color: rgba(148, 163, 184, 0.16);
+  box-shadow: var(--shadow);
+}
+
+html[data-theme="dark"] .goals-hero {
+  background:
+    radial-gradient(circle at top left, rgba(71, 215, 232, 0.1), transparent 34%),
+    radial-gradient(circle at 84% 12%, rgba(126, 240, 192, 0.08), transparent 30%),
+    linear-gradient(180deg, rgba(14, 23, 37, 0.98), rgba(9, 15, 27, 0.98));
+}
+
+html[data-theme="dark"] .goals-hero__focus-card,
+html[data-theme="dark"] .goal-illustration,
+html[data-theme="dark"] .goals-hero__ring-card {
+  background:
+    radial-gradient(circle at top left, rgba(71, 215, 232, 0.08), transparent 30%),
+    rgba(14, 23, 37, 0.94);
+}
+
+html[data-theme="dark"] .goals-progress,
+html[data-theme="dark"] .goals-action-plan__lead,
+html[data-theme="dark"] .goals-hero__setup-note,
+html[data-theme="dark"] .goals-heatmap__legend span,
+html[data-theme="dark"] .goals-lane__metrics > div,
+html[data-theme="dark"] .goals-lane,
+html[data-theme="dark"] .goals-action,
+html[data-theme="dark"] .goals-editor__card,
+html[data-theme="dark"] .goals-editor__amount,
+html[data-theme="dark"] .goals-editor__mode select,
+html[data-theme="dark"] .goals-editor__purpose input,
+html[data-theme="dark"] .goals-editor__purpose-chip,
+html[data-theme="dark"] .goals-plan,
+html[data-theme="dark"] .goals-investments,
+html[data-theme="dark"] .goals-history__item,
+html[data-theme="dark"] .goals-milestone,
+html[data-theme="dark"] .goals-weekly__card,
+html[data-theme="dark"] .goals-checklist__item,
+html[data-theme="dark"] .goals-alerts__item,
+html[data-theme="dark"] .goal-illustration__metrics > div {
+  background: rgba(9, 15, 27, 0.94);
+}
+
+html[data-theme="dark"] .goals-progress__bar,
+html[data-theme="dark"] .goals-hero__focus-card-bar,
+html[data-theme="dark"] .goals-pace__track,
+html[data-theme="dark"] .goals-driver__track,
+html[data-theme="dark"] .goals-milestone__bar,
+html[data-theme="dark"] .goals-hero__stats,
+html[data-theme="dark"] .goals-pace__bars,
+html[data-theme="dark"] .goals-heatmap__grid,
+html[data-theme="dark"] .goals-drivers__bars,
+html[data-theme="dark"] .goals-action-grid,
+html[data-theme="dark"] .goals-action-plan__steps,
+html[data-theme="dark"] .goals-action-plan__list,
+html[data-theme="dark"] .goals-weekly__grid,
+html[data-theme="dark"] .goals-checklist__grid,
+html[data-theme="dark"] .goals-lane-grid,
+html[data-theme="dark"] .goals-editor__grid,
+html[data-theme="dark"] .goals-editor__mode-grid,
+html[data-theme="dark"] .goals-editor__purpose-chips,
+html[data-theme="dark"] .goals-investments__metrics {
+  gap: 10px;
+}
+
+html[data-theme="dark"] .goals-progress__head span,
+html[data-theme="dark"] .goals-progress p,
+html[data-theme="dark"] .goals-hero__focus-card-body p,
+html[data-theme="dark"] .goals-hero__focus-card-body small,
+html[data-theme="dark"] .goals-hero__ring-copy span,
+html[data-theme="dark"] .goals-hero__setup-note,
+html[data-theme="dark"] .goals-hero__copy p,
+html[data-theme="dark"] .goals-beginner-guide__item p,
+html[data-theme="dark"] .goals-lane p,
+html[data-theme="dark"] .goals-lane__metrics span,
+html[data-theme="dark"] .goals-lane__footer span,
+html[data-theme="dark"] .goals-action span,
+html[data-theme="dark"] .goals-action-plan__lead p,
+html[data-theme="dark"] .goals-action-plan__step span,
+html[data-theme="dark"] .goals-action-plan__item span,
+html[data-theme="dark"] .goals-action-plan__item small,
+html[data-theme="dark"] .goals-pace__label span,
+html[data-theme="dark"] .goals-pace__bar small,
+html[data-theme="dark"] .goals-heatmap__legend span,
+html[data-theme="dark"] .goals-heatmap__cell span,
+html[data-theme="dark"] .goals-driver__head span,
+html[data-theme="dark"] .goals-driver small,
+html[data-theme="dark"] .goals-editor__status span,
+html[data-theme="dark"] .goals-editor__card span,
+html[data-theme="dark"] .goals-editor__amount small,
+html[data-theme="dark"] .goals-editor__purpose small,
+html[data-theme="dark"] .goals-editor__advanced-toggle small,
+html[data-theme="dark"] .goals-investments__metrics span,
+html[data-theme="dark"] .goals-investments__item span,
+html[data-theme="dark"] .goals-investments__metrics small,
+html[data-theme="dark"] .goals-investments__item small,
+html[data-theme="dark"] .goals-history__label,
+html[data-theme="dark"] .goals-history__hint,
+html[data-theme="dark"] .goals-weekly__card small,
+html[data-theme="dark"] .goals-checklist__copy span,
+html[data-theme="dark"] .goals-alerts__item p,
+html[data-theme="dark"] .goals-plan__body small,
+html[data-theme="dark"] .goal-illustration__copy,
+html[data-theme="dark"] .goal-illustration__metrics span {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .goals-hero__copy h3,
+html[data-theme="dark"] .goals-hero__focus-card-body strong,
+html[data-theme="dark"] .goals-hero__ring-copy strong,
+html[data-theme="dark"] .goals-stat strong,
+html[data-theme="dark"] .goals-pace__label strong,
+html[data-theme="dark"] .goals-lane h5,
+html[data-theme="dark"] .goals-lane__metrics strong,
+html[data-theme="dark"] .goals-action strong,
+html[data-theme="dark"] .goals-action-plan__lead strong,
+html[data-theme="dark"] .goals-action-plan__step strong,
+html[data-theme="dark"] .goals-action-plan__item strong,
+html[data-theme="dark"] .goals-weekly__card strong,
+html[data-theme="dark"] .goals-checklist__copy strong,
+html[data-theme="dark"] .goals-milestone__head strong,
+html[data-theme="dark"] .goals-editor__head h4,
+html[data-theme="dark"] .goals-editor__status strong,
+html[data-theme="dark"] .goal-illustration__head h4,
+html[data-theme="dark"] .goals-plan__body p,
+html[data-theme="dark"] .goals-investments__metrics strong,
+html[data-theme="dark"] .goals-investments__item strong,
+html[data-theme="dark"] .goals-hero__summary span {
+  color: var(--text);
+}
+
+html[data-theme="dark"] .goals-lane.is-active,
+html[data-theme="dark"] .goals-editor__card.is-selected,
+html[data-theme="dark"] .goals-weekly__card.positive,
+html[data-theme="dark"] .goals-weekly__card.negative,
+html[data-theme="dark"] .goals-weekly__card.neutral,
+html[data-theme="dark"] .goals-checklist__item.is-done,
+html[data-theme="dark"] .goals-milestone.is-reached,
+html[data-theme="dark"] .goals-action-plan__item.positive,
+html[data-theme="dark"] .goals-action-plan__item.warning,
+html[data-theme="dark"] .goals-action-plan__item.negative,
+html[data-theme="dark"] .goals-action-plan__item.neutral,
+html[data-theme="dark"] .goals-pace__bar.positive,
+html[data-theme="dark"] .goals-pace__bar.negative {
+  background:
+    radial-gradient(circle at top left, rgba(71, 215, 232, 0.08), transparent 32%),
+    rgba(9, 15, 27, 0.96);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+html[data-theme="dark"] .goals-hero__setup-note,
+html[data-theme="dark"] .goals-hero__summary,
+html[data-theme="dark"] .goals-checklist__checkbox,
+html[data-theme="dark"] .goals-lane__icon,
+html[data-theme="dark"] .goals-driver__icon,
+html[data-theme="dark"] .goals-milestone__icon,
+html[data-theme="dark"] .goals-editor__card-pill,
+html[data-theme="dark"] .goal-illustration__badge {
+  background: rgba(241, 245, 249, 0.92);
+  color: #334155;
+}
+
+html[data-theme="dark"] .goals-editor__card.is-selected strong,
+html[data-theme="dark"] .goals-lane.is-active h5,
+html[data-theme="dark"] .goals-weekly__card.positive strong,
+html[data-theme="dark"] .goals-weekly__card.negative strong,
+html[data-theme="dark"] .goals-weekly__card.neutral strong {
+  color: var(--text);
 }
