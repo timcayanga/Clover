@@ -3,7 +3,6 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
-import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
@@ -14,9 +13,10 @@ import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
+import { RouteSplash } from "@/components/route-splash";
+import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { recordAppError } from "@/lib/error-logs";
-import { Suspense } from "react";
 import { InfoTip as ReportInfoTip } from "@/components/info-tip";
 
 const ReportsReviewQueue = nextDynamic(() => import("@/components/reports-review-queue").then((module) => module.ReportsReviewQueue), {
@@ -118,10 +118,10 @@ const reportsRangeLabels: Record<ReportsRange, string> = {
 };
 
 const reportsSectionLabels: Record<ReportsSection, string> = {
-  overview: "Overview",
-  spending: "Spending",
-  trends: "Trends",
-  advanced: "Advanced",
+  overview: "Summary",
+  spending: "Spend",
+  trends: "Patterns",
+  advanced: "More",
 };
 
 const normalizeReportsRange = (value: string | undefined): ReportsRange => {
@@ -1250,7 +1250,7 @@ async function ReportsStream({
               className="reports-empty-state"
               eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
               title="Your reports are ready for new data."
-              copy="Add transactions and accounts, and Clover will populate cash flow, spending, review items, and goal-aware summaries for you."
+              copy="Add transactions and accounts, and Clover will fill in cash flow, spending, and review items for you."
               illustration="/illustrations/clover-reports-chart-3d.png"
               illustrationAlt="A 3D Clover reports chart illustration"
               artClassName="transactions-empty-state__art--teal"
@@ -1340,8 +1340,8 @@ async function ReportsStream({
               <article className="report-card glass report-card--wide">
                 <div className="report-card__head">
                   <div className="report-card__head-title">
-                    <h4>Cash flow trend</h4>
-                    <ReportInfoTip label="A six-month line showing how net cash flow moved over time." />
+                    <h4>Money over time</h4>
+                    <ReportInfoTip label="A six-month view of how the balance moved." />
                   </div>
                   <div className="report-card__stat">
                     <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
@@ -1399,9 +1399,9 @@ async function ReportsStream({
               <article className="report-ai-card report-ai-card--compact glass">
                 <div className="report-card__head report-card__head--compact">
                   <div>
-                    <h4>What changed</h4>
+                    <h4>Summary</h4>
                   </div>
-                  <ReportInfoTip label="A short summary of the biggest change in your money this period." />
+                  <ReportInfoTip label="A simple summary of the biggest shift this period." />
                 </div>
                 <h3>{aiHeadline}</h3>
                 <p>{aiSummary}</p>
@@ -1415,9 +1415,9 @@ async function ReportsStream({
               <article className="report-ai-card report-ai-card--compact glass">
                 <div className="report-card__head report-card__head--compact">
                   <div>
-                    <h4>Why it changed</h4>
+                    <h4>Main drivers</h4>
                   </div>
-                  <ReportInfoTip label="The main drivers behind the change." />
+                  <ReportInfoTip label="The biggest reasons behind the shift." />
                 </div>
                 <div className="report-ai-signal-grid report-ai-signal-grid--compact">
                   {aiSignals.slice(0, 3).map((signal) => (
@@ -1433,9 +1433,9 @@ async function ReportsStream({
               <article className="report-ai-card report-ai-card--compact glass">
                 <div className="report-card__head report-card__head--compact">
                   <div>
-                    <h4>What to do next</h4>
+                    <h4>Next step</h4>
                   </div>
-                  <ReportInfoTip label="One action you can take right now from the report." />
+                  <ReportInfoTip label="One easy action to take right now." />
                 </div>
                 <div className="report-list">
                   {aiActions.map((action) => (
@@ -1454,7 +1454,7 @@ async function ReportsStream({
             </section>
 
             <article className="reports-next glass">
-              <p className="eyebrow">Goal lens</p>
+              <p className="eyebrow">Goal check</p>
               <h4>{goalNextStep.title}</h4>
               <p>{goalSummary}</p>
               <div className="reports-next__meta">
@@ -1475,7 +1475,7 @@ async function ReportsStream({
             <section className="reports-attention-strip">
               {attentionItems.map((item) => (
                 <article key={item.title} className="reports-attention-card glass">
-                  <span className="eyebrow">Things to check</span>
+                  <span className="eyebrow">Watch list</span>
                   <h4>{item.title}</h4>
                   <p>{item.body}</p>
                   <Link className="pill-link pill-link--inline" href={item.href}>
@@ -1487,7 +1487,7 @@ async function ReportsStream({
 
             <article className="reports-decision-lens glass">
               <div>
-                <p className="eyebrow">Next best action</p>
+                <p className="eyebrow">Now</p>
                 <h4>{nextStep.title}</h4>
                 <p>{nextStep.body}</p>
               </div>
@@ -1503,8 +1503,8 @@ async function ReportsStream({
           <article className="report-card glass report-card--wide">
             <div className="report-card__head">
               <div className="report-card__head-title">
-                <h4>Where your money went</h4>
-                <ReportInfoTip label="A flow view showing how income spreads into spending categories." />
+                <h4>Where it went</h4>
+                <ReportInfoTip label="A simple view of where income flowed." />
               </div>
               <div className="report-card__stat">
                 <strong>{formatCurrency(currentSummary.income)}</strong>
@@ -1569,8 +1569,8 @@ async function ReportsStream({
           <article className="report-card glass">
             <div className="report-card__head">
               <div className="report-card__head-title">
-                <h4>Spending by category</h4>
-                <ReportInfoTip label="The biggest spending groups in the selected range." />
+                <h4>Spending mix</h4>
+                <ReportInfoTip label="The biggest spending groups in this period." />
               </div>
               <div className="report-card__stat">
                 <strong>{formatCurrency(currentSpend)}</strong>
@@ -1671,8 +1671,8 @@ async function ReportsStream({
           <article className="report-card glass">
             <div className="report-card__head">
               <div className="report-card__head-title">
-                <h4>Repeat charges</h4>
-                <ReportInfoTip label="Merchants that appear more than once and usually repeat." />
+                <h4>Repeat bills</h4>
+                <ReportInfoTip label="Bills and merchants that tend to show up again." />
               </div>
               <div className="report-card__stat">
                 <strong>{recurringMerchants.length}</strong>
@@ -1735,8 +1735,8 @@ async function ReportsStream({
           <article className="report-card glass">
             <div className="report-card__head">
               <div className="report-card__head-title">
-                <h4>Top spenders</h4>
-                <ReportInfoTip label="Where spending is most concentrated by merchant." />
+                <h4>Biggest merchants</h4>
+                <ReportInfoTip label="The merchants taking the biggest share of spend." />
               </div>
               <div className="report-card__stat">
                 <strong>{topMerchants.length}</strong>
@@ -1781,8 +1781,8 @@ async function ReportsStream({
           <article className="report-card glass">
             <div className="report-card__head">
               <div className="report-card__head-title">
-                <h4>This month</h4>
-                <ReportInfoTip label="A quick month-to-month snapshot of net cash flow." />
+                <h4>Month summary</h4>
+                <ReportInfoTip label="A quick look at this month versus the last one." />
               </div>
               <div className="report-card__stat">
                 <strong className={currentMonthBucket.net >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentMonthBucket.net)}</strong>
@@ -1879,30 +1879,14 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
   }
 
   const requestedSection = normalizeReportsSection(resolvedSearchParams?.section);
-  const selectedRange = normalizeReportsRange(resolvedSearchParams?.range);
   const isPro = user.planTier === "pro";
   const selectedSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
   const sectionTabs: ReportsSection[] = isPro ? ["overview", "spending", "trends", "advanced"] : ["overview", "spending", "trends"];
-  const titleAddon = (
-    <nav className="reports-tabs" aria-label="Report sections">
-      {sectionTabs.map((section) => (
-        <Link
-          key={section}
-          className={`reports-tab ${selectedSection === section ? "reports-tab--active" : ""}`}
-          href={buildReportsHref({ section }, selectedRange, selectedSection)}
-          aria-current={selectedSection === section ? "page" : undefined}
-        >
-          {reportsSectionLabels[section]}
-        </Link>
-      ))}
-    </nav>
-  );
 
   return (
     <CloverShell
       active="reports"
       title="Reports"
-      titleAddon={titleAddon}
     >
       <ReportsStream active="reports" searchParams={resolvedSearchParams} />
     </CloverShell>
@@ -1910,9 +1894,5 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
 }
 
 export default function ReportsPage({ searchParams }: { searchParams?: Promise<{ range?: string; section?: string }> }) {
-  return (
-    <Suspense fallback={<CloverLoadingScreen label="reports" />}>
-      <ReportsPageStream searchParams={searchParams} />
-    </Suspense>
-  );
+  return <RouteSplash label="reports"><ReportsPageStream searchParams={searchParams} /></RouteSplash>;
 }
