@@ -1318,38 +1318,37 @@ function TransactionsPageContent() {
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const selectAllRef = useRef<HTMLInputElement>(null);
   const initialWorkspaceId = urlSearchParams.get("workspaceId") || readSelectedWorkspaceId();
-  const initialCachedWorkspace = getCachedTransactionsWorkspace(initialWorkspaceId);
+  const initialCachedWorkspace = null;
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
   const [accounts, setAccounts] = useState<Account[]>(
-    () => (initialCachedWorkspace?.accounts as Account[]) ?? []
+    () => []
   );
   const [categories, setCategories] = useState<Category[]>(
-    () => (initialCachedWorkspace?.categories as Category[]) ?? []
+    () => []
   );
   const [transactions, setTransactions] = useState<Transaction[]>(
-    () => (initialCachedWorkspace?.transactions as Transaction[]) ?? []
+    () => []
   );
-  const transactionsRef = useRef<Transaction[]>(initialCachedWorkspace?.transactions as Transaction[] ?? []);
+  const transactionsRef = useRef<Transaction[]>([]);
   const [imports, setImports] = useState<ImportFile[]>(
-    () => (initialCachedWorkspace?.imports as ImportFile[]) ?? []
+    () => []
   );
   const [transactionsSummary, setTransactionsSummary] = useState<TransactionPageMeta>(
-    () =>
-      initialCachedWorkspace?.summary ?? {
-        totalCount: initialCachedWorkspace?.transactions?.length ?? 0,
-        income: 0,
-        spending: 0,
-        transfers: 0,
-        review: 0,
-        topCategory: null,
-        topAccount: null,
-        firstTransactionDate: null,
-        lastTransactionDate: null,
-        firstReviewTransaction: null,
-        firstReviewTransactionIndex: null,
-      }
+    () => ({
+      totalCount: 0,
+      income: 0,
+      spending: 0,
+      transfers: 0,
+      review: 0,
+      topCategory: null,
+      topAccount: null,
+      firstTransactionDate: null,
+      lastTransactionDate: null,
+      firstReviewTransaction: null,
+      firstReviewTransactionIndex: null,
+    })
   );
   const [transactionsPageSize, setTransactionsPageSize] = useState(25);
   const [transactionsPage, setTransactionsPage] = useState(1);
@@ -1799,17 +1798,23 @@ function TransactionsPageContent() {
       return;
     }
 
-    if (hydrateWorkspaceFromCache(selectedWorkspaceId)) {
-      setIsWorkspaceDataReady(true);
-      setHasInitialTransactionsLoaded(true);
-      void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
-      return;
-    }
-
     setAccounts([]);
     setCategories([]);
     setTransactions([]);
     setImports([]);
+    setTransactionsSummary({
+      totalCount: 0,
+      income: 0,
+      spending: 0,
+      transfers: 0,
+      review: 0,
+      topCategory: null,
+      topAccount: null,
+      firstTransactionDate: null,
+      lastTransactionDate: null,
+      firstReviewTransaction: null,
+      firstReviewTransactionIndex: null,
+    });
     setIsWorkspaceDataReady(false);
     setHasInitialTransactionsLoaded(false);
     void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true });
@@ -4885,74 +4890,88 @@ function TransactionsPageContent() {
             className={`transactions-mobile-view${!hasVisibleTransactions && !isTableLoading ? " transactions-table-wrap--empty" : ""}`}
           >
             {isTableLoading ? (
-              <div className="transactions-mobile-loading" role="status" aria-live="polite" aria-label="Loading transactions">
-                {Array.from({ length: 6 }).map((_, index) => (
-                  <div key={index} className="transactions-mobile-card glass transactions-mobile-card--loading">
-                    <div className="transactions-mobile-card__top">
+              <div className="transactions-mobile-table" role="status" aria-live="polite" aria-label="Loading transactions">
+                <div className="transactions-mobile-table__head">
+                  <span />
+                  <span />
+                  <span>Name</span>
+                  <span>Amount</span>
+                  <span />
+                  <span />
+                </div>
+                <div className="transactions-mobile-table__body transactions-mobile-table__body--loading">
+                  {Array.from({ length: 6 }).map((_, index) => (
+                    <div key={index} className="transactions-mobile-row transactions-mobile-row--loading">
                       <span className="skeleton-block skeleton-block--checkbox" />
                       <span className="skeleton-block skeleton-block--icon" />
-                      <span className="transactions-mobile-card__loading-name">
+                      <span className="transactions-mobile-row__name">
                         <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
                         <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
                       </span>
                       <span className="skeleton-block skeleton-block--amount" />
+                      <span className="skeleton-block skeleton-block--chevron" />
                       <span className="skeleton-block skeleton-block--warning" />
                     </div>
-                    <div className="transactions-mobile-card__meta">
-                      <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
-                      <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
-                      <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
-                    </div>
-                    <div className="transactions-mobile-card__actions">
-                      <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             ) : transactionsSummary.totalCount > 0 ? (
-              <div className="transactions-mobile-list">
-                {visibleTransactions.map((transaction, index) => {
-                  const warningReason = warningReasonFor(transaction);
-                  const amount = Number(transaction.amount);
-                  const isPositive = transaction.type === "income";
-                  const amountToneClass = isPositive ? "positive" : "negative";
-                  const categoryValue = transaction.categoryId ?? otherCategoryId;
-                  const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
-                  const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
-                  const merchantSummary = summarizeTransactionMerchantText(
-                    transaction.merchantClean ?? transaction.merchantRaw,
-                    accountInstitution
-                  );
-                  const merchantDisplay = humanizeTransactionMerchantText(transaction.merchantRaw);
-                  const showMerchantSubtext = merchantDisplay && merchantDisplay.toLowerCase() !== merchantSummary.toLowerCase();
-                  const sourceClass =
-                    transaction.source === "manual"
-                      ? "transactions-mobile-card--manual"
-                      : transaction.source === "upload"
-                        ? "transactions-mobile-card--imported"
-                        : "transactions-mobile-card--other";
-                  const rowStateClass = warningReason ? "transactions-mobile-card--warning" : "transactions-mobile-card--clear";
+              <div className="transactions-mobile-table">
+                <div className="transactions-mobile-table__head">
+                  <span />
+                  <span />
+                  <span>Name</span>
+                  <span>Amount</span>
+                  <span />
+                  <span />
+                </div>
+                <div className="transactions-mobile-table__body">
+                  {visibleTransactions.map((transaction, index) => {
+                    const warningReason = warningReasonFor(transaction);
+                    const amount = Number(transaction.amount);
+                    const isPositive = transaction.type === "income";
+                    const amountToneClass = isPositive ? "positive" : "negative";
+                    const categoryValue = transaction.categoryId ?? otherCategoryId;
+                    const categoryLabel =
+                      transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+                    const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
+                    const merchantSummary = summarizeTransactionMerchantText(
+                      transaction.merchantClean ?? transaction.merchantRaw,
+                      accountInstitution
+                    );
+                    const merchantDisplay = humanizeTransactionMerchantText(transaction.merchantRaw);
+                    const showMerchantSubtext = merchantDisplay && merchantDisplay.toLowerCase() !== merchantSummary.toLowerCase();
+                    const transactionAccount = accounts.find((account) => account.id === transaction.accountId) ?? null;
+                    const transactionAccountBrand = transactionAccount
+                      ? getAccountBrand({
+                          name: transactionAccount.name,
+                          institution: transactionAccount.institution,
+                          type: transactionAccount.type,
+                        })
+                      : null;
 
-                  return (
-                    <article
-                      key={transaction.id}
-                      ref={(node) => {
-                        if (node) {
-                          transactionRowRefs.current.set(transaction.id, node);
-                          return;
-                        }
+                    return (
+                      <article
+                        key={transaction.id}
+                        ref={(node) => {
+                          if (node) {
+                            transactionRowRefs.current.set(transaction.id, node);
+                            return;
+                          }
 
-                        transactionRowRefs.current.delete(transaction.id);
-                      }}
-                      className={`transactions-mobile-card glass ${sourceClass} ${rowStateClass} ${transaction.isExcluded ? "is-muted" : ""} ${
-                        selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
-                      }`}
-                      tabIndex={0}
-                      aria-label={`${merchantSummary}, ${formatDate(transaction.date)}, ${categoryLabel}, ${formatTransactionAmount(amount, transaction.currency)}`}
-                      onKeyDown={(event) => handleTransactionRowKeyDown(event, transaction, index)}
-                    >
-                      <div className="transactions-mobile-card__top">
-                        <label className="transaction-select-cell transactions-mobile-card__select">
+                          transactionRowRefs.current.delete(transaction.id);
+                        }}
+                        className={`transactions-mobile-row ${transaction.isExcluded ? "is-muted" : ""} ${
+                          selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
+                        }`}
+                        tabIndex={0}
+                        aria-label={`${merchantSummary}, ${formatDate(transaction.date)}, ${categoryLabel}, ${formatTransactionAmount(
+                          amount,
+                          transaction.currency
+                        )}`}
+                        onKeyDown={(event) => handleTransactionRowKeyDown(event, transaction, index)}
+                      >
+                        <label className="transaction-select-cell transactions-mobile-row__select">
                           <input
                             type="checkbox"
                             checked={selectedTransactionIds.includes(transaction.id)}
@@ -4960,35 +4979,45 @@ function TransactionsPageContent() {
                             aria-label={`Select ${transaction.merchantRaw}`}
                           />
                         </label>
-                        <span className="transaction-category-icon-cell transactions-mobile-card__icon" aria-hidden="true">
-                          <span className="transaction-category-icon" style={getCategoryIconTone(categoryLabel)}>
-                            <img src={getCategoryIconSrc(categoryLabel)} alt="" aria-hidden="true" />
-                          </span>
+                        <span className="transactions-mobile-row__icon" aria-hidden="true">
+                          {transactionAccountBrand ? (
+                            <AccountBrandMark accountBrand={transactionAccountBrand} label={transaction.accountName} />
+                          ) : (
+                            <span className="transactions-mobile-row__icon-fallback">?</span>
+                          )}
                         </span>
-                        <div className="transactions-mobile-card__name">
+                        <div className="transactions-mobile-row__name">
                           <InlineEditableCell
                             value={transaction.merchantClean ?? transaction.merchantRaw}
                             displayValue={merchantSummary}
                             ariaLabel={`Edit name for ${transaction.merchantRaw}`}
                             kind="text"
-                            className="transaction-inline-edit transaction-inline-edit--name transactions-mobile-card__name-edit"
+                            className="transaction-inline-edit transaction-inline-edit--name transactions-mobile-row__name-edit"
                             onCommit={(value) => commitInlineEdit(transaction, "name", value)}
                           />
                           {showMerchantSubtext ? <small className="transaction-subtext">{merchantDisplay}</small> : null}
                         </div>
-                        <div className={`transaction-amount-cell ${amountToneClass} transactions-mobile-card__amount`}>
+                        <div className={`transaction-amount-cell ${amountToneClass} transactions-mobile-row__amount`}>
                           <InlineEditableCell
                             value={transaction.amount}
                             displayValue={formatTransactionAmount(amount, transaction.currency)}
                             ariaLabel={`Edit amount for ${transaction.merchantRaw}`}
                             kind="number"
-                            className={`transaction-inline-edit transaction-inline-edit--amount ${amountToneClass} transactions-mobile-card__amount-edit`}
+                            className={`transaction-inline-edit transaction-inline-edit--amount ${amountToneClass} transactions-mobile-row__amount-edit`}
                             onCommit={(value) => commitInlineEdit(transaction, "amount", value)}
                           />
                         </div>
+                        <button
+                          type="button"
+                          className="icon-button transactions-mobile-row__detail"
+                          onClick={() => openTransactionDetail(transaction)}
+                          aria-label={`Open details for ${transaction.merchantRaw}`}
+                        >
+                          <ActionIcon name="chevron-right" />
+                        </button>
                         {warningReason ? (
                           <div
-                            className={`transaction-warning-wrap transactions-mobile-card__warning-wrap ${
+                            className={`transaction-warning-wrap transactions-mobile-row__warning-wrap ${
                               activeWarningTransactionId === transaction.id ? "is-open" : ""
                             }`}
                             ref={(node) => {
@@ -5002,7 +5031,7 @@ function TransactionsPageContent() {
                           >
                             <button
                               type="button"
-                              className="warning-chip transactions-mobile-card__warning"
+                              className="warning-chip transactions-mobile-row__warning"
                               title={warningReason}
                               aria-label={warningReason}
                               aria-expanded={activeWarningTransactionId === transaction.id}
@@ -5044,71 +5073,10 @@ function TransactionsPageContent() {
                             </div>
                           </div>
                         ) : null}
-                      </div>
-
-                      <div className="transactions-mobile-card__meta">
-                        <div className="transactions-mobile-card__field">
-                          <span>Date</span>
-                          <InlineEditableCell
-                            value={transaction.date.slice(0, 10)}
-                            displayValue={formatDate(transaction.date)}
-                            ariaLabel={`Edit date for ${transaction.merchantRaw}`}
-                            kind="date"
-                            className="transaction-inline-edit transaction-inline-edit--date transactions-mobile-card__field-edit"
-                            onCommit={(value) => commitInlineEdit(transaction, "date", value)}
-                          />
-                        </div>
-                        <div className="transactions-mobile-card__field">
-                          <span>Account</span>
-                          <InlineEditableCell
-                            value={transaction.accountId}
-                            displayValue={transaction.accountName}
-                            ariaLabel={`Edit account for ${transaction.merchantRaw}`}
-                            kind="select"
-                            className="transaction-inline-edit transaction-inline-edit--select transactions-mobile-card__field-edit"
-                            options={accounts.map((account) => ({
-                              value: account.id,
-                              label: account.name,
-                            }))}
-                            onCommit={(value) => commitInlineEdit(transaction, "accountId", value)}
-                          />
-                        </div>
-                        <div className="transactions-mobile-card__field">
-                          <span>Category</span>
-                          <InlineEditableCell
-                            value={categoryValue}
-                            displayValue={categoryLabel}
-                            ariaLabel={`Edit category for ${transaction.merchantRaw}`}
-                            kind="select"
-                            className="transaction-inline-edit transaction-inline-edit--select transactions-mobile-card__field-edit"
-                            options={categories.map((category) => ({
-                              value: category.id,
-                              label: category.name,
-                            }))}
-                            onCommit={(value) => commitInlineEdit(transaction, "categoryId", value)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="transactions-mobile-card__actions">
-                        <button
-                          type="button"
-                          className="button button-secondary button-small transactions-mobile-card__detail-button"
-                          onClick={() => openTransactionDetail(transaction)}
-                          aria-label={`Open details for ${transaction.merchantRaw}`}
-                        >
-                          Details
-                        </button>
-                        {warningReason ? (
-                          <span className="transactions-mobile-card__warning-copy">
-                            <span className="warning-mark warning-mark--small" aria-hidden="true" />
-                            Needs review
-                          </span>
-                        ) : null}
-                      </div>
-                    </article>
-                  );
-                })}
+                      </article>
+                    );
+                  })}
+                </div>
               </div>
             ) : !hasVisibleTransactions ? (
               <EmptyDataCta
