@@ -13591,6 +13591,43 @@ input.transaction-inline-edit--amount::placeholder {
   font-weight: 700;
 }
 
+.transactions-currency-filter {
+  width: max-content;
+}
+
+.transactions-currency-filter__button {
+  min-height: 34px;
+  padding: 0 12px 0 10px;
+  border-radius: 999px;
+  background: rgba(242, 245, 247, 0.98);
+  border-color: rgba(182, 191, 197, 1);
+  color: #111111;
+  box-shadow: none;
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+.transactions-currency-filter__button:hover,
+.transactions-currency-filter__button:focus-visible {
+  background: rgba(235, 239, 241, 0.98);
+  border-color: rgba(160, 170, 176, 1);
+  box-shadow: none;
+}
+
+.transactions-currency-filter__button .currency-selector__trigger-token,
+.transactions-currency-filter__button .currency-selector__trigger-all {
+  color: var(--accent);
+  font-size: 0.72rem;
+}
+
+.transactions-currency-filter__menu {
+  width: min(196px, calc(100vw - 16px));
+}
+
+.transactions-currency-filter__option {
+  padding-block: 8px;
+}
+
 .currency-symbol {
   color: var(--accent);
   font-weight: 700;

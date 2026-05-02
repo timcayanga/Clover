@@ -37,7 +37,7 @@ import {
   mergeImportedWorkspaceTransactions,
   normalizeImportedAccountKey,
 } from "@/lib/workspace-cache";
-import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
+import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import type { UserLimits } from "@/lib/user-limits";
 import { parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
@@ -1400,27 +1400,6 @@ function TransactionsPageContent() {
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
-  const currencyFilterOptions = useMemo(() => {
-    const values = new Set<string>();
-
-    transactions.forEach((transaction) => {
-      values.add(formatCurrencyCode(transaction.currency));
-    });
-
-    accounts.forEach((account) => {
-      values.add(formatCurrencyCode(account.currency));
-    });
-
-    if (currencyFilter) {
-      values.add(formatCurrencyCode(currencyFilter));
-    }
-
-    if (!values.size) {
-      currencyCatalogCodes.forEach((code) => values.add(code));
-    }
-
-    return Array.from(values).filter(Boolean).sort((a, b) => a.localeCompare(b));
-  }, [accounts, currencyCatalogCodes, currencyFilter, transactions]);
 
   useEffect(() => {
     transactionsRef.current = transactions;
@@ -1440,7 +1419,7 @@ function TransactionsPageContent() {
   const drilldownParamRef = useRef<string | null>(null);
   const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [activeWarningTransactionId, setActiveWarningTransactionId] = useState<string | null>(null);
-  const [headerMenuOpen, setHeaderMenuOpen] = useState<TransactionSortField | "currency" | null>(null);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState<TransactionSortField | null>(null);
   const [headerMenuPosition, setHeaderMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
   const detailAutosaveTimerRef = useRef<number | null>(null);
@@ -2572,7 +2551,7 @@ function TransactionsPageContent() {
     setHeaderMenuPosition(null);
   };
 
-  const openHeaderMenu = (field: TransactionSortField | "currency", event: ReactMouseEvent<HTMLButtonElement>) => {
+  const openHeaderMenu = (field: TransactionSortField, event: ReactMouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const menuWidth = field === "category" ? 380 : field === "amount" ? 340 : field === "date" ? 360 : 320;
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
@@ -3906,9 +3885,7 @@ function TransactionsPageContent() {
             ? "Filter category"
           : headerMenuOpen === "amount"
             ? "Sort by amount"
-            : headerMenuOpen === "currency"
-              ? "Filter currency"
-              : "";
+            : "";
   const headerMenuPanel = headerMenuOpen && headerMenuPosition ? (
     <div
       className="transactions-column-menu glass"
@@ -4111,35 +4088,6 @@ function TransactionsPageContent() {
         </div>
       ) : null}
 
-      {headerMenuOpen === "currency" ? (
-        <div className="transactions-column-menu__section">
-          <div className="transactions-column-menu__sort">
-            <button
-              type="button"
-              className={`button button-secondary button-small transactions-column-menu__button ${currencyFilter ? "" : "is-active"}`}
-              onClick={() => setCurrencyFilter("")}
-            >
-              All currencies
-            </button>
-          </div>
-          <div className="transactions-column-menu__fields transactions-column-menu__fields--currency">
-            {currencyFilterOptions.map((code) => (
-              <button
-                key={code}
-                type="button"
-                className={`button button-secondary button-small transactions-column-menu__button ${
-                  currencyFilter === code ? "is-active" : ""
-                }`}
-                onClick={() => setCurrencyFilter(code)}
-              >
-                {code}
-              </button>
-            ))}
-          </div>
-          <div className="transactions-column-menu__hint">Show only transactions in the selected currency.</div>
-        </div>
-      ) : null}
-
       <div className="form-actions form-actions--compact">
         <button
           className="button button-secondary"
@@ -4289,20 +4237,19 @@ function TransactionsPageContent() {
           {!isCompactViewport ? <span>Date</span> : null}
         </button>
 
-      <button
-        className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-toolbar-currency"
-        style={toolbarChipStyle}
-        type="button"
-        title={currencyFilter ? formatCurrencySymbol(currencyFilter) : "All currencies"}
-        onClick={(event) => openHeaderMenu("currency", event)}
-        aria-label={currencyFilter ? `Open currency filter, currently ${formatCurrencySymbol(currencyFilter)}` : "Open currency filter"}
-        aria-expanded={headerMenuOpen === "currency"}
-      >
-        <span className="button-icon" aria-hidden="true">
-          <ActionIcon name="currency" />
-        </span>
-        <span className="transactions-toolbar-currency__label">{currencyFilter ? formatCurrencyCode(currencyFilter) : "PHP"}</span>
-      </button>
+      <CurrencySelector
+        value={currencyFilter}
+        onChange={(next) => setCurrencyFilter(next === "all" ? "" : formatCurrencyCode(next))}
+        options={currencyCatalogCodes}
+        includeAllOption
+        allLabel="All currencies"
+        ariaLabel="Filter transactions by currency"
+        className="transactions-currency-filter"
+        buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip"
+        menuClassName="transactions-currency-filter__menu"
+        optionClassName="transactions-currency-filter__option"
+        menuAlignment="end"
+      />
 
       <button
         className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
