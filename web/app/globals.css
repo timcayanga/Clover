@@ -524,6 +524,20 @@ body[data-clover-page-modal] .sidebar-backdrop {
   font-weight: 600;
 }
 
+.clover-auth-card__link-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+  justify-self: start;
+  text-align: left;
+}
+
+.clover-auth-forgot-password {
+  margin-top: -4px;
+  justify-self: start;
+}
+
 .clover-auth-card__link:hover {
   color: var(--accent-hover);
 }
