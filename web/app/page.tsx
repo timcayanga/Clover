@@ -124,10 +124,10 @@ export default function HomePage() {
 
       <ScrollReveal as="section" className="landing-hero">
         <div className="landing-hero__copy">
-          <h1>8 hours a week, turned into minutes.</h1>
+          <h1>Turn money clutter into clarity.</h1>
           <p className="landing-hero__lede">
-            Tracking finances takes time. Clover helps you upload statements, see every account together, and turn that data into faster reports,
-            insights, and smarter money moves.
+            Clover helps you gather statements, receipts, and accounts so you can understand what is happening without digging through folders,
+            PDFs, and spreadsheets.
           </p>
 
           <div className="landing-hero__actions">
@@ -139,7 +139,7 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <p className="landing-hero__note">Spend less time sorting through numbers and more time making smarter money moves.</p>
+          <p className="landing-hero__note">Less guesswork. More confidence about what comes next.</p>
         </div>
 
         <HeroImage />
@@ -148,9 +148,9 @@ export default function HomePage() {
       <ScrollReveal as="section" className="landing-gallery-section">
         <div className="landing-gallery__copy">
           <p className="eyebrow">Visual overview</p>
-          <h2>See every account in one view.</h2>
+          <h2>From scattered files to a clear picture.</h2>
           <p>
-            Clover turns uploaded statements into a clearer overview so you can spot patterns without manual sorting.
+            Upload the things you already have. Clover organizes them into an overview that makes your finances easier to understand.
           </p>
         </div>
 
@@ -161,7 +161,7 @@ export default function HomePage() {
       <ScrollReveal as="section" className="landing-flow">
         <div className="landing-flow__copy">
           <p className="eyebrow">How it works</p>
-          <h2>Three simple steps.</h2>
+          <h2>A simple path from upload to action.</h2>
         </div>
 
         <div className="landing-flow__steps" aria-label="How Clover works">
@@ -171,7 +171,7 @@ export default function HomePage() {
             </span>
             <span className="landing-flow__number">01</span>
             <h3>Upload</h3>
-            <p>Add your statements and receipts so Clover can start organizing them for you.</p>
+            <p>Bring in the statements and receipts you have been putting off. Clover starts the cleanup for you.</p>
           </div>
           <div className="landing-flow__step">
             <span className="landing-flow__icon">
@@ -179,7 +179,7 @@ export default function HomePage() {
             </span>
             <span className="landing-flow__number">02</span>
             <h3>Analyze</h3>
-            <p>Clover spots patterns in your money and shows what changed in a simple way.</p>
+            <p>See what changed, what stands out, and what needs attention in a way that feels easy to follow.</p>
           </div>
           <div className="landing-flow__step">
             <span className="landing-flow__icon">
@@ -187,7 +187,7 @@ export default function HomePage() {
             </span>
             <span className="landing-flow__number">03</span>
             <h3>Plan</h3>
-            <p>Use reports and insights to make smarter money decisions going forward.</p>
+            <p>Know your next move so the next month feels more intentional and less reactive.</p>
           </div>
         </div>
 
@@ -198,9 +198,9 @@ export default function HomePage() {
         <div className="landing-cta__inner">
           <div className="landing-cta__copy">
             <p className="eyebrow">Ready when you are</p>
-            <h2>Keep your finances in view, whenever you need them.</h2>
+            <h2>Start with clarity. Grow into more control.</h2>
             <p>
-              Clover stays with you as a clear place to upload statements, review insights, and take action with confidence.
+              Begin free, then move to Pro when you want more accounts, more uploads, and deeper reports that help you stay ahead.
             </p>
           </div>
           <div className="landing-cta__actions">
