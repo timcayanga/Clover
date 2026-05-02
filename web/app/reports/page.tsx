@@ -1303,7 +1303,7 @@ async function ReportsStream({
           </div>
         </div>
 
-        {selectedSection === "overview" ? (
+        {selectedSection === "overview" && !isEmptyWorkspace ? (
           <>
             <section className="reports-summary-grid reports-summary-grid--highlights reports-overview-grid">
               <article className="metric compact metric--highlight glass">
@@ -1887,6 +1887,7 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
     <CloverShell
       active="reports"
       title="Reports"
+      subtitle="Start with Summary. Then check Spend and Patterns."
     >
       <ReportsStream active="reports" searchParams={resolvedSearchParams} />
     </CloverShell>
