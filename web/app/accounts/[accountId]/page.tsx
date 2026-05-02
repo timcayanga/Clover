@@ -7,6 +7,7 @@ import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { InfoTooltip } from "@/components/info-tooltip";
 import { getAccountBrand } from "@/lib/account-brand";
+import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { extractAccountIdFromPathSegment, getAccountPath } from "@/lib/account-path";
@@ -749,13 +750,23 @@ function AccountDetailPageContent() {
   );
 
   const accountBrand = useMemo(
-    () =>
-      getAccountBrand({
+    () => {
+      if (account?.type === "investment") {
+        return getInvestmentAssetBrand({
+          symbol: account.investmentSymbol,
+          name: account.name,
+          subtype: account.investmentSubtype,
+          currency: account.currency,
+        });
+      }
+
+      return getAccountBrand({
         institution: account?.institution ?? null,
         name: account?.name ?? null,
         type: account?.type ?? null,
-      }),
-    [account?.institution, account?.name, account?.type]
+      });
+    },
+    [account?.currency, account?.institution, account?.investmentSubtype, account?.investmentSymbol, account?.name, account?.type]
   );
 
   const accountBrandStyles = useMemo(
@@ -1259,7 +1270,7 @@ function AccountDetailPageContent() {
       <section className="panel accounts-detail__panel" style={accountBrandStyles}>
         <div className="accounts-detail__header">
           <div className="accounts-detail__headline">
-            {account ? <AccountBrandMark accountBrand={accountBrand} label={account.name} /> : null}
+            {account ? <AccountBrandMark accountBrand={accountBrand} label={accountBrand.label} /> : null}
             <div>
               <p className="eyebrow">{account?.type === "investment" ? "Asset details" : "Account details"}</p>
               <h2>

@@ -12470,6 +12470,27 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 2px;
 }
 
+.investments-allocation__row-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.investments-allocation__row-label > div,
+.investments-portfolio-table__cell--asset > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.investments-allocation__row-label .accounts-brand-mark,
+.investments-portfolio-table__cell--asset .accounts-brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 12px;
+}
+
 .investments-allocation__row-head strong {
   font-size: 14px;
   font-weight: 600;
@@ -12538,7 +12559,14 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 13px;
 }
 
+.investments-portfolio-table__cell--asset {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .investments-portfolio-table__cell--asset strong {
+  min-width: 0;
   font-size: 14px;
   font-weight: 600;
 }
@@ -12559,6 +12587,19 @@ input.transaction-inline-edit--amount::placeholder {
 .investments-portfolio-table__cell span {
   color: inherit;
   font-size: 12px;
+}
+
+.accounts-overview-card__asset-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.accounts-overview-card__asset-name .accounts-brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 12px;
 }
 
 .investments-portfolio-table__empty {

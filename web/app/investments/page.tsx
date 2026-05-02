@@ -11,8 +11,8 @@ import { getAccountPath } from "@/lib/account-path";
 import { InfoTip } from "@/components/info-tip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { InvestmentMarketChart } from "@/components/investment-market-chart";
-import { getAccountBrand } from "@/lib/account-brand";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import {
   chooseWorkspaceId,
   persistSelectedWorkspaceId,
@@ -1121,8 +1121,19 @@ export default function InvestmentsPage() {
                     return (
                       <div key={row.account.id} className="investments-portfolio-table__row" role="row">
                         <div className="investments-portfolio-table__cell investments-portfolio-table__cell--asset">
-                          <strong>{row.account.name}</strong>
-                          <span>{row.account.investmentSymbol ?? row.account.institution ?? "No code set"}</span>
+                          <AccountBrandMark
+                            accountBrand={getInvestmentAssetBrand({
+                              symbol: row.account.investmentSymbol,
+                              name: row.account.name,
+                              subtype: row.account.investmentSubtype,
+                              currency: row.account.currency,
+                            })}
+                            label={row.account.investmentSymbol ?? row.account.name}
+                          />
+                          <div>
+                            <strong>{row.account.name}</strong>
+                            <span>{row.account.investmentSymbol ?? row.account.institution ?? "No code set"}</span>
+                          </div>
                         </div>
                         <div className="investments-portfolio-table__cell">
                           {row.account.investmentSubtype ? getInvestmentSubtypeLabel(row.account.investmentSubtype) : "Unclassified"}
@@ -1169,10 +1180,11 @@ export default function InvestmentsPage() {
 
                     <div className="accounts-card-grid">
                       {group.accounts.map((account) => {
-                        const accountBrand = getAccountBrand({
-                          institution: account.institution ?? null,
+                        const investmentAssetBrand = getInvestmentAssetBrand({
+                          symbol: account.investmentSymbol,
                           name: account.name,
-                          type: account.type,
+                          subtype: account.investmentSubtype,
+                          currency: account.currency,
                         });
                         const currentValue = parseNullableAmount(account.balance);
                         const purchaseValue = parseNullableAmount(account.investmentCostBasis ?? account.investmentPrincipal);
@@ -1187,12 +1199,12 @@ export default function InvestmentsPage() {
                           <article key={account.id} className="accounts-account-card glass">
                             <div className="accounts-account-card__head">
                               <div className="accounts-account-card__brand">
-                                <AccountBrandMark accountBrand={accountBrand} label={account.name} />
+                                <AccountBrandMark accountBrand={investmentAssetBrand} label={investmentAssetBrand.label} />
                                 <div>
                                   <strong>{account.name}</strong>
                                   <span>
-                                    {accountBrand.label}
-                                    {account.institution && account.institution !== accountBrand.label ? ` · ${account.institution}` : ""}
+                                    {investmentAssetBrand.label}
+                                    {account.institution && account.institution !== investmentAssetBrand.label ? ` · ${account.institution}` : ""}
                                   </span>
                                 </div>
                               </div>
@@ -1438,13 +1450,22 @@ export default function InvestmentsPage() {
               {topHoldings.length > 0 ? (
                 <div className="investments-allocation__list">
                   {topHoldings.map((item) => {
+                    const investmentAssetBrand = getInvestmentAssetBrand({
+                      symbol: item.account.investmentSymbol,
+                      name: item.account.name,
+                      subtype: item.account.investmentSubtype,
+                      currency: item.account.currency,
+                    });
                     const returnPercent = getReturnPercent(item.currentValue, item.purchaseValue);
                     return (
                       <div key={item.account.id} className="investments-allocation__row">
                         <div className="investments-allocation__row-head">
-                          <div>
-                            <strong>{item.account.name}</strong>
-                            <span>{item.account.investmentSubtype ? getInvestmentSubtypeLabel(item.account.investmentSubtype) : "Unclassified"}</span>
+                          <div className="investments-allocation__row-label">
+                            <AccountBrandMark accountBrand={investmentAssetBrand} label={investmentAssetBrand.label} />
+                            <div>
+                              <strong>{item.account.name}</strong>
+                              <span>{item.account.investmentSubtype ? getInvestmentSubtypeLabel(item.account.investmentSubtype) : "Unclassified"}</span>
+                            </div>
                           </div>
                           <div>
                             <strong>{formatInvestmentAmount(item.currentValue, item.account.currency)}</strong>
@@ -1490,7 +1511,24 @@ export default function InvestmentsPage() {
                     <InfoTip label="The holding with the highest current value." />
                   </div>
                   <strong>{topHoldings[0] ? formatInvestmentAmount(topHoldings[0].currentValue, topHoldings[0].account.currency) : "—"}</strong>
-                  <span>{topHoldings[0]?.account.name ?? "No portfolio assets yet"}</span>
+                  <span className="accounts-overview-card__asset-name">
+                    {topHoldings[0] ? (
+                      <>
+                        <AccountBrandMark
+                          accountBrand={getInvestmentAssetBrand({
+                            symbol: topHoldings[0].account.investmentSymbol,
+                            name: topHoldings[0].account.name,
+                            subtype: topHoldings[0].account.investmentSubtype,
+                            currency: topHoldings[0].account.currency,
+                          })}
+                          label={topHoldings[0].account.investmentSymbol ?? topHoldings[0].account.name}
+                        />
+                        {topHoldings[0].account.name}
+                      </>
+                    ) : (
+                      "No portfolio assets yet"
+                    )}
+                  </span>
                 </article>
                 <article className="accounts-overview-card glass">
                   <div className="investments-metric__label">
