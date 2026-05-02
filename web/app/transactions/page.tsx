@@ -4445,7 +4445,7 @@ function TransactionsPageContent() {
   return (
     <CloverShell active="transactions" title="Transactions" actions={transactionsShellActions}>
       <PageFileDropZone
-        enabled={!importOpen}
+        enabled={true}
         title="Drop statement files anywhere"
         onFilesDropped={(files) => openImportFiles(files, true)}
       />

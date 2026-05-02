@@ -15,7 +15,7 @@ import { isLikelyPasswordProtectedPdf } from "@/lib/import-file-password";
 import { extractTextFromFile } from "@/lib/import-file-text";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { validateImportFile } from "@/lib/import-file-validation";
-import { IMPORT_IMAGE_MODES, normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
+import { type ImportImageMode } from "@/lib/import-image-mode";
 import {
   detectStatementMetadata,
   getTrailingBalanceFromParsedRows,
@@ -732,7 +732,7 @@ export function ImportFilesModal({
   const [items, setItems] = useState<QueuedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState("");
-  const [selectedImportMode, setSelectedImportMode] = useState<ImportImageMode>("statement");
+  const selectedImportMode: ImportImageMode = "statement";
   const [launchInBackground, setLaunchInBackground] = useState(backgroundOnly);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("Upload PDF, CSV, and screenshot files to import documents and transactions.");
@@ -839,7 +839,6 @@ export function ImportFilesModal({
 
       setDragActive(false);
       setSelectedAccountId("");
-      setSelectedImportMode("statement");
       setSelectedPasswordItemId(null);
       setPlanTier("unknown");
       setMonthlyUploadLimit(10);
@@ -885,7 +884,6 @@ export function ImportFilesModal({
 
       return defaultAccountId ?? "";
     });
-    setSelectedImportMode("statement");
     setMessage("Upload PDF, CSV, and screenshot files to import documents and transactions.");
     setValidationNotice(null);
   }, [accounts, backgroundOnly, defaultAccountId, items, launchInBackground, open]);
@@ -1613,32 +1611,44 @@ export function ImportFilesModal({
             seedImportedWorkspaceCaches(workspaceId, fallbackSummary);
             void onImported(fallbackSummary);
             updateItem(itemId, {
-              status: "done",
-              confirmationState: "confirmed",
-              progress: 100,
-              progressLabel: "Done",
+              status: "importing",
+              confirmationState: "pending",
+              progress: Math.max(
+                IMPORT_PROGRESS.loadingAccount,
+                Math.min(92, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
+              ),
+              progressLabel: "Loading account",
               targetAccountId: fallbackAccountId,
             });
             publishImportActivity({
               workspaceId,
               surface: importActivitySurfaceRef.current,
-              status: "done",
+              status: "active",
               fileName: summaryContext.fileName,
               fileIndex: items.findIndex((item) => item.id === itemId) + 1,
               fileTotal: items.length,
-              completedFiles: completedFileCount + 1,
-              progress: 100,
-              detail: "All set",
-              summary: fallbackSummary,
+              completedFiles: completedFileCount,
+              progress: Math.max(
+                IMPORT_PROGRESS.loadingAccount,
+                Math.min(92, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
+              ),
+              detail: getProgressDetail(
+                {
+                  accountName: fallbackSummary.accountName,
+                  institution: fallbackSummary.institution,
+                  accountNumber: fallbackSummary.accountNumber,
+                },
+                parsedRowsCount
+              ),
+              summary: null,
               errorMessage: null,
             });
-            return;
           }
           await sleep(600);
           continue;
         }
 
-        if (confirmedTransactionsCount > 0) {
+        if (confirmedTransactionsCount > 0 || (importFile?.status === "done" && Boolean(importFile?.accountId))) {
           updateItem(itemId, {
             status: "done",
             confirmationState: "confirmed",
@@ -2662,7 +2672,106 @@ export function ImportFilesModal({
             queued: Boolean(processPayload?.queued),
           },
           analyticsOnceKey("import_parsed_with_warnings", `file:${item.id}`)
-        );
+          );
+      }
+
+      const serverConfirmedAccountId =
+        typeof processPayload?.accountId === "string" && processPayload.accountId.trim()
+          ? processPayload.accountId.trim()
+          : null;
+      if (serverConfirmedAccountId) {
+        const confirmedRows = Number(processPayload?.confirmedTransactionsCount ?? processPayload?.imported ?? 0) || 0;
+        const confirmedAccountName = statementIdentity?.accountName ?? guessedIdentity?.accountName ?? item.file.name;
+        const confirmedInstitution = statementIdentity?.institution ?? guessedIdentity?.institution ?? null;
+        const confirmedAccountNumber = statementIdentity?.accountNumber ?? guessedIdentity?.accountNumber ?? null;
+        const confirmedAccountType =
+          statementIdentity?.accountType ??
+          statementAccountType ??
+          inferAccountTypeFromStatement(confirmedInstitution, confirmedAccountName, "bank");
+        const confirmedPreviewTransactions = await loadOptimisticPreviewTransactions(
+          importFileId,
+          serverConfirmedAccountId,
+          confirmedAccountName ?? "",
+          confirmedInstitution
+        ).catch(() => []);
+        const confirmedInsightSummary =
+          processPayload?.insightSummary ??
+          {
+            incomeTotal: 0,
+            expenseTotal: 0,
+            netTotal: 0,
+            topCategoryName: null,
+            topCategoryAmount: null,
+            topCategoryShare: null,
+            topMerchantName: null,
+            topMerchantCount: null,
+          };
+        const confirmedSummary = ({
+          fileName: item.file.name,
+          rowsImported: confirmedRows,
+          accountId: serverConfirmedAccountId,
+          accountName: confirmedAccountName ?? null,
+          institution: confirmedInstitution,
+          accountNumber: confirmedAccountNumber,
+          accountType: confirmedAccountType,
+          balance: typeof processPayload.accountBalance === "string" ? processPayload.accountBalance : null,
+          optimisticAccountId: item.optimisticAccountId ?? null,
+          previewTransactions: confirmedPreviewTransactions,
+          incomeTotal: Number(confirmedInsightSummary.incomeTotal ?? 0),
+          expenseTotal: Number(confirmedInsightSummary.expenseTotal ?? 0),
+          netTotal: Number(confirmedInsightSummary.netTotal ?? 0),
+          topCategoryName: confirmedInsightSummary.topCategoryName ?? null,
+          topCategoryAmount:
+            confirmedInsightSummary.topCategoryAmount === null
+              ? null
+              : Number(confirmedInsightSummary.topCategoryAmount),
+          topCategoryShare:
+            confirmedInsightSummary.topCategoryShare === null
+              ? null
+              : Number(confirmedInsightSummary.topCategoryShare),
+          topMerchantName: confirmedInsightSummary.topMerchantName ?? null,
+          topMerchantCount:
+            confirmedInsightSummary.topMerchantCount === null
+              ? null
+              : Number(confirmedInsightSummary.topMerchantCount),
+        } satisfies UploadInsightsSummary);
+
+        updateItem(itemId, {
+          status: "done",
+          confirmationState: "confirmed",
+          error: null,
+          importFileId,
+          targetAccountId: serverConfirmedAccountId,
+          importedRows: confirmedRows,
+          progress: 100,
+          progressLabel: "Done",
+        });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "done",
+          fileName: item.file.name,
+          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount + 1,
+          progress: 100,
+          detail: "All set",
+          summary: confirmedSummary,
+          errorMessage: null,
+        });
+
+        if (confirmedSummary) {
+          seedImportedWorkspaceCaches(workspaceId, confirmedSummary);
+          void onImported(confirmedSummary);
+        }
+
+        setMessage(`Imported ${item.file.name}.`);
+        router.refresh();
+        return {
+          status: "done",
+          importedRows: confirmedRows,
+          summary: confirmedSummary,
+        };
       }
 
       if (processPayload?.queued) {
@@ -3386,29 +3495,6 @@ export function ImportFilesModal({
             }
           }}
         >
-          <div className="accounts-import-document-family">
-            <label className="accounts-import-document-family__label">
-              <span>Document family</span>
-              <select value={selectedImportMode} onChange={(event) => setSelectedImportMode(normalizeImportImageMode(event.target.value))}>
-                {IMPORT_IMAGE_MODES.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <p>
-              {selectedImportMode === "statement"
-                ? "Use this for statement PDFs, CSVs, and statement screenshots."
-                : selectedImportMode === "receipt"
-                  ? "Use this for receipt photos, screenshots, and payment proofs."
-                  : selectedImportMode === "portfolio"
-                    ? "Use this for investment holdings and portfolio screenshots."
-                    : selectedImportMode === "account_detail"
-                      ? "Use this for account summary and balance detail screenshots."
-                      : "Use this for notes-app screenshots that contain transaction lists."}
-            </p>
-          </div>
           <input
             ref={fileInputRef}
             className="hidden-file-input"

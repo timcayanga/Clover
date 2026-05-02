@@ -3220,7 +3220,7 @@ function AccountsPageContent() {
       ) : null}
 
       <PageFileDropZone
-        enabled={!importOpen}
+        enabled={true}
         title="Drop statement files anywhere"
         onFilesDropped={(files) => openImportFiles(files, true)}
       />
