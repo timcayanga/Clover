@@ -6,6 +6,7 @@ export type ImportedAccountType = "bank" | "wallet" | "credit_card" | "cash" | "
 export type ParsedImportRow = {
   date?: string;
   amount?: string;
+  currency?: string | null;
   merchantRaw?: string;
   merchantClean?: string;
   description?: string;
@@ -23,6 +24,7 @@ export type DetectedStatementMetadata = {
   accountNumber: string | null;
   accountName: string | null;
   accountType: ImportedAccountType | null;
+  currency?: string | null;
   openingBalance: number | null;
   endingBalance: number | null;
   paymentDueDate?: string | null;
@@ -40,7 +42,6 @@ export type ImportParseContext = {
 
 const delimiterForFile = (fileType: string, fileName: string) => {
   const lower = `${fileType} ${fileName}`.toLowerCase();
-  if (lower.includes("tsv")) return "\t";
   return ",";
 };
 
@@ -49,7 +50,8 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   const compact = compactWhitespace(text).toLowerCase();
   if (/taxwithheld|withheldtax|tax withheld|withheld tax/.test(lower) || /taxwithheld|withheldtax/.test(compact)) return "Financial";
   if (/instapay\s*transfer\s*fee|instapaytransferfee/.test(lower) || /instapaytransferfee/.test(compact)) return "Transfers";
-  if (type === "income" || /salary|payroll|income|deposit|credit memo/.test(lower)) return "Income";
+  if (/cash\s*(?:withdrawal|out)|atm\b|automated\s+teller|cash\s+advance/.test(lower)) return "Cash & ATM";
+  if (type === "income" || /salary|payroll|income|deposit|cash\s+deposit|credit memo/.test(lower)) return "Income";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut/.test(lower)) return "Food & Dining";
   if (/auntie\s*annes|llaollao/.test(lower)) return "Food & Dining";
@@ -141,6 +143,108 @@ const splitLine = (line: string, delimiter: string) => {
 };
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+
+const normalizeCurrencyCode = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = normalizeWhitespace(value).toUpperCase();
+  const compact = normalized.replace(/[^A-Z0-9]/g, "");
+
+  if (!compact) {
+    return null;
+  }
+
+  const aliasMap: Record<string, string> = {
+    P: "PHP",
+    PHP: "PHP",
+    "PHILIPPINEPESO": "PHP",
+    "PHILIPPINEPESOS": "PHP",
+    "PESO": "PHP",
+    "PESOS": "PHP",
+    "U.S.DOLLAR": "USD",
+    "USDOLLAR": "USD",
+    USD: "USD",
+    "US$": "USD",
+    EURO: "EUR",
+    EUR: "EUR",
+    POUND: "GBP",
+    STERLING: "GBP",
+    GBP: "GBP",
+    BAHT: "THB",
+    THB: "THB",
+    SGD: "SGD",
+    JPY: "JPY",
+    YEN: "JPY",
+    HKD: "HKD",
+    AUD: "AUD",
+    CAD: "CAD",
+    NZD: "NZD",
+    CHF: "CHF",
+    KRW: "KRW",
+    CNY: "CNY",
+    RMB: "CNY",
+    TWD: "TWD",
+    MYR: "MYR",
+    IDR: "IDR",
+    INR: "INR",
+    BTC: "BTC",
+    ETH: "ETH",
+    USDT: "USDT",
+    USDC: "USDC",
+    SOL: "SOL",
+    XRP: "XRP",
+    ADA: "ADA",
+    BNB: "BNB",
+    DOGE: "DOGE",
+  };
+
+  return aliasMap[compact] ?? null;
+};
+
+const detectCurrencyFromText = (text: string) => {
+  const normalized = normalizeWhitespace(text);
+  const compact = normalized.replace(/\s+/g, " ").toUpperCase();
+
+  const patterns: Array<{ code: string; match: RegExp }> = [
+    { code: "PHP", match: /\b(PHP|PHILIPPINE\s+PESO)\b|₱/i },
+    { code: "USD", match: /\b(USD|U\.?\s*S\.?\s*DOLLAR|U\.?\s*S\.?|US\s*DOLLAR)\b|\$/i },
+    { code: "EUR", match: /\b(EUR|EURO)\b|€/i },
+    { code: "GBP", match: /\b(GBP|POUND|STERLING)\b|£/i },
+    { code: "SGD", match: /\bSGD\b/ },
+    { code: "JPY", match: /\bJPY\b|\bYEN\b|¥/i },
+    { code: "HKD", match: /\bHKD\b/ },
+    { code: "THB", match: /\b(THB|BAHT)\b/ },
+    { code: "AUD", match: /\bAUD\b/ },
+    { code: "CAD", match: /\bCAD\b/ },
+    { code: "NZD", match: /\bNZD\b/ },
+    { code: "CHF", match: /\bCHF\b/ },
+    { code: "KRW", match: /\bKRW\b/ },
+    { code: "CNY", match: /\b(CNY|RMB)\b/ },
+    { code: "TWD", match: /\bTWD\b/ },
+    { code: "MYR", match: /\bMYR\b/ },
+    { code: "IDR", match: /\bIDR\b/ },
+    { code: "INR", match: /\bINR\b/ },
+    { code: "BTC", match: /\bBTC\b|₿/i },
+    { code: "ETH", match: /\bETH\b/ },
+    { code: "USDT", match: /\bUSDT\b/ },
+    { code: "USDC", match: /\bUSDC\b/ },
+    { code: "SOL", match: /\bSOL\b/ },
+    { code: "XRP", match: /\bXRP\b/ },
+    { code: "ADA", match: /\bADA\b/ },
+    { code: "BNB", match: /\bBNB\b/ },
+    { code: "DOGE", match: /\bDOGE\b/ },
+  ];
+
+  for (const { code, match } of patterns) {
+    if (match.test(normalized) || match.test(compact)) {
+      return code;
+    }
+  }
+
+  return normalizeCurrencyCode(normalized);
+};
 
 const scoreMetadataConfidence = (metadata: Omit<DetectedStatementMetadata, "confidence">) => {
   let score = 0;
@@ -313,6 +417,11 @@ const detectBalanceFromText = (text: string) => {
   };
 };
 
+const withDetectedCurrency = (metadata: DetectedStatementMetadata, text: string): DetectedStatementMetadata => ({
+  ...metadata,
+  currency: metadata.currency ?? detectCurrencyFromText(text),
+});
+
 const parseBpiDate = (value?: string | null, yearHint?: number) => {
   if (!value) return null;
   const normalized = normalizeWhitespace(value);
@@ -415,7 +524,7 @@ const bpiCreditCardStatementMetadata = (text: string): DetectedStatementMetadata
   const accountNumber = detectAccountNumberFromText(normalized) ?? "9001";
 
   return {
-    institution: "BPI",
+    institution: "BPI Family Savings Bank",
     accountNumber,
     accountName: formatSimpleBankAccountName("BPI", accountNumber.slice(-4)),
     accountType: "credit_card",
@@ -686,8 +795,13 @@ const rcbcStatementMetadata = (text: string): DetectedStatementMetadata | null =
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
 
-  const accountNumber = detectAccountNumberFromText(normalized);
-  const accountName = formatSimpleBankAccountName("RCBC", accountNumber);
+  const accountLineIndex = lines.findIndex((line) => /CARDHOLDER|ACCOUNT\s+NUMBER|CARD\s+NUMBER/i.test(line));
+  const accountNumber =
+    extractFormattedAccountNumberFromLines(lines) ??
+    detectAccountNumberFromText(normalized);
+  const accountName =
+    extractAccountHolderNameFromLines(lines, accountLineIndex) ??
+    (accountNumber ? formatSimpleBankAccountName("RCBC", accountNumber) : "RCBC");
 
   const savingsPeriodMatch = normalized.match(
     /STATEMENT\s+PERIOD\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})\s+(?:TO|THRU|THROUGH)\s+(\d{1,2}\s+[A-Za-z]{3}\s+\d{4})/i
@@ -1298,6 +1412,7 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     .split(/\r?\n/)
     .map((line) => decompactOcrText(line))
     .filter(Boolean);
+  const accountLineIndex = lines.findIndex((line) => /ACCOUNT\s*(?:NBR|NO\.?|NUMBER|#)|ACCOUNT\s+SUMMARY/i.test(line));
   const headerLine =
     lines.find((line) => /PERIOD\s*COVERED/i.test(line)) ??
     lines.find((line) => /FORBES\s*PARK\s*SAVINGS/i.test(line)) ??
@@ -1345,7 +1460,9 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     (/^BE\d{8}$/i.test(accountSection) ? accountSection.toUpperCase() : null) ||
     accountSection.replace(/\D/g, "").slice(0, 16) ||
     null;
-  const accountName = accountNumber ? `BPI ${accountNumber.slice(-4)}` : "BPI";
+  const accountName =
+    extractAccountHolderNameFromLines(lines, accountLineIndex) ??
+    (accountNumber ? `BPI ${accountNumber.slice(-4)}` : "BPI");
 
   const periodMatch =
     compactWhitespace(normalized).match(/(?:ACCOUNTSUMMARYFORTHEPERIOD|PERIODCOVERED|FORTHEPERIOD)(?:.*?)([A-Z]{3}\d{1,2},?\d{4})[-–—]([A-Z]{3}\d{1,2},?\d{4})/i) ??
@@ -1751,7 +1868,7 @@ const parseBpiCreditCardSegment = (
 
 const guessRcbcCategoryName = (description: string, type: TransactionType) => {
   const lower = description.toLowerCase();
-  if (/^cash payment$/i.test(description) || /cash payment|payment to card|card payment/.test(lower)) return "Transfers";
+  if (/^cash payment$/i.test(description) || /cash payment|payment to card|card payment/.test(lower)) return "Financial";
   if (/transfer|instapay|pesonet/.test(lower)) return "Transfers";
   if (/the\s+sm\s+store|sm\s+fairview|sm\s+grand\s+caloocan/i.test(lower)) return "Shopping";
   if (/bayad\s+online/i.test(lower)) return "Bills & Utilities";
@@ -1932,6 +2049,428 @@ const normalizeBdoText = (text: string) =>
       return normalizeWhitespace(decompactOcrText(collapsed));
     })
     .join("\n");
+
+const extractAccountHolderNameFromLines = (lines: string[], accountLineIndex: number | null = null) => {
+  const isLikelyAccountHolderName = (value: string) => {
+    const normalized = normalizeWhitespace(value)
+      .replace(/\s*\([^)]*\)\s*$/, "")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+
+    if (!normalized || normalized.length < 3) {
+      return false;
+    }
+
+    if (/[0-9]/.test(normalized)) {
+      return false;
+    }
+
+    if (
+      /^(?:STATEMENT|ACCOUNT|CURRENCY|ADDRESS|BRGY|DATE|PAGE|CREDIT CARD ACCOUNT|PHILIPPINE NATIONAL BANK|BDO UNIBANK|METROBANK|TOTAL|BALANCE|CREDIT LIMIT|REMINDERS|TRANSACTION DETAILS|CONNECT WITH US|FOR INQUIRIES|REGULATED BY|DEPOSITS ARE INSURED|THIS IS TO CERTIFY|MONEY THAT YOU MUST|REQUESTED DATE|PRINTED BY|PESO ACCOUNT DETAILS|PAYMENT DUE|CLIENT NAME|CUSTOMER NAME|BANK NAME|ACCOUNT NUMBER|ACCOUNT NO\.?|CARD NUMBER|CARDHOLDER|PREFERRED NICKNAME)/i.test(
+      normalized
+      )
+    ) {
+      return false;
+    }
+
+    if (
+      /(?:BANK OF THE PHILIPPINE ISLANDS|BPI FAMILY SAVINGS BANK|UNIONBANK OF THE PHILIPPINES|METROBANK|METROPOLITAN BANK AND TRUST|RCBC|BDO UNIBANK|PHILIPPINE NATIONAL BANK|GCASH|MAYA|SAVINGS\s+ACCOUNT|CHECKING\s+ACCOUNT|DEPOSIT\s+ACCOUNT|EASY\s+SAVER|TIME\s+DEPOSIT|ACCOUNT\s+SUMMARY|STATEMENT\s+OF\s+ACCOUNT|TRANSACTION\s+HISTORY|AVAILABLE\s+BALANCE|CURRENT\s+BALANCE|ENDING\s+BALANCE|OPENING\s+BALANCE|CLOSING\s+BALANCE|PREFERRED\s+NICKNAME|CARD\s+NUMBER|CARDHOLDER|CLIENT\s+NAME|CUSTOMER\s+NAME)/i.test(
+        normalized
+      )
+    ) {
+      return false;
+    }
+
+    if (/PURCHASES\s+AND\s+ADVANCES|FOR\s+BEST\s+RESULTS|FOR\s+BILLING\s+CONCERNS|THANK\s+YOU\s+FOR\s+BANKING|PLEASE\s+KEEP\s+THIS\s+STATEMENT|THIS\s+IS\s+TO\s+CERTIFY/i.test(normalized)) {
+      return false;
+    }
+
+    const tokens = normalized.split(/\s+/);
+    if (tokens.length < 2 || tokens.length > 6) {
+      return false;
+    }
+
+    if (tokens.length >= 5 && tokens.every((token) => token === token.toUpperCase())) {
+      return false;
+    }
+
+    if (/\b(?:VILLAGE|CITY|PROVINCE|BARANGAY|BRGY|SUBDIVISION|MUNICIPALITY|STREET|ROAD|AVENUE|POBLACION|DISTRICT|PHILIPPINES|PHILIPPINE)\b/i.test(normalized) && tokens.length > 1) {
+      return false;
+    }
+
+    return tokens.every((token) => /^[A-Za-z][A-Za-z.'-]*$/.test(token));
+  };
+
+  const labeledPatterns = [
+    /(?:^|\b)ACCOUNT\s+HOLDER\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)ACCOUNT\s+NAME\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)CLIENT\s+NAME\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)CUSTOMER\s+NAME\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)CARDHOLDER\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)PREFERRED\s+NICKNAME\s*[:\-]?\s*(.+)/i,
+  ];
+
+  for (const line of lines) {
+    for (const pattern of labeledPatterns) {
+      const match = line.match(pattern);
+      if (!match?.[1]) {
+        continue;
+      }
+
+      const value = normalizeWhitespace(match[1])
+        .replace(/\s*\([^)]*\)\s*$/, "")
+        .replace(/\s+[0-9][0-9\s-]*$/, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+
+      if (value && isLikelyAccountHolderName(value)) {
+        return value;
+      }
+    }
+  }
+
+  const candidateLines =
+    accountLineIndex !== null && accountLineIndex > 0
+      ? lines.slice(Math.max(0, accountLineIndex - 8), Math.min(lines.length, accountLineIndex + 4))
+      : lines.slice(0, 16);
+
+  for (const line of candidateLines) {
+    const normalized = normalizeWhitespace(line).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s{2,}/g, " ").trim();
+    if (isLikelyAccountHolderName(normalized)) {
+      return normalized;
+    }
+  }
+
+  return null;
+};
+
+const extractFormattedAccountNumberFromLines = (lines: string[]) => {
+  const accountPatterns = [
+    /ACCOUNT\s+NUMBER\s*[:\-]?\s*([0-9][0-9\s-]{6,}?)(?=\s*(?:\(|$))/i,
+    /ACCOUNT\s+NO\.?\s*[:\-]?\s*([0-9][0-9\s-]{6,}?)(?=\s*(?:\(|$))/i,
+    /ACCOUNT\s+#\s*[:\-]?\s*([0-9][0-9\s-]{6,}?)(?=\s*(?:\(|$))/i,
+    /CARD\s+NUMBER\s*[:\-]?\s*([0-9][0-9\s-]{6,}?)(?=\s*(?:\(|$))/i,
+  ];
+
+  for (const line of lines) {
+    for (const pattern of accountPatterns) {
+      const match = line.match(pattern);
+      if (!match?.[1]) {
+        continue;
+      }
+
+      const raw = normalizeWhitespace(match[1]).replace(/\s+/g, "");
+      const digits = raw.replace(/\D/g, "");
+      if (digits.length >= 8) {
+        return raw;
+      }
+    }
+  }
+
+  return null;
+};
+
+const normalizeMetrobankHeaderLine = (value: string) => normalizeWhitespace(value.replace(/[\u0000-\u001f\u007f]/g, " "));
+
+const extractMetrobankStatementNameFromText = (text: string) => {
+  const compact = normalizeMetrobankHeaderLine(text);
+  const patterns = [
+    /(?:^|\b)ACCOUNT\s+NAME\s*[:\-]?\s*([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){1,5})(?=\s+ACCOUNT\s+NUMBER|\s+ADDRESS|\s+ACCOUNT\s+TYPE|\s+DATE\s+COVERED|\s+STATEMENT\s+DATE|$)/i,
+    /(?:^|\b)ACCOUNT\s+HOLDER\s*[:\-]?\s*([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){1,5})(?=\s+ACCOUNT\s+NUMBER|\s+ADDRESS|\s+ACCOUNT\s+TYPE|\s+DATE\s+COVERED|\s+STATEMENT\s+DATE|$)/i,
+    /(?:^|\b)CLIENT\s+NAME\s*[:\-]?\s*([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){1,5})(?=\s+ACCOUNT\s+NUMBER|\s+ADDRESS|\s+ACCOUNT\s+TYPE|\s+DATE\s+COVERED|\s+STATEMENT\s+DATE|$)/i,
+    /(?:^|\b)CUSTOMER\s+NAME\s*[:\-]?\s*([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){1,5})(?=\s+ACCOUNT\s+NUMBER|\s+ADDRESS|\s+ACCOUNT\s+TYPE|\s+DATE\s+COVERED|\s+STATEMENT\s+DATE|$)/i,
+    /(?:^|\b)CARDHOLDER\s*[:\-]?\s*([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){1,5})(?=\s+ACCOUNT\s+NUMBER|\s+ADDRESS|\s+ACCOUNT\s+TYPE|\s+DATE\s+COVERED|\s+STATEMENT\s+DATE|$)/i,
+    /ACCOUNT\s+NUMBER\s*[:\-]?\s*(?:\d[\d\s-]{12,})\s*(?:\(([^)]+)\)|([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){1,5}))\s*(?=STATEMENT\s+DATE|PAYMENT\s+DUE|TOTAL\s+AMOUNT\s+DUE|MINIMUM\s+AMOUNT\s+DUE|PREVIOUS\s+BALANCE|BALANCE\s+LAST\s+STATEMENT|BALANCE\s+THIS\s+STATEMENT|DATE\s+COVERED|$)/i,
+    /(?:^|\b)PAGE\s+([A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){1,5})\s+STATEMENT\s+DATE\b/i,
+    /(?:CREDIT\s+CARD\s+ACCOUNT|ACCOUNT\s+TYPE\s*:\s*(?:SAVINGS|RETAIL)|STATEMENT\s+OF\s+ACCOUNT|PESO\s+ACCOUNT\s+DETAILS)[\s\S]{0,250}?\b([A-Z][A-Z.'-]*(?:\s+[A-Z][A-Z.'-]*){1,5})\s+STATEMENT\s+DATE\b/i,
+    /(?:CREDIT\s+CARD\s+ACCOUNT|ACCOUNT\s+TYPE\s*:\s*(?:SAVINGS|RETAIL)|STATEMENT\s+OF\s+ACCOUNT|PESO\s+ACCOUNT\s+DETAILS)[\s\S]{0,250}?ACCOUNT\s+NUMBER[\s\S]{0,160}?\b([A-Z][A-Z.'-]*(?:\s+[A-Z][A-Z.'-]*){1,5})\s+STATEMENT\s+DATE\b/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = compact.match(pattern);
+    if (!match?.[1]) {
+      continue;
+    }
+
+    const value = normalizeWhitespace(match[1]).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s{2,}/g, " ").trim();
+    if (value && !/^(?:STATEMENT|ACCOUNT|CREDIT|METROBANK|METROPOLITAN)$/i.test(value)) {
+      return value;
+    }
+
+    const altValue = normalizeWhitespace(match[2] ?? "").replace(/\s*\([^)]*\)\s*$/, "").replace(/\s{2,}/g, " ").trim();
+    if (altValue && !/^(?:STATEMENT|ACCOUNT|CREDIT|METROBANK|METROPOLITAN)$/i.test(altValue)) {
+      return altValue;
+    }
+  }
+
+  return null;
+};
+
+const extractMetrobankCardAccountNumberFromText = (text: string) => {
+  const compact = normalizeMetrobankHeaderLine(text);
+  const patterns = [
+    /CREDIT\s+CARD\s+ACCOUNT\s+((?:\d{4}[-\s]){3}\d{4})\s+Account\s+Number/i,
+    /CREDIT\s+CARD\s+ACCOUNT\s+((?:\d{4}[-\s]){3}\d{4})\s+Regular/i,
+    /CREDIT\s+CARD\s+ACCOUNT\s+((?:\d{4}[-\s]){3}\d{4})\s+Statement\s+Date/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = compact.match(pattern);
+    if (match?.[1]) {
+      return normalizeWhitespace(match[1]).replace(/\s+/g, "");
+    }
+  }
+
+  const cardNumberMatch = compact.match(/\b((?:\d{4}[-\s]){3}\d{4})\b/);
+  return cardNumberMatch?.[1] ? cardNumberMatch[1].replace(/\s+/g, "") : null;
+};
+
+const extractMetrobankStatementName = (lines: string[], accountLineIndex: number | null = null) => {
+  const candidateLines = lines.slice(0, 20);
+  const debugMetrobank = process.env.CLOVER_DEBUG_METROBANK === "1";
+
+  if (debugMetrobank) {
+    console.log("[metrobank-name] candidates", candidateLines.slice(0, 12));
+  }
+
+  const labeledPatterns = [
+    /(?:^|\b)ACCOUNT\s+NAME\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)ACCOUNT\s+HOLDER\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)CLIENT\s+NAME\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)CUSTOMER\s+NAME\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)CARDHOLDER\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)PAGE\s+(.+?)\s+STATEMENT\s+DATE\b/i,
+  ];
+
+  const isLikelyName = (value: string) => {
+    const normalized = normalizeWhitespace(value).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s{2,}/g, " ").trim();
+    if (!normalized || normalized.length < 3 || /[0-9]/.test(normalized)) {
+      return false;
+    }
+
+    if (
+      /\b(ACCOUNT\s+NUMBER|ACCOUNT\s+TYPE|STATEMENT\s+DATE|PAYMENT\s+DUE|TOTAL\s+AMOUNT\s+DUE|MINIMUM\s+AMOUNT\s+DUE|PREVIOUS\s+BALANCE|BALANCE\s+LAST\s+STATEMENT|BALANCE\s+THIS\s+STATEMENT|VERY\s+TRULY|AUTO\s+LOAN|APPLICATION|SHALL\s+NOT\s+EARN\s+INTEREST|FOR\s+AUTO\s+LOAN|DEAR\s+SIR|DEAR\s+MADAM|THIS\s+IS\s+TO\s+CERTIFY|VERY\s+TRULY\s+YOURS)\b/i.test(
+        normalized
+      )
+    ) {
+      return false;
+    }
+
+    if (
+      /^(?:APRIL|MARCH|FEBRUARY|JANUARY|DECEMBER|NOVEMBER|OCTOBER|SEPTEMBER|AUGUST|JULY|JUNE|MAY)\b/i.test(normalized) ||
+      /^(?:METROBANK|METROPOLITAN\s+BANK|ACCOUNT|STATEMENT|CREDIT\s+CARD\s+ACCOUNT|ACCOUNT\s+NUMBER|ACCOUNT\s+TYPE|DATE\s+COVERED|PAYMENT\s+DUE|TOTAL\s+AMOUNT\s+DUE|MINIMUM\s+AMOUNT\s+DUE|PREVIOUS\s+BALANCE|BALANCE\s+LAST\s+STATEMENT|BALANCE\s+THIS\s+STATEMENT|TRANSACTION\s+DETAILS|REWARDS\s+POINTS\s+SUMMARY|REMINDERS|PESO\s+ACCOUNT\s+DETAILS|PAGE\s+\d+)/i.test(
+        normalized
+      )
+    ) {
+      return false;
+    }
+
+    const tokens = normalized.split(/\s+/);
+    if (tokens.length < 2 || tokens.length > 6) {
+      return false;
+    }
+
+    return tokens.every((token) => /^[A-Za-z][A-Za-z.'-]*$/.test(token));
+  };
+
+  for (const line of candidateLines) {
+    const normalized = normalizeMetrobankHeaderLine(line).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s{2,}/g, " ").trim();
+    for (const pattern of labeledPatterns) {
+      const match = normalized.match(pattern);
+      if (!match?.[1]) {
+        continue;
+      }
+
+      const value = normalizeWhitespace(match[1]).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s{2,}/g, " ").trim();
+      if (isLikelyName(value)) {
+        if (debugMetrobank) {
+          console.log("[metrobank-name] labeled", { line, value });
+        }
+        return value;
+      }
+    }
+  }
+
+  for (const line of candidateLines) {
+    const normalized = normalizeMetrobankHeaderLine(line).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s{2,}/g, " ").trim();
+    const parentheticalMatch = normalized.match(/ACCOUNT\s+NUMBER.*?\(([^)]+)\)/i);
+    if (parentheticalMatch?.[1]) {
+      const value = normalizeWhitespace(parentheticalMatch[1]).replace(/\s{2,}/g, " ").trim();
+      if (isLikelyName(value)) {
+        if (debugMetrobank) {
+          console.log("[metrobank-name] parenthetical", { line, value });
+        }
+        return value;
+      }
+    }
+  }
+
+  for (const line of candidateLines) {
+    const normalized = normalizeMetrobankHeaderLine(line).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s{2,}/g, " ").trim();
+    if (isLikelyName(normalized)) {
+      if (debugMetrobank) {
+        console.log("[metrobank-name] plain", { line, normalized });
+      }
+      return normalized;
+    }
+  }
+
+  if (debugMetrobank) {
+    console.log("[metrobank-name] none");
+  }
+
+  return null;
+};
+
+const extractMetrobankAccountHolderName = (lines: string[], accountLineIndex: number | null = null) => {
+  const nameBlockLines =
+    accountLineIndex !== null && accountLineIndex > 0
+      ? lines.slice(Math.max(0, accountLineIndex - 10), Math.min(lines.length, accountLineIndex + 3))
+      : lines.slice(0, 12);
+
+  const isLikelyMetrobankName = (value: string) => {
+    const normalized = normalizeWhitespace(value).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s{2,}/g, " ").trim();
+
+    if (!normalized || normalized.length < 3) {
+      return false;
+    }
+
+    if (/[0-9]/.test(normalized)) {
+      return false;
+    }
+
+    if (
+      /\b(ACCOUNT\s+NUMBER|ACCOUNT\s+TYPE|STATEMENT\s+DATE|PAYMENT\s+DUE|TOTAL\s+AMOUNT\s+DUE|MINIMUM\s+AMOUNT\s+DUE|PREVIOUS\s+BALANCE|BALANCE\s+LAST\s+STATEMENT|BALANCE\s+THIS\s+STATEMENT|VERY\s+TRULY|AUTO\s+LOAN|APPLICATION|SHALL\s+NOT\s+EARN\s+INTEREST|FOR\s+AUTO\s+LOAN|DEAR\s+SIR|DEAR\s+MADAM|THIS\s+IS\s+TO\s+CERTIFY|VERY\s+TRULY\s+YOURS)\b/i.test(
+        normalized
+      )
+    ) {
+      return false;
+    }
+
+    if (
+      /^(?:APRIL|MARCH|FEBRUARY|JANUARY|DECEMBER|NOVEMBER|OCTOBER|SEPTEMBER|AUGUST|JULY|JUNE|MAY)\b/i.test(normalized) ||
+      /^(?:METROBANK|METROPOLITAN\s+BANK|ACCOUNT|STATEMENT|CREDIT\s+CARD\s+ACCOUNT|ACCOUNT\s+NUMBER|ACCOUNT\s+TYPE|DATE\s+COVERED|PAYMENT\s+DUE|TOTAL\s+AMOUNT\s+DUE|MINIMUM\s+AMOUNT\s+DUE|PREVIOUS\s+BALANCE|BALANCE\s+LAST\s+STATEMENT|BALANCE\s+THIS\s+STATEMENT|TRANSACTION\s+DETAILS|REWARDS\s+POINTS\s+SUMMARY|REMINDERS|PESO\s+ACCOUNT\s+DETAILS|PAGE\s+\d+)/i.test(
+        normalized
+      )
+    ) {
+      return false;
+    }
+
+    if (/\b(?:UNIT|STREET|ROAD|AVENUE|VILLAGE|BARANGAY|BRGY|CITY|PROVINCE|PHILIPPINES|PHILIPPINE)\b/i.test(normalized)) {
+      return false;
+    }
+
+    const tokens = normalized.split(/\s+/);
+    if (tokens.length < 2 || tokens.length > 6) {
+      return false;
+    }
+
+    return tokens.every((token) => /^[A-Za-z][A-Za-z.'-]*$/.test(token));
+  };
+
+  const labeledNamePatterns = [
+    /(?:^|\b)ACCOUNT\s+NAME\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)ACCOUNT\s+HOLDER\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)CLIENT\s+NAME\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)CUSTOMER\s+NAME\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)CARDHOLDER\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)PAGE\s+(.+?)\s+STATEMENT\s+DATE\b/i,
+  ];
+
+  for (const line of nameBlockLines) {
+    const normalized = normalizeMetrobankHeaderLine(line).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s{2,}/g, " ").trim();
+    for (const pattern of labeledNamePatterns) {
+      const match = normalized.match(pattern);
+      if (!match?.[1]) {
+        continue;
+      }
+
+      const value = normalizeWhitespace(match[1]).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s{2,}/g, " ").trim();
+      if (isLikelyMetrobankName(value)) {
+        return value;
+      }
+    }
+  }
+
+  for (const line of nameBlockLines.slice(0, 3)) {
+    const normalized = normalizeMetrobankHeaderLine(line).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s{2,}/g, " ").trim();
+    if (isLikelyMetrobankName(normalized)) {
+      return normalized;
+    }
+  }
+
+  for (const line of nameBlockLines) {
+    const normalized = normalizeMetrobankHeaderLine(line).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s{2,}/g, " ").trim();
+    if (isLikelyMetrobankName(normalized)) {
+      return normalized;
+    }
+  }
+
+  return null;
+};
+
+const isMetrobankHumanName = (value: string | null | undefined) => {
+  if (!value) {
+    return false;
+  }
+
+  const normalized = normalizeWhitespace(value).replace(/\s*\([^)]*\)\s*$/, "").replace(/\s{2,}/g, " ").trim();
+  if (!normalized || normalized.length < 3 || /[0-9]/.test(normalized)) {
+    return false;
+  }
+
+  if (
+    /\b(ACCOUNT\s+NUMBER|ACCOUNT\s+TYPE|STATEMENT\s+DATE|PAYMENT\s+DUE|TOTAL\s+AMOUNT\s+DUE|MINIMUM\s+AMOUNT\s+DUE|PREVIOUS\s+BALANCE|BALANCE\s+LAST\s+STATEMENT|BALANCE\s+THIS\s+STATEMENT|VERY\s+TRULY|AUTO\s+LOAN|APPLICATION|SHALL\s+NOT\s+EARN\s+INTEREST|FOR\s+AUTO\s+LOAN|DEAR\s+SIR|DEAR\s+MADAM|THIS\s+IS\s+TO\s+CERTIFY|VERY\s+TRULY\s+YOURS)\b/i.test(
+      normalized
+    )
+  ) {
+    return false;
+  }
+
+  if (
+    /^(?:APRIL|MARCH|FEBRUARY|JANUARY|DECEMBER|NOVEMBER|OCTOBER|SEPTEMBER|AUGUST|JULY|JUNE|MAY)\b/i.test(normalized) ||
+    /^(?:METROBANK|METROPOLITAN\s+BANK|ACCOUNT|STATEMENT|CREDIT\s+CARD\s+ACCOUNT|ACCOUNT\s+NUMBER|ACCOUNT\s+TYPE|DATE\s+COVERED|PAYMENT\s+DUE|TOTAL\s+AMOUNT\s+DUE|MINIMUM\s+AMOUNT\s+DUE|PREVIOUS\s+BALANCE|BALANCE\s+LAST\s+STATEMENT|BALANCE\s+THIS\s+STATEMENT|TRANSACTION\s+DETAILS|REWARDS\s+POINTS\s+SUMMARY|REMINDERS|PESO\s+ACCOUNT\s+DETAILS|PAGE\s+\d+)/i.test(
+      normalized
+    )
+  ) {
+    return false;
+  }
+
+  if (/\b(?:UNIT|STREET|ROAD|AVENUE|VILLAGE|BARANGAY|BRGY|CITY|PROVINCE|PHILIPPINES|PHILIPPINE)\b/i.test(normalized)) {
+    return false;
+  }
+
+  const tokens = normalized.split(/\s+/);
+  if (tokens.length < 2 || tokens.length > 6) {
+    return false;
+  }
+
+  return tokens.every((token) => /^[A-Za-z][A-Za-z.'-]*$/.test(token));
+};
+
+const finalizeMetrobankAccountName = (metadata: DetectedStatementMetadata, lines: string[], accountLineIndex: number | null = null) => {
+  const existingName = normalizeWhitespace(metadata.accountName ?? "");
+  if (existingName && !/^Metrobank(?:\s+[\d-]+)?$/i.test(existingName)) {
+    return metadata;
+  }
+
+  const directLine =
+    lines.slice(1, 8).find((line) => isMetrobankHumanName(normalizeMetrobankHeaderLine(line))) ??
+    lines.slice(Math.max(0, accountLineIndex !== null ? accountLineIndex - 10 : 0), Math.min(lines.length, (accountLineIndex ?? 0) + 3)).find((line) =>
+      isMetrobankHumanName(normalizeMetrobankHeaderLine(line))
+    ) ??
+    extractAccountHolderNameFromLines(lines, accountLineIndex) ??
+    extractMetrobankAccountHolderName(lines, accountLineIndex);
+
+  if (!directLine) {
+    return metadata;
+  }
+
+  return {
+    ...metadata,
+    accountName: normalizeWhitespace(directLine).replace(/\s{2,}/g, " ").trim(),
+  };
+};
 
 const detectBdoAccountNumberFromText = (text: string) => {
   const normalized = normalizeBdoText(text);
@@ -2130,8 +2669,12 @@ const bdoStatementMetadata = (text: string): DetectedStatementMetadata | null =>
   }
 
   const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
-  const accountNumber = detectBdoAccountNumberFromText(normalized) ?? detectAccountNumberFromText(normalized);
-  const accountName = accountNumber ? formatSimpleBankAccountName("BDO", accountNumber) : "BDO";
+  const accountNumberLineIndex = lines.findIndex((line) => /ACCOUNT\s+(?:NBR|NO\.?|NUMBER|#)|ACCOUNT\s+SUMMARY/i.test(line));
+  const accountNumber =
+    extractFormattedAccountNumberFromLines(lines) ??
+    detectBdoAccountNumberFromText(normalized) ??
+    detectAccountNumberFromText(normalized);
+  const accountName = extractAccountHolderNameFromLines(lines, accountNumberLineIndex) ?? (accountNumber ? formatSimpleBankAccountName("BDO", accountNumber) : "BDO");
 
   const periodLine =
     lines.find((line) => /BAL\s+AS\s+OF/i.test(line)) ??
@@ -2193,7 +2736,7 @@ const bdoStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     currentBalance;
 
   return {
-    institution: "BDO",
+    institution: "BDO Unibank, Inc.",
     accountNumber,
     accountName,
     accountType: "bank",
@@ -2286,12 +2829,13 @@ const guessBdoCategoryName = (description: string, type: TransactionType) => {
   if (/salary|payroll/.test(lower)) return "Income";
   if (/service\s+charge|tax|withheld|fee|charge/.test(lower)) return "Financial";
   if (
-    /deposit|received|funds\s+deposited|cash\s+deposit|\bcd\b|interbank\s+deposit|bank\s+transfer|fund\s+transfer|withdrawal|atm|cash\s+withdrawal|cw\b|w\/d|wdrawal|pob\s+ibft/i.test(
+    /cash\s*deposit|fund\s+transfer\s+deposit|funds\s+deposited|received\s+a\/c|payroll|salary|interbank\s+deposit|bank\s+transfer/i.test(
       lower
     )
   ) {
-    return "Transfers";
+    return "Income";
   }
+  if (/withdrawal|atm|cash\s+withdrawal|cw\b|w\/d|wdrawal|pob\s+ibft/i.test(lower)) return "Cash & ATM";
   if (/merchant\s+payment|ma[_\s-]?pc/i.test(lower)) return "Shopping";
   return guessCategoryName(description, type);
 };
@@ -2461,6 +3005,35 @@ const parseBdoSavingsImportText = (text: string) => {
   };
 };
 
+const extractMetrobankCardAccountNumber = (lines: string[]) => {
+  const labeledSectionIndex = lines.findIndex((line) => /CREDIT\s+CARD\s+ACCOUNT/i.test(line));
+  const accountLabelIndex = lines.findIndex((line) => /ACCOUNT\s+NUMBER/i.test(line));
+  const searchStart = labeledSectionIndex >= 0 ? labeledSectionIndex + 1 : 0;
+  const searchEnd = accountLabelIndex > searchStart ? accountLabelIndex : Math.min(lines.length, 12);
+
+  for (let index = searchStart; index < searchEnd; index += 1) {
+    const candidate = normalizeWhitespace(lines[index]).trim();
+    if (/^(?:\d{4}[-\s]){3}\d{4}$/.test(candidate)) {
+      return candidate.replace(/\s+/g, "");
+    }
+  }
+
+  for (let index = 0; index < Math.min(lines.length, 12); index += 1) {
+    const candidate = normalizeWhitespace(lines[index]).trim();
+    if (!/^(?:\d{4}[-\s]){3}\d{4}$/.test(candidate)) {
+      continue;
+    }
+
+    if (accountLabelIndex >= 0 && index > accountLabelIndex) {
+      continue;
+    }
+
+    return candidate.replace(/\s+/g, "");
+  }
+
+  return null;
+};
+
 const metrobankSavingsStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
   const compact = normalized.replace(/\s+/g, " ");
@@ -2469,11 +3042,22 @@ const metrobankSavingsStatementMetadata = (text: string): DetectedStatementMetad
   }
 
   const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const topAccountHolderLine = lines.find((line, index) => index > 0 && index < 8 && isMetrobankHumanName(line)) ?? null;
   const accountLine = lines.find((line) => /ACCOUNT\s+NUMBER/i.test(line)) ?? normalized;
+  const accountLineIndex = lines.findIndex((line) => /ACCOUNT\s+NUMBER/i.test(line));
   const accountNumber =
-    accountLine.match(/ACCOUNT\s+NUMBER\s*[:\-]?\s*([0-9\s-]{8,})/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+    extractMetrobankCardAccountNumberFromText(normalized) ??
+    extractFormattedAccountNumberFromLines(lines) ??
+    accountLine.match(/ACCOUNT\s+NUMBER\s*[:\-]?\s*([0-9\s-]{8,})/i)?.[1]?.replace(/\s+/g, "") ??
     detectAccountNumberFromText(normalized);
-  const accountName = formatSimpleBankAccountName("Metrobank", accountNumber);
+  const accountName =
+    extractMetrobankStatementNameFromText(normalized) ??
+    extractMetrobankStatementName(lines, accountLineIndex) ??
+    topAccountHolderLine ??
+    (isMetrobankHumanName(lines[1]) ? normalizeWhitespace(lines[1]) : null) ??
+    extractMetrobankAccountHolderName(lines, accountLineIndex) ??
+    extractAccountHolderNameFromLines(lines, accountLineIndex) ??
+    (accountNumber ? formatSimpleBankAccountName("Metrobank", accountNumber) : "Metrobank");
 
   const dateCoveredLine = lines.find((line) => /DATE\s+COVERED/i.test(line)) ?? null;
   const periodMatch = dateCoveredLine?.match(/DATE\s+COVERED\s*:\s*([A-Za-z]+)\s+(\d{4})\s*-\s*([A-Za-z]+)\s+(\d{4})/i);
@@ -2505,17 +3089,21 @@ const metrobankSavingsStatementMetadata = (text: string): DetectedStatementMetad
     parseMoney(normalized.match(/BALANCE\s+THIS\s+STATEMENT\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(normalized.match(/ENDING\s+BALANCE\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
 
-  return {
-    institution: "Metrobank",
-    accountNumber,
-    accountName,
-    accountType: "bank",
-    openingBalance,
-    endingBalance,
-    startDate: startDate ? startDate.toISOString() : null,
-    endDate: endDate ? endDate.toISOString() : null,
-    confidence: accountNumber && endingBalance !== null ? 95 : 86,
-  };
+  return finalizeMetrobankAccountName(
+    {
+      institution: "Metrobank",
+      accountNumber,
+      accountName,
+      accountType: "bank",
+      openingBalance,
+      endingBalance,
+      startDate: startDate ? startDate.toISOString() : null,
+      endDate: endDate ? endDate.toISOString() : null,
+      confidence: accountNumber && endingBalance !== null ? 95 : 86,
+    },
+    lines,
+    accountLineIndex
+  );
 };
 
 const metrobankCertificateStatementMetadata = (text: string): DetectedStatementMetadata | null => {
@@ -2533,11 +3121,21 @@ const metrobankCertificateStatementMetadata = (text: string): DetectedStatementM
     lines.find((line) => /ACCOUNT\s+NUMBER/i.test(line)) ??
     lines.find((line) => /TOTAL\s+CURRENT\/SAVINGS/i.test(line)) ??
     normalized;
+  const accountLineIndex =
+    lines.findIndex((line) => /ACCOUNT\s+NUMBER/i.test(line)) >= 0
+      ? lines.findIndex((line) => /ACCOUNT\s+NUMBER/i.test(line))
+      : lines.findIndex((line) => /TOTAL\s+CURRENT\/SAVINGS/i.test(line));
   const accountNumber =
-    accountLine.match(/ACCOUNT\s+NUMBER\s*[:\-]?\s*([0-9\s-]{8,})/i)?.[1]?.replace(/\D/g, "").slice(0, 20) ??
-    accountLine.match(/TOTAL\s+CURRENT\/SAVINGS.*?([0-9][0-9,\s-]{7,})/i)?.[1]?.replace(/\D/g, "").slice(0, 20) ??
+    extractMetrobankCardAccountNumberFromText(normalized) ??
+    extractFormattedAccountNumberFromLines(lines) ??
+    accountLine.match(/ACCOUNT\s+NUMBER\s*[:\-]?\s*([0-9\s-]{8,})/i)?.[1]?.replace(/\s+/g, "") ??
+    accountLine.match(/TOTAL\s+CURRENT\/SAVINGS.*?([0-9][0-9,\s-]{7,})/i)?.[1]?.replace(/\s+/g, "") ??
     detectAccountNumberFromText(normalized);
-  const accountName = formatSimpleBankAccountName("Metrobank", accountNumber);
+  const accountName =
+    extractMetrobankStatementNameFromText(normalized) ??
+    extractMetrobankStatementName(lines, accountLineIndex) ??
+    extractAccountHolderNameFromLines(lines, accountLineIndex) ??
+    (accountNumber ? formatSimpleBankAccountName("Metrobank", accountNumber) : "Metrobank");
 
   const statementDates = lines
     .map((line, index) => {
@@ -2874,25 +3472,46 @@ const metrobankCreditCardStatementMetadata = (text: string): DetectedStatementMe
     .split(/\r?\n/)
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
+  const topAccountHolderLine = lines.find((line, index) => index > 0 && index < 8 && isMetrobankHumanName(line)) ?? null;
 
   const accountLine =
     lines.find((line) => /CREDIT\s+CARD\s+ACCOUNT\s+NUMBER/i.test(line)) ??
     lines.find((line) => /ACCOUNT\s+NUMBER/i.test(line)) ??
     normalized;
+  const accountLineIndex =
+    lines.findIndex((line) => /CREDIT\s+CARD\s+ACCOUNT\s+NUMBER/i.test(line)) >= 0
+      ? lines.findIndex((line) => /CREDIT\s+CARD\s+ACCOUNT\s+NUMBER/i.test(line))
+      : lines.findIndex((line) => /ACCOUNT\s+NUMBER/i.test(line));
+  const visibleCardNumber = extractMetrobankCardAccountNumber(lines);
   const cardAccountSuffix =
     accountLine.match(/(?:CREDIT\s+CARD\s+ACCOUNT\s+NUMBER|CARD\s+ACCOUNT\s+NUMBER)\s*[:\-]?\s*.*?(\d{4})\b/i)?.[1] ??
     null;
   const accountNumber =
+    extractMetrobankCardAccountNumberFromText(normalized) ??
+    visibleCardNumber ??
+    extractFormattedAccountNumberFromLines(lines) ??
     cardAccountSuffix ??
-    accountLine.match(/(?:CREDIT\s+CARD\s+ACCOUNT\s+NUMBER|ACCOUNT\s+NUMBER)\s*[:\-]?\s*([0-9\s-]{8,})/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+    accountLine.match(/(?:CREDIT\s+CARD\s+ACCOUNT\s+NUMBER|ACCOUNT\s+NUMBER)\s*[:\-]?\s*([0-9\s-]{8,})/i)?.[1]?.replace(/\s+/g, "") ??
     detectAccountNumberFromText(normalized);
-  const accountName = formatSimpleBankAccountName("Metrobank", accountNumber);
+  const accountName =
+    extractMetrobankStatementNameFromText(normalized) ??
+    extractMetrobankStatementName(lines, accountLineIndex) ??
+    topAccountHolderLine ??
+    (isMetrobankHumanName(lines[1]) ? normalizeWhitespace(lines[1]) : null) ??
+    extractMetrobankAccountHolderName(lines, accountLineIndex) ??
+    extractAccountHolderNameFromLines(lines, accountLineIndex) ??
+    (accountNumber ? formatSimpleBankAccountName("Metrobank", accountNumber) : "Metrobank");
 
   const paymentDueDate =
     parseDateValue(normalized.match(/PAYMENT\s+DUE\s+DATE\s*:\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i)?.[1] ?? null) ??
     parseDateValue(normalized.match(/PAYMENT\s+DUE\s+DATE\s*:\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})/i)?.[1] ?? null) ??
     parseDateValue(normalized.match(/PAYMENT\s+DUE\s+DATE\s*[:\-]?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i)?.[1] ?? null) ??
     parseDateValue(normalized.match(/PAYMENT\s+DUE\s+DATE\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})/i)?.[1] ?? null);
+  const statementDate =
+    parseDateValue(normalized.match(/STATEMENT\s+DATE\s+PAYMENT\s+DUE\s+DATE[\s\S]{0,220}?\b(\d{1,2}\s+[A-Za-z]+\s+\d{4}|[A-Za-z]+\s+\d{1,2},?\s+\d{4})\b/i)?.[1] ?? null) ??
+    parseDateValue(normalized.match(/STATEMENT\s+DATE\s+PAYMENT\s+DUE\s+DATE[\s\S]{0,260}?\b(\d{1,2}\s+[A-Za-z]+\s+\d{4}|[A-Za-z]+\s+\d{1,2},?\s+\d{4})\b/i)?.[1] ?? null) ??
+    parseDateValue(normalized.match(/STATEMENT\s+DATE\s*[:\-]?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i)?.[1] ?? null) ??
+    parseDateValue(normalized.match(/STATEMENT\s+DATE\s*[:\-]?\s*(\d{1,2}\s+[A-Za-z]+\s+\d{4})/i)?.[1] ?? null);
   const totalAmountDue =
     parseMoney(normalized.match(/TOTAL\s+AMOUNT\s+DUE\s*:\s*(?:PHP\s*)?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(normalized.match(/TOTAL\s+AMOUNT\s+DUE\s*[:\-]?\s*(?:PHP\s*)?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
@@ -2901,19 +3520,23 @@ const metrobankCreditCardStatementMetadata = (text: string): DetectedStatementMe
     parseMoney(normalized.match(/PREVIOUS\s+BALANCE\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(normalized.match(/PREVIOUS\s+STATEMENT\s+BALANCE.*?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
 
-  return {
-    institution: "Metrobank",
-    accountNumber,
-    accountName,
-    accountType: "credit_card",
-    openingBalance: previousBalance,
-    endingBalance: totalAmountDue,
-    paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
-    totalAmountDue,
-    startDate: paymentDueDate ? new Date(Date.UTC(paymentDueDate.getUTCFullYear() - 1, paymentDueDate.getUTCMonth(), 1, 12)).toISOString() : null,
-    endDate: paymentDueDate ? paymentDueDate.toISOString() : null,
-    confidence: accountNumber && paymentDueDate && totalAmountDue !== null ? 95 : 86,
-  };
+  return finalizeMetrobankAccountName(
+    {
+      institution: "Metrobank",
+      accountNumber,
+      accountName,
+      accountType: "credit_card",
+      openingBalance: previousBalance,
+      endingBalance: totalAmountDue,
+      paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
+      totalAmountDue,
+      startDate: null,
+      endDate: statementDate ? statementDate.toISOString() : null,
+      confidence: accountNumber && paymentDueDate && totalAmountDue !== null ? 95 : 86,
+    },
+    lines,
+    accountLineIndex
+  );
 };
 
 const guessMetrobankCreditCategoryName = (description: string, type: TransactionType) => {
@@ -2950,6 +3573,10 @@ const parseMetrobankCreditCardTransactionLine = (
   const description = normalizeWhitespace(match[3]);
   const amount = parseMoney(match[4]);
   if (amount === null || !description) {
+    return null;
+  }
+
+  if (/^finance\s+charges?$/i.test(description)) {
     return null;
   }
 
@@ -3056,10 +3683,14 @@ const pnbStatementMetadata = (text: string): DetectedStatementMetadata | null =>
 
   const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
   const accountLine = lines.find((line) => /ACCOUNT\s+NUMBER/i.test(line)) ?? normalized;
+  const accountLineIndex = lines.findIndex((line) => /ACCOUNT\s+NUMBER/i.test(line));
   const accountNumber =
-    accountLine.match(/ACCOUNT\s+NUMBER\s*[:\-]?\s*([0-9\s-]{6,})/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+    extractFormattedAccountNumberFromLines(lines) ??
+    accountLine.match(/ACCOUNT\s+NUMBER\s*[:\-]?\s*([0-9\s-]{6,})/i)?.[1]?.replace(/\s+/g, "") ??
     detectAccountNumberFromText(normalized);
-  const accountName = formatSimpleBankAccountName("PNB", accountNumber);
+  const accountName =
+    extractAccountHolderNameFromLines(lines, accountLineIndex) ??
+    (accountNumber ? formatSimpleBankAccountName("PNB", accountNumber) : "PNB");
 
   const periodLine = lines.find((line) => /STATEMENT\s+PERIOD/i.test(line) || /PERIOD\s+COVERED/i.test(line)) ?? null;
   const periodMatch =
@@ -3070,14 +3701,20 @@ const pnbStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     periodLine?.match(/(\d{1,2}\/\d{1,2}\/\d{4}).*?(\d{1,2}\/\d{1,2}\/\d{4})/i);
   const startDate = periodMatch ? parseDateValue(periodMatch[1]) : null;
   const endDate = periodMatch ? parseDateValue(periodMatch[2]) : null;
+  const startingBalance =
+    parseMoney(compact.match(/(?:STARTING|BEGINNING)\s+BALANCE[^0-9]*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(compact.match(/(?:STARTING|BEGINNING)\s+BALANCE\s+PHP\s+([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+  const endingBalance =
+    parseMoney(compact.match(/(?:ENDING|CLOSING)\s+BALANCE\s*[:\-]?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(compact.match(/BALANCE\s+PHP\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
 
   return {
-    institution: "PNB",
+    institution: "Philippine National Bank",
     accountNumber,
     accountName,
     accountType: "bank",
-    openingBalance: null,
-    endingBalance: null,
+    openingBalance: startingBalance,
+    endingBalance,
     startDate: startDate ? startDate.toISOString() : null,
     endDate: endDate ? endDate.toISOString() : null,
     confidence: accountNumber && startDate && endDate ? 94 : accountNumber ? 86 : 72,
@@ -3130,7 +3767,8 @@ const guessPnbSavingsCategoryName = (description: string, type: TransactionType,
   if (/interest|salary|payroll|remittance|deposit|cash\s*deposit|check\s*dep|check\s*deposit|check[_\s-]?batch|ccd/.test(lower)) {
     return "Income";
   }
-  if (/transfer|atm|withdrawal|w\/d|sweep|gcash\s*top-?up/.test(lower)) return "Transfers";
+  if (/atm|cash\s*withdrawal|withdrawal|w\/d/.test(lower)) return "Cash & ATM";
+  if (/transfer|sweep|gcash\s*top-?up/.test(lower)) return "Transfers";
   if (balanceDelta !== null) {
     if (balanceDelta > 0) return "Income";
     if (balanceDelta < 0) return "Transfers";
@@ -4351,6 +4989,8 @@ const guessBpiCategoryName = (description: string, type: TransactionType) => {
   }
   if (/service charge|bank charge/.test(lower)) return "Financial";
   if (/fee/.test(lower)) return "Financial";
+  if (/cash\s*deposit|deposit|credit memo|remittance|payroll|salary|received|income/.test(lower)) return "Income";
+  if (/withdrawal|atm\b|cash\s*withdrawal|cash\s*out/.test(lower)) return "Cash & ATM";
   if (/bills payment|utility|bill|payment/.test(lower)) return "Bills & Utilities";
   if (/interest earned|interest/.test(lower)) return "Income";
   return guessCategoryName(description, type);
@@ -4367,7 +5007,10 @@ const parseBpiTransactionLine = (
     statementStartDate: string | null;
   }
 ) => {
-  const normalized = normalizeWhitespace(line);
+  const normalized = normalizeWhitespace(stripBpiFooterBoilerplate(line));
+  if (!normalized || isBpiBoilerplateLine(normalized)) {
+    return null;
+  }
   const compact = compactWhitespace(normalized);
   const match =
     compact.match(new RegExp(`^(${monthNamePattern}\\d{1,2}(?:,\\d{4})?|\\d{1,2}${monthNamePattern}(?:,\\d{4})?)(.+)$`, "i")) ??
@@ -4438,14 +5081,20 @@ const parseBpiTransactionLine = (
     state.previousBalance = currentBalance;
   }
 
-  const description = body
+  const description = stripBpiFooterBoilerplate(
+    body
     .replace(/[0-9][0-9,]*\.\d{2}/g, "")
     .replace(/\s{2,}/g, " ")
-    .trim();
+    .trim()
+  );
   const classificationText = compactWhitespace(description).toLowerCase();
 
-  const isOpeningBalance = /^BEGINNING BALANCE$/i.test(description);
+  const isOpeningBalance = /^BEGINNING\s+BALANCE\b/i.test(description);
   if (isOpeningBalance) {
+    return null;
+  }
+
+  if (!description || isBpiBoilerplateLine(description)) {
     return null;
   }
 
@@ -4484,6 +5133,42 @@ const parseBpiTransactionLine = (
   } satisfies ParsedImportRow;
 };
 
+const BPI_FOOTER_BOILERPLATE_PATTERN =
+  /regulated\s+by\s+(?:bangko\s+sentral\s+ng\s+pilipinas|bsp)|consumer\s*affairs@bsp\.gov\.ph|consumeraffairs@bsp\.gov\.ph|tel\.?\s*no\.?\s*:\s*\(?0?2\)?\s*8[\s-]*708/i;
+
+const stripBpiFooterBoilerplate = (value: string) => {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return normalized;
+  }
+
+  return normalized
+    .replace(/\s*regulated\s+by\s+(?:bangko\s+sentral\s+ng\s+pilipinas|bsp).*$/i, "")
+    .replace(/\s*consumer\s*affairs@bsp\.gov\.ph.*$/i, "")
+    .replace(/\s*consumeraffairs@bsp\.gov\.ph.*$/i, "")
+    .trim();
+};
+
+const isBpiBoilerplateLine = (value: string) => {
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) {
+    return true;
+  }
+
+  const compact = compactWhitespace(normalized);
+  return (
+    BPI_FOOTER_BOILERPLATE_PATTERN.test(normalized) ||
+    /member:\s*pdic/i.test(normalized) ||
+    /deposits\s+are\s+insured/i.test(normalized) ||
+    /^balance\s+this\s+statement\b/i.test(normalized) ||
+    /^total\s+debit\b/i.test(normalized) ||
+    /^total\s+credit\b/i.test(normalized) ||
+    /^ending\s+balance\b/i.test(normalized) ||
+    /^beginning\s+balance\b/i.test(normalized) ||
+    /REGULATEDBYBANGKOSENTRALNGPILIPINAS/i.test(compact)
+  );
+};
+
 const parseBpiImportText = (text: string) => {
   const normalizedText = normalizeBpiText(text);
   const metadata = bpiStatementMetadata(normalizedText);
@@ -4509,23 +5194,30 @@ const parseBpiImportText = (text: string) => {
   let pendingStandaloneBalance: string | null = null;
 
   for (const line of rawTransactionLines) {
-    if (/^[0-9][0-9,]*\.\d{2}$/.test(line)) {
+    const cleanedLine = stripBpiFooterBoilerplate(line);
+
+    if (!cleanedLine || isBpiBoilerplateLine(cleanedLine)) {
+      pendingStandaloneBalance = null;
+      continue;
+    }
+
+    if (/^[0-9][0-9,]*\.\d{2}$/.test(cleanedLine)) {
       pendingStandaloneBalance = line;
       continue;
     }
 
     const hasDatePrefix =
       new RegExp(`^(${monthNamePattern}\\s*\\d{1,2}|\\d{1,2}${monthNamePattern}|\\d{1,2}\\/\\d{1,2}(?:\\/\\d{2,4})?)`, "i").test(
-        compactWhitespace(line)
+        compactWhitespace(cleanedLine)
       );
-    const moneyMatches = line.match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
+    const moneyMatches = cleanedLine.match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
     if (pendingStandaloneBalance && hasDatePrefix && moneyMatches.length === 1) {
-      transactionLines.push(`${line} ${pendingStandaloneBalance}`);
+      transactionLines.push(`${cleanedLine} ${pendingStandaloneBalance}`);
       pendingStandaloneBalance = null;
       continue;
     }
 
-    transactionLines.push(line);
+    transactionLines.push(cleanedLine);
   }
 
   const startDate = metadata.startDate ? new Date(metadata.startDate) : null;
@@ -4560,7 +5252,12 @@ const parseBpiImportText = (text: string) => {
   if (
     openingBalance !== null &&
     startDate &&
-    !rows.some((row) => row.categoryName === "Opening Balance" && row.merchantRaw === "Beginning balance")
+    !rows.some(
+      (row) =>
+        row.categoryName === "Opening Balance" ||
+        /^Beginning balance$/i.test(String(row.merchantRaw ?? "")) ||
+        /^Beginning balance$/i.test(String(row.merchantClean ?? ""))
+    )
   ) {
     rows.unshift({
       date: startDate.toISOString().slice(0, 10),
@@ -4631,8 +5328,16 @@ const unionbankStatementMetadata = (text: string): DetectedStatementMetadata | n
 
   const accountLineIndex = lines.findIndex((line) => /^ACCOUNT NUMBER\b/i.test(line));
   const accountLine = accountLineIndex >= 0 ? lines[accountLineIndex] : normalized;
-  const accountNumber = accountLine.match(/\b(?:ACCOUNT NUMBER|ACCOUNT NO\.?|ACCOUNT #)\b.*?(\d[\d\s-]{6,}\d)\b/i)?.[1]?.replace(/\D/g, "").slice(0, 16) || detectAccountNumberFromText(normalized);
-  const accountName = formatSimpleBankAccountName("UnionBank", accountNumber);
+  const accountNumberFromAccountLine = accountLine.match(
+    /\b(?:ACCOUNT NUMBER|ACCOUNT NO\.?|ACCOUNT #)\b.*?(\d[\d\s-]{6,}\d)\b/i,
+  )?.[1];
+  const accountNumber =
+    extractFormattedAccountNumberFromLines(lines) ??
+    (accountNumberFromAccountLine ? accountNumberFromAccountLine.replace(/\D/g, "").slice(0, 16) : null) ??
+    detectAccountNumberFromText(normalized);
+  const accountName =
+    extractAccountHolderNameFromLines(lines, accountLineIndex) ??
+    (accountNumber ? formatSimpleBankAccountName("UnionBank", accountNumber) : "UnionBank");
 
   const statementDateLine = lines.find((line) => /TRANSACTION HISTORY AS OF/i.test(line)) ?? "";
   const statementDateMatch = statementDateLine.match(/TRANSACTION HISTORY AS OF\s+(.+)$/i);
@@ -4640,7 +5345,7 @@ const unionbankStatementMetadata = (text: string): DetectedStatementMetadata | n
   const accountType = /credit\s*card|visa|mastercard|amex|platinum/i.test(normalized) ? "credit_card" : "bank";
 
   return {
-    institution: "UnionBank",
+    institution: "UnionBank of the Philippines",
     accountNumber,
     accountName,
     accountType,
@@ -5873,92 +6578,92 @@ const parseMayaSavingsImportText = (text: string, context: ImportParseContext = 
 export const detectStatementMetadata = (text: string): DetectedStatementMetadata | null => {
   const gcashMetadata = gcashStatementMetadata(text);
   if (gcashMetadata) {
-    return gcashMetadata;
+    return withDetectedCurrency(gcashMetadata, text);
   }
 
   const aubCardMetadata = parseAubCardImportText(text);
   if (aubCardMetadata) {
-    return aubCardMetadata.metadata;
+    return withDetectedCurrency(aubCardMetadata.metadata, text);
   }
 
   const aubSavingsMetadata = parseAubSavingsImportText(text);
   if (aubSavingsMetadata) {
-    return aubSavingsMetadata.metadata;
-  }
-
-  const metrobankCertificateMetadata = metrobankCertificateStatementMetadata(text);
-  if (metrobankCertificateMetadata) {
-    return metrobankCertificateMetadata;
-  }
-
-  const metrobankSavingsMetadata = parseMetrobankSavingsImportText(text);
-  if (metrobankSavingsMetadata) {
-    return metrobankSavingsMetadata.metadata;
+    return withDetectedCurrency(aubSavingsMetadata.metadata, text);
   }
 
   const metrobankMetadata = parseMetrobankCreditCardImportText(text);
   if (metrobankMetadata) {
-    return metrobankMetadata.metadata;
+    return withDetectedCurrency(metrobankMetadata.metadata, text);
   }
 
-  const securityBankMetadata = securityBankStatementMetadata(text);
-  if (securityBankMetadata) {
-    return securityBankMetadata;
+  const metrobankCertificateMetadata = metrobankCertificateStatementMetadata(text);
+  if (metrobankCertificateMetadata) {
+    return withDetectedCurrency(metrobankCertificateMetadata, text);
   }
 
-  const rcbcMetadata = rcbcStatementMetadata(text);
-  if (rcbcMetadata) {
-    return rcbcMetadata;
+  const metrobankSavingsMetadata = parseMetrobankSavingsImportText(text);
+  if (metrobankSavingsMetadata) {
+    return withDetectedCurrency(metrobankSavingsMetadata.metadata, text);
   }
 
   const unionbankMetadata = unionbankStatementMetadata(text);
   if (unionbankMetadata) {
-    return unionbankMetadata;
+    return withDetectedCurrency(unionbankMetadata, text);
+  }
+
+  const securityBankMetadata = securityBankStatementMetadata(text);
+  if (securityBankMetadata) {
+    return withDetectedCurrency(securityBankMetadata, text);
+  }
+
+  const rcbcMetadata = rcbcStatementMetadata(text);
+  if (rcbcMetadata) {
+    return withDetectedCurrency(rcbcMetadata, text);
   }
 
   const mayaCreditMetadata = parseMayaCreditStatementMetadata(text);
   if (mayaCreditMetadata) {
-    return mayaCreditMetadata;
+    return withDetectedCurrency(mayaCreditMetadata, text);
   }
 
   const mayaSavingsMetadata = parseMayaSavingsStatementMetadata(text);
   if (mayaSavingsMetadata) {
-    return mayaSavingsMetadata;
+    return withDetectedCurrency(mayaSavingsMetadata, text);
   }
 
   const pnbParsed = parsePnbImportText(text);
   if (pnbParsed) {
-    return pnbParsed.metadata;
+    return withDetectedCurrency(pnbParsed.metadata, text);
   }
 
   const bpiCreditMetadata = bpiCreditCardStatementMetadata(text);
   if (bpiCreditMetadata) {
-    return bpiCreditMetadata;
+    return withDetectedCurrency(bpiCreditMetadata, text);
   }
 
   const bpiMetadata = bpiStatementMetadata(text);
   if (bpiMetadata) {
-    return bpiMetadata;
+    return withDetectedCurrency(bpiMetadata, text);
   }
 
   const cimbMetadata = parseCimbImportText(text);
   if (cimbMetadata) {
-    return cimbMetadata.metadata;
+    return withDetectedCurrency(cimbMetadata.metadata, text);
   }
 
   const gotymeMetadata = parseGoTymeImportText(text);
   if (gotymeMetadata) {
-    return gotymeMetadata.metadata;
+    return withDetectedCurrency(gotymeMetadata.metadata, text);
   }
 
   const bdoParsed = parseBdoSavingsImportText(text);
   if (bdoParsed) {
-    return bdoParsed.metadata;
+    return withDetectedCurrency(bdoParsed.metadata, text);
   }
 
   const genericMetadata = parseGenericStatementMetadata(text);
   if (genericMetadata) {
-    return genericMetadata;
+    return withDetectedCurrency(genericMetadata, text);
   }
 
   const normalized = text.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -5983,6 +6688,7 @@ export const detectStatementMetadata = (text: string): DetectedStatementMetadata
     accountNumber,
     accountName,
     accountType: inferAccountTypeFromStatement(institution, accountName, "bank"),
+    currency: detectCurrencyFromText(normalized),
     openingBalance,
     endingBalance,
     startDate: startDate ? startDate.toISOString() : null,
