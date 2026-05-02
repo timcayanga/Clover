@@ -14,7 +14,7 @@ import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { deriveReconciledBalance } from "@/lib/account-balance";
-import { getAccountPath } from "@/lib/account-path";
+import { getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
@@ -235,6 +235,16 @@ type StatementCheckpoint = {
   } | null;
 };
 
+type InvestmentInstitutionCard = {
+  kind: "investment_institution";
+  id: string;
+  institution: string;
+  currency: string;
+  balance: string;
+  updatedAt: string;
+  accounts: Account[];
+};
+
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", {
     day: "2-digit",
@@ -260,6 +270,39 @@ const formatAggregateAmount = (value: number, accounts: Array<{ currency: string
   }
 
   return "Mixed currencies";
+};
+
+const getInvestmentInstitutionName = (account: Account) =>
+  account.institution?.trim() || account.name.trim() || "Investment institution";
+
+const buildInvestmentInstitutionCards = (accounts: Account[]) => {
+  const groups = new Map<string, InvestmentInstitutionCard>();
+
+  for (const account of accounts) {
+    const institution = getInvestmentInstitutionName(account);
+    const currency = formatCurrencyCode(account.currency);
+    const key = `${institution.toLowerCase()}::${currency}`;
+    const current = groups.get(key);
+    const nextBalance = (parseAmount(current?.balance) ?? 0) + Math.abs(parseAmount(account.balance));
+    const nextUpdatedAt =
+      current && new Date(current.updatedAt).getTime() > new Date(account.updatedAt).getTime()
+        ? current.updatedAt
+        : account.updatedAt;
+
+    groups.set(key, {
+      kind: "investment_institution",
+      id: key,
+      institution,
+      currency,
+      balance: nextBalance.toFixed(2),
+      updatedAt: nextUpdatedAt,
+      accounts: current ? [...current.accounts, account] : [account],
+    });
+  }
+
+  return Array.from(groups.values()).sort(
+    (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()
+  );
 };
 
 const normalizeAccountBalance = (type: Account["type"], value: number) =>
@@ -688,6 +731,7 @@ function AccountsPageContent() {
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
+  const [selectedCurrency, setSelectedCurrency] = useState("PHP");
   const [accounts, setAccounts] = useState<Account[]>(
     () => (initialCachedWorkspace?.accounts as Account[]) ?? []
   );
@@ -1251,15 +1295,6 @@ function AccountsPageContent() {
     };
   }, []);
 
-  const duplicateCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const account of reconciledAccounts) {
-      const key = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return counts;
-  }, [reconciledAccounts]);
-
   const latestCheckpoints = useMemo(() => {
     const checkpointsByAccountId = new Map<string, StatementCheckpoint>();
     const checkpointsByAccountKey = new Map<string, StatementCheckpoint>();
@@ -1309,14 +1344,51 @@ function AccountsPageContent() {
     [latestCheckpoint]
   );
 
-  const visibleAccounts = useMemo(() => {
-    return [...reconciledAccounts].sort((left, right) => {
-      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-    });
+  const availableCurrencies = useMemo(() => {
+    const currencySet = new Set(
+      reconciledAccounts
+        .map((account) => formatCurrencyCode(account.currency))
+        .filter(Boolean)
+    );
+
+    if (currencySet.size === 0) {
+      currencySet.add("PHP");
+    }
+
+    return Array.from(currencySet).sort((left, right) => left.localeCompare(right));
   }, [reconciledAccounts]);
 
+  useEffect(() => {
+    if (availableCurrencies.includes(selectedCurrency)) {
+      return;
+    }
+
+    setSelectedCurrency(availableCurrencies[0] ?? "PHP");
+  }, [availableCurrencies, selectedCurrency]);
+
+  const currencyFilteredAccounts = useMemo(
+    () =>
+      reconciledAccounts.filter((account) => formatCurrencyCode(account.currency) === selectedCurrency),
+    [reconciledAccounts, selectedCurrency]
+  );
+
+  const duplicateCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const account of currencyFilteredAccounts) {
+      const key = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return counts;
+  }, [currencyFilteredAccounts]);
+
+  const visibleAccounts = useMemo(() => {
+    return [...currencyFilteredAccounts].sort((left, right) => {
+      return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+    });
+  }, [currencyFilteredAccounts]);
+
   const totals = useMemo(() => {
-    return reconciledAccounts.reduce(
+    return currencyFilteredAccounts.reduce(
       (accumulator, account) => {
         const signedValue = normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(account.balance));
         if (signedValue >= 0) {
@@ -1329,11 +1401,11 @@ function AccountsPageContent() {
       },
       { assets: 0, liabilities: 0, netWorth: 0 }
     );
-  }, [reconciledAccounts]);
+  }, [currencyFilteredAccounts]);
 
   const spendableAmount = useMemo(
-    () => reconciledAccounts.reduce((sum, account) => sum + getSpendableBalance(account), 0),
-    [reconciledAccounts]
+    () => currencyFilteredAccounts.reduce((sum, account) => sum + getSpendableBalance(account), 0),
+    [currencyFilteredAccounts]
   );
 
   const accountGroups = useMemo(() => {
@@ -1341,6 +1413,7 @@ function AccountsPageContent() {
       {
         title: "Banks & savings",
         tone: "assets",
+        itemLabel: "account",
         rows: visibleAccounts.filter((account) => {
           const effectiveType = getEffectiveAccountType(account);
           return effectiveType === "bank";
@@ -1349,26 +1422,33 @@ function AccountsPageContent() {
       {
         title: "Wallets",
         tone: "assets",
+        itemLabel: "account",
         rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "wallet"),
       },
       {
         title: "Investments",
         tone: "assets",
-        rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "investment"),
+        itemLabel: "institution",
+        rows: buildInvestmentInstitutionCards(
+          visibleAccounts.filter((account) => getEffectiveAccountType(account) === "investment")
+        ),
       },
       {
         title: "Liabilities",
         tone: "liability",
+        itemLabel: "account",
         rows: visibleAccounts.filter((account) => isLiabilityAccountType(getEffectiveAccountType(account))),
       },
       {
         title: "Tracked assets",
         tone: "neutral",
+        itemLabel: "account",
         rows: visibleAccounts.filter((account) => isTrackedAssetAccountType(getEffectiveAccountType(account))),
       },
       {
         title: "Cash",
         tone: "cash",
+        itemLabel: "account",
         rows: visibleAccounts.filter((account) => getEffectiveAccountType(account) === "cash"),
       },
     ];
@@ -1377,7 +1457,12 @@ function AccountsPageContent() {
       .map((group) => ({
         ...group,
         total: group.rows.reduce(
-          (sum, account) => sum + normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(account.balance)),
+          (sum, row) =>
+            sum +
+            normalizeAccountBalance(
+              row.kind === "investment_institution" ? "investment" : getEffectiveAccountType(row),
+              parseAmount(row.balance)
+            ),
           0
         ),
       }))
@@ -1716,6 +1801,16 @@ function AccountsPageContent() {
 
     setManualType("bank");
     setManualInstitution("");
+  };
+
+  const openInvestmentInstitution = (institutionCard: InvestmentInstitutionCard) => {
+    closeChrome();
+    window.location.assign(
+      getInvestmentInstitutionPath({
+        institution: institutionCard.institution,
+        currency: institutionCard.currency,
+      })
+    );
   };
 
   const openAccountDrawer = (account: Account) => {
@@ -2088,6 +2183,16 @@ function AccountsPageContent() {
       title="Accounts"
       actions={
         <>
+          <label className="accounts-currency-filter" aria-label="Select currency">
+            <span>Currency</span>
+            <select value={selectedCurrency} onChange={(event) => setSelectedCurrency(event.target.value)}>
+              {availableCurrencies.map((currency) => (
+                <option key={currency} value={currency}>
+                  {currency}
+                </option>
+              ))}
+            </select>
+          </label>
           <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
             <ActionIcon name="plus" />
             <span>Add account</span>
@@ -2156,7 +2261,8 @@ function AccountsPageContent() {
                       <div>
                         <h5>{group.title}</h5>
                         <p>
-                          {group.rows.length} account{group.rows.length === 1 ? "" : "s"} ·{" "}
+                          {group.rows.length} {group.itemLabel}
+                          {group.rows.length === 1 ? "" : "s"} ·{" "}
                           {formatAggregateAmount(group.total, group.rows)}
                         </p>
                       </div>
@@ -2164,6 +2270,69 @@ function AccountsPageContent() {
 
                     <div className="accounts-card-grid" aria-label={`${group.title} accounts`}>
                       {group.rows.map((account) => {
+                          if ("kind" in account && account.kind === "investment_institution") {
+                            const accountBrand = getAccountBrand({
+                              institution: account.institution,
+                              name: account.institution,
+                              type: "investment",
+                            });
+                            return (
+                              <article
+                                key={account.id}
+                                className="accounts-account-card glass"
+                                style={{
+                                  ["--brand-accent" as string]: accountBrand.accent,
+                                  ["--brand-soft" as string]: accountBrand.background,
+                                }}
+                              >
+                                <button
+                                  className="accounts-account-card__link-overlay"
+                                  type="button"
+                                  onClick={() => openInvestmentInstitution(account)}
+                                  aria-label={`Open ${account.institution} investment institution`}
+                                />
+
+                                <div className="accounts-account-card__content">
+                                  <div className="accounts-account-card__head">
+                                    <div className="accounts-account-card__brand">
+                                      <AccountBrandMark accountBrand={accountBrand} label={account.institution} />
+                                      <div>
+                                        <strong>{account.institution}</strong>
+                                        <span>
+                                          {account.accounts.length} asset{account.accounts.length === 1 ? "" : "s"}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="accounts-account-card__actions">
+                                      <button
+                                        className="button button-secondary button-small accounts-row-button"
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          openInvestmentInstitution(account);
+                                        }}
+                                        aria-label={`Open ${account.institution} institution details`}
+                                      >
+                                        <span aria-hidden="true">&gt;</span>
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  <div className="accounts-account-card__body">
+                                    <div className="accounts-account-card__balance-row">
+                                      <div className="accounts-account-card__amount is-asset">
+                                        {formatAccountAmount(Math.abs(parseAmount(account.balance)), account.currency)}
+                                      </div>
+                                      <div className="accounts-account-card__balance-meta">
+                                        <span className="accounts-account-card__balance-pill is-neutral">Tracked</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </article>
+                            );
+                          }
+
                           const value = parseAmount(account.balance);
                           const isLiability = isLiabilityAccountType(getEffectiveAccountType(account));
                           const isSpendable = isSpendableAccountType(getEffectiveAccountType(account));
@@ -2201,11 +2370,11 @@ function AccountsPageContent() {
                               />
 
                               <div className="accounts-account-card__content">
-                                <div className="accounts-account-card__head">
-                                  <div className="accounts-account-card__brand">
-                                    <AccountBrandMark accountBrand={accountBrand} label={account.name} />
-                                    <div>
-                                      <strong>{account.name}</strong>
+                                  <div className="accounts-account-card__head">
+                                    <div className="accounts-account-card__brand">
+                                      <AccountBrandMark accountBrand={accountBrand} label={account.name} />
+                                      <div>
+                                        <strong>{account.name}</strong>
                                       <span>
                                         {accountBrand.label}
                                         {account.institution && account.institution !== accountBrand.label ? ` · ${account.institution}` : ""}
@@ -2272,27 +2441,42 @@ function AccountsPageContent() {
                     </article>
                 ))
               ) : (
-                <EmptyDataCta
-                  className="empty-state--illustrated"
-                  eyebrow="No accounts yet"
-                  title="No accounts to show right now."
-                  copy="Try a different sort, or add another account to keep building your picture."
-                  illustration="/illustrations/clover-empty-dashboard-3d.png"
-                  illustrationAlt="A 3D Clover dashboard illustration"
-                  importHref="/dashboard?import=1"
-                  accountHref="/accounts"
-                  transactionHref="/transactions?manual=1"
-                  actions={
-                    <>
+                accounts.length > 0 ? (
+                  <div className="empty-state accounts-empty-state">
+                    <strong>No accounts in {selectedCurrency} yet.</strong>
+                    <p>Pick another currency or add/import an account in {selectedCurrency} to keep this view focused.</p>
+                    <div className="accounts-empty-state__actions">
                       <button className="button button-primary button-small" type="button" onClick={openAddAccount}>
                         Add account
                       </button>
                       <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
                         Import files
                       </button>
-                    </>
-                  }
-                />
+                    </div>
+                  </div>
+                ) : (
+                  <EmptyDataCta
+                    className="empty-state--illustrated"
+                    eyebrow="No accounts yet"
+                    title="No accounts to show right now."
+                    copy="Try a different sort, or add another account to keep building your picture."
+                    illustration="/illustrations/clover-empty-dashboard-3d.png"
+                    illustrationAlt="A 3D Clover dashboard illustration"
+                    importHref="/dashboard?import=1"
+                    accountHref="/accounts"
+                    transactionHref="/transactions?manual=1"
+                    actions={
+                      <>
+                        <button className="button button-primary button-small" type="button" onClick={openAddAccount}>
+                          Add account
+                        </button>
+                        <button className="button button-secondary button-small" type="button" onClick={() => openImportFiles()}>
+                          Import files
+                        </button>
+                      </>
+                    }
+                  />
+                )
               )}
             </div>
           </div>

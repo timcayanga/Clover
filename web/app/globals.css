@@ -12784,6 +12784,35 @@ input.transaction-inline-edit--amount::placeholder {
   box-shadow: none;
 }
 
+.accounts-currency-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 10px 0 12px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #f5f7f9;
+  color: var(--text);
+}
+
+.accounts-currency-filter span {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.accounts-currency-filter select {
+  min-height: 28px;
+  border: 0;
+  background: transparent;
+  padding: 0 18px 0 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  outline: none;
+}
+
 .accounts-toolbar-button .button-icon {
   margin-right: 0;
   color: var(--text);
@@ -13112,6 +13141,181 @@ input.transaction-inline-edit--amount::placeholder {
   margin: auto;
   object-fit: contain;
   object-position: center;
+}
+
+.institution-detail-page {
+  display: grid;
+  gap: 14px;
+}
+
+.institution-detail-hero,
+.institution-detail-panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-soft);
+}
+
+.institution-detail-hero::before,
+.institution-detail-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: var(--institution-accent, rgba(3, 168, 192, 0.8));
+}
+
+.institution-detail-hero {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 252, 0.9)),
+    var(--institution-accent-soft, rgba(255, 255, 255, 0.9));
+}
+
+.institution-detail-hero__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.institution-detail-hero__brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.institution-detail-hero__brand h1 {
+  margin: 4px 0 2px;
+  font-size: 1.8rem;
+  letter-spacing: -0.04em;
+}
+
+.institution-detail-hero__brand span {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.institution-detail-hero__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.institution-detail-metric {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.institution-detail-metric span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.institution-detail-metric strong {
+  font-size: 1.18rem;
+  letter-spacing: -0.03em;
+}
+
+.institution-detail-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.institution-detail-panel--danger {
+  border-color: rgba(198, 79, 110, 0.18);
+}
+
+.institution-detail-panel--danger::before {
+  background: rgba(198, 79, 110, 0.85);
+}
+
+.institution-detail-panel__head h2 {
+  margin: 4px 0 0;
+  font-size: 1.1rem;
+  letter-spacing: -0.03em;
+}
+
+.institution-detail-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.institution-detail-form .settings-field {
+  flex: 1 1 auto;
+}
+
+.institution-detail-empty,
+.institution-detail-delete-copy {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.institution-assets-table-wrap {
+  overflow-x: auto;
+}
+
+.institution-assets-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+.institution-assets-table th,
+.institution-assets-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.institution-assets-table th {
+  color: var(--muted);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.institution-assets-table td {
+  font-size: 0.92rem;
+}
+
+.institution-assets-table__actions {
+  white-space: nowrap;
+}
+
+.institution-assets-table__actions .button + .button {
+  margin-left: 8px;
+}
+
+.institution-asset-editor {
+  display: grid;
+  gap: 14px;
+}
+
+.institution-asset-editor__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.institution-asset-editor__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .accounts-detail__headline {
@@ -18176,10 +18380,43 @@ input.transaction-inline-edit--amount::placeholder {
     display: none;
   }
 
+  .accounts-currency-filter {
+    min-height: 36px;
+    padding-inline: 10px;
+  }
+
+  .accounts-currency-filter span {
+    display: none;
+  }
+
   .accounts-toolbar-add,
   .accounts-toolbar-button {
     min-height: 36px;
     padding-inline: 12px;
+  }
+
+  .institution-detail-hero,
+  .institution-detail-panel {
+    border-radius: 20px;
+  }
+
+  .institution-detail-hero {
+    padding: 18px;
+  }
+
+  .institution-detail-hero__head,
+  .institution-detail-form {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .institution-detail-hero__metrics,
+  .institution-asset-editor__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .institution-assets-table {
+    min-width: 640px;
   }
 
   .accounts-detail__transaction-header,
