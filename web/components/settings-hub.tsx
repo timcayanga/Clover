@@ -405,10 +405,6 @@ export function SettingsHub({
               <div>
                 <h4>Display</h4>
               </div>
-              <div className="settings-profile-summary">
-                <span className="settings-profile-summary__label">Current mode</span>
-                <strong>{themeMode === "system" ? "System preferences" : themeMode === "light" ? "Light" : "Dark"}</strong>
-              </div>
             </div>
 
             <div className="settings-choice-grid">
@@ -423,6 +419,7 @@ export function SettingsHub({
                       checked={isSelected}
                       onChange={() => setThemeMode(option.value)}
                     />
+                    {isSelected ? <span className="settings-choice-card__selected">Selected</span> : null}
                     <strong>{option.label}</strong>
                     <span>{option.helper}</span>
                   </label>

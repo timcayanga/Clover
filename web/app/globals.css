@@ -24383,6 +24383,25 @@ input.transaction-inline-edit--amount::placeholder {
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
 }
 
+.settings-choice-card__selected {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(3, 168, 192, 0.18);
+  background: rgba(3, 168, 192, 0.14);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .settings-choice-card input {
   position: absolute;
   opacity: 0;
@@ -24402,9 +24421,17 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .settings-choice-card.is-selected {
-  border-color: rgba(3, 168, 192, 0.16);
-  background: rgba(3, 168, 192, 0.09);
-  box-shadow: 0 10px 22px rgba(3, 168, 192, 0.08);
+  border-color: rgba(3, 168, 192, 0.48);
+  background:
+    linear-gradient(180deg, rgba(3, 168, 192, 0.18), rgba(255, 255, 255, 0.96)),
+    rgba(247, 249, 250, 0.82);
+  box-shadow:
+    0 14px 28px rgba(3, 168, 192, 0.12),
+    0 0 0 1px rgba(3, 168, 192, 0.08) inset;
+}
+
+.settings-choice-card.is-selected strong {
+  color: var(--text);
 }
 
 .settings-action-card {
