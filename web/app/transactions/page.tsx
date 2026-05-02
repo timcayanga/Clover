@@ -3276,7 +3276,6 @@ function TransactionsPageContent() {
         accountName: transaction.accountName,
         categoryId: transaction.categoryId,
         categoryName: transaction.categoryName,
-        currency: transaction.currency,
       };
 
       if (field === "accountId") {
@@ -3292,10 +3291,6 @@ function TransactionsPageContent() {
           categories.find((category) => category.id === value)?.name ?? (value ? transaction.categoryName : null);
         rollbackPatch.accountId = transaction.accountId;
         rollbackPatch.accountName = transaction.accountName;
-      }
-
-      if (field === "currency") {
-        nextPatch.currency = value.trim().toUpperCase();
       }
 
       applyTransactionPatchLocally(transaction.id, nextPatch);
@@ -3405,7 +3400,14 @@ function TransactionsPageContent() {
     const accountNames = new Map(accounts.map((account) => [account.id, account.name] as const));
     const categoryNames = new Map(categories.map((category) => [category.id, category.name] as const));
 
-    const payloads = selected.map((transaction) => ({
+    const payloads: Array<{
+      transaction: Transaction;
+      payload: {
+        accountId?: string;
+        categoryId?: string;
+        type?: "income" | "expense";
+      };
+    }> = selected.map((transaction) => ({
       transaction,
       payload: {
         accountId: bulkEditForm.accountId || undefined,

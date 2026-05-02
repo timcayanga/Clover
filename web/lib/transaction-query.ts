@@ -1,6 +1,8 @@
 import { Prisma } from "@prisma/client";
 
 export type DateFilterMode = "ltd" | "day" | "week" | "month" | "quarter" | "year" | "custom";
+export type TransactionSortField = "date" | "name" | "account" | "category" | "amount";
+export type TransactionSortDirection = "asc" | "desc";
 
 export type TransactionQueryFilters = {
   query?: string;
@@ -12,6 +14,10 @@ export type TransactionQueryFilters = {
   dateFilterAnchor?: string;
   customStart?: string;
   customEnd?: string;
+  sortField?: TransactionSortField;
+  sortDirection?: TransactionSortDirection;
+  amountMin?: string;
+  amountMax?: string;
 };
 
 export type TransactionQueryPagination = {
@@ -123,6 +129,10 @@ export const parseTransactionQueryFilters = (searchParams: Pick<URLSearchParams,
   const dateFilterAnchor = searchParams.get("dateFilterAnchor") ?? "";
   const customStart = searchParams.get("customStart") ?? "";
   const customEnd = searchParams.get("customEnd") ?? "";
+  const sortField = (searchParams.get("sortField") ?? "date") as TransactionSortField;
+  const sortDirection = (searchParams.get("sortDirection") ?? "desc") as TransactionSortDirection;
+  const amountMin = searchParams.get("amountMin") ?? "";
+  const amountMax = searchParams.get("amountMax") ?? "";
 
   return {
     query,
@@ -134,6 +144,10 @@ export const parseTransactionQueryFilters = (searchParams: Pick<URLSearchParams,
     dateFilterAnchor,
     customStart,
     customEnd,
+    sortField,
+    sortDirection,
+    amountMin,
+    amountMax,
   } satisfies TransactionQueryFilters;
 };
 
@@ -168,6 +182,22 @@ export const buildTransactionQuerySearchParams = (
 
   if (filters.customEnd?.trim()) {
     params.set("customEnd", filters.customEnd.trim());
+  }
+
+  if (filters.sortField && filters.sortField !== "date") {
+    params.set("sortField", filters.sortField);
+  }
+
+  if (filters.sortDirection && filters.sortDirection !== "desc") {
+    params.set("sortDirection", filters.sortDirection);
+  }
+
+  if (filters.amountMin?.trim()) {
+    params.set("amountMin", filters.amountMin.trim());
+  }
+
+  if (filters.amountMax?.trim()) {
+    params.set("amountMax", filters.amountMax.trim());
   }
 
   if (pagination.page && pagination.page > 1) {
@@ -258,5 +288,50 @@ export const buildTransactionQueryWhere = (workspaceId: string, filters: Transac
     where.date = dateRange;
   }
 
+  const amountMinValue = filters.amountMin?.trim() ?? "";
+  const amountMaxValue = filters.amountMax?.trim() ?? "";
+  const amountMin = amountMinValue ? Number(amountMinValue) : null;
+  const amountMax = amountMaxValue ? Number(amountMaxValue) : null;
+  const hasMin = amountMin !== null && Number.isFinite(amountMin);
+  const hasMax = amountMax !== null && Number.isFinite(amountMax);
+  if (hasMin || hasMax) {
+    where.amount = {
+      ...(hasMin ? { gte: new Prisma.Decimal(amountMin) } : {}),
+      ...(hasMax ? { lte: new Prisma.Decimal(amountMax) } : {}),
+    } as Prisma.DecimalFilter;
+  }
+
   return where;
+};
+
+export const buildTransactionQueryOrderBy = (
+  filters: TransactionQueryFilters
+): Prisma.TransactionOrderByWithRelationInput[] => {
+  const direction = filters.sortDirection ?? "desc";
+  switch (filters.sortField ?? "date") {
+    case "name":
+      return [
+        { merchantClean: direction },
+        { merchantRaw: direction },
+        { date: "desc" },
+      ];
+    case "account":
+      return [
+        { account: { name: direction } },
+        { date: "desc" },
+      ];
+    case "category":
+      return [
+        { category: { name: direction } },
+        { date: "desc" },
+      ];
+    case "amount":
+      return [
+        { amount: direction },
+        { date: "desc" },
+      ];
+    case "date":
+    default:
+      return [{ date: direction }, { createdAt: direction }];
+  }
 };

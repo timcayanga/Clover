@@ -11,6 +11,7 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import {
   buildTransactionQueryWhere,
+  buildTransactionQueryOrderBy,
   parseTransactionQueryFilters,
   type TransactionQueryFilters,
 } from "@/lib/transaction-query";
@@ -69,7 +70,6 @@ type TransactionSummaryRow = {
   currency: string;
   description: string | null;
   category: { name: string } | null;
-  categoryName: string | null;
   account: { name: string } | null;
   createdAt: Date;
   isTransfer: boolean;
@@ -96,7 +96,7 @@ const getTransactionWarningReason = (transaction: TransactionSummaryRow, duplica
     return "Ignored from totals";
   }
 
-  const categoryName = transaction.category?.name ?? transaction.categoryName ?? null;
+  const categoryName = transaction.category?.name ?? null;
   if (!transaction.categoryId && !(categoryName ?? "").trim()) {
     return "Needs category review";
   }
@@ -188,6 +188,7 @@ export async function GET(request: Request) {
 
     const filters: TransactionQueryFilters = parseTransactionQueryFilters(searchParams);
     const where = buildTransactionQueryWhere(workspaceId, filters);
+    const orderBy = buildTransactionQueryOrderBy(filters);
     const pageSizeParam = searchParams.get("pageSize");
     const includeAll = pageSizeParam === "all";
     const summaryMode = searchParams.get("summaryMode") === "light" ? "light" : "full";
@@ -239,7 +240,6 @@ export async function GET(request: Request) {
             transferConfidence: true,
             currency: true,
             description: true,
-            categoryName: true,
             category: {
               select: {
                 name: true,
@@ -254,7 +254,7 @@ export async function GET(request: Request) {
             isTransfer: true,
             isExcluded: true,
           },
-          orderBy: { date: "desc" },
+          orderBy,
           skip: pageStart,
           take: includeAll ? totalCount : requestedPageSize ?? 25,
         }),
@@ -273,7 +273,7 @@ export async function GET(request: Request) {
             merchantRaw: true,
             merchantClean: true,
           },
-          orderBy: { date: "desc" },
+          orderBy,
           take: 250,
         }),
       ]);
@@ -310,7 +310,7 @@ export async function GET(request: Request) {
           merchantRaw: transaction.merchantRaw,
           merchantClean: transaction.merchantClean,
           description: transaction.description,
-          categoryName: transaction.categoryName,
+          categoryName: transaction.category?.name ?? null,
           isTransfer: transaction.isTransfer,
           isExcluded: transaction.isExcluded,
           createdAt: transaction.createdAt,
@@ -358,7 +358,6 @@ export async function GET(request: Request) {
         transferConfidence: true,
         currency: true,
         description: true,
-        categoryName: true,
         category: {
           select: {
             name: true,
@@ -373,7 +372,7 @@ export async function GET(request: Request) {
         isTransfer: true,
         isExcluded: true,
       },
-      orderBy: { date: "desc" },
+      orderBy,
     });
 
     const duplicateCounts = new Map<string, number>();
@@ -405,7 +404,7 @@ export async function GET(request: Request) {
     summaryRows.forEach((transaction, index) => {
       const warningReason = getTransactionWarningReason(transaction, duplicateCounts);
       const amount = Math.abs(Number(transaction.amount));
-      const categoryName = transaction.category?.name ?? transaction.categoryName ?? "Other";
+      const categoryName = transaction.category?.name ?? "Other";
       const accountName = transaction.account?.name ?? "";
       const mappedTransaction = mapTransactionRow({
         id: transaction.id,
@@ -427,7 +426,7 @@ export async function GET(request: Request) {
         merchantRaw: transaction.merchantRaw,
         merchantClean: transaction.merchantClean,
         description: transaction.description,
-        categoryName: transaction.categoryName,
+        categoryName: transaction.category?.name ?? null,
         isTransfer: transaction.isTransfer,
         isExcluded: transaction.isExcluded,
         createdAt: transaction.createdAt,
