@@ -2964,25 +2964,16 @@ function AccountsPageContent() {
                       <span className="accounts-add-brand-inline" aria-label="Account logo preview">
                         <AccountBrandMark accountBrand={manualAccountBrand} label={manualName || manualInstitution || "Account"} />
                       </span>
-                    <InstitutionAutocomplete
-                      label="Name"
-                      value={manualName}
-                      onChange={setManualName}
-                      onSelectSuggestion={applyManualNameSuggestion}
-                      placeholder={manualType === "investment" ? "Example: FMETF" : "Example: BDO"}
-                      variant="account"
-                    />
+                      <InstitutionAutocomplete
+                        label="Name"
+                        value={manualName}
+                        onChange={setManualName}
+                        onSelectSuggestion={applyManualNameSuggestion}
+                        placeholder={manualType === "investment" ? "Example: FMETF" : "Example: BDO"}
+                        variant="account"
+                      />
                     </div>
                     <div className="accounts-add-fields__row accounts-add-fields__row--amount">
-                      <label className="accounts-add-fields__balance">
-                        Amount
-                        <input
-                          value={manualBalance}
-                          onChange={(event) => setManualBalance(event.target.value)}
-                          inputMode="decimal"
-                          placeholder="0.00"
-                        />
-                      </label>
                       <label className="accounts-add-fields__currency">
                         <span className="sr-only">Currency</span>
                         <div className="accounts-form-currency-field accounts-form-currency-field--inline">
@@ -3000,7 +2991,25 @@ function AccountsPageContent() {
                           />
                         </div>
                       </label>
+                      <label className="accounts-add-fields__balance">
+                        Amount
+                        <input
+                          value={manualBalance}
+                          onChange={(event) => setManualBalance(event.target.value)}
+                          inputMode="decimal"
+                          placeholder="0.00"
+                        />
+                      </label>
                     </div>
+                    <button
+                      className="accounts-add-more-link"
+                      type="button"
+                      onClick={() => setManualMoreOpen((current) => !current)}
+                      aria-expanded={manualMoreOpen}
+                    >
+                      <span>More</span>
+                      <span aria-hidden="true">▾</span>
+                    </button>
                     {manualMoreOpen ? (
                       <div className="accounts-add-advanced">
                         <div className="accounts-add-fields__row">
@@ -3182,15 +3191,6 @@ function AccountsPageContent() {
                   </>
                 ) : null}
                 <div className="accounts-add-actions">
-                  <button
-                    className="accounts-add-more-link"
-                    type="button"
-                    onClick={() => setManualMoreOpen((current) => !current)}
-                    aria-expanded={manualMoreOpen}
-                  >
-                    <span>More</span>
-                    <span aria-hidden="true">{manualMoreOpen ? "▾" : "▸"}</span>
-                  </button>
                   <div className="accounts-add-actions__buttons">
                     <button className="button button-secondary" type="button" onClick={() => void createAnotherManualAccount()} disabled={isSaving}>
                       {isSaving ? "Saving..." : "Add another"}

@@ -15279,6 +15279,7 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-add-fields {
   display: grid;
   gap: 12px;
+  width: 100%;
 }
 
 .accounts-add-fields__name-row {
@@ -15286,6 +15287,7 @@ input.transaction-inline-edit--amount::placeholder {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: end;
   gap: 12px;
+  width: 100%;
 }
 
 .accounts-add-fields__name {
@@ -15300,10 +15302,11 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
+  width: 100%;
 }
 
 .accounts-add-fields__row--amount {
-  grid-template-columns: minmax(0, 1fr) 104px;
+  grid-template-columns: 104px minmax(0, 1fr);
   align-items: end;
 }
 
@@ -15313,6 +15316,10 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-add-fields__balance input {
+  min-width: 0;
+}
+
+.accounts-add-fields__currency {
   min-width: 0;
 }
 
@@ -15329,6 +15336,7 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   gap: 12px;
   padding-top: 4px;
+  width: 100%;
 }
 
 .accounts-add-schedule {
@@ -15381,7 +15389,7 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-add-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
 }
 
@@ -15397,17 +15405,27 @@ input.transaction-inline-edit--amount::placeholder {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: 24px;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--muted-2);
   font-size: 0.92rem;
   font-weight: 500;
+  align-self: start;
 }
 
 .accounts-add-more-link:hover {
   color: var(--text);
+}
+
+.accounts-add-fields .institution-autocomplete,
+.accounts-add-fields .institution-autocomplete__field,
+.accounts-add-fields .institution-autocomplete input,
+.accounts-add-fields__account-number input,
+.accounts-add-fields__row select,
+.accounts-add-fields__row input {
+  width: 100%;
 }
 
 .institution-autocomplete {
@@ -20579,7 +20597,7 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-add-fields__row--amount {
-    grid-template-columns: minmax(0, 1fr) 92px;
+    grid-template-columns: 92px minmax(0, 1fr);
   }
 
   .accounts-add-brand-inline,
@@ -20588,9 +20606,14 @@ input.transaction-inline-edit--amount::placeholder {
     height: 40px;
   }
 
+  .accounts-add-advanced > .accounts-add-fields__row {
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  }
+
   .accounts-add-actions__buttons {
     flex-wrap: wrap;
     justify-content: flex-end;
+    width: 100%;
   }
 
   .institution-autocomplete__suggestions {
