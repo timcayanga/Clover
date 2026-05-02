@@ -172,28 +172,47 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
-  const [phase, setPhase] = useState<"form" | "verify-email">("form");
+  const [phase, setPhase] = useState<"form" | "verify-email" | "reset-request" | "reset-code" | "reset-password">(
+    "form",
+  );
+  const [resetEmailAddress, setResetEmailAddress] = useState("");
+  const [resetVerificationCode, setResetVerificationCode] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [socialBusy, setSocialBusy] = useState<SocialStrategy | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const [touchedEmail, setTouchedEmail] = useState(false);
   const [touchedPassword, setTouchedPassword] = useState(false);
+  const [touchedResetEmail, setTouchedResetEmail] = useState(false);
+  const [touchedResetPassword, setTouchedResetPassword] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
 
   const isReady = auth.isLoaded && signInState.isLoaded && signUpState.isLoaded;
   const trimmedEmail = email.trim();
+  const trimmedResetEmail = resetEmailAddress.trim();
   const emailIsValid = useMemo(() => isValidEmail(email), [email]);
+  const resetEmailIsValid = useMemo(() => isValidEmail(resetEmailAddress), [resetEmailAddress]);
   const passwordRequirements = useMemo(() => getPasswordRequirements(password), [password]);
   const passwordMessage = useMemo(() => getPasswordMessage(password), [password]);
   const missingPasswordRequirements = useMemo(() => getMissingPasswordRequirements(password), [password]);
+  const resetPasswordMessage = useMemo(() => getPasswordMessage(resetPassword), [resetPassword]);
+  const missingResetPasswordRequirements = useMemo(() => getMissingPasswordRequirements(resetPassword), [resetPassword]);
   const passwordMatchesRequirements = passwordMessage === null;
+  const resetPasswordMatchesRequirements = resetPasswordMessage === null;
   const passwordStatusMessage = passwordMatchesRequirements
     ? "Password looks good."
     : `Missing: ${missingPasswordRequirements.join(", ").replace(/, ([^,]*)$/, " and $1")}.`;
+  const resetPasswordStatusMessage = resetPasswordMatchesRequirements
+    ? "Password looks good."
+    : `Missing: ${missingResetPasswordRequirements.join(", ").replace(/, ([^,]*)$/, " and $1")}.`;
   const showEmailWarning = (touchedEmail || attemptedSubmit) && !emailIsValid;
+  const showResetEmailWarning = (touchedResetEmail || attemptedSubmit) && !resetEmailIsValid;
   const showPasswordWarning = mode === "sign-up" ? (touchedPassword || attemptedSubmit) && Boolean(passwordMessage) : false;
+  const showResetPasswordWarning =
+    phase === "reset-password" ? (touchedResetPassword || attemptedSubmit) && Boolean(resetPasswordMessage) : false;
   const canSubmitSignUp = emailIsValid && passwordMessage === null && !busy;
   const canSubmitSignIn = emailIsValid && password.length > 0 && !busy;
 
@@ -206,13 +225,19 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
   useEffect(() => {
     setPhase("form");
     setVerificationCode("");
+    setResetEmailAddress("");
+    setResetVerificationCode("");
+    setResetPassword("");
     setError(null);
     setNotice(null);
     setBusy(false);
     setSocialBusy(null);
     setShowPassword(false);
+    setShowResetPassword(false);
     setTouchedEmail(false);
     setTouchedPassword(false);
+    setTouchedResetEmail(false);
+    setTouchedResetPassword(false);
     setAttemptedSubmit(false);
     setEmail("");
     setPassword("");
@@ -264,6 +289,144 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
       } else {
         setError("We couldn’t sign you in just yet. Please double-check your email and password.");
       }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startPasswordReset = async () => {
+    await signInState.signIn.reset();
+    setPhase("reset-request");
+    setError(null);
+    setNotice(null);
+    setResetEmailAddress(trimmedEmail || resetEmailAddress);
+    setResetVerificationCode("");
+    setResetPassword("");
+    setShowResetPassword(false);
+    setTouchedResetEmail(false);
+    setTouchedResetPassword(false);
+    setAttemptedSubmit(false);
+  };
+
+  const cancelPasswordReset = async () => {
+    await signInState.signIn.reset();
+    setPhase("form");
+    setError(null);
+    setNotice(null);
+    setResetEmailAddress("");
+    setResetVerificationCode("");
+    setResetPassword("");
+    setShowResetPassword(false);
+    setTouchedResetEmail(false);
+    setTouchedResetPassword(false);
+    setAttemptedSubmit(false);
+  };
+
+  const sendPasswordResetCode = async () => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    setAttemptedSubmit(true);
+
+    if (!resetEmailIsValid) {
+      setBusy(false);
+      setError("Please enter the email address you use for Clover.");
+      return;
+    }
+
+    try {
+      await signInState.signIn.create({
+        identifier: trimmedResetEmail,
+      });
+
+      const { error: sendCodeError } = await signInState.signIn.resetPasswordEmailCode.sendCode();
+
+      if (sendCodeError) {
+        setError(formatError(sendCodeError));
+        return;
+      }
+
+      setPhase("reset-code");
+      setNotice(`We sent a reset code to ${trimmedResetEmail}.`);
+    } catch (err) {
+      setError(formatError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const verifyPasswordResetCode = async () => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    setAttemptedSubmit(true);
+
+    try {
+      const { error: verifyCodeError } = await signInState.signIn.resetPasswordEmailCode.verifyCode({
+        code: resetVerificationCode.trim(),
+      });
+
+      if (verifyCodeError) {
+        setError(formatError(verifyCodeError));
+        return;
+      }
+
+      setPhase("reset-password");
+    } catch (err) {
+      setError(formatError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitNewPassword = async () => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    setAttemptedSubmit(true);
+
+    if (resetPasswordMessage) {
+      setBusy(false);
+      setError(resetPasswordMessage);
+      return;
+    }
+
+    try {
+      const { error: passwordError } = await signInState.signIn.resetPasswordEmailCode.submitPassword({
+        password: resetPassword,
+      });
+
+      if (passwordError) {
+        setError(formatError(passwordError));
+        return;
+      }
+
+      if (signInState.signIn.status === "complete") {
+        await signInState.signIn.finalize({
+          navigate: async ({ session, decorateUrl }) => {
+            if (session?.currentTask) {
+              return;
+            }
+
+            const url = decorateUrl(completeRedirectUrl);
+            if (url.startsWith("http")) {
+              window.location.href = url;
+            } else {
+              router.replace(url);
+            }
+          },
+        });
+        return;
+      }
+
+      if (signInState.signIn.status === "needs_second_factor") {
+        setError("We’ve sent the reset request through, but extra verification is required. Please check your account.");
+        return;
+      }
+
+      setError("We couldn’t finish the password reset just yet. Please try again.");
+    } catch (err) {
+      setError(formatError(err));
     } finally {
       setBusy(false);
     }
@@ -365,6 +528,21 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
     }
 
     if (mode === "sign-in") {
+      if (phase === "reset-request") {
+        await sendPasswordResetCode();
+        return;
+      }
+
+      if (phase === "reset-code") {
+        await verifyPasswordResetCode();
+        return;
+      }
+
+      if (phase === "reset-password") {
+        await submitNewPassword();
+        return;
+      }
+
       if (!emailIsValid) {
         setAttemptedSubmit(true);
         setError("Please enter a valid email address.");
@@ -419,19 +597,51 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
     }
   };
 
-  const title = mode === "sign-in" ? "Welcome back" : "Create your Clover account";
+  const isResetFlow = mode === "sign-in" && phase !== "form";
+  const title =
+    mode === "sign-in"
+      ? phase === "reset-request"
+        ? "Reset your password"
+        : phase === "reset-code"
+          ? "Check your email"
+          : phase === "reset-password"
+            ? "Set a new password"
+            : "Welcome back"
+      : "Create your Clover account";
   const subtitle =
     mode === "sign-in"
-      ? "Sign in to pick up where you left off and keep moving."
+      ? phase === "reset-request"
+        ? "We’ll send a reset code to the email address on your Clover account."
+        : phase === "reset-code"
+          ? "Enter the 6-digit code we sent to your email."
+          : phase === "reset-password"
+            ? "Choose a new password to get back into Clover."
+            : "Sign in to pick up where you left off and keep moving."
       : "Create your account once, then import a statement, connect an account, or start manually.";
   const footerText =
     mode === "sign-in" ? (
-      <>
-        New to Clover? <Link className="clover-auth-card__link" href="/sign-up">Create an account</Link>
-      </>
+      isResetFlow ? (
+        <button
+          type="button"
+          className="clover-auth-card__link clover-auth-card__link-button"
+          onClick={() => {
+            void cancelPasswordReset();
+          }}
+        >
+          Back to sign in
+        </button>
+      ) : (
+        <>
+          New to Clover? <Link className="clover-auth-card__link" href="/sign-up">
+            Create an account
+          </Link>
+        </>
+      )
     ) : (
       <>
-        Already have an account? <Link className="clover-auth-card__link" href="/sign-in">Sign In</Link>
+        Already have an account? <Link className="clover-auth-card__link" href="/sign-in">
+          Sign In
+        </Link>
       </>
     );
 
@@ -447,7 +657,135 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
       </header>
 
       <form className="clover-auth-card__form" onSubmit={handleSubmit}>
-        {phase === "form" ? (
+        {mode === "sign-in" && phase === "reset-request" ? (
+          <>
+            <label className="clover-auth-field">
+              <span>Email address</span>
+              <input
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                placeholder="Enter the email on your Clover account"
+                value={resetEmailAddress}
+                onChange={(event) => setResetEmailAddress(event.target.value)}
+                onBlur={() => setTouchedResetEmail(true)}
+                aria-invalid={showResetEmailWarning}
+                aria-describedby={showResetEmailWarning ? "clover-reset-email-warning" : undefined}
+                required
+              />
+            </label>
+            {showResetEmailWarning ? (
+              <p id="clover-reset-email-warning" className="clover-auth-field__hint clover-auth-field__hint--error">
+                Please enter the email address you use for Clover.
+              </p>
+            ) : null}
+
+            <p className="clover-auth-field__hint">
+              We’ll send a reset code to this email so you can create a new password.
+            </p>
+
+            <button className="clover-auth-primary" type="submit" disabled={busy}>
+              {busy ? "Sending..." : "Send reset code"}
+            </button>
+          </>
+        ) : mode === "sign-in" && phase === "reset-code" ? (
+          <>
+            <label className="clover-auth-field">
+              <span>Reset code</span>
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="Enter the 6-digit code"
+                value={resetVerificationCode}
+                onChange={(event) => setResetVerificationCode(event.target.value)}
+                required
+              />
+            </label>
+
+            <p className="clover-auth-field__hint">
+              We sent a code to <strong>{trimmedResetEmail}</strong>. Enter it below to continue.
+            </p>
+
+            <button className="clover-auth-primary" type="submit" disabled={busy}>
+              {busy ? "Verifying..." : "Verify code"}
+            </button>
+
+            <button
+              className="clover-auth-secondary"
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                setError(null);
+                setNotice(null);
+                setBusy(true);
+                try {
+                  const { error: resendCodeError } = await signInState.signIn.resetPasswordEmailCode.sendCode();
+                  if (resendCodeError) {
+                    setError(formatError(resendCodeError));
+                    return;
+                  }
+                  setNotice(`We sent a new reset code to ${trimmedResetEmail}.`);
+                } catch (err) {
+                  setError(formatError(err));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Resend code
+            </button>
+
+          </>
+        ) : mode === "sign-in" && phase === "reset-password" ? (
+          <>
+            <label className="clover-auth-field">
+              <span>New password</span>
+              <div className="clover-auth-password">
+                <input
+                  type={showResetPassword ? "text" : "password"}
+                  autoComplete="new-password"
+                  placeholder="Enter your new password"
+                  value={resetPassword}
+                  onChange={(event) => setResetPassword(event.target.value)}
+                  onBlur={() => setTouchedResetPassword(true)}
+                  aria-invalid={showResetPasswordWarning}
+                  aria-describedby={showResetPasswordWarning ? "clover-reset-password-warning" : undefined}
+                  required
+                />
+                <button
+                  type="button"
+                  className="clover-auth-password-toggle"
+                  onClick={() => setShowResetPassword((value) => !value)}
+                  aria-label={showResetPassword ? "Hide password" : "Show password"}
+                >
+                  <PasswordIcon visible={showResetPassword} />
+                </button>
+              </div>
+            </label>
+
+            <p
+              className={`clover-auth-field__hint clover-auth-field__hint--status ${resetPasswordMatchesRequirements ? "is-ok" : "is-missing"}`}
+              role="status"
+              aria-live="polite"
+            >
+              <span className="clover-auth-field__status-mark" aria-hidden="true">
+                {resetPasswordMatchesRequirements ? "✓" : "✕"}
+              </span>
+              <span>{resetPasswordStatusMessage}</span>
+            </p>
+
+            {showResetPasswordWarning ? (
+              <p id="clover-reset-password-warning" className="clover-auth-field__hint clover-auth-field__hint--error">
+                {resetPasswordMessage}
+              </p>
+            ) : null}
+
+            <button className="clover-auth-primary" type="submit" disabled={busy}>
+              {busy ? "Saving..." : "Set new password"}
+            </button>
+          </>
+        ) : phase === "form" ? (
           <>
             <label className="clover-auth-field">
               <span>Email address</span>
@@ -519,6 +857,19 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
             >
               {busy ? "Please wait..." : mode === "sign-in" ? "Sign In" : "Continue"}
             </button>
+
+            {mode === "sign-in" ? (
+              <button
+                type="button"
+                className="clover-auth-card__link clover-auth-card__link-button clover-auth-forgot-password"
+                onClick={() => {
+                  void startPasswordReset();
+                }}
+                disabled={busy}
+              >
+                Forgot password?
+              </button>
+            ) : null}
           </>
         ) : (
           <>
@@ -566,26 +917,30 @@ function ClerkAuthScreenInner({ mode }: { mode: "sign-in" | "sign-up" }) {
       {error ? <p className="clover-auth-card__message clover-auth-card__message--error">{error}</p> : null}
       {notice ? <p className="clover-auth-card__message clover-auth-card__message--notice">{notice}</p> : null}
 
-      <div className="clover-auth-card__divider">
-        <span>or continue with</span>
-      </div>
+      {!isResetFlow ? (
+        <>
+          <div className="clover-auth-card__divider">
+            <span>or continue with</span>
+          </div>
 
-      <div className="clover-auth-card__socials">
-        {socialProviders.map((provider) => (
-          <button
-            key={provider.strategy}
-            type="button"
-            className="clover-auth-social"
-            disabled={socialBusy !== null || busy}
-            onClick={() => {
-              void handleSocialLogin(provider.strategy);
-            }}
-          >
-            <SocialIcon provider={provider.icon} />
-            <span>{socialBusy === provider.strategy ? "Connecting..." : provider.label}</span>
-          </button>
-        ))}
-      </div>
+          <div className="clover-auth-card__socials">
+            {socialProviders.map((provider) => (
+              <button
+                key={provider.strategy}
+                type="button"
+                className="clover-auth-social"
+                disabled={socialBusy !== null || busy}
+                onClick={() => {
+                  void handleSocialLogin(provider.strategy);
+                }}
+              >
+                <SocialIcon provider={provider.icon} />
+                <span>{socialBusy === provider.strategy ? "Connecting..." : provider.label}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
 
       <footer className="clover-auth-card__footer">{footerText}</footer>
     </section>
