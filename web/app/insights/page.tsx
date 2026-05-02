@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
-import { Suspense } from "react";
-import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
@@ -13,7 +11,8 @@ import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
 import { listImportFilesCompat } from "@/lib/data-engine";
-import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
+import { getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
+import { RouteSplash } from "@/components/route-splash";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 
@@ -33,11 +32,6 @@ const currencyFormatter = new Intl.NumberFormat("en-PH", {
 const monthFormatter = new Intl.DateTimeFormat("en-PH", {
   month: "short",
   year: "numeric",
-});
-
-const shortDateFormatter = new Intl.DateTimeFormat("en-PH", {
-  month: "short",
-  day: "2-digit",
 });
 
 type InsightTransaction = {
@@ -91,14 +85,13 @@ const goalLabels: Record<string, string> = {
 const insightsTabLabels: Record<InsightsTab, string> = {
   summary: "Summary",
   spending: "Spending",
-  patterns: "Patterns",
+  patterns: "Habits",
 };
 
 const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "MIXED");
 const formatSignedCurrency = (value: number, currency?: string | null) =>
   `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "MIXED")}`;
 const formatPercent = (value: number) => `${value >= 0 ? "+" : ""}${value.toFixed(0)}%`;
-const formatShortDate = (value: Date) => shortDateFormatter.format(value);
 const toIsoMonth = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 const toMonthLabel = (date: Date) => monthFormatter.format(date);
 const normalizeMerchant = (value: string) => value.trim().toLowerCase();
@@ -447,22 +440,6 @@ async function InsightsPageStream({
     bucket.net = bucket.income - bucket.expense;
   });
 
-  const totalAccountBalance = workspaceAccounts
-    .filter((account) => account.balance !== null)
-    .reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
-  const activeAccountCount = workspaceAccounts.filter((account) => account.balance !== null).length;
-  const investmentAccounts = workspaceAccounts.filter((account) => account.type === "investment");
-  const investmentCurrentValue = investmentAccounts.reduce((sum, account) => sum + Math.max(0, account.balance ?? 0), 0);
-  const investmentPurchaseValue = investmentAccounts.reduce((sum, account) => {
-    const baseValue = account.investmentCostBasis ?? account.investmentPrincipal;
-    return sum + Math.max(0, baseValue ?? 0);
-  }, 0);
-  const investmentGainLoss = investmentCurrentValue - investmentPurchaseValue;
-  const investmentReturnPercent = investmentPurchaseValue > 0 ? investmentGainLoss / investmentPurchaseValue : null;
-  const investmentPortfolioShare = totalAccountBalance > 0 ? investmentCurrentValue / totalAccountBalance : null;
-  const investmentTopHolding = investmentAccounts.slice().sort((left, right) => (right.balance ?? 0) - (left.balance ?? 0))[0] ?? null;
-  const hasInvestmentSnapshot = isPro && investmentAccounts.length > 0;
-
   const uncategorizedTransactions = currentWindowTransactions.filter(
     (transaction) => !transaction.category?.name || !transaction.merchantClean
   );
@@ -511,19 +488,14 @@ async function InsightsPageStream({
   const incomeDelta =
     previousSummary.income > 0 ? ((currentSummary.income - previousSummary.income) / previousSummary.income) * 100 : null;
   const currentGoalPlan = normalizeGoalPlan(user.goalPlan, selectedGoalValue as GoalKey | null, goalTargetAmount);
-  const goalPlanSummary = getGoalPlanSummary(
-    currentGoalPlan,
-    currentSummary.income > 0 ? currentSummary.income : null,
-    displayCurrency
-  );
 
   const topCategories = Array.from(currentSummary.expenseCategories.entries())
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 4);
+    .slice(0, 3);
 
   const previousTopCategories = Array.from(previousSummary.expenseCategories.entries())
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 4);
+    .slice(0, 3);
 
   const topCategoryShare = currentSpend > 0 ? (topCategories[0]?.[1] ?? 0) / currentSpend : null;
   const currentMonthKey = monthBuckets[monthBuckets.length - 1]?.key ?? toIsoMonth(now);
@@ -599,11 +571,6 @@ async function InsightsPageStream({
         (uncategorizedTransactions.length + possibleDuplicateGroups.length) * 1.5
     )
   );
-  const confidenceLabel = confidenceScore >= 85 ? "High confidence" : confidenceScore >= 70 ? "Good confidence" : "Watch closely";
-
-  const trendDirection = currentNet >= previousNet ? "improving" : "softening";
-  const spendDirection =
-    spendDelta === null ? "stable" : spendDelta > 4 ? "up" : spendDelta < -4 ? "down" : "stable";
   const goalProgress = getGoalProgressSnapshot({
     goalKey: selectedGoalValue as GoalKey | null,
     targetAmount: goalTargetAmount,
@@ -623,29 +590,15 @@ async function InsightsPageStream({
 
   const aiHeadline =
     topCategories[0] !== undefined
-      ? goalLabel !== null
-        ? goalTargetAmount !== null
-          ? `${goalLabel} is ${goalProgress.progressPercent === null ? "set" : `${Math.round(goalProgress.progressPercent)}% complete`}, while ${headlineDriver} is the main pressure point.`
-          : `${headlineDriver} is the main pressure point, even while you are on track for ${goalLabel.toLowerCase()}.`
-        : `${headlineDriver} is the biggest spend area this month.`
+      ? `${headlineDriver} is taking the most room this month.`
       : currentNet >= 0
-        ? "Cash flow looks positive, but the driver is still unclear."
-        : "Cash flow looks negative, but the driver is still unclear.";
+        ? "You still have money left this month."
+        : "You spent more than you brought in this month.";
 
   const aiSummary =
-    spendDelta === null || incomeDelta === null
-      ? "More activity will sharpen the next insight."
-      : [
-          currentNet >= 0
-            ? `Net cash flow is positive at ${formatSignedCurrency(currentNet)}.`
-            : `Net cash flow is negative at ${formatSignedCurrency(currentNet)}.`,
-          topCategories[0] !== undefined ? `${headlineDriver} makes up ${formatPercent(headlineDriverShare ?? 0)} of tracked spend.` : null,
-          recurringMerchants[0] !== undefined
-            ? `${recurringMerchants[0].label} repeats ${recurringMerchants[0].count} times over 90 days.`
-            : null,
-        ]
-          .filter((line): line is string => line !== null)
-          .join(" ");
+    topCategories[0] !== undefined
+      ? `${headlineDriver} makes up ${formatPercent(headlineDriverShare ?? 0)} of tracked spending this month.`
+      : "Import a little more activity and Clover will start surfacing clearer reasons.";
   const primarySnapshotItems: Array<{
     label: string;
     value: string;
@@ -655,28 +608,28 @@ async function InsightsPageStream({
     hint: string;
   }> = [
     {
-      label: "Net position",
+      label: "Money left",
       value: formatSignedCurrency(currentNet),
       note: currentNet >= previousNet ? "Up vs prior period" : "Down vs prior period",
       tone: currentNet >= 0 ? "positive" : "negative",
-      hint: "Net position is income minus expenses for the selected window.",
+      hint: "Money left is income minus expenses for the selected window.",
     },
     {
       label: "Savings rate",
       value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
       note:
-        goalLabel !== null && goalTargetAmount !== null
-          ? `${goalProgress.bandLabel} · ${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}${goalPlanSummary?.subtitle ? ` · ${goalPlanSummary.subtitle}` : ""}`
-          : goalLabel ?? "No primary goal set yet",
+        goalLabel !== null
+          ? `${goalProgress.bandLabel} for ${goalLabel.toLowerCase()}`
+          : "No primary goal yet",
       tone: currentSavingsRate !== null && currentSavingsRate >= 0.2 ? "positive" : "neutral",
       hint: "Savings rate is the share of income left after spending.",
     },
     {
-      label: "Top driver",
+      label: "Biggest cause",
       value: headlineDriver,
       note: `${formatCurrency(headlineDriverAmount)}${headlineDriverShare === null ? "" : ` · ${formatPercent(headlineDriverShare)}`}`,
       tone: "neutral",
-      hint: "Top driver is the category contributing the most to this month's spending.",
+      hint: "Biggest cause is the category contributing the most to this month's spending.",
     },
   ];
 
@@ -684,31 +637,20 @@ async function InsightsPageStream({
     {
       title: topCategories[0] ? `Review ${headlineDriver.toLowerCase()}` : "Review spending",
       body: topCategories[0]
-        ? `${formatCurrency(headlineDriverAmount)} sits in this category this month.`
+        ? `${formatCurrency(headlineDriverAmount)} was spent here this month.`
         : "Open the transactions behind this month's summary.",
       href: topCategories[0] ? buildTransactionsHref({ category: headlineDriver }) : "/transactions",
       label: "Open category",
     },
     {
-      title: uncategorizedTransactions.length > 0 ? `Fix ${uncategorizedTransactions.length} uncategorized rows` : "Clean up rows",
+      title: uncategorizedTransactions.length > 0 ? `Fix ${uncategorizedTransactions.length} uncategorized rows` : "Set a spending cap",
       body: uncategorizedTransactions.length > 0
-        ? "Clear rows with missing categories or merchants to sharpen the next insight pass."
-        : "Keep imported rows clean so the insights stay trustworthy.",
-      href: "/transactions",
-      label: "Review rows",
-    },
-    {
-      title: goalLabel ? `Check ${goalLabel.toLowerCase()}` : "Set a goal",
-      body:
-        goalLabel && goalTargetAmount !== null
-          ? `Use ${goalProgress.nextAction} The current band is ${goalProgress.bandLabel.toLowerCase()}.`
-          : goalLabel === "Invest better" && investmentAccounts.length > 0
-            ? "Open the portfolio and decide which holdings should grow or rebalance."
-          : goalLabel
-            ? `Use ${goalLabel.toLowerCase()} as the benchmark for this month.`
-            : "A goal turns trends into a direction.",
-      href: goalLabel === "Invest better" && investmentAccounts.length > 0 ? "/investments" : "/goals",
-      label: goalLabel === "Invest better" && investmentAccounts.length > 0 ? "Open investments" : goalLabel ? "Open goal" : "Set goal",
+        ? "Clear missing categories or merchants so the next insight is more accurate."
+        : topCategories[0]
+          ? `Start with ${headlineDriver.toLowerCase()} if you want one place to tighten spending.`
+          : "Use one category limit to keep this month more predictable.",
+      href: uncategorizedTransactions.length > 0 ? "/transactions" : "/goals",
+      label: uncategorizedTransactions.length > 0 ? "Review rows" : "Open goals",
     },
   ];
 
@@ -725,9 +667,9 @@ async function InsightsPageStream({
 
   const recurringInsightCards = recurringMerchants.map((merchant) => ({
     ...merchant,
-    title: `${merchant.label} appears ${merchant.count} times`,
+    title: `${merchant.label} repeats ${merchant.count} times`,
     evidence: `${formatCurrency(merchant.amount)} over the last 90 days`,
-    nextStep: `Open the merchant transactions and decide whether this is a fixed cost or a habit to trim.`,
+    nextStep: "Open the merchant transactions and decide whether to keep or cut it.",
     href: buildTransactionsHref({ merchant: merchant.label }),
   }));
 
@@ -762,32 +704,36 @@ async function InsightsPageStream({
       href: topCategories[0] ? buildTransactionsHref({ category: headlineDriver }) : "/transactions",
       icon: "🎯",
     },
-    {
-      title: "Data quality",
-      evidence:
-        importStatusCounts.failed > 0
-          ? `${importStatusCounts.failed} failed import${importStatusCounts.failed === 1 ? "" : "s"} still need attention`
-          : "Imports look clean enough for guidance",
-      soWhat:
-        importStatusCounts.failed > 0
-          ? "Some of the advice may be less reliable until the failed files are resolved."
-          : "The data is clean enough to trust the current insight pass.",
-      nextStep: importStatusCounts.failed > 0 ? "Open imports and clear the failed files first." : "Keep the imports flowing so the page stays current.",
-      href: "/imports",
-      icon: "🧼",
-    },
-    {
-      title: "Goal context",
-      evidence: goalLabel ?? "No primary goal set yet",
-      soWhat: goalLabel ? "The page can measure progress against a specific target." : "Without a goal, the page can explain behavior but not judge progress.",
-      nextStep: goalLabel ? "Use this goal to decide which spending changes matter most." : "Set one goal so the next insight has a destination.",
-      href: "/goals",
-      icon: "🎯",
-    },
   ];
-  const visibleDriverInsightCards = isPro ? driverInsightCards : driverInsightCards.slice(0, 2);
-  const visibleRecurringInsightCards = isPro ? recurringInsightCards : recurringInsightCards.slice(0, 2);
-  const visibleBehaviorInsightCards = isPro ? behaviorInsightCards : behaviorInsightCards.slice(0, 2);
+  const habitCards = [
+    driverInsightCards[0]
+      ? {
+          title: driverInsightCards[0].title,
+          evidence: driverInsightCards[0].evidence,
+          nextStep: "Open this category and decide whether it needs a limit.",
+          href: driverInsightCards[0].href,
+          icon: getCategoryGlyph(driverInsightCards[0].categoryName),
+        }
+      : null,
+    recurringInsightCards[0]
+      ? {
+          title: recurringInsightCards[0].title,
+          evidence: recurringInsightCards[0].evidence,
+          nextStep: recurringInsightCards[0].nextStep,
+          href: recurringInsightCards[0].href,
+          icon: "↻",
+        }
+      : null,
+    behaviorInsightCards[0]
+      ? {
+          title: behaviorInsightCards[0].title,
+          evidence: behaviorInsightCards[0].evidence,
+          nextStep: behaviorInsightCards[0].nextStep,
+          href: behaviorInsightCards[0].href,
+          icon: behaviorInsightCards[0].icon,
+        }
+      : null,
+  ].filter((card): card is { title: string; evidence: string; nextStep: string; href: string; icon: string } => card !== null);
 
   const chartWidth = 520;
   const chartHeight = 150;
@@ -806,15 +752,8 @@ async function InsightsPageStream({
   });
   const chartPath = chartPoints.map((point, index) => `${index === 0 ? "M" : "L"} ${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" ");
 
-  const headlineNetLabel =
-    currentNet >= previousNet
-      ? `${formatSignedCurrency(currentNet)} this month, up from ${formatSignedCurrency(previousNet)} last month`
-      : `${formatSignedCurrency(currentNet)} this month, down from ${formatSignedCurrency(previousNet)} last month`;
-
   const recurringCostsTotal = recurringMerchants.reduce((sum, merchant) => sum + merchant.amount, 0);
   const recurringSavingsPotential = recurringCostsTotal * 0.2;
-  const topCategoryOpportunity = topCategories[0] ? topCategories[0][1] * 0.2 : 0;
-  const annualRecurringOpportunity = recurringSavingsPotential * 12;
   const trackedCategorySpend = topCategories.reduce((sum, [, amount]) => sum + amount, 0);
   const otherSpend = Math.max(currentSpend - trackedCategorySpend, 0);
   const trackedCategoryShare = currentSpend > 0 ? trackedCategorySpend / currentSpend : 0;
@@ -904,12 +843,12 @@ async function InsightsPageStream({
           <div className="insights-snapshot__copy">
             <h3>{aiHeadline}</h3>
             <p>{aiSummary}</p>
-            <div className="insights-snapshot__summary">
+          <div className="insights-snapshot__summary">
               <span className={`pill ${currentNet >= 0 ? "pill-good" : "pill-danger"}`}>
                 {currentNet >= 0 ? "On track" : "Needs attention"}
               </span>
               <span>{currentWindowTransactions.length} transactions reviewed</span>
-              <span>{goalLabel ?? "No primary goal set yet"}</span>
+              <span>{goalLabel ?? "No goal yet"}</span>
             </div>
           </div>
 
@@ -950,54 +889,12 @@ async function InsightsPageStream({
           }
           spending={
           <>
-        {hasInvestmentSnapshot ? (
-          <article className="insight-panel glass insights-investment-summary">
-            <div className="insight-panel__head">
-              <div>
-                <p className="eyebrow">Investments</p>
-                <h4>
-                  Quick snapshot <InsightInfoTip label="A lightweight investment summary for the Insights page. Open Investments for the full portfolio view." />
-                </h4>
-              </div>
-              <Link className="pill-link pill-link--inline" href="/investments">
-                Open Investments
-              </Link>
-            </div>
-
-            <div className="insight-signal-grid insight-signal-grid--compact">
-              <div className="insight-signal">
-                <span>Current value</span>
-                <strong>{formatCurrency(investmentCurrentValue)}</strong>
-                <small>{investmentAccounts.length} holdings</small>
-              </div>
-              <div className="insight-signal">
-                <span>Gain / loss</span>
-                <strong className={investmentGainLoss >= 0 ? "positive" : "negative"}>{formatSignedCurrency(investmentGainLoss)}</strong>
-                <small>{investmentReturnPercent === null ? "No return baseline" : `${formatPercent(investmentReturnPercent * 100)} since purchase`}</small>
-              </div>
-              <div className="insight-signal">
-                <span>Top holding</span>
-                <strong>{investmentTopHolding?.name ?? "No holding yet"}</strong>
-                <small>
-                  {investmentTopHolding !== null && investmentTopHolding.balance !== null && investmentCurrentValue > 0
-                    ? `${formatPercent((Number(investmentTopHolding.balance) / investmentCurrentValue) * 100)} of portfolio`
-                    : "Open Investments for the full breakdown"}
-                </small>
-              </div>
-              <div className="insight-signal">
-                <span>Portfolio share</span>
-                <strong>{investmentPortfolioShare === null ? "N/A" : formatPercent(investmentPortfolioShare * 100)}</strong>
-                <small>Of tracked assets</small>
-              </div>
-            </div>
-          </article>
-        ) : null}
           <article className="insight-panel insight-panel--feature glass">
           <div className="insight-panel__head">
             <div>
               <p className="eyebrow">What happened</p>
               <h4>
-                Cash flow momentum <InsightInfoTip label="Tap a month to open matching transactions. This chart shows the last six months of net cash flow." />
+                Money in vs money out <InsightInfoTip label="Tap a month to open matching transactions. This chart shows the last six months of net cash flow." />
               </h4>
             </div>
             <div className="insight-panel__stat">
@@ -1018,14 +915,9 @@ async function InsightsPageStream({
               <small>{spendDelta === null ? "No comparison period" : `${formatPercent(spendDelta)} vs last 30 days`}</small>
             </div>
             <div className="insight-signal">
-              <span>Net</span>
-              <strong className={currentNet >= 0 ? "positive" : "negative"}>{formatSignedCurrency(currentNet)}</strong>
-              <small>{previousNet === 0 ? "No prior baseline" : `${formatSignedCurrency(previousNet)} previously`}</small>
-            </div>
-            <div className="insight-signal">
-              <span>Saving</span>
-              <strong>{currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}</strong>
-              <small>{goalLabel ?? "Add a goal to focus the guidance"}</small>
+              <span>Monthly change</span>
+              <strong>{spendDelta === null ? "N/A" : formatPercent(spendDelta)}</strong>
+              <small>{spendDelta !== null && spendDelta > 0 ? "Spending is up" : spendDelta !== null && spendDelta < 0 ? "Spending is down" : "More data will sharpen this"}</small>
             </div>
           </div>
 
@@ -1133,17 +1025,7 @@ async function InsightsPageStream({
                   );
                 })
               ) : (
-                <EmptyDataCta
-                  className="insights-empty-state"
-                  eyebrow="Fresh start"
-                  title="No categorized expenses yet."
-                  copy="Import more activity or resolve uncategorized rows to reveal the spending mix."
-                  illustration="/illustrations/clover-insights-analytics-3d.png"
-                  illustrationAlt="A 3D Clover analytics illustration"
-                  importHref="/dashboard?import=1"
-                  accountHref="/accounts"
-                  transactionHref="/transactions?manual=1"
-                />
+                <div className="empty-state">Import more activity or resolve uncategorized rows to reveal the spending mix.</div>
               )}
               <div className="insight-donut__item">
                 <span className="insight-donut__icon" aria-hidden="true">
@@ -1164,117 +1046,34 @@ async function InsightsPageStream({
           <article className="insight-panel glass">
           <div className="insight-panel__head">
             <div>
-              <p className="eyebrow">Why it happened</p>
+              <p className="eyebrow">Habits</p>
               <h4>
-                What changed and why <InsightInfoTip label="This compares the current period with the prior period and highlights the biggest category shifts." />
+                Three things worth noticing <InsightInfoTip label="These cards highlight the clearest change, the biggest recurring cost, and one spending habit to review." />
               </h4>
             </div>
             <div className="insight-panel__stat">
-              <strong>{previousTopCategories[0]?.[0] ?? "No baseline"}</strong>
-              <span>Last period's top category</span>
+              <strong>{formatCurrency(recurringSavingsPotential)}</strong>
+              <span>Possible monthly savings</span>
             </div>
           </div>
 
-          <div className="insight-list">
-            {visibleDriverInsightCards.length > 0 ? (
-              visibleDriverInsightCards.map((driver) => (
-                <Link key={driver.categoryName} href={driver.href} className="insight-list__item insight-list__item--link">
+          <div className="insight-pattern-grid insight-pattern-grid--triple">
+            {habitCards.length > 0 ? (
+              habitCards.map((card) => (
+                <Link key={card.title} href={card.href} className="insight-list__item insight-list__item--link">
                   <strong>
                     <span className="insight-list__icon" aria-hidden="true">
-                      {getCategoryGlyph(driver.categoryName)}
+                      {card.icon}
                     </span>
-                    {driver.title}
+                    {card.title}
                   </strong>
-                  <span>{driver.evidence}</span>
-                  <span className="insight-list__callout">So what: this is the clearest reason the month moved.</span>
-                  <span className="insight-list__callout">Next step: review the linked category transactions and decide if it should be capped.</span>
+                  <span>{card.evidence}</span>
+                  <span className="insight-list__callout">{card.nextStep}</span>
                 </Link>
               ))
             ) : (
-              <EmptyDataCta
-                className="insights-empty-state"
-                eyebrow="Fresh start"
-                title="No category changes surfaced yet."
-                copy="Clover will highlight shifts once it has enough recent activity to compare."
-                illustration="/illustrations/clover-insights-analytics-3d.png"
-                illustrationAlt="A 3D Clover analytics illustration"
-                importHref="/dashboard?import=1"
-                accountHref="/accounts"
-                transactionHref="/transactions?manual=1"
-              />
+              <div className="empty-state">Import more activity and Clover will start surfacing the habits that matter most.</div>
             )}
-          </div>
-          </article>
-          <article className="insight-panel glass">
-          <div className="insight-panel__head">
-            <div>
-              <p className="eyebrow">Patterns to watch</p>
-              <h4>{isPro ? "Recurring costs and habits" : "A few patterns to watch"}</h4>
-            </div>
-            <div className="insight-panel__stat">
-              <strong>{formatCurrency(recurringSavingsPotential)}</strong>
-              <span>Monthly savings potential</span>
-            </div>
-          </div>
-
-          <div className="insight-pattern-grid">
-            <div className="insight-pattern-card">
-              <p className="eyebrow">Recurring costs</p>
-              <div className="insight-list">
-                {visibleRecurringInsightCards.length > 0 ? (
-                  visibleRecurringInsightCards.map((merchant) => (
-                    <Link key={merchant.label} href={merchant.href} className="insight-list__item insight-list__item--link">
-                      <strong>
-                        <span className="insight-list__icon" aria-hidden="true">
-                          {getCategoryGlyph(merchant.label)}
-                        </span>
-                        {merchant.title}
-                      </strong>
-                      <span>{merchant.evidence}</span>
-                      <span className="insight-list__callout">So what: this repeats often enough to behave like a fixed cost.</span>
-                      <span className="insight-list__callout">Next step: open the merchant transactions and keep or cut it.</span>
-                    </Link>
-                  ))
-                ) : (
-                  <EmptyDataCta
-                    className="insights-empty-state"
-                    eyebrow="Fresh start"
-                    title="No recurring merchants surfaced yet."
-                    copy="Add more transactions and Clover will call out the fixed costs."
-                    illustration="/illustrations/clover-insights-analytics-3d.png"
-                    illustrationAlt="A 3D Clover analytics illustration"
-                    importHref="/dashboard?import=1"
-                    accountHref="/accounts"
-                    transactionHref="/transactions?manual=1"
-                  />
-                )}
-                <div className="insight-list__item">
-                  <strong>Potential savings</strong>
-                  <span>
-                    Cutting recurring costs by 20% could save {formatCurrency(recurringSavingsPotential)} a month, or {formatCurrency(annualRecurringOpportunity)} a year.
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="insight-pattern-card">
-              <p className="eyebrow">Behavioral patterns</p>
-              <div className="insight-list">
-                {visibleBehaviorInsightCards.map((item) => (
-                  <Link key={item.title} href={item.href} className="insight-list__item insight-list__item--link">
-                    <strong>
-                      <span className="insight-list__icon" aria-hidden="true">
-                        {item.icon}
-                      </span>
-                      {item.title}
-                    </strong>
-                    <span>{item.evidence}</span>
-                    <span className="insight-list__callout">So what: {item.soWhat}</span>
-                    <span className="insight-list__callout">Next step: {item.nextStep}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
           </div>
           </article>
           </>
@@ -1293,9 +1092,5 @@ async function InsightsPageStream({
 }
 
 export default function InsightsPage({ searchParams }: { searchParams?: Promise<{ tab?: string }> }) {
-  return (
-    <Suspense fallback={<CloverLoadingScreen label="insights" />}>
-      <InsightsPageStream searchParams={searchParams} />
-    </Suspense>
-  );
+  return <RouteSplash label="insights"><InsightsPageStream searchParams={searchParams} /></RouteSplash>;
 }

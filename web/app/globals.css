@@ -5579,7 +5579,7 @@ body[data-clover-page-modal] .sidebar-backdrop {
 .insights-snapshot__actions {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -5958,7 +5958,7 @@ body[data-clover-page-modal] .sidebar-backdrop {
 
 .insight-signal-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -6085,6 +6085,10 @@ body[data-clover-page-modal] .sidebar-backdrop {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.insight-pattern-grid--triple {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .insight-pattern-card {
