@@ -2,14 +2,13 @@ import nextDynamic from "next/dynamic";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
-import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { getSessionContext } from "@/lib/auth";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
+import { RouteSplash } from "@/components/route-splash";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { PostHogEvent, analyticsOnceKey } from "@/components/posthog-analytics";
 import { GoalsSubtabs } from "@/components/goals-subtabs";
@@ -20,7 +19,6 @@ import {
   getGoalDefinition,
   getGoalMoneyLabel,
   getGoalPlanSummary,
-  getGoalProgressLabel,
   getGoalProgressSnapshot,
   getGoalPlaybook,
   getSuggestedGoalAmount,
@@ -30,10 +28,6 @@ import {
 
 const GoalsEditor = nextDynamic(() => import("@/components/goals-editor").then((module) => module.GoalsEditor), {
   loading: () => <section className="goals-editor glass" aria-label="Loading goal editor" />,
-});
-
-const GoalsChecklist = nextDynamic(() => import("@/components/goals-checklist").then((module) => module.GoalsChecklist), {
-  loading: () => <section className="goals-checklist glass" aria-label="Loading weekly actions" />,
 });
 
 const GoalIllustration = nextDynamic(() => import("@/components/goals-visuals").then((module) => module.GoalIllustration), {
@@ -528,7 +522,6 @@ async function GoalsPageStream({
   const suggestedGoalTarget = getSuggestedGoalAmount(selectedGoalKey as GoalKey | null, monthlyIncome);
   const latestGoalPlan = goalHistoryRows.length > 0 ? normalizeGoalPlan(goalHistoryRows[0].goalPlan, goalHistoryRows[0].primaryGoal as GoalKey | null, goalHistoryRows[0].targetAmount !== null && goalHistoryRows[0].targetAmount !== undefined ? Number(goalHistoryRows[0].targetAmount) : null) : null;
   const currentGoalPlan = normalizeGoalPlan(user.goalPlan, selectedGoalKey as GoalKey | null, goalTargetAmount) ?? latestGoalPlan;
-  const goalPlanSummary = getGoalPlanSummary(currentGoalPlan, monthlyIncome, goalCurrency);
 
   const monthBuckets = getMonthBuckets(now);
   sixMonthSummaryRows.forEach((row) => {
@@ -614,7 +607,6 @@ async function GoalsPageStream({
   const investmentFlow = currentWindowTransactions
     .filter((transaction) => transaction.account.type === "investment" && transaction.type !== "income")
     .reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0);
-  const topInvestmentHolding = investmentHoldings.length > 0 ? investmentHoldings[0] : null;
   const goalProgress = getGoalProgressSnapshot({
     goalKey: selectedGoalKey as GoalKey | null,
     targetAmount: goalTargetAmount,
@@ -631,7 +623,6 @@ async function GoalsPageStream({
     investmentFlow,
     investmentHoldings: investmentHoldingsCount,
   }, goalCurrency);
-  const goalActionSteps = playbook.weeklyFocus.length > 0 ? playbook.weeklyFocus : [goalProgress.nextAction];
   const uncategorizedShare = currentSpend > 0
     ? uncategorizedTransactions.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0) / currentSpend
     : 0;
@@ -646,128 +637,41 @@ async function GoalsPageStream({
   const coach = getCoachMessage(goalScore);
   const onboardingDate = user.onboardingCompletedAt ? new Date(user.onboardingCompletedAt) : null;
   const goalMoneyLabel = getGoalMoneyLabel(selectedGoalKey as GoalKey | null);
-  const goalProgressLabel = getGoalProgressLabel(selectedGoalKey as GoalKey | null);
   const progressLabel =
     goalScore >= 85 ? "Coach mode: you are ahead of the curve" : goalScore >= 70 ? "On pace and looking sharp" : goalScore >= 50 ? "Building good momentum" : "Early, but absolutely moving";
 
   const weeklyProgress = clamp(goalScore + (currentSavingsRate !== null && currentSavingsRate >= targetRate / 100 ? 8 : 0) - (recurringShare > 0.25 ? 6 : 0), 12, 100);
   const progressRingPercent = goalProgress.progressPercent !== null ? clamp(goalProgress.progressPercent, 0, 100) : weeklyProgress;
-  const ringCircumference = 2 * Math.PI * 46;
-  const ringDashOffset = ringCircumference - (progressRingPercent / 100) * ringCircumference;
 
-  const paceBars = [
+  const overviewCards = [
     {
-      label: "Current pace",
-      value: currentSavingsRate === null ? 0 : currentSavingsRate * 100,
-      note: currentSavingsRate === null ? "Need more income context" : `Running at ${formatPercent(currentSavingsRate * 100)}`,
-      tone: currentSavingsRate !== null && currentSavingsRate * 100 >= targetRate ? "positive" : "neutral",
-    },
-    {
-      label: "Goal line",
-      value: targetRate,
-      note: `The lane you set for ${selectedGoal.title.toLowerCase()}`,
-      tone: "neutral",
-    },
-    {
-      label: "Last window",
-      value: previousSavingsRate === null ? 0 : previousSavingsRate * 100,
-      note: previousSavingsRate === null ? "No prior baseline" : `Previous pace was ${formatPercent(previousSavingsRate * 100)}`,
-      tone: previousSavingsRate !== null && previousSavingsRate * 100 >= targetRate ? "positive" : "negative",
-    },
-  ];
-
-  const movementHighlights = [
-    {
-      label: "Savings rate",
-      value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
-      note:
-        currentSavingsRate === null
-          ? "Need more income context"
-          : currentSavingsRate >= targetRate / 100
-            ? "Strong enough to support the goal"
-            : "Below the target line",
-      tone: currentSavingsRate !== null && currentSavingsRate >= targetRate / 100 ? "positive" : "warning",
-    },
-    {
-      label: "Spend pressure",
-      value: spendDelta === null ? "N/A" : formatPercent(spendDelta),
-      note: spendDelta === null ? "No prior comparison" : spendDelta > 0 ? "Spending is rising" : "Spending is easing",
-      tone: spendDelta === null ? "neutral" : spendDelta > 0 ? "negative" : "positive",
-    },
-    {
-      label: "Recurring share",
-      value: formatPercent(recurringShare * 100),
-      note: recurringShare > 0.25 ? "Automatic costs need a look" : "Recurring costs are manageable",
-      tone: recurringShare > 0.25 ? "warning" : "positive",
-    },
-    {
-      label: "Goal band",
-      value: goalProgress.bandLabel,
-      note: goalProgress.nextAction,
-      tone: goalProgress.bandTone,
-    },
-  ] as const;
-
-  const goalSnapshot = [
-    {
-      label: "Current net",
-      value: formatSignedCurrency(currentNet),
-      note: currentNet >= previousNet ? "Up vs prior period" : "Down vs prior period",
-    },
-    {
-      label: hasGoalTarget ? goalMoneyLabel : "Suggested target",
+      label: "Current target",
       value:
         hasGoalTarget && goalProgress.targetAmount !== null
-          ? `${formatCurrency(goalProgress.currentAmount, goalCurrency)} / ${formatCurrency(goalProgress.targetAmount, goalCurrency)}`
+          ? formatCurrency(goalProgress.targetAmount, goalCurrency)
           : suggestedGoalTarget !== null
             ? formatCurrency(suggestedGoalTarget, goalCurrency)
             : "Set it now",
-      note: hasGoalTarget
-        ? goalProgress.achieved
-          ? "You crossed the line"
-          : goalProgress.remainingAmount !== null
-            ? `${formatCurrency(goalProgress.remainingAmount, goalCurrency)} remaining`
-            : "Keep moving"
-        : "Clover can suggest a starting point",
-    },
-    {
-      label: goalProgressLabel,
-      value:
-        hasGoalTarget && goalProgress.progressPercent !== null
-          ? `${Math.round(goalProgress.progressPercent)}%`
-          : "No target yet",
-      note: hasGoalTarget
-        ? `${goalProgress.bandLabel} · tracked from ${goalTargetSource ?? "your saved goal"}`
-        : `${uncategorizedTransactions.length} items still need attention`,
-    },
-    {
-      label: "Investments",
-      value: investmentHoldingsCount > 0 ? formatCurrency(investmentHoldingsValue, goalCurrency) : "No holdings",
       note:
-        investmentHoldingsCount > 0
-          ? `${investmentHoldingsCount} holding${investmentHoldingsCount === 1 ? "" : "s"} · ${investmentGainLoss >= 0 ? "+" : "-"}${formatCurrency(Math.abs(investmentGainLoss), goalCurrency)} gain/loss`
-          : "Connect your Investments page to make this goal feel more real",
+        hasGoalTarget && currentGoalPlan !== null
+          ? `${goalTargetSource ?? "Saved goal"} · ${currentGoalPlan.targetMode === "percent" ? "Percent of salary" : currentGoalPlan.cadence === "annual" ? "Annual target" : "Monthly target"}`
+          : "One clear number keeps the month simple.",
     },
     {
-      label: "Momentum",
-      value: goalScore.toString(),
-      note: progressLabel,
-    },
-  ];
-  const heroStats = isBeginnerMode ? goalSnapshot.slice(0, 3) : goalSnapshot;
-
-  const beginnerGuide = [
-    {
-      title: "Pick one goal",
-      body: "Choose the lane that matters most right now, like saving, debt, spending, or investing.",
+      label: "Status",
+      value: goalProgress.bandLabel,
+      note: goalProgress.achieved
+        ? "You already reached the target."
+        : goalProgress.bandTone === "positive"
+          ? "Ahead of plan"
+          : goalProgress.bandTone === "negative"
+            ? "Needs a reset"
+            : "Staying steady",
     },
     {
-      title: "Set one number",
-      body: "Use a fixed peso amount first. If you get comfortable later, you can switch to percent of salary.",
-    },
-    {
-      title: "Check it weekly",
-      body: "Look at progress, then follow the next action Clover recommends.",
+      label: "Next action",
+      value: goalProgress.nextAction,
+      note: goalProgress.achieved ? "Set the next goal when you are ready." : "One useful move is enough for now.",
     },
   ];
 
@@ -808,33 +712,6 @@ async function GoalsPageStream({
     },
   ];
 
-  const weeklySignals = [
-    {
-      label: "Spend",
-      value: spendDelta === null ? "N/A" : formatPercent(spendDelta),
-      note: spendDelta === null ? "No prior comparison" : spendDelta > 0 ? "Up vs prior month" : "Down vs prior month",
-      tone: spendDelta === null ? "neutral" : spendDelta > 0 ? "negative" : "positive",
-    },
-    {
-      label: "Savings",
-      value: savingsRateDelta === null ? "N/A" : formatPercent(savingsRateDelta),
-      note: savingsRateDelta === null ? "No prior comparison" : savingsRateDelta >= 0 ? "Improving momentum" : "Needs a reset",
-      tone: savingsRateDelta === null ? "neutral" : savingsRateDelta >= 0 ? "positive" : "negative",
-    },
-    {
-      label: "Net",
-      value: formatSignedCurrency(netDelta),
-      note: currentNet >= previousNet ? "Up vs last period" : "Down vs last period",
-      tone: netDelta >= 0 ? "positive" : "negative",
-    },
-    {
-      label: "Cleanliness",
-      value: `${Math.round(cleanlinessScore)}%`,
-      note: uncategorizedTransactions.length === 0 ? "Nice and tidy" : `${uncategorizedTransactions.length} items to clear`,
-      tone: cleanlinessScore >= 80 ? "positive" : cleanlinessScore >= 60 ? "neutral" : "negative",
-    },
-  ];
-
   const goalTimelineEntries =
     goalHistoryRows.length > 0
       ? goalHistoryRows.map((row) => {
@@ -856,478 +733,32 @@ async function GoalsPageStream({
           },
         ];
 
-  const goalAlerts = [
+  const recurringMerchantsPreview = recurringMerchants.slice(0, 3);
+  const driverCards = [
     {
-      text: hasGoalTarget
-        ? goalProgress.achieved
-          ? currentGoalPlan?.targetMode === "percent"
-            ? `You reached your salary-share target. That is a real win.`
-            : currentGoalPlan?.cadence === "annual"
-              ? `You are on pace for your annual goal. That is a real win.`
-              : `You reached your ${formatCurrency(goalTargetAmount, goalCurrency)} monthly target. That is a real win.`
-          : goalProgress.remainingAmount !== null
-            ? `${formatCurrency(goalProgress.remainingAmount, goalCurrency)} left to go this month. Keep the rhythm steady.`
-            : goalProgress.nextAction
-        : "Set a monthly target to unlock live progress tracking.",
-      icon: goalProgress.achieved ? "spark" : hasGoalTarget ? "chart" : "target",
+      label: "Spending pressure",
+      value: spendDelta === null ? "N/A" : formatPercent(spendDelta),
+      note: spendDelta === null ? "No prior comparison" : spendDelta > 0 ? "Spending is higher than before" : "Spending is easing",
     },
-    investmentHoldingsCount > 0
-      ? {
-          text:
-            selectedGoalKey === "invest_better"
-              ? `Your portfolio is sitting at ${formatCurrency(investmentHoldingsValue, goalCurrency)} across ${investmentHoldingsCount} holding${investmentHoldingsCount === 1 ? "" : "s"}.`
-              : `Your Investments page shows ${formatCurrency(investmentHoldingsValue, goalCurrency)} in assets${topInvestmentHolding ? `, led by ${topInvestmentHolding.name}` : ""}.`,
-          icon: "chart" as const,
-        }
-      : {
-          text: "Open Investments to connect portfolio value with this goal.",
-          icon: "target" as const,
-        },
-    uncategorizedTransactions.length > 0
-      ? {
-          text: `${uncategorizedTransactions.length} uncategorized transaction${uncategorizedTransactions.length === 1 ? "" : "s"} are softening the signal.`,
-          icon: "target" as const,
-        }
-      : {
-          text: "The review queue is looking clean right now.",
-          icon: "shield" as const,
-        },
-    recurringShare > 0.25
-      ? {
-          text: "Recurring spending is taking up a meaningful slice of the month.",
-          icon: "chart" as const,
-        }
-      : {
-          text: "Recurring spending is under control and not blocking progress.",
-          icon: "spark" as const,
-        },
+    {
+      label: "Savings rate",
+      value: currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100),
+      note: currentSavingsRate === null ? "Need more income context" : savingsRateDelta !== null && savingsRateDelta >= 0 ? "Improving momentum" : "Needs a reset",
+    },
+    {
+      label: "Recurring costs",
+      value: recurringShare > 0 ? formatPercent(recurringShare * 100) : "Clean",
+      note: recurringShare > 0.25 ? "A meaningful slice of the month" : "Recurring spending is under control",
+    },
+    {
+      label: "Investment movement",
+      value: investmentHoldingsCount > 0 ? formatCurrency(investmentHoldingsValue, goalCurrency) : "No holdings",
+      note:
+        investmentHoldingsCount > 0
+          ? `${investmentHoldingsCount} holding${investmentHoldingsCount === 1 ? "" : "s"} · ${investmentGainLoss >= 0 ? "+" : "-"}${formatCurrency(Math.abs(investmentGainLoss), goalCurrency)}`
+          : "Connect Investments to make this lane feel real",
+    },
   ];
-
-  const checklistItems = playbook.weeklyFocus.map((focus) => ({
-    title: focus,
-    body:
-      focus === "Move money early"
-        ? "Set the transfer before the month gets noisy."
-        : focus === "Protect one no-spend window"
-          ? "Make one part of the week friction-free."
-          : focus === "Review the biggest leak"
-            ? "Use the biggest category as your first improvement target."
-            : focus === "Attack the smallest leak"
-              ? "Pick the easiest category to shrink first."
-              : focus === "Keep one extra payment ready"
-                ? "Leave a little surplus ready for principal."
-                : focus === "Protect the payoff window"
-                  ? "Keep the payoff amount out of reach until it clears."
-                  : focus === "Clear uncategorized rows"
-                    ? "Make the month easier to read in one pass."
-                    : focus === "Confirm duplicates"
-                      ? "Remove double-counted noise before it distorts the trend."
-                      : focus === "Review the top category"
-                        ? "Check the biggest bucket for a quick win."
-                        : focus === "Move savings early"
-                          ? "Lock the habit in before other spending gets a vote."
-                          : focus === "Keep an emergency buffer untouched"
-                            ? "Protect the reserve from short-term decisions."
-                            : focus === "Avoid short-term detours"
-                              ? "Stay steady and keep the runway intact."
-                            : focus === "Keep a clean surplus"
-                                ? "Preserve room for investing by trimming leakage."
-                                : focus === "Avoid impulse spending"
-                                  ? "The best investable dollars are the ones that survive the week."
-                                  : "Protect the investing window",
-    href: "/transactions",
-    label: "Review now",
-    icon: getChecklistIcon(focus),
-  }));
-
-  const specificGoalSummary =
-    currentGoalPlan !== null
-      ? goalPlanSummary
-      : goalTargetAmount !== null
-        ? {
-            title: `${selectedGoal.title} monthly`,
-            detail: `Aim to set aside ${formatCurrency(goalTargetAmount, goalCurrency)} each month${goalTargetSource ? ` · tracked from ${goalTargetSource}` : ""}.`,
-            subtitle: "Legacy monthly target",
-            targetAmount: goalTargetAmount,
-          }
-        : null;
-
-  const advancedSections = (
-    <>
-      {specificGoalSummary || investmentAccounts.length > 0 ? (
-        <section className="goals-plan-grid">
-          {specificGoalSummary ? (
-            <article className="goals-plan glass">
-              <div className="goals-panel__head">
-                <div>
-                  <p className="eyebrow">Specific goal</p>
-                  <h4>{specificGoalSummary.title}</h4>
-                </div>
-                <div className="goals-panel__stat">
-                  <strong>{specificGoalSummary.subtitle}</strong>
-                  <span>{goalTargetSource ?? "Saved goal"}</span>
-                </div>
-              </div>
-
-              <div className="goals-plan__body">
-                <GoalGlyph goalKey={selectedGoal.value} />
-                <div>
-                  <p>{specificGoalSummary.detail}</p>
-                  <small>
-                    {goalProgress.achieved
-                      ? "You already hit the current target. Time to set the next one."
-                      : goalProgress.remainingAmount !== null
-                        ? `${formatCurrency(goalProgress.remainingAmount, goalCurrency)} remains to close the gap this cycle.`
-                        : "Set a specific amount, cadence, or salary share to make the target more concrete."}
-                  </small>
-                </div>
-              </div>
-            </article>
-          ) : null}
-
-          <article className="goals-investments glass">
-            <div className="goals-panel__head">
-              <div>
-                <p className="eyebrow">Investments</p>
-                <h4>What your portfolio adds to the plan</h4>
-              </div>
-              <div className="goals-panel__stat">
-                <strong>{investmentAccounts.length}</strong>
-                <span>Holdings tracked</span>
-              </div>
-            </div>
-
-            {investmentAccounts.length > 0 ? (
-              <>
-                <div className="goals-investments__metrics">
-                  <div>
-                    <span>Portfolio value</span>
-                    <strong>{formatCurrency(investmentHoldingsValue, goalCurrency)}</strong>
-                    <small>{investmentHoldingsCount} holding{investmentHoldingsCount === 1 ? "" : "s"} total</small>
-                  </div>
-                  <div>
-                    <span>Gain / loss</span>
-                    <strong className={investmentGainLoss >= 0 ? "positive" : "negative"}>
-                      {investmentGainLoss >= 0 ? "+" : "-"}
-                      {formatCurrency(Math.abs(investmentGainLoss), goalCurrency)}
-                    </strong>
-                    <small>{investmentCostBasis > 0 ? `${formatPercent((investmentGainLoss / investmentCostBasis) * 100)} vs cost basis` : "No cost basis yet"}</small>
-                  </div>
-                  <div>
-                    <span>Monthly flow</span>
-                    <strong>{formatCurrency(investmentFlow, goalCurrency)}</strong>
-                    <small>Investment movement this month</small>
-                  </div>
-                </div>
-
-                <div className="goals-investments__list">
-                  {investmentHoldings.slice(0, 3).map((account) => (
-                    <div key={account.id} className="goals-investments__item">
-                      <div>
-                        <strong>{account.name}</strong>
-                        <span>
-                          {account.investmentSubtype ?? "investment"}
-                          {account.institution ? ` · ${account.institution}` : ""}
-                        </span>
-                      </div>
-                      <strong>{formatCurrency(Number(account.balance ?? 0), account.currency ?? goalCurrency)}</strong>
-                    </div>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <div className="goals-investments__empty">
-                <p>
-                  Open Investments to bring portfolio values into the goal plan. That makes investing targets feel like
-                  real money movement instead of just a monthly wish.
-                </p>
-                <Link className="pill-link pill-link--inline" href="/investments">
-                  Open Investments
-                </Link>
-              </div>
-            )}
-          </article>
-        </section>
-      ) : null}
-
-      <article className="goals-action-plan glass">
-        <div className="goals-panel__head">
-          <div>
-            <p className="eyebrow">Action plan</p>
-            <h4>What Clover wants you to do next</h4>
-          </div>
-          <div className="goals-panel__stat">
-            <strong>{goalProgress.bandLabel}</strong>
-            <span>{goalProgress.achieved ? "Target hit" : "One clear step ahead"}</span>
-          </div>
-        </div>
-
-        <div className="goals-action-plan__lead">
-          <strong>{goalProgress.coachCopy}</strong>
-          <p>{goalProgress.nextAction}</p>
-        </div>
-
-        <div className="goals-action-plan__steps" aria-label="Goal actions">
-          {goalActionSteps.map((step, index) => (
-            <div key={step} className="goals-action-plan__step">
-              <span>Step {index + 1}</span>
-              <strong>{step}</strong>
-            </div>
-          ))}
-        </div>
-
-        <div className="goals-action-plan__list">
-          {movementHighlights.map((item) => (
-            <div key={item.label} className={`goals-action-plan__item ${item.tone}`}>
-              <span>{item.label}</span>
-              <strong>{item.value}</strong>
-              <small>{item.note}</small>
-            </div>
-          ))}
-        </div>
-      </article>
-
-      <section className="goals-visual-grid">
-        <article className="goals-heatmap glass">
-          <div className="goals-panel__head">
-            <div>
-              <p className="eyebrow">Current pressure</p>
-              <h4>What is helping or slowing the goal</h4>
-            </div>
-            <div className="goals-panel__stat">
-              <strong>{formatPercent(recurringShare * 100)}</strong>
-              <span>Recurring share</span>
-            </div>
-          </div>
-
-          <div className="goals-heatmap__grid goals-heatmap__grid--actions">
-            <div className="goals-heatmap__cell is-4">
-              <span>Spend delta</span>
-              <strong>{spendDelta === null ? "N/A" : formatPercent(spendDelta)}</strong>
-              <small>{spendDelta === null ? "No prior comparison" : spendDelta > 0 ? "Spending is higher than before" : "Spending is easing"}</small>
-            </div>
-            <div className="goals-heatmap__cell is-3">
-              <span>Savings rate</span>
-              <strong>{currentSavingsRate === null ? "N/A" : formatPercent(currentSavingsRate * 100)}</strong>
-              <small>{currentSavingsRate === null ? "Need more income context" : goalProgress.bandLabel}</small>
-            </div>
-            <div className="goals-heatmap__cell is-2">
-              <span>Remaining</span>
-              <strong>{goalProgress.remainingAmount === null ? "Set target" : formatCurrency(goalProgress.remainingAmount, goalCurrency)}</strong>
-              <small>{goalProgress.achieved ? "Target reached" : "Amount left to close the gap"}</small>
-            </div>
-          </div>
-        </article>
-
-        <article className="goals-drivers glass">
-          <div className="goals-panel__head">
-            <div>
-              <p className="eyebrow">Momentum drivers</p>
-              <h4>What is helping or hurting the lane</h4>
-            </div>
-            <div className="goals-panel__stat">
-              <strong>{formatPercent(recurringShare * 100)}</strong>
-              <span>Recurring share</span>
-            </div>
-          </div>
-
-          <div className="goals-drivers__bars">
-            {recurringMerchants.length > 0 ? (
-              recurringMerchants.map((merchant) => {
-                const share = recurringDrag > 0 ? (merchant.amount / recurringDrag) * 100 : 0;
-                return (
-                  <div key={merchant.label} className="goals-driver">
-                    <div className="goals-driver__head">
-                      <div className="goals-driver__icon" aria-hidden="true">
-                        <GoalGlyph goalKey={selectedGoal.value} />
-                      </div>
-                      <div>
-                        <strong>{merchant.label}</strong>
-                        <span>{merchant.count} transactions</span>
-                      </div>
-                    </div>
-                    <div className="goals-driver__track" aria-hidden="true">
-                      <div className="goals-driver__fill" style={{ width: `${clamp(share, 8, 100)}%` }} />
-                    </div>
-                    <small>{formatCurrency(merchant.amount, goalCurrency)}</small>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="goals-driver goals-driver--empty">
-                <div className="goals-driver__head">
-                  <div className="goals-driver__icon" aria-hidden="true">
-                    <GoalGlyph goalKey={selectedGoal.value} />
-                  </div>
-                  <div>
-                    <strong>No recurring drag yet</strong>
-                    <span>Clover has not seen a repeating merchant large enough to crowd this plan.</span>
-                  </div>
-                </div>
-                <small>Add a few more transactions and Clover will surface the first fixed cost worth watching.</small>
-              </div>
-            )}
-          </div>
-        </article>
-      </section>
-
-      <section className="goals-lanes">
-        <div className="goals-lanes__head">
-          <div>
-            <p className="eyebrow">Onboarding goals</p>
-            <h4>All the lanes Clover can coach you through</h4>
-          </div>
-          <p className="goals-lanes__summary">
-            These are the same focus areas Clover asked about during onboarding. Your active lane is highlighted so
-            you can see how the current month supports it.
-          </p>
-        </div>
-
-        <div className="goals-lane-grid">
-          {GOAL_OPTIONS.map((goal) => {
-            const isActive = goal.value === selectedGoalKey;
-            return (
-              <article key={goal.value} className={`goals-lane glass ${isActive ? "is-active" : ""}`}>
-                <div className="goals-lane__top">
-                  <div className="goals-lane__icon" aria-hidden="true">
-                    <GoalGlyph goalKey={goal.value} />
-                  </div>
-                  <div className="goals-lane__badge-row">
-                    <span className={`pill ${isActive ? "pill-good" : "pill-subtle"}`}>{isActive ? "Current focus" : "Available focus"}</span>
-                    <span className="goals-lane__score">{goal.targetRate}% pace target</span>
-                  </div>
-                </div>
-                <h5>{goal.title}</h5>
-                <p>{goal.description}</p>
-                <div className="goals-lane__metrics">
-                  <div>
-                    <span>Target line</span>
-                    <strong>{goal.targetRate}%</strong>
-                  </div>
-                  <div>
-                    <span>Current band</span>
-                    <strong>{isActive ? goalProgress.bandLabel : "Not active"}</strong>
-                  </div>
-                </div>
-                <div className="goals-lane__footer">
-                  <span>{goal.signal}</span>
-                  {isActive ? <strong>{goalProgress.nextAction}</strong> : <strong>{goal.coachNote}</strong>}
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </section>
-
-      <section className="goals-intel-grid">
-        <article className="goals-history glass">
-          <div className="goals-panel__head">
-            <div>
-              <p className="eyebrow">Goal history</p>
-              <h4>Your path so far</h4>
-            </div>
-            <div className="goals-panel__stat">
-              <strong>{goalTimelineEntries.length}</strong>
-              <span>Saved goal updates</span>
-            </div>
-          </div>
-
-          <div className="goals-history__timeline">
-            {goalTimelineEntries.map((entry, index) => (
-              <div key={`${entry.label}-${index}`} className="goals-history__item">
-                <span className="goals-history__label">{entry.label}</span>
-                <strong>{entry.detail}</strong>
-              </div>
-            ))}
-          </div>
-          <p className="goals-history__hint">{playbook.historyMarkers[0]}</p>
-        </article>
-
-        <article className="goals-milestones glass">
-          <div className="goals-panel__head">
-            <div>
-              <p className="eyebrow">Milestones</p>
-              <h4>What progress looks like here</h4>
-            </div>
-            <div className="goals-panel__stat">
-              <strong>{Math.round(weeklyProgress)}</strong>
-              <span>Weekly pace</span>
-            </div>
-          </div>
-
-          <div className="goals-milestones__list">
-            {milestoneCards.map((milestone) => (
-              <div key={milestone.label} className={`goals-milestone ${milestone.reached ? "is-reached" : ""}`}>
-                <div className="goals-milestone__head">
-                  <strong>
-                    <span className="goals-milestone__icon" aria-hidden="true">
-                      <GoalGlyph goalKey={selectedGoal.value} />
-                    </span>
-                    {milestone.label}
-                  </strong>
-                  <span>{milestone.reached ? "Reached" : `Threshold ${milestone.threshold}%`}</span>
-                </div>
-                <p>{milestone.detail}</p>
-                <div className="goals-milestone__bar" aria-hidden="true">
-                  <div className="goals-milestone__fill" style={{ width: `${milestone.percent}%` }} />
-                </div>
-                <small>{milestone.reached ? "Keep this behavior consistent through month-end." : `You are ${Math.max(0, milestone.threshold - goalScore)} points away from this checkpoint.`}</small>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="goals-weekly glass">
-          <div className="goals-panel__head">
-            <div>
-              <p className="eyebrow">Weekly change</p>
-              <h4>What shifted since the last check</h4>
-            </div>
-            <div className="goals-panel__stat">
-              <strong className={goalScore >= 70 ? "positive" : "negative"}>{goalScore}</strong>
-              <span>Coach score</span>
-            </div>
-          </div>
-
-          <div className="goals-weekly__grid">
-            {weeklySignals.map((signal) => (
-              <div key={signal.label} className={`goals-weekly__card ${signal.tone}`}>
-                <span>{signal.label}</span>
-                <strong>{signal.value}</strong>
-                <small>{signal.note}</small>
-              </div>
-            ))}
-          </div>
-        </article>
-      </section>
-
-      <GoalsChecklist items={checklistItems} />
-
-      <article className="goals-alerts glass">
-        <div className="goals-panel__head">
-          <div>
-            <p className="eyebrow">Goal alerts</p>
-            <h4>Coach notes for this moment</h4>
-          </div>
-          <div className="goals-panel__stat">
-            <strong>{goalAlerts.length}</strong>
-            <span>Active messages</span>
-          </div>
-        </div>
-
-        <div className="goals-alerts__list">
-          {goalAlerts.map((alert, index) => (
-            <div key={`${alert.text}-${index}`} className="goals-alerts__item">
-              <span className="goals-alerts__dot" aria-hidden="true">
-                <GoalGlyph goalKey={selectedGoal.value} />
-              </span>
-              <p>{alert.text}</p>
-            </div>
-          ))}
-        </div>
-      </article>
-    </>
-  );
 
   return (
     <CloverShell
@@ -1351,388 +782,395 @@ async function GoalsPageStream({
       ) : null}
 
       <GoalsSubtabs activeSection={selectedSection} beginnerMode={isBeginnerMode}>
-        <article className="goals-hero glass goals-section goals-section--overview">
-          <div className="goals-hero__copy">
-            <p className="goals-hero__eyebrow">{isBeginnerMode ? "Start here" : "Goal coaching"}</p>
-            <h3>{heroLead}</h3>
-            <p>{heroSupport}</p>
-            {!hasGoalTarget ? (
-              <>
-                <p className="goals-hero__setup-note">
-                  {isBeginnerMode
-                    ? "Start here: pick one number below and Clover will track the rest with you."
-                    : "You did not set a monthly target yet. Pick a number below so Clover can track how much progress you make each month."}
-                </p>
-                <Link className="pill-link pill-link--inline" href="#goal-editor">
-                  Set your target
-                </Link>
-              </>
-            ) : null}
+        <section className="goals-section goals-section--overview">
+          <article className="goals-hero glass">
+            <div className="goals-hero__copy">
+              <p className="goals-hero__eyebrow">{isBeginnerMode ? "Start here" : "Goal coaching"}</p>
+              <h3>{heroLead}</h3>
+              <p>{heroSupport}</p>
+              {!hasGoalTarget ? (
+                <>
+                  <p className="goals-hero__setup-note">
+                    {isBeginnerMode
+                      ? "Start here: pick one number below and Clover will track the rest with you."
+                      : "You did not set a monthly target yet. Pick a number below so Clover can track how much progress you make each month."}
+                  </p>
+                  <Link className="pill-link pill-link--inline" href="#goal-editor">
+                    Set your target
+                  </Link>
+                </>
+              ) : null}
 
-            <div className="goals-hero__summary">
-              <span className={`pill ${goalScore >= 70 ? "pill-good" : goalScore >= 50 ? "pill-accent" : "pill-warning"}`}>
-                {coach.badge}
-              </span>
-              <span>{hasGoalSelection ? selectedGoal.signal : "Choose a lane to shape the plan."}</span>
-              <span>
-                {hasGoalSelection
-                  ? hasGoalTarget
-                    ? goalMoneyLabel
-                    : "Set a target to unlock live tracking"
-                  : "Pick a goal to unlock tracking"}
-              </span>
-            </div>
-
-            <div className="goals-progress">
-              <div className="goals-progress__head">
-                <strong>{hasGoalTarget ? goalProgress.label : "Monthly goal setup"}</strong>
+              <div className="goals-hero__summary">
+                <span className={`pill ${goalScore >= 70 ? "pill-good" : goalScore >= 50 ? "pill-accent" : "pill-warning"}`}>
+                  {coach.badge}
+                </span>
+                <span>{hasGoalSelection ? selectedGoal.signal : "Choose a lane to shape the plan."}</span>
                 <span>
-                  {hasGoalTarget && goalProgress.targetAmount !== null
-                    ? `${formatCurrency(goalProgress.currentAmount, goalCurrency)} of ${formatCurrency(goalProgress.targetAmount, goalCurrency)}`
-                    : suggestedGoalTarget !== null
-                      ? `Suggested ${formatCurrency(suggestedGoalTarget, goalCurrency)}`
-                      : "No target saved yet"}
+                  {hasGoalSelection
+                    ? hasGoalTarget
+                      ? goalMoneyLabel
+                      : "Set a target to unlock live tracking"
+                    : "Pick a goal to unlock tracking"}
                 </span>
               </div>
-              <div className="goals-progress__bar" aria-hidden="true">
-                <div
-                  className="goals-progress__fill"
-                  style={{ width: `${goalProgress.progressPercent ?? 0}%` }}
-                />
+
+              <div className="goals-progress">
+                <div className="goals-progress__head">
+                  <strong>{hasGoalTarget ? goalProgress.label : "Monthly goal setup"}</strong>
+                  <span>
+                    {hasGoalTarget && goalProgress.targetAmount !== null
+                      ? `${formatCurrency(goalProgress.currentAmount, goalCurrency)} of ${formatCurrency(goalProgress.targetAmount, goalCurrency)}`
+                      : suggestedGoalTarget !== null
+                        ? `Suggested ${formatCurrency(suggestedGoalTarget, goalCurrency)}`
+                        : "No target saved yet"}
+                  </span>
+                </div>
+                <div className="goals-progress__bar" aria-hidden="true">
+                  <div className="goals-progress__fill" style={{ width: `${goalProgress.progressPercent ?? 0}%` }} />
+                </div>
+                <p>{hasGoalTarget ? goalProgress.coachCopy : "Set the number, then Clover will track the month with you."}</p>
               </div>
-              <p>{hasGoalTarget ? goalProgress.coachCopy : "Set the number, then Clover will track the month with you."}</p>
+
+              {goalProgress.achieved ? (
+                <PostHogEvent
+                  event="goal_target_reached"
+                  onceKey={analyticsOnceKey(
+                    "goal_target_reached",
+                    `user:${user.id}:goal:${selectedGoalKey ?? "none"}:${goalTargetAmount ?? "none"}:${goalTargetSource ?? "saved"}`
+                  )}
+                  properties={{
+                    user_id: user.id,
+                    primary_goal: selectedGoalKey ?? null,
+                    target_amount: goalTargetAmount ?? null,
+                    target_source: goalTargetSource ?? null,
+                    progress_percent: goalProgress.progressPercent ?? null,
+                    current_amount: goalProgress.currentAmount,
+                  }}
+                />
+              ) : null}
+
+              {goalProgress.achieved ? (
+                <div className="goals-celebration" role="status" aria-live="polite">
+                  <span className="goals-celebration__icon" aria-hidden="true">
+                    ✦
+                  </span>
+                  <div>
+                    <strong>Goal reached</strong>
+                    <span>You hit your monthly target. That is a solid finish to the month.</span>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
-            {goalProgress.achieved ? (
-              <PostHogEvent
-                event="goal_target_reached"
-                onceKey={analyticsOnceKey(
-                  "goal_target_reached",
-                  `user:${user.id}:goal:${selectedGoalKey ?? "none"}:${goalTargetAmount ?? "none"}:${goalTargetSource ?? "saved"}`
-                )}
-                properties={{
-                  user_id: user.id,
-                  primary_goal: selectedGoalKey ?? null,
-                  target_amount: goalTargetAmount ?? null,
-                  target_source: goalTargetSource ?? null,
-                  progress_percent: goalProgress.progressPercent ?? null,
-                  current_amount: goalProgress.currentAmount,
-                }}
-              />
-            ) : null}
-
-            {goalProgress.achieved ? (
-              <div className="goals-celebration" role="status" aria-live="polite">
-                <span className="goals-celebration__icon" aria-hidden="true">
-                  ✦
-                </span>
-                <div>
-                  <strong>Goal reached</strong>
-                  <span>You hit your monthly target. That is a solid finish to the month.</span>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          <div className={`goals-hero__visual${isBeginnerMode ? " goals-hero__visual--simple" : ""}`}>
-            {isBeginnerMode ? (
-              <article className="goals-hero__focus-card glass">
-                <div className="goals-panel__head">
-                  <div>
-                    <p className="eyebrow">Your goal this month</p>
-                    <h4>{hasGoalTarget ? goalProgress.bandLabel : "Set a target to get started"}</h4>
-                  </div>
-                  <div className="goals-panel__stat">
-                    <strong>{hasGoalTarget && goalProgress.progressPercent !== null ? `${Math.round(goalProgress.progressPercent)}%` : "—"}</strong>
-                    <span>{hasGoalTarget ? "Progress made" : "Waiting for amount"}</span>
-                  </div>
-                </div>
-
-                <div className="goals-hero__focus-card-body">
-                  <p>{hasGoalTarget ? goalProgress.coachCopy : "Set one simple peso amount and Clover will do the coaching."}</p>
-                  <div className="goals-hero__focus-card-bar" aria-hidden="true">
-                    <div className="goals-hero__focus-card-fill" style={{ width: `${goalProgress.progressPercent ?? 0}%` }} />
-                  </div>
-                  <small>
-                    {hasGoalTarget
-                      ? goalProgress.remainingAmount !== null
-                        ? `${formatCurrency(goalProgress.remainingAmount, goalCurrency)} left to reach the goal.`
-                        : "Goal progress is ready to track."
-                      : "Once you set a number, the bar will start moving."}
-                  </small>
-                </div>
-
-                <details className="goals-hero__details">
-                  <summary>Show more details</summary>
-                  <div className="goals-hero__details-content">
-                    <div className="goals-hero__ring-card">
-                      <div
-                        className={`goals-hero__ring ${goalProgress.achieved ? "is-complete" : ""}`}
-                        role="img"
-                        aria-label={
-                          hasGoalTarget && goalProgress.progressPercent !== null
-                            ? `Monthly goal progress at ${Math.round(goalProgress.progressPercent)} percent`
-                            : "Monthly goal is waiting for a target amount"
-                        }
-                      >
-                        <svg viewBox="0 0 240 240">
-                          <defs>
-                            <linearGradient id="goals-ring-gradient" x1="0" x2="1" y1="0" y2="1">
-                              <stop offset="0%" stopColor="rgba(34,197,94,0.25)" />
-                              <stop offset="100%" stopColor="rgba(3,168,192,0.92)" />
-                            </linearGradient>
-                          </defs>
-                          <circle cx="120" cy="120" r="84" className="goals-ring__track" />
-                          <circle
-                            cx="120"
-                            cy="120"
-                            r="84"
-                            className="goals-ring__progress"
-                            stroke="url(#goals-ring-gradient)"
-                            style={{
-                              strokeDasharray: `${2 * Math.PI * 84 * ((goalProgress.progressPercent ?? 0) / 100)} ${2 * Math.PI * 84}`,
-                            }}
-                          />
-                        </svg>
-                        <div className="goals-hero__ring-copy">
-                          <strong>{hasGoalTarget && goalProgress.progressPercent !== null ? `${Math.round(goalProgress.progressPercent)}%` : "Set it"}</strong>
-                          <span>{hasGoalTarget ? `${formatCurrency(goalProgress.currentAmount, goalCurrency)} ${goalProgress.currentLabel.toLowerCase()}` : "No monthly target yet"}</span>
-                        </div>
-                      </div>
-
-                      <div className="goals-hero__stats">
-                        {goalSnapshot.map((item) => (
-                          <div key={item.label} className="goals-stat">
-                            <span>{item.label}</span>
-                            <strong>{item.value}</strong>
-                            <small>{item.note}</small>
-                          </div>
-                        ))}
-                      </div>
+            <div className={`goals-hero__visual${isBeginnerMode ? " goals-hero__visual--simple" : ""}`}>
+              {isBeginnerMode ? (
+                <article className="goals-hero__focus-card glass">
+                  <div className="goals-panel__head">
+                    <div>
+                      <p className="eyebrow">Your goal this month</p>
+                      <h4>{hasGoalTarget ? goalProgress.bandLabel : "Set a target to get started"}</h4>
                     </div>
-
-                    <article className="goals-pace-card glass">
-                      <div className="goals-panel__head">
-                        <div>
-                          <p className="eyebrow">Progress bands</p>
-                          <h4>Where the month stands right now</h4>
-                        </div>
-                        <div className="goals-panel__stat">
-                          <strong>{goalProgress.bandLabel}</strong>
-                          <span>{goalProgress.bandTone === "positive" ? "Ahead of plan" : goalProgress.bandTone === "negative" ? "Needs a reset" : "Staying steady"}</span>
-                        </div>
-                      </div>
-
-                      <div className="goals-pace__bars">
-                        {progressBands.map((band) => (
-                          <div key={band.label} className={`goals-pace__bar ${band.tone}`}>
-                            <div className="goals-pace__label">
-                              <span>{band.label}</span>
-                              <strong>{band.threshold}%</strong>
-                            </div>
-                            <div className="goals-pace__track" aria-hidden="true">
-                              <div
-                                className="goals-pace__fill"
-                                style={{
-                                  width:
-                                    goalProgress.progressPercent === null
-                                      ? "0%"
-                                      : `${clamp(goalProgress.progressPercent >= band.threshold ? 100 : (goalProgress.progressPercent / Math.max(band.threshold, 1)) * 100, 8, 100)}%`,
-                                }}
-                              />
-                            </div>
-                            <small>
-                              {band.copy}
-                              {goalProgress.progressPercent !== null && goalProgress.progressPercent >= band.threshold ? " This band is cleared." : ""}
-                            </small>
-                          </div>
-                        ))}
-                      </div>
-                    </article>
+                    <div className="goals-panel__stat">
+                      <strong>{hasGoalTarget && goalProgress.progressPercent !== null ? `${Math.round(goalProgress.progressPercent)}%` : "—"}</strong>
+                      <span>{hasGoalTarget ? "Progress made" : "Waiting for amount"}</span>
+                    </div>
                   </div>
-                </details>
-              </article>
-            ) : (
-              <>
+
+                  <div className="goals-hero__focus-card-body">
+                    <p>{hasGoalTarget ? goalProgress.coachCopy : "Set one simple peso amount and Clover will do the coaching."}</p>
+                    <div className="goals-hero__focus-card-bar" aria-hidden="true">
+                      <div className="goals-hero__focus-card-fill" style={{ width: `${goalProgress.progressPercent ?? 0}%` }} />
+                    </div>
+                    <small>
+                      {hasGoalTarget
+                        ? goalProgress.remainingAmount !== null
+                          ? `${formatCurrency(goalProgress.remainingAmount, goalCurrency)} left to reach the goal.`
+                          : "Goal progress is ready to track."
+                        : "Once you set a number, the bar will start moving."}
+                    </small>
+                  </div>
+                </article>
+              ) : (
                 <GoalIllustration
                   goalKey={(selectedGoalKey ?? "save_more") as GoalKey}
                   title={`${selectedGoal.title} in motion`}
                   subtitle={heroSupport}
                   progress={goalProgress.progressPercent ?? goalScore}
                 />
-
-                <div className="goals-hero__ring-card">
-                  <div
-                    className={`goals-hero__ring ${goalProgress.achieved ? "is-complete" : ""}`}
-                    role="img"
-                    aria-label={
-                      hasGoalTarget && goalProgress.progressPercent !== null
-                        ? `Monthly goal progress at ${Math.round(goalProgress.progressPercent)} percent`
-                        : "Monthly goal is waiting for a target amount"
-                    }
-                  >
-                    <svg viewBox="0 0 240 240">
-                      <defs>
-                        <linearGradient id="goals-ring-gradient" x1="0" x2="1" y1="0" y2="1">
-                          <stop offset="0%" stopColor="rgba(34,197,94,0.25)" />
-                          <stop offset="100%" stopColor="rgba(3,168,192,0.92)" />
-                        </linearGradient>
-                      </defs>
-                      <circle cx="120" cy="120" r="84" className="goals-ring__track" />
-                      <circle
-                        cx="120"
-                        cy="120"
-                        r="84"
-                        className="goals-ring__progress"
-                        stroke="url(#goals-ring-gradient)"
-                        style={{
-                          strokeDasharray: `${2 * Math.PI * 84 * ((goalProgress.progressPercent ?? 0) / 100)} ${2 * Math.PI * 84}`,
-                        }}
-                      />
-                    </svg>
-                    <div className="goals-hero__ring-copy">
-                      <strong>{hasGoalTarget && goalProgress.progressPercent !== null ? `${Math.round(goalProgress.progressPercent)}%` : "Set it"}</strong>
-                      <span>{hasGoalTarget ? `${formatCurrency(goalProgress.currentAmount, goalCurrency)} ${goalProgress.currentLabel.toLowerCase()}` : "No monthly target yet"}</span>
-                    </div>
-                  </div>
-
-                  <div className="goals-hero__stats">
-                    {goalSnapshot.map((item) => (
-                      <div key={item.label} className="goals-stat">
-                        <span>{item.label}</span>
-                        <strong>{item.value}</strong>
-                        <small>{item.note}</small>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <article className="goals-pace-card glass">
-                  <div className="goals-panel__head">
-                    <div>
-                      <p className="eyebrow">Progress bands</p>
-                      <h4>Where the month stands right now</h4>
-                    </div>
-                    <div className="goals-panel__stat">
-                      <strong>{goalProgress.bandLabel}</strong>
-                      <span>{goalProgress.bandTone === "positive" ? "Ahead of plan" : goalProgress.bandTone === "negative" ? "Needs a reset" : "Staying steady"}</span>
-                    </div>
-                  </div>
-
-                  <div className="goals-pace__bars">
-                    {progressBands.map((band) => (
-                      <div key={band.label} className={`goals-pace__bar ${band.tone}`}>
-                        <div className="goals-pace__label">
-                          <span>{band.label}</span>
-                          <strong>{band.threshold}%</strong>
-                        </div>
-                        <div className="goals-pace__track" aria-hidden="true">
-                          <div
-                            className="goals-pace__fill"
-                            style={{
-                              width:
-                                goalProgress.progressPercent === null
-                                  ? "0%"
-                                  : `${clamp(goalProgress.progressPercent >= band.threshold ? 100 : (goalProgress.progressPercent / Math.max(band.threshold, 1)) * 100, 8, 100)}%`,
-                            }}
-                          />
-                        </div>
-                        <small>
-                          {band.copy}
-                          {goalProgress.progressPercent !== null && goalProgress.progressPercent >= band.threshold ? " This band is cleared." : ""}
-                        </small>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-              </>
-            )}
-          </div>
-        </article>
-
-        {isBeginnerMode ? (
-          <article className="goals-beginner-guide glass goals-section goals-section--overview">
-            <div className="goals-panel__head">
-              <div>
-                <p className="eyebrow">Start here</p>
-                <h4>One goal at a time</h4>
-              </div>
-              <div className="goals-panel__stat">
-                <strong>Easy path</strong>
-                <span>Beginner-friendly</span>
-              </div>
-            </div>
-
-            <div className="goals-beginner-guide__list">
-              {beginnerGuide.map((step, index) => (
-                <div key={step.title} className="goals-beginner-guide__item">
-                  <span>{index + 1}</span>
-                  <div>
-                    <strong>{step.title}</strong>
-                  <p>{step.body}</p>
-                </div>
-              </div>
-            ))}
+              )}
             </div>
           </article>
+
+          <div className="goals-overview__cards">
+            {overviewCards.map((card) => (
+              <article key={card.label} className="goals-overview__card glass">
+                <span>{card.label}</span>
+                <strong>{card.value}</strong>
+                <small>{card.note}</small>
+              </article>
+            ))}
+          </div>
+
+          <div className="goals-editor-shell" id="goal-editor">
+            <GoalsEditor
+              goals={GOAL_OPTIONS}
+              currentGoal={selectedGoalKey}
+              currentTargetAmount={goalTargetAmount !== null ? String(goalTargetAmount) : null}
+              currentGoalPlan={currentGoalPlan}
+              monthlyIncome={monthlyIncome}
+              suggestedTargetAmount={suggestedGoalTarget}
+              currency={goalCurrency}
+            />
+          </div>
+        </section>
+
+        <section className="goals-section goals-section--progress">
+          <div className="goals-progress-grid">
+            <article className="goals-hero__ring-card">
+              <div
+                className={`goals-hero__ring ${goalProgress.achieved ? "is-complete" : ""}`}
+                role="img"
+                aria-label={
+                  hasGoalTarget && goalProgress.progressPercent !== null
+                    ? `Monthly goal progress at ${Math.round(goalProgress.progressPercent)} percent`
+                    : "Monthly goal is waiting for a target amount"
+                }
+              >
+                <svg viewBox="0 0 240 240">
+                  <defs>
+                    <linearGradient id="goals-ring-gradient" x1="0" x2="1" y1="0" y2="1">
+                      <stop offset="0%" stopColor="rgba(34,197,94,0.25)" />
+                      <stop offset="100%" stopColor="rgba(3,168,192,0.92)" />
+                    </linearGradient>
+                  </defs>
+                  <circle cx="120" cy="120" r="84" className="goals-ring__track" />
+                  <circle
+                    cx="120"
+                    cy="120"
+                    r="84"
+                    className="goals-ring__progress"
+                    stroke="url(#goals-ring-gradient)"
+                    style={{
+                      strokeDasharray: `${2 * Math.PI * 84 * ((goalProgress.progressPercent ?? 0) / 100)} ${2 * Math.PI * 84}`,
+                    }}
+                  />
+                </svg>
+                <div className="goals-hero__ring-copy">
+                  <strong>{hasGoalTarget && goalProgress.progressPercent !== null ? `${Math.round(goalProgress.progressPercent)}%` : "Set it"}</strong>
+                  <span>{hasGoalTarget ? `${formatCurrency(goalProgress.currentAmount, goalCurrency)} ${goalProgress.currentLabel.toLowerCase()}` : "No monthly target yet"}</span>
+                </div>
+              </div>
+            </article>
+
+            <article className="goals-pace-card glass">
+              <div className="goals-panel__head">
+                <div>
+                  <p className="eyebrow">Progress bands</p>
+                  <h4>Where the month stands right now</h4>
+                </div>
+                <div className="goals-panel__stat">
+                  <strong>{goalProgress.bandLabel}</strong>
+                  <span>{goalProgress.bandTone === "positive" ? "Ahead of plan" : goalProgress.bandTone === "negative" ? "Needs a reset" : "Staying steady"}</span>
+                </div>
+              </div>
+
+              <div className="goals-pace__bars">
+                {progressBands.map((band) => (
+                  <div key={band.label} className={`goals-pace__bar ${band.tone}`}>
+                    <div className="goals-pace__label">
+                      <span>{band.label}</span>
+                      <strong>{band.threshold}%</strong>
+                    </div>
+                    <div className="goals-pace__track" aria-hidden="true">
+                      <div
+                        className="goals-pace__fill"
+                        style={{
+                          width:
+                            goalProgress.progressPercent === null
+                              ? "0%"
+                              : `${clamp(goalProgress.progressPercent >= band.threshold ? 100 : (goalProgress.progressPercent / Math.max(band.threshold, 1)) * 100, 8, 100)}%`,
+                        }}
+                      />
+                    </div>
+                    <small>
+                      {band.copy}
+                      {goalProgress.progressPercent !== null && goalProgress.progressPercent >= band.threshold ? " This band is cleared." : ""}
+                    </small>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </div>
+
+          <div className="goals-progress__lower">
+            <article className="goals-milestones glass">
+              <div className="goals-panel__head">
+                <div>
+                  <p className="eyebrow">Milestones</p>
+                  <h4>What progress looks like here</h4>
+                </div>
+                <div className="goals-panel__stat">
+                  <strong>{Math.round(weeklyProgress)}</strong>
+                  <span>Weekly pace</span>
+                </div>
+              </div>
+
+              <div className="goals-milestones__list">
+                {milestoneCards.map((milestone) => (
+                  <div key={milestone.label} className={`goals-milestone ${milestone.reached ? "is-reached" : ""}`}>
+                    <div className="goals-milestone__head">
+                      <strong>
+                        <span className="goals-milestone__icon" aria-hidden="true">
+                          <GoalGlyph goalKey={selectedGoal.value} />
+                        </span>
+                        {milestone.label}
+                      </strong>
+                      <span>{milestone.reached ? "Reached" : `Threshold ${milestone.threshold}%`}</span>
+                    </div>
+                    <p>{milestone.detail}</p>
+                    <div className="goals-milestone__bar" aria-hidden="true">
+                      <div className="goals-milestone__fill" style={{ width: `${milestone.percent}%` }} />
+                    </div>
+                    <small>{milestone.reached ? "Keep this behavior consistent through month-end." : `You are ${Math.max(0, milestone.threshold - goalScore)} points away from this checkpoint.`}</small>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="goals-weekly glass">
+              <div className="goals-panel__head">
+                <div>
+                  <p className="eyebrow">Weekly change</p>
+                  <h4>What shifted since the last check</h4>
+                </div>
+                <div className="goals-panel__stat">
+                  <strong className={goalScore >= 70 ? "positive" : "negative"}>{goalScore}</strong>
+                  <span>Coach score</span>
+                </div>
+              </div>
+
+              <div className="goals-weekly__grid">
+                {[
+                  {
+                    label: "Spend",
+                    value: spendDelta === null ? "N/A" : formatPercent(spendDelta),
+                    note: spendDelta === null ? "No prior comparison" : spendDelta > 0 ? "Up vs prior month" : "Down vs prior month",
+                    tone: spendDelta === null ? "neutral" : spendDelta > 0 ? "negative" : "positive",
+                  },
+                  {
+                    label: "Savings",
+                    value: savingsRateDelta === null ? "N/A" : formatPercent(savingsRateDelta),
+                    note: savingsRateDelta === null ? "No prior comparison" : savingsRateDelta >= 0 ? "Improving momentum" : "Needs a reset",
+                    tone: savingsRateDelta === null ? "neutral" : savingsRateDelta >= 0 ? "positive" : "negative",
+                  },
+                  {
+                    label: "Net",
+                    value: formatSignedCurrency(netDelta),
+                    note: currentNet >= previousNet ? "Up vs last period" : "Down vs last period",
+                    tone: netDelta >= 0 ? "positive" : "negative",
+                  },
+                  {
+                    label: "Cleanliness",
+                    value: `${Math.round(cleanlinessScore)}%`,
+                    note: uncategorizedTransactions.length === 0 ? "Nice and tidy" : `${uncategorizedTransactions.length} items to clear`,
+                    tone: cleanlinessScore >= 80 ? "positive" : cleanlinessScore >= 60 ? "neutral" : "negative",
+                  },
+                ].map((signal) => (
+                  <div key={signal.label} className={`goals-weekly__card ${signal.tone}`}>
+                    <span>{signal.label}</span>
+                    <strong>{signal.value}</strong>
+                    <small>{signal.note}</small>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </div>
+        </section>
+
+        {isPro ? (
+          <section className="goals-section goals-section--drivers">
+            <div className="goals-drivers-grid">
+              {driverCards.map((card) => (
+                <article key={card.label} className="goals-driver goals-driver--summary glass">
+                  <div className="goals-driver__head">
+                    <div className="goals-driver__icon" aria-hidden="true">
+                      <GoalGlyph goalKey={selectedGoal.value} />
+                    </div>
+                    <div>
+                      <strong>{card.label}</strong>
+                      <span>{card.note}</span>
+                    </div>
+                  </div>
+                  <strong className="goals-driver__value">{card.value}</strong>
+                </article>
+              ))}
+            </div>
+
+            <article className="goals-driver goals-driver--recurring glass">
+              <div className="goals-panel__head">
+                <div>
+                  <p className="eyebrow">Recurring costs</p>
+                  <h4>What is taking repeated bites out of the month</h4>
+                </div>
+                <div className="goals-panel__stat">
+                  <strong>{formatPercent(recurringShare * 100)}</strong>
+                  <span>Recurring share</span>
+                </div>
+              </div>
+
+              <div className="goals-driver__list">
+                {recurringMerchantsPreview.length > 0 ? (
+                  recurringMerchantsPreview.map((merchant) => {
+                    const share = recurringDrag > 0 ? (merchant.amount / recurringDrag) * 100 : 0;
+                    return (
+                      <div key={merchant.label} className="goals-driver__row">
+                        <div>
+                          <strong>{merchant.label}</strong>
+                          <span>{merchant.count} transactions</span>
+                        </div>
+                        <div className="goals-driver__track" aria-hidden="true">
+                          <div className="goals-driver__fill" style={{ width: `${clamp(share, 8, 100)}%` }} />
+                        </div>
+                        <small>{formatCurrency(merchant.amount, goalCurrency)}</small>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="goals-driver--empty">
+                    <strong>No recurring drag yet</strong>
+                    <span>Clover has not seen a repeating merchant large enough to crowd this plan.</span>
+                  </div>
+                )}
+              </div>
+            </article>
+          </section>
         ) : null}
 
-        {advancedSections}
-
-        <div className="goals-editor-shell goals-section goals-section--overview" id="goal-editor">
-          <GoalsEditor
-            goals={GOAL_OPTIONS}
-            currentGoal={selectedGoalKey}
-            currentTargetAmount={goalTargetAmount !== null ? String(goalTargetAmount) : null}
-            currentGoalPlan={currentGoalPlan}
-            monthlyIncome={monthlyIncome}
-            suggestedTargetAmount={suggestedGoalTarget}
-            currency={goalCurrency}
-          />
-        </div>
-
-        <article className="goals-actions glass goals-section goals-section--overview">
-          <div className="goals-panel__head">
-            <div>
-              <p className="eyebrow">Next move</p>
-              <h4>Keep the momentum moving</h4>
+        <section className="goals-section goals-section--history">
+          <article className="goals-history glass">
+            <div className="goals-panel__head">
+              <div>
+                <p className="eyebrow">Goal history</p>
+                <h4>Your path so far</h4>
+              </div>
+              <div className="goals-panel__stat">
+                <strong>{goalTimelineEntries.length}</strong>
+                <span>Saved goal updates</span>
+              </div>
             </div>
-            <div className="goals-panel__stat">
-              <strong>{formatPercent(Math.max(0, goalScore - 50))}</strong>
-              <span>Above the build line</span>
-            </div>
-          </div>
 
-          <div className="goals-action-grid">
-            <article className="goals-action">
-              <div>
-                <strong>Review transactions</strong>
-                <span>Clear out the rough edges so the goal score keeps telling the truth.</span>
-              </div>
-              <Link className="pill-link pill-link--inline" href="/transactions">
-                Open transactions
-              </Link>
-            </article>
-            <article className="goals-action">
-              <div>
-                <strong>Open insights</strong>
-                <span>Compare the coach view with the broader trend line whenever you need context.</span>
-              </div>
-              <Link className="pill-link pill-link--inline" href="/insights">
-                Open insights
-              </Link>
-            </article>
-            <article className="goals-action">
-              <div>
-                <strong>Inspect spending</strong>
-                <span>Use the biggest category as the easiest lever for a quick win.</span>
-              </div>
-              <Link className="pill-link pill-link--inline" href="/reports">
-                Open reports
-              </Link>
-            </article>
-          </div>
-        </article>
+            <div className="goals-history__timeline">
+              {goalTimelineEntries.map((entry, index) => (
+                <div key={`${entry.label}-${index}`} className="goals-history__item">
+                  <span className="goals-history__label">{entry.label}</span>
+                  <strong>{entry.detail}</strong>
+                </div>
+              ))}
+            </div>
+            <p className="goals-history__hint">{playbook.historyMarkers[0]}</p>
+          </article>
+        </section>
       </GoalsSubtabs>
 
       {user.planTier === "free" ? (
@@ -1751,9 +1189,5 @@ export default function GoalsPage({
     section?: string;
   }>;
 }) {
-  return (
-    <Suspense fallback={<CloverLoadingScreen label="goals" />}>
-      <GoalsPageStream searchParams={searchParams} />
-    </Suspense>
-  );
+  return <RouteSplash label="goals"><GoalsPageStream searchParams={searchParams} /></RouteSplash>;
 }
