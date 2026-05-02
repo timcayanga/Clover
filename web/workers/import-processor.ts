@@ -6,7 +6,7 @@ import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { countNonCashAccounts, getWorkspaceOwnerLimits } from "@/lib/plan-access";
 import { parseAmountValue, parseDateValue, parseImportText } from "@/lib/import-parser";
-import { readImportedFileText, readImportedPdfPageImages } from "@/lib/import-file-text.server";
+import { readImportedFileImageDataUrls, readImportedFileText, readImportedPdfPageImages } from "@/lib/import-file-text.server";
 import {
   DATA_ENGINE_VERSION,
   applyDataQaReviewLearning,
@@ -35,6 +35,7 @@ import { parseImportTextWithOpenAIFallback } from "@/lib/openai-import-parser";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName } from "@/lib/data-qa-banks";
+import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
 
 type ImportInsightSummary = {
   incomeTotal: number;
@@ -144,10 +145,6 @@ const shouldRouteToReview = (params: { confidence: number; categoryName?: string
     return true;
   }
 
-  if ((params.categoryName ?? "").trim() === "Other") {
-    return true;
-  }
-
   if (!params.type) {
     return true;
   }
@@ -197,6 +194,14 @@ const readCheckpointBankName = (sourceMetadata: unknown) => {
 
   const normalized = normalizeBankName(bankName);
   return normalized && normalized !== "Unknown" ? normalized : null;
+};
+
+const readCheckpointImportMode = (sourceMetadata: unknown): ImportImageMode | null => {
+  if (!isRecord(sourceMetadata)) {
+    return null;
+  }
+
+  return normalizeImportImageMode(sourceMetadata.importMode);
 };
 
 const detectGenericTrainingBundle = (root: Record<string, unknown>, fileName: string) => {
@@ -263,6 +268,20 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isJsonImportFile = (fileType: string | null | undefined, fileName: string | null | undefined) =>
   /\.json$/i.test(fileName ?? "") || /(?:^|\/)json$/i.test(fileType ?? "") || /\bjson\b/i.test(fileType ?? "");
+
+const isImageImportFile = (fileType: string | null | undefined, fileName: string | null | undefined) => {
+  const lowerName = `${fileName ?? ""} ${fileType ?? ""}`.toLowerCase();
+  return (
+    lowerName.includes("image/jpeg") ||
+    lowerName.includes("image/jpg") ||
+    lowerName.includes("image/png") ||
+    lowerName.includes("image/webp") ||
+    lowerName.endsWith(".jpg") ||
+    lowerName.endsWith(".jpeg") ||
+    lowerName.endsWith(".png") ||
+    lowerName.endsWith(".webp")
+  );
+};
 
 const readParsedRowText = (row: Record<string, unknown>, keys: string[]) => {
   for (const key of keys) {
@@ -1121,7 +1140,7 @@ const resolveConfirmationAccount = async (params: {
   }>;
   accountId?: string | null;
   planLimits?: {
-    accountLimit: number;
+    accountLimit: number | null;
   } | null;
 }) => {
   const workspaceId = String(params.importFile.workspaceId);
@@ -1321,6 +1340,7 @@ const buildTransactionInsertRecord = (params: {
   accountId: string;
   importFileId?: string | null;
   categoryId?: string | null;
+  categoryName?: string | null;
   reviewStatus?: string;
   parserConfidence?: number;
   categoryConfidence?: number;
@@ -1350,6 +1370,7 @@ const buildTransactionInsertRecord = (params: {
     workspaceId: params.workspaceId,
     accountId: params.accountId,
     categoryId: params.categoryId ?? null,
+    categoryName: params.categoryName ?? null,
     reviewStatus: params.reviewStatus ?? "suggested",
     parserConfidence: params.parserConfidence ?? 0,
     categoryConfidence: params.categoryConfidence ?? 0,
@@ -1400,6 +1421,7 @@ export const processImportFileText = async (
       startDate: string | null;
       endDate: string | null;
     }> | null;
+    importMode?: ImportImageMode | null;
   } = {}
 ): Promise<ProcessImportResult> => {
   const startedAt = Date.now();
@@ -1410,6 +1432,16 @@ export const processImportFileText = async (
   if (!importFile) {
     throw new Error("Import file not found");
   }
+
+  const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
+    ? await prisma.accountStatementCheckpoint.findUnique({
+        where: { importFileId },
+        select: {
+          sourceMetadata: true,
+        },
+      }).catch(() => null)
+    : null;
+  const importMode = readCheckpointImportMode(statementCheckpoint?.sourceMetadata) ?? options.importMode ?? "statement";
 
   await updateImportFileCompat(importFileId, {
     status: "processing",
@@ -1423,24 +1455,39 @@ export const processImportFileText = async (
         : "Parsing file...",
   });
 
+  const fileType = String(importFile.fileType ?? "");
+  const fileName = String(importFile.fileName ?? "");
+  const imageImport = isImageImportFile(fileType, fileName);
   let text = options.text ?? "";
-  if (!text) {
+  let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
+
+  if (imageImport || !text) {
     const storageKey = String(importFile.storageKey ?? "");
     if (!storageKey) {
       throw new Error("Missing imported file.");
     }
 
-    text = await readImportedFileText(
-      {
+    if (imageImport) {
+      pageImages = await readImportedFileImageDataUrls({
         storageKey,
-        fileType: String(importFile.fileType ?? ""),
-        fileName: String(importFile.fileName ?? ""),
-      },
-      options.password
-    );
+        fileType,
+        fileName,
+      });
+    }
+
+    if (!text && !imageImport) {
+      text = await readImportedFileText(
+        {
+          storageKey,
+          fileType,
+          fileName,
+        },
+        options.password
+      );
+    }
   }
 
-  if (isJsonImportFile(String(importFile.fileType ?? ""), String(importFile.fileName ?? ""))) {
+  if (isJsonImportFile(fileType, fileName)) {
     return processImportTrainingJson(importFileId, importFile, text, options, startedAt);
   }
 
@@ -1490,11 +1537,13 @@ export const processImportFileText = async (
     ...Object.fromEntries(Object.entries(metadataOverride).filter(([, value]) => value !== undefined)),
   } as typeof mergedMetadata;
 
-  const parsedRows = parseImportText(text, importFile.fileName, importFile.fileType, {
-    institution: metadataForParse.institution,
-    accountName: metadataForParse.accountName,
-    accountNumber: metadataForParse.accountNumber,
-  });
+  const parsedRows = imageImport
+    ? []
+    : parseImportText(text, importFile.fileName, importFile.fileType, {
+        institution: metadataForParse.institution,
+        accountName: metadataForParse.accountName,
+        accountNumber: metadataForParse.accountNumber,
+      });
   const hasKnownInstitution = Boolean(metadataForParse.institution && metadataForParse.institution !== "Unknown");
   const gcashSuspiciouslySparse =
     metadataForParse.institution === "GCash" &&
@@ -1504,11 +1553,11 @@ export const processImportFileText = async (
   const parsedRowsWithDates = countRowsWithParseableDates(parsedRows);
   const parsedDateCoverage = parsedRows.length > 0 ? parsedRowsWithDates / parsedRows.length : 0;
   const suspiciousDateCoverage =
-    importFile.fileType === "application/pdf" && parsedRows.length >= 6 && parsedRowsWithDates === 0
+    (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && parsedRowsWithDates === 0
       ? true
-      : importFile.fileType === "application/pdf" && parsedRows.length >= 10 && parsedDateCoverage < 0.25;
+      : (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 10 && parsedDateCoverage < 0.25;
   const shouldUseVisionFallback =
-    importFile.fileType === "application/pdf" &&
+    (importFile.fileType === "application/pdf" || imageImport) &&
     (!text.trim() ||
       parsedRows.length === 0 ||
       (metadataForParse.confidence ?? 0) < 70 ||
@@ -1516,21 +1565,28 @@ export const processImportFileText = async (
       !hasKnownInstitution ||
       gcashSuspiciouslySparse ||
       suspiciousDateCoverage);
-  let pageImages: Awaited<ReturnType<typeof readImportedPdfPageImages>> | null = null;
-  if (shouldUseVisionFallback) {
+  if (shouldUseVisionFallback && !pageImages) {
     try {
-      pageImages = await readImportedPdfPageImages(
-        {
+      if (imageImport) {
+        pageImages = await readImportedFileImageDataUrls({
           storageKey: String(importFile.storageKey ?? ""),
-          fileType: String(importFile.fileType ?? ""),
-          fileName: String(importFile.fileName ?? ""),
-        },
-        options.password,
-        !text.trim() ? 4 : gcashSuspiciouslySparse ? 3 : 2,
-        !text.trim() ? 1.6 : gcashSuspiciouslySparse ? 1.35 : 1.1
-      );
+          fileType,
+          fileName,
+        });
+      } else {
+        pageImages = await readImportedPdfPageImages(
+          {
+            storageKey: String(importFile.storageKey ?? ""),
+            fileType,
+            fileName,
+          },
+          options.password,
+          !text.trim() ? 4 : gcashSuspiciouslySparse ? 3 : 2,
+          !text.trim() ? 1.6 : gcashSuspiciouslySparse ? 1.35 : 1.1
+        );
+      }
     } catch (error) {
-      console.warn("Unable to render PDF page images for fallback; continuing without them", {
+      console.warn("Unable to render page images for fallback; continuing without them", {
         importFileId,
         error,
       });
@@ -1540,12 +1596,13 @@ export const processImportFileText = async (
   const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
   const openAiParsed = await parseImportTextWithOpenAIFallback({
     text,
-    fileName: String(importFile.fileName ?? ""),
-    fileType: String(importFile.fileType ?? ""),
-      detectedMetadata: metadataForParse,
+    fileName,
+    fileType,
+    detectedMetadata: metadataForParse,
     parsedRows,
     pageImages,
     preferPrimary: openAiPrimaryMode || Boolean(pageImages?.length),
+    importMode,
   });
 
   const openAiMetadata = openAiParsed
@@ -2403,6 +2460,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       accountId: resolvedAccountId,
       importFileId,
       categoryId,
+      categoryName,
       reviewStatus: shouldRouteToReview({ confidence: rowConfidence, categoryName, type: rowType }) ? "pending_review" : "confirmed",
       parserConfidence: rowParserConfidence,
       categoryConfidence: rowCategoryConfidence,
@@ -2465,7 +2523,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
 
     for (const batch of chunkArray(preparedTransactions, 25)) {
       await tx.transaction.createMany({
-      data: batch.map((entry) => entry.insertRow as any),
+        data: batch.map((entry) => {
+          const { categoryName: _categoryName, ...transactionRow } = entry.insertRow as Record<string, unknown>;
+          return transactionRow as Prisma.TransactionCreateManyInput;
+        }),
     });
   }
 

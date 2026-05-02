@@ -1,8 +1,8 @@
 import type { PlanTier } from "@prisma/client";
 
 export type UserLimits = {
-  accountLimit: number;
-  monthlyUploadLimit: number;
+  accountLimit: number | null;
+  monthlyUploadLimit: number | null;
   transactionLimit: number | null;
 };
 
@@ -29,9 +29,18 @@ type UserLimitsLike = {
 export const getPlanDefaultLimits = (planTier: PlanTier): UserLimits => PLAN_DEFAULT_LIMITS[planTier];
 
 export const getEffectiveUserLimits = (user: UserLimitsLike): UserLimits => {
+  if (process.env.NODE_ENV !== "production") {
+    return {
+      accountLimit: null,
+      monthlyUploadLimit: null,
+      transactionLimit: null,
+    };
+  }
+
   const defaults = getPlanDefaultLimits(user.planTier);
+  const defaultMonthlyUploadLimit = defaults.monthlyUploadLimit ?? 0;
   const monthlyUploadLimit =
-    user.monthlyUploadLimit === null ? defaults.monthlyUploadLimit : Math.max(defaults.monthlyUploadLimit, user.monthlyUploadLimit);
+    user.monthlyUploadLimit === null ? defaults.monthlyUploadLimit : Math.max(defaultMonthlyUploadLimit, user.monthlyUploadLimit);
 
   return {
     accountLimit: user.accountLimit ?? defaults.accountLimit,

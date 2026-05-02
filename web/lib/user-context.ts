@@ -8,6 +8,7 @@ import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/li
 export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User> => {
   const clerkUser: SyncedClerkUser = await syncClerkUser(clerkUserId);
   const currentEnvironment = getCurrentUserEnvironment();
+  const isLocalEnvironment = currentEnvironment === "local";
   const existing = await prisma.user.findUnique({
     where: { clerkUserId: clerkUser.clerkUserId },
   });
@@ -24,6 +25,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
           currentEnvironment,
           existing?.environment
         ),
+        ...(isLocalEnvironment ? { planTier: "pro" } : {}),
       },
       create: {
         clerkUserId: clerkUser.clerkUserId,
@@ -32,7 +34,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
         lastName: clerkUser.lastName,
         verified: clerkUser.verified,
         environment: currentEnvironment,
-        planTier: "free",
+        planTier: isLocalEnvironment ? "pro" : "free",
       },
     });
 
@@ -45,7 +47,7 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
       });
     }
 
-    if (!user.planTierLocked) {
+    if (!isLocalEnvironment && !user.planTierLocked) {
       await reconcileBillingPlanTier(user.id).catch(() => null);
     }
 
@@ -77,7 +79,17 @@ export const getOrCreateCurrentUser = async (clerkUserId: string): Promise<User>
           currentEnvironment,
           existingByEmail.environment
         ),
+        ...(isLocalEnvironment ? { planTier: "pro" } : {}),
       },
+    });
+
+    void capturePostHogServerEvent("signup_completed", clerkUser.clerkUserId, {
+      email_verified: clerkUser.verified,
+      recovered_existing_email: true,
+    });
+    void capturePostHogServerEvent("first_login", clerkUser.clerkUserId, {
+      email_verified: clerkUser.verified,
+      recovered_existing_email: true,
     });
 
     return updated;
