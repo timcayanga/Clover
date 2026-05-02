@@ -12,6 +12,8 @@ import { buildRecurringTransactionSummaries } from "@/lib/recurring";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
+import { deriveReconciledBalance } from "@/lib/account-balance";
+import { isLiabilityAccountType } from "@/lib/account-types";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
 import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -90,9 +92,10 @@ type WorkspaceSummary = {
     id: string;
     name: string;
     institution: string | null;
+    accountNumber: string | null;
     type: string;
     currency: string;
-    balance: string | null;
+    balance: unknown;
   }>;
   _count: {
     accounts: number;
@@ -130,87 +133,7 @@ const toIsoDay = (date: Date) =>
 
 const toDayStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-type BalanceOverviewEntry = {
-  currency: string;
-  total: number;
-  count: number;
-};
-
-type BalanceOverview = {
-  hasBalances: boolean;
-  isMixed: boolean;
-  primaryCurrency: string | null;
-  total: number;
-  label: string;
-  value: string;
-  detail: string;
-  entries: BalanceOverviewEntry[];
-};
-
-const summarizeBalances = (accounts: Array<{ balance: unknown; currency: string }>): BalanceOverview => {
-  const balancesByCurrency = new Map<string, { total: number; count: number }>();
-
-  for (const account of accounts) {
-    if (account.balance === null) {
-      continue;
-    }
-
-    const currency = formatCurrencyCode(account.currency);
-    const current = balancesByCurrency.get(currency) ?? { total: 0, count: 0 };
-    current.total += toAmount(account.balance);
-    current.count += 1;
-    balancesByCurrency.set(currency, current);
-  }
-
-  const entries = Array.from(balancesByCurrency.entries())
-    .map(([currency, value]) => ({
-      currency,
-      total: value.total,
-      count: value.count,
-    }))
-    .sort((left, right) => Math.abs(right.total) - Math.abs(left.total) || right.count - left.count || left.currency.localeCompare(right.currency));
-
-  if (entries.length === 0) {
-    return {
-      hasBalances: false,
-      isMixed: false,
-      primaryCurrency: null,
-      total: 0,
-      label: "Total balance",
-      value: "No balances yet",
-      detail: "Add an account balance to see your totals here.",
-      entries,
-    };
-  }
-
-  if (entries.length === 1) {
-    const [entry] = entries;
-    return {
-      hasBalances: true,
-      isMixed: false,
-      primaryCurrency: entry.currency,
-      total: entry.total,
-      label: "Total balance",
-      value: formatCurrencyAmount(entry.total, entry.currency),
-      detail: `${entry.count} account${entry.count === 1 ? "" : "s"} tracked in ${entry.currency}`,
-      entries,
-    };
-  }
-
-  return {
-    hasBalances: true,
-    isMixed: true,
-    primaryCurrency: null,
-    total: entries.reduce((sum, entry) => sum + entry.total, 0),
-    label: "Balances by currency",
-    value: "Mixed currencies",
-    detail: entries
-      .slice(0, 3)
-      .map((entry) => `${entry.currency} ${formatCurrencyAmount(entry.total, entry.currency)}`)
-      .join(" · "),
-    entries,
-  };
-};
+const normalizeNetWorthBalance = (type: string, value: number) => (isLiabilityAccountType(type as Parameters<typeof isLiabilityAccountType>[0]) ? -Math.abs(value) : Math.abs(value));
 
 const summarizeWindow = (transactions: DashboardTransaction[], label: string): WindowSummary => {
   const totals = summarizeTransactions(transactions);
@@ -466,6 +389,7 @@ async function DashboardStream({
         id: true,
         name: true,
         institution: true,
+        accountNumber: true,
         type: true,
         currency: true,
         balance: true,
@@ -515,6 +439,7 @@ async function DashboardStream({
             id: true,
             name: true,
             institution: true,
+            accountNumber: true,
             type: true,
             currency: true,
             balance: true,
@@ -535,11 +460,20 @@ async function DashboardStream({
     redirect("/dashboard");
   }
 
-  const accountsWithBalance = workspaceSummary.accounts.filter((account) => account.balance !== null);
-  const balanceOverview = summarizeBalances(accountsWithBalance);
   const cashAccountCount = workspaceSummary.accounts.filter((account) => account.type === "cash").length;
   const shouldShowStarterCard =
     workspaceSummary._count.transactions === 0 && workspaceSummary._count.importFiles === 0 && workspaceSummary._count.accounts === 0;
+  const preferredDashboardCurrency = (() => {
+    const currencies = Array.from(
+      new Set(workspaceSummary.accounts.map((account) => formatCurrencyCode(account.currency)).filter(Boolean))
+    ).sort((left, right) => left.localeCompare(right));
+
+    if (currencies.includes("PHP")) {
+      return "PHP";
+    }
+
+    return currencies[0] ?? "PHP";
+  })();
 
   const now = new Date();
   const todayStart = toDayStart(now);
@@ -562,6 +496,54 @@ async function DashboardStream({
       uploadedAt: true,
     },
   });
+
+  const dashboardAccountsPromise =
+    workspaceSummary._count.accounts > 0
+      ? prisma.account.findMany({
+          where: {
+            workspaceId: workspaceSummary.id,
+            currency: preferredDashboardCurrency,
+          },
+          select: {
+            id: true,
+            name: true,
+            institution: true,
+            accountNumber: true,
+            type: true,
+            currency: true,
+            balance: true,
+            transactions: {
+              where: { isExcluded: false },
+              select: {
+                amount: true,
+                type: true,
+                isExcluded: true,
+                merchantRaw: true,
+                merchantClean: true,
+                description: true,
+                date: true,
+                createdAt: true,
+                rawPayload: true,
+              },
+              orderBy: { date: "desc" },
+            },
+            statementCheckpoints: {
+              select: {
+                endingBalance: true,
+                status: true,
+                statementEndDate: true,
+                createdAt: true,
+              },
+              orderBy: [
+                { statementEndDate: "desc" },
+                { createdAt: "desc" },
+              ],
+              take: 1,
+            },
+          },
+          orderBy: { updatedAt: "desc" },
+        })
+      : Promise.resolve([]);
 
   const shouldLoadTransactions = !selectedWorkspaceData || workspaceSummary._count.transactions > 0;
   const transactionsPromise = shouldLoadTransactions
@@ -599,20 +581,31 @@ async function DashboardStream({
       })
     : Promise.resolve([] as DashboardTransaction[]);
 
-  const [latestImport, recentTransactions] = await Promise.all([latestImportPromise, transactionsPromise]);
+  const [latestImport, recentTransactions, dashboardAccounts] = await Promise.all([
+    latestImportPromise,
+    transactionsPromise,
+    dashboardAccountsPromise,
+  ]);
 
   const currentTransactions = recentTransactions as DashboardTransaction[];
-  const currencyCandidates = new Set<string>();
-  workspaceSummary.accounts.forEach((account) => currencyCandidates.add(formatCurrencyCode(account.currency)));
-  currentTransactions.forEach((transaction) => {
-    if (transaction.account.currency) {
-      currencyCandidates.add(formatCurrencyCode(transaction.account.currency));
-    }
-  });
-  const displayCurrency = currencyCandidates.size === 1 ? Array.from(currencyCandidates)[0] : "MIXED";
+  const displayCurrency = preferredDashboardCurrency;
   const formatCurrency = (value: number, currency: string | null = displayCurrency) => formatCurrencyAmount(value, currency);
   const formatSignedCurrency = (value: number, currency: string | null = displayCurrency) =>
     `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency)}`;
+  const totalNetWorth = dashboardAccounts.reduce((sum, account) => {
+    const latestCheckpoint = account.statementCheckpoints[0] ?? null;
+    const checkpointBalance =
+      latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance ? latestCheckpoint.endingBalance : null;
+    const reconciledBalance =
+      checkpointBalance ??
+      deriveReconciledBalance({
+        balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
+        transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
+        checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
+      });
+    const signedBalance = normalizeNetWorthBalance(account.type, Number(reconciledBalance ?? account.balance ?? 0));
+    return sum + signedBalance;
+  }, 0);
   const todayTransactions = currentTransactions.filter((transaction) => transaction.date >= todayStart);
   const currentSevenDayTransactions = currentTransactions.filter((transaction) => transaction.date >= sevenDaysAgo);
   const currentThirtyDayTransactions = currentTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo);
@@ -678,19 +671,17 @@ async function DashboardStream({
       ? `${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} need review`
       : "No items need review";
   const goalSummaryLabel = goalTargetAmount !== null ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}` : goalProgress.currentLabel;
-  const totalBalanceLabel = balanceOverview.value;
+  const totalBalanceLabel = formatCurrency(totalNetWorth, displayCurrency);
   const heroSupportCopy = shouldShowStarterCard
     ? "Import a statement to unlock your balance, movement, and goal snapshot."
-    : balanceOverview.isMixed
-      ? `${balanceOverview.detail} tracked separately so the dashboard stays accurate.`
-      : "Your balance, movement, and goals in one calm view.";
+    : "Your balance, movement, and goals in one calm view.";
   const heroBadgeLabels = [
     weekSummary.transactions > 0 ? `${formatSignedCurrency(weekSummary.net)} this week` : "No activity this week",
     monthSummary.transactions > 0 ? `${monthSummary.transactions} transactions this month` : "No transactions this month",
     latestImport ? `Updated ${formatRelativeDate(latestImport.uploadedAt)}` : "No imports yet",
   ];
   const goalHeroHeading = goalKey ? "Goal progress" : "Set a goal to track your progress";
-  const goalHeroCopy = goalKey ? goalProgress.coachCopy : "It’s optional, and Clover will still keep your dashboard useful.";
+  const goalHeroCopy = goalKey ? goalProgress.coachCopy : "Set a goal to track your progress.";
   const goalHeroActionLabel = goalKey ? "Open goals" : "Set a goal";
   const goalHeroActionHref = "/goals";
   const movementWindows = [
@@ -747,8 +738,8 @@ async function DashboardStream({
           workspace_name: workspaceSummary.name,
           account_count: workspaceSummary._count.accounts,
           cash_account_count: cashAccountCount,
-          tracked_balance_total: balanceOverview.isMixed ? null : Number(balanceOverview.total.toFixed(2)),
-          tracked_balance_currency: balanceOverview.isMixed ? "MIXED" : balanceOverview.primaryCurrency,
+          tracked_balance_total: Number(totalNetWorth.toFixed(2)),
+          tracked_balance_currency: displayCurrency,
           transaction_count: workspaceSummary._count.transactions,
           import_count: workspaceSummary._count.importFiles,
           review_attention_count: reviewAttentionCount,
@@ -771,7 +762,7 @@ async function DashboardStream({
       <section className="dashboard-home">
         <article className="dashboard-home__hero glass dashboard-home__hero--balance">
           <div className="dashboard-home__hero-copy">
-            <p className="eyebrow">{balanceOverview.label}</p>
+            <p className="eyebrow">Net worth</p>
             <h3>{totalBalanceLabel}</h3>
             <p>{heroSupportCopy}</p>
 
@@ -789,7 +780,7 @@ async function DashboardStream({
               <div className="dashboard-home__starter-card">
                 <p className="eyebrow">Get started</p>
                 <strong>Import files to unlock your dashboard.</strong>
-                <p>Bring in a statement and Clover will populate balance, movement, and optional goal progress in one place.</p>
+                <p>Bring in a statement and Clover will populate balance, movement, and goal progress in one place.</p>
                 <div className="dashboard-home__starter-actions">
                   <Link className="button button-primary button-small" href="/dashboard?import=1">
                     Import files
