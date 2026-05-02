@@ -25436,8 +25436,9 @@ html[data-theme="dark"] .sidebar {
 
 html[data-theme="dark"] .topbar,
 html[data-theme="dark"] .shell-compact-bar {
-  background: rgba(14, 23, 37, 0.86);
-  border-color: rgba(148, 163, 184, 0.14);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 html[data-theme="dark"] .sidebar-search-panel,
@@ -25524,8 +25525,33 @@ html[data-theme="dark"] .sidebar-search-trigger:focus-visible,
 html[data-theme="dark"] .sidebar-search-trigger[aria-expanded="true"],
 html[data-theme="dark"] .settings-hub__menu-item:hover,
 html[data-theme="dark"] .settings-hub__menu-item.is-active {
-  background: rgba(71, 215, 232, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(71, 215, 232, 0.18), 0 10px 22px rgba(0, 0, 0, 0.18);
+  background: rgba(9, 15, 27, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.16), 0 10px 22px rgba(0, 0, 0, 0.18);
+}
+
+html[data-theme="dark"] .nav-link:hover .nav-link__icon,
+html[data-theme="dark"] .nav-link.is-active .nav-link__icon {
+  background: rgba(9, 15, 27, 0.96);
+  color: var(--accent-hover);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .sidebar-icon-button:hover,
+html[data-theme="dark"] .sidebar-icon-button.is-active,
+html[data-theme="dark"] .sidebar-profile:hover,
+html[data-theme="dark"] .sidebar-profile.is-active {
+  background: rgba(9, 15, 27, 0.96);
+  border-color: rgba(148, 163, 184, 0.2);
+  color: var(--accent-hover);
+}
+
+html[data-theme="dark"] .sidebar-profile--photo:hover,
+html[data-theme="dark"] .sidebar-profile--photo.is-active {
+  background: rgba(9, 15, 27, 0.96);
+}
+
+html[data-theme="dark"] .sidebar-profile__avatar {
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.16);
 }
 
 html[data-theme="dark"] .sidebar-search-results__label,
@@ -25550,7 +25576,7 @@ html[data-theme="dark"] .settings-category-table__row--head {
 }
 
 html[data-theme="dark"] .settings-category-table__icon {
-  background: rgba(71, 215, 232, 0.12);
+  background: rgba(148, 163, 184, 0.12);
 }
 
 html[data-theme="dark"] .settings-plan-card--free {
@@ -25575,6 +25601,10 @@ html[data-theme="dark"] .settings-plan-card--monthly .settings-plan-card__band {
 
 html[data-theme="dark"] .settings-choice-card.is-selected {
   background: rgba(71, 215, 232, 0.12);
+}
+
+html[data-theme="dark"] .button-primary {
+  color: #07111d;
 }
 
 html[data-theme="dark"] .button-secondary,
@@ -25647,6 +25677,125 @@ html[data-theme="dark"] .import-progress-modal {
 }
 
 html[data-theme="dark"] .dashboard-home__hero,
+html[data-theme="dark"] .dashboard-home__goal-card,
+html[data-theme="dark"] .dashboard-home__starter-card,
+html[data-theme="dark"] .dashboard-home__movement-card,
+html[data-theme="dark"] .dashboard-home__activity-card,
+html[data-theme="dark"] .dashboard-home__decision-card,
+html[data-theme="dark"] .dashboard-home__mini-card,
+html[data-theme="dark"] .dashboard-home__summary-card,
+html[data-theme="dark"] .dashboard-home__review-strip,
+html[data-theme="dark"] .dashboard-home__ring-inner,
+html[data-theme="dark"] .dashboard-home__activity-bar-track,
+html[data-theme="dark"] .dashboard-home__insight-track {
+  background: rgba(14, 23, 37, 0.94);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .dashboard-home__hero {
+  background:
+    radial-gradient(circle at top left, rgba(71, 215, 232, 0.1), transparent 32%),
+    radial-gradient(circle at 84% 12%, rgba(126, 240, 192, 0.08), transparent 28%),
+    linear-gradient(180deg, rgba(14, 23, 37, 0.98), rgba(10, 16, 28, 0.96));
+}
+
+html[data-theme="dark"] .dashboard-home__hero-copy h3,
+html[data-theme="dark"] .dashboard-home__goal-card-copy strong,
+html[data-theme="dark"] .dashboard-home__starter-card strong,
+html[data-theme="dark"] .dashboard-home__movement-card-head strong,
+html[data-theme="dark"] .dashboard-home__copy h3,
+html[data-theme="dark"] .dashboard-home__review-copy strong,
+html[data-theme="dark"] .dashboard-home__summary-card-head h4,
+html[data-theme="dark"] .dashboard-home__summary-card strong,
+html[data-theme="dark"] .dashboard-home__activity-card h4,
+html[data-theme="dark"] .dashboard-home__movement-card h4,
+html[data-theme="dark"] .report-card__head-title h4,
+html[data-theme="dark"] .report-card__stat strong,
+html[data-theme="dark"] .report-ai-card strong,
+html[data-theme="dark"] .accounts-overview-card__amount,
+html[data-theme="dark"] .accounts-account-card__brand strong,
+html[data-theme="dark"] .accounts-account-card__amount,
+html[data-theme="dark"] .institution-detail-hero__brand h1,
+html[data-theme="dark"] .institution-detail-panel__head h2,
+html[data-theme="dark"] .transactions-empty-state h3,
+html[data-theme="dark"] .transactions-summary-panel__head h4,
+html[data-theme="dark"] .transactions-summary-list dd,
+html[data-theme="dark"] .recurring-patterns__item-head strong,
+html[data-theme="dark"] .commitments-detail-panel h3,
+html[data-theme="dark"] .commitments-detail-panel h4,
+html[data-theme="dark"] .settings-section__intro h4 {
+  color: var(--text);
+}
+
+html[data-theme="dark"] .dashboard-home__goal-card-copy p,
+html[data-theme="dark"] .dashboard-home__goal-card-copy small,
+html[data-theme="dark"] .dashboard-home__starter-card p,
+html[data-theme="dark"] .dashboard-home__movement-copy,
+html[data-theme="dark"] .dashboard-home__movement-footer,
+html[data-theme="dark"] .dashboard-home__copy p,
+html[data-theme="dark"] .dashboard-home__review-copy span,
+html[data-theme="dark"] .dashboard-home__summary-card-head span,
+html[data-theme="dark"] .dashboard-home__summary-card-body small,
+html[data-theme="dark"] .dashboard-home__insight-bar-meta span,
+html[data-theme="dark"] .dashboard-home__activity-bar-count,
+html[data-theme="dark"] .dashboard-home__activity-bar-label,
+html[data-theme="dark"] .dashboard-home__decision-card small,
+html[data-theme="dark"] .dashboard-home__mini-card small,
+html[data-theme="dark"] .report-card__stat span,
+html[data-theme="dark"] .report-ai-card p,
+html[data-theme="dark"] .accounts-import-summary span,
+html[data-theme="dark"] .accounts-import-security p,
+html[data-theme="dark"] .accounts-group__head p,
+html[data-theme="dark"] .accounts-group__tone,
+html[data-theme="dark"] .investments-allocation__row-head span,
+html[data-theme="dark"] .investments-allocation__summary span,
+html[data-theme="dark"] .investments-allocation__summary small,
+html[data-theme="dark"] .institution-detail-hero__brand span,
+html[data-theme="dark"] .institution-detail-panel p,
+html[data-theme="dark"] .panel-muted,
+html[data-theme="dark"] .modal-copy,
+html[data-theme="dark"] .import-password-file span,
+html[data-theme="dark"] .import-upload-dock__header p,
+html[data-theme="dark"] .import-upload-dock__meta span,
+html[data-theme="dark"] .import-progress-copy p,
+html[data-theme="dark"] .plan-limit-nudge__body,
+html[data-theme="dark"] .upload-insights-toast__title-row p,
+html[data-theme="dark"] .upload-insights-toast__list,
+html[data-theme="dark"] .import-error-toast__title-row p,
+html[data-theme="dark"] .import-error-toast__list,
+html[data-theme="dark"] .reports-next p,
+html[data-theme="dark"] .dashboard-home__hero-copy p {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .dashboard-home__goal-card .button,
+html[data-theme="dark"] .dashboard-home__starter-card .button,
+html[data-theme="dark"] .dashboard-home__review-actions .button,
+html[data-theme="dark"] .dashboard-home__starter-actions .button {
+  color: #07111d;
+}
+
+html[data-theme="dark"] .dashboard-home__activity-bar-track {
+  background:
+    linear-gradient(180deg, rgba(71, 215, 232, 0.12), rgba(9, 15, 27, 0.96)),
+    rgba(9, 15, 27, 0.9);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .dashboard-home__insight-track {
+  background: rgba(148, 163, 184, 0.14);
+}
+
+html[data-theme="dark"] .dashboard-home__ring-inner {
+  background: rgba(9, 15, 27, 0.96);
+  border-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .dashboard-home__insight-fill {
+  box-shadow: none;
+}
+
+html[data-theme="dark"] .dashboard-home__hero,
 html[data-theme="dark"] .reports-hero__copy,
 html[data-theme="dark"] .reports-next,
 html[data-theme="dark"] .accounts-group,
@@ -25675,6 +25824,34 @@ html[data-theme="dark"] .accounts-account-card {
     linear-gradient(180deg, rgba(14, 23, 37, 0.96), rgba(12, 18, 31, 0.94)),
     rgba(14, 23, 37, 0.9);
   border-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .accounts-brand-mark {
+  background: linear-gradient(135deg, rgba(71, 215, 232, 0.16), rgba(126, 240, 192, 0.18));
+  border-color: rgba(148, 163, 184, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .accounts-brand-mark__fallback,
+html[data-theme="dark"] .accounts-brand-mark__logo-fallback {
+  filter: brightness(0) invert(1);
+  opacity: 0.92;
+}
+
+html[data-theme="dark"] .accounts-overview-card .eyebrow {
+  color: var(--muted);
+}
+
+html[data-theme="dark"] .accounts-overview-card__amount.is-good {
+  color: #7ef0c0;
+}
+
+html[data-theme="dark"] .accounts-overview-card__amount.is-danger {
+  color: #ff9aa5;
+}
+
+html[data-theme="dark"] .accounts-overview-card__amount.is-neutral {
+  color: var(--text);
 }
 
 html[data-theme="dark"] .accounts-account-card__brand span,
@@ -25779,6 +25956,46 @@ html[data-theme="dark"] .date-filter-tab.is-active {
   color: #04262d;
 }
 
+html[data-theme="dark"] .transactions-toolbar-search {
+  background: rgba(9, 15, 27, 0.96) !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  box-shadow: var(--shadow-soft) !important;
+}
+
+html[data-theme="dark"] .transactions-toolbar-search input {
+  background: transparent !important;
+}
+
+html[data-theme="dark"] .line-item-header {
+  background: rgba(9, 15, 27, 0.98);
+  color: var(--text);
+  border-bottom-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .line-item-header-cell {
+  color: var(--text);
+}
+
+html[data-theme="dark"] .transactions-footer {
+  border-top-color: rgba(148, 163, 184, 0.16);
+}
+
+html[data-theme="dark"] .transactions-footer-snapshot__metric,
+html[data-theme="dark"] .transactions-footer-snapshot__metric--net,
+html[data-theme="dark"] .transactions-summary-panel {
+  background: rgba(14, 23, 37, 0.92);
+  border-color: rgba(148, 163, 184, 0.16);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .transactions-footer-snapshot__metric-label,
+html[data-theme="dark"] .transactions-summary-list dt,
+html[data-theme="dark"] .transactions-summary-panel__head p,
+html[data-theme="dark"] .transactions-summary-panel__head span,
+html[data-theme="dark"] .transactions-summary-panel__download {
+  color: var(--muted);
+}
+
 html[data-theme="dark"] .transaction-drawer,
 html[data-theme="dark"] .transactions-manual-currency__menu,
 html[data-theme="dark"] .transactions-manual-picker__menu,
@@ -25812,4 +26029,32 @@ html[data-theme="dark"] .upload-insights-toast,
 html[data-theme="dark"] .plan-limit-nudge,
 html[data-theme="dark"] .import-error-toast {
   color: var(--text);
+}
+
+html[data-theme="dark"] .commitments-summary-grid .panel,
+html[data-theme="dark"] .commitments-detail-panel,
+html[data-theme="dark"] .recurring-page__stack > .glass {
+  background: rgba(14, 23, 37, 0.94) !important;
+  border-color: rgba(148, 163, 184, 0.16) !important;
+  box-shadow: var(--shadow) !important;
+  color: var(--text) !important;
+}
+
+html[data-theme="dark"] .commitments-summary-grid .panel strong,
+html[data-theme="dark"] .commitments-summary-grid .panel span,
+html[data-theme="dark"] .commitments-detail-panel .notification-item__tone,
+html[data-theme="dark"] .commitments-detail-panel .notification-item__main h4,
+html[data-theme="dark"] .commitments-detail-panel .notification-item__time time,
+html[data-theme="dark"] .commitments-detail-panel p,
+html[data-theme="dark"] .commitments-detail-panel span {
+  color: var(--text) !important;
+}
+
+html[data-theme="dark"] .commitments-summary-grid .panel p,
+html[data-theme="dark"] .commitments-summary-grid .panel div,
+html[data-theme="dark"] .commitments-detail-panel .panel-muted,
+html[data-theme="dark"] .commitments-detail-panel .notification-item__main p,
+html[data-theme="dark"] .commitments-detail-panel .notification-item__time,
+html[data-theme="dark"] .recurring-patterns__item-meta span {
+  color: var(--muted) !important;
 }
