@@ -2777,6 +2777,9 @@ function TransactionsPageContent() {
 
   const saveManualTransaction = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const submitter = event.nativeEvent instanceof SubmitEvent ? event.nativeEvent.submitter : null;
+    const submitMode = submitter instanceof HTMLElement ? submitter.getAttribute("data-submit-mode") : null;
+    const keepOpenAfterSave = submitMode === "add-another";
 
     const activeWorkspaceId = selectedWorkspaceId || readTransactionsWorkspaceCache()?.selectedWorkspaceId || workspaces[0]?.id || null;
 
@@ -2793,8 +2796,10 @@ function TransactionsPageContent() {
     let optimisticTransactionId = "";
     let optimisticTransactionAmount = 0;
     let optimisticTransactionType: Transaction["type"] = "expense";
+    let resolvedAccountId = "";
     try {
       const accountId = manualForm.accountId || (await ensureDefaultAccount(activeWorkspaceId));
+      resolvedAccountId = accountId;
       const merchantText = manualForm.merchantRaw.trim();
       const categoryId = manualForm.categoryId || getOtherCategoryId(categories) || undefined;
       const categoryName = getCategoryNameById(categories, categoryId ?? null);
@@ -2838,7 +2843,12 @@ function TransactionsPageContent() {
         }));
         setUndoStack([]);
         setRedoStack([]);
-        setManualOpen(false);
+        setManualMoreOpen(false);
+        setManualAccountMenuOpen(false);
+        setManualCategoryMenuOpen(false);
+        if (!keepOpenAfterSave) {
+          setManualOpen(false);
+        }
       });
 
       const response = await fetch("/api/transactions", {
@@ -2944,6 +2954,30 @@ function TransactionsPageContent() {
         }, 1800);
       }
       setMessage(`Transaction "${created.merchantRaw}" added.`);
+
+      if (keepOpenAfterSave) {
+        const nextAccountId = resolvedAccountId || created.accountId || (await ensureDefaultAccount(activeWorkspaceId));
+        const nextAccount = accounts.find((entry) => entry.id === nextAccountId) ?? null;
+        const nextCurrency = formatCurrencyCode(nextAccount?.currency ?? created.currency ?? "PHP");
+        flushSync(() => {
+          setManualForm(
+            createEmptyManualForm(
+              nextAccountId,
+              getOtherCategoryId(categories),
+              nextCurrency
+            )
+          );
+          setManualCategoryTouched(false);
+          setManualMoreOpen(false);
+          setManualAccountMenuOpen(false);
+          setManualCategoryMenuOpen(false);
+          setManualOpen(true);
+        });
+
+        window.requestAnimationFrame(() => {
+          manualNameInputRef.current?.focus();
+        });
+      }
     } catch (error) {
       if (optimisticTransactionId) {
         setTransactions((current) => current.filter((entry) => entry.id !== optimisticTransactionId));
@@ -5279,7 +5313,7 @@ function TransactionsPageContent() {
       {bulkEditOpen ? (
         <div className="modal-backdrop" role="presentation" onClick={() => setBulkEditOpen(false)}>
           <section
-            className="modal-card modal-card--wide glass"
+            className="modal-card modal-card--manual glass"
             role="dialog"
             aria-modal="true"
             aria-labelledby="bulk-edit-title"
@@ -5363,7 +5397,7 @@ function TransactionsPageContent() {
             </div>
 
             <form onSubmit={saveManualTransaction}>
-              <div className="manual-form-layout manual-form-layout--simple">
+              <div className="manual-form-layout manual-form-layout--compact">
                 <label className="manual-form-layout__full">
                   Name
                   <input
@@ -5375,41 +5409,81 @@ function TransactionsPageContent() {
                   />
                 </label>
 
-                <div className="manual-form-top-row">
-                  <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
-                    <button
-                      type="button"
-                      className={`transactions-manual-type-toggle__button ${manualForm.type === "debit" ? "is-active" : ""}`}
-                      onClick={() => setManualForm((current) => ({ ...current, type: "debit" }))}
-                      aria-pressed={manualForm.type === "debit"}
-                    >
-                      <span className="transactions-manual-type-symbol" aria-hidden="true">
-                        −
-                      </span>
-                      <span>Debit</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`transactions-manual-type-toggle__button ${manualForm.type === "credit" ? "is-active" : ""}`}
-                      onClick={() => setManualForm((current) => ({ ...current, type: "credit" }))}
-                      aria-pressed={manualForm.type === "credit"}
-                    >
-                      <span className="transactions-manual-type-symbol" aria-hidden="true">
-                        +
-                      </span>
-                      <span>Credit</span>
-                    </button>
-                    <button
-                      type="button"
-                      className="transactions-manual-type-help"
-                      title="Debit means money leaving this account. Credit means money coming in."
-                      aria-label="Debit means money leaving this account. Credit means money coming in."
-                    >
-                      i
-                    </button>
-                  </div>
+                <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
+                  <button
+                    type="button"
+                    className={`transactions-manual-type-toggle__button ${manualForm.type === "debit" ? "is-active" : ""}`}
+                    onClick={() => setManualForm((current) => ({ ...current, type: "debit" }))}
+                    aria-pressed={manualForm.type === "debit"}
+                  >
+                    <span className="transactions-manual-type-symbol" aria-hidden="true">
+                      −
+                    </span>
+                    <span>Debit</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`transactions-manual-type-toggle__button ${manualForm.type === "credit" ? "is-active" : ""}`}
+                    onClick={() => setManualForm((current) => ({ ...current, type: "credit" }))}
+                    aria-pressed={manualForm.type === "credit"}
+                  >
+                    <span className="transactions-manual-type-symbol" aria-hidden="true">
+                      +
+                    </span>
+                    <span>Credit</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="transactions-manual-type-help"
+                    title="Debit means money leaving this account. Credit means money coming in."
+                    aria-label="Debit means money leaving this account. Credit means money coming in."
+                  >
+                    i
+                  </button>
+                </div>
 
-                  <label className="manual-form-layout__currency">
+                <button
+                  type="button"
+                  className="transactions-manual-category-row"
+                  onClick={() => setManualMoreOpen(true)}
+                >
+                  <span className="transactions-manual-category-row__icon" aria-hidden="true" style={getCategoryIconTone(manualSelectedCategory?.name ?? "Other")}>
+                    <img src={getCategoryIconSrc(manualSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
+                  </span>
+                  <span className="transactions-manual-category-row__label">Category</span>
+                  <span className="transactions-manual-category-row__value">{manualSelectedCategory?.name ?? "Other"}</span>
+                  <span className="transactions-manual-category-row__chevron" aria-hidden="true">
+                    <ActionIcon name="chevron-down" />
+                  </span>
+                </button>
+
+                <div className="manual-form-compact-row">
+                  <button
+                    type="button"
+                    className="transactions-manual-account-row"
+                    aria-expanded={manualAccountMenuOpen}
+                    onClick={() => {
+                      setManualCategoryMenuOpen(false);
+                      setManualAccountMenuOpen((current) => !current);
+                    }}
+                  >
+                    {manualSelectedAccountBrand ? (
+                      <span className="transactions-manual-account-row__brand">
+                        <AccountBrandMark
+                          accountBrand={manualSelectedAccountBrand}
+                          label={manualSelectedAccount?.name ?? "Selected account"}
+                        />
+                      </span>
+                    ) : (
+                      <span className="transactions-manual-account-row__fallback">?</span>
+                    )}
+                    <span className="transactions-manual-account-row__text">{manualSelectedAccount?.name ?? "Cash"}</span>
+                    <span className="transactions-manual-account-row__chevron" aria-hidden="true">
+                      <ActionIcon name="chevron-down" />
+                    </span>
+                  </button>
+
+                  <label className="manual-form-layout__currency manual-form-compact-row__currency">
                     <span className="sr-only">Currency</span>
                     <CurrencySelector
                       value={manualForm.currency}
@@ -5424,7 +5498,7 @@ function TransactionsPageContent() {
                     />
                   </label>
 
-                  <label className="manual-form-layout__amount">
+                  <label className="manual-form-layout__amount manual-form-compact-row__amount">
                     Amount
                     <input
                       type="number"
@@ -5448,7 +5522,7 @@ function TransactionsPageContent() {
                 </button>
 
                 {manualMoreOpen ? (
-                  <div className="manual-more-panel">
+                  <div className="manual-more-panel manual-more-panel--compact">
                     <label>
                       Date
                       <input
@@ -5459,7 +5533,7 @@ function TransactionsPageContent() {
                       />
                     </label>
 
-                    <div className="manual-form-layout__double">
+                    <div className="manual-more-panel__split">
                       <div className="transactions-manual-picker">
                         <span className="transactions-manual-picker__label">Account</span>
                         <div className="transactions-manual-picker__control">
@@ -5589,13 +5663,23 @@ function TransactionsPageContent() {
                 ) : null}
               </div>
 
-              <div className="form-actions">
-                <button className="button button-secondary" type="button" onClick={() => setManualOpen(false)}>
-                  Cancel
+              <div className="manual-form-actions">
+                <button
+                  className="button button-secondary button-small"
+                  type="submit"
+                  data-submit-mode="add-another"
+                  disabled={isSaving}
+                >
+                  {isSaving ? "Saving..." : "Add another"}
                 </button>
-                <button className="button button-primary" type="submit" disabled={isSaving}>
-                  {isSaving ? "Saving..." : "Add transaction"}
-                </button>
+                <div className="manual-form-actions__right">
+                  <button className="button button-secondary" type="button" onClick={() => setManualOpen(false)}>
+                    Cancel
+                  </button>
+                  <button className="button button-primary" type="submit" data-submit-mode="close" disabled={isSaving}>
+                    {isSaving ? "Saving..." : "Add transaction"}
+                  </button>
+                </div>
               </div>
             </form>
           </section>

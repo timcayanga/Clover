@@ -10934,6 +10934,10 @@ input.transaction-inline-edit--amount::placeholder {
   width: min(980px, 100%);
 }
 
+.modal-card--manual {
+  width: min(760px, 100%);
+}
+
 .accounts-import-modal {
   width: min(860px, 100%);
   max-height: calc(100dvh - 40px);
@@ -11700,9 +11704,10 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 12px;
 }
 
-.manual-form-layout--simple {
+.manual-form-layout--simple,
+.manual-form-layout--compact {
   grid-template-columns: 1fr;
-  gap: 14px;
+  gap: 12px;
 }
 
 .manual-form-layout__full {
@@ -11731,6 +11736,155 @@ input.transaction-inline-edit--amount::placeholder {
   grid-template-columns: minmax(0, 1fr) minmax(138px, 184px) minmax(150px, 210px);
   gap: 12px;
   align-items: end;
+}
+
+.manual-form-compact-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 160px) minmax(0, 3fr);
+  gap: 10px;
+  align-items: end;
+}
+
+.manual-form-compact-row__currency,
+.manual-form-compact-row__amount {
+  min-width: 0;
+}
+
+.transactions-manual-category-row,
+.transactions-manual-account-row {
+  width: 100%;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 11px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.transactions-manual-category-row:hover,
+.transactions-manual-category-row:focus-visible,
+.transactions-manual-account-row:hover,
+.transactions-manual-account-row:focus-visible {
+  border-color: rgba(3, 168, 192, 0.34);
+  box-shadow: 0 0 0 3px rgba(3, 168, 192, 0.1);
+  outline: none;
+}
+
+.transactions-manual-category-row__icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.transactions-manual-category-row__icon img {
+  width: 14px;
+  height: 14px;
+}
+
+.transactions-manual-category-row__label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  flex: 0 0 auto;
+}
+
+.transactions-manual-category-row__value {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.transactions-manual-category-row__chevron,
+.transactions-manual-account-row__chevron {
+  color: var(--muted-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.transactions-manual-category-row__chevron svg,
+.transactions-manual-account-row__chevron svg {
+  width: 14px;
+  height: 14px;
+}
+
+.transactions-manual-account-row__brand {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+
+.transactions-manual-account-row__brand .accounts-brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+}
+
+.transactions-manual-account-row__brand .accounts-brand-mark__logo,
+.transactions-manual-account-row__brand .accounts-brand-mark__fallback,
+.transactions-manual-account-row__brand .accounts-brand-mark__logo-fallback {
+  width: 14px;
+  height: 14px;
+}
+
+.transactions-manual-account-row__fallback {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  background: rgba(3, 168, 192, 0.12);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.transactions-manual-account-row__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.manual-more-panel--compact {
+  gap: 10px;
+}
+
+.manual-more-panel__split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.manual-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.manual-form-actions__right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
 }
 
 .transactions-manual-type-toggle {
@@ -20708,6 +20862,10 @@ input.transaction-inline-edit--amount::placeholder {
     width: 100%;
   }
 
+  .modal-card--manual {
+    width: min(640px, 100%);
+  }
+
   .modal-backdrop--centered-mobile .modal-card,
   .modal-backdrop--centered-mobile .modal-card--wide {
     width: min(640px, 100%);
@@ -20721,10 +20879,6 @@ input.transaction-inline-edit--amount::placeholder {
 
   .transactions-manual-type-toggle {
     flex-wrap: wrap;
-  }
-
-  .manual-more-panel .manual-form-layout__double {
-    grid-template-columns: 1fr;
   }
 
   .accounts-drawer-backdrop {
