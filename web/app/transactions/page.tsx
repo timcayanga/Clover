@@ -215,7 +215,7 @@ type ManualTransactionForm = {
 type BulkEditForm = {
   accountId: string;
   categoryId: string;
-  type: "" | "income" | "expense" | "transfer";
+  type: "" | "debit" | "credit";
 };
 
 type TransactionDetailDraft = {
@@ -938,7 +938,7 @@ const summarizeTransactionChange = (before: Transaction, after: Transaction, acc
 
 const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => ({
   merchantRaw: transaction.merchantRaw,
-  merchantClean: transaction.merchantClean ?? "",
+  merchantClean: transaction.merchantClean ?? transaction.merchantRaw,
   date: transaction.date.slice(0, 10),
   accountId: transaction.accountId,
   categoryId: transaction.categoryId ?? "",
@@ -1821,7 +1821,7 @@ function TransactionsPageContent() {
   ]);
 
   useEffect(() => {
-    if (!addMenuOpen && !downloadMenuOpen) {
+    if (!addMenuOpen && !downloadMenuOpen && !selectionMenuOpen && !activeWarningTransactionId) {
       return;
     }
 
@@ -1833,19 +1833,25 @@ function TransactionsPageContent() {
 
       if (
         addMenuRef.current?.contains(target) ||
-        downloadMenuRef.current?.contains(target)
+        downloadMenuRef.current?.contains(target) ||
+        selectionActionsMenuRef.current?.contains(target) ||
+        (activeWarningTransactionId ? warningPopoverRefs.current.get(activeWarningTransactionId)?.contains(target) : false)
       ) {
         return;
       }
 
       setAddMenuOpen(false);
       setDownloadMenuOpen(false);
+      setSelectionMenuOpen(false);
+      setActiveWarningTransactionId(null);
     };
 
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       if (event.key === "Escape") {
         setAddMenuOpen(false);
         setDownloadMenuOpen(false);
+        setSelectionMenuOpen(false);
+        setActiveWarningTransactionId(null);
         setImportOpen(false);
       }
     };
@@ -1856,7 +1862,7 @@ function TransactionsPageContent() {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [addMenuOpen, downloadMenuOpen]);
+  }, [activeWarningTransactionId, addMenuOpen, downloadMenuOpen, selectionMenuOpen]);
 
   useEffect(() => {
     if (manualOpen) {
@@ -1891,11 +1897,13 @@ function TransactionsPageContent() {
   const closeToolbarMenus = () => {
     setAddMenuOpen(false);
     setDownloadMenuOpen(false);
+    setSelectionMenuOpen(false);
   };
 
   const openAddMenu = () => {
     flushSync(() => {
       setDownloadMenuOpen(false);
+      setSelectionMenuOpen(false);
       setAddMenuOpen((current) => !current);
     });
   };
@@ -1903,6 +1911,7 @@ function TransactionsPageContent() {
   const openDownloadMenu = () => {
     flushSync(() => {
       setAddMenuOpen(false);
+      setSelectionMenuOpen(false);
       setDownloadMenuOpen((current) => !current);
     });
   };
@@ -2186,14 +2195,37 @@ function TransactionsPageContent() {
   );
 
   const selectedTransactionWarningReason = selectedTransaction ? detailWarningReasonFor(selectedTransaction) : null;
-  const selectedTransactionConfidenceSignals = selectedTransaction
-    ? inferTransactionConfidenceSignals(selectedTransaction, selectedTransactionWarningReason)
-    : [];
-  const selectedTransactionHistory = selectedTransaction
-    ? undoStack
-        .filter((entry) => entry.before.id === selectedTransaction.id || entry.after.id === selectedTransaction.id)
-        .slice(0, 3)
-    : [];
+  const hasDetailDraftChanges = useMemo(() => {
+    if (!selectedTransaction || !detailDraft) {
+      return false;
+    }
+
+    return (
+      (detailDraft.merchantClean.trim() || "") !== (selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw).trim() ||
+      detailDraft.date !== selectedTransaction.date.slice(0, 10) ||
+      detailDraft.accountId !== selectedTransaction.accountId ||
+      (detailDraft.categoryId || otherCategoryId) !== (selectedTransaction.categoryId ?? otherCategoryId) ||
+      detailDraft.amount !== selectedTransaction.amount ||
+      detailDraft.type !== (selectedTransaction.type === "income" ? "credit" : "debit") ||
+      normalizeTransactionNotes(detailDraft.description) !== normalizeTransactionNotes(selectedTransaction.description ?? "") ||
+      detailDraft.isExcluded !== selectedTransaction.isExcluded ||
+      detailDraft.isTransfer !== selectedTransaction.isTransfer
+    );
+  }, [detailDraft, otherCategoryId, selectedTransaction]);
+
+  useEffect(() => {
+    if (!activeWarningTransactionId || !isWorkspaceDataReady) {
+      return;
+    }
+
+    const row = transactionRowRefs.current.get(activeWarningTransactionId);
+    if (!row) {
+      return;
+    }
+
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.focus();
+  }, [activeWarningTransactionId, isWorkspaceDataReady, transactions, transactionsPage]);
   const detailSelectedAccount = useMemo(
     () => (detailDraft ? accounts.find((account) => account.id === detailDraft.accountId) ?? null : null),
     [accounts, detailDraft]
@@ -2230,28 +2262,6 @@ function TransactionsPageContent() {
     row?.focus();
   };
 
-  const focusTransactionById = (transactionId: string) => {
-    const transactionIndex = visibleTransactions.findIndex((transaction) => transaction.id === transactionId);
-    if (transactionIndex < 0) {
-      return;
-    }
-
-    const targetPage = Math.floor(transactionIndex / Math.max(transactionsPageSize, 1)) + 1;
-    setTransactionsPage(targetPage);
-
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => {
-        const row = transactionRowRefs.current.get(transactionId);
-        if (!row) {
-          return;
-        }
-
-        row.scrollIntoView({ behavior: "smooth", block: "center" });
-        row.focus();
-      });
-    });
-  };
-
   const handleTransactionRowKeyDown = (event: ReactKeyboardEvent<HTMLElement>, transaction: Transaction, index: number) => {
     if (event.target !== event.currentTarget) {
       return;
@@ -2282,6 +2292,7 @@ function TransactionsPageContent() {
   };
 
   const openTransactionDetail = (transaction: Transaction) => {
+    setActiveWarningTransactionId(null);
     setSelectedTransaction(transaction);
     setTransactionDeleteConfirmOpen(false);
     setDetailDraft({
@@ -2291,26 +2302,30 @@ function TransactionsPageContent() {
   };
 
   const openTransactionReview = (transaction: Transaction, transactionIndex?: number | null) => {
-    if (typeof transactionIndex === "number" && transactionIndex > 0) {
-      setTransactionsPage(Math.max(1, Math.ceil(transactionIndex / Math.max(transactionsPageSize, 1))));
-    } else {
-      focusTransactionById(transaction.id);
+    const revealWarning = () => {
+      setActiveWarningTransactionId(transaction.id);
+      setTransactionDeleteConfirmOpen(false);
+
+      const warningReason = warningReasonFor(transaction);
+      if (warningReason) {
+        capturePostHogClientEventOnce(
+          "review_item_opened",
+          {
+            workspace_id: selectedWorkspaceId || null,
+            transaction_id: transaction.id,
+            review_reason: warningReason,
+            review_status: transaction.reviewStatus ?? null,
+          },
+          analyticsOnceKey("review_item_opened", `transaction:${transaction.id}`)
+        );
+      }
+    };
+
+    if (typeof transactionIndex === "number" && transactionIndex >= 0) {
+      setTransactionsPage(Math.max(1, Math.ceil((transactionIndex + 1) / Math.max(transactionsPageSize, 1))));
     }
-    setActiveWarningTransactionId(transaction.id);
-    setTransactionDeleteConfirmOpen(false);
-    const warningReason = warningReasonFor(transaction);
-    if (warningReason) {
-      capturePostHogClientEventOnce(
-        "review_item_opened",
-        {
-          workspace_id: selectedWorkspaceId || null,
-          transaction_id: transaction.id,
-          review_reason: warningReason,
-          review_status: transaction.reviewStatus ?? null,
-        },
-        analyticsOnceKey("review_item_opened", `transaction:${transaction.id}`)
-      );
-    }
+
+    revealWarning();
   };
 
   const resolveTransactionWarning = (
@@ -2384,6 +2399,7 @@ function TransactionsPageContent() {
     setSelectedTransaction(null);
     setDetailDraft(null);
     setTransactionDeleteConfirmOpen(false);
+    setActiveWarningTransactionId(null);
   };
 
   const toggleSelectedTransaction = (transactionId: string, selected: boolean) => {
@@ -2409,6 +2425,7 @@ function TransactionsPageContent() {
     }
     setTransactions((current) => current.filter((entry) => entry.id !== transactionId));
     setSelectedTransactionIds((current) => current.filter((entryId) => entryId !== transactionId));
+    setActiveWarningTransactionId((current) => (current === transactionId ? null : current));
     setSelectedTransaction((current) => (current?.id === transactionId ? null : current));
     setDetailDraft((current) => {
       if (!current || selectedTransaction?.id !== transactionId) {
@@ -3116,6 +3133,26 @@ function TransactionsPageContent() {
     syncAfterTransactionRemoval(transactionId);
   };
 
+  const deleteWarningTransaction = async (transaction: Transaction) => {
+    setActiveWarningTransactionId(null);
+    syncAfterTransactionRemoval(transaction.id);
+    setMessage("Deleting transaction...");
+
+    try {
+      await deleteTransactionRemote(transaction.id);
+      refreshTransactionsSummary();
+      setMessage("Transaction deleted.");
+    } catch (error) {
+      void loadTransactionsPage(selectedWorkspaceId || "", {
+        background: true,
+        pageOverride: transactionsPage,
+        pageSizeOverride: transactionsPageSize,
+        summaryMode: "full",
+      });
+      setMessage(error instanceof Error ? error.message : "Unable to delete transaction.");
+    }
+  };
+
   const refreshTransactionsSummary = () => {
     if (!selectedWorkspaceId) {
       return;
@@ -3310,26 +3347,31 @@ function TransactionsPageContent() {
       payload: {
         accountId: bulkEditForm.accountId || undefined,
         categoryId: bulkEditForm.categoryId || undefined,
-        type: bulkEditForm.type || undefined,
+        type:
+          bulkEditForm.type === ""
+            ? undefined
+            : bulkEditForm.type === "credit"
+              ? "income"
+              : "expense",
       },
     }));
 
     applyTransactionPatchesLocally(
       payloads.map(({ transaction, payload }) => ({
         transactionId: transaction.id,
-          patch: {
-            ...(payload.accountId
-              ? {
-                  accountId: payload.accountId,
-                  accountName: accountNames.get(payload.accountId) ?? transaction.accountName,
+        patch: {
+          ...(payload.accountId
+            ? {
+                accountId: payload.accountId,
+                accountName: accountNames.get(payload.accountId) ?? transaction.accountName,
               }
             : {}),
-            ...(payload.categoryId
-              ? {
-                  categoryId: payload.categoryId,
-                  categoryName: categoryNames.get(payload.categoryId) ?? transaction.categoryName,
-                }
-              : {}),
+          ...(payload.categoryId
+            ? {
+                categoryId: payload.categoryId,
+                categoryName: categoryNames.get(payload.categoryId) ?? transaction.categoryName,
+              }
+            : {}),
           ...(payload.type !== undefined ? { type: payload.type } : {}),
         },
       }))
@@ -3386,127 +3428,8 @@ function TransactionsPageContent() {
           selected_count: selected.length,
           updated_count: selected.length - failedTransactions.length,
           updated_fields: updatedFields.join(",") || null,
-          is_excluded: Object.prototype.hasOwnProperty.call(payloads[0]?.payload ?? {}, "isExcluded")
-            ? Boolean(payloads[0]?.payload?.isExcluded)
-            : null,
-          is_transfer: Object.prototype.hasOwnProperty.call(payloads[0]?.payload ?? {}, "isTransfer")
-            ? Boolean(payloads[0]?.payload?.isTransfer)
-            : null,
-        });
-      } finally {
-        setIsSaving(false);
-      }
-    })();
-  };
-
-  const bulkUpdateSelectedTransactions = async (payloadFactory: (transaction: Transaction) => Record<string, unknown>) => {
-    if (!selectedTransactionIds.length) {
-      setMessage("Select transactions first.");
-      return;
-    }
-
-    setIsSaving(true);
-    const selected = selectedTransactionIds
-      .map((transactionId) => transactions.find((entry) => entry.id === transactionId))
-      .filter((entry): entry is Transaction => Boolean(entry));
-    const originalTransactions = new Map(selected.map((transaction) => [transaction.id, transaction] as const));
-    const payloads = selected.map((transaction) => ({
-      transaction,
-      payload: payloadFactory(transaction),
-    }));
-
-    applyTransactionPatchesLocally(
-      payloads.map(({ transaction, payload }) => {
-        const patch: Partial<Transaction> = {};
-
-        if (Object.prototype.hasOwnProperty.call(payload, "isExcluded")) {
-          patch.isExcluded = Boolean(payload.isExcluded);
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "isTransfer")) {
-          patch.isTransfer = Boolean(payload.isTransfer);
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "accountId") && typeof payload.accountId === "string") {
-          patch.accountId = payload.accountId;
-          patch.accountName = accounts.find((account) => account.id === payload.accountId)?.name ?? transaction.accountName;
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "categoryId")) {
-          const categoryId = typeof payload.categoryId === "string" ? payload.categoryId : null;
-          patch.categoryId = categoryId;
-          patch.categoryName = categories.find((category) => category.id === categoryId)?.name ?? transaction.categoryName;
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "type") && typeof payload.type === "string") {
-          patch.type = payload.type as Transaction["type"];
-        }
-
-        if (Object.prototype.hasOwnProperty.call(payload, "description")) {
-          patch.description = typeof payload.description === "string" ? payload.description : null;
-        }
-
-        return {
-          transactionId: transaction.id,
-          patch,
-        };
-      })
-    );
-
-    setUndoStack([]);
-    setRedoStack([]);
-    setMessage(`${selected.length} transaction${selected.length === 1 ? "" : "s"} updated.`);
-
-    void (async () => {
-      try {
-        const results = await Promise.allSettled(
-          payloads.map(({ transaction, payload }) =>
-            updateTransaction(transaction.id, payload, {
-              recordHistory: false,
-            })
-          )
-        );
-
-        const failedTransactions = results
-          .map((result, index) => ({ result, transaction: payloads[index].transaction }))
-          .filter(
-            (
-              entry
-            ): entry is {
-              result: PromiseRejectedResult;
-              transaction: Transaction;
-            } => entry.result.status === "rejected"
-          );
-
-        if (failedTransactions.length) {
-          applyTransactionPatchesLocally(
-            failedTransactions.map(({ transaction }) => ({
-              transactionId: transaction.id,
-              patch: originalTransactions.get(transaction.id) ?? transaction,
-            }))
-          );
-          setMessage("Some transactions could not be updated. Please try again.");
-          return;
-        }
-
-        const updatedFields = Array.from(
-          new Set(
-            payloads.flatMap(({ payload }) =>
-              Object.keys(payload).filter((key) => payload[key as keyof typeof payload] !== undefined)
-            )
-          )
-        );
-
-        capturePostHogClientEvent("bulk_transaction_updated", {
-          workspace_id: selectedWorkspaceId || null,
-          selected_count: selected.length,
-          updated_count: selected.length - failedTransactions.length,
-          updated_fields: updatedFields.join(",") || null,
-          is_excluded: Object.prototype.hasOwnProperty.call(payloads[0]?.payload ?? {}, "isExcluded")
-            ? Boolean(payloads[0]?.payload?.isExcluded)
-            : null,
-          is_transfer: Object.prototype.hasOwnProperty.call(payloads[0]?.payload ?? {}, "isTransfer")
-            ? Boolean(payloads[0]?.payload?.isTransfer)
+          transaction_type: Object.prototype.hasOwnProperty.call(payloads[0]?.payload ?? {}, "type")
+            ? String(payloads[0]?.payload?.type)
             : null,
         });
       } finally {
@@ -4153,45 +4076,44 @@ function TransactionsPageContent() {
             <div className="transactions-status-line transactions-selection-bar" role="status" aria-live="polite">
               <div className="transactions-status-line__meta">
                 <span className="pill pill-neutral">{selectedTransactionIds.length} selected</span>
-                <span className="transactions-selection-bar__text">Choose what you want to do with the selected transactions.</span>
               </div>
               <div className="transactions-status-line__meta">
-                <button
-                  className="button button-secondary button-small transactions-action-button"
-                  type="button"
-                  onClick={openBulkEdit}
-                  disabled={isSaving || isApplyingHistory}
-                >
-                  Bulk edit
-                </button>
-                <button
-                  className="button button-secondary button-small transactions-action-button"
-                  type="button"
-                  onClick={() => {
-                    void bulkUpdateSelectedTransactions(() => ({ isExcluded: true }));
-                  }}
-                  disabled={isSaving}
-                >
-                  Ignore
-                </button>
-                <button
-                  className="button button-secondary button-small transactions-action-button"
-                  type="button"
-                  onClick={() => {
-                    void bulkUpdateSelectedTransactions(() => ({ isExcluded: false }));
-                  }}
-                  disabled={isSaving}
-                >
-                  Include
-                </button>
-                <button
-                  className="button button-secondary button-small transactions-action-button transactions-selection-bar__danger"
-                  type="button"
-                  onClick={() => setBulkDeleteConfirmOpen(true)}
-                  disabled={isSaving}
-                >
-                  Delete
-                </button>
+                <div className="transactions-selection-menu" ref={selectionActionsMenuRef}>
+                  <button
+                    className="button button-secondary button-small transactions-action-button transactions-selection-menu__toggle"
+                    type="button"
+                    onClick={() => setSelectionMenuOpen((current) => !current)}
+                    aria-expanded={selectionMenuOpen}
+                    aria-label="Selected transactions actions"
+                  >
+                    <span>Actions</span>
+                    <span className="button-icon" aria-hidden="true">
+                      <ActionIcon name="chevron-down" />
+                    </span>
+                  </button>
+                  <div className="transactions-selection-menu__panel" hidden={!selectionMenuOpen}>
+                    <button
+                      className="transactions-selection-menu__item"
+                      type="button"
+                      onClick={() => {
+                        setSelectionMenuOpen(false);
+                        openBulkEdit();
+                      }}
+                    >
+                      Bulk edit
+                    </button>
+                    <button
+                      className="transactions-selection-menu__item transactions-selection-menu__item--danger"
+                      type="button"
+                      onClick={() => {
+                        setSelectionMenuOpen(false);
+                        setBulkDeleteConfirmOpen(true);
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
                 <button
                   className="button button-secondary button-small transactions-action-button"
                   type="button"
@@ -4457,15 +4379,62 @@ function TransactionsPageContent() {
                     </div>
                     <div className="transaction-warning-cell">
                       {warningReason ? (
-                        <button
-                          type="button"
-                          className="warning-chip"
-                          title={warningReason}
-                          aria-label={warningReason}
-                          onClick={() => openTransactionDetail(transaction)}
+                        <div
+                          className={`transaction-warning-wrap ${
+                            activeWarningTransactionId === transaction.id ? "is-open" : ""
+                          }`}
+                          ref={(node) => {
+                            if (node) {
+                              warningPopoverRefs.current.set(transaction.id, node);
+                              return;
+                            }
+
+                            warningPopoverRefs.current.delete(transaction.id);
+                          }}
                         >
-                          <span className="warning-mark warning-mark--small" aria-hidden="true" />
-                        </button>
+                          <button
+                            type="button"
+                            className="warning-chip"
+                            title={warningReason}
+                            aria-label={warningReason}
+                            aria-expanded={activeWarningTransactionId === transaction.id}
+                            onClick={() =>
+                              setActiveWarningTransactionId((current) => (current === transaction.id ? null : transaction.id))
+                            }
+                          >
+                            <span className="warning-mark warning-mark--small" aria-hidden="true" />
+                          </button>
+                          <div className="transaction-warning-popover" role="tooltip" aria-label={warningReason}>
+                            <p className="transaction-warning-popover__reason">{warningReason}</p>
+                            <div className="transaction-warning-popover__actions">
+                              <button
+                                type="button"
+                                className="button button-primary button-small"
+                                onClick={() =>
+                                  resolveTransactionWarning(
+                                    transaction,
+                                    {
+                                      isExcluded: false,
+                                      isTransfer: false,
+                                      reviewStatus: "confirmed",
+                                    },
+                                    "Transaction kept.",
+                                    "accepted"
+                                  )
+                                }
+                              >
+                                Keep
+                              </button>
+                              <button
+                                type="button"
+                                className="button button-secondary button-small"
+                                onClick={() => void deleteWarningTransaction(transaction)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       ) : null}
                     </div>
                   </div>
@@ -4607,15 +4576,62 @@ function TransactionsPageContent() {
                           />
                         </div>
                         {warningReason ? (
-                          <button
-                            type="button"
-                            className="warning-chip transactions-mobile-card__warning"
-                            title={warningReason}
-                            aria-label={warningReason}
-                            onClick={() => openTransactionDetail(transaction)}
+                          <div
+                            className={`transaction-warning-wrap transactions-mobile-card__warning-wrap ${
+                              activeWarningTransactionId === transaction.id ? "is-open" : ""
+                            }`}
+                            ref={(node) => {
+                              if (node) {
+                                warningPopoverRefs.current.set(transaction.id, node);
+                                return;
+                              }
+
+                              warningPopoverRefs.current.delete(transaction.id);
+                            }}
                           >
-                            <span className="warning-mark warning-mark--small" aria-hidden="true" />
-                          </button>
+                            <button
+                              type="button"
+                              className="warning-chip transactions-mobile-card__warning"
+                              title={warningReason}
+                              aria-label={warningReason}
+                              aria-expanded={activeWarningTransactionId === transaction.id}
+                              onClick={() =>
+                                setActiveWarningTransactionId((current) => (current === transaction.id ? null : transaction.id))
+                              }
+                            >
+                              <span className="warning-mark warning-mark--small" aria-hidden="true" />
+                            </button>
+                            <div className="transaction-warning-popover" role="tooltip" aria-label={warningReason}>
+                              <p className="transaction-warning-popover__reason">{warningReason}</p>
+                              <div className="transaction-warning-popover__actions">
+                                <button
+                                  type="button"
+                                  className="button button-primary button-small"
+                                  onClick={() =>
+                                    resolveTransactionWarning(
+                                      transaction,
+                                      {
+                                        isExcluded: false,
+                                        isTransfer: false,
+                                        reviewStatus: "confirmed",
+                                      },
+                                      "Transaction kept.",
+                                      "accepted"
+                                    )
+                                  }
+                                >
+                                  Keep
+                                </button>
+                                <button
+                                  type="button"
+                                  className="button button-secondary button-small"
+                                  onClick={() => void deleteWarningTransaction(transaction)}
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </div>
+                          </div>
                         ) : null}
                       </div>
 
@@ -5068,62 +5084,14 @@ function TransactionsPageContent() {
                     ))}
                   </select>
                 </label>
-                <div className="transactions-bulk-toggle-group">
-                  <span className="transactions-bulk-toggle-group__label">Review state</span>
-                  <div className="transactions-bulk-toggle-group__buttons">
-                    <button
-                      type="button"
-                      className={`pill pill-interactive transactions-filter-pill ${bulkEditForm.isExcluded === "include" ? "pill-is-selected" : ""}`}
-                      onClick={() => setBulkEditForm((current) => ({ ...current, isExcluded: "include" }))}
-                      aria-pressed={bulkEditForm.isExcluded === "include"}
-                    >
-                      Include
-                    </button>
-                    <button
-                      type="button"
-                      className={`pill pill-interactive transactions-filter-pill ${bulkEditForm.isExcluded === "exclude" ? "pill-is-selected" : ""}`}
-                      onClick={() => setBulkEditForm((current) => ({ ...current, isExcluded: "exclude" }))}
-                      aria-pressed={bulkEditForm.isExcluded === "exclude"}
-                    >
-                      Exclude
-                    </button>
-                    <button
-                      type="button"
-                      className="transactions-bulk-toggle-group__clear"
-                      onClick={() => setBulkEditForm((current) => ({ ...current, isExcluded: "" }))}
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </div>
-                <div className="transactions-bulk-toggle-group">
-                  <span className="transactions-bulk-toggle-group__label">Transfer</span>
-                  <div className="transactions-bulk-toggle-group__buttons">
-                    <button
-                      type="button"
-                      className={`pill pill-interactive transactions-filter-pill ${bulkEditForm.isTransfer === "false" ? "pill-is-selected" : ""}`}
-                      onClick={() => setBulkEditForm((current) => ({ ...current, isTransfer: "false" }))}
-                      aria-pressed={bulkEditForm.isTransfer === "false"}
-                    >
-                      Not transfer
-                    </button>
-                    <button
-                      type="button"
-                      className={`pill pill-interactive transactions-filter-pill ${bulkEditForm.isTransfer === "true" ? "pill-is-selected" : ""}`}
-                      onClick={() => setBulkEditForm((current) => ({ ...current, isTransfer: "true" }))}
-                      aria-pressed={bulkEditForm.isTransfer === "true"}
-                    >
-                      Transfer
-                    </button>
-                    <button
-                      type="button"
-                      className="transactions-bulk-toggle-group__clear"
-                      onClick={() => setBulkEditForm((current) => ({ ...current, isTransfer: "" }))}
-                    >
-                      Clear
-                    </button>
-                  </div>
-                </div>
+                <label>
+                  Type
+                  <select value={bulkEditForm.type} onChange={(event) => setBulkEditForm((current) => ({ ...current, type: event.target.value as BulkEditForm["type"] }))}>
+                    <option value="">Leave unchanged</option>
+                    <option value="debit">Debit</option>
+                    <option value="credit">Credit</option>
+                  </select>
+                </label>
               </div>
 
               <div className="form-actions">
@@ -5369,7 +5337,7 @@ function TransactionsPageContent() {
       {selectedTransaction ? (
         <div className="modal-backdrop modal-backdrop--transaction-detail" role="presentation" onClick={closeTransactionDetail}>
           <section
-            className="modal-card modal-card--wide transaction-drawer transaction-drawer--sidepanel glass"
+            className="modal-card modal-card--wide transaction-drawer transaction-drawer--sidepanel"
             role="dialog"
             aria-modal="true"
             aria-labelledby="transaction-notes-title"
@@ -5395,8 +5363,133 @@ function TransactionsPageContent() {
               </button>
             </div>
 
+            <div className="transaction-drawer-form transaction-drawer-form--single">
+              <label>
+                Name
+                <input
+                  value={detailDraft?.merchantClean ?? selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw}
+                  onChange={(event) =>
+                    setDetailDraft((current) => (current ? { ...current, merchantClean: event.target.value } : current))
+                  }
+                  placeholder="Merchant or payee"
+                />
+              </label>
+
+              <label>
+                Date
+                <input
+                  type="date"
+                  value={detailDraft?.date ?? todayIso}
+                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, date: event.target.value } : current))}
+                />
+              </label>
+
+              <label>
+                Amount
+                <input
+                  type="number"
+                  step="0.01"
+                  value={detailDraft?.amount ?? selectedTransaction.amount}
+                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, amount: event.target.value } : current))}
+                />
+              </label>
+
+              <label>
+                <span className="transactions-manual-type-label">
+                  <span>Type</span>
+                  <button
+                    className="transactions-manual-type-help"
+                    type="button"
+                    title="Debit means money leaving the account. Credit means money coming in."
+                    aria-label="Type help"
+                  >
+                    i
+                  </button>
+                </span>
+                <div className="transactions-manual-type-control transaction-drawer-type-control">
+                  <span className="transactions-manual-type-symbol" aria-hidden="true">
+                    {(detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : "debit")) === "credit" ? "+" : "-"}
+                  </span>
+                  <select
+                    value={detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : "debit")}
+                    onChange={(event) =>
+                      setDetailDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              type: event.target.value as TransactionDetailDraft["type"],
+                            }
+                          : current
+                      )
+                    }
+                  >
+                    <option value="debit">Debit</option>
+                    <option value="credit">Credit</option>
+                  </select>
+                </div>
+              </label>
+
+              <label>
+                <span className="transaction-drawer-field-label">
+                  <span>Account</span>
+                </span>
+                <div className="transaction-drawer-select">
+                  <span className="transaction-drawer-select__icon" aria-hidden="true">
+                    {detailSelectedAccountBrand ? (
+                      <AccountBrandMark
+                        accountBrand={detailSelectedAccountBrand}
+                        label={detailSelectedAccount?.name ?? "Account"}
+                      />
+                    ) : null}
+                  </span>
+                  <select
+                    value={detailDraft?.accountId ?? ""}
+                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, accountId: event.target.value } : current))}
+                  >
+                    {accounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </label>
+
+              <label>
+                <span className="transaction-drawer-field-label">
+                  <span>Category</span>
+                </span>
+                <div className="transaction-drawer-select">
+                  <span className="transaction-drawer-select__icon" aria-hidden="true">
+                    <span className="transaction-category-icon transaction-drawer-category-icon" style={getCategoryIconTone(detailSelectedCategory?.name ?? "Other")}>
+                      <img src={getCategoryIconSrc(detailSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
+                    </span>
+                  </span>
+                  <select
+                    value={detailDraft?.categoryId ?? otherCategoryId}
+                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, categoryId: event.target.value } : current))}
+                  >
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </label>
+
+              <label className="transaction-drawer-form__notes">
+                Notes
+                <textarea
+                  value={detailDraft?.description ?? ""}
+                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, description: event.target.value } : current))}
+                  placeholder="Optional note or review context"
+                />
+              </label>
+            </div>
+
             {selectedTransactionWarningReason ? (
-              <div className="detail-warning-box detail-warning-box--compact">
+              <div className="detail-warning-box detail-warning-box--compact transaction-drawer-warning">
                 <div className="detail-warning-box__header">
                   <span className="detail-warning-box__icon" aria-hidden="true">
                     <span className="warning-mark warning-mark--small" aria-hidden="true" />
@@ -5421,7 +5514,7 @@ function TransactionsPageContent() {
                       );
                     }}
                   >
-                    Keep transaction
+                    Keep
                   </button>
                   <button
                     className="button button-secondary button-small detail-warning-delete"
@@ -5430,139 +5523,11 @@ function TransactionsPageContent() {
                       setTransactionDeleteConfirmOpen(true);
                     }}
                   >
-                    Delete transaction
+                    Delete
                   </button>
                 </div>
               </div>
             ) : null}
-
-            <div className="manual-form-layout transaction-drawer-form">
-              <div className="manual-form-layout__triple transaction-drawer-form__primary-row">
-                <label>
-                  Date
-                  <input
-                    type="date"
-                    value={detailDraft?.date ?? todayIso}
-                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, date: event.target.value } : current))}
-                  />
-                </label>
-                <label>
-                  Amount
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={detailDraft?.amount ?? selectedTransaction.amount}
-                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, amount: event.target.value } : current))}
-                  />
-                </label>
-                <label>
-                  <span className="transactions-manual-type-label">
-                    <span>Type</span>
-                    <button
-                      className="transactions-manual-type-help"
-                      type="button"
-                      title="Debit means money leaving the account. Credit means money coming in."
-                      aria-label="Type help"
-                    >
-                      i
-                    </button>
-                  </span>
-                  <div className="transactions-manual-type-control transaction-drawer-type-control">
-                    <span className="transactions-manual-type-symbol" aria-hidden="true">
-                      {(detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : "debit")) === "credit" ? "+" : "-"}
-                    </span>
-                    <select
-                      value={detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : "debit")}
-                      onChange={(event) =>
-                        setDetailDraft((current) =>
-                          current
-                            ? {
-                                ...current,
-                                type: event.target.value as TransactionDetailDraft["type"],
-                              }
-                            : current
-                        )
-                      }
-                    >
-                      <option value="debit">Debit</option>
-                      <option value="credit">Credit</option>
-                    </select>
-                  </div>
-                </label>
-              </div>
-
-              <div className="manual-form-layout__double transaction-drawer-form__secondary-row">
-                <label>
-                  <span className="transaction-drawer-field-label">
-                    <span>Account</span>
-                    {detailSelectedAccountBrand ? (
-                      <AccountBrandMark
-                        accountBrand={detailSelectedAccountBrand}
-                        label={detailSelectedAccount?.name ?? "Account"}
-                      />
-                    ) : null}
-                  </span>
-                  <select
-                    value={detailDraft?.accountId ?? ""}
-                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, accountId: event.target.value } : current))}
-                  >
-                    {accounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  <span className="transaction-drawer-field-label">
-                    <span>Category</span>
-                    <span
-                      className="transaction-category-icon transaction-drawer-category-icon"
-                      style={getCategoryIconTone(detailSelectedCategory?.name ?? "Other")}
-                    >
-                      <img src={getCategoryIconSrc(detailSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
-                    </span>
-                  </span>
-                  <select
-                    value={detailDraft?.categoryId ?? otherCategoryId}
-                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, categoryId: event.target.value } : current))}
-                  >
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                  {detailCategorySuggestion ? (
-                    <CategorySuggestionChip
-                      suggestion={detailCategorySuggestion}
-                      applied={(detailDraft?.categoryId ?? otherCategoryId) === detailCategorySuggestion.categoryId}
-                      onApply={
-                        (detailDraft?.categoryId ?? otherCategoryId) === detailCategorySuggestion.categoryId
-                          ? undefined
-                          : () =>
-                              setDetailDraft((current) =>
-                                current ? { ...current, categoryId: detailCategorySuggestion.categoryId } : current
-                              )
-                      }
-                    />
-                  ) : null}
-                </label>
-              </div>
-
-              <label className="transaction-drawer-form__currency">
-                Currency
-                <input
-                  value={detailDraft?.currency ?? selectedTransaction.currency}
-                  onChange={(event) => setDetailDraft((current) => (current ? { ...current, currency: event.target.value.toUpperCase() } : current))}
-                  placeholder="PHP, USD, BTC"
-                  maxLength={8}
-                  autoCapitalize="characters"
-                  spellCheck={false}
-                />
-                <span className="field-help">Change this if the transaction should display in a different currency than the account.</span>
-              </label>
-            </div>
 
             <div className="form-actions detail-actions">
               {!selectedTransactionWarningReason ? (
@@ -5594,9 +5559,11 @@ function TransactionsPageContent() {
                   </div>
                 </div>
               ) : null}
-              <button className="button button-primary" type="button" disabled={isSaving} onClick={saveDetailDraft}>
-                {isSaving ? "Saving..." : "Save changes"}
-              </button>
+              {hasDetailDraftChanges ? (
+                <button className="button button-primary" type="button" disabled={isSaving} onClick={saveDetailDraft}>
+                  {isSaving ? "Saving..." : "Save changes"}
+                </button>
+              ) : null}
             </div>
           </section>
         </div>

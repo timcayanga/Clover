@@ -9085,10 +9085,18 @@ body[data-clover-page-modal] .sidebar-backdrop {
 
 .transactions-selection-bar {
   margin: 12px 0 14px;
-  padding: 12px 14px;
-  border-radius: 18px;
+  padding: 10px 12px;
+  border-radius: 14px;
   background: rgba(3, 168, 192, 0.06);
   border: 1px solid rgba(3, 168, 192, 0.12);
+}
+
+.transactions-selection-bar .transactions-status-line__meta:first-child {
+  flex: 0 0 auto;
+}
+
+.transactions-selection-bar .transactions-status-line__meta:last-child {
+  flex: 1 1 auto;
 }
 
 .transactions-selection-bar__text {
@@ -9331,9 +9339,10 @@ body[data-clover-page-modal] .sidebar-backdrop {
   align-items: center;
   padding: 8px 4px;
   border-bottom: 1px solid rgba(215, 228, 233, 0.82);
+  border-radius: 0 !important;
   font-size: 0.88rem;
   position: relative;
-  border-radius: 0;
+  background: rgba(255, 255, 255, 0.98);
   transition: background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
@@ -9366,11 +9375,11 @@ body[data-clover-page-modal] .sidebar-backdrop {
 }
 
 .line-item--warning {
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .line-item--clear {
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .line-item.is-selected.line-item--imported {
@@ -9384,6 +9393,7 @@ body[data-clover-page-modal] .sidebar-backdrop {
 .transaction-warning-wrap {
   position: relative;
   display: inline-flex;
+  align-items: center;
   justify-content: flex-end;
 }
 
@@ -9394,9 +9404,9 @@ body[data-clover-page-modal] .sidebar-backdrop {
   z-index: 10;
   display: grid;
   gap: 10px;
-  min-width: 220px;
-  padding: 10px 12px;
-  border-radius: 14px;
+  min-width: 180px;
+  padding: 8px 10px;
+  border-radius: 12px;
   border: 1px solid rgba(245, 158, 11, 0.22);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: var(--shadow);
@@ -9431,7 +9441,7 @@ body[data-clover-page-modal] .sidebar-backdrop {
 }
 
 .transaction-warning-popover__actions .button {
-  min-height: 28px;
+  min-height: 26px;
 }
 
 .transaction-select-cell {
