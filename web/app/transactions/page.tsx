@@ -125,6 +125,15 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
     };
   });
 
+  const preservedCurrentAccounts = currentAccounts.filter((account) => {
+    if (account.source === "upload") {
+      return false;
+    }
+
+    const accountKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+    return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
+  });
+
   const optimisticAccounts = currentAccounts.filter((account) => {
     if (account.source !== "upload") {
       return false;
@@ -134,7 +143,7 @@ const mergeAccountsWithOptimisticImports = (fetchedAccounts: Account[], currentA
     return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
   });
 
-  return [...optimisticAccounts, ...mergedFetchedAccounts];
+  return [...preservedCurrentAccounts, ...optimisticAccounts, ...mergedFetchedAccounts];
 };
 
 const accountMatchesTransaction = (transaction: Transaction, account: Account) =>
@@ -165,6 +174,7 @@ type Transaction = {
   source?: string | null;
   importFileId?: string | null;
   warningReason?: string | null;
+  rawPayload?: unknown;
 };
 
 type TransactionPageMeta = {
@@ -221,6 +231,7 @@ type ManualTransactionForm = {
   type: "debit" | "credit";
   merchantRaw: string;
   description: string;
+  receiptLineItems: ReceiptLineItemDraft[];
 };
 
 type BulkEditForm = {
@@ -241,6 +252,20 @@ type TransactionDetailDraft = {
   description: string;
   isExcluded: boolean;
   isTransfer: boolean;
+};
+
+type ReceiptLineItemDraft = {
+  description: string;
+  quantity: string;
+  unitPrice: string;
+  amount: string;
+};
+
+type ReceiptLineItem = {
+  description: string;
+  quantity?: string | null;
+  unitPrice?: string | null;
+  amount?: string | null;
 };
 
 type EditableTransactionField = "name" | "date" | "accountId" | "categoryId" | "amount" | "currency";
@@ -338,6 +363,7 @@ const createEmptyManualForm = (accountId = "", categoryId = "", currency = "PHP"
   type: "debit",
   merchantRaw: "",
   description: "",
+  receiptLineItems: [],
 });
 
 const getOtherCategoryId = (categoryList: Category[]) =>
@@ -837,6 +863,116 @@ const normalizeTransactionNotes = (value: string | null | undefined) => {
 
   return trimmed;
 };
+
+const createEmptyReceiptLineItem = (): ReceiptLineItemDraft => ({
+  description: "",
+  quantity: "",
+  unitPrice: "",
+  amount: "",
+});
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
+const normalizeReceiptLineItemText = (value: unknown) => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : "";
+  }
+
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  const trimmed = value.trim();
+  return trimmed;
+};
+
+const parseReceiptLineItemsFromPayload = (rawPayload: unknown): ReceiptLineItem[] => {
+  if (!isRecord(rawPayload)) {
+    return [];
+  }
+
+  const candidateSources: unknown[] = [];
+  if (Array.isArray(rawPayload.receiptLineItems)) {
+    candidateSources.push(rawPayload.receiptLineItems);
+  }
+
+  const receiptDetails = isRecord(rawPayload.receiptDetails) ? rawPayload.receiptDetails : null;
+  if (receiptDetails && Array.isArray(receiptDetails.lineItems)) {
+    candidateSources.push(receiptDetails.lineItems);
+  }
+
+  for (const source of candidateSources) {
+    const lineItems = (source as unknown[]).flatMap((entry) => {
+      if (!isRecord(entry)) {
+        return [];
+      }
+
+      const description = normalizeReceiptLineItemText(entry.description ?? entry.name ?? entry.label);
+      if (!description) {
+        return [];
+      }
+
+      return [
+        {
+          description,
+          quantity: normalizeReceiptLineItemText(entry.quantity) || null,
+          unitPrice: normalizeReceiptLineItemText(entry.unitPrice ?? entry.unit_price) || null,
+          amount: normalizeReceiptLineItemText(entry.amount ?? entry.total) || null,
+        },
+      ];
+    });
+
+    if (lineItems.length > 0) {
+      return lineItems;
+    }
+  }
+
+  return [];
+};
+
+const parseReceiptLineItemNumber = (value: string | null | undefined) => {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Number(String(value).replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getReceiptLineItemComputedAmount = (item: ReceiptLineItemDraft | ReceiptLineItem) => {
+  const amount = parseReceiptLineItemNumber(item.amount);
+  if (amount !== null) {
+    return amount;
+  }
+
+  const unitPrice = parseReceiptLineItemNumber(item.unitPrice);
+  const quantity = parseReceiptLineItemNumber(item.quantity);
+  if (unitPrice !== null && quantity !== null) {
+    return unitPrice * quantity;
+  }
+
+  return null;
+};
+
+const getManualReceiptLineItemTotal = (lineItems: ReceiptLineItemDraft[]) =>
+  lineItems.reduce((total, item) => total + (getReceiptLineItemComputedAmount(item) ?? 0), 0);
+
+const sanitizeReceiptLineItems = (lineItems: ReceiptLineItemDraft[]) =>
+  lineItems
+    .map((item) => ({
+      description: item.description.trim(),
+      quantity: item.quantity.trim(),
+      unitPrice: item.unitPrice.trim(),
+      amount: item.amount.trim(),
+    }))
+    .filter((item) => Boolean(item.description))
+    .map((item) => ({
+      description: item.description,
+      quantity: item.quantity || null,
+      unitPrice: item.unitPrice || null,
+      amount: item.amount || null,
+    }));
 
 const normalizeMerchantGroupKey = (value: string) =>
   value
@@ -2368,6 +2504,22 @@ function TransactionsPageContent() {
     () => categories.find((category) => category.id === (detailDraft?.categoryId ?? otherCategoryId)) ?? null,
     [categories, detailDraft?.categoryId, otherCategoryId]
   );
+  const selectedTransactionReceiptLineItems = useMemo(
+    () => parseReceiptLineItemsFromPayload(selectedTransaction?.rawPayload),
+    [selectedTransaction?.rawPayload]
+  );
+  const manualReceiptLineItemTotal = useMemo(
+    () => getManualReceiptLineItemTotal(manualForm.receiptLineItems),
+    [manualForm.receiptLineItems]
+  );
+  const manualReceiptLineItemHasValues = manualForm.receiptLineItems.some(
+    (item) => item.description.trim() || item.amount.trim() || item.quantity.trim() || item.unitPrice.trim()
+  );
+  const manualReceiptLineItemAmount = Number(manualForm.amount || 0);
+  const manualReceiptLineItemMismatch =
+    manualReceiptLineItemHasValues && Number.isFinite(manualReceiptLineItemAmount)
+      ? Math.abs(manualReceiptLineItemTotal - manualReceiptLineItemAmount) > 0.01
+      : false;
 
   const nextReviewTransactionAfter = (transactionId: string) => {
     const startIndex = visibleTransactions.findIndex((transaction) => transaction.id === transactionId);
@@ -2840,6 +2992,7 @@ function TransactionsPageContent() {
       const accountName = account?.name ?? accountId;
       const accountCurrency = formatCurrencyCode(account?.currency ?? "PHP");
       const transactionCurrency = formatCurrencyCode(manualForm.currency || accountCurrency);
+      const receiptLineItems = sanitizeReceiptLineItems(manualForm.receiptLineItems);
       const optimisticTransaction: Transaction = {
         id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
         accountId,
@@ -2859,6 +3012,13 @@ function TransactionsPageContent() {
         source: "manual",
         importFileId: null,
         warningReason: null,
+        rawPayload: {
+          source: "manual",
+          merchantRaw: manualForm.merchantRaw,
+          merchantClean: null,
+          description: manualForm.description.trim() || null,
+          receiptLineItems,
+        },
       };
       optimisticTransactionId = optimisticTransaction.id;
       optimisticTransactionAmount = Number(optimisticTransaction.amount);
@@ -2898,6 +3058,7 @@ function TransactionsPageContent() {
           merchantRaw: manualForm.merchantRaw,
           merchantClean: null,
           description: manualForm.description.trim() || null,
+          receiptLineItems,
           isTransfer: false,
           isExcluded: false,
         }),
@@ -5674,6 +5835,124 @@ function TransactionsPageContent() {
                         placeholder="Optional note or review context"
                       />
                     </label>
+
+                    <div className="manual-more-panel__receipt-line-items">
+                      <div className="manual-more-panel__section-head">
+                        <span>Receipt line items</span>
+                        <button
+                          type="button"
+                          className="button button-secondary button-small"
+                          onClick={() =>
+                            setManualForm((current) => ({
+                              ...current,
+                              receiptLineItems: [...current.receiptLineItems, createEmptyReceiptLineItem()],
+                            }))
+                          }
+                        >
+                          Add line item
+                        </button>
+                      </div>
+
+                      {manualForm.receiptLineItems.length === 0 ? (
+                        <p className="field-help">
+                          Optional. Add item lines if you want the receipt breakdown to follow the transaction.
+                        </p>
+                      ) : null}
+
+                      {manualForm.receiptLineItems.map((lineItem, index) => (
+                        <div key={index} className="manual-receipt-line-item">
+                          <div className="manual-receipt-line-item__fields">
+                            <label>
+                              Item
+                              <input
+                                value={lineItem.description}
+                                onChange={(event) =>
+                                  setManualForm((current) => ({
+                                    ...current,
+                                    receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
+                                      entryIndex === index ? { ...entry, description: event.target.value } : entry
+                                    ),
+                                  }))
+                                }
+                                placeholder="Coffee"
+                              />
+                            </label>
+                            <label>
+                              Qty
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={lineItem.quantity}
+                                onChange={(event) =>
+                                  setManualForm((current) => ({
+                                    ...current,
+                                    receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
+                                      entryIndex === index ? { ...entry, quantity: event.target.value } : entry
+                                    ),
+                                  }))
+                                }
+                                placeholder="1"
+                              />
+                            </label>
+                            <label>
+                              Unit price
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={lineItem.unitPrice}
+                                onChange={(event) =>
+                                  setManualForm((current) => ({
+                                    ...current,
+                                    receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
+                                      entryIndex === index ? { ...entry, unitPrice: event.target.value } : entry
+                                    ),
+                                  }))
+                                }
+                                placeholder="0.00"
+                              />
+                            </label>
+                            <label>
+                              Amount
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={lineItem.amount}
+                                onChange={(event) =>
+                                  setManualForm((current) => ({
+                                    ...current,
+                                    receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
+                                      entryIndex === index ? { ...entry, amount: event.target.value } : entry
+                                    ),
+                                  }))
+                                }
+                                placeholder="0.00"
+                              />
+                            </label>
+                          </div>
+                          <button
+                            type="button"
+                            className="button button-secondary button-small"
+                            onClick={() =>
+                              setManualForm((current) => ({
+                                ...current,
+                                receiptLineItems: current.receiptLineItems.filter((_, entryIndex) => entryIndex !== index),
+                              }))
+                            }
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+
+                      {manualReceiptLineItemHasValues ? (
+                        <div className="field-help">
+                          <div>Line-item total: {formatTransactionAmount(manualReceiptLineItemTotal, manualForm.currency)}</div>
+                          {manualReceiptLineItemMismatch ? (
+                            <div>Line items do not match the transaction amount yet.</div>
+                          ) : null}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -5877,6 +6156,57 @@ function TransactionsPageContent() {
                   placeholder="Optional note or review context"
                 />
               </label>
+
+              {selectedTransactionReceiptLineItems.length > 0 ? (
+                <div className="transaction-drawer-receipt-lines">
+                  <div className="transaction-drawer-receipt-lines__head">
+                    <span className="transaction-drawer-field-label">
+                      <span>Receipt line items</span>
+                    </span>
+                    <span className="field-help">
+                      {formatTransactionAmount(
+                        selectedTransactionReceiptLineItems.reduce(
+                          (total, item) => total + (getReceiptLineItemComputedAmount(item) ?? 0),
+                          0
+                        ),
+                        selectedTransaction.currency
+                      )}
+                    </span>
+                  </div>
+                  <div className="transaction-drawer-receipt-lines__list">
+                    {selectedTransactionReceiptLineItems.map((lineItem, index) => {
+                      const lineAmount = getReceiptLineItemComputedAmount(lineItem);
+                      return (
+                        <div key={`${lineItem.description}-${index}`} className="transaction-drawer-receipt-line">
+                          <div className="transaction-drawer-receipt-line__meta">
+                            <strong>{lineItem.description}</strong>
+                            <span className="field-help">
+                              {[
+                                lineItem.quantity !== null && lineItem.quantity !== undefined ? `Qty ${lineItem.quantity}` : null,
+                                lineItem.unitPrice !== null && lineItem.unitPrice !== undefined
+                                  ? (() => {
+                                      const unitPrice = parseReceiptLineItemNumber(lineItem.unitPrice);
+                                      return unitPrice !== null
+                                        ? `Unit ${formatTransactionAmount(unitPrice, selectedTransaction.currency)}`
+                                        : `Unit ${lineItem.unitPrice}`;
+                                    })()
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                          </div>
+                          <span className="transaction-drawer-receipt-line__amount">
+                            {lineAmount !== null
+                              ? formatTransactionAmount(lineAmount, selectedTransaction.currency)
+                              : lineItem.amount ?? "—"}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {selectedTransactionWarningReason ? (

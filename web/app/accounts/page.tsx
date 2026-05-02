@@ -191,6 +191,15 @@ const mergeAccountsWithOptimisticImports = (
     };
   });
 
+  const preservedCurrentAccounts = visibleCurrentAccounts.filter((account) => {
+    if (account.source === "upload") {
+      return false;
+    }
+
+    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+    return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
+  });
+
   const optimisticAccounts = visibleCurrentAccounts.filter((account) => {
     if (account.source !== "upload") {
       return false;
@@ -200,7 +209,7 @@ const mergeAccountsWithOptimisticImports = (
     return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
   });
 
-  return [...optimisticAccounts, ...mergedFetchedAccounts];
+  return [...preservedCurrentAccounts, ...optimisticAccounts, ...mergedFetchedAccounts];
 };
 
 type AccountRule = {
@@ -916,11 +925,15 @@ function AccountsPageContent() {
                             : getLatestCheckpointForAccount(account, statementCheckpoints);
                         const effectiveType = getEffectiveAccountType(account);
                         const accountCheckpoints = latestCheckpoint ? [latestCheckpoint] : [];
-                        const reconciledBalance = deriveReconciledBalance({
-                          balance: account.balance,
-                          transactions: accountTransactions,
-                          checkpoints: accountCheckpoints,
-                        });
+                        const shouldPreserveImportedBalance =
+                          account.source === "upload" && (!latestCheckpoint || latestCheckpoint.status !== "reconciled");
+                        const reconciledBalance = shouldPreserveImportedBalance
+                          ? account.balance
+                          : deriveReconciledBalance({
+                              balance: account.balance,
+                              transactions: accountTransactions,
+                              checkpoints: accountCheckpoints,
+                            });
                         const normalizedBalance = normalizeAccountBalance(effectiveType, parseAmount(reconciledBalance ?? account.balance));
 
         return {

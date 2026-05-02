@@ -1144,7 +1144,9 @@ export function ImportFilesModal({
         additionsCount += 1;
         shouldAutoClose = !shouldLaunchInBackground;
         const guessedIdentity = guessStatementIdentity(file.name);
-        const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName);
+        const canUseOptimisticGuess = Boolean(
+          guessedIdentity?.accountName && /\d{4}$/.test(guessedIdentity.accountName.replace(/\s+/g, " "))
+        );
         const optimisticAccountId = guessedIdentity && canUseOptimisticGuess ? `optimistic-${crypto.randomUUID()}` : null;
         capturePostHogClientEvent("file_upload_started", {
           ...fileAnalyticsBase(file, workspaceId),
@@ -1232,14 +1234,14 @@ export function ImportFilesModal({
           errorMessage: null,
         });
       }
-      queueMicrotask(() => {
+      window.setTimeout(() => {
         if (busy || !workspaceId || !autoStartRef.current || !handleStartImportRef.current) {
           return;
         }
 
         autoStartRef.current = false;
         void handleStartImportRef.current();
-      });
+      }, 0);
     }
 
     if (feedbackMessage) {
@@ -2798,14 +2800,15 @@ export function ImportFilesModal({
               )
             : [];
         const optimisticIdentity =
-          (statementIdentity?.accountNumber ? statementIdentity : null) ??
-          (guessedIdentity
-            ? {
-                ...guessedIdentity,
-                accountNumber: null,
-                accountType: inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank"),
-              }
-            : null);
+          statementIdentity?.accountNumber
+            ? statementIdentity
+            : canUseOptimisticGuess && guessedIdentity
+              ? {
+                  ...guessedIdentity,
+                  accountNumber: null,
+                  accountType: inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank"),
+                }
+              : null;
         const optimisticSummary = optimisticIdentity
           ? ({
               ...buildOptimisticUploadSummary(
