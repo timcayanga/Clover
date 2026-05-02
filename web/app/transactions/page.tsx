@@ -173,6 +173,7 @@ type TransactionPageMeta = {
   spending: number;
   transfers: number;
   review: number;
+  currencyCodes: string[];
   topCategory: [string, number] | null;
   topAccount: [string, number] | null;
   firstTransactionDate: string | null;
@@ -197,6 +198,7 @@ type TransactionsWorkspaceCacheSnapshot = {
   page?: number;
   pageSize?: number;
   totalCount?: number;
+  currencyCodes?: string[];
   summary?: TransactionPageMeta;
   updatedAt: number;
 };
@@ -308,6 +310,11 @@ const formatTransactionAmount = (value: number, currency?: string | null) => for
 
 const getCurrencyCodes = (transactions: Array<{ currency: string }>) =>
   Array.from(new Set(transactions.map((transaction) => formatCurrencyCode(transaction.currency))));
+
+const getWorkspaceCurrencyCodes = (transactions: Array<{ currency: string }>, fallback = "PHP") => {
+  const codes = getCurrencyCodes(transactions);
+  return codes.length > 0 ? codes : [fallback];
+};
 
 const formatTransactionAggregate = (value: number, transactions: Array<{ currency: string }>) => {
   const currencies = getCurrencyCodes(transactions);
@@ -747,10 +754,11 @@ const readTransactionsWorkspaceCache = (): TransactionsWorkspaceCacheState | nul
               Array.isArray(snapshot.accounts) &&
               Array.isArray(snapshot.categories) &&
               Array.isArray(snapshot.transactions) &&
-              Array.isArray(snapshot.imports)
+              Array.isArray(snapshot.imports) &&
+              (!("currencyCodes" in snapshot) || Array.isArray(snapshot.currencyCodes))
             );
           })
-        ) as Record<string, TransactionsWorkspaceCacheSnapshot>,
+      ) as Record<string, TransactionsWorkspaceCacheSnapshot>,
       };
     } catch {
       return null;
@@ -1345,6 +1353,7 @@ function TransactionsPageContent() {
       spending: 0,
       transfers: 0,
       review: 0,
+      currencyCodes: ["PHP"],
       topCategory: null,
       topAccount: null,
       firstTransactionDate: null,
@@ -1356,7 +1365,7 @@ function TransactionsPageContent() {
   const [transactionsPageSize, setTransactionsPageSize] = useState(25);
   const [transactionsPage, setTransactionsPage] = useState(1);
   const [query, setQuery] = useState("");
-  const [currencyFilter, setCurrencyFilter] = useState("");
+  const [currencyFilter, setCurrencyFilter] = useState("PHP");
   const [sortField, setSortField] = useState<TransactionSortField>("date");
   const [sortDirection, setSortDirection] = useState<TransactionSortDirection>("desc");
   const [amountMin, setAmountMin] = useState("");
@@ -1395,6 +1404,7 @@ function TransactionsPageContent() {
   const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
   const [hasInitialTransactionsLoaded, setHasInitialTransactionsLoaded] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [workspaceCurrencyCodes, setWorkspaceCurrencyCodes] = useState<string[]>(() => ["PHP"]);
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
@@ -1549,6 +1559,7 @@ function TransactionsPageContent() {
         spending: 0,
         transfers: 0,
         review: 0,
+        currencyCodes: ["PHP"],
         topCategory: null,
         topAccount: null,
         firstTransactionDate: null,
@@ -1602,6 +1613,14 @@ function TransactionsPageContent() {
       const payload = await response.json();
       const fetchedTransactions = Array.isArray(payload.transactions) ? payload.transactions : [];
       const mergedTransactions = mergeImportedWorkspaceTransactions(transactionsRef.current, fetchedTransactions);
+      const responseCurrencyCodes = Array.isArray(payload.currencyCodes)
+        ? payload.currencyCodes.map((value: unknown) => formatCurrencyCode(String(value ?? ""))).filter(Boolean)
+        : [];
+      const workspaceCurrencyCodesFromData = getWorkspaceCurrencyCodes(
+        mergedTransactions.length > 0 ? mergedTransactions : fetchedTransactions
+      );
+      const nextCurrencyCodes = responseCurrencyCodes.length > 0 ? responseCurrencyCodes : workspaceCurrencyCodesFromData;
+      setWorkspaceCurrencyCodes(nextCurrencyCodes);
       setTransactions(mergedTransactions);
       setTransactionsSummary(
         payload.summary && typeof payload.summary === "object"
@@ -1616,6 +1635,7 @@ function TransactionsPageContent() {
               spending: typeof payload.summary.spending === "number" ? payload.summary.spending : 0,
               transfers: typeof payload.summary.transfers === "number" ? payload.summary.transfers : 0,
               review: typeof payload.summary.review === "number" ? payload.summary.review : 0,
+              currencyCodes: nextCurrencyCodes,
               topCategory: Array.isArray(payload.summary.topCategory) ? payload.summary.topCategory : null,
               topAccount: Array.isArray(payload.summary.topAccount) ? payload.summary.topAccount : null,
               firstTransactionDate:
@@ -1640,6 +1660,7 @@ function TransactionsPageContent() {
               spending: 0,
               transfers: 0,
               review: 0,
+              currencyCodes: nextCurrencyCodes,
               topCategory: null,
               topAccount: null,
               firstTransactionDate: null,
@@ -1690,21 +1711,29 @@ function TransactionsPageContent() {
     setCategories(cachedSnapshot.categories);
     setTransactions(cachedSnapshot.transactions);
     setImports(cachedSnapshot.imports);
+    const cachedCurrencyCodes = cachedSnapshot.summary?.currencyCodes ?? cachedSnapshot.currencyCodes ?? getWorkspaceCurrencyCodes(cachedSnapshot.transactions);
     setTransactionsSummary(
-      cachedSnapshot.summary ?? {
-        totalCount: cachedSnapshot.totalCount ?? cachedSnapshot.transactions.length,
-        income: 0,
-        spending: 0,
-        transfers: 0,
-        review: 0,
-        topCategory: null,
-        topAccount: null,
-        firstTransactionDate: null,
-        lastTransactionDate: null,
-        firstReviewTransaction: null,
-        firstReviewTransactionIndex: null,
-      }
+      cachedSnapshot.summary
+        ? {
+            ...cachedSnapshot.summary,
+            currencyCodes: cachedSnapshot.summary.currencyCodes ?? cachedCurrencyCodes,
+          }
+        : {
+            totalCount: cachedSnapshot.totalCount ?? cachedSnapshot.transactions.length,
+            income: 0,
+            spending: 0,
+            transfers: 0,
+            review: 0,
+            currencyCodes: cachedCurrencyCodes,
+            topCategory: null,
+            topAccount: null,
+            firstTransactionDate: null,
+            lastTransactionDate: null,
+            firstReviewTransaction: null,
+            firstReviewTransactionIndex: null,
+          }
     );
+    setWorkspaceCurrencyCodes(cachedCurrencyCodes);
     setIsWorkspaceDataReady(true);
     setHasInitialTransactionsLoaded(true);
     return true;
@@ -1769,6 +1798,7 @@ function TransactionsPageContent() {
         spending: 0,
         transfers: 0,
         review: 0,
+        currencyCodes: ["PHP"],
         topCategory: null,
         topAccount: null,
         firstTransactionDate: null,
@@ -1776,6 +1806,7 @@ function TransactionsPageContent() {
         firstReviewTransaction: null,
         firstReviewTransactionIndex: null,
       });
+      setWorkspaceCurrencyCodes(["PHP"]);
       setIsWorkspaceDataReady(true);
       setHasInitialTransactionsLoaded(true);
       return;
@@ -1791,6 +1822,7 @@ function TransactionsPageContent() {
       spending: 0,
       transfers: 0,
       review: 0,
+      currencyCodes: ["PHP"],
       topCategory: null,
       topAccount: null,
       firstTransactionDate: null,
@@ -1798,6 +1830,7 @@ function TransactionsPageContent() {
       firstReviewTransaction: null,
       firstReviewTransactionIndex: null,
     });
+    setWorkspaceCurrencyCodes(["PHP"]);
     setIsWorkspaceDataReady(false);
     setHasInitialTransactionsLoaded(false);
     void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true });
@@ -2030,7 +2063,7 @@ function TransactionsPageContent() {
 
       drilldownParamRef.current = drilldownSignature;
       setQuery("");
-      setCurrencyFilter("");
+      setCurrencyFilter("PHP");
       setCategoryFilters([]);
       setAccountFilters([]);
       setTypeFilters([]);
@@ -2054,7 +2087,7 @@ function TransactionsPageContent() {
       .filter(Boolean);
 
     setQuery(q);
-    setCurrencyFilter(currencyFromUrl ? formatCurrencyCode(currencyFromUrl) : "");
+    setCurrencyFilter(currencyFromUrl ? formatCurrencyCode(currencyFromUrl) : "PHP");
     setCategoryFilters(nextCategoryFilters);
     setAccountFilters(nextAccountFilters);
     setTypeFilters([]);
@@ -2153,7 +2186,7 @@ function TransactionsPageContent() {
       count += 1;
     }
 
-    if (currencyFilter.trim()) {
+    if (currencyFilter.trim().toUpperCase() !== "PHP") {
       count += 1;
     }
 
@@ -2569,7 +2602,7 @@ function TransactionsPageContent() {
 
   const clearAllTransactionFilters = () => {
     setQuery("");
-    setCurrencyFilter("");
+    setCurrencyFilter("PHP");
     setCategoryFilters([]);
     setAccountFilters([]);
     setTypeFilters([]);
@@ -4273,10 +4306,8 @@ function TransactionsPageContent() {
 
       <CurrencySelector
         value={currencyFilter}
-        onChange={(next) => setCurrencyFilter(next === "all" ? "" : formatCurrencyCode(next))}
-        options={currencyCatalogCodes}
-        includeAllOption
-        allLabel="All currencies"
+        onChange={(next) => setCurrencyFilter(formatCurrencyCode(next || "PHP"))}
+        options={workspaceCurrencyCodes}
         ariaLabel="Filter transactions by currency"
         className="transactions-currency-filter"
         buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip"
@@ -4364,9 +4395,10 @@ function TransactionsPageContent() {
       page: transactionsPage,
       pageSize: transactionsPageSize,
       totalCount: transactionsSummary.totalCount,
+      currencyCodes: workspaceCurrencyCodes,
       summary: transactionsSummary,
     });
-  }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary]);
+  }, [accounts, categories, imports, isWorkspaceDataReady, selectedWorkspaceId, transactions, transactionsPage, transactionsPageSize, transactionsSummary, workspaceCurrencyCodes]);
 
   useEffect(() => {
     if (!importOpen || !pendingImportSummary || pendingImportSummary.optimistic) {
@@ -5398,17 +5430,6 @@ function TransactionsPageContent() {
 
             <form onSubmit={saveManualTransaction}>
               <div className="manual-form-layout manual-form-layout--compact">
-                <label className="manual-form-layout__full">
-                  Name
-                  <input
-                    ref={manualNameInputRef}
-                    value={manualForm.merchantRaw}
-                    onChange={(event) => setManualForm((current) => ({ ...current, merchantRaw: event.target.value }))}
-                    placeholder="e.g. Lunch at SM Parking"
-                    required
-                  />
-                </label>
-
                 <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
                   <button
                     type="button"
@@ -5442,45 +5463,49 @@ function TransactionsPageContent() {
                   </button>
                 </div>
 
+                <label className="manual-form-layout__full">
+                  Name
+                  <input
+                    ref={manualNameInputRef}
+                    value={manualForm.merchantRaw}
+                    onChange={(event) => setManualForm((current) => ({ ...current, merchantRaw: event.target.value }))}
+                    placeholder="Lunch in Makati"
+                    required
+                  />
+                </label>
+
                 <button
                   type="button"
-                  className="transactions-manual-category-row"
+                  className="transactions-manual-category-button"
                   onClick={() => setManualMoreOpen(true)}
+                  aria-label="Open more transaction details"
+                  aria-expanded={manualMoreOpen}
+                  title="Open more transaction details"
                 >
-                  <span className="transactions-manual-category-row__icon" aria-hidden="true" style={getCategoryIconTone(manualSelectedCategory?.name ?? "Other")}>
+                  <span className="transactions-manual-category-button__icon" aria-hidden="true" style={getCategoryIconTone(manualSelectedCategory?.name ?? "Other")}>
                     <img src={getCategoryIconSrc(manualSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
-                  </span>
-                  <span className="transactions-manual-category-row__label">Category</span>
-                  <span className="transactions-manual-category-row__value">{manualSelectedCategory?.name ?? "Other"}</span>
-                  <span className="transactions-manual-category-row__chevron" aria-hidden="true">
-                    <ActionIcon name="chevron-down" />
                   </span>
                 </button>
 
                 <div className="manual-form-compact-row">
                   <button
                     type="button"
-                    className="transactions-manual-account-row"
-                    aria-expanded={manualAccountMenuOpen}
-                    onClick={() => {
-                      setManualCategoryMenuOpen(false);
-                      setManualAccountMenuOpen((current) => !current);
-                    }}
+                    className="transactions-manual-account-button"
+                    aria-label="Open more transaction details"
+                    aria-expanded={manualMoreOpen}
+                    title="Open more transaction details"
+                    onClick={() => setManualMoreOpen(true)}
                   >
                     {manualSelectedAccountBrand ? (
-                      <span className="transactions-manual-account-row__brand">
+                      <span className="transactions-manual-account-button__brand">
                         <AccountBrandMark
                           accountBrand={manualSelectedAccountBrand}
                           label={manualSelectedAccount?.name ?? "Selected account"}
                         />
                       </span>
                     ) : (
-                      <span className="transactions-manual-account-row__fallback">?</span>
+                      <span className="transactions-manual-account-button__fallback">?</span>
                     )}
-                    <span className="transactions-manual-account-row__text">{manualSelectedAccount?.name ?? "Cash"}</span>
-                    <span className="transactions-manual-account-row__chevron" aria-hidden="true">
-                      <ActionIcon name="chevron-down" />
-                    </span>
                   </button>
 
                   <label className="manual-form-layout__currency manual-form-compact-row__currency">
@@ -5510,16 +5535,6 @@ function TransactionsPageContent() {
                     />
                   </label>
                 </div>
-
-                <button
-                  type="button"
-                  className="transactions-manual-more"
-                  onClick={() => setManualMoreOpen((current) => !current)}
-                  aria-expanded={manualMoreOpen}
-                >
-                  <span>{manualMoreOpen ? "Less" : "More"}</span>
-                  <ActionIcon name="chevron-down" />
-                </button>
 
                 {manualMoreOpen ? (
                   <div className="manual-more-panel manual-more-panel--compact">
@@ -5664,18 +5679,26 @@ function TransactionsPageContent() {
               </div>
 
               <div className="manual-form-actions">
-                <button
-                  className="button button-secondary button-small"
-                  type="submit"
-                  data-submit-mode="add-another"
-                  disabled={isSaving}
-                >
-                  {isSaving ? "Saving..." : "Add another"}
-                </button>
-                <div className="manual-form-actions__right">
-                  <button className="button button-secondary" type="button" onClick={() => setManualOpen(false)}>
-                    Cancel
+                <div className="manual-form-actions__left">
+                  <button
+                    type="button"
+                    className="button button-secondary button-small transactions-manual-more"
+                    onClick={() => setManualMoreOpen((current) => !current)}
+                    aria-expanded={manualMoreOpen}
+                  >
+                    <span>{manualMoreOpen ? "Less" : "More"}</span>
+                    <ActionIcon name="chevron-down" />
                   </button>
+                  <button
+                    className="button button-secondary button-small"
+                    type="submit"
+                    data-submit-mode="add-another"
+                    disabled={isSaving}
+                  >
+                    {isSaving ? "Saving..." : "Add another"}
+                  </button>
+                </div>
+                <div className="manual-form-actions__right">
                   <button className="button button-primary" type="submit" data-submit-mode="close" disabled={isSaving}>
                     {isSaving ? "Saving..." : "Add transaction"}
                   </button>

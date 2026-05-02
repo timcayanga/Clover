@@ -11707,7 +11707,7 @@ input.transaction-inline-edit--amount::placeholder {
 .manual-form-layout--simple,
 .manual-form-layout--compact {
   grid-template-columns: 1fr;
-  gap: 12px;
+  gap: 10px;
 }
 
 .manual-form-layout__full {
@@ -11885,7 +11885,14 @@ input.transaction-inline-edit--amount::placeholder {
   border-color: rgba(3, 168, 192, 0.34);
   background: rgba(3, 168, 192, 0.1);
   color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(3, 168, 192, 0.08);
+}
+
+.transactions-manual-type-toggle__button.is-active:first-of-type {
+  box-shadow: -4px 8px 18px rgba(3, 168, 192, 0.12), 0 0 0 3px rgba(3, 168, 192, 0.08);
+}
+
+.transactions-manual-type-toggle__button.is-active:nth-of-type(2) {
+  box-shadow: 4px 8px 18px rgba(3, 168, 192, 0.12), 0 0 0 3px rgba(3, 168, 192, 0.08);
 }
 
 .transactions-manual-type-toggle__button:focus-visible {
@@ -20910,6 +20917,28 @@ input.transaction-inline-edit--amount::placeholder {
 
   .manual-form-top-row {
     grid-template-columns: 1fr;
+  }
+
+  .manual-form-compact-row {
+    grid-template-columns: 44px minmax(0, 1fr) minmax(0, 2fr);
+    gap: 8px;
+  }
+
+  .manual-more-panel__split {
+    grid-template-columns: 1fr;
+  }
+
+  .manual-form-actions {
+    gap: 10px;
+  }
+
+  .manual-form-actions__left,
+  .manual-form-actions__right {
+    width: 100%;
+  }
+
+  .manual-form-actions__right {
+    justify-content: flex-end;
   }
 
   .transactions-manual-type-toggle {

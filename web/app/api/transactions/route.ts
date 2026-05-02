@@ -189,6 +189,32 @@ const transactionSchema = z.object({
   isExcluded: z.boolean().optional(),
 });
 
+const getWorkspaceCurrencyCodes = async (workspaceId: string) => {
+  const rows = await prisma.transaction.findMany({
+    where: {
+      workspaceId,
+      deletedAt: null,
+    },
+    select: {
+      currency: true,
+    },
+    distinct: ["currency"],
+    orderBy: {
+      currency: "asc",
+    },
+  });
+
+  const codes = Array.from(
+    new Set(
+      rows
+        .map((row) => (typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : ""))
+        .filter(Boolean)
+    )
+  );
+
+  return codes.length > 0 ? codes : ["PHP"];
+};
+
 export async function GET(request: Request) {
   try {
     const userId = await resolveTransactionsRouteUserId();
@@ -203,26 +229,30 @@ export async function GET(request: Request) {
 
     const filters: TransactionQueryFilters = parseTransactionQueryFilters(searchParams);
     const where = buildTransactionQueryWhere(workspaceId, filters);
+    const visibleWhere = { ...where, isExcluded: false };
     const orderBy = buildTransactionQueryOrderBy(filters);
     const pageSizeParam = searchParams.get("pageSize");
     const includeAll = pageSizeParam === "all";
     const summaryMode = searchParams.get("summaryMode") === "light" ? "light" : "full";
     const requestedPage = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const requestedPageSize = includeAll ? null : Math.max(1, Number(pageSizeParam ?? "25") || 25);
+    const currencyCodes = await getWorkspaceCurrencyCodes(workspaceId);
 
-    const totalCount = await prisma.transaction.count({ where });
+    const totalCount = await prisma.transaction.count({ where: visibleWhere });
     if (totalCount === 0) {
       return NextResponse.json({
         transactions: [],
         page: 1,
         pageSize: includeAll ? 0 : requestedPageSize ?? 25,
         totalCount: 0,
+        currencyCodes,
         summary: {
           totalCount: 0,
           income: 0,
           spending: 0,
           transfers: 0,
           review: 0,
+          currencyCodes,
           topCategory: null,
           topAccount: null,
           firstTransactionDate: null,
@@ -237,7 +267,7 @@ export async function GET(request: Request) {
       const pageStart = (requestedPage - 1) * (requestedPageSize ?? 25);
       const [pageRows, duplicateRows] = await Promise.all([
         prisma.transaction.findMany({
-          where,
+          where: visibleWhere,
           select: {
             id: true,
             accountId: true,
@@ -276,11 +306,10 @@ export async function GET(request: Request) {
         }),
         prisma.transaction.findMany({
           where: {
-            ...where,
+            ...visibleWhere,
             OR: [
               { reviewStatus: { notIn: ["confirmed", "rejected", "duplicate_skipped"] } },
               { categoryId: null },
-              { isExcluded: true },
             ],
           },
           select: {
@@ -339,12 +368,14 @@ export async function GET(request: Request) {
         page: includeAll ? 1 : requestedPage,
         pageSize: includeAll ? totalCount : requestedPageSize ?? 25,
         totalCount,
+        currencyCodes,
         summary: {
           totalCount,
           income: 0,
           spending: 0,
           transfers: 0,
           review: 0,
+          currencyCodes,
           topCategory: null,
           topAccount: null,
           firstTransactionDate: null,
@@ -356,7 +387,7 @@ export async function GET(request: Request) {
     }
 
     const summaryRows = await prisma.transaction.findMany({
-      where,
+      where: visibleWhere,
       select: {
         id: true,
         accountId: true,
@@ -483,12 +514,14 @@ export async function GET(request: Request) {
       page: includeAll ? 1 : requestedPage,
       pageSize: includeAll ? summaryState.totalCount : requestedPageSize ?? 25,
       totalCount,
+      currencyCodes,
       summary: {
         totalCount,
         income: summaryState.income,
         spending: summaryState.spending,
         transfers: summaryState.transfers,
         review: summaryState.review,
+        currencyCodes,
         topCategory,
         topAccount,
         firstTransactionDate: summaryState.firstTransactionDate,
