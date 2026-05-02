@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   getCurrencyCatalogOptions,
   getCurrencyCatalogOption,
-  getCurrencyCatalogSections,
   type CurrencyCatalogOption,
 } from "@/lib/currencies";
 
@@ -21,6 +20,8 @@ type CurrencySelectorProps = {
   optionClassName?: string;
   compact?: boolean;
   disabled?: boolean;
+  menuAlignment?: "start" | "end";
+  showGroupedSections?: boolean;
 };
 
 type CurrencySectionProps = {
@@ -77,11 +78,11 @@ export function CurrencySelector({
   optionClassName,
   compact = false,
   disabled = false,
+  menuAlignment = "start",
+  showGroupedSections = false,
 }: CurrencySelectorProps) {
   const [open, setOpen] = useState(false);
-  const [menuStyle, setMenuStyle] = useState<CSSProperties | undefined>(undefined);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuId = useId();
 
   const catalogOptions = useMemo(() => {
@@ -92,7 +93,18 @@ export function CurrencySelector({
     return isKnown || !current ? sortedOptions : [getCurrencyCatalogOption(current), ...sortedOptions];
   }, [options, value]);
 
-  const sections = useMemo(() => getCurrencyCatalogSections(catalogOptions.map((option) => option.code)), [catalogOptions]);
+  const sections = useMemo(() => {
+    if (!showGroupedSections) {
+      return [];
+    }
+
+    const suggested = catalogOptions.filter((option) => option.code === "PHP" || option.code === "USD" || option.code === "EUR" || option.code === "GBP");
+    const remaining = catalogOptions.filter((option) => !suggested.some((item) => item.code === option.code));
+    return [
+      { label: "Suggested", options: suggested },
+      { label: "All Currencies", options: remaining },
+    ];
+  }, [catalogOptions, showGroupedSections]);
 
   const selectedCode = value.trim().toUpperCase();
   const isAllSelected = includeAllOption && (selectedCode === "" || selectedCode === "ALL" || selectedCode === "__ALL__");
@@ -100,43 +112,6 @@ export function CurrencySelector({
     () => catalogOptions.find((option) => option.code === selectedCode) ?? getCurrencyCatalogOption(selectedCode || "PHP"),
     [catalogOptions, selectedCode]
   );
-
-  useLayoutEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const updateMenuStyle = () => {
-      const trigger = triggerRef.current;
-      if (!trigger) {
-        return;
-      }
-
-      const triggerRect = trigger.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      const width = Math.min(420, viewportWidth - 24);
-      const left = Math.min(Math.max(triggerRect.right - width, 12), Math.max(12, viewportWidth - width - 12));
-      const top = Math.min(triggerRect.bottom + 8, Math.max(12, viewportHeight - 160));
-
-      setMenuStyle({
-        position: "fixed",
-        left,
-        top,
-        width,
-        maxHeight: Math.max(220, viewportHeight - top - 16),
-      });
-    };
-
-    updateMenuStyle();
-    window.addEventListener("resize", updateMenuStyle);
-    window.addEventListener("scroll", updateMenuStyle, true);
-
-    return () => {
-      window.removeEventListener("resize", updateMenuStyle);
-      window.removeEventListener("scroll", updateMenuStyle, true);
-    };
-  }, [open, selectedCode]);
 
   useEffect(() => {
     if (!open) {
@@ -167,7 +142,6 @@ export function CurrencySelector({
   return (
     <div ref={rootRef} className={`currency-selector ${className ?? ""}`.trim()}>
       <button
-        ref={triggerRef}
         type="button"
         className={`currency-selector__button ${compact ? "currency-selector__button--compact" : ""} ${buttonClassName ?? ""}`.trim()}
         aria-label={ariaLabel}
@@ -198,43 +172,68 @@ export function CurrencySelector({
       {open ? (
         <div
           id={menuId}
-          className={`currency-selector__menu ${menuClassName ?? ""}`.trim()}
-          style={menuStyle}
+          className={`currency-selector__menu currency-selector__menu--${menuAlignment} ${menuClassName ?? ""}`.trim()}
           role="listbox"
           aria-label={ariaLabel}
         >
-          {includeAllOption ? (
-            <button
-              type="button"
-            className={`currency-selector__option ${optionClassName ?? ""} ${isAllSelected ? "is-selected" : ""}`.trim()}
-            role="option"
-            aria-selected={isAllSelected}
-            onClick={() => {
-              onChange("all");
-              setOpen(false);
-            }}
-          >
-              <span className="currency-selector__option-text">
-                <strong>{allLabel}</strong>
-                <span>Show every currency</span>
-              </span>
-              {isAllSelected ? <span className="currency-selector__option-check" aria-hidden="true">✓</span> : null}
-            </button>
-          ) : null}
-
-          {sections.map((section) => (
-            <CurrencySection
-              key={section.label}
-              label={section.label}
-              options={section.options}
-              selectedCode={selectedCode}
-              optionClassName={optionClassName}
-              onSelect={(nextCode) => {
-                onChange(nextCode);
-                setOpen(false);
-              }}
-            />
-          ))}
+          {showGroupedSections ? (
+            <>
+              {includeAllOption ? (
+                <button
+                  type="button"
+                  className={`currency-selector__option ${optionClassName ?? ""} ${isAllSelected ? "is-selected" : ""}`.trim()}
+                  role="option"
+                  aria-selected={isAllSelected}
+                  onClick={() => {
+                    onChange("all");
+                    setOpen(false);
+                  }}
+                >
+                  <span className="currency-selector__option-text">
+                    <strong>{allLabel}</strong>
+                    <span>Show every currency</span>
+                  </span>
+                  {isAllSelected ? <span className="currency-selector__option-check" aria-hidden="true">✓</span> : null}
+                </button>
+              ) : null}
+              {sections.map((section) => (
+                <CurrencySection
+                  key={section.label}
+                  label={section.label}
+                  options={section.options}
+                  selectedCode={selectedCode}
+                  optionClassName={optionClassName}
+                  onSelect={(nextCode) => {
+                    onChange(nextCode);
+                    setOpen(false);
+                  }}
+                />
+              ))}
+            </>
+          ) : (
+            catalogOptions.map((option) => {
+              const isSelected = option.code === selectedCode;
+              return (
+                <button
+                  key={option.code}
+                  type="button"
+                  className={`currency-selector__option ${optionClassName ?? ""} ${isSelected ? "is-selected" : ""}`.trim()}
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => {
+                    onChange(option.code);
+                    setOpen(false);
+                  }}
+                >
+                  <span className="currency-selector__option-text">
+                    <strong>{option.symbol}</strong>
+                    <span>{option.name}</span>
+                  </span>
+                  {isSelected ? <span className="currency-selector__option-check" aria-hidden="true">✓</span> : null}
+                </button>
+              );
+            })
+          )}
         </div>
       ) : null}
     </div>

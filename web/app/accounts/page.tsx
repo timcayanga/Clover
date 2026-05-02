@@ -2193,7 +2193,7 @@ function AccountsPageContent() {
                       <td>${account.name}</td>
                       <td>${getAccountDisplayType(account)}</td>
                       <td>${formatAccountAmount(parseAmount(account.balance), account.currency)}</td>
-                      <td>${formatCurrencySymbol(account.currency)}</td>
+                      <td><span class="currency-symbol">${formatCurrencySymbol(account.currency)}</span></td>
                       <td>${formatDate(account.updatedAt)}</td>
                     </tr>`
                 )
@@ -2236,6 +2236,7 @@ function AccountsPageContent() {
             buttonClassName="accounts-currency-filter__button"
             menuClassName="accounts-currency-filter__menu"
             optionClassName="accounts-currency-filter__option"
+            menuAlignment="end"
           />
           <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
             <ActionIcon name="plus" />
@@ -2699,16 +2700,17 @@ function AccountsPageContent() {
                 </label>
                 <div className="accounts-form-currency-field">
                   <span className="sr-only">Currency</span>
-                  <CurrencySelector
-                    value={accountEditCurrency}
-                    onChange={setAccountEditCurrency}
-                    options={currencyCatalogCodes}
-                    ariaLabel="Select account currency"
-                    className="accounts-form-currency-field__selector"
-                    buttonClassName="accounts-form-currency-field__button"
-                    menuClassName="accounts-form-currency-field__menu"
-                    optionClassName="accounts-form-currency-field__option"
-                  />
+                          <CurrencySelector
+                            value={accountEditCurrency}
+                            onChange={setAccountEditCurrency}
+                            options={currencyCatalogCodes}
+                            ariaLabel="Select account currency"
+                            className="accounts-form-currency-field__selector"
+                            buttonClassName="accounts-form-currency-field__button"
+                            menuClassName="accounts-form-currency-field__menu"
+                            optionClassName="accounts-form-currency-field__option"
+                            menuAlignment="end"
+                          />
                 </div>
                 <button className="button button-primary" type="submit" disabled={accountEditBusy}>
                   {accountEditBusy ? "Saving..." : "Save changes"}
@@ -2973,6 +2975,7 @@ function AccountsPageContent() {
                             menuClassName="accounts-form-currency-field__menu"
                             optionClassName="accounts-form-currency-field__option"
                             compact
+                            showGroupedSections
                           />
                         </div>
                       </label>

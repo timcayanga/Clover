@@ -1246,6 +1246,7 @@ export default function InvestmentsPage() {
                   menuClassName="investments-currency-filter__menu"
                   optionClassName="investments-currency-filter__option"
                   compact
+                  menuAlignment="end"
                 />
               </div>
               <div className="investments-filters__actions">
@@ -1317,7 +1318,9 @@ export default function InvestmentsPage() {
                         <div className="investments-portfolio-table__cell">
                           {row.account.investmentSubtype ? getInvestmentSubtypeLabel(row.account.investmentSubtype) : "Unclassified"}
                         </div>
-                        <div className="investments-portfolio-table__cell">{formatCurrencySymbol(row.account.currency)}</div>
+                        <div className="investments-portfolio-table__cell">
+                          <span className="currency-symbol">{formatCurrencySymbol(row.account.currency)}</span>
+                        </div>
                         <div className="investments-portfolio-table__cell">
                           {row.currentValue === null ? "Not set" : formatInvestmentAmount(row.currentValue, row.account.currency)}
                         </div>
@@ -1469,6 +1472,7 @@ export default function InvestmentsPage() {
                                         buttonClassName="accounts-form-currency-field__button"
                                         menuClassName="accounts-form-currency-field__menu"
                                         optionClassName="accounts-form-currency-field__option"
+                                        menuAlignment="end"
                                       />
                                     </div>
                                     {editFieldConfigs.map((field) => (
@@ -1830,6 +1834,7 @@ export default function InvestmentsPage() {
                     buttonClassName="accounts-form-currency-field__button"
                     menuClassName="accounts-form-currency-field__menu"
                     optionClassName="accounts-form-currency-field__option"
+                    menuAlignment="end"
                   />
                   <span className="field-help">Use a fiat currency such as PHP or USD. Keep BTC, USDT, and similar codes in the asset field above.</span>
                 </div>

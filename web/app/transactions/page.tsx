@@ -5473,6 +5473,7 @@ function TransactionsPageContent() {
                       buttonClassName="transactions-manual-currency__button"
                       menuClassName="transactions-manual-currency__menu"
                       optionClassName="transactions-manual-currency__option"
+                      menuAlignment="end"
                     />
                   </label>
 
@@ -5809,6 +5810,7 @@ function TransactionsPageContent() {
                   buttonClassName="transaction-drawer-form__currency-button"
                   menuClassName="transaction-drawer-form__currency-menu"
                   optionClassName="transaction-drawer-form__currency-option"
+                  menuAlignment="end"
                 />
                 <span className="field-help">Change this if the transaction should display in a different currency than the account.</span>
               </label>

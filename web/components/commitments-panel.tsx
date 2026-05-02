@@ -540,6 +540,7 @@ export function CommitmentsPanel({
                     buttonClassName="settings-currency-field__button"
                     menuClassName="settings-currency-field__menu"
                     optionClassName="settings-currency-field__option"
+                    menuAlignment="end"
                   />
                 </label>
 
