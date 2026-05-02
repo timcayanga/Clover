@@ -13457,6 +13457,13 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 8px;
 }
 
+.accounts-detail__footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .accounts-detail__import-row {
   display: flex;
   align-items: flex-start;

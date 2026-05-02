@@ -385,8 +385,8 @@ function AccountDetailPageContent() {
   const [importFiles, setImportFiles] = useState<ImportFile[]>([]);
   const [checkpoints, setCheckpoints] = useState<StatementCheckpoint[]>([]);
   const [message, setMessage] = useState("Loading account history...");
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteAction, setDeleteAction] = useState<"activity" | "account" | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState<false | "activity" | "account">(false);
   const [transactionDeleteTarget, setTransactionDeleteTarget] = useState<Transaction | null>(null);
   const [transactionDeleteBusy, setTransactionDeleteBusy] = useState(false);
   const [investmentEditDraft, setInvestmentEditDraft] = useState<InvestmentEditDraft | null>(null);
@@ -962,6 +962,118 @@ function AccountDetailPageContent() {
     }
   };
 
+  const clearAccountActivity = async () => {
+    if (!account) {
+      return;
+    }
+
+    const workspaceId = account.workspaceId;
+    const transactionsToDelete = visibleTransactions;
+    const purchasesToDelete = account.type === "investment" ? investmentPurchases : [];
+    const dividendsToDelete = account.type === "investment" ? investmentDividends : [];
+
+    setDeleteBusy("activity");
+    try {
+      if (transactionsToDelete.length > 0) {
+        await Promise.all(transactionsToDelete.map((transaction) => deleteTransactionRemote(transaction.id)));
+        for (const transaction of transactionsToDelete) {
+          applyOptimisticWorkspaceTransactionDeletion(workspaceId, transaction.id);
+        }
+      }
+
+      if (account.type === "investment") {
+        if (purchasesToDelete.length > 0) {
+          await Promise.all(
+            purchasesToDelete.map((purchase) =>
+              fetch(`/api/accounts/${account.id}/investment-purchases/${purchase.id}`, {
+                method: "DELETE",
+              }).then((response) => {
+                if (!response.ok) {
+                  throw new Error("Unable to delete asset history.");
+                }
+              })
+            )
+          );
+        }
+
+        if (dividendsToDelete.length > 0) {
+          await Promise.all(
+            dividendsToDelete.map((dividend) =>
+              fetch(`/api/accounts/${account.id}/investment-dividends/${dividend.id}`, {
+                method: "DELETE",
+              }).then((response) => {
+                if (!response.ok) {
+                  throw new Error("Unable to delete asset history.");
+                }
+              })
+            )
+          );
+        }
+
+        const resetResponse = await fetch(`/api/accounts/${account.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            workspaceId,
+            name: account.name,
+            institution: account.institution,
+            investmentSubtype: account.investmentSubtype,
+            investmentSymbol: account.investmentSymbol,
+            investmentQuantity: null,
+            investmentCostBasis: null,
+            investmentPrincipal: null,
+            investmentStartDate: account.investmentStartDate,
+            investmentMaturityDate: account.investmentMaturityDate,
+            investmentInterestRate: account.investmentInterestRate,
+            investmentMaturityValue: null,
+            type: "investment",
+            currency: account.currency,
+            source: account.source,
+            balance: 0,
+          }),
+        });
+
+        if (!resetResponse.ok) {
+          throw new Error("Unable to reset this asset after deletion.");
+        }
+
+        const payload = (await resetResponse.json()) as { account?: Account } | null;
+        if (payload?.account) {
+          setAccount(payload.account);
+        } else {
+          setAccount((current) =>
+            current
+              ? {
+                  ...current,
+                  balance: "0",
+                  investmentQuantity: null,
+                  investmentCostBasis: null,
+                  investmentPrincipal: null,
+                  investmentMaturityValue: null,
+                }
+              : current
+          );
+        }
+      } else {
+        setAccount((current) => (current ? { ...current, balance: "0" } : current));
+      }
+
+      setTransactions((current) => current.filter((transaction) => transaction.merchantRaw === "Beginning balance"));
+      setTransactionTotalCount(0);
+      setTransactionPage(1);
+      setImportFiles([]);
+      setCheckpoints([]);
+      setInvestmentPurchases([]);
+      setInvestmentDividends([]);
+      setDeleteAction(null);
+      setMessage(account.type === "investment" ? "Asset history deleted." : "Transactions deleted.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : account.type === "investment" ? "Unable to delete asset history." : "Unable to delete transactions.");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   const updateInvestmentSummaryFromPurchase = (totalCost: string, direction: "add" | "subtract") => {
     const delta = Number(totalCost);
     if (!Number.isFinite(delta)) {
@@ -1218,7 +1330,7 @@ function AccountDetailPageContent() {
       return;
     }
 
-    setDeleteBusy(true);
+    setDeleteBusy("account");
     try {
       const workspaceId = account?.workspaceId ?? selectedWorkspaceId ?? readSelectedWorkspaceId() ?? null;
       if (workspaceId) {
@@ -1244,7 +1356,7 @@ function AccountDetailPageContent() {
         clearDeletingWorkspaceAccount(workspaceId, accountId);
       }
       setMessage(error instanceof Error ? error.message : "Unable to delete account.");
-      setDeleteConfirmOpen(false);
+      setDeleteAction(null);
     } finally {
       setDeleteBusy(false);
     }
@@ -1763,41 +1875,100 @@ function AccountDetailPageContent() {
           </div>
         ) : null}
 
-        {deleteConfirmOpen ? (
+        {deleteAction ? (
           <div className="detail-warning-box accounts-detail__delete-confirm" style={{ marginTop: 20 }}>
             <div className="detail-warning-box__header">
               <span className="detail-warning-box__icon" aria-hidden="true">
                 <ActionIcon name="warning" />
               </span>
-              <strong>Delete this asset?</strong>
+              <strong>
+                {deleteAction === "activity"
+                  ? account?.type === "investment"
+                    ? "Delete this asset history?"
+                    : "Delete this account's transactions?"
+                  : account?.type === "investment"
+                    ? "Delete this asset?"
+                    : "Delete this account?"}
+              </strong>
             </div>
-            <p>
-              This will remove <strong>{account?.name ?? "this asset"}</strong> from Clover and also delete any linked transactions for this asset.
-            </p>
-            <p>If you still need it later, you can always add the asset again or re-import its files.</p>
+            {deleteAction === "activity" ? (
+              <>
+                <p>
+                  {account?.type === "investment" ? (
+                    <>
+                      This will clear the linked activity and holdings for <strong>{account?.name ?? "this asset"}</strong> while keeping the asset itself in Clover.
+                    </>
+                  ) : (
+                    <>
+                      This will remove all linked transactions for <strong>{account?.name ?? "this account"}</strong> and reset its running balance.
+                    </>
+                  )}
+                </p>
+                <p>
+                  {account?.type === "investment"
+                    ? "You can add new purchases, dividends, or imports again later."
+                    : "You can still add new transactions or re-import this account later if needed."}
+                </p>
+              </>
+            ) : (
+              <>
+                <p>
+                  This will remove <strong>{account?.name ?? "this account"}</strong> from Clover and also delete any linked transactions
+                  {account?.type === "investment" ? " and asset history" : ""}.
+                </p>
+                <p>If you still need it later, you can always add it again or re-import its files.</p>
+              </>
+            )}
             <div className="detail-warning-actions">
               <button
                 className="button button-secondary button-small"
                 type="button"
-                onClick={() => setDeleteConfirmOpen(false)}
-                disabled={deleteBusy}
+                onClick={() => setDeleteAction(null)}
+                disabled={Boolean(deleteBusy)}
               >
                 Cancel
               </button>
-              <button className="button button-danger button-small" type="button" onClick={() => void deleteAccount()} disabled={deleteBusy}>
-                {deleteBusy ? "Deleting..." : "Yes, delete asset"}
+              <button
+                className="button button-danger button-small"
+                type="button"
+                onClick={() => void (deleteAction === "activity" ? clearAccountActivity() : deleteAccount())}
+                disabled={Boolean(deleteBusy)}
+              >
+                {deleteBusy === "activity"
+                  ? account?.type === "investment"
+                    ? "Deleting assets..."
+                    : "Deleting transactions..."
+                  : deleteBusy === "account"
+                    ? account?.type === "investment"
+                      ? "Deleting asset..."
+                      : "Deleting account..."
+                    : deleteAction === "activity"
+                      ? account?.type === "investment"
+                        ? "Yes, delete assets"
+                        : "Yes, delete transactions"
+                      : account?.type === "investment"
+                        ? "Yes, delete asset"
+                        : "Yes, delete account"}
               </button>
             </div>
           </div>
         ) : (
-          <div style={{ marginTop: 20 }}>
+          <div className="accounts-detail__footer-actions" style={{ marginTop: 20 }}>
+            <button
+              className="button button-secondary button-small"
+              type="button"
+              onClick={() => setDeleteAction("activity")}
+              disabled={Boolean(deleteBusy)}
+            >
+              {account?.type === "investment" ? "Delete Assets" : "Delete Transactions"}
+            </button>
             <button
               className="button button-danger button-small accounts-drawer__delete"
               type="button"
-              onClick={() => setDeleteConfirmOpen(true)}
-              disabled={deleteBusy}
+              onClick={() => setDeleteAction("account")}
+              disabled={Boolean(deleteBusy)}
             >
-              Delete Asset
+              {account?.type === "investment" ? "Delete Asset" : "Delete Account"}
             </button>
           </div>
         )}
