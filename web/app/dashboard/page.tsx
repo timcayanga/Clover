@@ -130,6 +130,88 @@ const toIsoDay = (date: Date) =>
 
 const toDayStart = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
+type BalanceOverviewEntry = {
+  currency: string;
+  total: number;
+  count: number;
+};
+
+type BalanceOverview = {
+  hasBalances: boolean;
+  isMixed: boolean;
+  primaryCurrency: string | null;
+  total: number;
+  label: string;
+  value: string;
+  detail: string;
+  entries: BalanceOverviewEntry[];
+};
+
+const summarizeBalances = (accounts: Array<{ balance: unknown; currency: string }>): BalanceOverview => {
+  const balancesByCurrency = new Map<string, { total: number; count: number }>();
+
+  for (const account of accounts) {
+    if (account.balance === null) {
+      continue;
+    }
+
+    const currency = formatCurrencyCode(account.currency);
+    const current = balancesByCurrency.get(currency) ?? { total: 0, count: 0 };
+    current.total += toAmount(account.balance);
+    current.count += 1;
+    balancesByCurrency.set(currency, current);
+  }
+
+  const entries = Array.from(balancesByCurrency.entries())
+    .map(([currency, value]) => ({
+      currency,
+      total: value.total,
+      count: value.count,
+    }))
+    .sort((left, right) => Math.abs(right.total) - Math.abs(left.total) || right.count - left.count || left.currency.localeCompare(right.currency));
+
+  if (entries.length === 0) {
+    return {
+      hasBalances: false,
+      isMixed: false,
+      primaryCurrency: null,
+      total: 0,
+      label: "Total balance",
+      value: "No balances yet",
+      detail: "Add an account balance to see your totals here.",
+      entries,
+    };
+  }
+
+  if (entries.length === 1) {
+    const [entry] = entries;
+    return {
+      hasBalances: true,
+      isMixed: false,
+      primaryCurrency: entry.currency,
+      total: entry.total,
+      label: "Total balance",
+      value: formatCurrencyAmount(entry.total, entry.currency),
+      detail: `${entry.count} account${entry.count === 1 ? "" : "s"} tracked in ${entry.currency}`,
+      entries,
+    };
+  }
+
+  return {
+    hasBalances: true,
+    isMixed: true,
+    primaryCurrency: null,
+    total: entries.reduce((sum, entry) => sum + entry.total, 0),
+    label: "Balances by currency",
+    value: "Mixed currencies",
+    detail: entries
+      .slice(0, 3)
+      .map((entry) => `${entry.currency} ${formatCurrencyAmount(entry.total, entry.currency)}`)
+      .join(" · "),
+    entries,
+  };
+};
+
 const summarizeWindow = (transactions: DashboardTransaction[], label: string): WindowSummary => {
   const totals = summarizeTransactions(transactions);
   return {
@@ -454,12 +536,10 @@ async function DashboardStream({
   }
 
   const accountsWithBalance = workspaceSummary.accounts.filter((account) => account.balance !== null);
-  const linkedBalanceTotal = accountsWithBalance.reduce((sum, account) => sum + Number(account.balance ?? 0), 0);
+  const balanceOverview = summarizeBalances(accountsWithBalance);
   const cashAccountCount = workspaceSummary.accounts.filter((account) => account.type === "cash").length;
-  const accountCurrencies = new Set(workspaceSummary.accounts.map((account) => account.currency).filter(Boolean));
-  const trackedBalanceCurrency = accountCurrencies.size === 1 ? workspaceSummary.accounts[0]?.currency ?? null : "MIXED";
-  const isEmptyWorkspace =
-    workspaceSummary._count.transactions === 0 && workspaceSummary._count.importFiles === 0 && workspaceSummary._count.accounts <= 1;
+  const shouldShowStarterCard =
+    workspaceSummary._count.transactions === 0 && workspaceSummary._count.importFiles === 0 && workspaceSummary._count.accounts === 0;
 
   const now = new Date();
   const todayStart = toDayStart(now);
@@ -598,19 +678,19 @@ async function DashboardStream({
       ? `${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} need review`
       : "No items need review";
   const goalSummaryLabel = goalTargetAmount !== null ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}` : goalProgress.currentLabel;
-  const totalBalanceLabel = formatCurrency(linkedBalanceTotal, trackedBalanceCurrency);
-  const heroSupportCopy = isEmptyWorkspace
+  const totalBalanceLabel = balanceOverview.value;
+  const heroSupportCopy = shouldShowStarterCard
     ? "Import a statement to unlock your balance, movement, and goal snapshot."
-    : "Your balance, movement, and goals in one calm view.";
+    : balanceOverview.isMixed
+      ? `${balanceOverview.detail} tracked separately so the dashboard stays accurate.`
+      : "Your balance, movement, and goals in one calm view.";
   const heroBadgeLabels = [
     weekSummary.transactions > 0 ? `${formatSignedCurrency(weekSummary.net)} this week` : "No activity this week",
     monthSummary.transactions > 0 ? `${monthSummary.transactions} transactions this month` : "No transactions this month",
     latestImport ? `Updated ${formatRelativeDate(latestImport.uploadedAt)}` : "No imports yet",
   ];
-  const goalHeroHeading = goalKey ? "Goal progress" : "Goals are optional";
-  const goalHeroCopy = goalKey
-    ? goalProgress.coachCopy
-    : "Set a goal later if you want a progress view. Clover stays useful even without one.";
+  const goalHeroHeading = goalKey ? "Goal progress" : "Set a goal to track your progress";
+  const goalHeroCopy = goalKey ? goalProgress.coachCopy : "It’s optional, and Clover will still keep your dashboard useful.";
   const goalHeroActionLabel = goalKey ? "Open goals" : "Set a goal";
   const goalHeroActionHref = "/goals";
   const movementWindows = [
@@ -656,8 +736,8 @@ async function DashboardStream({
     peakActivityDay && peakActivityDay.count > 0
       ? `${peakActivityDay.label} was busiest with ${peakActivityDay.count} transaction${peakActivityDay.count === 1 ? "" : "s"}`
       : "No daily activity yet";
-  const attentionActionHref = reviewAttentionCount > 0 ? "/review" : isEmptyWorkspace ? "/dashboard?import=1" : "/reports";
-  const attentionActionLabel = reviewAttentionCount > 0 ? "Open review" : isEmptyWorkspace ? "Import files" : "View reports";
+  const attentionActionHref = reviewAttentionCount > 0 ? "/review" : shouldShowStarterCard ? "/dashboard?import=1" : "/reports";
+  const attentionActionLabel = reviewAttentionCount > 0 ? "Open review" : shouldShowStarterCard ? "Import files" : "View reports";
 
   return (
     <>
@@ -667,8 +747,8 @@ async function DashboardStream({
           workspace_name: workspaceSummary.name,
           account_count: workspaceSummary._count.accounts,
           cash_account_count: cashAccountCount,
-          tracked_balance_total: Number(linkedBalanceTotal.toFixed(2)),
-          tracked_balance_currency: trackedBalanceCurrency,
+          tracked_balance_total: balanceOverview.isMixed ? null : Number(balanceOverview.total.toFixed(2)),
+          tracked_balance_currency: balanceOverview.isMixed ? "MIXED" : balanceOverview.primaryCurrency,
           transaction_count: workspaceSummary._count.transactions,
           import_count: workspaceSummary._count.importFiles,
           review_attention_count: reviewAttentionCount,
@@ -691,7 +771,7 @@ async function DashboardStream({
       <section className="dashboard-home">
         <article className="dashboard-home__hero glass dashboard-home__hero--balance">
           <div className="dashboard-home__hero-copy">
-            <p className="eyebrow">Total balance</p>
+            <p className="eyebrow">{balanceOverview.label}</p>
             <h3>{totalBalanceLabel}</h3>
             <p>{heroSupportCopy}</p>
 
@@ -705,7 +785,7 @@ async function DashboardStream({
           </div>
 
           <div className="dashboard-home__hero-side">
-            {isEmptyWorkspace ? (
+            {shouldShowStarterCard ? (
               <div className="dashboard-home__starter-card">
                 <p className="eyebrow">Get started</p>
                 <strong>Import files to unlock your dashboard.</strong>
@@ -744,7 +824,7 @@ async function DashboardStream({
               </div>
             ) : (
               <div className="dashboard-home__goal-card dashboard-home__goal-card--empty">
-                <p className="eyebrow">Goals are optional</p>
+                <p className="eyebrow">Track progress</p>
                 <strong>{goalHeroHeading}</strong>
                 <p>{goalHeroCopy}</p>
                 <Link className="button button-secondary button-small" href={goalHeroActionHref}>
@@ -826,7 +906,7 @@ async function DashboardStream({
           <div className="dashboard-home__review-copy">
             <p className="eyebrow">Small follow-up</p>
             <strong>{reviewAttentionText}</strong>
-            <span>{isEmptyWorkspace ? "Import a statement to unlock balance, movement, and goal progress." : latestImportLabel ?? reviewCoverageText}</span>
+            <span>{shouldShowStarterCard ? "Import a statement to unlock balance, movement, and goal progress." : latestImportLabel ?? reviewCoverageText}</span>
           </div>
           <div className="dashboard-home__review-actions">
             <Link className="button button-primary button-small" href={attentionActionHref}>
