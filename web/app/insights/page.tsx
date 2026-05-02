@@ -590,15 +590,15 @@ async function InsightsPageStream({
 
   const aiHeadline =
     topCategories[0] !== undefined
-      ? `${headlineDriver} is taking the most room this month.`
+      ? `${headlineDriver} is the biggest reason spending moved this month.`
       : currentNet >= 0
         ? "You still have money left this month."
         : "You spent more than you brought in this month.";
 
   const aiSummary =
     topCategories[0] !== undefined
-      ? `${headlineDriver} makes up ${formatPercent(headlineDriverShare ?? 0)} of tracked spending this month.`
-      : "Import a little more activity and Clover will start surfacing clearer reasons.";
+      ? `Start there if you want the fastest improvement.`
+      : "Import one more statement to make this clearer.";
   const primarySnapshotItems: Array<{
     label: string;
     value: string;
@@ -637,20 +637,20 @@ async function InsightsPageStream({
     {
       title: topCategories[0] ? `Review ${headlineDriver.toLowerCase()}` : "Review spending",
       body: topCategories[0]
-        ? `${formatCurrency(headlineDriverAmount)} was spent here this month.`
-        : "Open the transactions behind this month's summary.",
+        ? `${formatCurrency(headlineDriverAmount)} spent here this month.`
+        : "Open this month's transactions.",
       href: topCategories[0] ? buildTransactionsHref({ category: headlineDriver }) : "/transactions",
-      label: "Open category",
+      label: "Review category",
     },
     {
       title: uncategorizedTransactions.length > 0 ? `Fix ${uncategorizedTransactions.length} uncategorized rows` : "Set a spending cap",
       body: uncategorizedTransactions.length > 0
-        ? "Clear missing categories or merchants so the next insight is more accurate."
+        ? "Clear missing categories or merchants first."
         : topCategories[0]
-          ? `Start with ${headlineDriver.toLowerCase()} if you want one place to tighten spending.`
-          : "Use one category limit to keep this month more predictable.",
+          ? `Set one limit for ${headlineDriver.toLowerCase()}.`
+          : "Set one category limit for this month.",
       href: uncategorizedTransactions.length > 0 ? "/transactions" : "/goals",
-      label: uncategorizedTransactions.length > 0 ? "Review rows" : "Open goals",
+      label: uncategorizedTransactions.length > 0 ? "Fix rows" : "Set limit",
     },
   ];
 
@@ -661,7 +661,7 @@ async function InsightsPageStream({
       driver.previousAmount > 0
         ? `${formatCurrency(driver.previousAmount)} last month to ${formatCurrency(driver.currentAmount)} now`
         : `${formatCurrency(driver.currentAmount)} spent this month`,
-    nextStep: `Review the ${driver.categoryName.toLowerCase()} transactions and decide whether to cap or keep this level.`,
+    nextStep: `Review ${driver.categoryName.toLowerCase()}.`,
     href: buildTransactionsHref({ category: driver.categoryName }),
   }));
 
@@ -669,7 +669,7 @@ async function InsightsPageStream({
     ...merchant,
     title: `${merchant.label} repeats ${merchant.count} times`,
     evidence: `${formatCurrency(merchant.amount)} over the last 90 days`,
-    nextStep: "Open the merchant transactions and decide whether to keep or cut it.",
+    nextStep: "Check subscription.",
     href: buildTransactionsHref({ merchant: merchant.label }),
   }));
 
@@ -687,7 +687,7 @@ async function InsightsPageStream({
         weekendExpenseShare > 0.3
           ? "Weekends are a real pressure point this month."
           : "Weekend behavior looks fairly contained compared with the rest of the month.",
-      nextStep: `Review weekend transactions from ${monthBuckets[monthBuckets.length - 1]?.label ?? "this month"} and check for repeat patterns.`,
+      nextStep: "Look at weekends.",
       href: buildTransactionsHref({ month: currentMonthKey }),
       icon: "🗓",
     },
@@ -710,7 +710,7 @@ async function InsightsPageStream({
       ? {
           title: driverInsightCards[0].title,
           evidence: driverInsightCards[0].evidence,
-          nextStep: "Open this category and decide whether it needs a limit.",
+          nextStep: "Review category.",
           href: driverInsightCards[0].href,
           icon: getCategoryGlyph(driverInsightCards[0].categoryName),
         }
@@ -848,7 +848,6 @@ async function InsightsPageStream({
                 {currentNet >= 0 ? "On track" : "Needs attention"}
               </span>
               <span>{currentWindowTransactions.length} transactions reviewed</span>
-              <span>{goalLabel ?? "No goal yet"}</span>
             </div>
           </div>
 
@@ -915,9 +914,9 @@ async function InsightsPageStream({
               <small>{spendDelta === null ? "No comparison period" : `${formatPercent(spendDelta)} vs last 30 days`}</small>
             </div>
             <div className="insight-signal">
-              <span>Monthly change</span>
+              <span>Change</span>
               <strong>{spendDelta === null ? "N/A" : formatPercent(spendDelta)}</strong>
-              <small>{spendDelta !== null && spendDelta > 0 ? "Spending is up" : spendDelta !== null && spendDelta < 0 ? "Spending is down" : "More data will sharpen this"}</small>
+              <small>{spendDelta !== null && spendDelta > 0 ? "Spending up" : spendDelta !== null && spendDelta < 0 ? "Spending down" : "Need more data"}</small>
             </div>
           </div>
 

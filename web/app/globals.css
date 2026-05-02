@@ -5568,7 +5568,7 @@ body[data-clover-page-modal] .sidebar-backdrop {
 
 .insights-snapshot__copy h3 {
   margin: 0;
-  max-width: 15ch;
+  max-width: 13ch;
   font-size: clamp(1.9rem, 4vw, 3rem);
   line-height: 1.06;
   letter-spacing: -0.048em;
@@ -5576,9 +5576,9 @@ body[data-clover-page-modal] .sidebar-backdrop {
 
 .insights-snapshot__copy p {
   color: var(--muted);
-  max-width: 56ch;
-  font-size: 15px;
-  line-height: 1.42;
+  max-width: 34ch;
+  font-size: 14px;
+  line-height: 1.35;
 }
 
 .insights-snapshot__summary {
@@ -5635,8 +5635,8 @@ body[data-clover-page-modal] .sidebar-backdrop {
 
 .insights-snapshot__action span {
   color: var(--muted);
-  line-height: 1.45;
-  font-size: 12px;
+  line-height: 1.35;
+  font-size: 11px;
 }
 
 .insights-snapshot__metric {
@@ -5684,8 +5684,8 @@ body[data-clover-page-modal] .sidebar-backdrop {
 
 .insights-snapshot__metric small {
   color: var(--muted);
-  line-height: 1.35;
-  font-size: 12px;
+  line-height: 1.3;
+  font-size: 11px;
 }
 
 .insights-hero__summary h3 {
@@ -5785,6 +5785,7 @@ body[data-clover-page-modal] .sidebar-backdrop {
 
 .insight-panel--feature {
   min-height: auto;
+  gap: 14px;
 }
 
 .insight-donut {
@@ -5992,7 +5993,7 @@ body[data-clover-page-modal] .sidebar-backdrop {
 }
 
 .insight-signal {
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 16px;
   border: 1px solid rgba(15, 23, 42, 0.06);
   background: rgba(255, 255, 255, 0.58);
@@ -6008,23 +6009,25 @@ body[data-clover-page-modal] .sidebar-backdrop {
 }
 
 .insight-signal strong {
-  font-size: 21px;
+  font-size: 18px;
   line-height: 1.1;
   letter-spacing: -0.04em;
 }
 
 .insight-signal small {
   color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .insight-chart {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .insight-chart svg {
   width: 100%;
-  height: 140px;
+  height: 168px;
   display: block;
 }
 
@@ -6087,14 +6090,15 @@ body[data-clover-page-modal] .sidebar-backdrop {
 
 .insight-list__item span {
   color: var(--muted);
-  line-height: 1.5;
-  font-size: 13px;
+  line-height: 1.4;
+  font-size: 12px;
 }
 
 .insight-list__callout {
   color: var(--text);
-  line-height: 1.45;
+  line-height: 1.35;
   font-size: 12px;
+  font-weight: 500;
 }
 
 .insights-free-note {
