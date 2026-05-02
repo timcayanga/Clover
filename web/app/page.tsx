@@ -2,6 +2,7 @@ import { ScrollReveal } from "../components/scroll-reveal";
 import { LandingNav } from "../components/landing-nav";
 import { MobileCarousel } from "../components/mobile-carousel";
 import Link from "next/link";
+import Script from "next/script";
 
 function StepIcon({ name }: { name: "upload" | "insights" | "decision" }) {
   const icons = {
@@ -120,6 +121,14 @@ function HowItWorksCarousel() {
 export default function HomePage() {
   return (
     <main className="landing-page">
+      <Script id="landing-force-light-theme" strategy="beforeInteractive">
+        {`
+          try {
+            document.documentElement.dataset.theme = "light";
+            document.documentElement.style.colorScheme = "light";
+          } catch (error) {}
+        `}
+      </Script>
       <LandingNav />
 
       <ScrollReveal as="section" className="landing-hero">
