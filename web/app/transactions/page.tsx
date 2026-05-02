@@ -1394,6 +1394,7 @@ function TransactionsPageContent() {
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
   const [hasInitialTransactionsLoaded, setHasInitialTransactionsLoaded] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
@@ -4190,10 +4191,12 @@ function TransactionsPageContent() {
           <span className="button-icon" aria-hidden="true">
             <ActionIcon name="plus" />
           </span>
-          <span>Add</span>
-          <span className="button-icon" aria-hidden="true">
-            <ActionIcon name="chevron-down" />
-          </span>
+          {!isCompactViewport ? <span>Add</span> : null}
+          {!isCompactViewport ? (
+            <span className="button-icon" aria-hidden="true">
+              <ActionIcon name="chevron-down" />
+            </span>
+          ) : null}
         </button>
         <div className="transactions-add-menu__panel" hidden={!addMenuOpen}>
           <button
@@ -4218,20 +4221,58 @@ function TransactionsPageContent() {
         </div>
       </div>
 
-      <label className="transactions-toolbar-search" style={transactionsToolbarSearchStyle}>
-        <span className="transactions-toolbar-search__icon" aria-hidden="true">
-          <ActionIcon name="search" />
-        </span>
-        <span className="sr-only">Search transactions</span>
-        <input
-          ref={searchInputRef}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search"
-          aria-label="Search transactions"
-          aria-keyshortcuts="/"
-        />
-      </label>
+      {isCompactViewport ? (
+        <div className={`transactions-toolbar-search transactions-toolbar-search--mobile${mobileSearchOpen ? " is-open" : ""}`}>
+          <button
+            type="button"
+            className="transactions-toolbar-search__button"
+            onClick={() => {
+              setMobileSearchOpen(true);
+              window.requestAnimationFrame(() => {
+                searchInputRef.current?.focus();
+              });
+            }}
+            aria-label="Search transactions"
+          >
+            <span className="transactions-toolbar-search__icon" aria-hidden="true">
+              <ActionIcon name="search" />
+            </span>
+          </button>
+          {mobileSearchOpen ? (
+            <>
+              <span className="sr-only">Search transactions</span>
+              <input
+                ref={searchInputRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search"
+                aria-label="Search transactions"
+                aria-keyshortcuts="/"
+                onBlur={() => {
+                  if (!query.trim()) {
+                    setMobileSearchOpen(false);
+                  }
+                }}
+              />
+            </>
+          ) : null}
+        </div>
+      ) : (
+        <label className="transactions-toolbar-search" style={transactionsToolbarSearchStyle}>
+          <span className="transactions-toolbar-search__icon" aria-hidden="true">
+            <ActionIcon name="search" />
+          </span>
+          <span className="sr-only">Search transactions</span>
+          <input
+            ref={searchInputRef}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search"
+            aria-label="Search transactions"
+            aria-keyshortcuts="/"
+          />
+        </label>
+      )}
 
       <button
         className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
@@ -4245,11 +4286,11 @@ function TransactionsPageContent() {
           <span className="button-icon" aria-hidden="true">
             <ActionIcon name="calendar" />
           </span>
-          <span>Date</span>
+          {!isCompactViewport ? <span>Date</span> : null}
         </button>
 
       <button
-        className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
+        className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-toolbar-currency"
         style={toolbarChipStyle}
         type="button"
         title={currencyFilter ? formatCurrencySymbol(currencyFilter) : "All currencies"}
@@ -4260,7 +4301,7 @@ function TransactionsPageContent() {
         <span className="button-icon" aria-hidden="true">
           <ActionIcon name="currency" />
         </span>
-        <span>{currencyFilter ? formatCurrencySymbol(currencyFilter) : "All"}</span>
+        <span className="transactions-toolbar-currency__label">{currencyFilter ? formatCurrencyCode(currencyFilter) : "PHP"}</span>
       </button>
 
       <button
@@ -4272,11 +4313,11 @@ function TransactionsPageContent() {
         aria-label={activeFilterCount > 0 ? `Open filters, ${activeFilterCount} active` : "Open filters"}
         aria-expanded={filterOpen}
         aria-keyshortcuts="f"
-      >
+        >
         <span className="button-icon" aria-hidden="true">
           <ActionIcon name="filters" />
         </span>
-        <span>Filters</span>
+        {!isCompactViewport ? <span>Filters</span> : null}
         {activeFilterCount > 0 ? <span className="transactions-filter-count-badge">{activeFilterCount}</span> : null}
       </button>
 
@@ -4296,10 +4337,12 @@ function TransactionsPageContent() {
           <span className="button-icon" aria-hidden="true">
             <ActionIcon name="download" />
           </span>
-          <span>Download</span>
-          <span className="button-icon" aria-hidden="true">
-            <ActionIcon name="chevron-down" />
-          </span>
+          {!isCompactViewport ? <span>Download</span> : null}
+          {!isCompactViewport ? (
+            <span className="button-icon" aria-hidden="true">
+              <ActionIcon name="chevron-down" />
+            </span>
+          ) : null}
         </button>
         <div className="transactions-download-menu__panel" hidden={!downloadMenuOpen}>
           <button
@@ -4375,6 +4418,12 @@ function TransactionsPageContent() {
       mediaQuery.removeEventListener("change", updateViewport);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isCompactViewport) {
+      setMobileSearchOpen(false);
+    }
+  }, [isCompactViewport]);
 
   if (!hasInitialTransactionsLoaded) {
     return <CloverLoadingScreen label="transactions" />;
