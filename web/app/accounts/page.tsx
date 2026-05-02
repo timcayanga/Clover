@@ -766,6 +766,7 @@ function AccountsPageContent() {
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
   const [manualAccountNumber, setManualAccountNumber] = useState("");
+  const [manualMoreOpen, setManualMoreOpen] = useState(false);
   const [manualInvestmentSubtype, setManualInvestmentSubtype] = useState<InvestmentSubtype>("stock");
   const [manualInvestmentSymbol, setManualInvestmentSymbol] = useState("");
   const [manualInvestmentQuantity, setManualInvestmentQuantity] = useState("");
@@ -1752,6 +1753,7 @@ function AccountsPageContent() {
 
     flushSync(() => {
       setAddAccountError(null);
+      setManualMoreOpen(false);
       setAddOpen(true);
     });
   };
@@ -1794,6 +1796,7 @@ function AccountsPageContent() {
     if (suggestion.category === "investment_platform") {
       setManualType("investment");
       setManualInstitution(suggestion.label);
+      setManualMoreOpen(true);
       return;
     }
 
@@ -2083,6 +2086,7 @@ function AccountsPageContent() {
       setManualScheduleAmount("");
       setManualScheduleCounterparty("");
       setManualType("bank");
+      setManualMoreOpen(false);
       setAddAccountError(null);
       setAddOpen(false);
       setMessage(
@@ -2916,33 +2920,9 @@ function AccountsPageContent() {
                       placeholder={manualType === "investment" ? "Example: FMETF" : "Example: BDO"}
                       variant="account"
                     />
-                    <label className="accounts-add-fields__account-number">
-                      {manualAccountReference.label} <span className="field-optional">(optional)</span>
-                      <input
-                        value={manualAccountNumber}
-                        onChange={(event) => setManualAccountNumber(event.target.value)}
-                        inputMode="numeric"
-                        placeholder={manualAccountReference.placeholder}
-                      />
-                      {manualAccountReference.helper ? <span className="field-help">{manualAccountReference.helper}</span> : null}
-                    </label>
-                    <div className="accounts-add-fields__row">
-                      <label>
-                        Type
-                        <select value={manualType} onChange={(event) => setManualType(event.target.value as Account["type"])}>
-                          {ACCOUNT_TYPE_SECTIONS.map((section) => (
-                            <optgroup key={section.label} label={section.label}>
-                              {section.options.map((option) => (
-                                <option key={option} value={option}>
-                                  {formatAccountTypeLabel(option)}
-                                </option>
-                              ))}
-                            </optgroup>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Balance
+                    <div className="accounts-add-fields__row accounts-add-fields__row--amount">
+                      <label className="accounts-add-fields__balance">
+                        Amount
                         <input
                           value={manualBalance}
                           onChange={(event) => setManualBalance(event.target.value)}
@@ -2950,87 +2930,132 @@ function AccountsPageContent() {
                           placeholder="0.00"
                         />
                       </label>
-                    </div>
-                    {manualTypeGuidance ? <p className="modal-copy">{manualTypeGuidance}</p> : null}
-                    {manualScheduleConfig ? (
-                      <div className="accounts-add-schedule">
-                        <label className="accounts-add-schedule__toggle">
-                          <input
-                            type="checkbox"
-                            checked={manualScheduleEnabled}
-                            onChange={(event) => setManualScheduleEnabled(event.target.checked)}
+                      <label className="accounts-add-fields__currency">
+                        Currency
+                        <div className="accounts-form-currency-field accounts-form-currency-field--inline">
+                          <span className="sr-only">Currency</span>
+                          <CurrencySelector
+                            value={manualCurrency}
+                            onChange={setManualCurrency}
+                            options={currencyCatalogCodes}
+                            ariaLabel="Select account currency"
+                            className="accounts-form-currency-field__selector"
+                            buttonClassName="accounts-form-currency-field__button"
+                            menuClassName="accounts-form-currency-field__menu"
+                            optionClassName="accounts-form-currency-field__option"
+                            compact
                           />
-                          <span>{manualScheduleConfig.toggleLabel}</span>
-                        </label>
-                        <p className="field-help">{manualScheduleConfig.helper}</p>
-                        {manualScheduleEnabled ? (
-                          <div className="accounts-add-schedule__fields">
-                            <div className="accounts-add-fields__row">
-                              <label>
-                                {manualScheduleConfig.dueDateLabel}
-                                <input
-                                  type="date"
-                                  value={manualScheduleDueDate}
-                                  onChange={(event) => setManualScheduleDueDate(event.target.value)}
-                                />
-                              </label>
-                              <label>
-                                Repeats
-                                <select
-                                  value={manualScheduleRecurrence}
-                                  onChange={(event) =>
-                                    setManualScheduleRecurrence(
-                                      event.target.value as (typeof ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS)[number]["value"]
-                                    )
-                                  }
-                                >
-                                  {ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS.map((option) => (
-                                    <option key={option.value} value={option.value}>
-                                      {option.label}
+                        </div>
+                      </label>
+                    </div>
+                    <button
+                      className="button button-secondary button-small accounts-add-more-toggle"
+                      type="button"
+                      onClick={() => setManualMoreOpen((current) => !current)}
+                      aria-expanded={manualMoreOpen}
+                    >
+                      {manualMoreOpen ? "Less options" : "More options"}
+                    </button>
+                    {manualMoreOpen ? (
+                      <div className="accounts-add-advanced">
+                        <div className="accounts-add-fields__row">
+                          <label>
+                            Type
+                            <select
+                              value={manualType}
+                              onChange={(event) => setManualType(event.target.value as Account["type"])}
+                            >
+                              {ACCOUNT_TYPE_SECTIONS.map((section) => (
+                                <optgroup key={section.label} label={section.label}>
+                                  {section.options.map((option) => (
+                                    <option key={option} value={option}>
+                                      {formatAccountTypeLabel(option)}
                                     </option>
                                   ))}
-                                </select>
-                              </label>
-                            </div>
-                            <div className="accounts-add-fields__row">
-                              <label>
-                                {manualScheduleConfig.amountLabel} <span className="field-optional">(optional)</span>
-                                <input
-                                  value={manualScheduleAmount}
-                                  onChange={(event) => setManualScheduleAmount(event.target.value)}
-                                  inputMode="decimal"
-                                  placeholder={manualScheduleConfig.amountPlaceholder}
-                                />
-                              </label>
-                              <label>
-                                {manualScheduleConfig.counterpartyLabel}
-                                <input
-                                  value={manualScheduleCounterparty}
-                                  onChange={(event) => setManualScheduleCounterparty(event.target.value)}
-                                  placeholder={manualScheduleConfig.counterpartyPlaceholder}
-                                />
-                              </label>
-                            </div>
+                                </optgroup>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="accounts-add-fields__account-number">
+                            {manualAccountReference.label} <span className="field-optional">(optional)</span>
+                            <input
+                              value={manualAccountNumber}
+                              onChange={(event) => setManualAccountNumber(event.target.value)}
+                              inputMode="numeric"
+                              placeholder={manualAccountReference.placeholder}
+                            />
+                            {manualAccountReference.helper ? <span className="field-help">{manualAccountReference.helper}</span> : null}
+                          </label>
+                        </div>
+                        {manualTypeGuidance ? <p className="modal-copy">{manualTypeGuidance}</p> : null}
+                        {manualScheduleConfig ? (
+                          <div className="accounts-add-schedule">
+                            <label className="accounts-add-schedule__toggle">
+                              <input
+                                type="checkbox"
+                                checked={manualScheduleEnabled}
+                                onChange={(event) => setManualScheduleEnabled(event.target.checked)}
+                              />
+                              <span>{manualScheduleConfig.toggleLabel}</span>
+                            </label>
+                            <p className="field-help">{manualScheduleConfig.helper}</p>
+                            {manualScheduleEnabled ? (
+                              <div className="accounts-add-schedule__fields">
+                                <div className="accounts-add-fields__row">
+                                  <label>
+                                    {manualScheduleConfig.dueDateLabel}
+                                    <input
+                                      type="date"
+                                      value={manualScheduleDueDate}
+                                      onChange={(event) => setManualScheduleDueDate(event.target.value)}
+                                    />
+                                  </label>
+                                  <label>
+                                    Repeats
+                                    <select
+                                      value={manualScheduleRecurrence}
+                                      onChange={(event) =>
+                                        setManualScheduleRecurrence(
+                                          event.target.value as (typeof ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS)[number]["value"]
+                                        )
+                                      }
+                                    >
+                                      {ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>
+                                          {option.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                </div>
+                                <div className="accounts-add-fields__row">
+                                  <label>
+                                    {manualScheduleConfig.amountLabel} <span className="field-optional">(optional)</span>
+                                    <input
+                                      value={manualScheduleAmount}
+                                      onChange={(event) => setManualScheduleAmount(event.target.value)}
+                                      inputMode="decimal"
+                                      placeholder={manualScheduleConfig.amountPlaceholder}
+                                    />
+                                  </label>
+                                  <label>
+                                    {manualScheduleConfig.counterpartyLabel}
+                                    <input
+                                      value={manualScheduleCounterparty}
+                                      onChange={(event) => setManualScheduleCounterparty(event.target.value)}
+                                      placeholder={manualScheduleConfig.counterpartyPlaceholder}
+                                    />
+                                  </label>
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         ) : null}
                       </div>
                     ) : null}
-                    <div className="accounts-form-currency-field">
-                      <span className="sr-only">Currency</span>
-                      <CurrencySelector
-                        value={manualCurrency}
-                        onChange={setManualCurrency}
-                        options={currencyCatalogCodes}
-                        ariaLabel="Select account currency"
-                        className="accounts-form-currency-field__selector"
-                        buttonClassName="accounts-form-currency-field__button"
-                        menuClassName="accounts-form-currency-field__menu"
-                        optionClassName="accounts-form-currency-field__option"
-                      />
-                    </div>
                   </div>
                 </div>
-                {manualType === "investment" ? (
+                {manualType === "investment" && manualMoreOpen ? (
                   <InstitutionAutocomplete
                     label="Institution"
                     value={manualInstitution}
@@ -3040,7 +3065,7 @@ function AccountsPageContent() {
                     helperText="Use the platform or provider name when it differs from the investment name."
                   />
                 ) : null}
-                {manualType === "investment" ? (
+                {manualType === "investment" && manualMoreOpen ? (
                   <>
                     <label>
                       Investment subtype

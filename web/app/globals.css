@@ -14790,6 +14790,26 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 12px;
 }
 
+.accounts-add-fields__row--amount {
+  grid-template-columns: minmax(0, 1fr) 148px;
+  align-items: end;
+}
+
+.accounts-add-fields__balance,
+.accounts-add-fields__currency {
+  gap: 6px;
+}
+
+.accounts-add-more-toggle {
+  justify-self: start;
+}
+
+.accounts-add-advanced {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+}
+
 .accounts-add-schedule {
   display: grid;
   gap: 10px;
@@ -14828,7 +14848,7 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   place-items: center;
   width: 112px;
-  min-height: 112px;
+  min-height: 136px;
   padding: 10px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 20px;
@@ -19982,9 +20002,13 @@ input.transaction-inline-edit--amount::placeholder {
     grid-template-columns: 1fr;
   }
 
+  .accounts-add-fields__row--amount {
+    grid-template-columns: minmax(0, 1fr) 116px;
+  }
+
   .accounts-add-brand-tile {
     width: 88px;
-    min-height: 88px;
+    min-height: 120px;
   }
 
   .accounts-add-brand-tile .account-brand-mark {
