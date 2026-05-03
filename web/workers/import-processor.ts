@@ -85,6 +85,7 @@ type ProcessImportResult = {
   confirmedTransactionsCount?: number | null;
   insightSummary?: ImportInsightSummary;
   accountBalance?: string | null;
+  status?: "done" | "staged";
 };
 
 let accountColumnCache: Set<string> | null = null;
@@ -1473,6 +1474,7 @@ export const processImportFileText = async (
       endDate: string | null;
     }> | null;
     importMode?: ImportImageMode | null;
+    pdfJsBaseUrl?: string | null;
   } = {}
 ): Promise<ProcessImportResult> => {
   const startedAt = Date.now();
@@ -1528,14 +1530,23 @@ export const processImportFileText = async (
     }
 
     if (!text && !imageImport) {
-      text = await readImportedFileText(
-        {
-          storageKey,
-          fileType,
-          fileName,
-        },
-        options.password
-      );
+      try {
+        text = await readImportedFileText(
+          {
+            storageKey,
+            fileType,
+            fileName,
+          },
+          options.password,
+          options.pdfJsBaseUrl
+        );
+      } catch (error) {
+        console.warn("Unable to read PDF text; continuing with vision fallback", {
+          importFileId,
+          error,
+        });
+        text = "";
+      }
     }
   }
 
@@ -1633,8 +1644,9 @@ export const processImportFileText = async (
             fileName,
           },
           options.password,
-          !text.trim() ? 4 : gcashSuspiciouslySparse ? 3 : 2,
-          !text.trim() ? 1.6 : gcashSuspiciouslySparse ? 1.35 : 1.1
+          !text.trim() ? 6 : gcashSuspiciouslySparse ? 3 : 2,
+          !text.trim() ? 2.0 : gcashSuspiciouslySparse ? 1.35 : 1.1,
+          options.pdfJsBaseUrl
         );
       }
     } catch (error) {
@@ -2203,6 +2215,24 @@ export const processImportFileText = async (
     if (shouldMarkDone) {
       try {
         confirmedImportResult = await confirmImportFile(importFileId, null);
+        if (confirmedImportResult.status === "staged") {
+          await updateImportFileCompat(importFileId, {
+            status: "processing",
+            processingPhase: "staged",
+            processingMessage: "Clover is still lining things up.",
+          });
+
+          return {
+            imported: confirmedImportResult.imported,
+            duplicate: confirmedImportResult.duplicate,
+            metadata: resolvedMetadata,
+            accountId: confirmedImportResult.accountId ?? null,
+            confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
+            insightSummary: confirmedImportResult.insightSummary ?? undefined,
+            accountBalance: confirmedImportResult.accountBalance ?? null,
+            status: "staged",
+          };
+        }
       } catch (error) {
         await updateImportFileCompat(importFileId, {
           status: "failed",
@@ -2411,7 +2441,16 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   }
 
   if (parsedRows.length === 0) {
-    throw new Error("No parsed rows available");
+    return {
+      imported: 0,
+      duplicate: false,
+      metadata: detectStatementMetadataFromText(""),
+      accountId: accountId ?? null,
+      confirmedTransactionsCount: 0,
+      insightSummary: null,
+      accountBalance: null,
+      status: "staged",
+    };
   }
 
   const statementCheckpointRecord = (await hasCompatibleTable("AccountStatementCheckpoint"))

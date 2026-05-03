@@ -1,5 +1,6 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { getEnv } from "@/lib/env";
 import { getR2Client } from "@/lib/s3";
@@ -140,18 +141,24 @@ class SimplePath2D {
   addPath(_path: SimplePath2D, _transform?: DOMMatrixInit) {}
 }
 
-const ensurePdfJsPolyfills = () => {
-  let canvasModule: { DOMMatrix?: typeof DOMMatrix; ImageData?: typeof ImageData; Path2D?: typeof Path2D } | null = null;
+type CanvasModule = {
+  DOMMatrix?: typeof DOMMatrix;
+  ImageData?: typeof ImageData;
+  Path2D?: typeof Path2D;
+  createCanvas?: (...args: any[]) => any;
+};
+
+const loadCanvasModule = async (): Promise<CanvasModule | null> => {
   try {
-    const requireFn = eval("require") as NodeRequire;
-    canvasModule = requireFn("@napi-rs/canvas") as {
-      DOMMatrix?: typeof DOMMatrix;
-      ImageData?: typeof ImageData;
-      Path2D?: typeof Path2D;
-    };
+    const nodeRequire = createRequire(import.meta.url);
+    return nodeRequire("@napi-rs/canvas") as CanvasModule;
   } catch {
-    canvasModule = null;
+    return null;
   }
+};
+
+const ensurePdfJsPolyfills = async () => {
+  const canvasModule = await loadCanvasModule();
 
   if (typeof globalThis.DOMMatrix === "undefined") {
     (globalThis as any).DOMMatrix = canvasModule?.DOMMatrix ?? SimpleDOMMatrix;
@@ -167,12 +174,34 @@ const ensurePdfJsPolyfills = () => {
 };
 
 const loadPdfJs = async () => {
-  ensurePdfJsPolyfills();
-  const { resolvePDFJS } = await import("pdfjs-serverless");
-  return resolvePDFJS();
+  await ensurePdfJsPolyfills();
+  try {
+    return await import("pdfjs-serverless");
+  } catch {
+    return import("pdfjs-dist/legacy/build/pdf.mjs");
+  }
 };
 
-const getPdfJsStandardFontDataUrl = () => {
+export const getConfiguredPdfJsBaseUrl = () => {
+  const configuredBaseUrl =
+    process.env.APP_URL ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null) ??
+    (process.env.PORT ? `http://127.0.0.1:${process.env.PORT}` : null);
+
+  return typeof configuredBaseUrl === "string" && configuredBaseUrl.trim() ? configuredBaseUrl : null;
+};
+
+const getPdfJsStandardFontDataUrl = (baseUrl?: string | null) => {
+  const resolvedBaseUrl =
+    (typeof baseUrl === "string" && baseUrl.trim() ? baseUrl : null) ??
+    getConfiguredPdfJsBaseUrl();
+
+  if (resolvedBaseUrl) {
+    return new URL("/pdfjs/standard_fonts/", resolvedBaseUrl).toString();
+  }
+
   const pdfJsPackagePath = join(process.cwd(), "node_modules", "pdfjs-dist", "package.json");
   return `${pathToFileURL(join(dirname(pdfJsPackagePath), "standard_fonts")).toString().replace(/\/?$/, "")}/`;
 };
@@ -268,10 +297,12 @@ export const downloadImportObject = async (storageKey: string) => {
   return decodeBody(response.Body);
 };
 
-const extractTextFromPdfBytes = async (data: Uint8Array, password?: string) => {
+const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {
   const pdfjs = await loadPdfJs();
-  const standardFontDataUrl = getPdfJsStandardFontDataUrl();
-  const options = password ? { data, password, standardFontDataUrl } : { data, standardFontDataUrl };
+  const standardFontDataUrl = getPdfJsStandardFontDataUrl(baseUrl);
+  const options = password
+    ? { data, password, standardFontDataUrl, CanvasFactory: NodeCanvasFactory, disableWorker: true }
+    : { data, standardFontDataUrl, CanvasFactory: NodeCanvasFactory, disableWorker: true };
   const loadingTask = pdfjs.getDocument(options as any);
   const pdf = await loadingTask.promise;
   const pages: string[] = [];
@@ -304,19 +335,73 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string) => {
 };
 
 const loadCreateCanvas = async () => {
-  const requireFn = eval("require") as NodeRequire;
-  const canvasModule = requireFn("@napi-rs/canvas") as { createCanvas: (width: number, height: number) => {
-    getContext: (type: "2d") => CanvasRenderingContext2D;
-    toBuffer: (mimeType: string, quality?: number) => Buffer;
-  } };
-  return canvasModule.createCanvas;
+  const canvasModule = await loadCanvasModule();
+  return canvasModule?.createCanvas ?? null;
 };
 
-const renderPdfPageImagesFromBytes = async (data: Uint8Array, password?: string, maxPages = 2, scale = 1.1) => {
+class NodeCanvasFactory {
+  enableHWA: boolean;
+
+  constructor({ enableHWA = false }: { enableHWA?: boolean } = {}) {
+    this.enableHWA = enableHWA;
+  }
+
+  create(width: number, height: number) {
+    const canvasModule = getCanvasModule();
+    if (!canvasModule?.createCanvas) {
+      throw new Error("@napi-rs/canvas is not available in this environment");
+    }
+
+    const canvas = canvasModule.createCanvas(width, height);
+    const context = canvas.getContext("2d", { willReadFrequently: !this.enableHWA });
+    return { canvas, context };
+  }
+
+  reset({ canvas }: { canvas: any }, width: number, height: number) {
+    if (!canvas) {
+      throw new Error("Canvas is not specified");
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+  }
+
+  destroy(entry: { canvas: any; context: any }) {
+    if (!entry?.canvas) {
+      throw new Error("Canvas is not specified");
+    }
+
+    entry.canvas.width = 0;
+    entry.canvas.height = 0;
+    entry.canvas = null;
+    entry.context = null;
+  }
+}
+
+let canvasModuleCache: CanvasModule | null | undefined;
+
+const getCanvasModule = () => {
+  if (canvasModuleCache !== undefined) {
+    return canvasModuleCache;
+  }
+
+  try {
+    const nodeRequire = createRequire(import.meta.url);
+    canvasModuleCache = nodeRequire("@napi-rs/canvas") as CanvasModule;
+  } catch {
+    canvasModuleCache = null;
+  }
+
+  return canvasModuleCache;
+};
+
+const renderPdfPageImagesFromBytes = async (data: Uint8Array, password?: string, maxPages = 2, scale = 1.1, baseUrl?: string | null) => {
   const pdfjs = await loadPdfJs();
   const createCanvas = await loadCreateCanvas();
-  const standardFontDataUrl = getPdfJsStandardFontDataUrl();
-  const options = password ? { data, password, standardFontDataUrl } : { data, standardFontDataUrl };
+  const standardFontDataUrl = getPdfJsStandardFontDataUrl(baseUrl);
+  const options = password
+    ? { data, password, standardFontDataUrl, CanvasFactory: NodeCanvasFactory, disableWorker: true }
+    : { data, standardFontDataUrl, CanvasFactory: NodeCanvasFactory, disableWorker: true };
   const loadingTask = pdfjs.getDocument(options as any);
   const pdf = await loadingTask.promise;
   const pageImages: Array<{ page: number; dataUrl: string }> = [];
@@ -375,7 +460,8 @@ export const readUploadedFileText = async (file: File | ImportFileLike, password
 
 export const readImportedFileText = async (
   params: { storageKey: string; fileType: string; fileName: string },
-  password?: string
+  password?: string,
+  pdfJsBaseUrl?: string | null
 ) => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
   const bytes = await downloadImportObject(params.storageKey);
@@ -391,7 +477,19 @@ export const readImportedFileText = async (
     return "";
   }
 
-  return extractTextFromPdfBytes(bytes, password);
+  try {
+    return await extractTextFromPdfBytes(bytes, password, pdfJsBaseUrl);
+  } catch (error) {
+    if (!pdfJsBaseUrl) {
+      throw error;
+    }
+
+    console.warn("PDF text extraction failed with configured base URL; retrying without it", {
+      fileName: params.fileName,
+      error,
+    });
+    return extractTextFromPdfBytes(bytes, password);
+  }
 };
 
 export const readUploadedFilePdfPageImages = async (file: File | ImportFileLike, password?: string, maxPages = 2) => {
@@ -414,7 +512,8 @@ export const readImportedPdfPageImages = async (
   params: { storageKey: string; fileType: string; fileName: string },
   password?: string,
   maxPages = 2,
-  scale = 1.1
+  scale = 1.1,
+  pdfJsBaseUrl?: string | null
 ) => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
   if (!lowerName.endsWith(".pdf") && !/pdf/.test(lowerName)) {
@@ -422,7 +521,19 @@ export const readImportedPdfPageImages = async (
   }
 
   const bytes = await downloadImportObject(params.storageKey);
-  return renderPdfPageImagesFromBytes(bytes, password, maxPages, scale);
+  try {
+    return await renderPdfPageImagesFromBytes(bytes, password, maxPages, scale, pdfJsBaseUrl);
+  } catch (error) {
+    if (!pdfJsBaseUrl) {
+      throw error;
+    }
+
+    console.warn("PDF page image rendering failed with configured base URL; retrying without it", {
+      fileName: params.fileName,
+      error,
+    });
+    return renderPdfPageImagesFromBytes(bytes, password, maxPages, scale);
+  }
 };
 
 export const readImportedFileImageDataUrls = async (params: { storageKey: string; fileType: string; fileName: string }) => {
