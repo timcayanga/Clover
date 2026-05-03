@@ -1,5 +1,4 @@
 import { dirname, join } from "node:path";
-import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { downloadImportObject } from "@/lib/import-storage.server";
 
@@ -150,8 +149,15 @@ const getCanvasPackageName = () => ["@", "napi-rs", "/canvas"].join("");
 
 const loadNativeCanvasModule = (): CanvasModule | null => {
   try {
-    const nodeRequire = createRequire(import.meta.url);
-    return nodeRequire(getCanvasPackageName()) as CanvasModule;
+    const nodeRequire = (() => {
+      try {
+        return (0, eval)("__non_webpack_require__") as NodeRequire;
+      } catch {
+        return (0, eval)("require") as NodeRequire;
+      }
+    })();
+    const loaded = nodeRequire(getCanvasPackageName()) as CanvasModule & { default?: CanvasModule };
+    return (loaded?.default ?? loaded) as CanvasModule;
   } catch {
     return null;
   }
