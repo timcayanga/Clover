@@ -3032,7 +3032,7 @@ function AccountsPageContent() {
                       onClick={() => setManualMoreOpen((current) => !current)}
                       aria-expanded={manualMoreOpen}
                     >
-                      <span>More</span>
+                      <span>{manualMoreOpen ? "Less" : "More"}</span>
                       <span aria-hidden="true">▾</span>
                     </button>
                     {manualMoreOpen ? (
