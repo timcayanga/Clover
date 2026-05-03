@@ -5973,6 +5973,9 @@ function TransactionsPageContent() {
                     aria-expanded={manualMoreOpen}
                   >
                     <span>{manualMoreOpen ? "Less" : "More"}</span>
+                    <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
+                      <ActionIcon name="chevron-down" />
+                    </span>
                   </button>
                 </div>
                 <div className="manual-form-actions__right">
