@@ -1,6 +1,5 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { dirname, join } from "node:path";
-import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { getEnv } from "@/lib/env";
 import { getR2Client } from "@/lib/s3";
@@ -148,6 +147,17 @@ type CanvasModule = {
   createCanvas?: (...args: any[]) => any;
 };
 
+const getCanvasPackageName = () => ["@", "napi-rs", "/canvas"].join("");
+
+const loadNativeCanvasModule = (): CanvasModule | null => {
+  try {
+    const nodeRequire = (0, eval)("require") as NodeRequire;
+    return nodeRequire(getCanvasPackageName()) as CanvasModule;
+  } catch {
+    return null;
+  }
+};
+
 const enhancePageImageBufferForOcr = async (buffer: Buffer) => {
   try {
     const sharpModule = await import("sharp");
@@ -165,12 +175,7 @@ const enhancePageImageBufferForOcr = async (buffer: Buffer) => {
 };
 
 const loadCanvasModule = async (): Promise<CanvasModule | null> => {
-  try {
-    const nodeRequire = createRequire(import.meta.url);
-    return nodeRequire("@napi-rs/canvas") as CanvasModule;
-  } catch {
-    return null;
-  }
+  return loadNativeCanvasModule();
 };
 
 const ensurePdfJsPolyfills = async () => {
@@ -401,12 +406,7 @@ const getCanvasModule = () => {
     return canvasModuleCache;
   }
 
-  try {
-    const nodeRequire = createRequire(import.meta.url);
-    canvasModuleCache = nodeRequire("@napi-rs/canvas") as CanvasModule;
-  } catch {
-    canvasModuleCache = null;
-  }
+  canvasModuleCache = loadNativeCanvasModule();
 
   return canvasModuleCache;
 };
