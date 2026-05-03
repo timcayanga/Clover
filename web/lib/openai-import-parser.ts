@@ -8,6 +8,7 @@ import {
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 
 const OPENAI_PROMPT_VERSION = "clover_bank_statement_extraction_v1";
+const OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION = "clover_bank_statement_transcription_v1";
 
 const GENERIC_PARSER_GUIDANCE = [
   "Generic parser guidance:",
@@ -228,6 +229,17 @@ type OpenAIParsedReceiptDetails = {
   };
 };
 
+type OpenAIImageTranscript = {
+  document_type: "statement" | "receipt" | "notes" | "portfolio" | "account_detail";
+  transcript: string;
+  confidence_score: number;
+  parser_evidence: {
+    page: number | null;
+    source_text: string | null;
+    reason: string;
+  };
+};
+
 type ImportMode = "statement" | "receipt" | "notes" | "portfolio" | "account_detail";
 
 type ReceiptAccountMatch = {
@@ -409,6 +421,17 @@ const importedStatementSchema = z.object({
       institution_aliases: [],
       edge_cases: [],
     }),
+});
+
+const openAIImageTranscriptSchema = z.object({
+  document_type: z.enum(["statement", "receipt", "notes", "portfolio", "account_detail"]).optional().default("statement"),
+  transcript: z.string().default(""),
+  confidence_score: z.number().min(0).max(100).optional().default(0),
+  parser_evidence: z.object({
+    page: z.number().nullable().optional().default(null),
+    source_text: z.string().nullable().optional().default(null),
+    reason: z.string(),
+  }),
 });
 
 const openAIJsonSchema = {
@@ -1242,6 +1265,65 @@ const buildOpenAIInputPayload = (params: {
   ].join("\n");
 };
 
+const buildImageTranscriptionInputPayload = (params: {
+  fileName?: string | null;
+  fileType?: string | null;
+  detectedMetadata: DetectedStatementMetadata | null;
+  pageImages?: Array<{ page: number; dataUrl: string }> | null;
+  importMode?: ImportMode | null;
+}) => {
+  const institution = params.detectedMetadata?.institution ?? null;
+  const accountType = params.detectedMetadata?.accountType ?? null;
+  const bankInstructionJson = buildBankInstructionJson({
+    institution,
+    accountType,
+    accountName: params.detectedMetadata?.accountName ?? null,
+  });
+
+  return [
+    "Transcribe this financial document image for Clover.",
+    "",
+    `File name: ${params.fileName ?? "unknown"}`,
+    `File type: ${params.fileType ?? "unknown"}`,
+    `Import mode: ${params.importMode ?? "statement"}`,
+    "",
+    `Known institution: ${institution ?? "null"}`,
+    `Known parser result: ${JSON.stringify(buildDeterministicParserSummary({ detectedMetadata: params.detectedMetadata, parsedRows: [] }))}`,
+    `Bank-specific instructions: ${JSON.stringify(bankInstructionJson)}`,
+    GENERIC_PARSER_GUIDANCE,
+    "Transcription guidance:",
+    "- Produce a faithful OCR-style transcription in reading order.",
+    "- Preserve line breaks, table rows, amounts, dates, account labels, merchant names, and page structure.",
+    "- Do not summarize, normalize, or guess missing text.",
+    "- Include page markers like [PAGE 1], [PAGE 2], etc. when multiple images are provided.",
+    "- If the image is clearly a receipt, portfolio screen, account-detail screen, notes screenshot, or transaction-history screenshot, say so in document_type.",
+    "- Keep the transcript compact but complete enough for the downstream parser to read it back into rows or receipt details.",
+    "",
+    ...(params.importMode === "receipt"
+      ? [
+          "The source is likely a receipt, invoice, order confirmation, or receipt-like photo.",
+          "Keep merchant, dates, totals, taxes, service charges, payment method, and line items in the transcript.",
+        ]
+      : []),
+    ...(params.importMode === "portfolio"
+      ? [
+          "The source is likely an investment portfolio or holdings screen.",
+          "Keep symbols, shares/units, market value, current value, gain/loss, and account labels in the transcript.",
+        ]
+      : []),
+    ...(params.importMode === "account_detail"
+      ? [
+          "The source is likely an account summary or balance detail screen.",
+          "Keep account names, account numbers, balances, and visible product labels in the transcript.",
+        ]
+      : []),
+    "",
+    "Extracted text:",
+    "",
+    "Return only valid JSON matching the schema.",
+  ].join("\n");
+};
+
 const buildFallbackMetadata = (metadata: DetectedStatementMetadata | null): DetectedStatementMetadata => {
   if (metadata) {
     return metadata;
@@ -1645,5 +1727,146 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   } catch (error) {
     console.warn("OpenAI import fallback failed", error);
     return null;
+  }
+};
+
+export const transcribeImportImagesWithOpenAI = async (params: {
+  fileName?: string | null;
+  fileType?: string | null;
+  detectedMetadata: DetectedStatementMetadata | null;
+  pageImages: Array<{ page: number; dataUrl: string }>;
+  importMode?: ImportMode | null;
+}): Promise<{
+  documentType: "statement" | "receipt" | "notes" | "portfolio" | "account_detail";
+  transcript: string;
+  confidence: number;
+  model: string;
+  promptVersion: string;
+} | null> => {
+  const env = getEnv();
+  const apiKey = (env as { OPENAI_API_KEY?: string }).OPENAI_API_KEY?.trim();
+  if (!apiKey || params.pageImages.length === 0) {
+    return null;
+  }
+
+  const systemPrompt = [
+    "You are Clover’s OCR transcription engine.",
+    "Transcribe the visible text faithfully.",
+    "Return JSON only.",
+    "Do not summarize.",
+    "Do not invent text.",
+  ].join(" ");
+
+  const userPrompt = buildImageTranscriptionInputPayload({
+    fileName: params.fileName ?? null,
+    fileType: params.fileType ?? null,
+    detectedMetadata: params.detectedMetadata,
+    pageImages: params.pageImages,
+    importMode: params.importMode ?? null,
+  });
+
+  const imageModel =
+    (env as { OPENAI_IMPORT_PARSER_IMAGE_MODEL?: string }).OPENAI_IMPORT_PARSER_IMAGE_MODEL?.trim() || "gpt-4.1";
+  const pageImagesToSend = params.pageImages.slice(0, 4);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 75_000);
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: imageModel,
+        temperature: 0,
+        max_output_tokens: 3_500,
+        input: [
+          {
+            role: "system",
+            content: [{ type: "input_text", text: systemPrompt }],
+          },
+          {
+            role: "user",
+            content: [
+              { type: "input_text", text: userPrompt },
+              ...pageImagesToSend.map((pageImage) => ({
+                type: "input_image",
+                image_url: pageImage.dataUrl,
+              })),
+            ],
+          },
+        ],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "bank_image_transcription",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                document_type: { type: "string", enum: ["statement", "receipt", "notes", "portfolio", "account_detail"] },
+                transcript: { type: "string" },
+                confidence_score: { type: "number" },
+                parser_evidence: {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: {
+                    page: { type: ["number", "null"] },
+                    source_text: { type: ["string", "null"] },
+                    reason: { type: "string" },
+                  },
+                  required: ["page", "source_text", "reason"],
+                },
+              },
+              required: ["document_type", "transcript", "confidence_score", "parser_evidence"],
+            },
+          },
+        },
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => "");
+      console.warn("OpenAI image transcription failed", {
+        status: response.status,
+        statusText: response.statusText,
+        errorText: errorText.slice(0, 1_000) || null,
+      });
+      return null;
+    }
+
+    const payload = (await response.json()) as Record<string, unknown>;
+    const outputText = extractOutputText(payload);
+    if (!outputText) {
+      return null;
+    }
+
+    const parsedJson = parseStructuredJsonText(outputText);
+    if (!parsedJson) {
+      return null;
+    }
+
+    const validation = openAIImageTranscriptSchema.safeParse(parsedJson);
+    if (!validation.success) {
+      return null;
+    }
+
+    const value = validation.data;
+    return {
+      documentType: value.document_type,
+      transcript: value.transcript,
+      confidence: value.confidence_score,
+      model: imageModel,
+      promptVersion: OPENAI_IMAGE_TRANSCRIPTION_PROMPT_VERSION,
+    };
+  } catch (error) {
+    console.warn("OpenAI image transcription threw", error);
+    return null;
+  } finally {
+    clearTimeout(timeout);
   }
 };

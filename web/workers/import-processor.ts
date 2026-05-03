@@ -35,7 +35,7 @@ import {
   upsertStatementTemplate,
 } from "@/lib/data-engine";
 import { getTrailingBalanceFromParsedRows, inferAccountTypeFromStatement } from "@/lib/import-parser";
-import { parseImportTextWithOpenAIFallback } from "@/lib/openai-import-parser";
+import { parseImportTextWithOpenAIFallback, transcribeImportImagesWithOpenAI } from "@/lib/openai-import-parser";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName } from "@/lib/data-qa-banks";
@@ -1495,7 +1495,8 @@ export const processImportFileText = async (
       }).catch(() => null)
     : null;
   const importMode = readCheckpointImportMode(statementCheckpoint?.sourceMetadata) ?? options.importMode ?? "statement";
-  const isNonTransactionDocument = importMode === "portfolio" || importMode === "account_detail";
+  const isDocumentImportMode =
+    importMode === "receipt" || importMode === "portfolio" || importMode === "account_detail" || importMode === "notes";
 
   await updateImportFileCompat(importFileId, {
     status: "processing",
@@ -1512,6 +1513,7 @@ export const processImportFileText = async (
   const fileType = String(importFile.fileType ?? "");
   const fileName = String(importFile.fileName ?? "");
   const imageImport = isImageImportFile(fileType, fileName);
+  const isDocumentImport = isDocumentImportMode || imageImport;
   let text = options.text ?? "";
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
 
@@ -1646,7 +1648,8 @@ export const processImportFileText = async (
           options.password,
           !text.trim() ? 6 : gcashSuspiciouslySparse ? 3 : 2,
           !text.trim() ? 2.0 : gcashSuspiciouslySparse ? 1.35 : 1.1,
-          options.pdfJsBaseUrl
+          options.pdfJsBaseUrl,
+          !text.trim() || imageImport
         );
       }
     } catch (error) {
@@ -1658,7 +1661,7 @@ export const processImportFileText = async (
     }
   }
   const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
-  const openAiParsed = await parseImportTextWithOpenAIFallback({
+  let openAiParsed = await parseImportTextWithOpenAIFallback({
     text,
     fileName,
     fileType,
@@ -1669,7 +1672,7 @@ export const processImportFileText = async (
     importMode,
   });
 
-  const openAiMetadata = openAiParsed
+  let openAiMetadata = openAiParsed
     ? mergeStatementMetadataWithTemplate(
         {
           ...openAiParsed.metadata,
@@ -1702,6 +1705,112 @@ export const processImportFileText = async (
       )
     : null;
 
+  const imageTranscriptRequiresRetry = Boolean(imageImport && pageImages?.length);
+  const openAiResultLooksSparse =
+    !openAiParsed ||
+    (importMode === "statement" && (openAiParsed.rows.length === 0 || !openAiMetadata?.accountNumber)) ||
+    (importMode === "receipt" &&
+      (!openAiParsed.receiptDetails ||
+        (!openAiParsed.receiptDetails.merchant_raw && !openAiParsed.receiptDetails.total && openAiParsed.receiptDetails.line_items.length === 0))) ||
+    ((importMode === "portfolio" || importMode === "account_detail") &&
+      (!openAiParsed.holdings.length || !openAiMetadata?.accountName));
+
+  if (imageTranscriptRequiresRetry && openAiResultLooksSparse) {
+    const transcript = await transcribeImportImagesWithOpenAI({
+      fileName,
+      fileType,
+      detectedMetadata: openAiMetadata ?? metadataForParse,
+      pageImages: pageImages ?? [],
+      importMode,
+    });
+
+    if (transcript?.transcript.trim()) {
+      const transcriptImportMode = normalizeImportImageMode(transcript.documentType);
+      const transcriptParsed = await parseImportTextWithOpenAIFallback({
+        text: transcript.transcript,
+        fileName,
+        fileType,
+        detectedMetadata: openAiMetadata ?? metadataForParse,
+        parsedRows: [],
+        pageImages: null,
+        preferPrimary: true,
+        importMode: transcriptImportMode,
+      });
+
+      const shouldAdoptTranscriptParse = (() => {
+        if (!transcriptParsed) {
+          return false;
+        }
+
+        if (!openAiParsed) {
+          return true;
+        }
+
+        if (transcriptImportMode === "statement") {
+          return transcriptParsed.rows.length > openAiParsed.rows.length;
+        }
+
+        if (transcriptImportMode === "receipt") {
+          const existingScore =
+            Number(openAiParsed.receiptDetails?.merchant_raw ? 1 : 0) +
+            Number(openAiParsed.receiptDetails?.merchant_clean ? 1 : 0) +
+            Number(openAiParsed.receiptDetails?.total !== null ? 1 : 0) +
+            Number(openAiParsed.receiptDetails?.transaction_date ? 1 : 0) +
+            Number((openAiParsed.receiptDetails?.line_items.length ?? 0) > 0 ? 1 : 0);
+          const transcriptScore =
+            Number(transcriptParsed.receiptDetails?.merchant_raw ? 1 : 0) +
+            Number(transcriptParsed.receiptDetails?.merchant_clean ? 1 : 0) +
+            Number(transcriptParsed.receiptDetails?.total !== null ? 1 : 0) +
+            Number(transcriptParsed.receiptDetails?.transaction_date ? 1 : 0) +
+            Number((transcriptParsed.receiptDetails?.line_items.length ?? 0) > 0 ? 1 : 0);
+          return transcriptScore > existingScore;
+        }
+
+        if (transcriptImportMode === "portfolio" || transcriptImportMode === "account_detail") {
+          return transcriptParsed.holdings.length > openAiParsed.holdings.length;
+        }
+
+        return transcriptParsed.rows.length > openAiParsed.rows.length;
+      })();
+
+      if (shouldAdoptTranscriptParse) {
+        openAiParsed = transcriptParsed;
+        openAiMetadata = transcriptParsed
+          ? mergeStatementMetadataWithTemplate(
+              {
+                ...transcriptParsed.metadata,
+                currency: transcriptParsed.metadata.currency ?? null,
+              },
+              {
+                institution:
+                  typeof templateMetadata?.institution === "string" && templateMetadata.institution.trim()
+                    ? templateMetadata.institution.trim()
+                    : null,
+                accountNumber:
+                  typeof templateMetadata?.accountNumber === "string" && templateMetadata.accountNumber.trim()
+                    ? templateMetadata.accountNumber.trim()
+                    : null,
+                accountName:
+                  typeof templateMetadata?.accountName === "string" && templateMetadata.accountName.trim()
+                    ? templateMetadata.accountName.trim()
+                    : null,
+                currency:
+                  typeof templateMetadata?.currency === "string" && templateMetadata.currency.trim()
+                    ? templateMetadata.currency.trim()
+                    : null,
+                openingBalance: typeof templateMetadata?.openingBalance === "number" ? templateMetadata.openingBalance : null,
+                endingBalance: typeof templateMetadata?.endingBalance === "number" ? templateMetadata.endingBalance : null,
+                paymentDueDate: typeof templateMetadata?.paymentDueDate === "string" ? templateMetadata.paymentDueDate : null,
+                totalAmountDue: typeof templateMetadata?.totalAmountDue === "number" ? templateMetadata.totalAmountDue : null,
+                startDate: typeof templateMetadata?.startDate === "string" ? templateMetadata.startDate : null,
+                endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
+              }
+            )
+          : null;
+      }
+    }
+  }
+
   if (openAiParsed?.audit && options.actorUserId) {
     await prisma.auditLog.create({
       data: {
@@ -1727,7 +1836,7 @@ export const processImportFileText = async (
     Boolean(openAiParsed?.audit.schemaValidated) &&
     (openAiPrimaryMode ||
       Boolean(pageImages?.length) ||
-      isNonTransactionDocument ||
+      isDocumentImport ||
       (openAiMetadata
         ? (openAiMetadata?.confidence ?? 0) >= (metadataForParse.confidence ?? 0)
         : parsedRows.length === 0));
@@ -2111,6 +2220,7 @@ export const processImportFileText = async (
 
     const shouldAutoRerun =
       autoRerunEnabled &&
+      !isDocumentImport &&
       !plateaued &&
       qaRunResult.evaluation.score < AUTO_REPARSE_SCORE_TARGET &&
       autoRerunAttempt < AUTO_REPARSE_MAX_ATTEMPTS;
@@ -2211,7 +2321,7 @@ export const processImportFileText = async (
       });
     }
 
-    const shouldMarkDone = qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET || canFinalizeWithWarnings;
+    const shouldMarkDone = isDocumentImport ? Boolean(documentImportRecord) : qaRunResult.evaluation.score >= AUTO_REPARSE_SCORE_TARGET || canFinalizeWithWarnings;
     if (shouldMarkDone) {
       try {
         confirmedImportResult = await confirmImportFile(importFileId, null);
@@ -2231,6 +2341,33 @@ export const processImportFileText = async (
             insightSummary: confirmedImportResult.insightSummary ?? undefined,
             accountBalance: confirmedImportResult.accountBalance ?? null,
             status: "staged",
+          };
+        }
+
+        if (isDocumentImport) {
+          await updateImportFileCompat(importFileId, {
+            status: "done",
+            processingPhase: "complete",
+            processingCurrentScore: qaRunResult.evaluation.score,
+            processingMessage:
+              importMode === "receipt"
+                ? "Receipt document saved."
+                : importMode === "portfolio"
+                  ? "Portfolio snapshot saved."
+                  : importMode === "account_detail"
+                    ? "Account detail snapshot saved."
+                    : "Document import saved.",
+          });
+
+          return {
+            imported: rows.length,
+            duplicate: false,
+            metadata: resolvedMetadata,
+            accountId: confirmedImportResult.accountId ?? null,
+            confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
+            insightSummary: confirmedImportResult.insightSummary ?? undefined,
+            accountBalance: confirmedImportResult.accountBalance ?? null,
+            status: "done",
           };
         }
       } catch (error) {
@@ -2414,6 +2551,40 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   }
 
   const planLimits = await getWorkspaceOwnerLimits(String(importFile.workspaceId));
+  const documentCheckpointRecord = (await hasCompatibleTable("AccountStatementCheckpoint"))
+    ? await prisma.accountStatementCheckpoint.findUnique({
+        where: { importFileId },
+      })
+    : null;
+  const importMode = readCheckpointImportMode(documentCheckpointRecord?.sourceMetadata) ?? "statement";
+  const imageImport = isImageImportFile(String(importFile.fileType ?? ""), String(importFile.fileName ?? ""));
+  const isDocumentImport = imageImport || importMode === "receipt" || importMode === "portfolio" || importMode === "account_detail" || importMode === "notes";
+
+  if (isDocumentImport) {
+    const documentImport =
+      (await hasCompatibleTable("DocumentImport"))
+        ? await prisma.documentImport.findUnique({
+            where: { importFileId },
+            select: {
+              id: true,
+              accountId: true,
+              documentFamily: true,
+              documentSubtype: true,
+            },
+          }).catch(() => null)
+        : null;
+
+    return {
+      imported: 0,
+      duplicate: false,
+      metadata: detectStatementMetadataFromText(""),
+      accountId: documentImport?.accountId ?? accountId ?? null,
+      confirmedTransactionsCount: 0,
+      insightSummary: null,
+      accountBalance: null,
+      status: "done",
+    };
+  }
 
   let parsedRows: Array<Record<string, unknown>> = [];
   const MAX_WAIT_MS = 30_000;

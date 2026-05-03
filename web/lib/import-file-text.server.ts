@@ -148,6 +148,22 @@ type CanvasModule = {
   createCanvas?: (...args: any[]) => any;
 };
 
+const enhancePageImageBufferForOcr = async (buffer: Buffer) => {
+  try {
+    const sharpModule = await import("sharp");
+    const sharp = sharpModule.default;
+    return await sharp(buffer)
+      .flatten({ background: "#ffffff" })
+      .grayscale()
+      .normalize()
+      .sharpen()
+      .jpeg({ quality: 92 })
+      .toBuffer();
+  } catch {
+    return buffer;
+  }
+};
+
 const loadCanvasModule = async (): Promise<CanvasModule | null> => {
   try {
     const nodeRequire = createRequire(import.meta.url);
@@ -395,7 +411,14 @@ const getCanvasModule = () => {
   return canvasModuleCache;
 };
 
-const renderPdfPageImagesFromBytes = async (data: Uint8Array, password?: string, maxPages = 2, scale = 1.1, baseUrl?: string | null) => {
+const renderPdfPageImagesFromBytes = async (
+  data: Uint8Array,
+  password?: string,
+  maxPages = 2,
+  scale = 1.1,
+  baseUrl?: string | null,
+  enhanceForOcr = false
+) => {
   const pdfjs = await loadPdfJs();
   const createCanvas = await loadCreateCanvas();
   const standardFontDataUrl = getPdfJsStandardFontDataUrl(baseUrl);
@@ -413,7 +436,7 @@ const renderPdfPageImagesFromBytes = async (data: Uint8Array, password?: string,
     const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
     const context = canvas.getContext("2d");
     await page.render({ canvas: canvas as any, canvasContext: context as any, viewport }).promise;
-    const buffer = canvas.toBuffer("image/jpeg", 65);
+    const buffer = enhanceForOcr ? await enhancePageImageBufferForOcr(canvas.toBuffer("image/jpeg", 65)) : canvas.toBuffer("image/jpeg", 65);
     pageImages.push({
       page: pageNumber,
       dataUrl: `data:image/jpeg;base64,${buffer.toString("base64")}`,
@@ -513,7 +536,8 @@ export const readImportedPdfPageImages = async (
   password?: string,
   maxPages = 2,
   scale = 1.1,
-  pdfJsBaseUrl?: string | null
+  pdfJsBaseUrl?: string | null,
+  enhanceForOcr = false
 ) => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
   if (!lowerName.endsWith(".pdf") && !/pdf/.test(lowerName)) {
@@ -522,7 +546,7 @@ export const readImportedPdfPageImages = async (
 
   const bytes = await downloadImportObject(params.storageKey);
   try {
-    return await renderPdfPageImagesFromBytes(bytes, password, maxPages, scale, pdfJsBaseUrl);
+    return await renderPdfPageImagesFromBytes(bytes, password, maxPages, scale, pdfJsBaseUrl, enhanceForOcr);
   } catch (error) {
     if (!pdfJsBaseUrl) {
       throw error;
@@ -532,7 +556,7 @@ export const readImportedPdfPageImages = async (
       fileName: params.fileName,
       error,
     });
-    return renderPdfPageImagesFromBytes(bytes, password, maxPages, scale);
+    return renderPdfPageImagesFromBytes(bytes, password, maxPages, scale, undefined, enhanceForOcr);
   }
 };
 
