@@ -41,8 +41,13 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               try {
                 const key = ${JSON.stringify(THEME_STORAGE_KEY)};
                 const saved = window.localStorage.getItem(key);
-                const isLanding = window.location.pathname === "/";
-                const mode = isLanding
+                const pathname = window.location.pathname;
+                const isLightOnlyRoute =
+                  pathname === "/" ||
+                  pathname.startsWith("/sign-in") ||
+                  pathname.startsWith("/sign-up") ||
+                  pathname === "/onboarding";
+                const mode = isLightOnlyRoute
                   ? "light"
                   : saved === "light" || saved === "dark" || saved === "system"
                     ? saved

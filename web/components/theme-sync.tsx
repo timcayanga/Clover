@@ -6,19 +6,21 @@ import { applyThemeMode, readStoredThemeMode, THEME_STORAGE_KEY } from "@/lib/th
 
 export function ThemeSync() {
   const pathname = usePathname() ?? "";
+  const isLightOnlyRoute =
+    pathname === "/" || pathname.startsWith("/sign-in") || pathname.startsWith("/sign-up") || pathname === "/onboarding";
 
   useEffect(() => {
-    if (pathname === "/") {
+    if (isLightOnlyRoute) {
       applyThemeMode("light");
       return;
     }
 
     const initialTheme = readStoredThemeMode();
     applyThemeMode(initialTheme);
-  }, [pathname]);
+  }, [isLightOnlyRoute, pathname]);
 
   useEffect(() => {
-    if (pathname === "/") {
+    if (isLightOnlyRoute) {
       return;
     }
 
@@ -77,7 +79,7 @@ export function ThemeSync() {
       }
       window.clearInterval(intervalId);
     };
-  }, [pathname]);
+  }, [isLightOnlyRoute, pathname]);
 
   return null;
 }
