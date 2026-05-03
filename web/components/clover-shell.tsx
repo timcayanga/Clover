@@ -1150,16 +1150,17 @@ export function CloverShell({
           ) : null}
         </div>
 
-        <button
-          className="shell-quick-add-button"
-          type="button"
-          aria-label="Add transaction"
-          title="Add transaction"
-          onClick={openQuickAddTransaction}
-        >
-          <MenuIcon name="plus" />
-        </button>
       </aside>
+
+      <button
+        className="shell-quick-add-button"
+        type="button"
+        aria-label="Add transaction"
+        title="Add transaction"
+        onClick={openQuickAddTransaction}
+      >
+        <MenuIcon name="plus" />
+      </button>
 
       <main
         className="content"

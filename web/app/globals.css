@@ -884,7 +884,7 @@ body[data-clover-page-modal] .sidebar-backdrop {
   position: fixed;
   right: 18px;
   bottom: 18px;
-  z-index: 40;
+  z-index: 110;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -893,7 +893,7 @@ body[data-clover-page-modal] .sidebar-backdrop {
   border-radius: 999px;
   border: 1px solid rgba(148, 163, 184, 0.18);
   background: var(--brand-gradient);
-  color: #07111d;
+  color: #ffffff;
   box-shadow: 0 14px 26px rgba(3, 168, 192, 0.22);
   cursor: pointer;
   transition: background 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
@@ -909,6 +909,14 @@ body[data-clover-page-modal] .sidebar-backdrop {
 .shell-quick-add-button svg {
   width: 18px;
   height: 18px;
+}
+
+.transactions-page .transactions-footer {
+  padding-right: 70px;
+}
+
+.transactions-page .transactions-footer-snapshot {
+  margin-right: 2px;
 }
 
 .sidebar-icon-button {
@@ -11154,7 +11162,9 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .modal-card--manual {
-  width: min(420px, 100%);
+  width: min(460px, 100%);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
 }
 
 .accounts-import-modal {
@@ -11923,15 +11933,22 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 12px;
 }
 
-.manual-form-layout--simple,
-.manual-form-layout--compact {
+.manual-form-layout--simple {
   grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.manual-form-layout--compact {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   gap: 10px;
 }
 
 .manual-form-layout__full {
   grid-column: span 2;
   min-width: 0;
+  width: 100%;
 }
 
 .manual-form-layout--simple .manual-form-layout__full {
@@ -11959,15 +11976,16 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-name-row {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-columns: 22px minmax(0, 1fr);
   gap: 10px;
   align-items: end;
+  width: 100%;
 }
 
 .transactions-manual-category-trigger,
 .transactions-manual-account-trigger {
-  width: 28px;
-  height: 28px;
+  width: 22px;
+  height: 22px;
   display: inline-grid;
   place-items: center;
   border: 0;
@@ -11979,14 +11997,14 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-category-trigger img {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   display: block;
 }
 
 .transactions-manual-account-trigger img {
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   display: block;
   object-fit: contain;
 }
@@ -11999,9 +12017,10 @@ input.transaction-inline-edit--amount::placeholder {
 
 .manual-form-compact-row {
   display: grid;
-  grid-template-columns: 28px minmax(94px, 1fr) minmax(0, 2fr);
+  grid-template-columns: 22px minmax(72px, 0.9fr) minmax(0, 2.35fr);
   gap: 10px;
   align-items: end;
+  width: 100%;
 }
 
 .manual-form-compact-row__currency,
@@ -12016,6 +12035,7 @@ input.transaction-inline-edit--amount::placeholder {
 .manual-more-panel__stack {
   display: grid;
   gap: 12px;
+  width: 100%;
 }
 
 .manual-form-actions {
@@ -12045,6 +12065,7 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   gap: 4px;
   min-width: 0;
+  width: 100%;
   color: var(--muted-2);
   font-size: 0.84rem;
   font-weight: 500;
@@ -12077,18 +12098,18 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-manual-type-toggle__button {
   flex: 1 1 0;
   min-width: 0;
-  min-height: 42px;
+  min-height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 14px;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 10px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.96);
   color: var(--text);
   font: inherit;
-  font-size: 0.88rem;
+  font-size: 0.78rem;
   font-weight: 700;
   cursor: pointer;
   transition:
@@ -12122,12 +12143,27 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-manual-more {
   width: fit-content;
   align-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.transactions-manual-more__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 150ms ease;
+}
+
+.transactions-manual-more__chevron.is-open {
+  transform: rotate(180deg);
 }
 
 .manual-more-panel {
   display: grid;
   gap: 12px;
   padding-top: 6px;
+  width: 100%;
 }
 
 .transactions-manual-currency {
@@ -12136,7 +12172,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-currency__button {
   width: 100%;
-  min-height: 42px;
+  min-height: 38px;
   border-radius: 14px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.96);
@@ -19915,6 +19951,10 @@ input.transaction-inline-edit--amount::placeholder {
     align-items: stretch;
   }
 
+  .transactions-page .transactions-footer {
+    padding-right: 0;
+  }
+
   .transactions-pagination {
     justify-content: flex-start;
   }
@@ -21199,6 +21239,7 @@ input.transaction-inline-edit--amount::placeholder {
 
   .modal-card--manual {
     width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
   }
 
   .modal-backdrop--centered-mobile .modal-card,
@@ -21213,11 +21254,11 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .transactions-manual-name-row {
-    grid-template-columns: 24px minmax(0, 1fr);
+    grid-template-columns: 20px minmax(0, 1fr);
   }
 
   .manual-form-compact-row {
-    grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1.5fr);
+    grid-template-columns: 20px minmax(0, 0.95fr) minmax(0, 1.7fr);
     gap: 8px;
   }
 
