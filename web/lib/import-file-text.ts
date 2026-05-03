@@ -7,6 +7,8 @@ type ProgressCallback = (progress: {
 
 const yieldToPaint = () => new Promise<void>((resolve) => window.setTimeout(resolve, 0));
 
+const isImageFileName = (fileName: string) => /\.(jpe?g|png|webp|heic|heif)$/i.test(fileName);
+
 export const extractTextFromFile = async (
   file: File,
   password?: string,
@@ -14,8 +16,12 @@ export const extractTextFromFile = async (
 ) => {
   const lowerName = file.name.toLowerCase();
 
-  if (lowerName.endsWith(".csv") || lowerName.endsWith(".tsv") || lowerName.endsWith(".txt") || lowerName.endsWith(".json")) {
+  if (lowerName.endsWith(".csv")) {
     return file.text();
+  }
+
+  if (isImageFileName(lowerName)) {
+    return "";
   }
 
   if (lowerName.endsWith(".pdf")) {
@@ -58,5 +64,5 @@ export const extractTextFromFile = async (
     return pages.join("\n");
   }
 
-  throw new Error("Only CSV, TSV, TXT, JSON, and PDF files are supported.");
+  throw new Error("Only PDF, CSV, and common image files are supported.");
 };

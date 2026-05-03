@@ -214,6 +214,37 @@ const decodeBody = async (body: unknown) => {
   throw new Error("Unable to read imported file.");
 };
 
+const isImageImportFileName = (fileType: string | null | undefined, fileName: string | null | undefined) => {
+  const lowerName = `${fileType ?? ""} ${fileName ?? ""}`.toLowerCase();
+  return (
+    lowerName.includes("image/") ||
+    /\.(jpe?g|png|webp|heic|heif)$/i.test(lowerName)
+  );
+};
+
+const normalizeImportedImageBytes = async (bytes: Uint8Array, fileType: string | null | undefined, fileName: string | null | undefined) => {
+  const mimeType = String(fileType ?? "").trim().toLowerCase();
+  const lowerName = String(fileName ?? "").toLowerCase();
+  const isHeicLike = /image\/(heic|heif)(-sequence)?/.test(mimeType) || /\.(heic|heif)$/i.test(lowerName);
+
+  try {
+    const sharpModule = await import("sharp");
+    const sharp = sharpModule.default;
+    const image = sharp(Buffer.from(bytes), { animated: true }).rotate();
+    const output = isHeicLike ? await image.jpeg({ quality: 90 }).toBuffer() : await image.jpeg({ quality: 90 }).toBuffer();
+    return {
+      mimeType: "image/jpeg",
+      dataUrl: `data:image/jpeg;base64,${output.toString("base64")}`,
+    };
+  } catch {
+    const fallbackMimeType = mimeType || "image/png";
+    return {
+      mimeType: fallbackMimeType,
+      dataUrl: `data:${fallbackMimeType};base64,${Buffer.from(bytes).toString("base64")}`,
+    };
+  }
+};
+
 type ImportFileLike = {
   name?: string;
   type?: string;
@@ -335,7 +366,11 @@ export const readUploadedFileText = async (file: File | ImportFileLike, password
     return extractTextFromPdfBytes(data, password);
   }
 
-  throw new Error("Only PDF and CSV files are supported.");
+  if (isImageImportFileName(lowerType, lowerName)) {
+    return "";
+  }
+
+  throw new Error("Only PDF, CSV, and common image files are supported.");
 };
 
 export const readImportedFileText = async (
@@ -350,6 +385,10 @@ export const readImportedFileText = async (
     /csv/.test(lowerName)
   ) {
     return new TextDecoder().decode(bytes);
+  }
+
+  if (isImageImportFileName(params.fileType, params.fileName)) {
+    return "";
   }
 
   return extractTextFromPdfBytes(bytes, password);
@@ -388,18 +427,13 @@ export const readImportedPdfPageImages = async (
 
 export const readImportedFileImageDataUrls = async (params: { storageKey: string; fileType: string; fileName: string }) => {
   const lowerName = `${params.fileType} ${params.fileName}`.toLowerCase();
-  if (!/\.(png|jpe?g|webp|gif|bmp|avif)$/.test(lowerName) && !/^image\//.test(String(params.fileType ?? "").toLowerCase())) {
+  if (!/\.(png|jpe?g|webp|heic|heif|gif|bmp|avif)$/.test(lowerName) && !/^image\//.test(String(params.fileType ?? "").toLowerCase())) {
     return [];
   }
 
   const bytes = await downloadImportObject(params.storageKey);
-  const mimeType = String(params.fileType ?? "").trim() || "image/png";
-  return [
-    {
-      page: 1,
-      dataUrl: `data:${mimeType};base64,${Buffer.from(bytes).toString("base64")}`,
-    },
-  ];
+  const normalized = await normalizeImportedImageBytes(bytes, params.fileType, params.fileName);
+  return [{ page: 1, dataUrl: normalized.dataUrl }];
 };
 
 export default {
