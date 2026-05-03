@@ -21184,7 +21184,7 @@ input.transaction-inline-edit--amount::placeholder {
 .landing-nav--scrolled {
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
-  background: rgba(245, 247, 249, 0.72);
+  background: rgba(255, 255, 255, 0.9);
   border-bottom: 1px solid rgba(15, 23, 42, 0.06);
   box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
 }
@@ -21368,7 +21368,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .landing-hero__lede {
-  color: var(--muted);
+  color: rgba(31, 41, 51, 0.8);
   font-size: 18px;
   line-height: 1.7;
   max-width: 52ch;
@@ -21383,7 +21383,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .landing-hero__note {
-  color: var(--muted-2);
+  color: rgba(31, 41, 51, 0.7);
   font-size: 14px;
   line-height: 1.6;
 }
@@ -21445,7 +21445,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .landing-gallery__copy p {
   max-width: 46ch;
-  color: var(--muted);
+  color: rgba(31, 41, 51, 0.8);
   line-height: 1.7;
 }
 
@@ -21625,7 +21625,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .landing-flow__step p {
-  color: var(--muted);
+  color: rgba(31, 41, 51, 0.78);
   line-height: 1.7;
   max-width: 26ch;
 }
@@ -21646,6 +21646,29 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 12px;
 }
 
+.landing-trust__statement {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 24px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: var(--shadow-soft);
+}
+
+.landing-trust__statement img {
+  display: block;
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+  flex: none;
+}
+
+.landing-trust__statement h2 {
+  max-width: 18ch;
+}
+
 .landing-trust__copy h2 {
   max-width: 16ch;
   font-size: clamp(2rem, 3.6vw, 3rem);
@@ -21655,50 +21678,13 @@ input.transaction-inline-edit--amount::placeholder {
 
 .landing-trust__copy p {
   max-width: 58ch;
-  color: var(--muted);
-  line-height: 1.7;
-}
-
-.landing-trust__grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.landing-trust-card {
-  display: grid;
-  gap: 10px;
-  padding: 20px;
-  border-radius: 26px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background:
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.9), transparent 34%),
-    rgba(255, 255, 255, 0.78);
-  box-shadow: var(--shadow-soft);
-}
-
-.landing-trust-card__eyebrow {
-  margin: 0;
-  color: var(--muted-2);
-  font-size: 12px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
-.landing-trust-card h3 {
-  font-size: 18px;
-  line-height: 1.18;
-  letter-spacing: -0.04em;
-}
-
-.landing-trust-card p {
-  color: var(--muted);
+  color: rgba(31, 41, 51, 0.8);
   line-height: 1.7;
 }
 
 .landing-trust__note {
   max-width: 70ch;
-  color: var(--muted);
+  color: rgba(31, 41, 51, 0.78);
   line-height: 1.7;
   font-size: 15px;
 }

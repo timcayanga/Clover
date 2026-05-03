@@ -41,7 +41,12 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
               try {
                 const key = ${JSON.stringify(THEME_STORAGE_KEY)};
                 const saved = window.localStorage.getItem(key);
-                const mode = saved === "light" || saved === "dark" || saved === "system" ? saved : "system";
+                const isLanding = window.location.pathname === "/";
+                const mode = isLanding
+                  ? "light"
+                  : saved === "light" || saved === "dark" || saved === "system"
+                    ? saved
+                    : "system";
                 const resolved =
                   mode === "system"
                     ? window.matchMedia("(prefers-color-scheme: dark)").matches

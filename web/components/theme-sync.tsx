@@ -1,15 +1,27 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { applyThemeMode, readStoredThemeMode, THEME_STORAGE_KEY } from "@/lib/theme-preference";
 
 export function ThemeSync() {
-  useEffect(() => {
-    const initialTheme = readStoredThemeMode();
-    applyThemeMode(initialTheme);
-  }, []);
+  const pathname = usePathname() ?? "";
 
   useEffect(() => {
+    if (pathname === "/") {
+      applyThemeMode("light");
+      return;
+    }
+
+    const initialTheme = readStoredThemeMode();
+    applyThemeMode(initialTheme);
+  }, [pathname]);
+
+  useEffect(() => {
+    if (pathname === "/") {
+      return;
+    }
+
     const syncSystemTheme = () => {
       if (readStoredThemeMode() === "system") {
         applyThemeMode("system");
@@ -65,7 +77,7 @@ export function ThemeSync() {
       }
       window.clearInterval(intervalId);
     };
-  }, []);
+  }, [pathname]);
 
   return null;
 }
