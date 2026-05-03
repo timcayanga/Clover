@@ -15489,6 +15489,11 @@ input.transaction-inline-edit--amount::placeholder {
   min-width: 0;
 }
 
+.accounts-add-fields__name-grow {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .accounts-add-fields__name {
   gap: 6px;
 }
@@ -15508,6 +15513,11 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-add-fields__row--amount {
   display: flex;
   align-items: end;
+}
+
+.accounts-add-fields__amount-grow {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .accounts-add-fields__balance,
@@ -15639,16 +15649,14 @@ input.transaction-inline-edit--amount::placeholder {
   width: 100%;
 }
 
-.accounts-add-fields__name-row > .institution-autocomplete,
-.accounts-add-fields__row--amount > .accounts-add-fields__balance,
+.accounts-add-fields__name-grow,
+.accounts-add-fields__name-grow > .institution-autocomplete,
+.accounts-add-fields__name-grow > .institution-autocomplete > .institution-autocomplete__field,
 .accounts-add-fields__row--amount > .accounts-add-fields__currency,
+.accounts-add-fields__amount-grow,
+.accounts-add-fields__amount-grow > .accounts-add-fields__balance,
 .accounts-add-advanced > .accounts-add-fields__row > label {
   min-width: 0;
-}
-
-.accounts-add-fields__name-row > .institution-autocomplete,
-.accounts-add-fields__row--amount > .accounts-add-fields__balance {
-  flex: 1 1 auto;
 }
 
 .accounts-add-fields__row--meta {
@@ -15656,12 +15664,12 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: end;
 }
 
-.accounts-add-fields__row--meta > label:first-child {
+.accounts-add-fields__type-field {
   flex: 0 0 180px;
   min-width: 0;
 }
 
-.accounts-add-fields__row--meta > label:last-child {
+.accounts-add-fields__account-number {
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -20844,7 +20852,7 @@ input.transaction-inline-edit--amount::placeholder {
     height: 40px;
   }
 
-  .accounts-add-fields__row--meta > label:first-child {
+  .accounts-add-fields__type-field {
     flex-basis: 140px;
   }
 
