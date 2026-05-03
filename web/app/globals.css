@@ -4441,6 +4441,12 @@ body[data-clover-page-modal] .sidebar-backdrop {
   list-style: none;
 }
 
+html[data-theme="dark"] .reports-range-menu__summary {
+  border-color: rgba(229, 231, 235, 0.14);
+  background: rgba(229, 231, 235, 0.9);
+  color: #111827;
+}
+
 .reports-range-menu__summary::-webkit-details-marker {
   display: none;
 }
@@ -4457,6 +4463,13 @@ body[data-clover-page-modal] .sidebar-backdrop {
   border-color: rgba(3, 168, 192, 0.28);
   color: var(--accent-strong);
   outline: none;
+}
+
+html[data-theme="dark"] .reports-range-menu__summary:hover,
+html[data-theme="dark"] .reports-range-menu__summary:focus-visible,
+html[data-theme="dark"] .reports-range-menu details[open] > .reports-range-menu__summary {
+  border-color: rgba(15, 23, 42, 0.18);
+  color: #111827;
 }
 
 .reports-range-menu__panel {
@@ -4917,26 +4930,6 @@ body[data-clover-page-modal] .sidebar-backdrop {
 
 .reports-overview-visual {
   margin-top: 2px;
-}
-
-.reports-overview-intro {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  margin: 2px 0 12px;
-}
-
-.reports-overview-intro .eyebrow {
-  margin-bottom: 4px;
-}
-
-.reports-overview-intro p:last-child {
-  margin: 0;
-  max-width: 54ch;
-  color: var(--muted);
-  line-height: 1.55;
 }
 
 .report-flow-map {
@@ -20046,10 +20039,6 @@ input.transaction-inline-edit--amount::placeholder {
   .reports-toolbar .reports-range-menu {
     order: 1;
     margin-left: auto;
-  }
-
-  .reports-overview-intro {
-    padding: 12px 14px;
   }
 
   .topbar .shell-menu-button {
