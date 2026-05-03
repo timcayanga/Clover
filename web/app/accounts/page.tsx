@@ -3033,7 +3033,7 @@ function AccountsPageContent() {
                     </button>
                     {manualMoreOpen ? (
                       <div className="accounts-add-advanced">
-                        <div className="accounts-add-fields__row">
+                        <div className="accounts-add-fields__row accounts-add-fields__row--meta">
                           <label>
                             Type
                             <select

@@ -15482,8 +15482,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-add-fields__name-row {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
+  display: flex;
   align-items: end;
   gap: 12px;
   width: 100%;
@@ -15507,7 +15506,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-add-fields__row--amount {
-  grid-template-columns: 92px minmax(0, 1fr);
+  display: flex;
   align-items: end;
 }
 
@@ -15525,6 +15524,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-add-fields__currency {
   min-width: 0;
+  flex: 0 0 92px;
 }
 
 .accounts-add-fields__currency .currency-selector__button {
@@ -15643,6 +15643,26 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-add-fields__row--amount > .accounts-add-fields__balance,
 .accounts-add-fields__row--amount > .accounts-add-fields__currency,
 .accounts-add-advanced > .accounts-add-fields__row > label {
+  min-width: 0;
+}
+
+.accounts-add-fields__name-row > .institution-autocomplete,
+.accounts-add-fields__row--amount > .accounts-add-fields__balance {
+  flex: 1 1 auto;
+}
+
+.accounts-add-fields__row--meta {
+  display: flex;
+  align-items: end;
+}
+
+.accounts-add-fields__row--meta > label:first-child {
+  flex: 0 0 180px;
+  min-width: 0;
+}
+
+.accounts-add-fields__row--meta > label:last-child {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -20807,7 +20827,6 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-add-fields__name-row {
-    grid-template-columns: 44px minmax(0, 1fr);
     align-items: center;
   }
 
@@ -20816,7 +20835,7 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-add-fields__row--amount {
-    grid-template-columns: 92px minmax(0, 1fr);
+    align-items: end;
   }
 
   .accounts-add-brand-inline,
@@ -20825,8 +20844,8 @@ input.transaction-inline-edit--amount::placeholder {
     height: 40px;
   }
 
-  .accounts-add-advanced > .accounts-add-fields__row {
-    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  .accounts-add-fields__row--meta > label:first-child {
+    flex-basis: 140px;
   }
 
   .accounts-add-actions__buttons {
