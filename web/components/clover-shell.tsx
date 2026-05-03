@@ -258,6 +258,7 @@ type IconName =
   | "menu"
   | "search"
   | "more"
+  | "plus"
   | "notifications"
   | "profile"
   | "settings"
@@ -299,6 +300,13 @@ function MenuIcon({ name }: { name: IconName }) {
           <path d="M4 7h16" />
           <path d="M4 12h16" />
           <path d="M4 17h16" />
+        </svg>
+      );
+    case "plus":
+      return (
+        <svg {...common}>
+          <path d="M12 5v14" />
+          <path d="M5 12h14" />
         </svg>
       );
     case "more":
@@ -860,6 +868,11 @@ export function CloverShell({
     window.location.assign(href);
   };
 
+  const openQuickAddTransaction = () => {
+    closeChrome();
+    router.push("/transactions?manual=1");
+  };
+
   const handleSignOut = () => {
     persistSelectedWorkspaceId("");
     clearAllWorkspaceCaches();
@@ -1136,6 +1149,16 @@ export function CloverShell({
             </div>
           ) : null}
         </div>
+
+        <button
+          className="shell-quick-add-button"
+          type="button"
+          aria-label="Add transaction"
+          title="Add transaction"
+          onClick={openQuickAddTransaction}
+        >
+          <MenuIcon name="plus" />
+        </button>
       </aside>
 
       <main
