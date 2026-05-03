@@ -1024,6 +1024,8 @@ const buildBankInstructionJson = (params: {
       notes: [
         "UnionBank statements should keep the account label simple and preserve the trailing account digits when visible.",
         "If the statement shows a full account number, return it in account.account_number with all digits preserved. Use account.account_last4 only as a display fallback.",
+        "UnionBank statement images usually place the account summary in the upper-right box and the transaction table below it. Capture the summary box first, then transcribe each row in table order with the Date, Description, Debit, Credit, and Balance columns preserved.",
+        "Do not drop rows that repeat similar descriptors such as ONLINE FUND TRANSFER or ONLINE INSTAPAYSEND; those are separate ledger entries when their amounts or balances differ.",
       ],
     };
   }
@@ -1315,6 +1317,12 @@ const buildImageTranscriptionInputPayload = (params: {
       ? [
           "The source is likely an account summary or balance detail screen.",
           "Keep account names, account numbers, balances, and visible product labels in the transcript.",
+        ]
+      : []),
+    ...(params.importMode === "statement"
+      ? [
+          "The source is a bank statement. If it spans multiple pages, continue across the pages instead of stopping after the first visible balance box.",
+          "Capture every visible transaction row, the account number, and the final ending balance from the last page footer or summary line when present.",
         ]
       : []),
     "",
@@ -1767,9 +1775,9 @@ export const transcribeImportImagesWithOpenAI = async (params: {
 
   const imageModel =
     (env as { OPENAI_IMPORT_PARSER_IMAGE_MODEL?: string }).OPENAI_IMPORT_PARSER_IMAGE_MODEL?.trim() || "gpt-4.1";
-  const pageImagesToSend = params.pageImages.slice(0, 4);
+  const pageImagesToSend = params.pageImages.slice(0, params.importMode === "statement" ? 6 : 4);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 75_000);
+  const timeout = setTimeout(() => controller.abort(), 120_000);
 
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -1781,7 +1789,7 @@ export const transcribeImportImagesWithOpenAI = async (params: {
       body: JSON.stringify({
         model: imageModel,
         temperature: 0,
-        max_output_tokens: 3_500,
+        max_output_tokens: 6_000,
         input: [
           {
             role: "system",

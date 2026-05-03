@@ -1,8 +1,7 @@
-import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
-import { getEnv } from "@/lib/env";
-import { getR2Client } from "@/lib/s3";
+import { downloadImportObject } from "@/lib/import-storage.server";
 
 class SimpleDOMMatrix {
   a: number;
@@ -151,11 +150,17 @@ const getCanvasPackageName = () => ["@", "napi-rs", "/canvas"].join("");
 
 const loadNativeCanvasModule = (): CanvasModule | null => {
   try {
-    const nodeRequire = (0, eval)("require") as NodeRequire;
+    const nodeRequire = createRequire(import.meta.url);
     return nodeRequire(getCanvasPackageName()) as CanvasModule;
   } catch {
     return null;
   }
+};
+
+type NormalizedImageBytes = {
+  mimeType: string;
+  buffer: Buffer;
+  dataUrl: string;
 };
 
 const enhancePageImageBufferForOcr = async (buffer: Buffer) => {
@@ -176,6 +181,36 @@ const enhancePageImageBufferForOcr = async (buffer: Buffer) => {
 
 const loadCanvasModule = async (): Promise<CanvasModule | null> => {
   return loadNativeCanvasModule();
+};
+
+let ocrWorkerPromise: Promise<import("tesseract.js").Worker> | null = null;
+
+const getOcrWorker = async () => {
+  if (!ocrWorkerPromise) {
+    ocrWorkerPromise = (async () => {
+      const { createWorker } = await import("tesseract.js");
+      return createWorker("eng", 1, {
+        logger: () => {
+          // Keep OCR logs quiet during imports.
+        },
+      });
+    })();
+  }
+
+  return ocrWorkerPromise;
+};
+
+const extractTextFromImageBufferWithOcr = async (buffer: Buffer) => {
+  try {
+    const worker = await getOcrWorker();
+    const {
+      data: { text },
+    } = await worker.recognize(buffer);
+    return typeof text === "string" ? text.trim() : "";
+  } catch (error) {
+    console.warn("Image OCR extraction failed", error);
+    return "";
+  }
 };
 
 const ensurePdfJsPolyfills = async () => {
@@ -284,14 +319,17 @@ const normalizeImportedImageBytes = async (bytes: Uint8Array, fileType: string |
     const output = isHeicLike ? await image.jpeg({ quality: 90 }).toBuffer() : await image.jpeg({ quality: 90 }).toBuffer();
     return {
       mimeType: "image/jpeg",
+      buffer: output,
       dataUrl: `data:image/jpeg;base64,${output.toString("base64")}`,
-    };
+    } satisfies NormalizedImageBytes;
   } catch {
     const fallbackMimeType = mimeType || "image/png";
+    const fallbackBuffer = Buffer.from(bytes);
     return {
       mimeType: fallbackMimeType,
-      dataUrl: `data:${fallbackMimeType};base64,${Buffer.from(bytes).toString("base64")}`,
-    };
+      buffer: fallbackBuffer,
+      dataUrl: `data:${fallbackMimeType};base64,${fallbackBuffer.toString("base64")}`,
+    } satisfies NormalizedImageBytes;
   }
 };
 
@@ -300,22 +338,6 @@ type ImportFileLike = {
   type?: string;
   arrayBuffer?: () => Promise<ArrayBuffer | SharedArrayBuffer>;
   text?: () => Promise<string>;
-};
-
-export const downloadImportObject = async (storageKey: string) => {
-  const env = getEnv();
-  if (!env.R2_BUCKET_NAME) {
-    throw new Error("Missing bucket name");
-  }
-
-  const response = await getR2Client().send(
-    new GetObjectCommand({
-      Bucket: env.R2_BUCKET_NAME,
-      Key: storageKey,
-    })
-  );
-
-  return decodeBody(response.Body);
 };
 
 const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {
@@ -475,7 +497,12 @@ export const readUploadedFileText = async (file: File | ImportFileLike, password
   }
 
   if (isImageImportFileName(lowerType, lowerName)) {
-    return "";
+    if (typeof file.arrayBuffer !== "function") {
+      throw new Error("Unable to read imported file.");
+    }
+
+    const normalized = await normalizeImportedImageBytes(new Uint8Array(await file.arrayBuffer()), lowerType, lowerName);
+    return extractTextFromImageBufferWithOcr(normalized.buffer);
   }
 
   throw new Error("Only PDF, CSV, and common image files are supported.");
@@ -497,7 +524,8 @@ export const readImportedFileText = async (
   }
 
   if (isImageImportFileName(params.fileType, params.fileName)) {
-    return "";
+    const normalized = await normalizeImportedImageBytes(bytes, params.fileType, params.fileName);
+    return extractTextFromImageBufferWithOcr(normalized.buffer);
   }
 
   try {

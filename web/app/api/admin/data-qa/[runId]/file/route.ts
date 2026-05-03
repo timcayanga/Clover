@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminAuth } from "@/lib/admin";
 import { prisma } from "@/lib/prisma";
 import { fetchImportFileCompat } from "@/lib/data-engine";
-import { downloadImportObject } from "@/lib/import-file-text.server";
+import { downloadImportObject } from "@/lib/import-storage.server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,12 +18,8 @@ const getContentType = (fileName: string, fileType: string) => {
     return "text/csv; charset=utf-8";
   }
 
-  if (lowerName.endsWith(".tsv") || lowerType.includes("tab-separated")) {
-    return "text/tab-separated-values; charset=utf-8";
-  }
-
-  if (lowerName.endsWith(".txt") || lowerType.startsWith("text/")) {
-    return "text/plain; charset=utf-8";
+  if (lowerName.endsWith(".json") || lowerType.includes("json")) {
+    return "application/json; charset=utf-8";
   }
 
   return "application/octet-stream";
