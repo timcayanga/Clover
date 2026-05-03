@@ -15452,7 +15452,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-add-fields__name-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr);
   align-items: end;
   gap: 12px;
   width: 100%;
@@ -15476,17 +15476,20 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-add-fields__row--amount {
-  grid-template-columns: 104px minmax(0, 1fr);
+  grid-template-columns: 92px minmax(0, 1fr);
   align-items: end;
 }
 
 .accounts-add-fields__balance,
 .accounts-add-fields__currency {
+  display: grid;
   gap: 6px;
+  min-width: 0;
 }
 
 .accounts-add-fields__balance input {
   min-width: 0;
+  width: 100%;
 }
 
 .accounts-add-fields__currency {
@@ -15593,11 +15596,23 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-add-fields .institution-autocomplete,
 .accounts-add-fields .institution-autocomplete__field,
 .accounts-add-fields .institution-autocomplete input,
+.accounts-add-fields__name-row > .institution-autocomplete,
+.accounts-add-fields__name-row > .institution-autocomplete > .institution-autocomplete__field,
+.accounts-add-fields__row--amount > .accounts-add-fields__balance,
+.accounts-add-fields__row--amount > .accounts-add-fields__currency,
+.accounts-add-advanced > .accounts-add-fields__row > label,
 .accounts-add-fields label,
 .accounts-add-fields__account-number input,
 .accounts-add-fields__row select,
 .accounts-add-fields__row input {
   width: 100%;
+}
+
+.accounts-add-fields__name-row > .institution-autocomplete,
+.accounts-add-fields__row--amount > .accounts-add-fields__balance,
+.accounts-add-fields__row--amount > .accounts-add-fields__currency,
+.accounts-add-advanced > .accounts-add-fields__row > label {
+  min-width: 0;
 }
 
 .institution-autocomplete {
@@ -20760,13 +20775,13 @@ input.transaction-inline-edit--amount::placeholder {
     align-items: start;
   }
 
-  .accounts-add-fields__row {
-    grid-template-columns: 1fr;
-  }
-
   .accounts-add-fields__name-row {
     grid-template-columns: 44px minmax(0, 1fr);
     align-items: center;
+  }
+
+  .accounts-add-fields__row {
+    grid-template-columns: 1fr;
   }
 
   .accounts-add-fields__row--amount {
@@ -20780,7 +20795,7 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-add-advanced > .accounts-add-fields__row {
-    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   }
 
   .accounts-add-actions__buttons {
