@@ -912,11 +912,11 @@ body[data-clover-page-modal] .sidebar-backdrop {
 }
 
 .transactions-page .transactions-footer {
-  padding-right: 70px;
+  padding-right: 88px;
 }
 
 .transactions-page .transactions-footer-snapshot {
-  margin-right: 2px;
+  margin-right: 18px;
 }
 
 .sidebar-icon-button {
@@ -19953,6 +19953,10 @@ input.transaction-inline-edit--amount::placeholder {
 
   .transactions-page .transactions-footer {
     padding-right: 0;
+  }
+
+  .transactions-page .transactions-footer-snapshot {
+    margin-right: 0;
   }
 
   .transactions-pagination {
