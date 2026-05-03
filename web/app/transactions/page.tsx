@@ -5573,7 +5573,7 @@ function TransactionsPageContent() {
       {manualOpen ? (
         <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => setManualOpen(false)}>
           <section
-            className="modal-card modal-card--wide glass"
+            className="modal-card modal-card--wide modal-card--manual glass"
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-transaction-title"
@@ -5700,6 +5700,18 @@ function TransactionsPageContent() {
                   </label>
                 </div>
 
+                <button
+                  type="button"
+                  className="accounts-add-more-link transactions-manual-more"
+                  onClick={() => setManualMoreOpen((current) => !current)}
+                  aria-expanded={manualMoreOpen}
+                >
+                  <span>{manualMoreOpen ? "Less" : "More"}</span>
+                  <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
+                    <ActionIcon name="chevron-down" />
+                  </span>
+                </button>
+
                 {manualMoreOpen ? (
                   <div className="manual-more-panel manual-more-panel--compact">
                     <label className="transactions-manual-field">
@@ -5712,11 +5724,10 @@ function TransactionsPageContent() {
                       />
                     </label>
 
-                    <div className="manual-more-panel__stack">
-                      <label className="transactions-manual-field">
-                        Account
-                        <div className="transactions-manual-picker">
-                          <div className="transactions-manual-picker__control">
+                    <label className="transactions-manual-field">
+                      Account
+                      <div className="transactions-manual-picker">
+                        <div className="transactions-manual-picker__control">
                           <button
                             type="button"
                             className="transactions-manual-picker__button"
@@ -5773,14 +5784,14 @@ function TransactionsPageContent() {
                               })}
                             </div>
                           ) : null}
-                          </div>
                         </div>
-                      </label>
+                      </div>
+                    </label>
 
-                      <label className="transactions-manual-field">
-                        Category
-                        <div className="transactions-manual-picker">
-                          <div className="transactions-manual-picker__control">
+                    <label className="transactions-manual-field">
+                      Category
+                      <div className="transactions-manual-picker">
+                        <div className="transactions-manual-picker__control">
                           <button
                             type="button"
                             className="transactions-manual-picker__button"
@@ -5829,12 +5840,11 @@ function TransactionsPageContent() {
                               ))}
                             </div>
                           ) : null}
-                          </div>
                         </div>
-                      </label>
-                    </div>
+                      </div>
+                    </label>
 
-                    <label className="manual-form-layout__full transactions-manual-field">
+                    <label className="transactions-manual-field">
                       Notes
                       <textarea
                         value={manualForm.description}
@@ -5967,26 +5977,15 @@ function TransactionsPageContent() {
               <div className="manual-form-actions">
                 <div className="manual-form-actions__left">
                   <button
-                    type="button"
-                    className="accounts-add-more-link transactions-manual-more"
-                    onClick={() => setManualMoreOpen((current) => !current)}
-                    aria-expanded={manualMoreOpen}
-                  >
-                    <span>{manualMoreOpen ? "Less" : "More"}</span>
-                    <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
-                      <ActionIcon name="chevron-down" />
-                    </span>
-                  </button>
-                </div>
-                <div className="manual-form-actions__right">
-                  <button
                     className="button button-secondary button-small"
                     type="submit"
                     data-submit-mode="add-another"
                     disabled={isSaving}
                   >
-                    {isSaving ? "Saving..." : "Add another"}
+                    Add another
                   </button>
+                </div>
+                <div className="manual-form-actions__right">
                   <button className="button button-primary" type="submit" data-submit-mode="close" disabled={isSaving}>
                     {isSaving ? "Saving..." : "Add transaction"}
                   </button>

@@ -11162,7 +11162,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .modal-card--manual {
-  width: min(460px, 100%);
+  width: min(440px, 100%);
   max-height: calc(100dvh - 24px);
   overflow: auto;
 }
