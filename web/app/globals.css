@@ -11154,7 +11154,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .modal-card--manual {
-  width: min(560px, 100%);
+  width: min(420px, 100%);
 }
 
 .accounts-import-modal {
@@ -11957,9 +11957,49 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: end;
 }
 
+.transactions-manual-name-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: end;
+}
+
+.transactions-manual-category-trigger,
+.transactions-manual-account-trigger {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.transactions-manual-category-trigger img {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+.transactions-manual-account-trigger img {
+  width: 20px;
+  height: 20px;
+  display: block;
+  object-fit: contain;
+}
+
+.transactions-manual-account-trigger span {
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .manual-form-compact-row {
   display: grid;
-  grid-template-columns: minmax(48px, 56px) minmax(120px, 1fr) minmax(0, 3fr);
+  grid-template-columns: 28px minmax(94px, 1fr) minmax(0, 2fr);
   gap: 10px;
   align-items: end;
 }
@@ -11969,79 +12009,12 @@ input.transaction-inline-edit--amount::placeholder {
   min-width: 0;
 }
 
-.transactions-manual-category-button,
-.transactions-manual-account-button {
-  width: 100%;
-  min-height: 44px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  cursor: pointer;
-  padding: 0;
-  border-radius: 999px;
-  transition:
-    box-shadow 160ms ease,
-    transform 160ms ease,
-    background-color 160ms ease,
-    color 160ms ease;
-}
-
-.transactions-manual-category-button:hover,
-.transactions-manual-category-button:focus-visible,
-.transactions-manual-account-button:hover,
-.transactions-manual-account-button:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 3px rgba(3, 168, 192, 0.12);
-  transform: translateY(-1px);
-}
-
-.transactions-manual-category-button__icon,
-.transactions-manual-account-button__brand,
-.transactions-manual-account-button__fallback {
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 auto;
-}
-
-.transactions-manual-category-button__icon img {
-  width: 16px;
-  height: 16px;
-}
-
-.transactions-manual-account-button__brand .accounts-brand-mark {
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
-}
-
-.transactions-manual-account-button__brand .accounts-brand-mark__logo,
-.transactions-manual-account-button__brand .accounts-brand-mark__fallback,
-.transactions-manual-account-button__brand .accounts-brand-mark__logo-fallback {
-  width: 16px;
-  height: 16px;
-}
-
-.transactions-manual-account-button__fallback {
-  background: rgba(3, 168, 192, 0.12);
-  color: var(--accent);
-  font-size: 0.8rem;
-  font-weight: 700;
-}
-
 .manual-more-panel--compact {
   gap: 10px;
 }
 
-.manual-more-panel__split {
+.manual-more-panel__stack {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -12066,6 +12039,32 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   gap: 10px;
   margin-left: auto;
+}
+
+.transactions-manual-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted-2);
+  font-size: 0.84rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.modal-card--manual label {
+  color: var(--muted-2);
+  font-size: 0.84rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.transactions-manual-field input,
+.transactions-manual-field select,
+.transactions-manual-field textarea {
+  width: 100%;
+  min-width: 0;
 }
 
 .transactions-manual-type-toggle {
@@ -12122,27 +12121,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-more {
   width: fit-content;
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  font: inherit;
-  font-size: 0.8rem;
-  font-weight: 700;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
-
-.transactions-manual-more svg {
-  width: 14px;
-  height: 14px;
-  transition: transform 0.18s ease;
-}
-
-.transactions-manual-more[aria-expanded="true"] svg {
-  transform: rotate(180deg);
+  align-self: start;
 }
 
 .manual-more-panel {
@@ -12204,10 +12183,10 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-picker__label {
   color: var(--muted);
-  font-size: 0.74rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 0.84rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .transactions-manual-picker__control {
@@ -15529,6 +15508,15 @@ input.transaction-inline-edit--amount::placeholder {
   min-width: 0;
 }
 
+.accounts-add-fields label,
+.accounts-add-fields .institution-autocomplete label {
+  color: var(--muted-2);
+  font-size: 0.9rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .accounts-add-fields__balance input {
   min-width: 0;
   width: 100%;
@@ -15584,10 +15572,16 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .field-optional {
-  margin-left: 6px;
   color: var(--muted);
   font-size: 0.72rem;
   font-weight: 400;
+}
+
+.field-label-inline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .accounts-add-brand-inline {
@@ -21191,12 +21185,12 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .modal-card--manual {
-    width: min(560px, 100%);
+    width: calc(100vw - 16px);
   }
 
   .modal-backdrop--centered-mobile .modal-card,
   .modal-backdrop--centered-mobile .modal-card--wide {
-    width: min(560px, 100%);
+    width: calc(100vw - 16px);
     max-height: calc(100dvh - 24px);
     border-radius: 26px;
   }
@@ -21205,13 +21199,17 @@ input.transaction-inline-edit--amount::placeholder {
     grid-template-columns: 1fr;
   }
 
+  .transactions-manual-name-row {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
   .manual-form-compact-row {
-    grid-template-columns: 44px minmax(0, 1fr) minmax(0, 2fr);
+    grid-template-columns: 24px minmax(0, 1fr) minmax(0, 1.5fr);
     gap: 8px;
   }
 
-  .manual-more-panel__split {
-    grid-template-columns: 1fr;
+  .manual-more-panel__stack {
+    gap: 10px;
   }
 
   .manual-form-actions {

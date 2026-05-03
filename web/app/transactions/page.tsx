@@ -5624,53 +5624,56 @@ function TransactionsPageContent() {
                   </button>
                 </div>
 
-                <label className="manual-form-layout__full">
-                  Name
-                  <input
-                    ref={manualNameInputRef}
-                    value={manualForm.merchantRaw}
-                    onChange={(event) => setManualForm((current) => ({ ...current, merchantRaw: event.target.value }))}
-                    placeholder="Lunch in Makati"
-                    required
-                  />
-                </label>
+                <div className="transactions-manual-name-row">
+                  <button
+                    type="button"
+                    className="transactions-manual-category-trigger"
+                    onClick={() => setManualMoreOpen(true)}
+                    aria-label="Open more transaction details"
+                    aria-expanded={manualMoreOpen}
+                    title="Open more transaction details"
+                  >
+                    <img
+                      src={getCategoryIconSrc(manualSelectedCategory?.name ?? "Other")}
+                      alt=""
+                      aria-hidden="true"
+                    />
+                  </button>
 
-                <button
-                  type="button"
-                  className="transactions-manual-category-button"
-                  onClick={() => setManualMoreOpen(true)}
-                  aria-label="Open more transaction details"
-                  aria-expanded={manualMoreOpen}
-                  title="Open more transaction details"
-                >
-                  <span className="transactions-manual-category-button__icon" aria-hidden="true" style={getCategoryIconTone(manualSelectedCategory?.name ?? "Other")}>
-                    <img src={getCategoryIconSrc(manualSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
-                  </span>
-                </button>
+                  <label className="manual-form-layout__full transactions-manual-field">
+                    Name
+                    <input
+                      ref={manualNameInputRef}
+                      value={manualForm.merchantRaw}
+                      onChange={(event) => setManualForm((current) => ({ ...current, merchantRaw: event.target.value }))}
+                      placeholder="Lunch in Makati"
+                      required
+                    />
+                  </label>
+                </div>
 
                 <div className="manual-form-compact-row">
                   <button
                     type="button"
-                    className="transactions-manual-account-button"
+                    className="transactions-manual-account-trigger"
                     aria-label="Open more transaction details"
                     aria-expanded={manualMoreOpen}
                     title="Open more transaction details"
                     onClick={() => setManualMoreOpen(true)}
                   >
                     {manualSelectedAccountBrand ? (
-                      <span className="transactions-manual-account-button__brand">
-                        <AccountBrandMark
-                          accountBrand={manualSelectedAccountBrand}
-                          label={manualSelectedAccount?.name ?? "Selected account"}
-                        />
-                      </span>
+                      <img
+                        src={manualSelectedAccountBrand.logoSrc ?? manualSelectedAccountBrand.fallbackIconSrc}
+                        alt=""
+                        aria-hidden="true"
+                      />
                     ) : (
-                      <span className="transactions-manual-account-button__fallback">?</span>
+                      <span aria-hidden="true">?</span>
                     )}
                   </button>
 
-                  <label className="manual-form-layout__currency manual-form-compact-row__currency">
-                    <span className="sr-only">Currency</span>
+                  <label className="manual-form-layout__currency manual-form-compact-row__currency transactions-manual-field">
+                    Currency
                     <CurrencySelector
                       value={manualForm.currency}
                       onChange={(value) => setManualForm((current) => ({ ...current, currency: value }))}
@@ -5684,7 +5687,7 @@ function TransactionsPageContent() {
                     />
                   </label>
 
-                  <label className="manual-form-layout__amount manual-form-compact-row__amount">
+                  <label className="manual-form-layout__amount manual-form-compact-row__amount transactions-manual-field">
                     Amount
                     <input
                       type="number"
@@ -5699,7 +5702,7 @@ function TransactionsPageContent() {
 
                 {manualMoreOpen ? (
                   <div className="manual-more-panel manual-more-panel--compact">
-                    <label>
+                    <label className="transactions-manual-field">
                       Date
                       <input
                         type="date"
@@ -5709,10 +5712,11 @@ function TransactionsPageContent() {
                       />
                     </label>
 
-                    <div className="manual-more-panel__split">
-                      <div className="transactions-manual-picker">
-                        <span className="transactions-manual-picker__label">Account</span>
-                        <div className="transactions-manual-picker__control">
+                    <div className="manual-more-panel__stack">
+                      <label className="transactions-manual-field">
+                        Account
+                        <div className="transactions-manual-picker">
+                          <div className="transactions-manual-picker__control">
                           <button
                             type="button"
                             className="transactions-manual-picker__button"
@@ -5769,12 +5773,14 @@ function TransactionsPageContent() {
                               })}
                             </div>
                           ) : null}
+                          </div>
                         </div>
-                      </div>
+                      </label>
 
-                      <div className="transactions-manual-picker">
-                        <span className="transactions-manual-picker__label">Category</span>
-                        <div className="transactions-manual-picker__control">
+                      <label className="transactions-manual-field">
+                        Category
+                        <div className="transactions-manual-picker">
+                          <div className="transactions-manual-picker__control">
                           <button
                             type="button"
                             className="transactions-manual-picker__button"
@@ -5823,11 +5829,12 @@ function TransactionsPageContent() {
                               ))}
                             </div>
                           ) : null}
+                          </div>
                         </div>
-                      </div>
+                      </label>
                     </div>
 
-                    <label className="manual-form-layout__full">
+                    <label className="manual-form-layout__full transactions-manual-field">
                       Notes
                       <textarea
                         value={manualForm.description}
@@ -5961,13 +5968,14 @@ function TransactionsPageContent() {
                 <div className="manual-form-actions__left">
                   <button
                     type="button"
-                    className="button button-secondary button-small transactions-manual-more"
+                    className="accounts-add-more-link transactions-manual-more"
                     onClick={() => setManualMoreOpen((current) => !current)}
                     aria-expanded={manualMoreOpen}
                   >
                     <span>{manualMoreOpen ? "Less" : "More"}</span>
-                    <ActionIcon name="chevron-down" />
                   </button>
+                </div>
+                <div className="manual-form-actions__right">
                   <button
                     className="button button-secondary button-small"
                     type="submit"
@@ -5976,8 +5984,6 @@ function TransactionsPageContent() {
                   >
                     {isSaving ? "Saving..." : "Add another"}
                   </button>
-                </div>
-                <div className="manual-form-actions__right">
                   <button className="button button-primary" type="submit" data-submit-mode="close" disabled={isSaving}>
                     {isSaving ? "Saving..." : "Add transaction"}
                   </button>

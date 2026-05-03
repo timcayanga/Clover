@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { HelpSectionPage } from "@/components/help-section-page";
 import { helpSectionMap, isHelpSection } from "@/lib/help-center";
 
+export const dynamic = "force-dynamic";
+
 type HelpSectionPageProps = {
   params: Promise<{
     section: string;

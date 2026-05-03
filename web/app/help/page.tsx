@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { HelpCenter } from "@/components/help-center";
 import { helpSections } from "@/lib/help-center";
 
+export const dynamic = "force-dynamic";
+
 type HelpPageProps = {
   searchParams?: Promise<{
     returnTo?: string;

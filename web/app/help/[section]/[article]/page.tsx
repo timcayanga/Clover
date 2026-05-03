@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { HelpArticlePage } from "@/components/help-article-page";
 import { findHelpSectionArticle, helpSectionMap, isHelpArticleSlug, isHelpSection } from "@/lib/help-center";
 
+export const dynamic = "force-dynamic";
+
 type HelpArticlePageProps = {
   params: Promise<{
     section: string;
@@ -67,4 +69,3 @@ export default async function HelpArticleRoute({ params, searchParams }: HelpArt
 
   return <HelpArticlePage section={section} article={article} returnTo={resolvedSearchParams?.returnTo ?? null} />;
 }
-
