@@ -3062,7 +3062,9 @@ function AccountsPageContent() {
                             </select>
                           </label>
                           <label className="accounts-add-fields__account-number" style={{ flex: "1 1 auto", minWidth: 0, width: "100%" }}>
-                            {manualAccountReference.label} <span className="field-optional">(optional)</span>
+                            <span className="field-label-inline">
+                              {manualAccountReference.label} <span className="field-optional">(optional)</span>
+                            </span>
                             <input
                               value={manualAccountNumber}
                               onChange={(event) => setManualAccountNumber(event.target.value)}
