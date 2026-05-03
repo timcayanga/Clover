@@ -696,8 +696,8 @@ function AccountDetailPageContent() {
   }, [accountId]);
 
   const accountCheckpointKey = useMemo(
-    () => normalizeImportedAccountKey(account?.name, account?.institution),
-    [account?.institution, account?.name]
+    () => normalizeImportedAccountKey(account?.name, account?.institution, account?.accountNumber, account?.type),
+    [account?.accountNumber, account?.institution, account?.name, account?.type]
   );
 
   const latestCheckpoint = useMemo(() => {
@@ -712,7 +712,9 @@ function AccountDetailPageContent() {
 
       const checkpointKey = normalizeImportedAccountKey(
         typeof checkpoint.sourceMetadata?.accountName === "string" ? checkpoint.sourceMetadata.accountName : null,
-        typeof checkpoint.sourceMetadata?.institution === "string" ? checkpoint.sourceMetadata.institution : null
+        typeof checkpoint.sourceMetadata?.institution === "string" ? checkpoint.sourceMetadata.institution : null,
+        typeof checkpoint.sourceMetadata?.accountNumber === "string" ? checkpoint.sourceMetadata.accountNumber : null,
+        typeof checkpoint.sourceMetadata?.accountType === "string" ? checkpoint.sourceMetadata.accountType : null
       );
       return checkpointKey === accountCheckpointKey;
     });
@@ -820,18 +822,29 @@ function AccountDetailPageContent() {
   );
 
   const currentBalance = useMemo(
-    () =>
-      normalizeAccountBalance(
-        account?.type ?? null,
-        parseAmount(
-          deriveReconciledBalance({
-            balance: account?.balance ?? null,
-            transactions,
-            checkpoints: latestCheckpoint ? [latestCheckpoint] : [],
-          })
-        )
-      ),
-    [account?.balance, account?.type, latestCheckpoint, transactions]
+    () => {
+      const checkpointBalance =
+        latestCheckpoint?.status === "reconciled" && latestCheckpoint.endingBalance !== null
+          ? String(latestCheckpoint.endingBalance)
+          : null;
+      const shouldPreserveImportedBalance =
+        account?.source === "upload" &&
+        (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
+        transactions.length === 0;
+
+      const reconciledValue = checkpointBalance
+        ? checkpointBalance
+        : shouldPreserveImportedBalance
+          ? account?.balance ?? null
+          : deriveReconciledBalance({
+              balance: account?.balance ?? null,
+              transactions,
+              checkpoints: latestCheckpoint ? [latestCheckpoint] : [],
+            });
+
+      return normalizeAccountBalance(account?.type ?? null, parseAmount(reconciledValue));
+    },
+    [account?.balance, account?.source, account?.type, latestCheckpoint, transactions]
   );
   const accountDetailValueCard = useMemo(() => {
     if (!account) {

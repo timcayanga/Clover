@@ -925,15 +925,23 @@ function AccountsPageContent() {
                             : getLatestCheckpointForAccount(account, statementCheckpoints);
                         const effectiveType = getEffectiveAccountType(account);
                         const accountCheckpoints = latestCheckpoint ? [latestCheckpoint] : [];
+                        const checkpointBalance =
+                          latestCheckpoint?.status === "reconciled" && latestCheckpoint.endingBalance !== null
+                            ? String(latestCheckpoint.endingBalance)
+                            : null;
                         const shouldPreserveImportedBalance =
-                          account.source === "upload" && (!latestCheckpoint || latestCheckpoint.status !== "reconciled");
-                        const reconciledBalance = shouldPreserveImportedBalance
-                          ? account.balance
-                          : deriveReconciledBalance({
-                              balance: account.balance,
-                              transactions: accountTransactions,
-                              checkpoints: accountCheckpoints,
-                            });
+                          account.source === "upload" &&
+                          (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
+                          accountTransactions.length === 0;
+                        const reconciledBalance = checkpointBalance
+                          ? checkpointBalance
+                          : shouldPreserveImportedBalance
+                            ? account.balance
+                            : deriveReconciledBalance({
+                                balance: account.balance,
+                                transactions: accountTransactions,
+                                checkpoints: accountCheckpoints,
+                              });
                         const normalizedBalance = normalizeAccountBalance(effectiveType, parseAmount(reconciledBalance ?? account.balance));
 
         return {

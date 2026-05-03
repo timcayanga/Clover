@@ -1765,8 +1765,12 @@ export function ImportFilesModal({
             fallbackPreviewTransactions,
             processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
           );
-          seedImportedWorkspaceCaches(workspaceId, completedSummary);
-          void onImported(completedSummary);
+          const finalizedSummary: UploadInsightsSummary = {
+            ...completedSummary,
+            optimistic: false,
+          };
+          seedImportedWorkspaceCaches(workspaceId, finalizedSummary);
+          void onImported(finalizedSummary);
           updateItem(itemId, {
             status: "done",
             confirmationState: "confirmed",
@@ -1783,7 +1787,7 @@ export function ImportFilesModal({
             completedFiles: completedFileCount + 1,
             progress: 100,
             detail: "All set",
-            summary: completedSummary,
+            summary: finalizedSummary,
             errorMessage: null,
           });
           return;
