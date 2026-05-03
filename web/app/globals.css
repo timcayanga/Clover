@@ -15421,12 +15421,15 @@ input.transaction-inline-edit--amount::placeholder {
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   align-items: start;
+  width: 100%;
 }
 
 .accounts-manual-form {
   display: grid;
   gap: 12px;
+  width: 100%;
   max-width: 100%;
+  min-width: 0;
 }
 
 .accounts-manual-form > label {
@@ -15437,12 +15440,14 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 12px;
+  width: 100%;
 }
 
 .accounts-add-fields {
   display: grid;
   gap: 12px;
   width: 100%;
+  min-width: 0;
 }
 
 .accounts-add-fields__name-row {
@@ -15451,6 +15456,7 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: end;
   gap: 12px;
   width: 100%;
+  min-width: 0;
 }
 
 .accounts-add-fields__name {
@@ -15466,6 +15472,7 @@ input.transaction-inline-edit--amount::placeholder {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
   width: 100%;
+  min-width: 0;
 }
 
 .accounts-add-fields__row--amount {
@@ -15500,6 +15507,7 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 12px;
   padding-top: 4px;
   width: 100%;
+  min-width: 0;
 }
 
 .accounts-add-schedule {
@@ -15585,6 +15593,7 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-add-fields .institution-autocomplete,
 .accounts-add-fields .institution-autocomplete__field,
 .accounts-add-fields .institution-autocomplete input,
+.accounts-add-fields label,
 .accounts-add-fields__account-number input,
 .accounts-add-fields__row select,
 .accounts-add-fields__row input {
