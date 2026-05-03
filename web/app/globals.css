@@ -26684,3 +26684,147 @@ html[data-theme="dark"] .goals-weekly__card.negative strong,
 html[data-theme="dark"] .goals-weekly__card.neutral strong {
   color: var(--text);
 }
+
+html[data-theme="dark"] .topbar,
+html[data-theme="dark"] .shell-compact-bar,
+html[data-theme="dark"] .transactions-topbar {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="dark"] :is(
+    .pill,
+    .pill-link,
+    .pill-subtle,
+    .pill-good,
+    .pill-danger,
+    .pill-link--inline,
+    .accounts-summary-chip,
+    .accounts-view-pill,
+    .accounts-account-card__balance-pill,
+    .accounts-toolbar-button,
+    .currency-selector__button,
+    .transactions-toolbar-chip.button-secondary,
+    .transactions-summary-toggle-button,
+    .transactions-manual-type-toggle__button,
+    .transactions-manual-currency__button,
+    .transactions-manual-picker__button,
+    .transactions-suggestion-chip,
+    .transactions-filter-pill,
+    .date-filter-tab,
+    .settings-display-toggle__button,
+    .settings-choice__option,
+    .sidebar-popover__link,
+    .sidebar-popover__item,
+    .sidebar-search-results__item,
+    .goals-editor__purpose-chip
+  ) {
+  background: rgba(5, 10, 18, 0.98);
+  border-color: rgba(148, 163, 184, 0.18);
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .accounts-summary-chip.is-good,
+html[data-theme="dark"] .accounts-summary-chip.is-danger,
+html[data-theme="dark"] .accounts-summary-chip.is-neutral,
+html[data-theme="dark"] .accounts-account-card__balance-pill.is-good,
+html[data-theme="dark"] .accounts-account-card__balance-pill.is-danger,
+html[data-theme="dark"] .date-filter-tab.is-active,
+html[data-theme="dark"] .settings-display-toggle__button.is-on,
+html[data-theme="dark"] .settings-choice__option.is-selected,
+html[data-theme="dark"] .transactions-manual-type-toggle__button.is-active,
+html[data-theme="dark"] .transactions-suggestion-chip--applied {
+  background: rgba(5, 10, 18, 0.98);
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .currency-selector__menu,
+html[data-theme="dark"] .transactions-manual-currency__menu,
+html[data-theme="dark"] .transactions-manual-picker__menu,
+html[data-theme="dark"] .sidebar-search-panel,
+html[data-theme="dark"] .sidebar-popover {
+  background: rgba(5, 10, 18, 0.98);
+  border-color: rgba(148, 163, 184, 0.18);
+  box-shadow: var(--shadow);
+}
+
+html[data-theme="dark"] .currency-selector__option,
+html[data-theme="dark"] .transactions-manual-currency__option,
+html[data-theme="dark"] .transactions-manual-picker__option,
+html[data-theme="dark"] .sidebar-popover__link,
+html[data-theme="dark"] .sidebar-popover__item,
+html[data-theme="dark"] .sidebar-search-results__item,
+html[data-theme="dark"] .transactions-suggestion-chip {
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .currency-selector__trigger-token,
+html[data-theme="dark"] .currency-selector__trigger-all,
+html[data-theme="dark"] .accounts-toolbar-button .button-icon,
+html[data-theme="dark"] .transactions-summary-toggle-button .button-icon,
+html[data-theme="dark"] .sidebar-search-trigger,
+html[data-theme="dark"] .sidebar-search-trigger svg {
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .currency-selector__option.is-selected,
+html[data-theme="dark"] .currency-selector__option:hover,
+html[data-theme="dark"] .currency-selector__option:focus-visible,
+html[data-theme="dark"] .transactions-manual-currency__option.is-selected,
+html[data-theme="dark"] .transactions-manual-picker__option.is-selected,
+html[data-theme="dark"] .transactions-manual-picker__button:hover,
+html[data-theme="dark"] .transactions-manual-picker__button:focus-visible,
+html[data-theme="dark"] .sidebar-popover__link:hover,
+html[data-theme="dark"] .sidebar-popover__item:hover,
+html[data-theme="dark"] .sidebar-search-results__item:hover,
+html[data-theme="dark"] .transactions-suggestion-chip--button:hover,
+html[data-theme="dark"] .transactions-suggestion-chip--button:focus-visible {
+  background: rgba(15, 23, 42, 0.98);
+  border-color: rgba(148, 163, 184, 0.24);
+}
+
+html[data-theme="dark"] .button-primary,
+html[data-theme="dark"] .transactions-page .transactions-toolbar-add.button-primary,
+html[data-theme="dark"] .recurring-topbar-add.button-primary,
+html[data-theme="dark"] .review-workbench__button-primary,
+html[data-theme="dark"] .dashboard-home__goal-card .button,
+html[data-theme="dark"] .dashboard-home__starter-card .button,
+html[data-theme="dark"] .dashboard-home__review-actions .button,
+html[data-theme="dark"] .dashboard-home__starter-actions .button {
+  color: #07111d;
+}
+
+html[data-theme="dark"] .button-secondary {
+  background: rgba(5, 10, 18, 0.98);
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .button-secondary:hover:not(:disabled),
+html[data-theme="dark"] .button-secondary:focus:not(:disabled) {
+  background: rgba(15, 23, 42, 0.98);
+}
+
+html[data-theme="dark"] .button-secondary,
+html[data-theme="dark"] .button-primary,
+html[data-theme="dark"] .button-danger,
+html[data-theme="dark"] .accounts-summary-chip,
+html[data-theme="dark"] .accounts-view-pill,
+html[data-theme="dark"] .accounts-account-card__balance-pill,
+html[data-theme="dark"] .accounts-toolbar-button,
+html[data-theme="dark"] .currency-selector__button,
+html[data-theme="dark"] .transactions-toolbar-chip.button-secondary,
+html[data-theme="dark"] .transactions-summary-toggle-button,
+html[data-theme="dark"] .transactions-manual-type-toggle__button,
+html[data-theme="dark"] .transactions-manual-currency__button,
+html[data-theme="dark"] .transactions-manual-picker__button,
+html[data-theme="dark"] .transactions-suggestion-chip,
+html[data-theme="dark"] .date-filter-tab,
+html[data-theme="dark"] .settings-display-toggle__button,
+html[data-theme="dark"] .settings-choice__option,
+html[data-theme="dark"] .sidebar-popover__link,
+html[data-theme="dark"] .sidebar-popover__item,
+html[data-theme="dark"] .sidebar-search-results__item,
+html[data-theme="dark"] .goals-editor__purpose-chip {
+  box-shadow: none;
+}
