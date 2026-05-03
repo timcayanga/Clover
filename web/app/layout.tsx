@@ -7,6 +7,7 @@ import { PostHogAnalytics, PostHogClerkIdentity } from "@/components/posthog-ana
 import { getAppBuildInfo } from "@/lib/build-info";
 import { ThemeSync } from "@/components/theme-sync";
 import { THEME_STORAGE_KEY } from "@/lib/theme-preference";
+import { HelperTextSync } from "@/components/helper-text-sync";
 
 export const metadata: Metadata = {
   title: {
@@ -66,6 +67,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <PostHogClerkIdentity />
             <GlobalImportActivity />
             <ThemeSync />
+            <HelperTextSync />
             {children}
           </ClerkProvider>
         ) : (
@@ -73,6 +75,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
             <PostHogAnalytics />
             <GlobalImportActivity />
             <ThemeSync />
+            <HelperTextSync />
             {children}
           </>
         )}

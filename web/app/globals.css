@@ -24724,6 +24724,57 @@ input.transaction-inline-edit--amount::placeholder {
   line-height: 1.5;
 }
 
+.settings-display-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: 22px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(247, 249, 250, 0.82);
+}
+
+.settings-display-toggle__copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.settings-display-toggle__copy h5 {
+  font-size: 15px;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.settings-display-toggle__copy p {
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.settings-display-toggle__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(3, 168, 192, 0.2);
+  background: rgba(3, 168, 192, 0.08);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.settings-display-toggle__button.is-on {
+  background: linear-gradient(135deg, rgba(3, 168, 192, 0.9), rgba(94, 211, 208, 0.88));
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 10px 18px rgba(3, 168, 192, 0.12);
+}
+
 .settings-action-card__row {
   display: flex;
   gap: 12px;
@@ -24735,6 +24786,25 @@ input.transaction-inline-edit--amount::placeholder {
 .settings-category-manager {
   display: grid;
   gap: 18px;
+}
+
+.settings-category-section {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-category-section__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.settings-category-section__head h5 {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
 }
 
 .settings-category-creator {
@@ -24757,6 +24827,10 @@ input.transaction-inline-edit--amount::placeholder {
   background: rgba(255, 255, 255, 0.84);
 }
 
+.settings-category-table--compact {
+  border-radius: 18px;
+}
+
 .settings-category-table--archived {
   display: grid;
   margin-top: 4px;
@@ -24769,6 +24843,20 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   padding: 10px 14px;
   border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.settings-category-table__row--compact {
+  min-height: 52px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.settings-category-table--compact .settings-category-table__row--built-in {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-category-table--compact .settings-category-table__row--custom {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .settings-category-table__row--head {
@@ -24810,6 +24898,11 @@ input.transaction-inline-edit--amount::placeholder {
   min-height: 40px;
   border-radius: 12px;
   background: rgba(247, 249, 250, 0.95);
+}
+
+.settings-category-table--compact .settings-category-table__name-copy input {
+  min-height: 38px;
+  padding-inline: 12px;
 }
 
 .settings-category-table__type,
@@ -25322,6 +25415,18 @@ input.transaction-inline-edit--amount::placeholder {
 .settings-helper {
   color: var(--muted);
   line-height: 1.5;
+}
+
+html[data-helper-text="hidden"] .settings-section__intro p,
+html[data-helper-text="hidden"] .settings-choice-card span,
+html[data-helper-text="hidden"] .settings-action-card p,
+html[data-helper-text="hidden"] .settings-display-toggle__copy p,
+html[data-helper-text="hidden"] .settings-plan-card__savings,
+html[data-helper-text="hidden"] .settings-plan-card__renewal,
+html[data-helper-text="hidden"] .settings-plan-usage__card p,
+html[data-helper-text="hidden"] .settings-plan-usage__renewal p,
+html[data-helper-text="hidden"] .settings-helper {
+  display: none !important;
 }
 
 .settings-status {
@@ -25849,6 +25954,29 @@ html[data-theme="dark"] .settings-category-table__row--head {
 
 html[data-theme="dark"] .settings-category-table__icon {
   background: rgba(148, 163, 184, 0.12);
+}
+
+html[data-theme="dark"] .settings-display-toggle,
+html[data-theme="dark"] .settings-category-section__head,
+html[data-theme="dark"] .settings-category-table--compact .settings-category-table__row--built-in,
+html[data-theme="dark"] .settings-category-table--compact .settings-category-table__row--custom {
+  background: rgba(14, 23, 37, 0.9);
+}
+
+html[data-theme="dark"] .settings-display-toggle__copy p,
+html[data-theme="dark"] .settings-category-section__head h5 {
+  color: var(--text);
+}
+
+html[data-theme="dark"] .settings-display-toggle__button {
+  background: rgba(9, 15, 27, 0.94);
+  border-color: rgba(148, 163, 184, 0.18);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .settings-display-toggle__button.is-on {
+  background: linear-gradient(145deg, rgba(4, 164, 184, 0.92), rgba(94, 211, 208, 0.84));
+  color: #ffffff;
 }
 
 html[data-theme="dark"] .settings-plan-card--free {

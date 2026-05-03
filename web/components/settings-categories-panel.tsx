@@ -285,10 +285,6 @@ function CategoryIcon({ category }: { category: CategoryRecord }) {
   );
 }
 
-function categoryTypeLabel(type: TransactionType) {
-  return CATEGORY_TYPE_OPTIONS.find((option) => option.value === type)?.label ?? type;
-}
-
 export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }) {
   const [categories, setCategories] = useState<CategoryRecord[]>([]);
   const [drafts, setDrafts] = useState<Record<string, CategoryDraft>>({});
@@ -356,8 +352,6 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
     () => categories.filter((category) => !category.isArchived && !category.isSystem),
     [categories]
   );
-  const activeCategories = useMemo(() => [...activeBuiltInCategories, ...activeCustomCategories], [activeBuiltInCategories, activeCustomCategories]);
-  const archivedCategories = useMemo(() => categories.filter((category) => category.isArchived), [categories]);
 
   const upsertCategory = (category: CategoryRecord) => {
     setCategories((current) => {
@@ -503,42 +497,6 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
     }
   };
 
-  const restoreCategory = async (categoryId: string) => {
-    const current = categories.find((category) => category.id === categoryId);
-    if (!current) {
-      return;
-    }
-
-    setBusyCategoryId(categoryId);
-    setStatusMessage(null);
-    setErrorMessage(null);
-
-    try {
-      const response = await fetch("/api/categories", {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          id: categoryId,
-          isArchived: false,
-        }),
-      });
-
-      const payload = (await response.json().catch(() => ({}))) as { category?: CategoryRecord; error?: string };
-      if (!response.ok || !payload.category) {
-        throw new Error(payload.error ?? "Unable to restore category.");
-      }
-
-      upsertCategory(payload.category);
-      setStatusMessage(`${payload.category.name} is available in Transactions again.`);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "Unable to restore category.");
-    } finally {
-      setBusyCategoryId(null);
-    }
-  };
-
   return (
     <section className="settings-category-manager">
       <div className="settings-section__intro">
@@ -547,58 +505,75 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
         </div>
       </div>
 
-      <article className="settings-action-card settings-category-creator">
-        <div>
-          <h5>Add custom category</h5>
+      <section className="settings-category-section" aria-label="Built-in categories">
+        <div className="settings-category-section__head">
+          <h5>Built-in categories</h5>
         </div>
-        <div className="settings-category-creator__fields">
-          <label className="settings-inline-field">
-            <span>Name</span>
-            <input
-              value={newCategoryName}
-              onChange={(event) => setNewCategoryName(event.target.value)}
-              placeholder="e.g. Side hustle"
-            />
-          </label>
-          <label className="settings-inline-field">
-            <span>Type</span>
-            <select value={newCategoryType} onChange={(event) => setNewCategoryType(event.target.value as TransactionType)}>
-              {CATEGORY_TYPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button type="button" className="button button-primary button-small" onClick={() => void createCategory()} disabled={isSavingNewCategory}>
-            {isSavingNewCategory ? "Adding..." : "Add category"}
-          </button>
-        </div>
-      </article>
-
-      <section className="settings-category-table" aria-label="Categories">
-        <div className="settings-category-table__row settings-category-table__row--head">
-          <span>Category</span>
-          <span>Type</span>
-          <span>Source</span>
-          <span>Actions</span>
-        </div>
-
-        {isLoading ? (
-          <div className="settings-category-table__empty">Loading categories...</div>
-        ) : activeCategories.length > 0 ? (
-          activeCategories.map((category) => {
-            const draft = drafts[category.id] ?? { name: category.name, type: category.type };
-            const hasChanges = normalizeName(draft.name) !== normalizeName(category.name) || draft.type !== category.type;
-            const busy = busyCategoryId === category.id;
-            const isCustom = !category.isSystem;
-
-            return (
-              <div key={category.id} className={`settings-category-table__row${category.isSystem ? " settings-category-table__row--system" : ""}`}>
+        <div className="settings-category-table settings-category-table--compact">
+          {isLoading ? (
+            <div className="settings-category-table__empty">Loading categories...</div>
+          ) : (
+            activeBuiltInCategories.map((category) => (
+              <div
+                key={category.id}
+                className="settings-category-table__row settings-category-table__row--compact settings-category-table__row--built-in"
+              >
                 <div className="settings-category-table__name">
                   <CategoryIcon category={category} />
                   <div className="settings-category-table__name-copy">
-                    {isCustom ? (
+                    <strong>{category.name}</strong>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </section>
+
+      <section className="settings-category-section" aria-label="Custom categories">
+        <div className="settings-category-section__head">
+          <h5>Custom categories</h5>
+        </div>
+
+        <article className="settings-action-card settings-category-creator">
+          <div className="settings-category-creator__fields">
+            <label className="settings-inline-field">
+              <span>Name</span>
+              <input value={newCategoryName} onChange={(event) => setNewCategoryName(event.target.value)} placeholder="e.g. Side hustle" />
+            </label>
+            <label className="settings-inline-field">
+              <span>Type</span>
+              <select value={newCategoryType} onChange={(event) => setNewCategoryType(event.target.value as TransactionType)}>
+                {CATEGORY_TYPE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className="button button-primary button-small" onClick={() => void createCategory()} disabled={isSavingNewCategory}>
+              {isSavingNewCategory ? "Adding..." : "Add category"}
+            </button>
+          </div>
+        </article>
+
+        <div className="settings-category-table settings-category-table--compact">
+          {isLoading ? (
+            <div className="settings-category-table__empty">Loading categories...</div>
+          ) : activeCustomCategories.length > 0 ? (
+            activeCustomCategories.map((category) => {
+              const draft = drafts[category.id] ?? { name: category.name, type: category.type };
+              const hasChanges = normalizeName(draft.name) !== normalizeName(category.name) || draft.type !== category.type;
+              const busy = busyCategoryId === category.id;
+
+              return (
+                <div
+                  key={category.id}
+                  className="settings-category-table__row settings-category-table__row--compact settings-category-table__row--custom"
+                >
+                  <div className="settings-category-table__name">
+                    <CategoryIcon category={category} />
+                    <div className="settings-category-table__name-copy">
                       <input
                         value={draft.name}
                         onChange={(event) =>
@@ -612,106 +587,33 @@ export function SettingsCategoriesPanel({ workspaceId }: { workspaceId: string }
                         }
                         disabled={busy}
                       />
-                    ) : (
-                      <strong>{category.name}</strong>
-                    )}
+                    </div>
                   </div>
-                </div>
 
-                <div className="settings-category-table__type">
-                  {isCustom ? (
-                    <select
-                      value={draft.type}
-                      onChange={(event) =>
-                        setDrafts((current) => ({
-                          ...current,
-                          [category.id]: {
-                            ...draft,
-                            type: event.target.value as TransactionType,
-                          },
-                        }))
-                      }
+                  <div className="settings-category-table__actions">
+                    <button
+                      type="button"
+                      className="button button-secondary button-small"
+                      onClick={() => void saveCategory(category.id)}
+                      disabled={busy || !hasChanges}
+                    >
+                      {busy ? "Saving..." : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      className="button button-danger button-small"
+                      onClick={() => void archiveCategory(category.id)}
                       disabled={busy}
                     >
-                      {CATEGORY_TYPE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span>{categoryTypeLabel(category.type)}</span>
-                  )}
-                </div>
-
-                <div className="settings-category-table__source">{category.isSystem ? "Built-in" : "Custom"}</div>
-
-                <div className="settings-category-table__actions">
-                  {isCustom ? (
-                    <>
-                      <button
-                        type="button"
-                        className="button button-secondary button-small"
-                        onClick={() => void saveCategory(category.id)}
-                        disabled={busy || !hasChanges}
-                      >
-                        {busy ? "Saving..." : "Save"}
-                      </button>
-                      <button
-                        type="button"
-                        className="button button-danger button-small"
-                        onClick={() => void archiveCategory(category.id)}
-                        disabled={busy}
-                      >
-                        Delete
-                      </button>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-            );
-          })
-        ) : (
-          <div className="settings-category-table__empty">No categories found.</div>
-        )}
-      </section>
-
-      {archivedCategories.length > 0 ? (
-        <section className="settings-category-table settings-category-table--archived" aria-label="Archived categories">
-          <div className="settings-category-table__row settings-category-table__row--head">
-            <span>Archived</span>
-            <span>Type</span>
-            <span>Source</span>
-            <span>Actions</span>
-          </div>
-          {archivedCategories.map((category) => {
-            const busy = busyCategoryId === category.id;
-
-            return (
-              <div key={category.id} className="settings-category-table__row settings-category-table__row--archived">
-                <div className="settings-category-table__name">
-                  <CategoryIcon category={category} />
-                  <div className="settings-category-table__name-copy">
-                    <strong>{category.name}</strong>
+                      Delete
+                    </button>
                   </div>
                 </div>
-                <div className="settings-category-table__type">{categoryTypeLabel(category.type)}</div>
-                <div className="settings-category-table__source">{category.isSystem ? "Built-in" : "Custom"}</div>
-                <div className="settings-category-table__actions">
-                  <button
-                    type="button"
-                    className="button button-secondary button-small"
-                    onClick={() => void restoreCategory(category.id)}
-                    disabled={busy}
-                  >
-                    {busy ? "Restoring..." : "Restore"}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </section>
-      ) : null}
+              );
+            })
+          ) : null}
+        </div>
+      </section>
 
       {errorMessage ? <p className="settings-status settings-status--error">{errorMessage}</p> : null}
       {statusMessage ? <p className="settings-status">{statusMessage}</p> : null}

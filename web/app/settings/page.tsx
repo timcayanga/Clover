@@ -1,7 +1,5 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
-import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
@@ -13,6 +11,7 @@ import { getUserBillingSubscription } from "@/lib/paypal-billing";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { countNonCashAccounts } from "@/lib/account-limit-count";
+import { RouteSplash } from "@/components/route-splash";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -129,7 +128,11 @@ async function SettingsPageStream() {
         paypalMonthlyPlanId={env.PAYPAL_MONTHLY_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
         paypalAnnualPlanId={env.PAYPAL_ANNUAL_PLAN_ID ?? env.PAYPAL_PRO_PLAN_ID ?? null}
         paypalBuyerCountry={env.PAYPAL_BUYER_COUNTRY ?? null}
-        planLimits={planLimits}
+        planLimits={{
+          accountLimit: planLimits.accountLimit ?? 0,
+          monthlyUploadLimit: planLimits.monthlyUploadLimit ?? 0,
+          transactionLimit: planLimits.transactionLimit ?? null,
+        }}
         planUsage={{
           accountCount,
           cashAccountCount,
@@ -142,9 +145,5 @@ async function SettingsPageStream() {
 }
 
 export default function SettingsPage() {
-  return (
-    <Suspense fallback={<CloverLoadingScreen label="settings" />}>
-      <SettingsPageStream />
-    </Suspense>
-  );
+  return <RouteSplash label="settings"><SettingsPageStream /></RouteSplash>;
 }

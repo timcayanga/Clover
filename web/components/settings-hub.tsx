@@ -8,6 +8,7 @@ import { BillingActions } from "@/components/billing-actions";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
 import { SettingsCategoriesPanel } from "@/components/settings-categories-panel";
 import { type BillingInterval } from "@/lib/billing-plans";
+import { applyHelperTextPreference, HELPER_TEXT_STORAGE_KEY, readStoredHelperTextPreference } from "@/lib/helper-text-preference";
 import { getPlanDisplayLabel } from "@/lib/user-limits";
 import { applyThemeMode, readStoredThemeMode, THEME_STORAGE_KEY, type ThemeMode } from "@/lib/theme-preference";
 type SettingsSectionKey = "profile" | "display" | "data" | "categories" | "plan";
@@ -251,6 +252,7 @@ export function SettingsHub({
 }: SettingsHubProps) {
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>("profile");
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+  const [helperTextVisible, setHelperTextVisible] = useState(true);
   const [historyCutoff, setHistoryCutoff] = useState(() => new Date().toISOString().slice(0, 10));
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -259,6 +261,12 @@ export function SettingsHub({
     const initialTheme = readStoredThemeMode();
     setThemeMode(initialTheme);
     applyThemeMode(initialTheme);
+  }, []);
+
+  useEffect(() => {
+    const initialHelperText = readStoredHelperTextPreference();
+    setHelperTextVisible(initialHelperText);
+    applyHelperTextPreference(initialHelperText);
   }, []);
 
   useEffect(() => {
@@ -275,6 +283,11 @@ export function SettingsHub({
 
     return () => mediaQuery.removeEventListener("change", handleChange);
   }, [themeMode]);
+
+  useEffect(() => {
+    window.localStorage.setItem(HELPER_TEXT_STORAGE_KEY, helperTextVisible ? "visible" : "hidden");
+    applyHelperTextPreference(helperTextVisible);
+  }, [helperTextVisible]);
 
   const runDownload = async (path: string, fileName: string) => {
     const response = await fetch(path);
@@ -381,15 +394,9 @@ export function SettingsHub({
       <div className="settings-hub__panel glass">
         {activeSection === "profile" ? (
           <section className="settings-section settings-section--profile" role="tabpanel">
-            <div className="settings-section__intro">
+            <div className="settings-section__intro settings-section__intro--single">
               <div>
                 <h4>Profile</h4>
-              </div>
-              <div className="settings-profile-summary">
-                <span className="settings-profile-summary__label">Email</span>
-                <strong>{email}</strong>
-                <span className="settings-profile-summary__label">Workspace</span>
-                <strong>{workspaceName}</strong>
               </div>
             </div>
 
@@ -426,20 +433,29 @@ export function SettingsHub({
                 );
               })}
             </div>
+
+            <article className="settings-display-toggle">
+              <div className="settings-display-toggle__copy">
+                <h5>Helper text</h5>
+                <p>Show guidance and supporting labels across Clover.</p>
+              </div>
+              <button
+                type="button"
+                className={`settings-display-toggle__button${helperTextVisible ? " is-on" : ""}`}
+                aria-pressed={helperTextVisible}
+                onClick={() => setHelperTextVisible((current) => !current)}
+              >
+                {helperTextVisible ? "Shown" : "Hidden"}
+              </button>
+            </article>
           </section>
         ) : null}
 
         {activeSection === "data" ? (
           <section className="settings-section" role="tabpanel">
-            <div className="settings-section__intro">
+            <div className="settings-section__intro settings-section__intro--single">
               <div>
                 <h4>Data</h4>
-              </div>
-              <div className="settings-profile-summary">
-                <span className="settings-profile-summary__label">Workspace</span>
-                <strong>{workspaceName}</strong>
-                <span className="settings-profile-summary__label">Cutoff date</span>
-                <strong>{historyCutoff}</strong>
               </div>
             </div>
 
