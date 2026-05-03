@@ -7,6 +7,7 @@ import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import type { ReportsQueueItem } from "@/components/reports-review-queue";
+import { ReportsRangeMenu } from "@/components/reports-range-menu";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getSessionContext } from "@/lib/auth";
@@ -238,6 +239,15 @@ const getMonthBuckets = (anchor: Date) => {
 
 function ReportsStreamFallback() {
   return <CloverLoadingScreen label="reports" />;
+}
+
+function ReportsEmptyNote({ title, copy }: { title: string; copy: string }) {
+  return (
+    <div className="reports-section-empty">
+      <strong>{title}</strong>
+      <p>{copy}</p>
+    </div>
+  );
 }
 
 async function ReportsStream({
@@ -1244,54 +1254,7 @@ async function ReportsStream({
             chart_type: "timeline",
           }}
         />
-        <div className="reports-toolbar glass">
-          <div className="reports-tabs" role="tablist" aria-label="Report sections">
-            {sectionTabs.map((section) => (
-              <Link
-                key={section}
-                href={buildReportsHref({}, selectedRange, section)}
-                className={`reports-tab ${selectedSection === section ? "reports-tab--active" : ""}`}
-                aria-current={selectedSection === section ? "page" : undefined}
-              >
-                {reportsSectionLabels[section]}
-              </Link>
-            ))}
-          </div>
-
-          <div className="reports-range-menu">
-            <details>
-              <summary
-                className="reports-range-menu__summary"
-                aria-label={`Change report range. Current range: ${selectedRangeLabel}`}
-                title="Change report range"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                  <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1.5A2.5 2.5 0 0 1 22 6.5v12A2.5 2.5 0 0 1 19.5 21h-15A2.5 2.5 0 0 1 2 18.5v-12A2.5 2.5 0 0 1 4.5 4H6V3a1 1 0 0 1 1-1Zm12.5 8h-15v8.5c0 .276.224.5.5.5h14a.5.5 0 0 0 .5-.5V10Zm-14-4A.5.5 0 0 0 5 8.5V8h14v.5a.5.5 0 0 0-.5-.5h-14Z" />
-                </svg>
-                <span className="sr-only">Change report range</span>
-              </summary>
-              <div className="reports-range-menu__panel glass">
-                <p className="reports-range-menu__label">Showing {selectedRangeLabel}</p>
-                <small>
-                  {comparisonCopy} · {latestImportSummary ? "Fresh data available" : "No recent refresh yet"}
-                </small>
-                <div className="reports-range-menu__choices" role="menu" aria-label="Report range">
-                  {(["30d", "90d", "ytd"] as const).map((range) => (
-                    <Link
-                      key={range}
-                      className={`pill pill-interactive ${selectedRange === range ? "pill-is-selected" : ""}`}
-                      href={buildReportsHref({ range }, selectedRange, selectedSection)}
-                    >
-                      {reportsRangeLabels[range]}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            </details>
-          </div>
-        </div>
-
-        {isEmptyWorkspace ? (
+        {selectedSection === "overview" && isEmptyWorkspace ? (
           <div className="reports-empty-wrap">
             <EmptyDataCta
               className="reports-empty-state"
@@ -1320,7 +1283,7 @@ async function ReportsStream({
           </div>
         ) : null}
 
-        {selectedSection === "overview" && !isEmptyWorkspace ? (
+        {selectedSection === "overview" ? (
           <>
             <section className="reports-summary-grid reports-summary-grid--highlights reports-overview-grid">
               <article className="metric compact metric--highlight glass">
@@ -1567,16 +1530,9 @@ async function ReportsStream({
                     ) : null}
                   </>
                 ) : (
-                  <EmptyDataCta
-                    className="reports-empty-state"
-                    eyebrow="Fresh start"
-                    title="Add categorized spending to wake up cash flow."
-                    copy="Clover will show where income is flowing once spending has enough detail."
-                    illustration="/illustrations/clover-reports-chart-3d.png"
-                    illustrationAlt="A 3D Clover reports chart illustration"
-                    artClassName="transactions-empty-state__art--teal"
-                    accountHref="/accounts"
-                    transactionHref="/transactions?manual=1"
+                  <ReportsEmptyNote
+                    title="Add categorized spending to see the flow map."
+                    copy="This view becomes useful once a few transactions are categorized."
                   />
                 )}
               </div>
@@ -1655,16 +1611,9 @@ async function ReportsStream({
                     );
                   })
                 ) : (
-                  <EmptyDataCta
-                    className="reports-empty-state"
-                    eyebrow="Fresh start"
-                    title="No categorized expenses yet."
-                    copy="Review uncategorized rows or import a fuller statement to surface the main spending groups."
-                    illustration="/illustrations/clover-reports-chart-3d.png"
-                    illustrationAlt="A 3D Clover reports chart illustration"
-                    artClassName="transactions-empty-state__art--teal"
-                    accountHref="/accounts"
-                    transactionHref="/transactions?manual=1"
+                  <ReportsEmptyNote
+                    title="No spending mix yet."
+                    copy="Once you categorize a few expenses, the donut chart will fill in."
                   />
                 )}
                 {currentOtherSpend > 0 ? (
@@ -1721,16 +1670,9 @@ async function ReportsStream({
                   </Link>
                 ))
               ) : (
-                <EmptyDataCta
-                  className="reports-empty-state"
-                  eyebrow="Fresh start"
-                  title="No repeat merchants surfaced yet."
-                  copy="Add more transactions or imports to reveal the fixed costs Clover can track."
-                  illustration="/illustrations/clover-reports-chart-3d.png"
-                  illustrationAlt="A 3D Clover reports chart illustration"
-                  artClassName="transactions-empty-state__art--teal"
-                  accountHref="/accounts"
-                  transactionHref="/transactions?manual=1"
+                <ReportsEmptyNote
+                  title="No repeat bills yet."
+                  copy="More transactions will reveal subscriptions and bills that show up again."
                 />
               )}
             </div>
@@ -1780,16 +1722,9 @@ async function ReportsStream({
                   </Link>
                 ))
               ) : (
-                <EmptyDataCta
-                  className="reports-empty-state"
-                  eyebrow="Fresh start"
-                  title="No merchants surfaced yet."
-                  copy="Import more activity and Clover will surface the concentration points for you."
-                  illustration="/illustrations/clover-reports-chart-3d.png"
-                  illustrationAlt="A 3D Clover reports chart illustration"
-                  artClassName="transactions-empty-state__art--teal"
-                  accountHref="/accounts"
-                  transactionHref="/transactions?manual=1"
+                <ReportsEmptyNote
+                  title="No top merchants yet."
+                  copy="Add more activity and the biggest spenders will show up here."
                 />
               )}
             </div>
@@ -1895,6 +1830,8 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
     redirect("/onboarding");
   }
 
+  const selectedRange = normalizeReportsRange(resolvedSearchParams?.range);
+  const selectedRangeLabel = reportsRangeLabels[selectedRange];
   const requestedSection = normalizeReportsSection(resolvedSearchParams?.section);
   const isPro = user.planTier === "pro";
   const selectedSection = isPro || requestedSection !== "advanced" ? requestedSection : "overview";
@@ -1904,6 +1841,27 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
     <CloverShell
       active="reports"
       title="Reports"
+      titleAddon={
+        <div className="reports-top-tabs" role="tablist" aria-label="Report sections">
+          {sectionTabs.map((section) => (
+            <Link
+              key={section}
+              href={buildReportsHref({}, selectedRange, section)}
+              className={`reports-tab ${selectedSection === section ? "reports-tab--active" : ""}`}
+              aria-current={selectedSection === section ? "page" : undefined}
+            >
+              {reportsSectionLabels[section]}
+            </Link>
+          ))}
+        </div>
+      }
+      actions={
+        <ReportsRangeMenu
+          currentRange={selectedRange}
+          currentSection={selectedSection}
+          currentRangeLabel={selectedRangeLabel}
+        />
+      }
     >
       <ReportsStream active="reports" searchParams={resolvedSearchParams} />
     </CloverShell>
