@@ -19720,11 +19720,24 @@ input.transaction-inline-edit--amount::placeholder {
 
   .accounts-currency-filter {
     min-height: 36px;
-    padding-inline: 10px;
+    min-width: 44px;
   }
 
-  .accounts-currency-filter span {
-    display: none;
+  .accounts-currency-filter .currency-selector__button {
+    min-width: 44px;
+    min-height: 36px;
+    padding-inline: 10px;
+    justify-content: center;
+  }
+
+  .accounts-currency-filter .currency-selector__trigger-token,
+  .accounts-currency-filter .currency-selector__trigger-all,
+  .accounts-currency-filter .currency-selector__chevron {
+    display: inline-flex;
+  }
+
+  .accounts-currency-filter .currency-selector__button svg {
+    display: block;
   }
 
   .accounts-toolbar-add,
