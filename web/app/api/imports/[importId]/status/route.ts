@@ -27,11 +27,18 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     const updatedAtMs = importFile.updatedAt ? new Date(importFile.updatedAt).getTime() : 0;
     const createdAtMs = importFile.createdAt ? new Date(importFile.createdAt).getTime() : 0;
     const importAgeMs = Math.max(0, Date.now() - Math.max(updatedAtMs, createdAtMs));
+    const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
+      ? await prisma.accountStatementCheckpoint.findUnique({
+          where: { importFileId: importId },
+        })
+      : null;
+    const checkpointRowCount = Number(statementCheckpoint?.rowCount ?? 0);
     const shouldSelfHeal =
-      (importFile.status === "processing" || importFile.status === "queued") &&
       parsedRowsCountBefore === 0 &&
       confirmedTransactionsCountBefore === 0 &&
-      importAgeMs > 15_000;
+      importAgeMs > 15_000 &&
+      ((importFile.status === "processing" || importFile.status === "queued") ||
+        (importFile.status === "done" && checkpointRowCount === 0));
 
     if (shouldSelfHeal) {
       try {
@@ -49,13 +56,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       }
     }
 
-    let parsedRowsCount = Number(importFile.parsedRowsCount ?? 0);
-    let confirmedTransactionsCount = Number(importFile.confirmedTransactionsCount ?? 0);
-    const statementCheckpoint = (await hasCompatibleTable("AccountStatementCheckpoint"))
-      ? await prisma.accountStatementCheckpoint.findUnique({
-          where: { importFileId: importId },
-        })
-      : null;
+    let parsedRowsCount = Math.max(Number(importFile.parsedRowsCount ?? 0), checkpointRowCount);
+    let confirmedTransactionsCount = Math.max(
+      Number(importFile.confirmedTransactionsCount ?? 0),
+      statementCheckpoint?.status === "reconciled" ? checkpointRowCount : 0
+    );
 
     const confirmationStatus =
       importFile.status === "failed"
