@@ -54,9 +54,17 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                     : "system";
                 const resolved =
                   mode === "system"
-                    ? window.matchMedia("(prefers-color-scheme: dark)").matches
-                      ? "dark"
-                      : "light"
+                    ? (() => {
+                        const lightQuery = window.matchMedia("(prefers-color-scheme: light)");
+                        const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+                        if (lightQuery.matches) {
+                          return "light";
+                        }
+                        if (darkQuery.matches) {
+                          return "dark";
+                        }
+                        return "light";
+                      })()
                     : mode;
                 document.documentElement.dataset.theme = resolved;
                 document.documentElement.style.colorScheme = resolved;

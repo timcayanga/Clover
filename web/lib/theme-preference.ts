@@ -19,7 +19,18 @@ export function getSystemTheme() {
     return "light";
   }
 
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  const lightQuery = window.matchMedia("(prefers-color-scheme: light)");
+
+  if (lightQuery.matches) {
+    return "light";
+  }
+
+  if (darkQuery.matches) {
+    return "dark";
+  }
+
+  return "light";
 }
 
 export function readStoredThemeMode() {

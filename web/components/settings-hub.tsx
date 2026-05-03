@@ -277,11 +277,32 @@ export function SettingsHub({
       return;
     }
 
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const darkMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const lightMediaQuery = window.matchMedia("(prefers-color-scheme: light)");
     const handleChange = () => applyThemeMode("system");
-    mediaQuery.addEventListener("change", handleChange);
+    if ("addEventListener" in darkMediaQuery) {
+      darkMediaQuery.addEventListener("change", handleChange);
+    } else {
+      darkMediaQuery.addListener(handleChange);
+    }
+    if ("addEventListener" in lightMediaQuery) {
+      lightMediaQuery.addEventListener("change", handleChange);
+    } else {
+      lightMediaQuery.addListener(handleChange);
+    }
 
-    return () => mediaQuery.removeEventListener("change", handleChange);
+    return () => {
+      if ("removeEventListener" in darkMediaQuery) {
+        darkMediaQuery.removeEventListener("change", handleChange);
+      } else {
+        darkMediaQuery.removeListener(handleChange);
+      }
+      if ("removeEventListener" in lightMediaQuery) {
+        lightMediaQuery.removeEventListener("change", handleChange);
+      } else {
+        lightMediaQuery.removeListener(handleChange);
+      }
+    };
   }, [themeMode]);
 
   useEffect(() => {

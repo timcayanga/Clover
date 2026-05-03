@@ -38,7 +38,8 @@ export function ThemeSync() {
       applyThemeMode(readStoredThemeMode());
     };
 
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const darkMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const lightMediaQuery = window.matchMedia("(prefers-color-scheme: light)");
     const handleMediaChange = () => {
       syncSystemTheme();
     };
@@ -59,23 +60,33 @@ export function ThemeSync() {
     window.addEventListener("focus", handleFocus);
     window.addEventListener("pageshow", handlePageShow);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    if ("addEventListener" in mediaQuery) {
-      mediaQuery.addEventListener("change", handleMediaChange);
+    if ("addEventListener" in darkMediaQuery) {
+      darkMediaQuery.addEventListener("change", handleMediaChange);
     } else {
-      mediaQuery.addListener(handleMediaChange);
+      darkMediaQuery.addListener(handleMediaChange);
+    }
+    if ("addEventListener" in lightMediaQuery) {
+      lightMediaQuery.addEventListener("change", handleMediaChange);
+    } else {
+      lightMediaQuery.addListener(handleMediaChange);
     }
 
-    const intervalId = window.setInterval(syncSystemTheme, 30000);
+    const intervalId = window.setInterval(syncSystemTheme, 5000);
 
     return () => {
       window.removeEventListener("storage", handleStorage);
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("pageshow", handlePageShow);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      if ("removeEventListener" in mediaQuery) {
-        mediaQuery.removeEventListener("change", handleMediaChange);
+      if ("removeEventListener" in darkMediaQuery) {
+        darkMediaQuery.removeEventListener("change", handleMediaChange);
       } else {
-        mediaQuery.removeListener(handleMediaChange);
+        darkMediaQuery.removeListener(handleMediaChange);
+      }
+      if ("removeEventListener" in lightMediaQuery) {
+        lightMediaQuery.removeEventListener("change", handleMediaChange);
+      } else {
+        lightMediaQuery.removeListener(handleMediaChange);
       }
       window.clearInterval(intervalId);
     };
