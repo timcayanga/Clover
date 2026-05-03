@@ -1341,93 +1341,126 @@ export function ImportFilesModal({
     });
 
     try {
-      const confirmResponse = await fetch(`/api/imports/${importFileId}/confirm`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId: resolvedAccountId }),
-      });
-
-      if (!confirmResponse.ok) {
-        const payload = await confirmResponse.json().catch(() => ({}));
-        const limitPayload = parsePlanLimitPayload(payload) ?? parsePlanLimitMessage(String(payload.error ?? ""), planTier);
-        if (limitPayload) {
-          showPlanLimitNudge(limitPayload);
-        }
-        const confirmError = formatImportFailureMessage(summaryContext.fileName, payload.error || "Unable to confirm this import.");
-        capturePostHogClientEvent("import_failed", {
-          error_stage: "confirm",
-          error_code: String(payload.error ?? "unable_to_confirm"),
-          file_name: summaryContext.fileName,
-          workspace_id: workspaceId || null,
+      for (let stagedAttempt = 0; stagedAttempt < 30; stagedAttempt += 1) {
+        const confirmResponse = await fetch(`/api/imports/${importFileId}/confirm`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accountId: resolvedAccountId }),
         });
-        closeImportAfterError(itemId, "confirm", summaryContext.fileName, confirmError);
-        return { status: "error", importedRows: null, summary: null };
+
+        if (!confirmResponse.ok) {
+          const payload = await confirmResponse.json().catch(() => ({}));
+          const limitPayload = parsePlanLimitPayload(payload) ?? parsePlanLimitMessage(String(payload.error ?? ""), planTier);
+          if (limitPayload) {
+            showPlanLimitNudge(limitPayload);
+          }
+          const confirmError = formatImportFailureMessage(summaryContext.fileName, payload.error || "Unable to confirm this import.");
+          capturePostHogClientEvent("import_failed", {
+            error_stage: "confirm",
+            error_code: String(payload.error ?? "unable_to_confirm"),
+            file_name: summaryContext.fileName,
+            workspace_id: workspaceId || null,
+          });
+          closeImportAfterError(itemId, "confirm", summaryContext.fileName, confirmError);
+          return { status: "error", importedRows: null, summary: null };
+        }
+
+        const confirmed = await confirmResponse.json();
+        if (confirmed.result?.status === "staged") {
+          updateItem(itemId, {
+            status: "importing",
+            confirmationState: "pending",
+            progress: Math.max(92, finalizingProgress),
+            progressLabel: "Finalizing import",
+            targetAccountId: resolvedAccountId,
+          });
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "active",
+            fileName: summaryContext.fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: Math.max(92, finalizingProgress),
+            detail: "Clover is still lining things up",
+            summary: null,
+            errorMessage: null,
+          });
+          await sleep(1000);
+          continue;
+        }
+
+        const importedRows = Number(confirmed.result?.imported ?? 0);
+        const accountBalance = typeof confirmed.result?.accountBalance === "string" ? confirmed.result.accountBalance : null;
+        const insightSummary = confirmed.result?.insightSummary ?? null;
+        const resolvedAccountType = (
+          summaryContext.accountType ??
+          accounts.find((account) => account.id === resolvedAccountId)?.type ??
+          inferAccountTypeFromStatement(summaryContext.institution, summaryContext.accountName, "bank")
+        ) as UploadInsightsSummary["accountType"];
+        const summary = {
+          fileName: summaryContext.fileName,
+          rowsImported: importedRows,
+          accountId: resolvedAccountId,
+          accountName: summaryContext.accountName,
+          institution: summaryContext.institution ?? null,
+          accountNumber: summaryContext.accountNumber ?? null,
+          accountType: resolvedAccountType,
+          balance: accountBalance,
+          optimisticAccountId: summaryContext.optimisticAccountId ?? null,
+          previewTransactions: summaryContext.previewTransactions ?? [],
+          incomeTotal: Number(insightSummary?.incomeTotal ?? 0),
+          expenseTotal: Number(insightSummary?.expenseTotal ?? 0),
+          netTotal: Number(insightSummary?.netTotal ?? 0),
+          topCategoryName: insightSummary?.topCategoryName ?? null,
+          topCategoryAmount: insightSummary?.topCategoryAmount === null ? null : Number(insightSummary?.topCategoryAmount ?? 0),
+          topCategoryShare: insightSummary?.topCategoryShare === null ? null : Number(insightSummary?.topCategoryShare ?? 0),
+          topMerchantName: insightSummary?.topMerchantName ?? null,
+          topMerchantCount: insightSummary?.topMerchantCount === null ? null : Number(insightSummary?.topMerchantCount ?? 0),
+        } satisfies UploadInsightsSummary;
+        updateItem(itemId, {
+          status: "done",
+          confirmationState: "confirmed",
+          error: null,
+          importFileId,
+          targetAccountId: resolvedAccountId,
+          importedRows,
+          progress: 100,
+          progressLabel: "Done",
+        });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "done",
+          fileName: summaryContext.fileName,
+          fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount + 1,
+          progress: 100,
+          detail: "All set",
+          summary,
+          errorMessage: null,
+        });
+        capturePostHogClientEvent("import_confirmed", {
+          workspace_id: workspaceId || null,
+          file_name: summaryContext.fileName,
+          file_type: summaryContext.fileName.split(".").pop()?.toUpperCase() ?? "FILE",
+          transaction_count: importedRows,
+          institution: summaryContext.institution ?? null,
+          amount_total: summary ? summary.incomeTotal + summary.expenseTotal : null,
+          currency: "PHP",
+        });
+        return { status: "done", importedRows, summary };
       }
 
-      const confirmed = await confirmResponse.json();
-      const importedRows = Number(confirmed.result?.imported ?? 0);
-      const accountBalance = typeof confirmed.result?.accountBalance === "string" ? confirmed.result.accountBalance : null;
-      const insightSummary = confirmed.result?.insightSummary ?? null;
-      const resolvedAccountType = (
-        summaryContext.accountType ??
-        accounts.find((account) => account.id === resolvedAccountId)?.type ??
-        inferAccountTypeFromStatement(summaryContext.institution, summaryContext.accountName, "bank")
-      ) as UploadInsightsSummary["accountType"];
-      const summary = insightSummary
-        ? {
-            fileName: summaryContext.fileName,
-            rowsImported: importedRows,
-            accountId: resolvedAccountId,
-            accountName: summaryContext.accountName,
-            institution: summaryContext.institution ?? null,
-            accountNumber: summaryContext.accountNumber ?? null,
-            accountType: resolvedAccountType,
-            balance: accountBalance,
-            optimisticAccountId: summaryContext.optimisticAccountId ?? null,
-            previewTransactions: summaryContext.previewTransactions ?? [],
-            incomeTotal: Number(insightSummary.incomeTotal ?? 0),
-            expenseTotal: Number(insightSummary.expenseTotal ?? 0),
-            netTotal: Number(insightSummary.netTotal ?? 0),
-            topCategoryName: insightSummary.topCategoryName ?? null,
-            topCategoryAmount: insightSummary.topCategoryAmount === null ? null : Number(insightSummary.topCategoryAmount),
-            topCategoryShare: insightSummary.topCategoryShare === null ? null : Number(insightSummary.topCategoryShare),
-            topMerchantName: insightSummary.topMerchantName ?? null,
-            topMerchantCount: insightSummary.topMerchantCount === null ? null : Number(insightSummary.topMerchantCount),
-          }
-        : null;
-      updateItem(itemId, {
-        status: "done",
-        confirmationState: "confirmed",
-        error: null,
-        importFileId,
-        targetAccountId: resolvedAccountId,
-        importedRows,
-        progress: 100,
-        progressLabel: "Done",
-      });
-      publishImportActivity({
-        workspaceId,
-        surface: importActivitySurfaceRef.current,
-        status: "done",
-        fileName: summaryContext.fileName,
-        fileIndex: items.findIndex((item) => item.id === itemId) + 1,
-        fileTotal: items.length,
-        completedFiles: completedFileCount + 1,
-        progress: 100,
-        detail: "All set",
-        summary,
-        errorMessage: null,
-      });
-      capturePostHogClientEvent("import_confirmed", {
-        workspace_id: workspaceId || null,
-        file_name: summaryContext.fileName,
-        file_type: summaryContext.fileName.split(".").pop()?.toUpperCase() ?? "FILE",
-        transaction_count: importedRows,
-        institution: summaryContext.institution ?? null,
-        amount_total: summary ? summary.incomeTotal + summary.expenseTotal : null,
-        currency: "PHP",
-      });
-      return { status: "done", importedRows, summary };
+      closeImportAfterError(
+        itemId,
+        "confirm",
+        summaryContext.fileName,
+        "Clover kept finalizing this import for too long. Try again, or add the account and transactions manually."
+      );
+      return { status: "error", importedRows: null, summary: null };
     } finally {
       window.clearInterval(finalizingTimer);
     }
@@ -1655,6 +1688,37 @@ export function ImportFilesModal({
               errorMessage: null,
             });
           }
+
+          const hasResolvedIdentity = Boolean(
+            processingIdentity?.accountName ||
+              processingIdentity?.institution ||
+              summaryContext.accountName ||
+              summaryContext.institution ||
+              latestResolvedAccountId
+          );
+          const shouldAdvanceToConfirmation =
+            parsedRowsCount > 0 &&
+            hasResolvedIdentity &&
+            Boolean(latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-"));
+          if (shouldAdvanceToConfirmation) {
+            const confirmResult = await confirmItemImport(
+              itemId,
+              importFileId,
+              latestResolvedAccountId,
+              {
+                fileName: summaryContext.fileName,
+                accountName: processingIdentity?.accountName ?? summaryContext.accountName,
+                institution: processingIdentity?.institution ?? summaryContext.institution,
+                accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber,
+                accountType: processingIdentity?.accountType ?? summaryContext.accountType,
+                optimisticAccountId: summaryContext.optimisticAccountId,
+                previewTransactions: summaryContext.previewTransactions,
+              }
+            );
+            if (confirmResult.status !== "error") {
+              return;
+            }
+          }
           await sleep(600);
           continue;
         }
@@ -1662,6 +1726,47 @@ export function ImportFilesModal({
         const hasSettledRows = confirmedTransactionsCount > 0 || parsedRowsCount > 0;
 
         if (hasSettledRows) {
+          const completedAccountId =
+            latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-")
+              ? latestResolvedAccountId
+              : accountId && !accountId.startsWith("optimistic-")
+                ? accountId
+                : processingIdentity?.accountName ||
+                    processingIdentity?.institution ||
+                    summaryContext.accountName ||
+                    summaryContext.institution
+                  ? await ensureTargetAccountId(
+                      processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName,
+                      processingIdentity?.institution ?? summaryContext.institution ?? null,
+                      processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+                      processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
+                    )
+                  : null;
+          const fallbackPreviewTransactions =
+            summaryContext.previewTransactions && summaryContext.previewTransactions.length > 0
+              ? summaryContext.previewTransactions
+              : completedAccountId
+                ? await loadOptimisticPreviewTransactions(
+                    importFileId,
+                    completedAccountId,
+                    processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName ?? "",
+                    processingIdentity?.institution ?? summaryContext.institution ?? null
+                  ).catch(() => [])
+                : [];
+          const completedSummary = buildOptimisticUploadSummary(
+            summaryContext.fileName,
+            confirmedTransactionsCount > 0 ? confirmedTransactionsCount : parsedRowsCount,
+            completedAccountId,
+            processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName ?? "",
+            processingIdentity?.institution ?? summaryContext.institution ?? null,
+            processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+            summaryContext.optimisticAccountId,
+            toBalanceString(statementCheckpoint?.endingBalance),
+            fallbackPreviewTransactions,
+            processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
+          );
+          seedImportedWorkspaceCaches(workspaceId, completedSummary);
+          void onImported(completedSummary);
           updateItem(itemId, {
             status: "done",
             confirmationState: "confirmed",
@@ -1678,7 +1783,7 @@ export function ImportFilesModal({
             completedFiles: completedFileCount + 1,
             progress: 100,
             detail: "All set",
-            summary: null,
+            summary: completedSummary,
             errorMessage: null,
           });
           return;
@@ -2002,7 +2107,7 @@ export function ImportFilesModal({
               syncAccountName,
               syncInstitution,
               resolvedAccountType,
-              null
+              resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null
             ).catch(() => null);
           }
 
@@ -2013,7 +2118,7 @@ export function ImportFilesModal({
               accountName,
               institution,
               resolvedAccountType,
-              null
+              resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null
             );
           }
           if (!resolvedAccountId) {
