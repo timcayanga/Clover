@@ -14589,8 +14589,7 @@ input.transaction-inline-edit--amount::placeholder {
   box-shadow:
     0 20px 48px rgba(15, 23, 42, 0.16),
     0 34px 88px color-mix(in srgb, var(--brand-accent) 14%, transparent),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
-    inset 0 -16px 28px rgba(255, 255, 255, 0.05);
+    inset 0 -16px 28px rgba(255, 255, 255, 0.04);
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
   overflow: hidden;
@@ -14609,8 +14608,7 @@ input.transaction-inline-edit--amount::placeholder {
   box-shadow:
     0 24px 54px rgba(15, 23, 42, 0.18),
     0 36px 102px color-mix(in srgb, var(--brand-accent) 24%, transparent),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
-    inset 0 -18px 32px rgba(255, 255, 255, 0.05);
+    inset 0 -18px 32px rgba(255, 255, 255, 0.04);
 }
 
 .accounts-account-card[data-visual="ledger"] {
@@ -14626,8 +14624,7 @@ input.transaction-inline-edit--amount::placeholder {
   box-shadow:
     0 18px 42px rgba(15, 23, 42, 0.12),
     0 30px 76px color-mix(in srgb, var(--brand-accent) 16%, transparent),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.34),
-    inset 0 -18px 30px rgba(255, 255, 255, 0.16);
+    inset 0 -18px 30px rgba(255, 255, 255, 0.12);
 }
 
 .accounts-account-card[data-visual="cash"] {
@@ -14643,8 +14640,7 @@ input.transaction-inline-edit--amount::placeholder {
   box-shadow:
     0 18px 42px rgba(15, 23, 42, 0.12),
     0 30px 76px color-mix(in srgb, var(--brand-accent) 16%, transparent),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.36),
-    inset 0 -18px 30px rgba(255, 255, 255, 0.16);
+    inset 0 -18px 30px rgba(255, 255, 255, 0.12);
 }
 
 .accounts-account-card[data-visual="investment"] {
@@ -14660,8 +14656,7 @@ input.transaction-inline-edit--amount::placeholder {
   box-shadow:
     0 18px 42px rgba(15, 23, 42, 0.12),
     0 30px 76px color-mix(in srgb, var(--brand-accent) 16%, transparent),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.34),
-    inset 0 -18px 30px rgba(255, 255, 255, 0.14);
+    inset 0 -18px 30px rgba(255, 255, 255, 0.11);
 }
 
 .accounts-account-card__link-overlay {
@@ -14695,15 +14690,18 @@ input.transaction-inline-edit--amount::placeholder {
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(118deg, transparent 0%, transparent 28%, rgba(255, 255, 255, 0.14) 44%, rgba(255, 255, 255, 0.04) 58%, transparent 74%),
-    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.12), transparent 18%);
-  opacity: 0.9;
+    linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.11) 48%, rgba(255, 255, 255, 0.04) 58%, transparent 74%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 18%, rgba(255, 255, 255, 0.06) 52%, transparent 82%),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0 1px, rgba(255, 255, 255, 0) 1px 6px);
+  opacity: 0.72;
+  mix-blend-mode: soft-light;
 }
 
 .accounts-account-card[data-visual="identity"]::after {
   background:
-    linear-gradient(118deg, transparent 0%, transparent 24%, rgba(255, 255, 255, 0.18) 42%, rgba(255, 255, 255, 0.05) 58%, transparent 74%),
-    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.14), transparent 18%);
+    linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.14) 46%, rgba(255, 255, 255, 0.05) 58%, transparent 74%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 18%, rgba(255, 255, 255, 0.08) 52%, transparent 82%),
+    repeating-linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0 1px, rgba(255, 255, 255, 0) 1px 6px);
 }
 
 .accounts-account-card:hover,
@@ -14712,8 +14710,7 @@ input.transaction-inline-edit--amount::placeholder {
   box-shadow:
     0 26px 58px rgba(15, 23, 42, 0.18),
     0 40px 108px color-mix(in srgb, var(--brand-accent) 22%, transparent),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
-    inset 0 -20px 34px rgba(255, 255, 255, 0.08);
+    inset 0 -20px 34px rgba(255, 255, 255, 0.06);
   outline: none;
 }
 
