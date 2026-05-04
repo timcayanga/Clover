@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { CurrencySelector } from "@/components/currency-selector";
 import { SplitBillImportModal } from "@/components/split-bill-import-modal";
 import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
@@ -9,9 +8,10 @@ import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
 type SplitBillPageActionsProps = {
   currencies: string[];
   selectedCurrency: string;
+  onCurrencyChange: (value: string) => void;
 };
 
-export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBillPageActionsProps) {
+export function SplitBillPageActions({ currencies, selectedCurrency, onCurrencyChange }: SplitBillPageActionsProps) {
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [openAddMode, setOpenAddMode] = useState<"manual" | "import" | null>(null);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
@@ -20,7 +20,6 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
   const [isSavingGroup, setIsSavingGroup] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
   const isModalOpen = Boolean(openAddMode || isGroupModalOpen);
-  const router = useRouter();
 
   const closeAddModal = () => {
     setOpenAddMode(null);
@@ -84,9 +83,7 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
         <div className="split-bill-page-actions">
           <CurrencySelector
             value={selectedCurrency === "ALL" ? "all" : selectedCurrency}
-            onChange={(nextCurrency) => {
-              router.push(nextCurrency === "all" ? "/split-bill" : `/split-bill?currency=${encodeURIComponent(nextCurrency)}`);
-            }}
+            onChange={onCurrencyChange}
             options={currencies}
             includeAllOption
             allLabel="All Currencies"

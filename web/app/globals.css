@@ -27208,10 +27208,6 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   gap: 10px;
 }
 
-.split-bill-currency-selector .currency-selector__trigger-all::after {
-  content: " Currencies";
-}
-
 .split-bill-currency-selector .currency-selector__trigger-all {
   min-width: 76px;
 }

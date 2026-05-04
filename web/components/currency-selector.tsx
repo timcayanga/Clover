@@ -282,7 +282,7 @@ export function CurrencySelector({
             {selectedOption.symbol}
           </span>
         ) : (
-          <span className="currency-selector__trigger-all">All</span>
+          <span className="currency-selector__trigger-all">{allLabel}</span>
         )}
         {showChevron ? (
           <span className="currency-selector__chevron" aria-hidden="true">
