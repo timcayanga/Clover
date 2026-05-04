@@ -291,6 +291,10 @@ const isIdentityAccountType = (value: SupportedAccountType) =>
   value === "bank" || value === "wallet" || value === "credit_card" || value === "prepaid";
 
 const getAccountCardVisual = (value: SupportedAccountType) => {
+  if (value === "cash") {
+    return "cash";
+  }
+
   if (value === "investment") {
     return "investment";
   }
@@ -304,6 +308,18 @@ const getAccountCardTitle = (account: Account) => {
   }
 
   return getAccountDisplayName(account);
+};
+
+const getAccountCardEyebrow = (account: Account) => {
+  if (account.type === "cash") {
+    return "Cash";
+  }
+
+  return account.institution?.trim() || getAccountBrand({
+    institution: account.institution,
+    name: account.name,
+    type: account.type,
+  }).label;
 };
 
 const getInvestmentInstitutionPreview = (accounts: Account[]) =>
@@ -2368,11 +2384,6 @@ function AccountsPageContent() {
                     <div className="accounts-group__head">
                       <div>
                         <h5>{group.title}</h5>
-                        <p>
-                          {group.rows.length} {group.itemLabel}
-                          {group.rows.length === 1 ? "" : "s"} ·{" "}
-                          {formatAggregateAmount(group.total, group.rows)}
-                        </p>
                       </div>
                     </div>
 
@@ -2463,6 +2474,7 @@ function AccountsPageContent() {
                           });
                           const cardVisual = getAccountCardVisual(getEffectiveAccountType(account));
                           const balanceValue = Math.abs(value);
+                          const cardEyebrow = getAccountCardEyebrow(account);
                           return (
                             <article
                               key={account.id}
@@ -2487,7 +2499,7 @@ function AccountsPageContent() {
                                       <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
                                       <div>
                                         {cardVisual === "identity" ? (
-                                          <strong>{getAccountCardTitle(account)}</strong>
+                                          <strong>{cardEyebrow}</strong>
                                         ) : (
                                           <>
                                             <span>{formatAccountTypeLabel(getEffectiveAccountType(account))}</span>
