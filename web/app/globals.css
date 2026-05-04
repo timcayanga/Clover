@@ -15094,14 +15094,18 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-detail__header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .accounts-detail__header .actions {
   margin-left: auto;
   flex: 0 0 auto;
+}
+
+.accounts-detail__mobile-back {
+  display: none;
 }
 
 .accounts-detail__hero {
@@ -15112,6 +15116,51 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-detail__hero-card {
   width: min(100%, 360px);
+}
+
+.accounts-detail__identity-edit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  width: min(100%, 640px);
+}
+
+.accounts-detail__identity-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.accounts-detail__identity-field span {
+  color: var(--muted-2);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.accounts-detail__identity-field input {
+  appearance: none;
+  width: 100%;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.38);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  box-shadow: none;
+}
+
+.accounts-detail__identity-field input:focus {
+  outline: none;
+  border-bottom-color: rgba(3, 168, 192, 0.58);
+}
+
+.accounts-detail__identity-status {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.8rem;
+  min-height: 1.2em;
 }
 
 .accounts-detail__panel::before {
@@ -21715,11 +21764,15 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-detail__header {
-    align-items: flex-start;
+    display: none;
   }
 
   .accounts-detail__header .actions {
     align-self: flex-start;
+  }
+
+  .accounts-detail__mobile-back {
+    display: inline-flex;
   }
 
   .accounts-detail__headline {
@@ -21728,6 +21781,12 @@ input.transaction-inline-edit--amount::placeholder {
 
   .accounts-detail__hero-card {
     width: min(100%, 340px);
+  }
+
+  .accounts-detail__identity-edit {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    width: 100%;
   }
 
   .accounts-detail__summary .status-card {

@@ -48,6 +48,7 @@ type Account = {
   workspaceId: string;
   name: string;
   institution: string | null;
+  accountNumber: string | null;
   investmentSubtype: InvestmentSubtype | null;
   investmentSymbol: string | null;
   investmentQuantity: string | null;
@@ -188,6 +189,20 @@ const getInvestmentPreview = (account: Account) =>
   ]
     .filter(Boolean)
     .join(" · ");
+
+const formatCardAccountNumber = (value: string | null | undefined) => {
+  const cleaned = (value ?? "").trim();
+  if (!cleaned) {
+    return "";
+  }
+
+  const digitsOnly = cleaned.replace(/\D/g, "");
+  if (digitsOnly.length >= 4) {
+    return `•••• ${digitsOnly.slice(-4)}`;
+  }
+
+  return cleaned;
+};
 
 function ActionIcon({ name }: { name: "warning" }) {
   if (name === "warning") {
@@ -445,6 +460,8 @@ function AccountDetailPageContent() {
   const [deleteBusy, setDeleteBusy] = useState<false | "activity" | "account">(false);
   const [transactionDeleteTarget, setTransactionDeleteTarget] = useState<Transaction | null>(null);
   const [transactionDeleteBusy, setTransactionDeleteBusy] = useState(false);
+  const [accountEditDraft, setAccountEditDraft] = useState({ name: "", accountNumber: "" });
+  const [accountEditSaveState, setAccountEditSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [investmentEditDraft, setInvestmentEditDraft] = useState<InvestmentEditDraft | null>(null);
   const [investmentAutosaveState, setInvestmentAutosaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [investmentPurchases, setInvestmentPurchases] = useState<InvestmentPurchase[]>([]);
@@ -471,6 +488,19 @@ function AccountDetailPageContent() {
   useEffect(() => {
     document.title = account?.type === "investment" ? "Clover | Asset Details" : "Clover | Account";
   }, [account?.type]);
+
+  useEffect(() => {
+    if (!account) {
+      setAccountEditDraft({ name: "", accountNumber: "" });
+      setAccountEditSaveState("idle");
+      return;
+    }
+
+    setAccountEditDraft({
+      name: account.name ?? "",
+      accountNumber: account.accountNumber ?? "",
+    });
+  }, [account?.accountNumber, account?.id, account?.name]);
 
   useEffect(() => {
     let cancelled = false;
@@ -866,6 +896,7 @@ function AccountDetailPageContent() {
     [account?.balance, account?.source, account?.type, latestCheckpoint, transactions]
   );
   const accountDisplayName = account ? getAccountDisplayName(account) : "Account";
+  const accountCardNumber = account ? formatCardAccountNumber(account.accountNumber) : "";
   const hasVisibleBalance = account?.balance !== null && account?.balance !== undefined && String(account.balance).trim() !== "";
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {
@@ -1229,6 +1260,65 @@ function AccountDetailPageContent() {
   };
 
   useEffect(() => {
+    if (!account || account.type === "investment") {
+      setAccountEditSaveState("idle");
+      return;
+    }
+
+    const nextName = accountEditDraft.name.trim();
+    const nextAccountNumber = accountEditDraft.accountNumber.trim();
+    const currentName = account.name.trim();
+    const currentAccountNumber = (account.accountNumber ?? "").trim();
+    const hasChanges = nextName !== currentName || nextAccountNumber !== currentAccountNumber;
+
+    if (!hasChanges) {
+      setAccountEditSaveState("idle");
+      return;
+    }
+
+    setAccountEditSaveState("saving");
+    const timeout = window.setTimeout(() => {
+      void fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: account.workspaceId,
+          name: nextName || account.name,
+          institution: account.institution,
+          accountNumber: nextAccountNumber || null,
+          type: account.type,
+          currency: account.currency,
+          source: account.source,
+          balance: account.balance,
+        }),
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            throw new Error("Unable to update account details.");
+          }
+
+          const payload = await response.json();
+          if (payload.account) {
+            const nextAccount = payload.account as Account;
+            setAccount(nextAccount);
+            const canonicalPath = getAccountPath(nextAccount);
+            if (canonicalPath !== `/accounts/${accountPathSegment}`) {
+              router.replace(canonicalPath);
+            }
+          }
+
+          setAccountEditSaveState("saved");
+        })
+        .catch((error) => {
+          setAccountEditSaveState("error");
+          setMessage(error instanceof Error ? error.message : "Unable to update account details.");
+        });
+    }, 450);
+
+    return () => window.clearTimeout(timeout);
+  }, [account, accountEditDraft, accountPathSegment, router]);
+
+  useEffect(() => {
     if (!account || account.type !== "investment" || !investmentEditDraft) {
       setInvestmentAutosaveState("idle");
       return;
@@ -1363,6 +1453,12 @@ function AccountDetailPageContent() {
     return <CloverLoadingScreen label="account details" />;
   }
 
+  const mobileBackAction = (
+    <button className="button button-secondary button-small accounts-detail__mobile-back" type="button" onClick={() => router.push("/accounts")}>
+      Back to Accounts
+    </button>
+  );
+
   return (
     <CloverShell
       active="accounts"
@@ -1373,21 +1469,13 @@ function AccountDetailPageContent() {
           ? "View the full history for a single investment asset."
           : "View the full statement history for a single account."
       }
+      actions={mobileBackAction}
       hideCompactBarKickerAndSubtitleOnMobile
       showTopbar={false}
     >
       <section className="panel accounts-detail__panel" style={accountBrandStyles}>
         <div className="accounts-detail__header">
-          <div className="accounts-detail__headline">
-            <div>
-              <p className="eyebrow">{account?.type === "investment" ? "Asset details" : "Account details"}</p>
-              <h2>{accountDisplayName}</h2>
-              <p className="panel-muted">
-                {account ? `${accountBrand.label} · ${formatAccountType(account.type)} · ${account.currency} · ${account.source}` : message}
-              </p>
-            </div>
-          </div>
-          <div className="actions">
+          <div className="actions accounts-detail__desktop-actions">
             <button className="button button-secondary" type="button" onClick={() => router.push("/accounts")}>
               Back to Accounts
             </button>
@@ -1417,11 +1505,15 @@ function AccountDetailPageContent() {
                     <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
                     <div>
                       {getAccountCardVisual(account.type) === "identity" ? (
-                        <strong>{getAccountCardTitle(account)}</strong>
+                        <>
+                          <strong>{getAccountCardTitle(account)}</strong>
+                          {accountCardNumber ? <span>{accountCardNumber}</span> : null}
+                        </>
                       ) : (
                         <>
                           <span>{formatAccountType(account.type)}</span>
                           <strong>{getAccountCardTitle(account)}</strong>
+                          {accountCardNumber ? <span>{accountCardNumber}</span> : null}
                         </>
                       )}
                       {account.type === "investment" ? <span>{getInvestmentPreview(account) || accountBrand.label}</span> : null}
@@ -1441,6 +1533,36 @@ function AccountDetailPageContent() {
                 </div>
               </div>
             </article>
+
+            {account.type !== "investment" ? (
+              <div className="accounts-detail__identity-edit">
+                <label className="accounts-detail__identity-field">
+                  <span>Name</span>
+                  <input
+                    value={accountEditDraft.name}
+                    onChange={(event) => setAccountEditDraft((current) => ({ ...current, name: event.target.value }))}
+                    placeholder="Account name"
+                  />
+                </label>
+                <label className="accounts-detail__identity-field">
+                  <span>Account number</span>
+                  <input
+                    value={accountEditDraft.accountNumber}
+                    onChange={(event) => setAccountEditDraft((current) => ({ ...current, accountNumber: event.target.value }))}
+                    placeholder="Add account number"
+                  />
+                </label>
+                <span className="accounts-detail__identity-status" aria-live="polite">
+                  {accountEditSaveState === "saving"
+                    ? "Saving..."
+                    : accountEditSaveState === "saved"
+                      ? "Saved"
+                      : accountEditSaveState === "error"
+                        ? "Needs attention"
+                        : ""}
+                </span>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
