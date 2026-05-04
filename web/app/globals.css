@@ -14416,16 +14416,48 @@ input.transaction-inline-edit--amount::placeholder {
   position: relative;
   display: grid;
   gap: 10px;
-  padding: 10px;
-  border-radius: 16px;
+  padding: 12px;
+  border-radius: 24px;
   border: 1px solid var(--stroke);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 252, 253, 0.9)),
     var(--brand-soft, rgba(255, 255, 255, 0.9));
-  box-shadow: var(--shadow-soft);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
   overflow: hidden;
+}
+
+.accounts-account-card[data-visual="identity"] {
+  border-color: color-mix(in srgb, var(--brand-accent) 34%, white);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--brand-accent) 78%, white), color-mix(in srgb, var(--brand-accent) 92%, black 8%)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.02));
+  box-shadow:
+    0 18px 40px color-mix(in srgb, var(--brand-accent) 20%, transparent),
+    0 14px 28px rgba(15, 23, 42, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset 0 -18px 28px rgba(255, 255, 255, 0.04);
+}
+
+.accounts-account-card[data-visual="ledger"] {
+  border-color: color-mix(in srgb, var(--brand-accent) 18%, white);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(249, 252, 253, 0.94)),
+    color-mix(in srgb, var(--brand-soft, rgba(255,255,255,0.95)) 90%, white);
+  box-shadow:
+    0 12px 26px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.accounts-account-card[data-visual="investment"] {
+  border-color: color-mix(in srgb, var(--brand-accent) 24%, white);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 252, 248, 0.94)),
+    color-mix(in srgb, var(--brand-soft, rgba(255,255,255,0.95)) 90%, white);
+  box-shadow:
+    0 12px 28px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
 
 .accounts-account-card__link-overlay {
@@ -14444,26 +14476,26 @@ input.transaction-inline-edit--amount::placeholder {
   position: relative;
   z-index: 2;
   display: grid;
-  gap: 10px;
+  gap: 12px;
   pointer-events: none;
 }
 
 .accounts-account-card::before {
   content: "";
   position: absolute;
-  inset: 0 0 auto 0;
-  height: 4px;
-  background: var(--brand-accent, transparent);
-  opacity: 0.78;
-  border-radius: 16px 16px 0 0;
+  inset: 0;
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, 0.24), transparent 24%, transparent 72%, rgba(255, 255, 255, 0.14)),
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.2), transparent 34%);
+  opacity: 0.9;
   pointer-events: none;
 }
 
 .accounts-account-card:hover,
 .accounts-account-card:focus-visible {
-  transform: translateY(-1px);
-  border-color: rgba(3, 168, 192, 0.22);
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.08);
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--brand-accent) 28%, white);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
   outline: none;
 }
 
@@ -14484,19 +14516,19 @@ input.transaction-inline-edit--amount::placeholder {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
 }
 
 .accounts-account-card__brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
 .accounts-account-card__brand strong {
   display: block;
-  font-size: 0.9rem;
+  font-size: 0.96rem;
   letter-spacing: -0.03em;
 }
 
@@ -14506,6 +14538,8 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--muted);
   font-size: 0.72rem;
   line-height: 1.25;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .accounts-account-card__actions {
@@ -14524,10 +14558,23 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-account-card__amount {
-  font-size: 1.1rem;
+  font-size: 1.42rem;
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 1;
+}
+
+.accounts-account-card[data-visual="identity"] .accounts-account-card__brand strong,
+.accounts-account-card[data-visual="identity"] .accounts-account-card__brand span,
+.accounts-account-card[data-visual="identity"] .accounts-account-card__amount.is-asset,
+.accounts-account-card[data-visual="identity"] .accounts-account-card__amount.is-liability,
+.accounts-account-card[data-visual="identity"] .accounts-card-chevron,
+.accounts-account-card[data-visual="identity"] .accounts-account-card__status-note {
+  color: #ffffff;
+}
+
+.accounts-account-card[data-visual="identity"] .accounts-account-card__brand span {
+  opacity: 0.88;
 }
 
 .accounts-account-card__amount.is-asset {
@@ -14540,43 +14587,43 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-account-card__balance-row {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 10px;
   min-width: 0;
 }
 
-.accounts-account-card__balance-meta {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex: none;
-}
-
-.accounts-account-card__balance-pill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  font-size: 0.62rem;
-  font-weight: 600;
-  border: 1px solid var(--stroke);
-  background: rgba(255, 255, 255, 0.9);
+.accounts-account-card__status-note {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--muted);
 }
 
-.accounts-account-card__balance-pill.is-good {
-  color: #166534;
-  background: rgba(22, 163, 74, 0.08);
-  border-color: rgba(22, 163, 74, 0.18);
+.accounts-card-chevron {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.14);
+  color: #1c3048;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  line-height: 1;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
-.accounts-account-card__balance-pill.is-danger {
-  color: var(--bad);
-  background: rgba(198, 79, 110, 0.08);
-  border-color: rgba(198, 79, 110, 0.18);
+.accounts-account-card[data-visual="ledger"] .accounts-card-chevron,
+.accounts-account-card[data-visual="investment"] .accounts-card-chevron {
+  border-color: rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.92);
+  color: #20334b;
 }
 
 .accounts-brand-mark {
@@ -21233,7 +21280,7 @@ input.transaction-inline-edit--amount::placeholder {
   .accounts-account-card {
     padding: 8px;
     gap: 8px;
-    border-radius: 14px;
+    border-radius: 18px;
   }
 
   .accounts-account-card__head {
@@ -21245,22 +21292,24 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-account-card__brand strong {
-    font-size: 0.76rem;
+    font-size: 0.82rem;
   }
 
   .accounts-account-card__brand span {
     margin-top: 1px;
-    font-size: 0.62rem;
+    font-size: 0.6rem;
   }
 
   .accounts-account-card__amount {
-    font-size: 0.94rem;
+    font-size: 1.02rem;
   }
 
-  .accounts-account-card__balance-pill {
-    min-height: 16px;
-    padding: 0 4px;
-    font-size: 0.56rem;
+  .accounts-card-chevron {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    font-size: 1.05rem;
   }
 
   .accounts-row-button {

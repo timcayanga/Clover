@@ -280,6 +280,32 @@ const formatAccountAmount = (value: number, currency?: string | null) => formatC
 const getCurrencyCodes = (accounts: Array<{ currency: string }>) =>
   Array.from(new Set(accounts.map((account) => formatCurrencyCode(account.currency))));
 
+const isIdentityAccountType = (value: SupportedAccountType) =>
+  value === "bank" || value === "wallet" || value === "credit_card" || value === "prepaid";
+
+const getAccountCardVisual = (value: SupportedAccountType) => {
+  if (value === "investment") {
+    return "investment";
+  }
+
+  return isIdentityAccountType(value) ? "identity" : "ledger";
+};
+
+const getAccountCardTitle = (account: Account) => {
+  if (account.type === "cash") {
+    return "Cash";
+  }
+
+  return account.name;
+};
+
+const getInvestmentInstitutionPreview = (accounts: Account[]) =>
+  accounts
+    .map((account) => account.investmentSymbol?.trim() || account.name.trim())
+    .filter(Boolean)
+    .slice(0, 4)
+    .join(", ");
+
 const formatAggregateAmount = (value: number, accounts: Array<{ currency: string }>) => {
   const currencies = getCurrencyCodes(accounts);
   if (currencies.length === 0) {
@@ -2359,6 +2385,7 @@ function AccountsPageContent() {
                                   ["--brand-accent" as string]: accountBrand.accent,
                                   ["--brand-soft" as string]: accountBrand.background,
                                 }}
+                                data-visual="investment"
                               >
                                 <button
                                   className="accounts-account-card__link-overlay"
@@ -2373,14 +2400,12 @@ function AccountsPageContent() {
                                       <AccountBrandMark accountBrand={accountBrand} label={account.institution} />
                                       <div>
                                         <strong>{account.institution}</strong>
-                                        <span>
-                                          {account.accounts.length} asset{account.accounts.length === 1 ? "" : "s"}
-                                        </span>
+                                        <span>{getInvestmentInstitutionPreview(account.accounts)}</span>
                                       </div>
                                     </div>
                                     <div className="accounts-account-card__actions">
                                       <button
-                                        className="button button-secondary button-small accounts-row-button"
+                                        className="accounts-card-chevron"
                                         type="button"
                                         onClick={(event) => {
                                           event.stopPropagation();
@@ -2388,7 +2413,7 @@ function AccountsPageContent() {
                                         }}
                                         aria-label={`Open ${account.institution} institution details`}
                                       >
-                                        <span aria-hidden="true">&gt;</span>
+                                        <span aria-hidden="true">›</span>
                                       </button>
                                     </div>
                                   </div>
@@ -2397,9 +2422,6 @@ function AccountsPageContent() {
                                     <div className="accounts-account-card__balance-row">
                                       <div className="accounts-account-card__amount is-asset">
                                         {formatAccountAmount(Math.abs(parseAmount(account.balance)), account.currency)}
-                                      </div>
-                                      <div className="accounts-account-card__balance-meta">
-                                        <span className="accounts-account-card__balance-pill is-neutral">Tracked</span>
                                       </div>
                                     </div>
                                   </div>
@@ -2410,7 +2432,6 @@ function AccountsPageContent() {
 
                           const value = parseAmount(account.balance);
                           const isLiability = isLiabilityAccountType(getEffectiveAccountType(account));
-                          const isSpendable = isSpendableAccountType(getEffectiveAccountType(account));
                           const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}::${String(
                             account.type ?? ""
                           ).trim().toLowerCase()}`;
@@ -2429,6 +2450,7 @@ function AccountsPageContent() {
                             name: account.name,
                             type: getEffectiveAccountType(account),
                           });
+                          const cardVisual = getAccountCardVisual(getEffectiveAccountType(account));
                           const balanceValue = Math.abs(value);
                           return (
                             <article
@@ -2439,6 +2461,7 @@ function AccountsPageContent() {
                                 ["--brand-soft" as string]: accountBrand.background,
                               }}
                               data-state={isDeleting ? "deleting" : undefined}
+                              data-visual={cardVisual}
                             >
                               <button
                                 className="accounts-account-card__link-overlay"
@@ -2452,13 +2475,16 @@ function AccountsPageContent() {
                                     <div className="accounts-account-card__brand">
                                       <AccountBrandMark accountBrand={accountBrand} label={account.name} />
                                       <div>
-                                        <strong>{account.name}</strong>
-                                      <span>
-                                        {accountBrand.label}
-                                        {account.institution && account.institution !== accountBrand.label ? ` · ${account.institution}` : ""}
-                                      </span>
+                                        {cardVisual === "identity" ? (
+                                          <strong>{getAccountCardTitle(account)}</strong>
+                                        ) : (
+                                          <>
+                                            <span>{formatAccountTypeLabel(getEffectiveAccountType(account))}</span>
+                                            <strong>{getAccountCardTitle(account)}</strong>
+                                          </>
+                                        )}
+                                      </div>
                                     </div>
-                                  </div>
                                   <div className="accounts-account-card__actions">
                                     {warning ? (
                                       <span className="accounts-warning-wrap">
@@ -2480,7 +2506,7 @@ function AccountsPageContent() {
                                       </span>
                                     ) : null}
                                     <button
-                                      className="button button-secondary button-small accounts-row-button"
+                                      className="accounts-card-chevron"
                                       type="button"
                                       onClick={(event) => {
                                         event.stopPropagation();
@@ -2488,7 +2514,7 @@ function AccountsPageContent() {
                                       }}
                                       aria-label={`Open ${account.name} drawer`}
                                     >
-                                      <span aria-hidden="true">&gt;</span>
+                                      <span aria-hidden="true">›</span>
                                     </button>
                                   </div>
                                 </div>
@@ -2498,17 +2524,8 @@ function AccountsPageContent() {
                                     <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
                                       {isLoading ? "Loading" : formatAccountAmount(balanceValue, account.currency)}
                                     </div>
-                                    <div className="accounts-account-card__balance-meta">
-                                      {isDeleting ? (
-                                        <span className="accounts-account-card__balance-pill is-neutral">Deleting</span>
-                                      ) : isLoading ? (
-                                        <span className="accounts-account-card__balance-pill is-neutral">Loading</span>
-                                      ) : (
-                                        <span className={`accounts-account-card__balance-pill is-${isLiability ? "danger" : isSpendable ? "good" : "neutral"}`}>
-                                          {isLiability ? "Outstanding" : isSpendable ? "Spendable" : "Tracked"}
-                                        </span>
-                                      )}
-                                    </div>
+                                    {isDeleting ? <div className="accounts-account-card__status-note">Deleting</div> : null}
+                                    {!isDeleting && isLoading ? <div className="accounts-account-card__status-note">Loading</div> : null}
                                   </div>
                                 </div>
                               </div>
