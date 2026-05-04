@@ -22,6 +22,7 @@ type CurrencySelectorProps = {
   disabled?: boolean;
   menuAlignment?: "start" | "end";
   showGroupedSections?: boolean;
+  showChevron?: boolean;
 };
 
 type CurrencySectionProps = {
@@ -80,6 +81,7 @@ export function CurrencySelector({
   disabled = false,
   menuAlignment = "start",
   showGroupedSections = false,
+  showChevron = true,
 }: CurrencySelectorProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -143,7 +145,7 @@ export function CurrencySelector({
     <div ref={rootRef} className={`currency-selector ${className ?? ""}`.trim()}>
       <button
         type="button"
-        className={`currency-selector__button ${compact ? "currency-selector__button--compact" : ""} ${buttonClassName ?? ""}`.trim()}
+        className={`currency-selector__button ${compact ? "currency-selector__button--compact" : ""} ${!showChevron ? "currency-selector__button--no-chevron" : ""} ${buttonClassName ?? ""}`.trim()}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -162,11 +164,13 @@ export function CurrencySelector({
         ) : (
           <span className="currency-selector__trigger-all">All</span>
         )}
-        <span className="currency-selector__chevron" aria-hidden="true">
-          <svg viewBox="0 0 20 20" fill="none">
-            <path d="M5 7.5 10 12.5 15 7.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
-          </svg>
-        </span>
+        {showChevron ? (
+          <span className="currency-selector__chevron" aria-hidden="true">
+            <svg viewBox="0 0 20 20" fill="none">
+              <path d="M5 7.5 10 12.5 15 7.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+            </svg>
+          </span>
+        ) : null}
       </button>
 
       {open ? (

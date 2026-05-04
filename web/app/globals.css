@@ -13836,6 +13836,10 @@ input.transaction-inline-edit--amount::placeholder {
   min-height: 34px;
 }
 
+.currency-selector__button--no-chevron {
+  padding-right: 10px;
+}
+
 .currency-selector__trigger-token,
 .currency-selector__trigger-all {
   display: inline-flex;

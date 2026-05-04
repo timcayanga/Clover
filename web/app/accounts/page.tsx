@@ -2266,6 +2266,7 @@ function AccountsPageContent() {
             menuClassName="accounts-currency-filter__menu"
             optionClassName="accounts-currency-filter__option"
             menuAlignment="end"
+            showChevron={false}
           />
           <button className="button button-primary button-small accounts-toolbar-add" type="button" onClick={openAddAccount}>
             <ActionIcon name="plus" />

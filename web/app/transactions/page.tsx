@@ -4475,6 +4475,7 @@ function TransactionsPageContent() {
         menuClassName="transactions-currency-filter__menu"
         optionClassName="transactions-currency-filter__option"
         menuAlignment="end"
+        showChevron={false}
       />
 
       <button
