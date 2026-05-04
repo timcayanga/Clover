@@ -12003,6 +12003,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .manual-form-layout--compact {
+  /* Keep the add-transaction flow stacked vertically in the compact modal. */
   display: flex;
   flex-direction: column;
   gap: 12px;
