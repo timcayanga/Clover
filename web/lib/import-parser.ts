@@ -144,6 +144,13 @@ const splitLine = (line: string, delimiter: string) => {
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
+const splitStatementLines = (text: string) =>
+  text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+
 const normalizeCurrencyCode = (value?: string | null) => {
   if (!value) {
     return null;
@@ -268,6 +275,19 @@ const normalizeAccountNumberCandidate = (value?: string | null) => {
 
   const digits = value.replace(/\D/g, "");
   return digits.length >= 8 && digits.length <= 16 ? digits : null;
+};
+
+const preserveAccountNumberDisplayCandidate = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = normalizeWhitespace(value).replace(/\s+/g, "");
+  if (!/[0-9*]/.test(normalized)) {
+    return null;
+  }
+
+  return normalized;
 };
 
 const formatSimpleBankAccountName = (institution: string, accountNumber?: string | null) => {
@@ -2511,7 +2531,11 @@ const finalizeMetrobankAccountName = (metadata: DetectedStatementMetadata, lines
 const detectBdoAccountNumberFromText = (text: string) => {
   const normalized = normalizeBdoText(text);
   const compact = compactWhitespace(normalized);
-  const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
   const accountLabelPattern =
     /(?:ACCOUNT\s*(?:NBR|NO\.?|NUMBER|#)|ACCT\s*(?:NBR|NO\.?|NUMBER|#)|A\/C\s*(?:NBR|NO\.?|NUMBER|#)|CARD\s*(?:NO\.?|NUMBER|#)|ACCOUNT\s+SUMMARY|NO)\s*[:\-]?\s*(\d[\d\s-]{6,})/i;
   const bdoNumberPattern = /\b(?:\d{3}[-\s]?\d{4}[-\s]?\d{3}[-\s]?\d{2}|\d{4}[-\s]?\d{4}[-\s]?\d{4})\b/;
@@ -2753,7 +2777,11 @@ const bdoStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     return null;
   }
 
-  const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
   const accountNumberLineIndex = lines.findIndex((line) => /ACCOUNT\s+(?:NBR|NO\.?|NUMBER|#)|ACCOUNT\s+SUMMARY/i.test(line));
   const accountNumber =
     extractFormattedAccountNumberFromLines(lines) ??
@@ -3338,7 +3366,11 @@ const metrobankSavingsStatementMetadata = (text: string): DetectedStatementMetad
     return null;
   }
 
-  const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
   const topAccountHolderLine = lines.find((line, index) => index > 0 && index < 8 && isMetrobankHumanName(line)) ?? null;
   const accountLine = lines.find((line) => /ACCOUNT\s+NUMBER/i.test(line)) ?? normalized;
   const accountLineIndex = lines.findIndex((line) => /ACCOUNT\s+NUMBER/i.test(line));
@@ -5876,14 +5908,25 @@ const parseMayaCreditStatementMetadata = (text: string, context: ImportParseCont
     return null;
   }
 
-  const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const normalized = text.replace(/\u00a0/g, " ");
+  const lines = splitStatementLines(text);
   const product = /\bMAYA\s+EASY\s+CREDIT\b/i.test(normalized) ? "Maya Easy Credit" : "Maya Credit";
   const accountNumber =
+    preserveAccountNumberDisplayCandidate(context.accountNumber) ??
     normalizeAccountNumberCandidate(context.accountNumber) ??
+    preserveAccountNumberDisplayCandidate(normalized.match(/\bAccount\s+((?:\d[\d-]{8,}\d|\*+[\d*]{4,}))\b/i)?.[1] ?? null) ??
     normalizeAccountNumberCandidate(normalized.match(/\bAccount\s+((?:\d[\d-]{8,}\d))\b/i)?.[1] ?? null) ??
+    extractFormattedAccountNumberFromLines(lines) ??
     detectAccountNumberFromText(normalized);
+  const accountNumberIndex = lines.findIndex((line) => /account\s+number/i.test(line));
+  const accountHolderLine =
+    extractAccountHolderNameFromLines(lines.slice(0, Math.min(lines.length, 16))) ??
+    extractAccountHolderNameFromLines(lines.slice(Math.max(0, accountNumberIndex - 8), Math.min(lines.length, accountNumberIndex + 2))) ??
+    extractAccountHolderNameFromLines(lines, accountNumberIndex) ??
+    null;
   const accountName =
     context.accountName?.trim() ||
+    accountHolderLine ||
     (accountNumber ? `${product} ${accountNumber.slice(-4)}` : product);
   const coverageMatch = normalized.match(
     /Coverage Period\s+((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*\s+\d{1,2},\s+\d{4})\s*-\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*\s+\d{1,2},\s+\d{4})/i
@@ -5903,7 +5946,7 @@ const parseMayaCreditStatementMetadata = (text: string, context: ImportParseCont
     institution: context.institution?.trim() || "Maya",
     accountNumber,
     accountName,
-    accountType: inferAccountTypeFromStatement("Maya", accountName, "credit_card"),
+    accountType: "credit_card" as ImportedAccountType,
     openingBalance: previousBalance,
     endingBalance: totalAmountDue,
     paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
@@ -6110,11 +6153,24 @@ const parseGoTymeStatementMetadata = (text: string, context: ImportParseContext 
     return null;
   }
 
-  const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const normalized = text.replace(/\u00a0/g, " ");
+  const lines = splitStatementLines(text);
   const accountNumber =
+    preserveAccountNumberDisplayCandidate(context.accountNumber) ??
     normalizeAccountNumberCandidate(context.accountNumber) ??
+    preserveAccountNumberDisplayCandidate(normalized.match(/Account\s+Number\s*:\s*(\d{12})(?:\s|,|$)/i)?.[1] ?? null) ??
+    normalizeAccountNumberCandidate(normalized.match(/Account\s+Number\s*:\s*(\d{12})(?:\s|,|$)/i)?.[1] ?? null) ??
+    preserveAccountNumberDisplayCandidate(normalized.match(/Account\s+Number\s*:\s*((?:\d[\d\s-]{6,}\d|\*+[\d*]{4,}))/i)?.[1] ?? null) ??
     normalizeAccountNumberCandidate(normalized.match(/Account\s+Number\s*:\s*((?:\d[\d\s-]{6,}\d))/i)?.[1] ?? null) ??
+    extractFormattedAccountNumberFromLines(lines) ??
     detectAccountNumberFromText(normalized);
+  const accountNumberIndex = lines.findIndex((line) => /account\s+number/i.test(line));
+  const accountHolderLine =
+    lines.slice(0, Math.min(lines.length, 16)).find((line) => /^[A-Z][A-Z .'\-]+$/.test(line) && !/\d/.test(line) && !/\b(STATEMENT|SUMMARY|GOTYME|BANK|ACCOUNT|REQUEST|DOC|PERIOD|ADDRESS|SUMMARY|CITY|PROVINCE|BARANGAY|BRGY)\b/i.test(line)) ??
+    extractAccountHolderNameFromLines(lines.slice(0, Math.min(lines.length, 16))) ??
+    extractAccountHolderNameFromLines(lines.slice(Math.max(0, accountNumberIndex - 8), Math.min(lines.length, accountNumberIndex + 2))) ??
+    extractAccountHolderNameFromLines(lines, accountNumberIndex) ??
+    null;
   const periodMatch =
     normalized.match(
       /Period\s*:\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*\s+\d{1,2},?\s+\d{4})\s*[-–—]\s*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[A-Za-z]*\s+\d{1,2},?\s+\d{4})/i
@@ -6130,6 +6186,7 @@ const parseGoTymeStatementMetadata = (text: string, context: ImportParseContext 
     parseMoney(normalized.match(/Closing\s+balance\s+PHP\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ?? null;
   const accountName =
     context.accountName?.trim() ||
+    accountHolderLine ||
     (accountNumber ? `GoTyme ${accountNumber.slice(-4)}` : "GoTyme");
 
   return {
@@ -6297,7 +6354,7 @@ const parseGoTymeImportText = (text: string, context: ImportParseContext = {}) =
       /^Page \d+ of \d+/i.test(line) ||
       /^Request Date:/i.test(line)
     ) {
-      break;
+      continue;
     }
 
     if (/^\d{2}-\d{2}-\d{4}\b/.test(line)) {
@@ -6326,7 +6383,31 @@ const parseGoTymeImportText = (text: string, context: ImportParseContext = {}) =
     )
     .filter(Boolean) as ParsedImportRow[];
 
-  return rows.length > 0 ? { metadata, rows } : { metadata, rows: [] };
+  const firstRawPayload =
+    rows[0]?.rawPayload && typeof rows[0].rawPayload === "object" ? (rows[0].rawPayload as Record<string, unknown>) : null;
+  const lastRawPayload =
+    rows.at(-1)?.rawPayload && typeof rows.at(-1).rawPayload === "object"
+      ? (rows.at(-1).rawPayload as Record<string, unknown>)
+      : null;
+  const firstCredit = parseMoney(typeof firstRawPayload?.creditText === "string" ? firstRawPayload.creditText : null);
+  const firstDebit = parseMoney(typeof firstRawPayload?.debitText === "string" ? firstRawPayload.debitText : null);
+  const firstBalance = parseMoney(typeof firstRawPayload?.balanceText === "string" ? firstRawPayload.balanceText : null);
+  const endingBalance =
+    metadata.endingBalance ??
+    (typeof lastRawPayload?.balance === "number" ? lastRawPayload.balance : null) ??
+    getTrailingBalanceFromParsedRows(rows);
+  const openingBalance =
+    metadata.openingBalance ??
+    (typeof firstBalance === "number" && typeof firstCredit === "number" && typeof firstDebit === "number"
+      ? firstBalance - firstCredit + firstDebit
+      : null);
+  const enrichedMetadata = {
+    ...metadata,
+    openingBalance,
+    endingBalance,
+  };
+
+  return rows.length > 0 ? { metadata: enrichedMetadata, rows } : { metadata: enrichedMetadata, rows: [] };
 };
 
 const genericStatementDateStartPattern = new RegExp(
@@ -6733,8 +6814,8 @@ const parseMayaSavingsStatementMetadata = (text: string, context: ImportParseCon
     return null;
   }
 
-  const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
-  const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const normalized = text.replace(/\u00a0/g, " ");
+  const lines = splitStatementLines(text);
 
   const accountLine =
     lines.find((line) => /account\s+name/i.test(line)) ??
@@ -6743,29 +6824,91 @@ const parseMayaSavingsStatementMetadata = (text: string, context: ImportParseCon
     normalized;
 
   const accountNumber =
+    preserveAccountNumberDisplayCandidate(context.accountNumber) ??
     normalizeAccountNumberCandidate(context.accountNumber) ??
+    normalized.match(/\b(\d{4}\s+\d{4}\s+\d{4})\b/)?.[1] ??
+    preserveAccountNumberDisplayCandidate(accountLine.match(/account\s+number\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i)?.[1]) ??
     normalizeAccountNumberCandidate(accountLine.match(/account\s+number\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i)?.[1]) ??
+    preserveAccountNumberDisplayCandidate(accountLine.match(/\b(?:\d[\d\s-]{10,}\d)\b/g)?.[0]) ??
     normalizeAccountNumberCandidate(accountLine.match(/\b(?:\d[\d\s-]{10,}\d)\b/g)?.[0]) ??
+    preserveAccountNumberDisplayCandidate(accountLine.match(/\b(\d{4}\s+\d{4}\s+\d{4})\b/)?.[1] ?? null) ??
+    extractFormattedAccountNumberFromLines(lines) ??
     detectAccountNumberFromText(normalized);
 
+  const mayaSavingsHolderCandidate = normalizeWhitespace(
+    normalized.match(/(?:Consumer Savings|Maya Savings)[\s\S]{0,220}?\b([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,4})\s+0\.00\s+PHP\s+0\.00\s+PHP\s+3\.5%/i)?.[1] ?? ""
+  )
+    .replace(/^PHP\s+/i, "")
+    .trim();
+  const mayaSavingsAccountNameFallback =
+    mayaSavingsHolderCandidate ||
+    accountLine.match(/^(.*?)\s+\d[\d\s-]{6,}\d\s+Maya Savings/i)?.[1]?.trim() ||
+    accountLine.match(/^(.*?)\s+Maya Savings/i)?.[1]?.trim() ||
+    extractAccountHolderNameFromLines(lines, lines.findIndex((line) => /account\s+number/i.test(line))) ||
+    "Maya Savings";
   const accountName =
     lines.find((line) => /account\s+name\s*:/i.test(line))?.match(/account\s+name\s*:\s*(.+)$/i)?.[1]?.trim() ??
-    (accountNumber ? "Maya Savings" : "Maya Savings");
+    mayaSavingsAccountNameFallback;
 
-  const summaryStart = parseMoney(normalized.match(/starting\s+balance\s+php\s+([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
-  const summaryEnd = parseMoney(normalized.match(/ending\s+balance\s+php\s+([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+  const summaryLine = lines.find((line) => /account\s+summary/i.test(line)) ?? null;
+  const summaryIndex = lines.findIndex((line) => /account\s+summary/i.test(line));
+  const summaryEndIndex =
+    summaryIndex >= 0
+      ? lines.findIndex((line, index) => index > summaryIndex && /transaction\s+details/i.test(line))
+      : -1;
+  const summaryBlock =
+    summaryIndex >= 0
+      ? lines.slice(summaryIndex + 1, summaryEndIndex > summaryIndex ? summaryEndIndex : Math.min(lines.length, summaryIndex + 8))
+      : [];
+  const summaryBlockNumbers = summaryBlock.flatMap((line) => line.match(/[0-9][0-9,]*\.\d{2}/g) ?? []);
+  const summaryLineNumbers = summaryLine?.match(/[0-9][0-9,]*\.\d{2}/g) ?? null;
+  const activitySectionIndex = lines.findIndex((line) => /(?:transaction\s+details|transactions?)/i.test(line));
+  const activitySectionOpeningBalance =
+    activitySectionIndex >= 0
+      ? lines
+          .slice(0, activitySectionIndex)
+          .flatMap((line) => line.match(/[0-9][0-9,]*\.\d{2}/g) ?? [])
+          [0] ?? null
+      : null;
+  const activitySectionEndingBalance =
+    activitySectionIndex >= 0
+      ? lines
+          .slice(0, activitySectionIndex)
+          .flatMap((line) => line.match(/[0-9][0-9,]*\.\d{2}/g) ?? [])
+          .at(-1) ?? null
+      : null;
+  const summaryStart =
+    parseMoney(summaryBlockNumbers[0] ?? null) ??
+    parseMoney(activitySectionOpeningBalance) ??
+    parseMoney(normalized.match(/beginning\s+balance\s+php\s+([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(normalized.match(/starting\s+balance\s+php\s+([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(summaryLineNumbers?.[0] ?? null);
+  const summaryEnd =
+    parseMoney(summaryBlockNumbers.at(-1) ?? null) ??
+    parseMoney(activitySectionEndingBalance) ??
+    parseMoney(normalized.match(/ending\s+balance\s+php\s+([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(summaryLineNumbers?.at(-1) ?? null);
   const coverageLine = lines.find((line) => /statement\s+coverage\s+period/i.test(line)) ?? null;
   const coverageDates = coverageLine?.match(/(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})/g) ?? null;
   const statementDateLine = lines.find((line) => /statement\s+date/i.test(line)) ?? null;
   const statementDateCandidates = statementDateLine?.match(/(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}-\d{2}-\d{2})/g) ?? null;
-  const startDate = parseMayaSavingsDateText(coverageDates?.[0] ?? null) ?? parseMayaSavingsDateText(statementDateCandidates?.[0] ?? null);
-  const endDate = parseMayaSavingsDateText(coverageDates?.at(-1) ?? null) ?? parseMayaSavingsDateText(statementDateCandidates?.[0] ?? null);
+  const transactionsPeriodMatch = normalized.match(/transactions\s+1-31\s+([A-Za-z]{3,9})\s+(\d{4})/i);
+  const transactionPeriodStart = transactionsPeriodMatch ? parseMayaSavingsDateText(`1 ${transactionsPeriodMatch[1]} ${transactionsPeriodMatch[2]}`) : null;
+  const transactionPeriodEnd = transactionsPeriodMatch ? parseMayaSavingsDateText(`31 ${transactionsPeriodMatch[1]} ${transactionsPeriodMatch[2]}`) : null;
+  const startDate =
+    parseMayaSavingsDateText(coverageDates?.[0] ?? null) ??
+    transactionPeriodStart ??
+    parseMayaSavingsDateText(statementDateCandidates?.[0] ?? null);
+  const endDate =
+    parseMayaSavingsDateText(coverageDates?.at(-1) ?? null) ??
+    transactionPeriodEnd ??
+    parseMayaSavingsDateText(statementDateCandidates?.[0] ?? null);
 
   return {
     institution: "Maya Bank",
     accountNumber,
     accountName,
-    accountType: inferAccountTypeFromStatement("Maya Bank", accountName, "bank"),
+    accountType: "bank" as ImportedAccountType,
     openingBalance: summaryStart,
     endingBalance: summaryEnd,
     startDate: startDate ? startDate.toISOString() : null,
@@ -6871,14 +7014,35 @@ const parseMayaSavingsImportText = (text: string, context: ImportParseContext = 
     return null;
   }
 
+  const firstRawPayload =
+    rows[0]?.rawPayload && typeof rows[0].rawPayload === "object" ? (rows[0].rawPayload as Record<string, unknown>) : null;
+  const lastRawPayload =
+    rows.at(-1)?.rawPayload && typeof rows.at(-1).rawPayload === "object"
+      ? (rows.at(-1).rawPayload as Record<string, unknown>)
+      : null;
+  const firstRow = rows[0];
+  const firstRowAmount = firstRow?.amount ? parseMoney(firstRow.amount) : null;
+  const firstRowBalance =
+    typeof firstRawPayload?.balance === "number"
+      ? firstRawPayload.balance
+      : parseMoney(typeof firstRawPayload?.balanceText === "string" ? firstRawPayload.balanceText : null);
   const endingBalance =
     metadata.endingBalance ??
+    (typeof lastRawPayload?.balance === "number" ? lastRawPayload.balance : null) ??
     getTrailingBalanceFromParsedRows(rows) ??
     parseMoney((rows.at(-1)?.rawPayload as Record<string, unknown> | undefined)?.balanceText as string | null);
 
   return {
     metadata: {
       ...metadata,
+      openingBalance:
+        metadata.openingBalance ??
+        (typeof firstRawPayload?.previousBalance === "number" ? firstRawPayload.previousBalance : null) ??
+        (typeof firstRowBalance === "number" && typeof firstRowAmount === "number"
+          ? firstRow.type === "expense"
+            ? firstRowBalance + firstRowAmount
+            : firstRowBalance - firstRowAmount
+          : null),
       endingBalance,
       confidence: Math.min(100, metadata.confidence + 5),
     },
