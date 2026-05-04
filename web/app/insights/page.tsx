@@ -834,7 +834,6 @@ async function InsightsPageStream({
           />
         </div>
       ) : null}
-      {!isEmptyWorkspace ? (
       <section className="insights-story">
         <InsightsTabs
           selectedTab={selectedTab}
@@ -1085,7 +1084,6 @@ async function InsightsPageStream({
           </p>
         ) : null}
       </section>
-      ) : null}
     </CloverShell>
   );
 }
