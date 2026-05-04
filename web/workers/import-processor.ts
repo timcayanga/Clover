@@ -2337,14 +2337,7 @@ export const processImportFileText = async (
           resolvedMetadata.accountType ??
           null,
         openingBalance:
-          (() => {
-            const value = readAutoRerunValue(autoRerunPayload.fieldReviewPayload.accountBalance);
-            if (!value) {
-              return resolvedMetadata.openingBalance ?? null;
-            }
-            const parsed = Number(value.replace(/[^0-9.-]/g, ""));
-            return Number.isFinite(parsed) ? parsed : resolvedMetadata.openingBalance ?? null;
-          })(),
+          resolvedMetadata.openingBalance ?? null,
         endingBalance:
           (() => {
             const value = readAutoRerunValue(autoRerunPayload.fieldReviewPayload.accountBalance);

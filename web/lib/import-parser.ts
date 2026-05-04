@@ -5225,17 +5225,24 @@ const parseCimbImportText = (text: string) => {
   const parsedSections = sections
     .map((sectionLines) => {
       const sectionText = sectionLines.join(" ");
-      const accountNumber =
-        sectionText.match(/GSave\s*-\s*Savings\s+Account\s+No\.\s*([0-9\s-]+)/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ?? null;
-      const accountName = accountNumber ? `CIMB ${accountNumber.slice(-4)}` : "CIMB";
       const holderName =
-        sectionLines.find(
-          (line) =>
-            !isCimbBoilerplateLine(line) &&
-            !/^\d/.test(line) &&
-            !/^(?:DEPOSIT|WITHDRAWAL|BALANCE|REF)$/i.test(line) &&
-            /[A-Za-z]/.test(line)
-        ) ?? null;
+        sectionLines
+          .slice(0, 6)
+          .map((line) => normalizeWhitespace(line.replace(/Reference\s+No\.?.*$/i, "").trim()))
+          .find(
+            (line) =>
+              line &&
+              !isCimbBoilerplateLine(line) &&
+              !/^\d/.test(line) &&
+              !/^(?:DEPOSIT|WITHDRAWAL|BALANCE|REF)$/i.test(line) &&
+              /[A-Za-z]/.test(line)
+          ) ?? null;
+      const accountNumber =
+        sectionText.match(/GSave\s*-\s*Savings\s+Account\s+No\.\s*([0-9\s-]+)/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+        sectionText.match(/Savings\s+Account\s+No\.\s*([0-9\s-]+)/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+        sectionText.match(/Account\s+No\.\s*([0-9\s-]+)/i)?.[1]?.replace(/\D/g, "").slice(0, 16) ??
+        null;
+      const accountName = holderName ?? (accountNumber ? `CIMB ${accountNumber.slice(-4)}` : "CIMB");
       const periodLine = sectionLines.find((line) => /^For\s+.+\s+to\s+.+$/i.test(line)) ?? null;
       const statementPeriodMatch = periodLine?.match(/^For\s+(.+?)\s+to\s+(.+)$/i);
       const startDate = parseCimbDate(statementPeriodMatch?.[1] ?? null);
@@ -5286,10 +5293,52 @@ const parseCimbImportText = (text: string) => {
     return null;
   }
 
+  const scoreSectionDateAlignment = (section: {
+    metadata: {
+      startDate: string | null;
+      endDate: string | null;
+    };
+    rows: ParsedImportRow[];
+  }) => {
+    const startDate = section.metadata.startDate ? new Date(section.metadata.startDate) : null;
+    const endDate = section.metadata.endDate ? new Date(section.metadata.endDate) : null;
+    if (!startDate || !endDate || Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      return { inRangeCount: 0, outOfRangeCount: 0 };
+    }
+
+    let inRangeCount = 0;
+    let outOfRangeCount = 0;
+    for (const row of section.rows) {
+      const rowDate = row.date ? new Date(`${row.date}T12:00:00.000Z`) : null;
+      if (!rowDate || Number.isNaN(rowDate.getTime())) {
+        outOfRangeCount += 1;
+        continue;
+      }
+
+      if (rowDate >= startDate && rowDate <= endDate) {
+        inRangeCount += 1;
+      } else {
+        outOfRangeCount += 1;
+      }
+    }
+
+    return { inRangeCount, outOfRangeCount };
+  };
+
   const uniqueAccountNumbers = new Set(parsedSections.map((section) => section.metadata.accountNumber).filter(Boolean));
 
   if (uniqueAccountNumbers.size > 1) {
-    const selected = [...parsedSections].sort((left, right) => right.rows.length - left.rows.length)[0];
+    const selected = [...parsedSections].sort((left, right) => {
+      const leftScore = scoreSectionDateAlignment(left);
+      const rightScore = scoreSectionDateAlignment(right);
+      if (rightScore.inRangeCount !== leftScore.inRangeCount) {
+        return rightScore.inRangeCount - leftScore.inRangeCount;
+      }
+      if (leftScore.outOfRangeCount !== rightScore.outOfRangeCount) {
+        return leftScore.outOfRangeCount - rightScore.outOfRangeCount;
+      }
+      return right.rows.length - left.rows.length;
+    })[0];
     return selected.rows.length > 0 ? selected : null;
   }
 
