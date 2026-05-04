@@ -1,6 +1,8 @@
 export type ThemeMode = "light" | "dark" | "system";
 
 export const THEME_STORAGE_KEY = "clover.settings-theme";
+export const THEME_RESOLVED_COOKIE_KEY = "clover.theme-resolved";
+const THEME_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 export function isThemeMode(value: unknown): value is ThemeMode {
   return value === "light" || value === "dark" || value === "system";
@@ -50,4 +52,5 @@ export function applyThemeMode(mode: ThemeMode) {
   const resolved = getResolvedTheme(mode);
   document.documentElement.dataset.theme = resolved;
   document.documentElement.style.colorScheme = resolved;
+  document.cookie = `${THEME_RESOLVED_COOKIE_KEY}=${resolved}; path=/; max-age=${THEME_COOKIE_MAX_AGE}; samesite=lax`;
 }

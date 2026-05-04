@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useLayoutEffect, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { applyThemeMode, readStoredThemeMode, THEME_STORAGE_KEY } from "@/lib/theme-preference";
 
@@ -9,7 +9,7 @@ export function ThemeSync() {
   const isLightOnlyRoute =
     pathname === "/" || pathname.startsWith("/sign-in") || pathname.startsWith("/sign-up") || pathname === "/onboarding";
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isLightOnlyRoute) {
       applyThemeMode("light");
       return;
