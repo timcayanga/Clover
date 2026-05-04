@@ -1648,6 +1648,8 @@ const parseAubSavingsImportText = (text: string) => {
       [line, lines[index + 1] ?? null, lines[index + 2] ?? null, lines[index + 3] ?? null],
       [line, lines[index + 1] ?? null, lines[index + 2] ?? null, lines[index + 3] ?? null, lines[index + 4] ?? null],
       [line, lines[index + 1] ?? null, lines[index + 2] ?? null, lines[index + 3] ?? null, lines[index + 4] ?? null, lines[index + 5] ?? null],
+      [line, lines[index + 1] ?? null, lines[index + 2] ?? null, lines[index + 3] ?? null, lines[index + 4] ?? null, lines[index + 5] ?? null, lines[index + 6] ?? null],
+      [line, lines[index + 1] ?? null, lines[index + 2] ?? null, lines[index + 3] ?? null, lines[index + 4] ?? null, lines[index + 5] ?? null, lines[index + 6] ?? null, lines[index + 7] ?? null],
     ].filter((window) => window.every((part) => typeof part === "string" && part.trim().length > 0)) as string[][];
 
     let parsed: ParsedImportRow | null = null;
