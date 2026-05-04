@@ -864,7 +864,6 @@ function AccountsPageContent() {
   const [manualName, setManualName] = useState("");
   const [manualInstitution, setManualInstitution] = useState("");
   const [manualAccountNumber, setManualAccountNumber] = useState("");
-  const [manualMoreOpen, setManualMoreOpen] = useState(false);
   const [manualInvestmentSubtype, setManualInvestmentSubtype] = useState<InvestmentSubtype>("stock");
   const [manualInvestmentSymbol, setManualInvestmentSymbol] = useState("");
   const [manualInvestmentQuantity, setManualInvestmentQuantity] = useState("");
@@ -1870,7 +1869,6 @@ function AccountsPageContent() {
 
     flushSync(() => {
       setAddAccountError(null);
-      setManualMoreOpen(false);
       setAddOpen(true);
     });
   };
@@ -2142,7 +2140,6 @@ function AccountsPageContent() {
     if (suggestion.category === "investment_platform") {
       setManualType("investment");
       setManualInstitution(suggestion.label);
-      setManualMoreOpen(true);
       return;
     }
 
@@ -2425,7 +2422,6 @@ function AccountsPageContent() {
       setAddAccountError(null);
       if (!keepOpen) {
         setManualType("bank");
-        setManualMoreOpen(false);
         setAddOpen(false);
       }
       setMessage(
@@ -3151,17 +3147,7 @@ function AccountsPageContent() {
                         </label>
                       </div>
                     </div>
-                    <button
-                      className="accounts-add-more-link"
-                      type="button"
-                      onClick={() => setManualMoreOpen((current) => !current)}
-                      aria-expanded={manualMoreOpen}
-                    >
-                      <span>{manualMoreOpen ? "Less" : "More"}</span>
-                      <span aria-hidden="true">▾</span>
-                    </button>
-                    {manualMoreOpen ? (
-                      <div className="accounts-add-advanced" style={{ width: "100%", minWidth: 0 }}>
+                    <div className="accounts-add-advanced" style={{ width: "100%", minWidth: 0 }}>
                         <div
                           className="accounts-add-fields__row accounts-add-fields__row--meta"
                           style={{ display: "flex", alignItems: "flex-end", gap: 12, width: "100%", minWidth: 0 }}
@@ -3260,11 +3246,10 @@ function AccountsPageContent() {
                             ) : null}
                           </div>
                         ) : null}
-                      </div>
-                    ) : null}
+                    </div>
                   </div>
                 </div>
-                {manualType === "investment" && manualMoreOpen ? (
+                {manualType === "investment" ? (
                   <InstitutionAutocomplete
                     label="Institution"
                     value={manualInstitution}
@@ -3274,7 +3259,7 @@ function AccountsPageContent() {
                     helperText="Use the platform or provider name when it differs from the investment name."
                   />
                 ) : null}
-                {manualType === "investment" && manualMoreOpen ? (
+                {manualType === "investment" ? (
                   <>
                     <label>
                       Investment subtype
