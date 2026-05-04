@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { UserProfile } from "@clerk/nextjs";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { BillingActions } from "@/components/billing-actions";
@@ -11,7 +12,17 @@ import { type BillingInterval } from "@/lib/billing-plans";
 import { applyHelperTextPreference, HELPER_TEXT_STORAGE_KEY, readStoredHelperTextPreference } from "@/lib/helper-text-preference";
 import { getPlanDisplayLabel } from "@/lib/user-limits";
 import { applyThemeMode, readStoredThemeMode, THEME_STORAGE_KEY, type ThemeMode } from "@/lib/theme-preference";
-type SettingsSectionKey = "profile" | "display" | "data" | "categories" | "plan";
+import { persistSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
+
+type SettingsSectionKey = "account" | "profiles" | "display" | "data" | "categories" | "plan";
+
+type ProfileSummary = {
+  id: string;
+  name: string;
+  type: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 type BillingSubscriptionSummary = {
   status: string;
@@ -27,6 +38,8 @@ type BillingSubscriptionSummary = {
 type SettingsHubProps = {
   workspaceId: string;
   workspaceName: string;
+  profiles: ProfileSummary[];
+  selectedProfileId: string;
   firstName: string | null;
   lastName: string | null;
   email: string;
@@ -101,8 +114,12 @@ const sectionCopy: Record<
     icon: ReactNode;
   }
 > = {
-  profile: {
-    title: "Profile",
+  account: {
+    title: "Account",
+    icon: <SettingsIcon path="M12 13.5c2.761 0 5-2.462 5-5.5S14.761 2.5 12 2.5 7 4.962 7 8s2.239 5.5 5 5.5Zm0 1.5c-4.418 0-8 2.91-8 6.5V22h16v-.5c0-3.59-3.582-6.5-8-6.5Z" />,
+  },
+  profiles: {
+    title: "Profiles",
     icon: <SettingsIcon path="M12 13.5c2.761 0 5-2.462 5-5.5S14.761 2.5 12 2.5 7 4.962 7 8s2.239 5.5 5 5.5Zm0 1.5c-4.418 0-8 2.91-8 6.5V22h16v-.5c0-3.59-3.582-6.5-8-6.5Z" />,
   },
   display: {
@@ -128,7 +145,7 @@ const themeOptions: Array<{
   label: string;
   helper: string;
 }> = [
-  { value: "light", label: "Light", helper: "Bright, high-contrast workspace view." },
+  { value: "light", label: "Light", helper: "Bright, high-contrast profile view." },
   { value: "dark", label: "Dark", helper: "Muted contrast for low-light sessions." },
   { value: "system", label: "System preferences", helper: "Follows the device preference automatically." },
 ];
@@ -141,7 +158,7 @@ const planCards = [
     icon: "free" as const,
     badge: "",
     helper: "Start here during beta and keep the core Clover workflow open.",
-    description: "Best for getting a small workspace organized without commitment.",
+    description: "Best for getting a small profile organized without commitment.",
     features: [
       "Manual transaction tracking",
       "5 non-cash accounts",
@@ -238,6 +255,8 @@ function getUsagePercent(used: number, limit: number | null) {
 export function SettingsHub({
   workspaceId,
   workspaceName,
+  profiles,
+  selectedProfileId,
   firstName,
   lastName,
   email,
@@ -250,18 +269,38 @@ export function SettingsHub({
   planLimits,
   planUsage,
 }: SettingsHubProps) {
-  const [activeSection, setActiveSection] = useState<SettingsSectionKey>("profile");
+  const router = useRouter();
+  const [activeSection, setActiveSection] = useState<SettingsSectionKey>("account");
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
   const [helperTextVisible, setHelperTextVisible] = useState(true);
   const [historyCutoff, setHistoryCutoff] = useState(() => new Date().toISOString().slice(0, 10));
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
+  const [newProfileName, setNewProfileName] = useState("");
+  const [profileRenameDrafts, setProfileRenameDrafts] = useState<Record<string, string>>({});
+  const [activeProfileId, setActiveProfileId] = useState(selectedProfileId);
   const [isPending, startTransition] = useTransition();
+
+  const activeProfile = profiles.find((profile) => profile.id === activeProfileId) ?? profiles[0] ?? null;
 
   useEffect(() => {
     const initialTheme = readStoredThemeMode();
     setThemeMode(initialTheme);
     applyThemeMode(initialTheme);
   }, []);
+
+  useEffect(() => {
+    setActiveProfileId(selectedProfileId);
+  }, [selectedProfileId]);
+
+  useEffect(() => {
+    setProfileRenameDrafts(
+      profiles.reduce<Record<string, string>>((drafts, profile) => {
+        drafts[profile.id] = profile.name;
+        return drafts;
+      }, {})
+    );
+  }, [profiles]);
 
   useEffect(() => {
     const initialHelperText = readStoredHelperTextPreference();
@@ -352,6 +391,93 @@ export function SettingsHub({
     });
   };
 
+  const handleProfileSwitch = (profileId: string) => {
+    if (!profileId || profileId === activeProfileId) {
+      return;
+    }
+
+    persistSelectedWorkspaceId(profileId);
+    syncSelectedWorkspaceCookie();
+    setActiveProfileId(profileId);
+    setProfileMessage("Profile switched.");
+    router.refresh();
+  };
+
+  const handleProfileCreate = () => {
+    const name = newProfileName.trim();
+    if (!name) {
+      setProfileMessage("Profile name cannot be empty.");
+      return;
+    }
+
+    setProfileMessage(null);
+    startTransition(async () => {
+      try {
+        const response = await fetch("/api/workspaces", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name,
+            type: "personal",
+          }),
+        });
+
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Unable to create profile.");
+        }
+
+        setNewProfileName("");
+        setProfileMessage("Profile created.");
+        router.refresh();
+      } catch (error) {
+        setProfileMessage(error instanceof Error ? error.message : "Unable to create profile.");
+      }
+    });
+  };
+
+  const handleProfileRename = (profileId: string) => {
+    const nextName = profileRenameDrafts[profileId]?.trim();
+    const currentProfile = profiles.find((profile) => profile.id === profileId);
+
+    if (!nextName) {
+      setProfileMessage("Profile name cannot be empty.");
+      return;
+    }
+
+    if (currentProfile && nextName === currentProfile.name) {
+      setProfileMessage("Profile name is unchanged.");
+      return;
+    }
+
+    setProfileMessage(null);
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/workspaces/${encodeURIComponent(profileId)}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: nextName,
+          }),
+        });
+
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Unable to update profile.");
+        }
+
+        setProfileMessage("Profile updated.");
+        router.refresh();
+      } catch (error) {
+        setProfileMessage(error instanceof Error ? error.message : "Unable to update profile.");
+      }
+    });
+  };
+
   const isFree = planTier === "free";
   const currentPlanValue = planTier === "free" ? "free" : billingSubscription?.interval ?? "annual";
   const currentPlanCard = planCards.find((plan) => plan.value === currentPlanValue) ?? planCards[0];
@@ -387,7 +513,7 @@ export function SettingsHub({
           <img className="settings-hub__brand-mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
           <div className="settings-hub__brand-copy">
             <strong>Clover</strong>
-            <span>{workspaceName}</span>
+            <span>{activeProfile?.name ?? workspaceName}</span>
           </div>
         </Link>
         <div className="settings-hub__menu-list" role="tablist" aria-label="Settings sections">
@@ -413,17 +539,126 @@ export function SettingsHub({
       </aside>
 
       <div className="settings-hub__panel glass">
-        {activeSection === "profile" ? (
+        {activeSection === "account" ? (
           <section className="settings-section settings-section--profile" role="tabpanel">
             <div className="settings-section__intro settings-section__intro--single">
               <div>
-                <h4>Profile</h4>
+                <h4>Account</h4>
               </div>
+            </div>
+
+            <div className="settings-data-grid">
+              <article className="settings-action-card">
+                <div>
+                  <h5>Switch profile</h5>
+                  <p>Use the current Clover account to move between profiles without signing out.</p>
+                </div>
+                <label className="settings-inline-field">
+                  <span>Active profile</span>
+                  <select
+                    value={activeProfileId}
+                    onChange={(event) => handleProfileSwitch(event.target.value)}
+                    aria-label="Active profile"
+                  >
+                    {profiles.map((profile) => (
+                      <option key={profile.id} value={profile.id}>
+                        {profile.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p className="settings-helper">Current profile: {activeProfile?.name ?? workspaceName}</p>
+              </article>
             </div>
 
             <div className="settings-clerk-frame">
               <UserProfile routing="virtual" />
             </div>
+          </section>
+        ) : null}
+
+        {activeSection === "profiles" ? (
+          <section className="settings-section" role="tabpanel">
+            <div className="settings-section__intro settings-section__intro--single">
+              <div>
+                <h4>Profiles</h4>
+              </div>
+            </div>
+
+            <div className="settings-data-grid">
+              <article className="settings-action-card">
+                <div>
+                  <h5>Create a profile</h5>
+                  <p>New profiles stay separated by default so Clover can keep personal and shared money clear.</p>
+                </div>
+                <div className="settings-action-card__row">
+                  <label className="settings-inline-field">
+                    <span>Profile name</span>
+                    <input
+                      value={newProfileName}
+                      onChange={(event) => setNewProfileName(event.target.value)}
+                      placeholder="Personal, Shared, Partner..."
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="button button-primary button-small"
+                    disabled={isPending}
+                    onClick={() => handleProfileCreate()}
+                  >
+                    Create profile
+                  </button>
+                </div>
+              </article>
+            </div>
+
+            <div className="settings-data-grid">
+              {profiles.map((profile) => {
+                const isActive = profile.id === activeProfileId;
+                const renameDraft = profileRenameDrafts[profile.id] ?? profile.name;
+
+                return (
+                  <article key={profile.id} className={`settings-action-card${isActive ? " is-active" : ""}`}>
+                    <div>
+                      <h5>{profile.name}</h5>
+                      <p>{profile.type === "shared" ? "Shared profile" : "Personal profile"}</p>
+                    </div>
+                    <div className="settings-action-card__row">
+                      <label className="settings-inline-field">
+                        <span>Rename</span>
+                        <input
+                          value={renameDraft}
+                          onChange={(event) =>
+                            setProfileRenameDrafts((current) => ({
+                              ...current,
+                              [profile.id]: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="button button-secondary button-small"
+                        disabled={isPending}
+                        onClick={() => handleProfileRename(profile.id)}
+                      >
+                        Save name
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-secondary button-small"
+                        disabled={isPending || isActive}
+                        onClick={() => handleProfileSwitch(profile.id)}
+                      >
+                        {isActive ? "Active" : "Switch"}
+                      </button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            <p className="settings-helper">Profiles are scoped to the signed-in email account and will not move data silently between each other.</p>
           </section>
         ) : null}
 
@@ -484,7 +719,7 @@ export function SettingsHub({
               <article className="settings-action-card">
                 <div>
                   <h5>Download transactions</h5>
-                  <p>Export the selected workspace’s transactions as CSV.</p>
+                  <p>Export the selected profile’s transactions as CSV.</p>
                 </div>
                 <button
                   type="button"
@@ -529,7 +764,7 @@ export function SettingsHub({
               <article className="settings-action-card">
                 <div>
                   <h5>Delete transaction history</h5>
-                  <p>Remove transactions before a chosen date from this workspace.</p>
+                  <p>Remove transactions before a chosen date from this profile.</p>
                 </div>
                 <div className="settings-action-card__row">
                   <label className="settings-inline-field">
@@ -558,7 +793,7 @@ export function SettingsHub({
               <article className="settings-action-card">
                 <div>
                   <h5>Delete accounts</h5>
-                  <p>Remove non-cash accounts in this workspace together with their linked transactions.</p>
+                  <p>Remove non-cash accounts in this profile together with their linked transactions.</p>
                 </div>
                 <div className="settings-action-card__row">
                   <button
@@ -569,13 +804,13 @@ export function SettingsHub({
                       handleAction(async () => {
                         if (
                           !window.confirm(
-                            "Delete all non-cash accounts in this workspace? Their linked transactions will be removed too. Clover can recreate the default Cash account later if needed."
+                            "Delete all non-cash accounts in this profile? Their linked transactions will be removed too. Clover can recreate the default Cash account later if needed."
                           )
                         ) {
                           return;
                         }
                         const deleted = await runDelete("accounts");
-                        setStatusMessage(`Deleted ${deleted} account${deleted === 1 ? "" : "s"} from this workspace.`);
+                        setStatusMessage(`Deleted ${deleted} account${deleted === 1 ? "" : "s"} from this profile.`);
                       })
                     }
                   >
@@ -587,7 +822,7 @@ export function SettingsHub({
               <article className="settings-action-card">
                 <div>
                   <h5>Delete all Clover data</h5>
-                  <p>Start fresh by removing app data across all of your workspaces while keeping your login.</p>
+                  <p>Start fresh by removing app data across all of your profiles while keeping your login.</p>
                 </div>
                 <div className="settings-action-card__row">
                   <button
@@ -598,7 +833,7 @@ export function SettingsHub({
                       handleAction(async () => {
                         if (
                           !window.confirm(
-                            "Delete all Clover data across every workspace? This removes your accounts, transactions, imports, and learned data, but keeps your Clover login."
+                            "Delete all Clover data across every profile? This removes your accounts, transactions, imports, and learned data, but keeps your Clover login."
                           )
                         ) {
                           return;
@@ -810,7 +1045,10 @@ export function SettingsHub({
           </section>
         ) : null}
 
-        {statusMessage ? <p className="settings-status">{statusMessage}</p> : null}
+        {(activeSection === "account" || activeSection === "profiles") && profileMessage ? (
+          <p className="settings-status">{profileMessage}</p>
+        ) : null}
+        {activeSection === "data" && statusMessage ? <p className="settings-status">{statusMessage}</p> : null}
       </div>
     </section>
   );

@@ -499,7 +499,7 @@ export function CloverShell({
   const [searchPlanTier, setSearchPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [searchTicker, setSearchTicker] = useState<SidebarSearchMarket | null>(null);
   const [searchTickerLoading, setSearchTickerLoading] = useState(false);
-  const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
+  const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Account";
   const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
   const profileImage = user?.imageUrl ?? null;
   const profileBackground = avatarBackgrounds[hashString(displayName) % avatarBackgrounds.length];
@@ -1119,7 +1119,7 @@ export function CloverShell({
             ref={profileButtonRef}
             className={`sidebar-profile${profileImage ? " sidebar-profile--photo" : ""}${isProfileActive || isProfileMenuOpen ? " is-active" : ""}`}
             type="button"
-            aria-label={`Open ${displayName} profile menu`}
+            aria-label={`Open ${displayName} account menu`}
             aria-expanded={isProfileMenuOpen}
             aria-haspopup="menu"
             onClick={() =>
@@ -1154,7 +1154,7 @@ export function CloverShell({
           </button>
 
           {isProfileMenuOpen ? (
-            <div ref={profilePopoverRef} className="sidebar-popover sidebar-popover--profile" role="menu" aria-label="Profile menu">
+            <div ref={profilePopoverRef} className="sidebar-popover sidebar-popover--profile" role="menu" aria-label="Account menu">
               <div className="sidebar-popover__head">
                 <span className="sidebar-popover__title">{displayName}</span>
               </div>

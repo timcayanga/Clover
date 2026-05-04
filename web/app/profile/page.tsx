@@ -6,7 +6,7 @@ import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-conte
 
 export const dynamic = "force-dynamic";
 export const metadata = {
-  title: "Profile",
+  title: "Account",
 };
 
 export default async function ProfilePage() {
@@ -19,9 +19,9 @@ export default async function ProfilePage() {
   return (
     <CloverShell
       active="profile"
-      title="Profile"
+      title="Account"
       kicker="Account hub"
-      subtitle="Your identity and account shortcuts live here, while settings stay one click away."
+      subtitle="Your identity and account shortcuts live here, while profile switching and settings stay one click away."
     >
       <ProfileCenter canSignOut={!session.isGuest} />
     </CloverShell>

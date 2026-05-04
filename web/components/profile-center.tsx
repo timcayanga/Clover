@@ -16,7 +16,7 @@ export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
   const { signOut } = useClerk();
   const pathname = usePathname();
   const currentDisplayName =
-    user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Profile";
+    user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Account";
   const email = user?.primaryEmailAddress?.emailAddress ?? "tim@example.com";
   const [displayName, setDisplayName] = useState(currentDisplayName);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);

@@ -31,34 +31,42 @@ async function SettingsPageStream() {
 
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
-  const workspaceSelect = {
+  const profileSelect = {
     id: true,
     name: true,
+    type: true,
+    createdAt: true,
+    updatedAt: true,
   } as const;
 
-  let selectedWorkspace =
-    (selectedWorkspaceCookieId
-      ? await prisma.workspace.findFirst({
-          where: {
-            id: selectedWorkspaceCookieId,
-            userId: user.id,
-          },
-          select: workspaceSelect,
-        })
-      : null) ??
-    (await prisma.workspace.findFirst({
-      where: { userId: user.id },
-      select: workspaceSelect,
-      orderBy: { createdAt: "asc" },
-    }));
+  let profiles = await prisma.workspace.findMany({
+    where: { userId: user.id },
+    select: profileSelect,
+    orderBy: [{ updatedAt: "desc" }, { createdAt: "asc" }],
+  });
 
-  if (!selectedWorkspace) {
+  if (!profiles.length) {
     const starterWorkspace = await ensureStarterWorkspace(user);
-    selectedWorkspace = await prisma.workspace.findUnique({
-      where: { id: starterWorkspace.id },
-      select: workspaceSelect,
+    profiles = await prisma.workspace.findMany({
+      where: { userId: user.id },
+      select: profileSelect,
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "asc" }],
     });
+    if (!profiles.length) {
+      profiles = [
+        {
+          id: starterWorkspace.id,
+          name: starterWorkspace.name,
+          type: starterWorkspace.type,
+          createdAt: starterWorkspace.createdAt,
+          updatedAt: starterWorkspace.updatedAt,
+        },
+      ];
+    }
   }
+
+  const selectedWorkspace =
+    (selectedWorkspaceCookieId ? profiles.find((profile) => profile.id === selectedWorkspaceCookieId) : null) ?? profiles[0] ?? null;
 
   if (!selectedWorkspace) {
     redirect("/dashboard");
@@ -106,6 +114,8 @@ async function SettingsPageStream() {
       <SettingsHub
         workspaceId={selectedWorkspace.id}
         workspaceName={selectedWorkspace.name}
+        profiles={profiles}
+        selectedProfileId={selectedWorkspace.id}
         firstName={user.firstName}
         lastName={user.lastName}
         email={user.email}

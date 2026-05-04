@@ -3,6 +3,8 @@
 ## Purpose
 Create a low-friction consumer onboarding and account system for Clover that gets users into the product quickly, starts everyone on a Free Plan by default, and leaves room for paid subscriptions and goal-based personalization in Phase 2.
 
+For security and device-storage guidance, also follow `docs/security-architecture.md`.
+
 ## Product Principles
 
 - Keep signup short and obvious.
@@ -15,7 +17,7 @@ Create a low-friction consumer onboarding and account system for Clover that get
 ## Audience
 
 - Primary: individual consumers managing personal finances.
-- Not in scope for Phase 1: business accounts, teams, shared workspaces, or multi-tenant organizational billing.
+- Not in scope for Phase 1: business accounts, teams, shared logins across different accounts, or multi-tenant organizational billing.
 
 ## Phase 1 Goals
 
@@ -138,6 +140,41 @@ Phase 2 introduces monetization and deeper personalization without changing the 
 
 The current schema already supports a user-centric model with a `User` record tied to one or more `Workspace` records.
 
+## Profiles Model
+
+In the product UI, Clover should present each user-scoped container as a `Profile`.
+
+### Core Hierarchy
+
+- One email = one Clover account = multiple Profiles.
+- A Profile belongs to one Clover account unless Clover explicitly adds shared Profiles later.
+- Profiles are separated by default.
+- Shared data must be explicitly marked as shared.
+- The active Profile controls what the user sees and edits.
+- Free/Pro limits are enforced at the account level, not per Profile.
+- Every Profile should have a clear owner or purpose.
+- Renaming or editing a Profile must not reassign confirmed financial data without a deliberate user action.
+- Imported data should default to the currently active Profile.
+- If Clover is unsure, it should ask rather than guess.
+- Profile switching should never silently move data between Profiles.
+
+### Settings Structure
+
+- `Settings > Account`
+  - login identity
+  - email
+  - password
+  - social sign-in
+  - avatar/name tied to Clerk
+  - quick Profile switching
+  - sign out
+- `Settings > Profiles`
+  - create a new Profile
+  - rename a Profile
+  - choose the active Profile
+  - archive or remove a Profile when safe
+  - optionally mark one as primary
+
 ### Current Requirements
 
 - Keep one account identity per user.
@@ -145,6 +182,7 @@ The current schema already supports a user-centric model with a `User` record ti
 - Store whether the email has been verified.
 - Keep plan data separate from authentication data.
 - Keep goal data separate from plan data so each can evolve independently.
+- Keep the user-facing Profile model separate from the underlying workspace storage model until the database is migrated.
 
 ### Suggested Additions for Later
 
