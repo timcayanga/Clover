@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
-import { InfoTooltip } from "@/components/info-tooltip";
 import { getAccountDisplayName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
@@ -163,6 +162,33 @@ const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 const normalizeAccountBalance = (type: Account["type"] | null | undefined, value: number) =>
   isLiabilityAccountType(type) ? -Math.abs(value) : Math.abs(value);
 
+const isIdentityAccountType = (value: Account["type"] | null | undefined) =>
+  value === "bank" || value === "wallet" || value === "credit_card" || value === "prepaid";
+
+const getAccountCardVisual = (value: Account["type"] | null | undefined) => {
+  if (value === "investment") {
+    return "investment";
+  }
+
+  return isIdentityAccountType(value) ? "identity" : "ledger";
+};
+
+const getAccountCardTitle = (account: Account) => {
+  if (account.type === "cash") {
+    return "Cash";
+  }
+
+  return getAccountDisplayName(account);
+};
+
+const getInvestmentPreview = (account: Account) =>
+  [
+    account.investmentSymbol?.trim(),
+    account.investmentSubtype ? getInvestmentSubtypeLabel(account.investmentSubtype) : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
 function ActionIcon({ name }: { name: "warning" }) {
   if (name === "warning") {
     return (
@@ -176,14 +202,6 @@ function ActionIcon({ name }: { name: "warning" }) {
 
   return null;
 }
-
-const ACCOUNT_DETAILS_INFO = {
-  currentBalance:
-    "Current balance = the latest balance Clover can derive for this account after applying its saved balance, imported transactions, and any statement checkpoint used for reconciliation.",
-  accountType:
-    "Account type controls how Clover groups this account and whether it is treated like spendable cash, a tracked asset such as a receivable or insurance policy, an investment holding, or a liability such as a credit card, loan, mortgage, payable, BNPL plan, or line of credit.",
-  transactions: "Transactions are the money movements linked to this account. The running balance changes as each transaction is imported, edited, or excluded.",
-} as const;
 
 const parseNullableNumber = (value: string | null | undefined) => {
   if (value === null || value === undefined || value === "") {
@@ -847,96 +865,8 @@ function AccountDetailPageContent() {
     },
     [account?.balance, account?.source, account?.type, latestCheckpoint, transactions]
   );
-  const accountDetailValueCard = useMemo(() => {
-    if (!account) {
-      return {
-        label: "Spendable amount",
-        value: currentBalance,
-      };
-    }
-
-    if (isLiabilityAccountType(account.type)) {
-      return {
-        label: "Outstanding balance",
-        value: Math.abs(currentBalance),
-      };
-    }
-
-    if (account.type === "receivable") {
-      return {
-        label: "Amount due to you",
-        value: currentBalance,
-      };
-    }
-
-    if (account.type === "prepaid") {
-      return {
-        label: "Stored value",
-        value: currentBalance,
-      };
-    }
-
-    if (account.type === "insurance") {
-      return {
-        label: "Policy value",
-        value: currentBalance,
-      };
-    }
-
-    if (account.type === "investment") {
-      if (isFixedIncomeInvestmentSubtype(investmentSubtype)) {
-        return {
-          label: investmentMaturityValue !== null ? "Maturity value" : "Principal",
-          value: investmentMaturityValue ?? investmentPrincipal ?? currentBalance,
-        };
-      }
-
-      return {
-        label: "Current value",
-        value: currentBalance,
-      };
-    }
-
-    return {
-      label: "Spendable amount",
-      value: currentBalance,
-    };
-  }, [account, currentBalance, investmentMaturityValue, investmentPrincipal, investmentSubtype]);
   const accountDisplayName = account ? getAccountDisplayName(account) : "Account";
   const hasVisibleBalance = account?.balance !== null && account?.balance !== undefined && String(account.balance).trim() !== "";
-  const accountDetailValueCardInfo = useMemo(() => {
-    if (!account) {
-      return "Spendable amount = the usable cash-like balance from this account.";
-    }
-
-    if (isLiabilityAccountType(account.type)) {
-      return "Outstanding balance = the amount currently owed on this liability account.";
-    }
-
-    if (account.type === "receivable") {
-      return "Amount due to you = money this receivable account is expected to bring back to you.";
-    }
-
-    if (account.type === "prepaid") {
-      return "Stored value = value you have already loaded or set aside for future use.";
-    }
-
-    if (account.type === "insurance") {
-      return "Policy value = the tracked value you want Clover to associate with this insurance account.";
-    }
-
-    if (account.type === "investment") {
-      if (isFixedIncomeInvestmentSubtype(investmentSubtype)) {
-        return investmentMaturityValue !== null
-          ? "Maturity value = the amount this fixed-income investment is expected to be worth at maturity."
-          : "Principal = the original amount placed into this fixed-income investment.";
-      }
-
-      return "Current value = the latest tracked value of this investment holding.";
-    }
-
-    return "Tracked value = the latest value Clover is keeping on this account.";
-  }, [account, investmentMaturityValue, investmentSubtype]);
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {
       return null;
@@ -1378,6 +1308,20 @@ function AccountDetailPageContent() {
     router.push(`/transactions?${params.toString()}`);
   };
 
+  const openTransactionDetail = (transaction: Transaction) => {
+    if (!account) {
+      return;
+    }
+
+    const params = buildTransactionQuerySearchParams(
+      account.workspaceId,
+      { accountIds: [account.id] },
+      { pageSize: "all" }
+    );
+    params.set("review", transaction.id);
+    router.push(`/transactions?${params.toString()}`);
+  };
+
   const deleteAccount = async () => {
     if (!accountId) {
       return;
@@ -1452,40 +1396,52 @@ function AccountDetailPageContent() {
         </div>
 
         {account ? (
-          <div className="accounts-detail__summary">
+          <div className="accounts-detail__hero">
             {account?.source === "upload" && (!latestCheckpoint || latestCheckpoint.status !== "reconciled") && !hasVisibleBalance ? (
               <div className="accounts-detail__loading-chip-wrap">
                 <span className="accounts-summary-chip is-neutral">Loading</span>
                 <p className="panel-muted">Clover is still reading this {latestCheckpointFamily?.pendingLabel ?? "statement"} and filling in the rest.</p>
               </div>
             ) : null}
-            <div className="status-card">
-              <div>
-                <div className="panel-muted">
-                  Current balance
-                  <InfoTooltip label={ACCOUNT_DETAILS_INFO.currentBalance} />
+
+            <article
+              className="accounts-account-card accounts-detail__hero-card glass"
+              style={{
+                ["--brand-accent" as string]: accountBrand.accent,
+                ["--brand-soft" as string]: accountBrand.background,
+              }}
+              data-visual={getAccountCardVisual(account.type)}
+            >
+              <div className="accounts-account-card__content">
+                <div className="accounts-account-card__head">
+                  <div className="accounts-account-card__brand">
+                    <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
+                    <div>
+                      {getAccountCardVisual(account.type) === "identity" ? (
+                        <strong>{getAccountCardTitle(account)}</strong>
+                      ) : (
+                        <>
+                          <span>{formatAccountType(account.type)}</span>
+                          <strong>{getAccountCardTitle(account)}</strong>
+                        </>
+                      )}
+                      {account.type === "investment" ? <span>{getInvestmentPreview(account) || accountBrand.label}</span> : null}
+                    </div>
+                  </div>
                 </div>
-                <strong>{formatAccountAmount(currentBalance, account.currency)}</strong>
-              </div>
-            </div>
-            <div className="status-card">
-              <div>
-                <div className="panel-muted">
-                  {accountDetailValueCard.label}
-                  <InfoTooltip label={accountDetailValueCardInfo} />
+                <div className="accounts-account-card__body">
+                  <div className="accounts-account-card__balance-row">
+                    <div
+                      className={`accounts-account-card__amount ${
+                        isLiabilityAccountType(account.type) ? "is-liability" : "is-asset"
+                      }`}
+                    >
+                      {formatAccountAmount(Math.abs(currentBalance), account.currency)}
+                    </div>
+                  </div>
                 </div>
-                <strong>{formatAccountAmount(accountDetailValueCard.value, account.currency)}</strong>
               </div>
-            </div>
-            <div className="status-card">
-              <div>
-                <div className="panel-muted">
-                  Account type
-                  <InfoTooltip label={ACCOUNT_DETAILS_INFO.accountType} />
-                </div>
-                <strong>{formatAccountType(account.type)}</strong>
-              </div>
-            </div>
+            </article>
           </div>
         ) : null}
 
@@ -1783,11 +1739,7 @@ function AccountDetailPageContent() {
         <div className="accounts-detail__transactions glass" style={{ marginTop: 24 }}>
           <div className="accounts-detail__reconciliation-head">
             <div>
-              <p className="eyebrow">
-                Transaction history
-                <InfoTooltip label={ACCOUNT_DETAILS_INFO.transactions} />
-              </p>
-              <h3>All transactions</h3>
+              <h3>Transactions</h3>
             </div>
             <div className="accounts-detail__transactions-actions">
               <span className="accounts-detail__transactions-count">{`${visibleTransactions.length} of ${transactionTotalCount} loaded`}</span>
@@ -1804,7 +1756,7 @@ function AccountDetailPageContent() {
                 <div className="line-item-header accounts-detail__transaction-header">
                   <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
                   <button className="line-item-header-cell line-item-header-cell--name" type="button">
-                    Name
+                    Transaction
                   </button>
                   <button className="line-item-header-cell" type="button">
                     Date
@@ -1826,11 +1778,7 @@ function AccountDetailPageContent() {
                   const subtext =
                     transaction.description && transaction.description.trim() && transaction.description !== merchantDisplay
                       ? transaction.description
-                      : transaction.source === "upload"
-                        ? "Imported"
-                        : transaction.source === "manual"
-                          ? "Manual"
-                          : "";
+                      : "";
 
                   return (
                     <div key={transaction.id} className={`line-item accounts-detail__transaction-row ${transaction.isExcluded ? "is-muted" : ""}`}>
@@ -1848,14 +1796,24 @@ function AccountDetailPageContent() {
                       <div className="accounts-detail__transaction-type">{getTransactionTypeLabel(transaction.type)}</div>
                       <div className={`accounts-detail__transaction-amount ${amountToneClass}`}>
                         <span>{formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}</span>
-                        <button
-                          className="button button-secondary button-small accounts-detail__transaction-delete"
-                          type="button"
-                          onClick={() => setTransactionDeleteTarget(transaction)}
-                          disabled={transactionDeleteBusy}
-                        >
-                          Delete
-                        </button>
+                        <div className="accounts-detail__transaction-actions">
+                          <button
+                            className="button button-secondary button-small accounts-detail__transaction-delete"
+                            type="button"
+                            onClick={() => setTransactionDeleteTarget(transaction)}
+                            disabled={transactionDeleteBusy}
+                          >
+                            Delete
+                          </button>
+                          <button
+                            className="accounts-card-chevron accounts-detail__transaction-open"
+                            type="button"
+                            onClick={() => openTransactionDetail(transaction)}
+                            aria-label={`Open details for ${merchantDisplay}`}
+                          >
+                            <span aria-hidden="true">›</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );

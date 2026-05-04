@@ -15029,6 +15029,16 @@ input.transaction-inline-edit--amount::placeholder {
   flex: 0 0 auto;
 }
 
+.accounts-detail__hero {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+}
+
+.accounts-detail__hero-card {
+  width: min(100%, 360px);
+}
+
 .accounts-detail__panel::before {
   content: "";
   position: absolute;
@@ -15238,11 +15248,22 @@ input.transaction-inline-edit--amount::placeholder {
   letter-spacing: -0.03em;
 }
 
+.accounts-detail__transaction-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .accounts-detail__transaction-delete {
   min-height: 0;
   padding: 5px 10px;
   font-size: 0.72rem;
   line-height: 1;
+}
+
+.accounts-detail__transaction-open {
+  pointer-events: auto;
 }
 
 .accounts-detail__transaction-amount.positive {
@@ -21480,6 +21501,10 @@ input.transaction-inline-edit--amount::placeholder {
     align-self: flex-start;
   }
 
+  .accounts-detail__hero-card {
+    width: min(100%, 340px);
+  }
+
   .accounts-detail__summary .status-card {
     margin-bottom: 0;
     padding: 10px 8px;
@@ -26201,6 +26226,14 @@ html[data-helper-text="hidden"] .settings-helper {
   .accounts-detail__transaction-date,
   .accounts-detail__transaction-category,
   .accounts-detail__transaction-type {
+    display: none;
+  }
+
+  .accounts-detail__transaction-actions {
+    gap: 6px;
+  }
+
+  .accounts-detail__transaction-delete {
     display: none;
   }
 }
