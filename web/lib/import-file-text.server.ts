@@ -189,12 +189,12 @@ const loadCanvasModule = async (): Promise<CanvasModule | null> => {
   return loadNativeCanvasModule();
 };
 
-let ocrWorkerPromise: Promise<import("tesseract.js").Worker> | null = null;
+let ocrWorkerPromise: Promise<unknown> | null = null;
 
 const getOcrWorker = async () => {
   if (!ocrWorkerPromise) {
     ocrWorkerPromise = (async () => {
-      const { createWorker } = await import("tesseract.js");
+      const { createWorker } = await new Function("return import('tesseract.js')")();
       return createWorker("eng", 1, {
         logger: () => {
           // Keep OCR logs quiet during imports.

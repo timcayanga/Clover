@@ -3,6 +3,7 @@ import path from "node:path";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: ["@napi-rs/canvas", "tesseract.js"],
   typescript: {
     ignoreBuildErrors: true,
   },
