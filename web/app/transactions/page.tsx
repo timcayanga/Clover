@@ -1585,6 +1585,7 @@ function TransactionsPageContent() {
   const [manualMoreOpen, setManualMoreOpen] = useState(false);
   const [manualAccountMenuOpen, setManualAccountMenuOpen] = useState(false);
   const [manualCategoryMenuOpen, setManualCategoryMenuOpen] = useState(false);
+  const [mobileVisibleCount, setMobileVisibleCount] = useState(MOBILE_TRANSACTIONS_BATCH_SIZE);
   const [isMobileLoadingMore, setIsMobileLoadingMore] = useState(false);
   const transactionRowRefs = useRef(new Map<string, HTMLElement>());
   const warningPopoverRefs = useRef(new Map<string, HTMLDivElement | null>());
@@ -1761,6 +1762,8 @@ function TransactionsPageContent() {
       setIsWorkspaceDataReady(false);
     }
 
+    const compactViewport = typeof window !== "undefined" && window.matchMedia("(max-width: 1100px)").matches;
+
     const searchParams = buildTransactionQuerySearchParams(
       workspaceId,
       {
@@ -1783,7 +1786,7 @@ function TransactionsPageContent() {
         pageSize:
           options?.includeAll
             ? "all"
-            : options?.pageSizeOverride ?? (isCompactViewport ? MOBILE_TRANSACTIONS_BATCH_SIZE : transactionsPageSize),
+            : options?.pageSizeOverride ?? (compactViewport ? MOBILE_TRANSACTIONS_BATCH_SIZE : transactionsPageSize),
       }
     );
     searchParams.set("summaryMode", options?.summaryMode ?? (options?.background ? "full" : "light"));
@@ -1812,6 +1815,11 @@ function TransactionsPageContent() {
       const nextCurrencyCodes = responseCurrencyCodes.length > 0 ? responseCurrencyCodes : workspaceCurrencyCodesFromData;
       setWorkspaceCurrencyCodes(nextCurrencyCodes);
       setTransactions(mergedTransactions);
+      if (options?.append) {
+        setMobileVisibleCount((current) => current + fetchedTransactions.length);
+      } else {
+        setMobileVisibleCount(MOBILE_TRANSACTIONS_BATCH_SIZE);
+      }
       if (options?.append) {
         setIsMobileLoadingMore(false);
       }
@@ -2339,14 +2347,14 @@ function TransactionsPageContent() {
   const pageStartIndex = (currentTransactionPage - 1) * transactionsPageSize;
   const pageEndIndex = pageStartIndex + transactionsPageSize;
   const visibleTransactions = useMemo(() => transactions.filter((transaction) => !transaction.isExcluded), [transactions]);
-  const mobileLoadedPageCount = useMemo(
-    () => Math.max(1, Math.ceil(Math.max(transactions.length, 1) / MOBILE_TRANSACTIONS_BATCH_SIZE)),
-    [transactions.length]
+  const mobileVisibleTransactions = useMemo(
+    () => visibleTransactions.slice(0, Math.max(mobileVisibleCount, MOBILE_TRANSACTIONS_BATCH_SIZE)),
+    [mobileVisibleCount, visibleTransactions]
   );
   const mobileTransactionGroups = useMemo(() => {
     const groups: Array<{ date: string; label: string; transactions: Transaction[] }> = [];
 
-    for (const transaction of visibleTransactions) {
+    for (const transaction of mobileVisibleTransactions) {
       const dateKey = transaction.date.slice(0, 10);
       const label = formatDate(dateKey);
       const lastGroup = groups[groups.length - 1];
@@ -2359,13 +2367,15 @@ function TransactionsPageContent() {
     }
 
     return groups;
-  }, [visibleTransactions]);
+  }, [mobileVisibleTransactions]);
   const hasVisibleTransactions = transactionsSummary.totalCount > 0;
   const visibleTransactionIds = useMemo(() => visibleTransactions.map((transaction) => transaction.id), [visibleTransactions]);
   const allVisibleSelected =
     visibleTransactionIds.length > 0 && visibleTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
   const someVisibleSelected = visibleTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
-  const hasMoreMobileTransactions = isCompactViewport && transactions.length < transactionsSummary.totalCount;
+  const hasMoreMobileTransactions =
+    isCompactViewport &&
+    (mobileVisibleTransactions.length < visibleTransactions.length || transactions.length < transactionsSummary.totalCount);
 
   const currentPageLabel = useMemo(() => {
     if (transactionsSummary.totalCount === 0) {
@@ -2403,11 +2413,20 @@ function TransactionsPageContent() {
   }, [currentTransactionPage, totalTransactionPages]);
 
   const loadMoreMobileTransactions = useCallback(async () => {
-    if (!isCompactViewport || isMobileLoadingMore || !selectedWorkspaceId || !hasMoreMobileTransactions) {
+    if (!isCompactViewport || !hasMoreMobileTransactions) {
       return;
     }
 
-    const nextPage = mobileLoadedPageCount + 1;
+    if (mobileVisibleCount < visibleTransactions.length) {
+      setMobileVisibleCount((current) => Math.min(current + MOBILE_TRANSACTIONS_BATCH_SIZE, visibleTransactions.length));
+      return;
+    }
+
+    if (isMobileLoadingMore || !selectedWorkspaceId || transactions.length >= transactionsSummary.totalCount) {
+      return;
+    }
+
+    const nextPage = Math.max(1, Math.ceil(transactions.length / MOBILE_TRANSACTIONS_BATCH_SIZE)) + 1;
     setIsMobileLoadingMore(true);
     try {
       await loadTransactionsPage(selectedWorkspaceId, {
@@ -2425,7 +2444,10 @@ function TransactionsPageContent() {
     isCompactViewport,
     isMobileLoadingMore,
     loadTransactionsPage,
-    mobileLoadedPageCount,
+    mobileVisibleCount,
+    transactions.length,
+    transactionsSummary.totalCount,
+    visibleTransactions.length,
     selectedWorkspaceId,
   ]);
 
@@ -2457,6 +2479,41 @@ function TransactionsPageContent() {
 
     return () => observer.disconnect();
   }, [hasMoreMobileTransactions, isCompactViewport, loadMoreMobileTransactions]);
+
+  useEffect(() => {
+    if (!isCompactViewport) {
+      return;
+    }
+
+    let rafId = 0;
+    const checkScrollPosition = () => {
+      if (rafId) {
+        return;
+      }
+
+      rafId = window.requestAnimationFrame(() => {
+        rafId = 0;
+        const doc = document.documentElement;
+        const distanceFromBottom = doc.scrollHeight - window.innerHeight - window.scrollY;
+
+        if (distanceFromBottom < 900) {
+          void loadMoreMobileTransactions();
+        }
+      });
+    };
+
+    window.addEventListener("scroll", checkScrollPosition, { passive: true });
+    window.addEventListener("resize", checkScrollPosition);
+    checkScrollPosition();
+
+    return () => {
+      if (rafId) {
+        window.cancelAnimationFrame(rafId);
+      }
+      window.removeEventListener("scroll", checkScrollPosition);
+      window.removeEventListener("resize", checkScrollPosition);
+    };
+  }, [isCompactViewport, loadMoreMobileTransactions]);
 
   const activeFilterCount = useMemo(() => {
     let count = 0;
