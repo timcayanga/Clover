@@ -925,6 +925,7 @@ const buildBankInstructionJson = (params: {
         "Landbank statement tables may show In/Out columns and a closing balance. Use the table rows only and ignore pure balance-note lines.",
         "Treat cash deposits, PESONet, interbank transfers, and wallet funding as transfers unless the description clearly says salary or merchant spend.",
         "Preserve the full account number exactly when it is visible in the statement header.",
+        "For OCR-heavy Landbank files, rely on the visible table structure and running balance instead of short OCR fragments. Keep each date row separate even if the description wraps onto the next line.",
       ],
     };
   }
@@ -937,6 +938,7 @@ const buildBankInstructionJson = (params: {
         "UCPB current-account statements often include a transaction code legend. Extract the legend before final classification.",
         "Use debit as outgoing and credit as incoming, and do not turn balance-forward or total rows into transactions.",
         "Preserve the raw transaction code plus the expanded meaning from the legend.",
+        "For OCR-heavy UCPB files, use the legend and the row columns as the source of truth. Ignore footer noise and repeated summary blocks.",
       ],
     };
   }
@@ -949,6 +951,7 @@ const buildBankInstructionJson = (params: {
         "China Bank savings and credit-card statements may include housekeeping or reversal rows; keep those separate from normal spend.",
         "Cash payments on credit cards should be treated as payments/transfers, not income.",
         "Preserve the account number exactly when visible.",
+        "For OCR-heavy China Bank files, trust the transaction table and account summary box over OCR fragments in the page margins or footers. Preserve long account-holder names when they wrap across lines.",
       ],
     };
   }
@@ -1416,7 +1419,10 @@ export const parseImportTextWithOpenAIFallback = async (params: {
   });
 
   const pageImagesInput = params.pageImages ?? [];
-  const pageImageLimit = params.text.trim().length === 0 ? 6 : 2;
+  const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank"]);
+  const isNoisyVisionInstitution =
+    typeof params.detectedMetadata?.institution === "string" && noisyVisionPreferredInstitutions.has(params.detectedMetadata.institution);
+  const pageImageLimit = params.text.trim().length === 0 ? 6 : isNoisyVisionInstitution ? 6 : 2;
   const pageImagesToSend = pageImagesInput.slice(0, Math.min(pageImageLimit, pageImagesInput.length));
   const textModel = (env as { OPENAI_IMPORT_PARSER_MODEL?: string }).OPENAI_IMPORT_PARSER_MODEL?.trim() || "gpt-4.1";
   const imageModel =
