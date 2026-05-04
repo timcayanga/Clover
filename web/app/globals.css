@@ -14677,19 +14677,9 @@ input.transaction-inline-edit--amount::placeholder {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(120deg, rgba(255, 255, 255, 0.28), transparent 22%, transparent 66%, rgba(255, 255, 255, 0.18)),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 36%, transparent 74%, rgba(0, 0, 0, 0.04)),
-    radial-gradient(circle at top left, rgba(255, 255, 255, 0.34), transparent 32%);
-  opacity: 1;
-  pointer-events: none;
-}
-
-.accounts-account-card::after {
-  content: "";
-  position: absolute;
-  inset: 1px;
-  border-radius: 29px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+    linear-gradient(120deg, rgba(255, 255, 255, 0.18), transparent 24%, transparent 70%, rgba(255, 255, 255, 0.1)),
+    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.16), transparent 28%);
+  opacity: 0.9;
   pointer-events: none;
 }
 
