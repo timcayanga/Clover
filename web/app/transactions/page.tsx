@@ -5659,7 +5659,7 @@ function TransactionsPageContent() {
                     />
                   </button>
 
-                  <label className="manual-form-layout__full transactions-manual-field">
+                  <label className="transactions-manual-field">
                     Name
                     <input
                       ref={manualNameInputRef}
