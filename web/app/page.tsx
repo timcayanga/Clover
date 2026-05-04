@@ -208,7 +208,7 @@ export default function HomePage() {
         <div className="landing-trust__copy">
           <div className="landing-trust__statement">
             <img src="/help-icons/privacy-security-data.png" alt="" aria-hidden="true" />
-            <h2>Built to keep your data clear, private, and easy to review.</h2>
+            <h2>Your uploads stay private, are only visible to your account, and can be deleted anytime after processing.</h2>
           </div>
         </div>
 
