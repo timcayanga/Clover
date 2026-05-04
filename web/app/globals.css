@@ -2149,6 +2149,7 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .shell-compact-bar__actions {
+  order: 3;
   margin-left: auto;
   display: flex;
   align-items: center;
@@ -15088,7 +15089,13 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-detail__panel {
   position: relative;
   overflow: clip;
-  padding-bottom: 28px;
+  display: grid;
+  gap: 20px;
+  padding: 8px 0 28px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .accounts-detail__header {
@@ -15096,7 +15103,7 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: flex-start;
   justify-content: flex-end;
   gap: 16px;
-  margin-bottom: 4px;
+  margin-bottom: 0;
 }
 
 .accounts-detail__header .actions {
@@ -15111,11 +15118,11 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-detail__hero {
   display: grid;
   justify-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .accounts-detail__hero-card {
-  width: min(100%, 360px);
+  width: min(100%, 300px);
 }
 
 .accounts-detail__identity-edit {
@@ -15164,14 +15171,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-detail__panel::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 4px;
-  background: var(--account-accent);
-  border-radius: 22px 22px 0 0;
-  opacity: 0.96;
-  pointer-events: none;
+  content: none;
 }
 
 .accounts-detail__summary {
@@ -21780,7 +21780,7 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-detail__hero-card {
-    width: min(100%, 340px);
+    width: min(100%, 260px);
   }
 
   .accounts-detail__identity-edit {

@@ -1473,7 +1473,7 @@ function AccountDetailPageContent() {
       hideCompactBarKickerAndSubtitleOnMobile
       showTopbar={false}
     >
-      <section className="panel accounts-detail__panel" style={accountBrandStyles}>
+      <section className="accounts-detail__panel" style={accountBrandStyles}>
         <div className="accounts-detail__header">
           <div className="actions accounts-detail__desktop-actions">
             <button className="button button-secondary" type="button" onClick={() => router.push("/accounts")}>
