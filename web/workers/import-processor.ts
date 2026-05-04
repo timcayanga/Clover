@@ -1670,7 +1670,7 @@ export const processImportFileText = async (
     (importFile.fileType === "application/pdf" || imageImport) &&
     (!text.trim() ||
       parsedRows.length === 0 ||
-      (prefersVisionFallbackForInstitution && (parsedRows.length >= 10 || parsedDateCoverage < 0.85)) ||
+      prefersVisionFallbackForInstitution ||
       (metadataForParse.confidence ?? 0) < 70 ||
       !metadataForParse.accountNumber ||
       !hasKnownInstitution ||
