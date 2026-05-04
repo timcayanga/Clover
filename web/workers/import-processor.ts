@@ -2843,69 +2843,9 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         },
       }))
     ) {
-      const openingBalanceCategory = await tx.category.findFirst({
-        where: {
-          workspaceId: importFile.workspaceId,
-          name: "Opening Balance",
-        },
-      });
-
-      const category =
-        openingBalanceCategory ??
-        (await tx.category.create({
-          data: {
-            workspaceId: importFile.workspaceId,
-            name: "Opening Balance",
-            type: "transfer",
-            isSystem: true,
-          },
-        }));
-
-      const openingBalanceInsertRow = buildTransactionInsertRecord({
-          workspaceId: String(importFile.workspaceId),
-          accountId: resolvedAccountId,
-          importFileId,
-          categoryId: category.id,
-          reviewStatus: "confirmed",
-          parserConfidence: 100,
-          categoryConfidence: 100,
-          accountMatchConfidence: 100,
-          duplicateConfidence: 0,
-          transferConfidence: 100,
-          rawPayload: {
-            bank: statementCheckpoint.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object"
-              ? (statementCheckpoint.sourceMetadata as Record<string, unknown>).institution ?? "Statement"
-              : "Statement",
-            kind: "opening_balance",
-            statementStartDate: statementStartDate?.toISOString() ?? null,
-            statementEndDate: statementEndDate?.toISOString() ?? null,
-            openingBalance: statementCheckpoint.openingBalance?.toString() ?? null,
-          } as Prisma.InputJsonValue,
-          normalizedPayload: {
-            kind: "opening_balance",
-            openingBalance: statementCheckpoint.openingBalance?.toString() ?? null,
-            statementStartDate: statementStartDate?.toISOString() ?? null,
-          } as Prisma.InputJsonValue,
-          learnedRuleIdsApplied: [] as Prisma.InputJsonValue,
-          date: statementStartDate ?? new Date(),
-          amount: parseAmountValue(statementCheckpoint.openingBalance?.toString() ?? null) ?? 0,
-          currency:
-            typeof statementCheckpoint?.sourceMetadata === "object" && statementCheckpoint?.sourceMetadata !== null
-              ? String((statementCheckpoint.sourceMetadata as Record<string, unknown>).currency ?? "PHP")
-              : "PHP",
-          type: "transfer" as TransactionType,
-          merchantRaw: "Beginning balance",
-          merchantClean: "Beginning balance",
-          description: statementCheckpoint.openingBalance !== null ? `Opening balance for statement ending ${statementEndDate?.toISOString().slice(0, 10) ?? "unknown"}` : "Opening balance",
-          isTransfer: false,
-          isExcluded: true,
-        });
-      const { categoryName: _openingBalanceCategoryName, ...openingBalanceTransactionRow } =
-        openingBalanceInsertRow as Record<string, unknown>;
-      await tx.transaction.create({
-        data: openingBalanceTransactionRow as Prisma.TransactionCreateInput,
-      });
-      openingBalanceInserted = true;
+      // Keep the checkpoint opening balance for reconciliation, but avoid synthesizing
+      // an extra transaction row. That keeps live imports aligned with the JSON fixtures.
+      openingBalanceInserted = false;
     }
   }
 
@@ -2988,6 +2928,17 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     const rowDuplicateConfidence = typeof row.duplicateConfidence === "number" ? row.duplicateConfidence : 0;
     const rowTransferConfidence = typeof row.transferConfidence === "number" ? row.transferConfidence : rowType === "transfer" ? 100 : 0;
     const categoryName = (typeof row.categoryName === "string" && row.categoryName) || defaultCategoryForType((rowType as "income" | "expense" | "transfer") ?? "expense");
+    const rowIsOpeningBalance = Boolean(
+      typeof row.rawPayload === "object" &&
+        row.rawPayload !== null &&
+        !Array.isArray(row.rawPayload) &&
+        (row.rawPayload as Record<string, unknown>).kind === "opening_balance"
+    );
+
+    if (rowIsOpeningBalance) {
+      continue;
+    }
+
     let categoryId = categoryByName.get(categoryName.toLowerCase());
 
     if (!categoryId) {
