@@ -1911,7 +1911,7 @@ function AccountsPageContent() {
       return (
         <article
           key={key}
-          className="accounts-account-card glass"
+          className="accounts-account-card"
           style={{
             ["--brand-accent" as string]: accountBrand.accent,
             ["--brand-soft" as string]: accountBrand.background,
@@ -1995,7 +1995,7 @@ function AccountsPageContent() {
     return (
       <article
         key={key}
-        className="accounts-account-card glass"
+        className="accounts-account-card"
         style={{
           ["--brand-accent" as string]: accountBrand.accent,
           ["--brand-soft" as string]: accountBrand.background,
