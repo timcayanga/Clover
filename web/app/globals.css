@@ -14559,6 +14559,10 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 14px;
 }
 
+.accounts-mobile-featured {
+  display: none;
+}
+
 .accounts-account-card {
   position: relative;
   display: grid;
@@ -14594,38 +14598,45 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-account-card[data-visual="ledger"] {
-  min-height: 196px;
+  aspect-ratio: 1.58 / 1;
+  min-height: 0;
   border-color: rgba(255, 255, 255, 0.2);
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.98), color-mix(in srgb, var(--brand-soft, rgba(255,255,255,0.96)) 92%, white));
+    linear-gradient(145deg, color-mix(in srgb, var(--brand-accent) 14%, white) 0%, color-mix(in srgb, var(--brand-accent) 32%, white) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.06));
   box-shadow:
-    0 14px 34px rgba(15, 23, 42, 0.08),
-    0 26px 58px color-mix(in srgb, var(--brand-accent) 10%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.82);
+    0 18px 42px rgba(15, 23, 42, 0.12),
+    0 28px 70px color-mix(in srgb, var(--brand-accent) 16%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 -18px 30px rgba(255, 255, 255, 0.12);
 }
 
 .accounts-account-card[data-visual="cash"] {
-  min-height: 196px;
+  aspect-ratio: 1.58 / 1;
+  min-height: 0;
   border-color: rgba(255, 255, 255, 0.24);
   background:
-    linear-gradient(145deg, rgba(249, 255, 248, 0.98), rgba(237, 249, 243, 0.96)),
-    color-mix(in srgb, var(--brand-soft, rgba(243,250,246,0.96)) 94%, white);
+    linear-gradient(145deg, color-mix(in srgb, var(--brand-accent) 12%, white) 0%, color-mix(in srgb, var(--brand-accent) 28%, white) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.06));
   box-shadow:
-    0 14px 34px rgba(15, 23, 42, 0.08),
-    0 24px 58px color-mix(in srgb, var(--brand-accent) 10%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.86);
+    0 18px 42px rgba(15, 23, 42, 0.12),
+    0 28px 70px color-mix(in srgb, var(--brand-accent) 16%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.86),
+    inset 0 -18px 30px rgba(255, 255, 255, 0.12);
 }
 
 .accounts-account-card[data-visual="investment"] {
-  min-height: 196px;
+  aspect-ratio: 1.58 / 1;
+  min-height: 0;
   border-color: rgba(255, 255, 255, 0.22);
   background:
-    linear-gradient(145deg, rgba(247, 255, 242, 0.98), rgba(229, 248, 222, 0.96)),
-    color-mix(in srgb, var(--brand-soft, rgba(247,255,242,0.96)) 92%, white);
+    linear-gradient(145deg, color-mix(in srgb, var(--brand-accent) 10%, white) 0%, color-mix(in srgb, var(--brand-accent) 24%, white) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0.06));
   box-shadow:
-    0 14px 34px rgba(15, 23, 42, 0.08),
-    0 26px 58px color-mix(in srgb, var(--brand-accent) 12%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.84);
+    0 18px 42px rgba(15, 23, 42, 0.12),
+    0 28px 70px color-mix(in srgb, var(--brand-accent) 16%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.84),
+    inset 0 -18px 30px rgba(255, 255, 255, 0.12);
 }
 
 .accounts-account-card__link-overlay {
@@ -21494,8 +21505,8 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-card-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .accounts-group {
@@ -21519,15 +21530,56 @@ input.transaction-inline-edit--amount::placeholder {
     border-radius: 24px;
   }
 
-  .accounts-account-card[data-visual="identity"] {
+  .accounts-account-card[data-visual="identity"],
+  .accounts-account-card[data-visual="cash"],
+  .accounts-account-card[data-visual="ledger"],
+  .accounts-account-card[data-visual="investment"] {
     aspect-ratio: 1.56 / 1;
     min-height: 0;
   }
 
-  .accounts-account-card[data-visual="cash"],
-  .accounts-account-card[data-visual="ledger"],
-  .accounts-account-card[data-visual="investment"] {
-    min-height: 168px;
+  .accounts-mobile-featured {
+    display: grid;
+    gap: 8px;
+  }
+
+  .accounts-mobile-featured__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .accounts-mobile-featured__head h5 {
+    margin: 0;
+    font-size: 0.88rem;
+    color: #17263d;
+  }
+
+  .accounts-mobile-featured__head span {
+    font-size: 0.68rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .accounts-mobile-featured__rail {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(248px, 82vw);
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .accounts-mobile-featured__rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .accounts-mobile-featured__rail .accounts-account-card {
+    scroll-snap-align: start;
   }
 
   .accounts-account-card__head {

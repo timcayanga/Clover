@@ -1585,6 +1585,11 @@ function AccountsPageContent() {
       .filter((group) => group.rows.length > 0);
   }, [visibleAccounts]);
 
+  const featuredAccountRows = useMemo(
+    () => accountGroups.flatMap((group) => group.rows).slice(0, 8),
+    [accountGroups]
+  );
+
   const selectedAccount = useMemo(
     () => reconciledAccounts.find((account) => account.id === drawerAccountId) ?? null,
     [drawerAccountId, reconciledAccounts]
@@ -1893,6 +1898,173 @@ function AccountsPageContent() {
       setImportSeedFiles(files && files.length > 0 ? files : null);
       setImportOpen(true);
     });
+  };
+
+  const renderAccountCard = (row: Account | InvestmentInstitutionCard, key: string) => {
+    if ("kind" in row && row.kind === "investment_institution") {
+      const accountBrand = getAccountBrand({
+        institution: row.institution,
+        name: row.institution,
+        type: "investment",
+      });
+
+      return (
+        <article
+          key={key}
+          className="accounts-account-card glass"
+          style={{
+            ["--brand-accent" as string]: accountBrand.accent,
+            ["--brand-soft" as string]: accountBrand.background,
+          }}
+          data-visual="investment"
+        >
+          <button
+            className="accounts-account-card__link-overlay"
+            type="button"
+            onClick={() => openInvestmentInstitution(row)}
+            aria-label={`Open ${row.institution} investment institution`}
+          />
+
+          <div className="accounts-account-card__content">
+            <div className="accounts-account-card__head">
+              <div className="accounts-account-card__brand">
+                <AccountBrandMark accountBrand={accountBrand} label={row.institution} />
+                <div>
+                  <span>Investments</span>
+                  <strong>{row.institution}</strong>
+                </div>
+              </div>
+              <div className="accounts-account-card__actions">
+                <button
+                  className="accounts-card-chevron"
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    openInvestmentInstitution(row);
+                  }}
+                  aria-label={`Open ${row.institution} institution details`}
+                >
+                  <span aria-hidden="true">›</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="accounts-account-card__body">
+              <div className="accounts-account-card__balance-row">
+                <div className="accounts-account-card__amount is-asset">
+                  {formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}
+                </div>
+              </div>
+              <div className="accounts-account-card__investment-meta">
+                <span>{getInvestmentInstitutionPreview(row.accounts)}</span>
+              </div>
+            </div>
+          </div>
+        </article>
+      );
+    }
+
+    const value = parseAmount(row.balance);
+    const isLiability = isLiabilityAccountType(getEffectiveAccountType(row));
+    const duplicateKey = `${row.name.trim().toLowerCase()}::${(row.institution ?? "").trim().toLowerCase()}::${String(
+      row.type ?? ""
+    ).trim().toLowerCase()}`;
+    const warning = getAccountWarning(row, duplicateCounts.get(duplicateKey) ?? 0);
+    const isDeleting = deletingAccountIdsSet.has(row.id);
+    const latestCheckpoint =
+      latestCheckpoints.checkpointsByAccountId.get(row.id) ??
+      latestCheckpoints.checkpointsByAccountKey.get(
+        normalizeImportedAccountKey(row.name, row.institution, row.accountNumber, row.type)
+      ) ??
+      null;
+    const accountDisplayName = getAccountDisplayName(row);
+    const hasVisibleBalance = row.balance !== null && row.balance.trim() !== "";
+    const isLoading =
+      row.source === "upload" &&
+      (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
+      !hasVisibleBalance;
+    const accountBrand = getAccountBrand({
+      institution: row.institution,
+      name: row.name,
+      type: getEffectiveAccountType(row),
+    });
+    const cardVisual = getAccountCardVisual(getEffectiveAccountType(row));
+    const balanceValue = Math.abs(value);
+    const cardEyebrow = getAccountCardEyebrow(row);
+
+    return (
+      <article
+        key={key}
+        className="accounts-account-card glass"
+        style={{
+          ["--brand-accent" as string]: accountBrand.accent,
+          ["--brand-soft" as string]: accountBrand.background,
+        }}
+        data-state={isDeleting ? "deleting" : undefined}
+        data-visual={cardVisual}
+      >
+        <button
+          className="accounts-account-card__link-overlay"
+          type="button"
+          onClick={() => openAccountDrawer(row)}
+          aria-label={`Open ${accountDisplayName} account`}
+        />
+
+        <div className="accounts-account-card__content">
+          <div className="accounts-account-card__head">
+            <div className="accounts-account-card__brand">
+              <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
+              <div>
+                <span>{formatAccountTypeLabel(getEffectiveAccountType(row))}</span>
+                <strong>{cardVisual === "identity" ? cardEyebrow : getAccountCardTitle(row)}</strong>
+              </div>
+            </div>
+            <div className="accounts-account-card__actions">
+              {warning ? (
+                <span className="accounts-warning-wrap">
+                  <button
+                    className="accounts-warning-icon"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      openDrawerForWarning(row, warning);
+                    }}
+                    title={warning}
+                    aria-label={warning}
+                  >
+                    <span aria-hidden="true">⚠</span>
+                  </button>
+                  <span className="accounts-warning-tooltip" role="tooltip">
+                    {warning}
+                  </span>
+                </span>
+              ) : null}
+              <button
+                className="accounts-card-chevron"
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  openAccountDrawer(row);
+                }}
+                aria-label={`Open ${accountDisplayName} drawer`}
+              >
+                <span aria-hidden="true">›</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="accounts-account-card__body">
+            <div className="accounts-account-card__balance-row">
+              <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
+                {formatAccountAmount(balanceValue, row.currency)}
+              </div>
+              {isDeleting ? <div className="accounts-account-card__status-note">Deleting</div> : null}
+              {!isDeleting && isLoading ? <div className="accounts-account-card__status-note">Loading</div> : null}
+            </div>
+          </div>
+        </div>
+      </article>
+    );
   };
 
   useEffect(() => {
@@ -2365,6 +2537,17 @@ function AccountsPageContent() {
         <section className="accounts-main-grid">
           <div className="accounts-list-column">
             <div className="accounts-sections">
+              {featuredAccountRows.length > 0 ? (
+                <section className="accounts-mobile-featured" aria-label="Featured accounts">
+                  <div className="accounts-mobile-featured__head">
+                    <h5>Featured accounts</h5>
+                    <span>Swipe left or right</span>
+                  </div>
+                  <div className="accounts-mobile-featured__rail">
+                    {featuredAccountRows.map((row) => renderAccountCard(row, `featured-${row.id}`))}
+                  </div>
+                </section>
+              ) : null}
               {accounts.length === 0 ? (
                 <div className="empty-state accounts-empty-state">
                   <strong>It's quiet in here.</strong>
@@ -2388,173 +2571,7 @@ function AccountsPageContent() {
                     </div>
 
                     <div className="accounts-card-grid" aria-label={`${group.title} accounts`}>
-                      {group.rows.map((account) => {
-                          if ("kind" in account && account.kind === "investment_institution") {
-                            const accountBrand = getAccountBrand({
-                              institution: account.institution,
-                              name: account.institution,
-                              type: "investment",
-                            });
-                            return (
-                              <article
-                                key={account.id}
-                                className="accounts-account-card glass"
-                                style={{
-                                  ["--brand-accent" as string]: accountBrand.accent,
-                                  ["--brand-soft" as string]: accountBrand.background,
-                                }}
-                                data-visual="investment"
-                              >
-                                <button
-                                  className="accounts-account-card__link-overlay"
-                                  type="button"
-                                  onClick={() => openInvestmentInstitution(account)}
-                                  aria-label={`Open ${account.institution} investment institution`}
-                                />
-
-                                <div className="accounts-account-card__content">
-                                  <div className="accounts-account-card__head">
-                                    <div className="accounts-account-card__brand">
-                                      <AccountBrandMark accountBrand={accountBrand} label={account.institution} />
-                                      <div>
-                                        <strong>{account.institution}</strong>
-                                        <span>{getInvestmentInstitutionPreview(account.accounts)}</span>
-                                      </div>
-                                    </div>
-                                    <div className="accounts-account-card__actions">
-                                      <button
-                                        className="accounts-card-chevron"
-                                        type="button"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          openInvestmentInstitution(account);
-                                        }}
-                                        aria-label={`Open ${account.institution} institution details`}
-                                      >
-                                        <span aria-hidden="true">›</span>
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  <div className="accounts-account-card__body">
-                                    <div className="accounts-account-card__balance-row">
-                                      <div className="accounts-account-card__amount is-asset">
-                                        {formatAccountAmount(Math.abs(parseAmount(account.balance)), account.currency)}
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </article>
-                            );
-                          }
-
-                          const value = parseAmount(account.balance);
-                          const isLiability = isLiabilityAccountType(getEffectiveAccountType(account));
-                          const duplicateKey = `${account.name.trim().toLowerCase()}::${(account.institution ?? "").trim().toLowerCase()}::${String(
-                            account.type ?? ""
-                          ).trim().toLowerCase()}`;
-                          const warning = getAccountWarning(account, duplicateCounts.get(duplicateKey) ?? 0);
-                          const isDeleting = deletingAccountIdsSet.has(account.id);
-                          const latestCheckpoint =
-                            latestCheckpoints.checkpointsByAccountId.get(account.id) ??
-                            latestCheckpoints.checkpointsByAccountKey.get(
-                              normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)
-                            ) ??
-                            null;
-                          const accountDisplayName = getAccountDisplayName(account);
-                          const hasVisibleBalance = account.balance !== null && account.balance.trim() !== "";
-                          const isLoading =
-                            account.source === "upload" &&
-                            (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
-                            !hasVisibleBalance;
-                          const accountBrand = getAccountBrand({
-                            institution: account.institution,
-                            name: account.name,
-                            type: getEffectiveAccountType(account),
-                          });
-                          const cardVisual = getAccountCardVisual(getEffectiveAccountType(account));
-                          const balanceValue = Math.abs(value);
-                          const cardEyebrow = getAccountCardEyebrow(account);
-                          return (
-                            <article
-                              key={account.id}
-                              className="accounts-account-card glass"
-                              style={{
-                                ["--brand-accent" as string]: accountBrand.accent,
-                                ["--brand-soft" as string]: accountBrand.background,
-                              }}
-                              data-state={isDeleting ? "deleting" : undefined}
-                              data-visual={cardVisual}
-                            >
-                              <button
-                                className="accounts-account-card__link-overlay"
-                                type="button"
-                                onClick={() => openAccountDrawer(account)}
-                                aria-label={`Open ${accountDisplayName} account`}
-                              />
-
-                              <div className="accounts-account-card__content">
-                                  <div className="accounts-account-card__head">
-                                    <div className="accounts-account-card__brand">
-                                      <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
-                                      <div>
-                                        {cardVisual === "identity" ? (
-                                          <strong>{cardEyebrow}</strong>
-                                        ) : (
-                                          <>
-                                            <span>{formatAccountTypeLabel(getEffectiveAccountType(account))}</span>
-                                            <strong>{getAccountCardTitle(account)}</strong>
-                                          </>
-                                        )}
-                                      </div>
-                                    </div>
-                                  <div className="accounts-account-card__actions">
-                                    {warning ? (
-                                      <span className="accounts-warning-wrap">
-                                        <button
-                                          className="accounts-warning-icon"
-                                          type="button"
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            openDrawerForWarning(account, warning);
-                                          }}
-                                          title={warning}
-                                          aria-label={warning}
-                                        >
-                                          <span aria-hidden="true">⚠</span>
-                                        </button>
-                                        <span className="accounts-warning-tooltip" role="tooltip">
-                                          {warning}
-                                        </span>
-                                      </span>
-                                    ) : null}
-                                      <button
-                                        className="accounts-card-chevron"
-                                        type="button"
-                                        onClick={(event) => {
-                                          event.stopPropagation();
-                                          openAccountDrawer(account);
-                                        }}
-                                        aria-label={`Open ${accountDisplayName} drawer`}
-                                      >
-                                      <span aria-hidden="true">›</span>
-                                    </button>
-                                  </div>
-                                </div>
-
-                                <div className="accounts-account-card__body">
-                                  <div className="accounts-account-card__balance-row">
-                                    <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
-                                      {formatAccountAmount(balanceValue, account.currency)}
-                                    </div>
-                                    {isDeleting ? <div className="accounts-account-card__status-note">Deleting</div> : null}
-                                    {!isDeleting && isLoading ? <div className="accounts-account-card__status-note">Loading</div> : null}
-                                  </div>
-                                </div>
-                              </div>
-                            </article>
-                          );
-                        })}
+                      {group.rows.map((row) => renderAccountCard(row, `${group.title}-${row.id}`))}
                       </div>
                     </article>
                 ))
