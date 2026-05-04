@@ -308,7 +308,7 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
-    match: /\bPNB\b/i,
+    match: /\b(PNB|PHILIPPINE NATIONAL BANK)\b/i,
     brand: makeBrand({
       label: "PNB",
       logoSrcs: philippinesLogoWithVariants("pnb"),

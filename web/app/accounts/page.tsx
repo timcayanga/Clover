@@ -15,6 +15,7 @@ import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
 import { formatCurrencyAmount, formatCurrencyCode, formatCurrencySymbol } from "@/lib/currency-format";
 import { deriveReconciledBalance } from "@/lib/account-balance";
+import { getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
 import { getAccountPath, getInvestmentInstitutionPath } from "@/lib/account-path";
 import { countNonCashAccounts } from "@/lib/account-limit-count";
 import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
@@ -107,10 +108,16 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
   if (!optimisticAccountId || !summary.accountName) {
     return null;
   }
+  const displayName = formatUploadAccountDisplayName(
+    summary.accountName,
+    summary.institution,
+    summary.accountNumber ?? null,
+    summary.accountType ?? null
+  );
 
   return {
     id: optimisticAccountId,
-    name: summary.accountName,
+    name: displayName,
     institution: summary.institution,
     accountNumber: summary.accountNumber ?? null,
     investmentSubtype: null,
@@ -296,7 +303,7 @@ const getAccountCardTitle = (account: Account) => {
     return "Cash";
   }
 
-  return account.name;
+  return getAccountDisplayName(account);
 };
 
 const getInvestmentInstitutionPreview = (accounts: Account[]) =>
@@ -2443,8 +2450,12 @@ function AccountsPageContent() {
                               normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)
                             ) ??
                             null;
+                          const accountDisplayName = getAccountDisplayName(account);
+                          const hasVisibleBalance = account.balance !== null && account.balance.trim() !== "";
                           const isLoading =
-                            account.source === "upload" && (!latestCheckpoint || latestCheckpoint.status !== "reconciled");
+                            account.source === "upload" &&
+                            (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
+                            !hasVisibleBalance;
                           const accountBrand = getAccountBrand({
                             institution: account.institution,
                             name: account.name,
@@ -2467,13 +2478,13 @@ function AccountsPageContent() {
                                 className="accounts-account-card__link-overlay"
                                 type="button"
                                 onClick={() => openAccountDrawer(account)}
-                                aria-label={`Open ${account.name} account`}
+                                aria-label={`Open ${accountDisplayName} account`}
                               />
 
                               <div className="accounts-account-card__content">
                                   <div className="accounts-account-card__head">
                                     <div className="accounts-account-card__brand">
-                                      <AccountBrandMark accountBrand={accountBrand} label={account.name} />
+                                      <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
                                       <div>
                                         {cardVisual === "identity" ? (
                                           <strong>{getAccountCardTitle(account)}</strong>
@@ -2505,15 +2516,15 @@ function AccountsPageContent() {
                                         </span>
                                       </span>
                                     ) : null}
-                                    <button
-                                      className="accounts-card-chevron"
-                                      type="button"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        openAccountDrawer(account);
-                                      }}
-                                      aria-label={`Open ${account.name} drawer`}
-                                    >
+                                      <button
+                                        className="accounts-card-chevron"
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          openAccountDrawer(account);
+                                        }}
+                                        aria-label={`Open ${accountDisplayName} drawer`}
+                                      >
                                       <span aria-hidden="true">›</span>
                                     </button>
                                   </div>
@@ -2522,7 +2533,7 @@ function AccountsPageContent() {
                                 <div className="accounts-account-card__body">
                                   <div className="accounts-account-card__balance-row">
                                     <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
-                                      {isLoading ? "Loading" : formatAccountAmount(balanceValue, account.currency)}
+                                      {formatAccountAmount(balanceValue, account.currency)}
                                     </div>
                                     {isDeleting ? <div className="accounts-account-card__status-note">Deleting</div> : null}
                                     {!isDeleting && isLoading ? <div className="accounts-account-card__status-note">Loading</div> : null}

@@ -6,6 +6,7 @@ import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { InfoTooltip } from "@/components/info-tooltip";
+import { getAccountDisplayName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import { deriveReconciledBalance } from "@/lib/account-balance";
@@ -901,6 +902,8 @@ function AccountDetailPageContent() {
       value: currentBalance,
     };
   }, [account, currentBalance, investmentMaturityValue, investmentPrincipal, investmentSubtype]);
+  const accountDisplayName = account ? getAccountDisplayName(account) : "Account";
+  const hasVisibleBalance = account?.balance !== null && account?.balance !== undefined && String(account.balance).trim() !== "";
   const accountDetailValueCardInfo = useMemo(() => {
     if (!account) {
       return "Spendable amount = the usable cash-like balance from this account.";
@@ -1435,9 +1438,7 @@ function AccountDetailPageContent() {
             {account ? <AccountBrandMark accountBrand={accountBrand} label={accountBrand.label} /> : null}
             <div>
               <p className="eyebrow">{account?.type === "investment" ? "Asset details" : "Account details"}</p>
-              <h2>
-                {account?.name ?? "Account"}
-              </h2>
+              <h2>{accountDisplayName}</h2>
               <p className="panel-muted">
                 {account ? `${accountBrand.label} · ${formatAccountType(account.type)} · ${account.currency} · ${account.source}` : message}
               </p>
@@ -1452,7 +1453,7 @@ function AccountDetailPageContent() {
 
         {account ? (
           <div className="accounts-detail__summary">
-            {account?.source === "upload" && (!latestCheckpoint || latestCheckpoint.status !== "reconciled") ? (
+            {account?.source === "upload" && (!latestCheckpoint || latestCheckpoint.status !== "reconciled") && !hasVisibleBalance ? (
               <div className="accounts-detail__loading-chip-wrap">
                 <span className="accounts-summary-chip is-neutral">Loading</span>
                 <p className="panel-muted">Clover is still reading this {latestCheckpointFamily?.pendingLabel ?? "statement"} and filling in the rest.</p>

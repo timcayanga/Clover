@@ -2,6 +2,7 @@ import type { AccountType, Prisma, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
 import { capturePostHogServerEvent } from "@/lib/analytics";
+import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/data-qa";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { countNonCashAccounts, getWorkspaceOwnerLimits } from "@/lib/plan-access";
@@ -1214,8 +1215,14 @@ const resolveConfirmationAccount = async (params: {
     }
   ) => {
     const data: Record<string, unknown> = {};
-    if (typeof next.name === "string" && next.name.trim() && next.name.trim() !== account.name) {
-      data.name = next.name.trim();
+    const displayName = formatUploadAccountDisplayName(
+      next.name ?? account.name,
+      next.institution ?? account.institution,
+      next.accountNumber ?? account.accountNumber,
+      next.type ?? account.type
+    );
+    if (displayName.trim() && displayName.trim() !== account.name) {
+      data.name = displayName.trim();
     }
     if (next.institution !== undefined && (next.institution ?? null) !== account.institution) {
       data.institution = next.institution === null ? null : next.institution.trim() || null;
@@ -1350,11 +1357,7 @@ const resolveConfirmationAccount = async (params: {
     const compatibleAccountColumns = await getCompatibleAccountColumns();
       const accountData = {
         workspaceId,
-        name:
-          inferredAccountName ??
-          (inferredInstitution && inferredAccountNumber
-            ? `${inferredInstitution} ${inferredAccountNumber.slice(-4)}`
-            : null),
+        name: formatUploadAccountDisplayName(inferredAccountName, inferredInstitution, inferredAccountNumber, accountIdentityType),
         institution: inferredInstitution,
         ...(compatibleAccountColumns.has("accountNumber") && inferredAccountNumber
           ? { accountNumber: inferredAccountNumber }
@@ -3151,7 +3154,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     accountNumber:
       typeof statementMetadata?.accountNumber === "string" ? statementMetadata.accountNumber : null,
     accountName:
-      typeof statementRow?.accountName === "string" ? statementRow.accountName : null,
+      formatUploadAccountDisplayName(
+        typeof statementRow?.accountName === "string" ? statementRow.accountName : null,
+        typeof statementRow?.institution === "string" ? statementRow.institution : null,
+        typeof statementMetadata?.accountNumber === "string" ? statementMetadata.accountNumber : null,
+        typeof account.type === "string" ? account.type : null
+      ),
     accountType: typeof account.type === "string" ? account.type : null,
     openingBalance:
       statementCheckpointRecord?.openingBalance !== null && statementCheckpointRecord?.openingBalance !== undefined
@@ -3169,7 +3177,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   };
   qaAccountForRun = {
     id: resolvedAccountId,
-    name: account.name,
+    name: formatUploadAccountDisplayName(account.name, account.institution, account.accountNumber, account.type),
     institution: account.institution,
     type: typeof account.type === "string" ? account.type : null,
     balance: reconciledAccountBalance,

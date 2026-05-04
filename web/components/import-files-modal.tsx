@@ -16,6 +16,7 @@ import { extractTextFromFile } from "@/lib/import-file-text";
 import { postFileWithProgress } from "@/lib/import-file-post";
 import { validateImportFile } from "@/lib/import-file-validation";
 import { type ImportImageMode } from "@/lib/import-image-mode";
+import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import {
   detectStatementMetadata,
   getTrailingBalanceFromParsedRows,
@@ -273,18 +274,6 @@ const normalizeStatementAccountName = (name: string, institution?: string | null
   return normalizedInstitution;
 };
 
-const formatImportedAccountName = (name: string | null, institution: string | null, accountNumber: string | null) => {
-  const normalizedName = normalizeStatementAccountName(name ?? "", institution);
-  const accountDigits = (accountNumber ?? "").replace(/\D/g, "");
-  const accountSuffix = accountDigits.length >= 4 ? accountDigits.slice(-4) : "";
-  if (!accountSuffix) {
-    return normalizedName;
-  }
-
-  const alreadyHasSuffix = new RegExp(`\\b${accountSuffix}$`).test(normalizedName.replace(/\s+/g, " "));
-  return alreadyHasSuffix ? normalizedName : `${normalizedName} ${accountSuffix}`.trim();
-};
-
 const accountKey = (name: string, institution: string | null, accountNumber?: string | null) =>
   `${normalizeStatementAccountName(name, institution).toLowerCase()}::${(institution ?? "").trim().toLowerCase()}::${(
     accountNumber ?? ""
@@ -373,7 +362,12 @@ const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
     return null;
   }
 
-  const normalizedAccountName = formatImportedAccountName(summary.accountName, summary.institution, summary.accountNumber ?? null);
+  const normalizedAccountName = formatUploadAccountDisplayName(
+    summary.accountName,
+    summary.institution,
+    summary.accountNumber ?? null,
+    summary.accountType ?? null
+  );
   const accountType =
     summary.accountType ??
     inferAccountTypeFromStatement(summary.institution, normalizedAccountName, "bank");
@@ -405,7 +399,12 @@ const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsight
       ? (entry as { optimisticAccountId?: string | null }).optimisticAccountId
       : "";
     const entryName = typeof entry.name === "string" ? normalizeStatementAccountName(entry.name, typeof entry.institution === "string" ? entry.institution : null) : "";
-    const importedName = normalizeStatementAccountName(summary.accountName ?? "", summary.institution ?? null);
+    const importedName = formatUploadAccountDisplayName(
+      summary.accountName ?? "",
+      summary.institution ?? null,
+      summary.accountNumber ?? null,
+      summary.accountType ?? null
+    );
     const entryInstitution = typeof entry.institution === "string" ? entry.institution : null;
     const entryAccountNumber = typeof (entry as { accountNumber?: unknown }).accountNumber === "string" ? (entry as { accountNumber?: string }).accountNumber : null;
     return (
@@ -1065,7 +1064,7 @@ export function ImportFilesModal({
     accountType?: UploadInsightsSummary["accountType"],
     accountNumber?: string | null
   ) => {
-    const normalizedName = normalizeStatementAccountName(name, institution);
+    const normalizedName = formatUploadAccountDisplayName(name, institution, accountNumber ?? null, accountType ?? null);
     const expectedType = accountType ?? inferAccountTypeFromStatement(institution, normalizedName, "bank");
     const current = accounts.find((account) => account.id === accountId);
     if (!current) {
@@ -1566,6 +1565,12 @@ export function ImportFilesModal({
                   inferAccountTypeFromStatement(summaryContext.institution, summaryContext.accountName, "bank"),
               }
             : null);
+        const resolvedAccountDisplayName = formatUploadAccountDisplayName(
+          processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName,
+          processingIdentity?.institution ?? summaryContext.institution ?? null,
+          processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
+          processingIdentity?.accountType ?? summaryContext.accountType ?? null
+        );
 
         if (importFile?.status === "failed") {
           const limitPayload = parsePlanLimitMessage(processingMessage, planTier);
@@ -1625,7 +1630,7 @@ export function ImportFilesModal({
                   : await ensureTargetAccountId(
                       processingIdentity?.accountName ?? summaryContext.fallbackAccountName,
                       processingIdentity?.institution ?? null,
-                      processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+                  processingIdentity?.accountType ?? summaryContext.accountType ?? null,
                       processingIdentity?.accountNumber ?? null
                     );
             latestResolvedAccountId = fallbackAccountId;
@@ -1635,14 +1640,14 @@ export function ImportFilesModal({
                 : await loadOptimisticPreviewTransactions(
                     importFileId,
                     fallbackAccountId ?? "",
-                    (processingIdentity?.accountName ?? summaryContext.fallbackAccountName ?? "").trim(),
+                    resolvedAccountDisplayName,
                     processingIdentity?.institution ?? null
                   ).catch(() => []);
             const fallbackSummary = buildOptimisticUploadSummary(
               summaryContext.fileName,
               parsedRowsCount || 0,
               fallbackAccountId,
-              processingIdentity?.accountName ?? summaryContext.fallbackAccountName ?? "",
+              resolvedAccountDisplayName,
               processingIdentity?.institution ?? null,
               processingIdentity?.accountType ?? summaryContext.accountType ?? null,
               summaryContext.optimisticAccountId,
@@ -1707,7 +1712,7 @@ export function ImportFilesModal({
               latestResolvedAccountId,
               {
                 fileName: summaryContext.fileName,
-                accountName: processingIdentity?.accountName ?? summaryContext.accountName,
+                accountName: resolvedAccountDisplayName,
                 institution: processingIdentity?.institution ?? summaryContext.institution,
                 accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber,
                 accountType: processingIdentity?.accountType ?? summaryContext.accountType,
@@ -1719,8 +1724,31 @@ export function ImportFilesModal({
               return;
             }
           }
-          await sleep(600);
-          continue;
+          const hasFinalizedAccountId =
+            Boolean(latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-")) ||
+            Boolean(
+              accountId &&
+                !accountId.startsWith("optimistic-") &&
+                accounts.some((account) => account.id === accountId)
+            );
+          if (!hasFinalizedAccountId) {
+            const fallbackAccountName =
+              processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName;
+            const fallbackInstitution = processingIdentity?.institution ?? summaryContext.institution ?? null;
+            const fallbackAccountNumber = processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null;
+            if (fallbackAccountName || fallbackInstitution || fallbackAccountNumber) {
+              latestResolvedAccountId = await ensureTargetAccountId(
+                fallbackAccountName,
+                fallbackInstitution,
+                processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+                fallbackAccountNumber
+              );
+            }
+          }
+          if (!latestResolvedAccountId || latestResolvedAccountId.startsWith("optimistic-")) {
+            await sleep(600);
+            continue;
+          }
         }
 
         const hasSettledRows = confirmedTransactionsCount > 0 || parsedRowsCount > 0;
@@ -2326,7 +2354,12 @@ export function ImportFilesModal({
     accountNumber?: string | null
   ) => {
     if (statementAccountName) {
-      const normalizedStatementAccountName = normalizeStatementAccountName(statementAccountName, institution ?? null);
+      const normalizedStatementAccountName = formatUploadAccountDisplayName(
+        statementAccountName,
+        institution ?? null,
+        accountNumber ?? null,
+        accountType ?? null
+      );
       const key = accountKey(normalizedStatementAccountName, institution ?? null, accountNumber ?? null);
       const existing =
         accountIdByKeyRef.current.get(key) ??
@@ -2337,10 +2370,9 @@ export function ImportFilesModal({
         return existing;
       }
 
-      const genericMatch =
-        hasStatementSuffix(normalizedStatementAccountName)
-          ? accounts.find((account) => isGenericSameInstitutionAccount(account, institution ?? null))
-          : null;
+      const genericMatch = hasStatementSuffix(normalizedStatementAccountName)
+        ? accounts.find((account) => isGenericSameInstitutionAccount(account, institution ?? null))
+        : null;
       if (genericMatch) {
         accountIdByKeyRef.current.set(
           accountKey(genericMatch.name, genericMatch.institution, genericMatch.accountNumber),
@@ -2582,6 +2614,127 @@ export function ImportFilesModal({
     }
   }
 
+  const monitorQueuedDocumentImport = async (
+    itemId: string,
+    importFileId: string,
+    importMode: ImportImageMode,
+    fileName: string
+  ) => {
+    const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    const startedAt = Date.now();
+    const MAX_WAIT_MS = 120_000;
+    const progressLabel =
+      importMode === "receipt"
+        ? "Reading receipt in background"
+        : importMode === "portfolio"
+          ? "Reading portfolio in background"
+          : importMode === "account_detail"
+            ? "Reading account details in background"
+            : importMode === "notes"
+              ? "Reading notes in background"
+              : "Reading document in background";
+    const doneLabel =
+      importMode === "receipt"
+        ? "Receipt imported"
+        : importMode === "portfolio"
+          ? "Portfolio screenshot imported"
+          : importMode === "account_detail"
+            ? "Account details imported"
+            : importMode === "notes"
+              ? "Notes screenshot imported"
+              : "Screenshot imported";
+
+    for (let attempt = 0; attempt < 240; attempt += 1) {
+      const response = await fetch(`/api/imports/${importFileId}/status`, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        throw new Error("Unable to load import status.");
+      }
+
+      const payload = (await response.json()) as ImportStatusPayload;
+      const importFile = payload.importFile;
+      const parsedRowsCount = Number(payload.parsedRowsCount ?? 0);
+      const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
+      const importStatus = typeof importFile?.status === "string" ? importFile.status : null;
+      const processingPhase = typeof importFile?.processingPhase === "string" ? importFile.processingPhase : null;
+      const processingMessage = typeof importFile?.processingMessage === "string" ? importFile.processingMessage : null;
+
+      if (importStatus === "failed") {
+        closeImportAfterError(
+          itemId,
+          "background",
+          fileName,
+          processingMessage ?? "Clover couldn't finish reading this file."
+        );
+        return false;
+      }
+
+      if (importStatus === "done") {
+        updateItem(itemId, {
+          status: "done",
+          confirmationState: "confirmed",
+          progress: 100,
+          progressLabel: doneLabel,
+        });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "done",
+          fileName,
+          fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount + 1,
+          progress: 100,
+          detail: doneLabel,
+          summary: null,
+          errorMessage: null,
+        });
+        router.refresh();
+        return true;
+      }
+
+      updateItem(itemId, {
+        status: "importing",
+        progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(92, IMPORT_PROGRESS.parsing + attempt * 0.25)),
+        progressLabel: processingMessage ?? progressLabel,
+      });
+      publishImportActivity({
+        workspaceId,
+        surface: importActivitySurfaceRef.current,
+        status: "active",
+        fileName,
+        fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+        fileTotal: items.length,
+        completedFiles: completedFileCount,
+        progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(92, IMPORT_PROGRESS.parsing + attempt * 0.25)),
+        detail:
+          processingMessage ??
+          (processingPhase === "auto_rerunning"
+            ? "Clover is rechecking the document"
+            : parsedRowsCount > 0 || confirmedTransactionsCount > 0
+              ? `Clover found ${Math.max(parsedRowsCount, confirmedTransactionsCount)} item(s)`
+              : progressLabel),
+        summary: null,
+        errorMessage: null,
+      });
+
+      if (Date.now() - startedAt >= MAX_WAIT_MS) {
+        const timeoutMessage =
+          parsedRowsCount > 0 || confirmedTransactionsCount > 0
+            ? "Clover could read the document, but couldn't finish processing it in time."
+            : "Timed out after 2 minutes while Clover was still reading the document.";
+        closeImportAfterError(itemId, "monitor", fileName, timeoutMessage);
+        return false;
+      }
+
+      await sleep(500);
+    }
+
+    closeImportAfterError(itemId, "monitor", fileName, "Timed out while Clover was still reading the document.");
+    return false;
+  };
+
   const processFile = async (itemId: string): Promise<ImportProcessResult> => {
     const item = items.find((entry) => entry.id === itemId);
     if (!item) return { status: "error", importedRows: null, summary: null };
@@ -2657,7 +2810,6 @@ export function ImportFilesModal({
           fileType: item.file.type || item.file.name.split(".").pop() || "unknown",
           password: item.password.trim() || undefined,
           importMode: itemImportMode,
-          forceInlineProcessing: isDocumentImport ? "true" : undefined,
         },
         (progress) => {
           publishImportActivity({
@@ -2710,9 +2862,61 @@ export function ImportFilesModal({
               ? "Portfolio screenshot imported"
               : itemImportMode === "account_detail"
                 ? "Account details imported"
-                : itemImportMode === "notes"
-                  ? "Notes screenshot imported"
-                  : "Screenshot imported";
+            : itemImportMode === "notes"
+              ? "Notes screenshot imported"
+              : "Screenshot imported";
+        if (processPayload?.queued) {
+          updateItem(itemId, {
+            status: "importing",
+            confirmationState: "pending",
+            error: null,
+            importFileId,
+            targetAccountId: null,
+            importedRows: 0,
+            progress: IMPORT_PROGRESS.loadingAccount,
+            progressLabel:
+              itemImportMode === "receipt"
+                ? "Reading receipt in background"
+                : itemImportMode === "portfolio"
+                  ? "Reading portfolio in background"
+                  : itemImportMode === "account_detail"
+                    ? "Reading account details in background"
+                    : itemImportMode === "notes"
+                      ? "Reading notes in background"
+                      : "Reading document in background",
+          });
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "active",
+            fileName: item.file.name,
+            fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: IMPORT_PROGRESS.loadingAccount,
+            detail:
+              itemImportMode === "receipt"
+                ? "Clover is reading the receipt"
+                : itemImportMode === "portfolio"
+                  ? "Clover is reading the portfolio"
+                  : itemImportMode === "account_detail"
+                    ? "Clover is reading the account details"
+                    : itemImportMode === "notes"
+                      ? "Clover is reading the notes"
+                      : "Clover is reading the document",
+            summary: null,
+            errorMessage: null,
+          });
+          const completed = await monitorQueuedDocumentImport(itemId, importFileId, itemImportMode, item.file.name);
+          if (!completed) {
+            return { status: "error", importedRows: null, summary: null };
+          }
+          return {
+            status: "done",
+            importedRows: 0,
+            summary: null,
+          };
+        }
         updateItem(itemId, {
           status: "done",
           confirmationState: "confirmed",
