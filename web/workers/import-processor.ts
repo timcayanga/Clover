@@ -212,6 +212,44 @@ const readCheckpointImportMode = (sourceMetadata: unknown): ImportImageMode | nu
   return normalizeImportImageMode(sourceMetadata.importMode);
 };
 
+const normalizeStatementImageOcrText = (text: string) => {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\u00a0/g, " ").replace(/[|¦]/g, " ").replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  const isStatementUiNoiseLine = (line: string) => {
+    if (/^(Transactions?|Transaction History|Wallet History|Portfolio|Accounts?|Today|Yesterday|Home|Inbox|QR|Pay|Cards?|Save & Invest|More)$/i.test(line)) {
+      return true;
+    }
+
+    if (/^\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:AM|PM))?$/i.test(line)) {
+      return true;
+    }
+
+    if (/^\d{1,2}:\d{2}/.test(line) && !/[₹₱$£€¥]|[A-Za-z].*\d/.test(line)) {
+      return true;
+    }
+
+    if (
+      /^\d{1,2}:\d{2}/.test(line) &&
+      !/[₹₱$£€¥]/.test(line) &&
+      !/\b(?:received|sent|cash|card|transfer|deposit|withdraw|refund|purchase|payment|balance|account|transactions?|history|buy|sell)\b/i.test(line) &&
+      !/\b[A-Za-z]{4,}\b/.test(line)
+    ) {
+      return true;
+    }
+
+    if (/^(?:Status|Signal|Battery|Wi-?Fi)$/i.test(line)) {
+      return true;
+    }
+
+    return false;
+  };
+
+  return lines.filter((line) => !isStatementUiNoiseLine(line)).join("\n");
+};
+
 const detectGenericTrainingBundle = (root: Record<string, unknown>, fileName: string) => {
   const bundleType =
     Array.isArray(root.modules) && isRecord(root.fallback)
@@ -1234,12 +1272,10 @@ const resolveConfirmationAccount = async (params: {
 
   const inferredAccountName =
     typeof candidateRow?.accountName === "string" && candidateRow.accountName.trim()
-    ? String(candidateRow.accountName).trim()
+      ? String(candidateRow.accountName).trim()
       : typeof candidateRow?.institution === "string" && candidateRow.institution.trim()
         ? candidateRow.institution.trim()
-        : typeof params.importFile.fileName === "string"
-          ? params.importFile.fileName.replace(/\.[^.]+$/, "").trim()
-          : null;
+        : null;
 
   const inferredInstitution =
     typeof candidateRow?.institution === "string" && candidateRow.institution.trim()
@@ -1312,21 +1348,25 @@ const resolveConfirmationAccount = async (params: {
     }
 
     const compatibleAccountColumns = await getCompatibleAccountColumns();
-    const accountData = {
-      workspaceId,
-      name:
-        inferredAccountName ??
-        (inferredInstitution && inferredAccountNumber
-          ? `${inferredInstitution} ${inferredAccountNumber.slice(-4)}`
-          : String(params.importFile.fileName ?? "Imported account").replace(/\.[^.]+$/, "").trim()),
-      institution: inferredInstitution,
-      ...(compatibleAccountColumns.has("accountNumber") && inferredAccountNumber
-        ? { accountNumber: inferredAccountNumber }
-        : {}),
-      type: accountIdentityType,
-      currency: inferredCurrency ?? "PHP",
-      source: "upload",
-    };
+      const accountData = {
+        workspaceId,
+        name:
+          inferredAccountName ??
+          (inferredInstitution && inferredAccountNumber
+            ? `${inferredInstitution} ${inferredAccountNumber.slice(-4)}`
+            : null),
+        institution: inferredInstitution,
+        ...(compatibleAccountColumns.has("accountNumber") && inferredAccountNumber
+          ? { accountNumber: inferredAccountNumber }
+          : {}),
+        type: accountIdentityType,
+        currency: inferredCurrency ?? "PHP",
+        source: "upload",
+      };
+
+      if (!accountData.name) {
+        return null;
+      }
 
     try {
       return await prisma.account.create({
@@ -1513,7 +1553,7 @@ export const processImportFileText = async (
   const fileType = String(importFile.fileType ?? "");
   const fileName = String(importFile.fileName ?? "");
   const imageImport = isImageImportFile(fileType, fileName);
-  const isDocumentImport = isDocumentImportMode || imageImport;
+  const isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
   let text = options.text ?? "";
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
 
@@ -1531,7 +1571,7 @@ export const processImportFileText = async (
       });
     }
 
-    if (!text && !imageImport) {
+    if (!text) {
       try {
         text = await readImportedFileText(
           {
@@ -1543,7 +1583,7 @@ export const processImportFileText = async (
           options.pdfJsBaseUrl
         );
       } catch (error) {
-        console.warn("Unable to read PDF text; continuing with vision fallback", {
+        console.warn("Unable to read imported file text; continuing with vision fallback", {
           importFileId,
           error,
         });
@@ -1556,8 +1596,9 @@ export const processImportFileText = async (
     return processImportTrainingJson(importFileId, importFile, text, options, startedAt);
   }
 
-  const metadata = detectStatementMetadataFromText(text);
-  const statementFingerprint = buildStatementFingerprint(text, metadata, importFile.fileName, importFile.fileType, importMode);
+  const textForParse = imageImport && importMode === "statement" ? normalizeStatementImageOcrText(text) : text;
+  const metadata = detectStatementMetadataFromText(textForParse);
+  const statementFingerprint = buildStatementFingerprint(textForParse, metadata, importFile.fileName, importFile.fileType, importMode);
   const existingTemplate = await loadStatementTemplate({
     workspaceId: String(importFile.workspaceId),
     fingerprint: statementFingerprint,
@@ -1602,13 +1643,11 @@ export const processImportFileText = async (
     ...Object.fromEntries(Object.entries(metadataOverride).filter(([, value]) => value !== undefined)),
   } as typeof mergedMetadata;
 
-  const parsedRows = imageImport
-    ? []
-    : parseImportText(text, importFile.fileName, importFile.fileType, {
-        institution: metadataForParse.institution,
-        accountName: metadataForParse.accountName,
-        accountNumber: metadataForParse.accountNumber,
-      });
+  const parsedRows = parseImportText(textForParse, importFile.fileName, importFile.fileType, {
+    institution: metadataForParse.institution,
+    accountName: metadataForParse.accountName,
+    accountNumber: metadataForParse.accountNumber,
+  });
   const hasKnownInstitution = Boolean(metadataForParse.institution && metadataForParse.institution !== "Unknown");
   const gcashSuspiciouslySparse =
     metadataForParse.institution === "GCash" &&
@@ -1662,7 +1701,7 @@ export const processImportFileText = async (
   }
   const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
   let openAiParsed = await parseImportTextWithOpenAIFallback({
-    text,
+    textForParse,
     fileName,
     fileType,
     detectedMetadata: metadataForParse,
@@ -1727,7 +1766,7 @@ export const processImportFileText = async (
     if (transcript?.transcript.trim()) {
       const transcriptImportMode = normalizeImportImageMode(transcript.documentType);
       const transcriptParsed = await parseImportTextWithOpenAIFallback({
-        text: transcript.transcript,
+        text: normalizeStatementImageOcrText(transcript.transcript),
         fileName,
         fileType,
         detectedMetadata: openAiMetadata ?? metadataForParse,
@@ -2212,10 +2251,12 @@ export const processImportFileText = async (
 
     const hasCriticalFindings = qaRunResult.evaluation.findings.some((finding) => finding.severity === "critical");
     const hasUsableParsedRows = rows.length > 0;
+    const allowWarningFinalizeForImageStatement =
+      imageImport && importMode === "statement" && hasUsableParsedRows && !hasCriticalFindings;
     const canFinalizeWithWarnings =
       hasUsableParsedRows &&
       !hasCriticalFindings &&
-      qaRunResult.evaluation.score >= 90 &&
+      (allowWarningFinalizeForImageStatement || qaRunResult.evaluation.score >= 90) &&
       qaRunResult.evaluation.score < AUTO_REPARSE_SCORE_TARGET;
 
     const shouldAutoRerun =
@@ -2223,7 +2264,8 @@ export const processImportFileText = async (
       !isDocumentImport &&
       !plateaued &&
       qaRunResult.evaluation.score < AUTO_REPARSE_SCORE_TARGET &&
-      autoRerunAttempt < AUTO_REPARSE_MAX_ATTEMPTS;
+      autoRerunAttempt < AUTO_REPARSE_MAX_ATTEMPTS &&
+      !allowWarningFinalizeForImageStatement;
 
     if (shouldAutoRerun) {
       const autoRerunPayload = buildAutoRerunPayload({
@@ -2558,7 +2600,9 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
     : null;
   const importMode = readCheckpointImportMode(documentCheckpointRecord?.sourceMetadata) ?? "statement";
   const imageImport = isImageImportFile(String(importFile.fileType ?? ""), String(importFile.fileName ?? ""));
-  const isDocumentImport = imageImport || importMode === "receipt" || importMode === "portfolio" || importMode === "account_detail" || importMode === "notes";
+  const isDocumentImport =
+    importMode !== "statement" &&
+    (imageImport || importMode === "receipt" || importMode === "portfolio" || importMode === "account_detail" || importMode === "notes");
 
   if (isDocumentImport) {
     const documentImport =

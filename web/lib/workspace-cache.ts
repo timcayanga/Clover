@@ -284,8 +284,8 @@ const mergeImportedAccount = <T extends CachedRecord>(items: T[], account: Impor
     const numeric = Number(normalized);
     return Number.isFinite(numeric);
   };
-  const currentIsUpload = typeof current.source === "string" && current.source.trim() === "upload";
-  const incomingIsUpload = typeof account.source === "string" && account.source.trim() === "upload";
+  const currentHasMeaningfulBalance = hasMeaningfulBalance(currentBalance);
+  const incomingHasMeaningfulBalance = hasMeaningfulBalance(incomingBalance);
 
   const merged: CachedRecord = {
     ...current,
@@ -293,13 +293,11 @@ const mergeImportedAccount = <T extends CachedRecord>(items: T[], account: Impor
     name: incomingName || currentName || account.name || current.name,
     institution: incomingInstitution || currentInstitution || account.institution || current.institution,
     accountNumber: incomingAccountNumber || currentAccountNumber || account.accountNumber || current.accountNumber,
-    balance: currentIsUpload && hasMeaningfulBalance(currentBalance)
-      ? current.balance
-      : hasMeaningfulBalance(incomingBalance) && Number(incomingBalance.replace(/[^0-9.-]/g, "")) !== 0
-        ? account.balance
-        : hasMeaningfulBalance(currentBalance) && (!incomingIsUpload || !hasMeaningfulBalance(incomingBalance))
-          ? current.balance
-          : account.balance ?? current.balance ?? null,
+    balance: incomingHasMeaningfulBalance
+      ? account.balance
+      : currentHasMeaningfulBalance
+        ? current.balance
+        : account.balance ?? current.balance ?? null,
     source:
       typeof account.source === "string" && account.source.trim()
         ? account.source
