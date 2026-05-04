@@ -10,6 +10,48 @@ import { ThemeSync } from "@/components/theme-sync";
 import { THEME_RESOLVED_COOKIE_KEY, THEME_STORAGE_KEY } from "@/lib/theme-preference";
 import { HelperTextSync } from "@/components/helper-text-sync";
 
+const clerkLocalization = {
+  userProfile: {
+    navbar: {
+      title: "Account",
+      description: "Manage your account details.",
+      account: "Account",
+      security: "Security",
+      billing: "Billing",
+      apiKeys: "API Keys",
+    },
+    start: {
+      headerTitle__account: "Account details",
+      headerTitle__security: "Security",
+      profileSection: {
+        title: "Account details",
+        primaryButton: "Update Account",
+      },
+      passwordSection: {
+        title: "Password",
+        primaryButton__updatePassword: "Update Account",
+        primaryButton__setPassword: "Set Password",
+      },
+    },
+    profilePage: {
+      title: "Update Account",
+      imageFormTitle: "Account photo",
+      imageFormSubtitle: "Upload a new account photo.",
+      imageFormDestructiveActionSubtitle: "Remove your account photo.",
+      fileDropAreaHint: "Drop an image here or click to browse.",
+      readonly: "Read only",
+      successMessage: "Account updated.",
+    },
+    passwordPage: {
+      title__set: "Set Password",
+      title__update: "Update Account",
+      successMessage__set: "Password set.",
+      successMessage__update: "Password updated.",
+      successMessage__signOutOfOtherSessions: "Signed out of other sessions.",
+    },
+  },
+};
+
 export const metadata: Metadata = {
   title: {
     default: "Clover",
@@ -91,7 +133,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         <HelperTextSync />
         <GlobalImportActivity />
         {publishableKey ? (
-          <ClerkProvider publishableKey={publishableKey} signInUrl="/sign-in" signUpUrl="/sign-up">
+          <ClerkProvider publishableKey={publishableKey} signInUrl="/sign-in" signUpUrl="/sign-up" localization={clerkLocalization}>
             <PostHogAnalytics />
             <PostHogClerkIdentity />
             {children}

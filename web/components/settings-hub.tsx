@@ -551,6 +551,24 @@ export function SettingsHub({
             <span>{activeProfile?.name ?? workspaceName}</span>
           </div>
         </Link>
+        <div className="settings-profile-summary">
+          <span className="settings-profile-summary__label">Active profile</span>
+          <strong>{activeProfile?.name ?? workspaceName}</strong>
+          <label className="settings-inline-field">
+            <span className="sr-only">Switch profile</span>
+            <select
+              value={activeProfileId}
+              onChange={(event) => handleProfileSwitch(event.target.value)}
+              aria-label="Switch profile"
+            >
+              {profiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div className="settings-hub__menu-list" role="tablist" aria-label="Settings sections">
           {(Object.keys(sectionCopy) as SettingsSectionKey[]).map((sectionKey) => {
             const section = sectionCopy[sectionKey];
@@ -578,32 +596,9 @@ export function SettingsHub({
           <section className="settings-section settings-section--profile" role="tabpanel">
             <div className="settings-section__intro settings-section__intro--single">
               <div>
-                <h4>Account</h4>
+                <h4>Account Details</h4>
+                <p>Manage your sign-in identity, email, and security settings.</p>
               </div>
-            </div>
-
-            <div className="settings-data-grid">
-              <article className="settings-action-card">
-                <div>
-                  <h5>Switch profile</h5>
-                  <p>Use the current Clover account to move between profiles without signing out.</p>
-                </div>
-                <label className="settings-inline-field">
-                  <span>Active profile</span>
-                  <select
-                    value={activeProfileId}
-                    onChange={(event) => handleProfileSwitch(event.target.value)}
-                    aria-label="Active profile"
-                  >
-                    {profiles.map((profile) => (
-                      <option key={profile.id} value={profile.id}>
-                        {profile.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <p className="settings-helper">Current profile: {activeProfile?.name ?? workspaceName}</p>
-              </article>
             </div>
 
             <div className="settings-clerk-frame">
