@@ -100,6 +100,11 @@ enum BillingInterval {
   annual
 }
 
+enum SplitBillSourceType {
+  manual
+  receipt
+}
+
 enum BillingSubscriptionStatus {
   approval_pending
   active
@@ -157,6 +162,8 @@ model User {
   updatedAt                DateTime                  @updatedAt
   workspaces               Workspace[]
   goalSettings             GoalSetting[]
+  splitBillGroups          SplitBillGroup[]
+  splitBills               SplitBill[]
   billingSubscription      BillingSubscription?
   billingEvents            BillingEvent[]
   brankasStatementSessions BrankasStatementSession[]
@@ -322,6 +329,7 @@ model Workspace {
   categories               Category[]
   transactions             Transaction[]
   importFiles              ImportFile[]
+  documentImports          DocumentImport[]
   statementCheckpoints     AccountStatementCheckpoint[]
   financialCommitments     FinancialCommitment[]
   auditLogs                AuditLog[]
@@ -332,6 +340,10 @@ model Workspace {
   dataQaRuns               DataQaRun[]
   dataQaFindings           DataQaFinding[]
   brankasStatementSessions BrankasStatementSession[]
+  receiptDocuments         ReceiptDocument[]
+  investmentSnapshots      InvestmentSnapshot[]
+  investmentHoldings       InvestmentHolding[]
+  recurringPatterns        RecurringPattern[]
 
   @@index([userId])
 }
@@ -360,41 +372,46 @@ model Account {
   workspace               Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   transactions            Transaction[]
   importFiles             ImportFile[]
+  documentImports         DocumentImport[]
   statementCheckpoints    AccountStatementCheckpoint[]
   financialCommitments    FinancialCommitment[]
   accountRules            AccountRule[]
   investmentPurchases     InvestmentPurchase[]
   investmentDividends     InvestmentDividend[]
+  receiptDocuments        ReceiptDocument[]
+  investmentSnapshots     InvestmentSnapshot[]
+  investmentHoldings      InvestmentHolding[]
+  recurringPatterns       RecurringPattern[]
 
   @@index([workspaceId])
 }
 
 model InvestmentPurchase {
-  id           String   @id @default(cuid())
-  accountId    String
-  purchasedAt  DateTime
-  quantity     Decimal? @db.Decimal(18, 8)
-  totalCost    Decimal? @db.Decimal(18, 2)
-  currency     String   @default("PHP")
-  note         String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  account      Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id          String   @id @default(cuid())
+  accountId   String
+  purchasedAt DateTime
+  quantity    Decimal? @db.Decimal(18, 8)
+  totalCost   Decimal? @db.Decimal(18, 2)
+  currency    String   @default("PHP")
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  account     Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId])
   @@index([purchasedAt])
 }
 
 model InvestmentDividend {
-  id         String   @id @default(cuid())
-  accountId  String
-  paidAt     DateTime
-  amount     Decimal? @db.Decimal(18, 2)
-  currency   String   @default("PHP")
-  note       String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  account    Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id        String   @id @default(cuid())
+  accountId String
+  paidAt    DateTime
+  amount    Decimal? @db.Decimal(18, 2)
+  currency  String   @default("PHP")
+  note      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@index([accountId])
   @@index([paidAt])
@@ -452,6 +469,7 @@ model Transaction {
   category               Category?             @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   trainingSignals        TrainingSignal[]
   dataQaFindings         DataQaFinding[]
+  receiptDocument        ReceiptDocument?
 
   @@index([workspaceId])
   @@index([accountId])
@@ -483,6 +501,7 @@ model ImportFile {
   updatedAt                  DateTime                    @updatedAt
   workspace                  Workspace                   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   account                    Account?                    @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  documentImport             DocumentImport?
   parsedRows                 ParsedTransaction[]
   transactions               Transaction[]
   trainingSignals            TrainingSignal[]
@@ -493,6 +512,61 @@ model ImportFile {
   @@index([workspaceId])
   @@index([accountId])
   @@index([status])
+}
+
+model DocumentImport {
+  id                 String               @id @default(cuid())
+  workspaceId        String
+  importFileId       String?              @unique
+  accountId          String?
+  documentFamily     String
+  documentSubtype    String?
+  institution        String?
+  accountName        String?
+  accountNumber      String?
+  currency           String               @default("PHP")
+  pageCount          Int                  @default(0)
+  confidence         Int                  @default(0)
+  sourceMetadata     Json?
+  rawPayload         Json?
+  extractedPayload   Json?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  workspace          Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  importFile         ImportFile?          @relation(fields: [importFileId], references: [id], onDelete: SetNull)
+  account            Account?             @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  pages              DocumentImportPage[]
+  receiptDocument    ReceiptDocument?
+  investmentSnapshot InvestmentSnapshot?
+  investmentHoldings InvestmentHolding[]
+  recurringPatterns  RecurringPattern[]
+
+  @@index([workspaceId])
+  @@index([accountId])
+  @@index([documentFamily])
+  @@index([importFileId])
+}
+
+model DocumentImportPage {
+  id               String         @id @default(cuid())
+  documentImportId String
+  pageNumber       Int
+  imageName        String?
+  pageType         String?
+  visibleTitle     String?
+  visibleDate      String?
+  visibleCurrency  String?
+  rawOcrText       String?        @db.Text
+  layoutNotes      String?        @db.Text
+  confidence       Int            @default(0)
+  rawPayload       Json?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  documentImport   DocumentImport @relation(fields: [documentImportId], references: [id], onDelete: Cascade)
+
+  @@unique([documentImportId, pageNumber])
+  @@index([documentImportId])
+  @@index([pageType])
 }
 
 model AccountStatementCheckpoint {
@@ -521,6 +595,126 @@ model AccountStatementCheckpoint {
   @@index([statementStartDate])
   @@index([statementEndDate])
   @@index([status])
+}
+
+model ReceiptDocument {
+  id               String          @id @default(cuid())
+  workspaceId      String
+  documentImportId String?         @unique
+  accountId        String?
+  transactionId    String?         @unique
+  merchantRaw      String?
+  merchantClean    String?
+  transactionDate  DateTime?
+  transactionTime  String?
+  currency         String          @default("PHP")
+  subtotal         Decimal?        @db.Decimal(18, 2)
+  tax              Decimal?        @db.Decimal(18, 2)
+  total            Decimal?        @db.Decimal(18, 2)
+  paymentMethod    String?
+  accountMatch     Json?
+  confidence       Int             @default(0)
+  rawPayload       Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  workspace        Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  documentImport   DocumentImport? @relation(fields: [documentImportId], references: [id], onDelete: SetNull)
+  account          Account?        @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  transaction      Transaction?    @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([accountId])
+  @@index([transactionId])
+}
+
+model InvestmentSnapshot {
+  id               String              @id @default(cuid())
+  workspaceId      String
+  documentImportId String?             @unique
+  accountId        String?
+  snapshotDate     DateTime?
+  portfolioName    String?
+  currency         String              @default("PHP")
+  totalValue       Decimal?            @db.Decimal(18, 2)
+  costBasis        Decimal?            @db.Decimal(18, 2)
+  gainLossValue    Decimal?            @db.Decimal(18, 2)
+  gainLossPercent  Decimal?            @db.Decimal(18, 8)
+  confidence       Int                 @default(0)
+  rawPayload       Json?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  workspace        Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  documentImport   DocumentImport?     @relation(fields: [documentImportId], references: [id], onDelete: SetNull)
+  account          Account?            @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  holdings         InvestmentHolding[]
+
+  @@index([workspaceId])
+  @@index([accountId])
+  @@index([snapshotDate])
+}
+
+model InvestmentHolding {
+  id                   String             @id @default(cuid())
+  workspaceId          String
+  investmentSnapshotId String
+  documentImportId     String?
+  accountId            String?
+  rowIndex             Int?
+  assetName            String
+  assetSymbol          String?
+  assetType            String?
+  quantity             Decimal?           @db.Decimal(18, 8)
+  unitPrice            Decimal?           @db.Decimal(18, 8)
+  costBasis            Decimal?           @db.Decimal(18, 2)
+  marketValue          Decimal?           @db.Decimal(18, 2)
+  currentValue         Decimal?           @db.Decimal(18, 2)
+  gainLossValue        Decimal?           @db.Decimal(18, 2)
+  gainLossPercent      Decimal?           @db.Decimal(18, 8)
+  currency             String             @default("PHP")
+  status               String?
+  confidence           Int                @default(0)
+  rawPayload           Json?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  workspace            Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  investmentSnapshot   InvestmentSnapshot @relation(fields: [investmentSnapshotId], references: [id], onDelete: Cascade)
+  documentImport       DocumentImport?    @relation(fields: [documentImportId], references: [id], onDelete: SetNull)
+  account              Account?           @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([investmentSnapshotId])
+  @@index([documentImportId])
+  @@index([accountId])
+  @@index([assetSymbol])
+}
+
+model RecurringPattern {
+  id               String                @id @default(cuid())
+  workspaceId      String
+  documentImportId String?
+  accountId        String?
+  merchantRaw      String
+  merchantClean    String?
+  amount           Decimal?              @db.Decimal(18, 2)
+  currency         String                @default("PHP")
+  frequency        CommitmentRecurrence?
+  firstSeenDate    DateTime?
+  lastSeenDate     DateTime?
+  nextExpectedDate DateTime?
+  transactionCount Int                   @default(1)
+  confidence       Int                   @default(0)
+  rawPayload       Json?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  workspace        Workspace             @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  documentImport   DocumentImport?       @relation(fields: [documentImportId], references: [id], onDelete: SetNull)
+  account          Account?              @relation(fields: [accountId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId])
+  @@index([accountId])
+  @@index([documentImportId])
+  @@index([nextExpectedDate])
+  @@index([frequency])
 }
 
 model ParsedTransaction {
@@ -585,6 +779,120 @@ model GoalSetting {
 
   @@index([userId])
   @@index([userId, createdAt])
+}
+
+model SplitBillGroup {
+  id        String                @id @default(cuid())
+  userId    String
+  name      String
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  members   SplitBillGroupMember[]
+  bills     SplitBill[]
+
+  @@index([userId])
+}
+
+model SplitBillGroupMember {
+  id        String           @id @default(cuid())
+  groupId   String
+  name      String
+  sortOrder Int              @default(0)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  group     SplitBillGroup   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+}
+
+model SplitBill {
+  id                  String                 @id @default(cuid())
+  userId              String
+  groupId             String?
+  title               String
+  note                String?
+  billDate            DateTime
+  currency            String                 @default("PHP")
+  sourceType          SplitBillSourceType    @default(manual)
+  merchantName        String?
+  receiptFileName     String?
+  receiptMimeType     String?
+  receiptText         String?                @db.Text
+  receiptConfidence   Int                    @default(0)
+  subtotal            Decimal?               @db.Decimal(18, 2)
+  tax                 Decimal?               @db.Decimal(18, 2)
+  tip                 Decimal?               @db.Decimal(18, 2)
+  discount            Decimal?               @db.Decimal(18, 2)
+  total               Decimal?               @db.Decimal(18, 2)
+  rawPayload          Json?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  group               SplitBillGroup?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  participants        SplitBillParticipant[]
+  items               SplitBillItem[]
+  payments            SplitBillPayment[]
+
+  @@index([userId])
+  @@index([groupId])
+  @@index([billDate])
+  @@index([sourceType])
+}
+
+model SplitBillParticipant {
+  id        String              @id @default(cuid())
+  billId    String
+  name      String
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  bill      SplitBill           @relation(fields: [billId], references: [id], onDelete: Cascade)
+  itemLinks SplitBillItemParticipant[]
+  payments  SplitBillPayment[]
+
+  @@index([billId])
+}
+
+model SplitBillItem {
+  id        String                    @id @default(cuid())
+  billId    String
+  description String
+  amount    Decimal                   @db.Decimal(18, 2)
+  sortOrder Int                       @default(0)
+  createdAt DateTime                  @default(now())
+  updatedAt DateTime                  @updatedAt
+  bill      SplitBill                 @relation(fields: [billId], references: [id], onDelete: Cascade)
+  participants SplitBillItemParticipant[]
+
+  @@index([billId])
+}
+
+model SplitBillItemParticipant {
+  id            String              @id @default(cuid())
+  itemId        String
+  participantId String
+  createdAt     DateTime            @default(now())
+  item          SplitBillItem       @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  participant   SplitBillParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, participantId])
+  @@index([itemId])
+  @@index([participantId])
+}
+
+model SplitBillPayment {
+  id            String                @id @default(cuid())
+  billId        String
+  participantId String
+  amount        Decimal               @db.Decimal(18, 2)
+  note          String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  bill          SplitBill             @relation(fields: [billId], references: [id], onDelete: Cascade)
+  participant   SplitBillParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([billId])
+  @@index([participantId])
 }
 
 model FinancialCommitment {

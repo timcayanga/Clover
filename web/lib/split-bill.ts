@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client";
+
 export type SplitBillSourceType = "manual" | "receipt";
 
 export type SplitBillParticipantDraft = {
@@ -6,6 +8,7 @@ export type SplitBillParticipantDraft = {
 };
 
 export type SplitBillPaymentDraft = {
+  id: string;
   participantId: string;
   amount: string;
   note?: string | null;
@@ -85,6 +88,16 @@ export type SplitBillSettlement = {
   totalPaid: number;
   totalOwed: number;
 };
+
+export const splitBillGroupMemberOrderBy: Prisma.SplitBillGroupMemberOrderByWithRelationInput[] = [
+  { sortOrder: "asc" },
+  { createdAt: "asc" },
+];
+
+export const splitBillItemOrderBy: Prisma.SplitBillItemOrderByWithRelationInput[] = [
+  { sortOrder: "asc" },
+  { createdAt: "asc" },
+];
 
 export type SplitBillSerializedBill = {
   id: string;

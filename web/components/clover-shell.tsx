@@ -28,12 +28,13 @@ export const useCloverChrome = () => {
 
 type CloverShellProps = {
   active:
-    | "dashboard"
-    | "accounts"
-    | "investments"
-    | "transactions"
-    | "recurring"
-    | "reports"
+  | "dashboard"
+  | "accounts"
+  | "investments"
+  | "split-bill"
+  | "transactions"
+  | "recurring"
+  | "reports"
     | "insights"
     | "goals"
     | "settings"
