@@ -21809,26 +21809,28 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .landing-trust__statement {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  gap: 14px;
-  padding: 16px 18px;
-  border-radius: 24px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: var(--shadow-soft);
+  gap: 22px;
+  width: 100%;
+  max-width: 760px;
 }
 
 .landing-trust__statement img {
   display: block;
-  width: 54px;
-  height: 54px;
+  width: 120px;
+  height: 120px;
   object-fit: contain;
   flex: none;
+  margin-left: -4px;
 }
 
 .landing-trust__statement h2 {
-  max-width: 18ch;
+  max-width: 14ch;
+  font-size: clamp(1.55rem, 2.5vw, 2.35rem);
+  line-height: 1.05;
+  letter-spacing: -0.05em;
 }
 
 .landing-trust__copy h2 {
@@ -24362,13 +24364,19 @@ input.transaction-inline-edit--amount::placeholder {
     padding: 18px 0 24px;
   }
 
-  .landing-trust__grid {
-    grid-template-columns: 1fr;
+  .landing-trust__statement {
+    gap: 14px;
+    max-width: none;
   }
 
-  .landing-trust-card {
-    padding: 16px;
-    border-radius: 22px;
+  .landing-trust__statement img {
+    width: 84px;
+    height: 84px;
+  }
+
+  .landing-trust__statement h2 {
+    max-width: none;
+    font-size: clamp(1.35rem, 6vw, 1.8rem);
   }
 
   .landing-flow__step {

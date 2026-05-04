@@ -207,7 +207,6 @@ export default function HomePage() {
 
       <ScrollReveal as="section" className="landing-trust">
         <div className="landing-trust__copy">
-          <p className="eyebrow">Trust and security</p>
           <div className="landing-trust__statement">
             <img src="/help-icons/privacy-security-data.png" alt="" aria-hidden="true" />
             <h2>Built to keep your data clear, private, and easy to review.</h2>
