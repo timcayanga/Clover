@@ -6,8 +6,7 @@ import { formatCurrencySymbol } from "@/lib/currency-format";
 
 type SplitBillManualModalProps = {
   open: boolean;
-  closeHref?: string;
-  onClose?: () => void;
+  onClose: () => void;
 };
 
 type SplitMode = "you-paid" | "you-owed" | "person-paid" | "person-owed";
@@ -37,7 +36,7 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   return payload;
 }
 
-export function SplitBillManualModal({ open, closeHref = "/split-bill", onClose }: SplitBillManualModalProps) {
+export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProps) {
   const router = useRouter();
   const [peopleText, setPeopleText] = useState("");
   const [people, setPeople] = useState<string[]>([]);
@@ -99,13 +98,7 @@ export function SplitBillManualModal({ open, closeHref = "/split-bill", onClose 
   };
 
   const closeModal = () => {
-    if (onClose) {
-      onClose();
-      return;
-    }
-
-    router.push(closeHref);
-    router.refresh();
+    onClose();
   };
 
   const saveBill = async () => {

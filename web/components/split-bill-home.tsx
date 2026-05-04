@@ -87,7 +87,6 @@ export function SplitBillHome({
         <div className="split-bill-panel__head">
           <div>
             <p className="eyebrow">Split Bills</p>
-            <h2>Split Bills</h2>
           </div>
         </div>
 
@@ -163,7 +162,6 @@ export function SplitBillHome({
         <div className="split-bill-panel__head">
           <div>
             <p className="eyebrow">Groups</p>
-            <h2>Save names you use often</h2>
           </div>
         </div>
 

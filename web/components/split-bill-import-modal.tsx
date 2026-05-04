@@ -1,13 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { splitBillDraftFromReceiptPreview, type ReceiptPreviewResult } from "@/lib/split-bill";
 
 type SplitBillImportModalProps = {
   open: boolean;
-  closeHref?: string;
-  onClose?: () => void;
+  onClose: () => void;
 };
 
 const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
@@ -38,8 +36,7 @@ const validateFile = (file: File | null) => {
   return null;
 };
 
-export function SplitBillImportModal({ open, closeHref = "/split-bill", onClose }: SplitBillImportModalProps) {
-  const router = useRouter();
+export function SplitBillImportModal({ open, onClose }: SplitBillImportModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -49,13 +46,7 @@ export function SplitBillImportModal({ open, closeHref = "/split-bill", onClose 
   }
 
   const closeModal = () => {
-    if (onClose) {
-      onClose();
-      return;
-    }
-
-    router.push(closeHref);
-    router.refresh();
+    onClose();
   };
 
   const handleUpload = async () => {
@@ -89,8 +80,7 @@ export function SplitBillImportModal({ open, closeHref = "/split-bill", onClose 
         })
       );
 
-      router.push("/split-bill/new");
-      router.refresh();
+      window.location.assign("/split-bill/new");
     } catch (uploadError) {
       setError(uploadError instanceof Error ? uploadError.message : "Unable to read that receipt.");
     } finally {

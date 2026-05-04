@@ -33,8 +33,6 @@ const billInclude = {
 export default async function SplitBillPage({ searchParams }: { searchParams?: Promise<{ add?: string; group?: string; currency?: string }> }) {
   const user = await getSplitBillCurrentUser();
   const params = searchParams ? await searchParams : undefined;
-  const showAddMode = params?.add === "manual" ? "manual" : params?.add === "import" ? "import" : null;
-  const showGroupMode = params?.group === "new" ? "new" : null;
   const selectedCurrency = params?.currency ? params.currency.toUpperCase() : "ALL";
 
   const [bills, groups] = await Promise.all([
@@ -64,14 +62,7 @@ export default async function SplitBillPage({ searchParams }: { searchParams?: P
     <CloverShell
       active="split-bill"
       title="Split Bill"
-      actions={
-        <SplitBillPageActions
-          currencies={normalizedCurrencies}
-          selectedCurrency={selectedCurrency}
-          initialAddMode={showAddMode}
-          initialGroupMode={showGroupMode}
-        />
-      }
+      actions={<SplitBillPageActions currencies={normalizedCurrencies} selectedCurrency={selectedCurrency} />}
     >
       <SplitBillHome
         bills={bills.map((bill) => serializeSplitBillRecord(bill as Parameters<typeof serializeSplitBillRecord>[0]))}

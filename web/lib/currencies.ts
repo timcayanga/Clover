@@ -15,7 +15,7 @@ type CurrencyDefinition = CurrencyCatalogOption & {
 
 const CURRENCY_DEFINITIONS: CurrencyDefinition[] = [
   { code: "PHP", symbol: "₱", name: "Philippine Peso", kind: "fiat", suggested: true },
-  { code: "USD", symbol: "USD", name: "US Dollar", kind: "fiat", suggested: true },
+  { code: "USD", symbol: "$", name: "US Dollar", kind: "fiat", suggested: true },
   { code: "EUR", symbol: "€", name: "Euro", kind: "fiat", suggested: true },
   { code: "GBP", symbol: "£", name: "British Pound", kind: "fiat", suggested: true },
   { code: "JPY", symbol: "¥", name: "Japanese Yen", kind: "fiat", suggested: true },
