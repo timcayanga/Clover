@@ -15663,6 +15663,8 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-add-fields__currency .currency-selector__menu {
   width: min(212px, calc(100vw - 24px));
+  top: auto;
+  bottom: calc(100% + 8px);
 }
 
 .accounts-add-advanced {
