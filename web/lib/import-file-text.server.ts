@@ -1,4 +1,5 @@
 import { dirname, join } from "node:path";
+import { createRequire } from "node:module";
 import { pathToFileURL } from "node:url";
 import { downloadImportObject } from "@/lib/import-storage.server";
 
@@ -153,7 +154,11 @@ const loadNativeCanvasModule = (): CanvasModule | null => {
       try {
         return (0, eval)("__non_webpack_require__") as NodeRequire;
       } catch {
-        return (0, eval)("require") as NodeRequire;
+        try {
+          return (0, eval)("require") as NodeRequire;
+        } catch {
+          return createRequire(import.meta.url);
+        }
       }
     })();
     const loaded = nodeRequire(getCanvasPackageName()) as CanvasModule & { default?: CanvasModule };
@@ -186,7 +191,12 @@ const enhancePageImageBufferForOcr = async (buffer: Buffer) => {
 };
 
 const loadCanvasModule = async (): Promise<CanvasModule | null> => {
-  return loadNativeCanvasModule();
+  try {
+    const loaded = await import("@napi-rs/canvas");
+    return loaded as CanvasModule;
+  } catch {
+    return loadNativeCanvasModule();
+  }
 };
 
 let ocrWorkerPromise: Promise<unknown> | null = null;
@@ -195,26 +205,118 @@ const getOcrWorker = async () => {
   if (!ocrWorkerPromise) {
     ocrWorkerPromise = (async () => {
       const { createWorker } = await new Function("return import('tesseract.js')")();
-      return createWorker("eng", 1, {
+      const worker = await createWorker("eng", 1, {
         logger: () => {
           // Keep OCR logs quiet during imports.
         },
       });
+      try {
+        await worker.setParameters({
+          preserve_interword_spaces: "1",
+          tessedit_pageseg_mode: "6",
+        } as any);
+      } catch {
+        // If OCR parameter setup fails, continue with the default worker config.
+      }
+      return worker;
     })();
   }
 
   return ocrWorkerPromise;
 };
 
-const extractTextFromImageBufferWithOcr = async (buffer: Buffer) => {
+const extractTextFromImageBufferWithOcr = async (
+  imageSource: Buffer | Uint8Array | string,
+  pageSegMode = "6"
+) => {
   try {
     const worker = await getOcrWorker();
+    const source =
+      typeof imageSource === "string"
+        ? imageSource
+        : `data:image/jpeg;base64,${Buffer.from(imageSource).toString("base64")}`;
+    try {
+      await worker.setParameters({
+        preserve_interword_spaces: "1",
+        tessedit_pageseg_mode: pageSegMode,
+      } as any);
+    } catch {
+      // Keep the default OCR configuration if per-pass tuning fails.
+    }
     const {
       data: { text },
-    } = await worker.recognize(buffer);
+    } = await worker.recognize(source as any);
     return typeof text === "string" ? text.trim() : "";
   } catch (error) {
     console.warn("Image OCR extraction failed", error);
+    return "";
+  }
+};
+
+const extractTextFromImageBufferWithOcrBestEffort = async (imageSource: Buffer | Uint8Array | string) => {
+  const firstPass = await extractTextFromImageBufferWithOcr(imageSource, "6");
+  const secondPass = await extractTextFromImageBufferWithOcr(imageSource, "11");
+
+  if (secondPass.trim().length > firstPass.trim().length) {
+    return secondPass;
+  }
+
+  return firstPass;
+};
+
+const renderPdfPagesToOcrText = async (data: Uint8Array, password?: string, baseUrl?: string | null, maxPages = 4, scale = 3.2) => {
+  const pageImages = await renderPdfPageImagesFromBytes(data, password, maxPages, scale, true);
+  const ocrPages: string[] = [];
+
+  for (const page of pageImages) {
+    if (!page.dataUrl) {
+      continue;
+    }
+
+    try {
+      const ocrText = await extractTextFromImageBufferWithOcrBestEffort(page.dataUrl);
+      if (ocrText.trim()) {
+        ocrPages.push(ocrText.trim());
+      }
+    } catch (pageError) {
+      console.warn("PDF OCR page fallback failed", {
+        page: page.page,
+        error: pageError,
+      });
+    }
+  }
+
+  return ocrPages.join("\n").trim();
+};
+
+const shouldPreferPdfOcrFirst = (fileName?: string | null) => {
+  const lower = String(fileName ?? "").toLowerCase();
+  return (
+    lower.includes("landbank") ||
+    lower.includes("land bank") ||
+    lower.includes("eastwest") ||
+    lower.includes("ucpb") ||
+    lower.includes("china bank") ||
+    lower.includes("china-bank") ||
+    lower.includes("chinabank") ||
+    (lower.includes("aub") && lower.includes("template"))
+  );
+};
+
+const extractTextFromPdfBytesWithRenderFirstFallback = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {
+  try {
+    const ocrText = await renderPdfPagesToOcrText(data, password, baseUrl);
+    if (ocrText.trim().length > 0) {
+      return ocrText;
+    }
+  } catch (error) {
+    console.warn("PDF OCR-first extraction failed; retrying with text extraction", error);
+  }
+
+  try {
+    return await extractTextFromPdfBytes(data, password, baseUrl);
+  } catch (error) {
+    console.warn("PDF text extraction after OCR-first fallback failed", error);
     return "";
   }
 };
@@ -235,13 +337,25 @@ const ensurePdfJsPolyfills = async () => {
   }
 };
 
-const loadPdfJs = async () => {
-  await ensurePdfJsPolyfills();
-  try {
-    return await import("pdfjs-serverless");
-  } catch {
-    return import("pdfjs-dist/legacy/build/pdf.mjs");
-  }
+const loadPdfJsText = async () => {
+  return import("pdfjs-serverless");
+};
+
+const loadPdfJsRender = async () => {
+  return import("./pdfjs.server");
+};
+
+const createPdfJsLoadOptions = (data: Uint8Array, password?: string, baseUrl?: string | null, disableWorker = true) => {
+  const standardFontDataUrl = getPdfJsStandardFontDataUrl(baseUrl);
+  return {
+    data,
+    ...(password ? { password } : {}),
+    disableWorker,
+    useWorkerFetch: false,
+    isOffscreenCanvasSupported: false,
+    isImageDecoderSupported: false,
+    standardFontDataUrl,
+  };
 };
 
 export const getConfiguredPdfJsBaseUrl = () => {
@@ -347,11 +461,8 @@ type ImportFileLike = {
 };
 
 const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {
-  const pdfjs = await loadPdfJs();
-  const standardFontDataUrl = getPdfJsStandardFontDataUrl(baseUrl);
-  const options = password
-    ? { data, password, standardFontDataUrl, CanvasFactory: NodeCanvasFactory, disableWorker: true }
-    : { data, standardFontDataUrl, CanvasFactory: NodeCanvasFactory, disableWorker: true };
+  const pdfjs = await loadPdfJsText();
+  const options = createPdfJsLoadOptions(data, password, baseUrl);
   const loadingTask = pdfjs.getDocument(options as any);
   const pdf = await loadingTask.promise;
   const pages: string[] = [];
@@ -383,9 +494,74 @@ const extractTextFromPdfBytes = async (data: Uint8Array, password?: string, base
   return pages.join("\n");
 };
 
-const loadCreateCanvas = async () => {
-  const canvasModule = await loadCanvasModule();
-  return canvasModule?.createCanvas ?? null;
+const extractTextFromPdfBytesWithOcrFallback = async (data: Uint8Array, password?: string, baseUrl?: string | null) => {
+  let extractedText = "";
+  try {
+    extractedText = await extractTextFromPdfBytes(data, password, baseUrl);
+  } catch (error) {
+    console.warn("PDF text extraction failed; retrying with rendered page OCR", error);
+  }
+
+  if (extractedText.trim().length >= 40) {
+    return extractedText;
+  }
+
+  try {
+    const pageImages = await renderPdfPageImagesFromBytes(data, password, 2, 3.5, true);
+    const ocrPages: string[] = [];
+
+    for (const page of pageImages) {
+      const base64 = page.dataUrl.split(",")[1];
+      if (!base64) {
+        continue;
+      }
+
+      try {
+        const ocrText = await extractTextFromImageBufferWithOcr(Buffer.from(base64, "base64"));
+        if (ocrText.trim()) {
+          ocrPages.push(ocrText.trim());
+        }
+      } catch (pageError) {
+        console.warn("PDF OCR page fallback failed", {
+          page: page.page,
+          error: pageError,
+        });
+      }
+    }
+
+    const ocrJoinedText = ocrPages.join("\n").trim();
+    return ocrJoinedText.length > extractedText.trim().length ? ocrJoinedText : extractedText;
+  } catch (error) {
+    console.warn("PDF OCR fallback failed; retrying with a lighter render path", error);
+    try {
+      const pageImages = await renderPdfPageImagesFromBytes(data, password, 4, 2.2, false);
+      const ocrPages: string[] = [];
+
+      for (const page of pageImages) {
+        if (!page.dataUrl) {
+          continue;
+        }
+
+        try {
+          const ocrText = await extractTextFromImageBufferWithOcrBestEffort(page.dataUrl);
+          if (ocrText.trim()) {
+            ocrPages.push(ocrText.trim());
+          }
+        } catch (pageError) {
+          console.warn("PDF OCR fallback retry page failed", {
+            page: page.page,
+            error: pageError,
+          });
+        }
+      }
+
+      const ocrJoinedText = ocrPages.join("\n").trim();
+      return ocrJoinedText.length > extractedText.trim().length ? ocrJoinedText : extractedText;
+    } catch (retryError) {
+      console.warn("PDF OCR fallback retry failed", retryError);
+      return extractedText;
+    }
+  }
 };
 
 class NodeCanvasFactory {
@@ -444,31 +620,42 @@ const renderPdfPageImagesFromBytes = async (
   password?: string,
   maxPages = 2,
   scale = 1.1,
-  baseUrl?: string | null,
   enhanceForOcr = false
 ) => {
-  const pdfjs = await loadPdfJs();
-  const createCanvas = await loadCreateCanvas();
-  const standardFontDataUrl = getPdfJsStandardFontDataUrl(baseUrl);
-  const options = password
-    ? { data, password, standardFontDataUrl, CanvasFactory: NodeCanvasFactory, disableWorker: true }
-    : { data, standardFontDataUrl, CanvasFactory: NodeCanvasFactory, disableWorker: true };
+  const pdfjsModule = await loadPdfJsRender();
+  const pdfjs = (pdfjsModule as any).pdfjs ?? pdfjsModule;
+  const options = {
+    data,
+    ...(password ? { password } : {}),
+    disableWorker: true,
+  };
   const loadingTask = pdfjs.getDocument(options as any);
   const pdf = await loadingTask.promise;
   const pageImages: Array<{ page: number; dataUrl: string }> = [];
   const pageCount = Math.max(0, Math.min(pdf.numPages, maxPages));
 
   for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
-    const page = await pdf.getPage(pageNumber);
-    const viewport = page.getViewport({ scale });
-    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
-    const context = canvas.getContext("2d");
-    await page.render({ canvas: canvas as any, canvasContext: context as any, viewport }).promise;
-    const buffer = enhanceForOcr ? await enhancePageImageBufferForOcr(canvas.toBuffer("image/jpeg", 65)) : canvas.toBuffer("image/jpeg", 65);
-    pageImages.push({
-      page: pageNumber,
-      dataUrl: `data:image/jpeg;base64,${buffer.toString("base64")}`,
-    });
+    try {
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale });
+      const canvasModule = getCanvasModule();
+      if (!canvasModule?.createCanvas) {
+        throw new Error("@napi-rs/canvas is not available in this environment");
+      }
+      const canvas = canvasModule.createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
+      const context = canvas.getContext("2d", { willReadFrequently: true });
+      await page.render({ canvasContext: context as any, viewport }).promise;
+      const buffer = enhanceForOcr ? await enhancePageImageBufferForOcr(canvas.toBuffer("image/jpeg", 65)) : canvas.toBuffer("image/jpeg", 65);
+      pageImages.push({
+        page: pageNumber,
+        dataUrl: `data:image/jpeg;base64,${buffer.toString("base64")}`,
+      });
+    } catch (error) {
+      console.warn("PDF page render failed; continuing with remaining pages", {
+        page: pageNumber,
+        error,
+      });
+    }
   }
 
   return pageImages;
@@ -499,7 +686,10 @@ export const readUploadedFileText = async (file: File | ImportFileLike, password
     }
 
     const data = new Uint8Array(await file.arrayBuffer());
-    return extractTextFromPdfBytes(data, password);
+    if (shouldPreferPdfOcrFirst(file.name)) {
+      return extractTextFromPdfBytesWithRenderFirstFallback(data, password);
+    }
+    return extractTextFromPdfBytesWithOcrFallback(data, password);
   }
 
   if (isImageImportFileName(lowerType, lowerName)) {
@@ -508,7 +698,7 @@ export const readUploadedFileText = async (file: File | ImportFileLike, password
     }
 
     const normalized = await normalizeImportedImageBytes(new Uint8Array(await file.arrayBuffer()), lowerType, lowerName);
-    return extractTextFromImageBufferWithOcr(normalized.buffer);
+    return extractTextFromImageBufferWithOcr(normalized.dataUrl);
   }
 
   throw new Error("Only PDF, CSV, and common image files are supported.");
@@ -531,11 +721,14 @@ export const readImportedFileText = async (
 
   if (isImageImportFileName(params.fileType, params.fileName)) {
     const normalized = await normalizeImportedImageBytes(bytes, params.fileType, params.fileName);
-    return extractTextFromImageBufferWithOcr(normalized.buffer);
+    return extractTextFromImageBufferWithOcr(normalized.dataUrl);
   }
 
   try {
-    return await extractTextFromPdfBytes(bytes, password, pdfJsBaseUrl);
+    if (shouldPreferPdfOcrFirst(params.fileName)) {
+      return await extractTextFromPdfBytesWithRenderFirstFallback(bytes, password, pdfJsBaseUrl);
+    }
+    return await extractTextFromPdfBytesWithOcrFallback(bytes, password, pdfJsBaseUrl);
   } catch (error) {
     if (!pdfJsBaseUrl) {
       throw error;
@@ -545,7 +738,10 @@ export const readImportedFileText = async (
       fileName: params.fileName,
       error,
     });
-    return extractTextFromPdfBytes(bytes, password);
+    if (shouldPreferPdfOcrFirst(params.fileName)) {
+      return extractTextFromPdfBytesWithRenderFirstFallback(bytes, password);
+    }
+    return extractTextFromPdfBytesWithOcrFallback(bytes, password);
   }
 };
 
@@ -580,7 +776,7 @@ export const readImportedPdfPageImages = async (
 
   const bytes = await downloadImportObject(params.storageKey);
   try {
-    return await renderPdfPageImagesFromBytes(bytes, password, maxPages, scale, pdfJsBaseUrl, enhanceForOcr);
+    return await renderPdfPageImagesFromBytes(bytes, password, maxPages, scale, enhanceForOcr);
   } catch (error) {
     if (!pdfJsBaseUrl) {
       throw error;
@@ -590,7 +786,7 @@ export const readImportedPdfPageImages = async (
       fileName: params.fileName,
       error,
     });
-    return renderPdfPageImagesFromBytes(bytes, password, maxPages, scale, undefined, enhanceForOcr);
+    return renderPdfPageImagesFromBytes(bytes, password, maxPages, scale, enhanceForOcr);
   }
 };
 
