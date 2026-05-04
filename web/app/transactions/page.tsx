@@ -5691,34 +5691,20 @@ function TransactionsPageContent() {
                     )}
                   </button>
 
-                  <div className="transactions-manual-money-row__stack">
-                    <label className="transactions-manual-field">
-                      Currency
-                      <CurrencySelector
-                        value={manualForm.currency}
-                        onChange={(value) => setManualForm((current) => ({ ...current, currency: value }))}
-                        options={currencyCatalogCodes}
-                        ariaLabel="Select transaction currency"
-                        className="transactions-manual-currency"
-                        buttonClassName="transactions-manual-currency__button"
-                        menuClassName="transactions-manual-currency__menu"
-                        optionClassName="transactions-manual-currency__option"
-                        menuAlignment="end"
-                      />
-                    </label>
-
-                    <button
-                      type="button"
-                      className="accounts-add-more-link transactions-manual-more"
-                      onClick={() => setManualMoreOpen((current) => !current)}
-                      aria-expanded={manualMoreOpen}
-                    >
-                      <span>{manualMoreOpen ? "Less" : "More"}</span>
-                      <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
-                        <ActionIcon name="chevron-down" />
-                      </span>
-                    </button>
-                  </div>
+                  <label className="transactions-manual-field transactions-manual-money-row__currency">
+                    Currency
+                    <CurrencySelector
+                      value={manualForm.currency}
+                      onChange={(value) => setManualForm((current) => ({ ...current, currency: value }))}
+                      options={currencyCatalogCodes}
+                      ariaLabel="Select transaction currency"
+                      className="transactions-manual-currency"
+                      buttonClassName="transactions-manual-currency__button"
+                      menuClassName="transactions-manual-currency__menu"
+                      optionClassName="transactions-manual-currency__option"
+                      menuAlignment="end"
+                    />
+                  </label>
 
                   <label className="transactions-manual-field transactions-manual-money-row__amount">
                     Amount
@@ -5731,6 +5717,20 @@ function TransactionsPageContent() {
                       required
                     />
                   </label>
+                </div>
+
+                <div className="transactions-manual-more-row">
+                  <button
+                    type="button"
+                    className="accounts-add-more-link transactions-manual-more"
+                    onClick={() => setManualMoreOpen((current) => !current)}
+                    aria-expanded={manualMoreOpen}
+                  >
+                    <span>{manualMoreOpen ? "Less" : "More"}</span>
+                    <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
+                      <ActionIcon name="chevron-down" />
+                    </span>
+                  </button>
                 </div>
 
                 {manualMoreOpen ? (
@@ -5996,17 +5996,15 @@ function TransactionsPageContent() {
               </div>
 
               <div className="manual-form-actions">
-                <div className="manual-form-actions__left">
+                <div className="manual-form-actions__right">
                   <button
-                    className="button button-secondary button-small"
+                    className="accounts-add-more-link transactions-manual-add-another"
                     type="submit"
                     data-submit-mode="add-another"
                     disabled={isSaving}
                   >
                     Add another
                   </button>
-                </div>
-                <div className="manual-form-actions__right">
                   <button className="button button-primary" type="submit" data-submit-mode="close" disabled={isSaving}>
                     {isSaving ? "Saving..." : "Add transaction"}
                   </button>

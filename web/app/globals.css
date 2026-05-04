@@ -12005,7 +12005,7 @@ input.transaction-inline-edit--amount::placeholder {
 .manual-form-layout--compact {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 
 .manual-form-layout__full {
@@ -12086,23 +12086,38 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-money-row {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) minmax(140px, 1.6fr);
-  gap: 8px;
+  grid-template-columns: 18px minmax(100px, 120px) minmax(0, 1fr);
+  gap: 10px;
   align-items: end;
   width: 100%;
-}
-
-.transactions-manual-money-row__stack {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
 }
 
 .transactions-manual-money-row__amount {
   min-width: 0;
 }
 
+.transactions-manual-money-row__currency {
+  min-width: 0;
+}
+
+.transactions-manual-money-row__currency .transactions-manual-currency {
+  width: 100%;
+}
+
+.transactions-manual-money-row__currency .transactions-manual-currency__button {
+  width: 100%;
+}
+
+.transactions-manual-more-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
 .manual-more-panel--compact {
+  grid-column: 1 / -1;
+  width: 100%;
   gap: 8px;
 }
 
@@ -12115,16 +12130,9 @@ input.transaction-inline-edit--amount::placeholder {
 .manual-form-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-.manual-form-actions__left {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -12133,6 +12141,16 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   gap: 10px;
   margin-left: auto;
+}
+
+.transactions-manual-add-another {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 0.92rem;
+  font-weight: 600;
 }
 
 .transactions-manual-field {
@@ -12173,19 +12191,20 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-manual-type-toggle__button {
   flex: 0 0 auto;
   min-width: 0;
-  min-height: 14px;
+  min-height: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 1px;
-  padding: 0 4px;
+  padding: 0 10px;
   border-radius: 999px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.96);
   color: var(--text);
   font: inherit;
-  font-size: 0.55rem;
+  font-size: 0.6rem;
   font-weight: 700;
+  line-height: 1;
   cursor: pointer;
   transition:
     box-shadow 180ms ease,
@@ -12533,9 +12552,9 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-type-symbol {
-  min-width: 12px;
+  min-width: 10px;
   color: var(--accent);
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 800;
   line-height: 1;
   text-align: center;
