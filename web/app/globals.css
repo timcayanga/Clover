@@ -823,6 +823,65 @@ body[data-clover-page-modal] .sidebar-backdrop {
   grid-auto-rows: max-content;
 }
 
+.sidebar-nav__more {
+  position: relative;
+  display: grid;
+  gap: 6px;
+}
+
+.sidebar-nav__submenu {
+  display: grid;
+  gap: 4px;
+  margin-left: 16px;
+  padding: 8px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid var(--stroke);
+  box-shadow: var(--shadow-soft);
+}
+
+.sidebar-nav__submenu-link {
+  appearance: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border-radius: 13px;
+  font-size: 13px;
+  line-height: 1.2;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.sidebar-nav__submenu-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  color: var(--accent);
+  background: rgba(3, 168, 192, 0.12);
+  flex: none;
+}
+
+.sidebar-nav__submenu-link:hover,
+.sidebar-nav__submenu-link.is-active {
+  background: rgba(3, 168, 192, 0.12);
+  color: var(--text);
+  transform: translateX(2px);
+}
+
+.sidebar-nav__submenu-link:hover .sidebar-nav__submenu-icon,
+.sidebar-nav__submenu-link.is-active .sidebar-nav__submenu-icon {
+  background: rgba(3, 168, 192, 0.18);
+}
+
 .nav-link {
   appearance: none;
   display: flex;
@@ -25986,6 +26045,7 @@ html[data-theme="dark"] .shell-compact-bar {
 html[data-theme="dark"] .sidebar-search-panel,
 html[data-theme="dark"] .sidebar-popover,
 html[data-theme="dark"] .sidebar-search-results__item,
+html[data-theme="dark"] .sidebar-nav__submenu,
 html[data-theme="dark"] .settings-hub__menu-list,
 html[data-theme="dark"] .settings-hub__panel,
 html[data-theme="dark"] .settings-profile-summary,
@@ -26076,6 +26136,26 @@ html[data-theme="dark"] .nav-link.is-active .nav-link__icon {
   background: rgba(241, 245, 249, 0.94);
   color: #334155;
   border: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+html[data-theme="dark"] .sidebar-nav__submenu {
+  background: rgba(5, 10, 18, 0.98);
+  border-color: rgba(148, 163, 184, 0.18);
+}
+
+html[data-theme="dark"] .sidebar-nav__submenu-link {
+  color: #dbe4ec;
+}
+
+html[data-theme="dark"] .sidebar-nav__submenu-link:hover,
+html[data-theme="dark"] .sidebar-nav__submenu-link.is-active {
+  background: rgba(9, 15, 27, 0.92);
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .sidebar-nav__submenu-icon {
+  background: rgba(3, 168, 192, 0.18);
+  color: #8ce7f0;
 }
 
 html[data-theme="dark"] .sidebar-icon-button:hover,
@@ -27017,4 +27097,529 @@ html[data-theme="dark"] .sidebar-popover__item,
 html[data-theme="dark"] .sidebar-search-results__item,
 html[data-theme="dark"] .goals-editor__purpose-chip {
   box-shadow: none;
+}
+
+.split-bill-home,
+.split-bill-editor,
+.split-bill-detail {
+  display: grid;
+  gap: 20px;
+}
+
+.split-bill-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
+  gap: 20px;
+  padding: 24px;
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  background:
+    radial-gradient(circle at top left, rgba(94, 211, 208, 0.18), transparent 36%),
+    linear-gradient(135deg, rgba(3, 168, 192, 0.08), rgba(15, 23, 42, 0.02));
+}
+
+.split-bill-hero__copy {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.split-bill-hero__copy h1,
+.split-bill-editor__section h1,
+.split-bill-detail__hero h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+}
+
+.split-bill-hero__copy p,
+.split-bill-editor__section p,
+.split-bill-detail__hero p {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--text-secondary);
+}
+
+.split-bill-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.split-bill-hero__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.split-bill-stat {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.split-bill-stat span,
+.split-bill-card__summary span,
+.split-bill-group-card p,
+.split-bill-detail__meta-grid span,
+.split-bill-detail__balance-card span,
+.split-bill-detail__payment p,
+.split-bill-editor__totals span {
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+}
+
+.split-bill-stat strong {
+  font-size: 1.45rem;
+  letter-spacing: -0.03em;
+}
+
+.split-bill-grid,
+.split-bill-detail__grid,
+.split-bill-editor__layout {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1.5fr) minmax(320px, 0.9fr);
+  align-items: start;
+}
+
+.split-bill-panel,
+.split-bill-editor__section,
+.split-bill-detail__panel {
+  display: grid;
+  gap: 16px;
+}
+
+.split-bill-panel__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.split-bill-panel__head h2,
+.split-bill-panel__head h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.split-bill-list,
+.split-bill-group-list,
+.split-bill-editor__rows,
+.split-bill-editor__item-list,
+.split-bill-editor__transfer-list,
+.split-bill-detail__balance-list,
+.split-bill-detail__item-list,
+.split-bill-detail__payment-list {
+  display: grid;
+  gap: 14px;
+}
+
+.split-bill-card,
+.split-bill-group-card,
+.split-bill-editor__item,
+.split-bill-editor__summary-card,
+.split-bill-detail__balance-card,
+.split-bill-detail__item,
+.split-bill-detail__payment {
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.split-bill-card__head,
+.split-bill-group-card__head,
+.split-bill-detail__item-head,
+.split-bill-detail__payment {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.split-bill-card__head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.split-bill-card__head p,
+.split-bill-group-card p {
+  margin: 4px 0 0;
+}
+
+.split-bill-card__meta {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  text-align: right;
+}
+
+.split-bill-card__meta span {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.split-bill-card__body {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.split-bill-card__summary,
+.split-bill-editor__summary-card {
+  display: grid;
+  gap: 6px;
+}
+
+.split-bill-card__summary strong,
+.split-bill-group-card strong,
+.split-bill-detail__balance-card strong,
+.split-bill-detail__item-head span,
+.split-bill-detail__payment strong,
+.split-bill-editor__summary-card strong,
+.split-bill-editor__transfer strong,
+.split-bill-editor__totals strong {
+  font-size: 1rem;
+}
+
+.split-bill-card__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.split-bill-card__hint {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.split-bill-card__actions,
+.split-bill-group-form__actions,
+.split-bill-editor__actions,
+.split-bill-detail__actions,
+.split-bill-editor__item-actions,
+.split-bill-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.split-bill-empty {
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.04);
+  color: var(--text-secondary);
+  display: grid;
+  gap: 8px;
+}
+
+.split-bill-empty strong {
+  color: var(--text-primary);
+}
+
+.split-bill-group-form {
+  display: grid;
+  gap: 14px;
+}
+
+.split-bill-group-form__textarea,
+.split-bill-editor__textarea,
+.split-bill-detail__receipt-text pre {
+  min-height: 110px;
+}
+
+.split-bill-editor__textarea--tall {
+  min-height: 180px;
+}
+
+.split-bill-group-form__error,
+.split-bill-editor__error {
+  margin: 0;
+  color: var(--danger, #b91c1c);
+  font-weight: 600;
+}
+
+.split-bill-group-card__members,
+.split-bill-editor__chips,
+.split-bill-detail__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.split-bill-group-card__members span,
+.split-bill-detail__chip,
+.split-bill-editor__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(3, 168, 192, 0.1);
+  color: var(--text-primary);
+  border: 1px solid rgba(3, 168, 192, 0.18);
+  font-size: 0.86rem;
+}
+
+.split-bill-editor__chip {
+  cursor: pointer;
+}
+
+.split-bill-editor__chip.is-selected,
+.split-bill-detail__chip {
+  background: rgba(3, 168, 192, 0.18);
+}
+
+.split-bill-detail__chip--neutral,
+.split-bill-editor__chip-note {
+  background: rgba(15, 23, 42, 0.04);
+  border-color: rgba(15, 23, 42, 0.08);
+  color: var(--text-secondary);
+}
+
+.split-bill-editor__file-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.split-bill-editor__file-button input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.split-bill-editor__receipt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.split-bill-editor__receipt-note,
+.split-bill-editor__inline-help {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.split-bill-form-grid,
+.split-bill-editor__item-fields,
+.split-bill-editor__payment,
+.split-bill-editor__totals,
+.split-bill-detail__meta-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.split-bill-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.split-bill-editor__inline-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.split-bill-editor__rows .split-bill-editor__row,
+.split-bill-editor__payment {
+  grid-template-columns: minmax(0, 1.2fr) minmax(120px, 0.7fr) minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.split-bill-editor__row {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.split-bill-editor__item-fields {
+  grid-template-columns: minmax(0, 1.5fr) minmax(140px, 0.6fr);
+}
+
+.split-bill-editor__item-people {
+  display: grid;
+  gap: 12px;
+}
+
+.split-bill-editor__item-people-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.split-bill-editor__summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.split-bill-editor__summary-card {
+  padding: 14px;
+}
+
+.split-bill-editor__summary-card small {
+  color: var(--text-secondary);
+}
+
+.split-bill-editor__transfer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.split-bill-editor__transfer:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.split-bill-editor__totals {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.split-bill-editor__totals div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.split-bill-detail__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(240px, 0.8fr);
+  gap: 20px;
+  padding: 24px;
+}
+
+.split-bill-detail__hero-metrics {
+  display: grid;
+  gap: 12px;
+}
+
+.split-bill-detail__hero-metrics article {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.split-bill-detail__hero-metrics strong {
+  font-size: 1.2rem;
+}
+
+.split-bill-detail__balance-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.split-bill-detail__balance-card .is-positive {
+  color: var(--success, #047857);
+}
+
+.split-bill-detail__balance-card .is-negative {
+  color: var(--danger, #b91c1c);
+}
+
+.split-bill-detail__transfer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.split-bill-detail__transfer:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.split-bill-detail__meta-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.split-bill-detail__meta-grid div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.split-bill-detail__receipt-text pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.04);
+  color: inherit;
+}
+
+.split-bill-modal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.38);
+  backdrop-filter: blur(10px);
+  z-index: 40;
+}
+
+.split-bill-modal__card {
+  width: min(520px, 100%);
+  padding: 24px;
+  display: grid;
+  gap: 16px;
+}
+
+.split-bill-modal__card h3 {
+  margin: 0;
+}
+
+.split-bill-modal__card p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 1024px) {
+  .split-bill-hero,
+  .split-bill-grid,
+  .split-bill-detail__grid,
+  .split-bill-editor__layout,
+  .split-bill-detail__hero {
+    grid-template-columns: 1fr;
+  }
+
+  .split-bill-card__body,
+  .split-bill-form-grid,
+  .split-bill-editor__summary-grid,
+  .split-bill-editor__totals,
+  .split-bill-detail__meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .split-bill-editor__rows .split-bill-editor__row,
+  .split-bill-editor__payment {
+    grid-template-columns: 1fr;
+  }
 }

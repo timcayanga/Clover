@@ -138,6 +138,14 @@ const sidebarSearchPages: Array<{
     terms: ["investments", "investment", "ticker", "tickers", "stock", "stocks", "fund", "bonds"],
   },
   {
+    key: "split-bill",
+    title: "Split Bill",
+    href: "/split-bill",
+    icon: "split-bill",
+    detail: "Share receipts and settle balances.",
+    terms: ["split bill", "split bill", "splitwise", "receipt split", "shared bill", "bill split"],
+  },
+  {
     key: "reports",
     title: "Reports",
     href: "/reports",
@@ -240,7 +248,6 @@ const navItems = [
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/recurring", label: "Recurring", key: "recurring" as const },
-  { href: "/investments", label: "Investments", key: "investments" as const },
   { href: "/reports", label: "Reports", key: "reports" as const },
   { href: "/insights", label: "Insights", key: "insights" as const },
   { href: "/goals", label: "Goals", key: "goals" as const },
@@ -250,6 +257,7 @@ type IconName =
   | "dashboard"
   | "accounts"
   | "investments"
+  | "split-bill"
   | "transactions"
   | "recurring"
   | "reports"
@@ -371,6 +379,15 @@ function MenuIcon({ name }: { name: IconName }) {
           <path d="M14.2 8H18v3.8" />
         </svg>
       );
+    case "split-bill":
+      return (
+        <svg {...common}>
+          <rect x="5" y="4.5" width="14" height="7.5" rx="2" />
+          <rect x="7" y="12" width="12" height="7.5" rx="2" />
+          <path d="M8.5 8h7" />
+          <path d="M10 15.5h7" />
+        </svg>
+      );
     case "transactions":
       return (
         <svg {...common}>
@@ -465,11 +482,14 @@ export function CloverShell({
   const shellRef = useRef<HTMLDivElement | null>(null);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
   const searchResultsRef = useRef<HTMLDivElement | null>(null);
+  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
+  const morePopoverRef = useRef<HTMLDivElement | null>(null);
   const profileButtonRef = useRef<HTMLButtonElement | null>(null);
   const profilePopoverRef = useRef<HTMLDivElement | null>(null);
   const notificationsButtonRef = useRef<HTMLButtonElement | null>(null);
   const notificationsPopoverRef = useRef<HTMLDivElement | null>(null);
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | null>(null);
+  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -483,6 +503,7 @@ export function CloverShell({
   const profileImage = user?.imageUrl ?? null;
   const profileBackground = avatarBackgrounds[hashString(displayName) % avatarBackgrounds.length];
   const isProfileActive = active === "profile" || pathname?.startsWith("/profile");
+  const isMoreActive = pathname?.startsWith("/investments") || pathname?.startsWith("/split-bill") || isMoreMenuOpen;
   const isNotificationsActive = openMenu === "notifications";
   const isProfileMenuOpen = openMenu === "profile";
   const closeChrome = () => {
@@ -523,9 +544,14 @@ export function CloverShell({
         setOpenMenu(null);
       }
 
+      if (isMoreMenuOpen && !moreButtonRef.current?.contains(target) && !morePopoverRef.current?.contains(target)) {
+        setIsMoreMenuOpen(false);
+      }
+
       if (!shellRef.current.contains(target)) {
         setOpenMenu(null);
         setIsSearchOpen(false);
+        setIsMoreMenuOpen(false);
       }
     };
 
@@ -577,6 +603,7 @@ export function CloverShell({
     setOpenMenu(null);
     setIsSearchOpen(false);
     setSearchQuery("");
+    setIsMoreMenuOpen(pathname?.startsWith("/investments") ?? false);
   }, [pathname]);
 
   useEffect(() => {
@@ -1039,8 +1066,51 @@ export function CloverShell({
                 <MenuIcon name={item.key} />
               </span>
               {item.label}
+              </button>
+            ))}
+
+          <div className="sidebar-nav__more" ref={morePopoverRef}>
+            <button
+              ref={moreButtonRef}
+              className={`nav-link nav-link--more${isMoreActive ? " is-active" : ""}`}
+              type="button"
+              aria-expanded={isMoreMenuOpen}
+              aria-haspopup="menu"
+              onClick={() => setIsMoreMenuOpen((current) => !current)}
+            >
+              <span className="nav-link__icon" aria-hidden="true">
+                <MenuIcon name="more" />
+              </span>
+              More
             </button>
-          ))}
+
+            {isMoreMenuOpen ? (
+              <div className="sidebar-nav__submenu" role="menu" aria-label="More navigation">
+                <button
+                  type="button"
+                  className={`sidebar-nav__submenu-link${pathname?.startsWith("/split-bill") ? " is-active" : ""}`}
+                  role="menuitem"
+                  onClick={() => navigateTo("/split-bill")}
+                >
+                  <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                    <MenuIcon name="split-bill" />
+                  </span>
+                  <span>Split Bill</span>
+                </button>
+                <button
+                  type="button"
+                  className={`sidebar-nav__submenu-link${pathname?.startsWith("/investments") ? " is-active" : ""}`}
+                  role="menuitem"
+                  onClick={() => navigateTo("/investments")}
+                >
+                  <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                    <MenuIcon name="investments" />
+                  </span>
+                  <span>Investments</span>
+                </button>
+              </div>
+            ) : null}
+          </div>
         </nav>
 
         <div className="sidebar-footer">
