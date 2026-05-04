@@ -5582,7 +5582,7 @@ function TransactionsPageContent() {
       {manualOpen ? (
         <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => setManualOpen(false)}>
           <section
-            className="modal-card modal-card--wide modal-card--manual glass"
+            className="modal-card modal-card--manual glass"
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-transaction-title"
