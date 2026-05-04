@@ -1152,9 +1152,7 @@ export function ImportFilesModal({
         additionsCount += 1;
         shouldAutoClose = !shouldLaunchInBackground;
         const guessedIdentity = guessStatementIdentity(file.name);
-        const canUseOptimisticGuess = Boolean(
-          guessedIdentity?.accountName && /\d{4}$/.test(guessedIdentity.accountName.replace(/\s+/g, " "))
-        );
+        const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName && guessedIdentity.accountNumber);
         const optimisticAccountId = guessedIdentity && canUseOptimisticGuess ? `optimistic-${crypto.randomUUID()}` : null;
         capturePostHogClientEvent("file_upload_started", {
           ...fileAnalyticsBase(file, workspaceId),
