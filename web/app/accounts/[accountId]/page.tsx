@@ -1379,7 +1379,6 @@ function AccountDetailPageContent() {
       <section className="panel accounts-detail__panel" style={accountBrandStyles}>
         <div className="accounts-detail__header">
           <div className="accounts-detail__headline">
-            {account ? <AccountBrandMark accountBrand={accountBrand} label={accountBrand.label} /> : null}
             <div>
               <p className="eyebrow">{account?.type === "investment" ? "Asset details" : "Account details"}</p>
               <h2>{accountDisplayName}</h2>
@@ -1742,7 +1741,7 @@ function AccountDetailPageContent() {
               <h3>Transactions</h3>
             </div>
             <div className="accounts-detail__transactions-actions">
-              <span className="accounts-detail__transactions-count">{`${visibleTransactions.length} of ${transactionTotalCount} loaded`}</span>
+              <span className="accounts-summary-chip is-neutral">{`${visibleTransactions.length} of ${transactionTotalCount} loaded`}</span>
               <button className="button button-secondary button-small" type="button" onClick={openTransactionsPage} disabled={!account}>
                 Open in Transactions
               </button>
