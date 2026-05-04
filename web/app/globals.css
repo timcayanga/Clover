@@ -11162,7 +11162,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .modal-card--manual {
-  width: min(440px, 100%);
+  width: min(400px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
   overflow: auto;
 }
@@ -11939,10 +11939,9 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .manual-form-layout--compact {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
 
 .manual-form-layout__full {
@@ -11976,16 +11975,16 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-name-row {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
-  gap: 10px;
-  align-items: end;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
   width: 100%;
 }
 
 .transactions-manual-category-trigger,
 .transactions-manual-account-trigger {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   display: inline-grid;
   place-items: center;
   border: 0;
@@ -11997,14 +11996,14 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-category-trigger img {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   display: block;
 }
 
 .transactions-manual-account-trigger img {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   display: block;
   object-fit: contain;
 }
@@ -12017,9 +12016,9 @@ input.transaction-inline-edit--amount::placeholder {
 
 .manual-form-compact-row {
   display: grid;
-  grid-template-columns: 22px minmax(72px, 0.9fr) minmax(0, 2.35fr);
-  gap: 10px;
-  align-items: end;
+  grid-template-columns: 18px minmax(64px, 0.8fr) minmax(0, 2.2fr);
+  gap: 8px;
+  align-items: center;
   width: 100%;
 }
 
@@ -12029,7 +12028,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .manual-more-panel--compact {
-  gap: 10px;
+  gap: 8px;
 }
 
 .manual-more-panel__stack {
@@ -12043,7 +12042,7 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 12px;
+  margin-top: 8px;
   flex-wrap: wrap;
 }
 
@@ -12067,7 +12066,7 @@ input.transaction-inline-edit--amount::placeholder {
   min-width: 0;
   width: 100%;
   color: var(--muted-2);
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
@@ -12075,7 +12074,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .modal-card--manual label {
   color: var(--muted-2);
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
@@ -12091,25 +12090,25 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-manual-type-toggle {
   display: flex;
   align-items: stretch;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
 .transactions-manual-type-toggle__button {
   flex: 1 1 0;
   min-width: 0;
-  min-height: 30px;
+  min-height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border-radius: 10px;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 8px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.96);
   color: var(--text);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 700;
   cursor: pointer;
   transition:
@@ -12161,8 +12160,8 @@ input.transaction-inline-edit--amount::placeholder {
 
 .manual-more-panel {
   display: grid;
-  gap: 12px;
-  padding-top: 6px;
+  gap: 8px;
+  padding-top: 2px;
   width: 100%;
 }
 
