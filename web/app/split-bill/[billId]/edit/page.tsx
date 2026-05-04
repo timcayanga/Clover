@@ -57,7 +57,7 @@ export default async function EditSplitBillPage({ params }: { params: Promise<{ 
   }
 
   return (
-    <CloverShell active="split-bill" title="Edit Split Bill" kicker="More" subtitle="Keep the receipt data separate, but fully editable.">
+    <CloverShell active="split-bill" title="Edit Split Bill">
       <SplitBillEditor mode="edit" initialBill={serializeSplitBillRecord(bill as Parameters<typeof serializeSplitBillRecord>[0])} groups={groups} />
     </CloverShell>
   );

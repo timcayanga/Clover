@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatSplitBillAmount, type SplitBillSerializedBill } from "@/lib/split-bill";
+import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
 
 type SplitBillGroupSummary = {
   id: string;
@@ -17,6 +18,7 @@ type SplitBillGroupSummary = {
 type SplitBillHomeProps = {
   bills: SplitBillSerializedBill[];
   groups: SplitBillGroupSummary[];
+  initialAddMode?: "manual" | "import" | null;
 };
 
 const formatDate = (value: string) =>
@@ -40,7 +42,7 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   return payload;
 }
 
-export function SplitBillHome({ bills: initialBills, groups: initialGroups }: SplitBillHomeProps) {
+export function SplitBillHome({ bills: initialBills, groups: initialGroups, initialAddMode }: SplitBillHomeProps) {
   const router = useRouter();
   const [bills, setBills] = useState(initialBills);
   const [groups, setGroups] = useState(initialGroups);
@@ -56,11 +58,6 @@ export function SplitBillHome({ bills: initialBills, groups: initialGroups }: Sp
     setSelectedGroupId("");
     setGroupName("");
     setMemberText("");
-  };
-
-  const addGroup = () => {
-    clearGroupForm();
-    document.getElementById("split-bill-groups-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const saveGroup = async () => {
@@ -149,31 +146,12 @@ export function SplitBillHome({ bills: initialBills, groups: initialGroups }: Sp
 
   return (
     <div className="split-bill-home">
-      <section className="split-bill-hero glass">
-        <div className="split-bill-hero__copy">
-          <span className="pill pill-accent">Split Bill</span>
-          <h1>Keep shared bills simple.</h1>
-          <p>View your recent split bills, add a new receipt or manual bill, and save the groups you use most often.</p>
-          <div className="split-bill-hero__actions">
-            <Link className="button button-primary button-pill" href="/split-bill/new" prefetch={false}>
-              Add bill
-            </Link>
-            <button className="button button-secondary button-pill" type="button" onClick={addGroup}>
-              Add group
-            </button>
-          </div>
-        </div>
-      </section>
-
       <section className="split-bill-panel panel glass">
         <div className="split-bill-panel__head">
           <div>
-            <p className="eyebrow">Recent bills</p>
-            <h2>Your split bills at a glance</h2>
+            <p className="eyebrow">Split Bills</p>
+            <h2>Recent split bills at a glance</h2>
           </div>
-          <Link className="button button-secondary button-small" href="/split-bill/new" prefetch={false}>
-            Add bill
-          </Link>
         </div>
 
         {bills.length > 0 ? (
@@ -241,9 +219,6 @@ export function SplitBillHome({ bills: initialBills, groups: initialGroups }: Sp
             <p className="eyebrow">Groups</p>
             <h2>Save names you use often</h2>
           </div>
-          <button className="button button-secondary button-small" type="button" onClick={addGroup}>
-            Add group
-          </button>
         </div>
 
         <div className="split-bill-group-list">
@@ -351,6 +326,8 @@ export function SplitBillHome({ bills: initialBills, groups: initialGroups }: Sp
           </section>
         </div>
       ) : null}
+
+      <SplitBillManualModal open={initialAddMode === "manual"} />
     </div>
   );
 }

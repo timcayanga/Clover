@@ -18,7 +18,7 @@ export default async function NewSplitBillPage() {
   });
 
   return (
-    <CloverShell active="split-bill" title="New Split Bill" kicker="More" subtitle="Import a receipt or enter a bill manually.">
+    <CloverShell active="split-bill" title="Split Bill">
       <SplitBillEditor mode="create" groups={groups} />
     </CloverShell>
   );
