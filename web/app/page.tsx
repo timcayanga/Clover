@@ -171,8 +171,7 @@ export default function HomePage() {
 
       <ScrollReveal as="section" className="landing-flow">
         <div className="landing-flow__copy">
-          <p className="eyebrow">How it works</p>
-          <h2>A simple path from upload to action.</h2>
+          <h2>How It Works</h2>
         </div>
 
         <div className="landing-flow__steps" aria-label="How Clover works">
