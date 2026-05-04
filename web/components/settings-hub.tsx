@@ -478,6 +478,41 @@ export function SettingsHub({
     });
   };
 
+  const handleProfileRemove = (profileId: string, profileName: string) => {
+    if (
+      !window.confirm(
+        `Remove ${profileName}? Clover will only allow this if the profile does not contain imported or confirmed data yet.`
+      )
+    ) {
+      return;
+    }
+
+    setProfileMessage(null);
+    startTransition(async () => {
+      try {
+        const response = await fetch(`/api/workspaces/${encodeURIComponent(profileId)}`, {
+          method: "DELETE",
+        });
+
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Unable to remove profile.");
+        }
+
+        if (profileId === activeProfileId) {
+          persistSelectedWorkspaceId("");
+          syncSelectedWorkspaceCookie();
+          setActiveProfileId("");
+        }
+
+        setProfileMessage("Profile removed.");
+        router.refresh();
+      } catch (error) {
+        setProfileMessage(error instanceof Error ? error.message : "Unable to remove profile.");
+      }
+    });
+  };
+
   const isFree = planTier === "free";
   const currentPlanValue = planTier === "free" ? "free" : billingSubscription?.interval ?? "annual";
   const currentPlanCard = planCards.find((plan) => plan.value === currentPlanValue) ?? planCards[0];
@@ -651,6 +686,14 @@ export function SettingsHub({
                         onClick={() => handleProfileSwitch(profile.id)}
                       >
                         {isActive ? "Active" : "Switch"}
+                      </button>
+                      <button
+                        type="button"
+                        className="button button-danger button-small"
+                        disabled={isPending}
+                        onClick={() => handleProfileRemove(profile.id, profile.name)}
+                      >
+                        Remove
                       </button>
                     </div>
                   </article>
