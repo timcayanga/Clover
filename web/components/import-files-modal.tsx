@@ -2739,7 +2739,7 @@ export function ImportFilesModal({
     const item = items.find((entry) => entry.id === itemId);
     if (!item) return { status: "error", importedRows: null, summary: null };
     const guessedIdentity = guessStatementIdentity(item.file.name);
-    const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName);
+    const canUseOptimisticGuess = Boolean(guessedIdentity?.accountName && guessedIdentity.accountNumber);
     const itemImportMode = item.importMode ?? "statement";
     const isDocumentImport = itemImportMode !== "statement";
     let importFileId: string | null = null;
