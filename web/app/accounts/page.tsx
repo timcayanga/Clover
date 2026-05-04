@@ -2027,14 +2027,6 @@ function AccountsPageContent() {
       return;
     }
 
-    const hasCashAccount = accounts.some((account) => account.type === "cash");
-    if (manualType === "cash" && hasCashAccount) {
-      const nextError = "Cash already appears automatically in this workspace. Rename the existing Cash account instead.";
-      setAddAccountError(nextError);
-      setMessage(nextError);
-      return;
-    }
-
     if (manualScheduleEnabled && manualScheduleConfig && !manualScheduleDueDate) {
       const nextError = `${manualScheduleConfig.dueDateLabel} is required when schedule tracking is turned on.`;
       setAddAccountError(nextError);
@@ -3234,11 +3226,7 @@ function AccountsPageContent() {
                     <button className="button button-secondary" type="button" onClick={() => void createAnotherManualAccount()} disabled={isSaving}>
                       {isSaving ? "Saving..." : "Add another"}
                     </button>
-                    <button
-                      className="button button-primary"
-                      type="submit"
-                      disabled={isSaving || (manualType === "cash" && accounts.some((account) => account.type === "cash"))}
-                    >
+                    <button className="button button-primary" type="submit" disabled={isSaving}>
                       {isSaving ? "Saving..." : "Create account"}
                     </button>
                   </div>
@@ -3248,9 +3236,6 @@ function AccountsPageContent() {
                     <strong>Unable to save account</strong>
                     <p>{addAccountError}</p>
                   </div>
-                ) : null}
-                {manualType === "cash" && accounts.some((account) => account.type === "cash") ? (
-                  <p className="modal-copy">Cash already appears automatically in this workspace.</p>
                 ) : null}
               </form>
             </div>

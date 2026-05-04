@@ -20896,6 +20896,11 @@ input.transaction-inline-edit--amount::placeholder {
     grid-template-columns: 1fr;
   }
 
+  .accounts-add-fields__row--meta {
+    grid-template-columns: minmax(136px, 0.7fr) minmax(0, 1fr);
+    align-items: end;
+  }
+
   .accounts-add-fields__row--amount {
     align-items: end;
   }
@@ -20919,7 +20924,7 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-add-fields__account-number {
-    width: calc(100% - 152px);
+    width: 100%;
   }
 
   .accounts-add-actions__buttons {
