@@ -2,7 +2,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { Suspense } from "react";
-import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
@@ -14,6 +13,7 @@ import { getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { isLiabilityAccountType } from "@/lib/account-types";
+import { RouteSplash } from "@/components/route-splash";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
 import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -291,11 +291,6 @@ function DashboardStreamFallback() {
           <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 108 }} />
           <span className="skeleton-block skeleton-block--line" style={{ width: "min(100%, 340px)", height: 38, borderRadius: 999 }} />
           <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 380px)" }} />
-          <div className="dashboard-home__hero-badges">
-            {Array.from({ length: 3 }).map((_, index) => (
-              <span key={index} className="skeleton-block" style={{ width: index === 2 ? 118 : 138, height: 28, borderRadius: 999 }} />
-            ))}
-          </div>
         </div>
         <div className="dashboard-home__hero-side">
           <div className="dashboard-home__goal-card dashboard-home__goal-card--loading">
@@ -360,14 +355,6 @@ function DashboardStreamFallback() {
         </div>
       </article>
 
-      <article className="dashboard-home__review-strip glass">
-        <div className="dashboard-home__review-copy">
-          <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 84 }} />
-          <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 240px)", height: 18 }} />
-          <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 320px)" }} />
-        </div>
-        <span className="skeleton-block" style={{ width: 118, height: 34, borderRadius: 999 }} />
-      </article>
     </section>
   );
 }
@@ -666,20 +653,11 @@ async function DashboardStream({
   const goalAction = goalProgress.nextAction;
   const goalProgressLabel = goalProgress.progressPercent === null ? "Set a target" : `${Math.round(goalProgress.progressPercent)}%`;
   const topDriver = currentSummary.topCategory?.[0] ?? "No clear driver yet";
-  const reviewAttentionText =
-    reviewAttentionCount > 0
-      ? `${reviewAttentionCount} item${reviewAttentionCount === 1 ? "" : "s"} need review`
-      : "No items need review";
   const goalSummaryLabel = goalTargetAmount !== null ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}` : goalProgress.currentLabel;
   const totalBalanceLabel = formatCurrency(totalNetWorth, displayCurrency);
   const heroSupportCopy = shouldShowStarterCard
     ? "Import a statement to unlock your balance, movement, and goal snapshot."
     : "Your balance, movement, and goals in one calm view.";
-  const heroBadgeLabels = [
-    weekSummary.transactions > 0 ? `${formatSignedCurrency(weekSummary.net)} this week` : "No activity this week",
-    monthSummary.transactions > 0 ? `${monthSummary.transactions} transactions this month` : "No transactions this month",
-    latestImport ? `Updated ${formatRelativeDate(latestImport.uploadedAt)}` : "No imports yet",
-  ];
   const goalHeroHeading = goalKey ? "Goal progress" : "Set a goal to track your progress";
   const goalHeroCopy = goalKey ? goalProgress.coachCopy : "Set a goal to track your progress.";
   const goalHeroActionLabel = goalKey ? "Open goals" : "Set a goal";
@@ -727,9 +705,6 @@ async function DashboardStream({
     peakActivityDay && peakActivityDay.count > 0
       ? `${peakActivityDay.label} was busiest with ${peakActivityDay.count} transaction${peakActivityDay.count === 1 ? "" : "s"}`
       : "No daily activity yet";
-  const attentionActionHref = reviewAttentionCount > 0 ? "/review" : shouldShowStarterCard ? "/dashboard?import=1" : "/reports";
-  const attentionActionLabel = reviewAttentionCount > 0 ? "Open review" : shouldShowStarterCard ? "Import files" : "View reports";
-
   return (
     <>
       <PostHogPersonProperties
@@ -766,13 +741,6 @@ async function DashboardStream({
             <h3>{totalBalanceLabel}</h3>
             <p>{heroSupportCopy}</p>
 
-            <div className="dashboard-home__hero-badges">
-              {heroBadgeLabels.map((label) => (
-                <span key={label} className="pill pill-subtle">
-                  {label}
-                </span>
-              ))}
-            </div>
           </div>
 
           <div className="dashboard-home__hero-side">
@@ -893,19 +861,6 @@ async function DashboardStream({
           </div>
         </article>
 
-        <article className="dashboard-home__review-strip glass">
-          <div className="dashboard-home__review-copy">
-            <p className="eyebrow">Small follow-up</p>
-            <strong>{reviewAttentionText}</strong>
-            <span>{shouldShowStarterCard ? "Import a statement to unlock balance, movement, and goal progress." : latestImportLabel ?? reviewCoverageText}</span>
-          </div>
-          <div className="dashboard-home__review-actions">
-            <Link className="button button-primary button-small" href={attentionActionHref}>
-              {attentionActionLabel}
-            </Link>
-          </div>
-        </article>
-
         <DashboardImportLauncher
           workspaceId={workspaceSummary.id}
           accounts={workspaceSummary.accounts.map((account) => ({
@@ -951,9 +906,5 @@ export default function DashboardPage({
 }: {
   searchParams?: Promise<{ import?: string }>;
 }) {
-  return (
-    <Suspense fallback={<CloverLoadingScreen label="dashboard" />}>
-      <DashboardPageStream searchParams={searchParams} />
-    </Suspense>
-  );
+  return <RouteSplash label="dashboard"><DashboardPageStream searchParams={searchParams} /></RouteSplash>;
 }
