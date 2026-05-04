@@ -44,7 +44,7 @@ export function EmptyDataCta({
           <img src={illustration} alt={illustrationAlt} loading="lazy" decoding="async" />
         </div>
       ) : null}
-      <p className="transactions-empty-state__eyebrow">{eyebrow}</p>
+      {eyebrow ? <p className="transactions-empty-state__eyebrow">{eyebrow}</p> : null}
       <h3>{title}</h3>
       <p className="transactions-empty-state__copy">{copy}</p>
       {actions ? (

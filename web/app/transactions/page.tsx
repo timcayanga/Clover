@@ -5087,12 +5087,12 @@ function TransactionsPageContent() {
                   </div>
                 );
               })
-            ) : !hasVisibleTransactions ? (
+            ) : transactionsSummary.totalCount === 0 ? (
               <EmptyDataCta
                 className="transactions-empty-state--table"
-                eyebrow="No results"
-                title="No transactions match the current filters."
-                copy="Clear one filter or widen the date range to bring rows back."
+                eyebrow=""
+                title="It is quiet in here"
+                copy="Add your first transaction or import files to bring rows in."
                 illustration={transactionsEmptyStateIllustration}
                 illustrationAlt=""
                 importHref="/transactions?import=1"
@@ -5100,8 +5100,8 @@ function TransactionsPageContent() {
                 transactionHref="/transactions?manual=1"
                 actions={
                   <>
-                    <button className="button button-primary button-small" type="button" onClick={clearAllTransactionFilters}>
-                      Clear filters
+                    <button className="button button-primary button-small" type="button" onClick={() => openManualAdd()}>
+                      Add transaction
                     </button>
                     <button className="button button-secondary button-small transactions-empty-state__import" type="button" onClick={() => openImportFiles()}>
                       Import files
@@ -5109,9 +5109,9 @@ function TransactionsPageContent() {
                   </>
                 }
               />
-            ) : (
-              <div className="empty-state">No transactions match the current filters. Clear one filter or widen the date range to bring rows back.</div>
-            )}
+            ) : !hasVisibleTransactions ? (
+              <div className="empty-state">No transactions match the current filters.</div>
+            ) : null}
           </div>
             </>
           ) : null}
@@ -5309,12 +5309,12 @@ function TransactionsPageContent() {
                   })}
                 </div>
               </div>
-            ) : !hasVisibleTransactions ? (
+            ) : transactionsSummary.totalCount === 0 ? (
               <EmptyDataCta
                 className="transactions-empty-state--table"
-                eyebrow="No results"
-                title="No transactions match the current filters."
-                copy="Clear one filter or widen the date range to bring rows back."
+                eyebrow=""
+                title="It is quiet in here"
+                copy="Add your first transaction or import files to bring rows in."
                 illustration={transactionsEmptyStateIllustration}
                 illustrationAlt=""
                 importHref="/transactions?import=1"
@@ -5322,8 +5322,8 @@ function TransactionsPageContent() {
                 transactionHref="/transactions?manual=1"
                 actions={
                   <>
-                    <button className="button button-primary button-small" type="button" onClick={clearAllTransactionFilters}>
-                      Clear filters
+                    <button className="button button-primary button-small" type="button" onClick={() => openManualAdd()}>
+                      Add transaction
                     </button>
                     <button className="button button-secondary button-small transactions-empty-state__import" type="button" onClick={() => openImportFiles()}>
                       Import files
@@ -5331,9 +5331,9 @@ function TransactionsPageContent() {
                   </>
                 }
               />
-            ) : (
-              <div className="empty-state">No transactions match the current filters. Clear one filter or widen the date range to bring rows back.</div>
-            )}
+            ) : !hasVisibleTransactions ? (
+              <div className="empty-state">No transactions match the current filters.</div>
+            ) : null}
           </div>
           ) : null}
 
