@@ -3013,6 +3013,7 @@ function AccountsPageContent() {
                             optionClassName="accounts-form-currency-field__option"
                             compact
                             showGroupedSections
+                            portalMenu
                           />
                         </div>
                       </label>

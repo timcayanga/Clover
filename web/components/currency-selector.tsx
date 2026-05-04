@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   getCurrencyCatalogOptions,
   getCurrencyCatalogOption,
@@ -23,6 +24,7 @@ type CurrencySelectorProps = {
   menuAlignment?: "start" | "end";
   showGroupedSections?: boolean;
   showChevron?: boolean;
+  portalMenu?: boolean;
 };
 
 type CurrencySectionProps = {
@@ -82,10 +84,13 @@ export function CurrencySelector({
   menuAlignment = "start",
   showGroupedSections = false,
   showChevron = true,
+  portalMenu = false,
 }: CurrencySelectorProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const menuId = useId();
+  const [portalMenuStyle, setPortalMenuStyle] = useState<React.CSSProperties | null>(null);
 
   const catalogOptions = useMemo(() => {
     const values = options.length > 0 ? options : [];
@@ -121,7 +126,11 @@ export function CurrencySelector({
     }
 
     const handlePointerDown = (event: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+      if (
+        rootRef.current &&
+        !rootRef.current.contains(event.target as Node) &&
+        (!menuRef.current || !menuRef.current.contains(event.target as Node))
+      ) {
         setOpen(false);
       }
     };
@@ -140,6 +149,117 @@ export function CurrencySelector({
       document.removeEventListener("keydown", handleEscape);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open || !portalMenu) {
+      return;
+    }
+
+    const updatePortalPosition = () => {
+      const trigger = rootRef.current;
+      if (!trigger || typeof window === "undefined") {
+        return;
+      }
+
+      const rect = trigger.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const width = Math.min(224, viewportWidth - 24);
+      const top = Math.min(rect.bottom + 8, viewportHeight - 16);
+      const left =
+        menuAlignment === "end"
+          ? Math.max(12, rect.right - width)
+          : Math.min(Math.max(12, rect.left), viewportWidth - width - 12);
+      const maxHeight = Math.max(160, viewportHeight - top - 16);
+
+      setPortalMenuStyle({
+        position: "fixed",
+        top,
+        left,
+        width,
+        maxHeight,
+        zIndex: 140,
+      });
+    };
+
+    updatePortalPosition();
+    window.addEventListener("resize", updatePortalPosition);
+    window.addEventListener("scroll", updatePortalPosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePortalPosition);
+      window.removeEventListener("scroll", updatePortalPosition, true);
+    };
+  }, [menuAlignment, open, portalMenu]);
+
+  const menuContent = open ? (
+    <div
+      id={menuId}
+      ref={menuRef}
+      className={`currency-selector__menu ${portalMenu ? "currency-selector__menu--portal" : ""} currency-selector__menu--${menuAlignment} ${menuClassName ?? ""}`.trim()}
+      role="listbox"
+      aria-label={ariaLabel}
+      style={portalMenu ? portalMenuStyle ?? undefined : undefined}
+    >
+      {showGroupedSections ? (
+        <>
+          {includeAllOption ? (
+            <button
+              type="button"
+              className={`currency-selector__option ${optionClassName ?? ""} ${isAllSelected ? "is-selected" : ""}`.trim()}
+              role="option"
+              aria-selected={isAllSelected}
+              onClick={() => {
+                onChange("all");
+                setOpen(false);
+              }}
+            >
+              <span className="currency-selector__option-text">
+                <strong>{allLabel}</strong>
+                <span>Show every currency</span>
+              </span>
+              {isAllSelected ? <span className="currency-selector__option-check" aria-hidden="true">✓</span> : null}
+            </button>
+          ) : null}
+          {sections.map((section) => (
+            <CurrencySection
+              key={section.label}
+              label={section.label}
+              options={section.options}
+              selectedCode={selectedCode}
+              optionClassName={optionClassName}
+              onSelect={(nextCode) => {
+                onChange(nextCode);
+                setOpen(false);
+              }}
+            />
+          ))}
+        </>
+      ) : (
+        catalogOptions.map((option) => {
+          const isSelected = option.code === selectedCode;
+          return (
+            <button
+              key={option.code}
+              type="button"
+              className={`currency-selector__option ${optionClassName ?? ""} ${isSelected ? "is-selected" : ""}`.trim()}
+              role="option"
+              aria-selected={isSelected}
+              onClick={() => {
+                onChange(option.code);
+                setOpen(false);
+              }}
+            >
+              <span className="currency-selector__option-text">
+                <strong>{option.symbol}</strong>
+                <span>{option.name}</span>
+              </span>
+              {isSelected ? <span className="currency-selector__option-check" aria-hidden="true">✓</span> : null}
+            </button>
+          );
+        })
+      )}
+    </div>
+  ) : null;
 
   return (
     <div ref={rootRef} className={`currency-selector ${className ?? ""}`.trim()}>
@@ -173,73 +293,7 @@ export function CurrencySelector({
         ) : null}
       </button>
 
-      {open ? (
-        <div
-          id={menuId}
-          className={`currency-selector__menu currency-selector__menu--${menuAlignment} ${menuClassName ?? ""}`.trim()}
-          role="listbox"
-          aria-label={ariaLabel}
-        >
-          {showGroupedSections ? (
-            <>
-              {includeAllOption ? (
-                <button
-                  type="button"
-                  className={`currency-selector__option ${optionClassName ?? ""} ${isAllSelected ? "is-selected" : ""}`.trim()}
-                  role="option"
-                  aria-selected={isAllSelected}
-                  onClick={() => {
-                    onChange("all");
-                    setOpen(false);
-                  }}
-                >
-                  <span className="currency-selector__option-text">
-                    <strong>{allLabel}</strong>
-                    <span>Show every currency</span>
-                  </span>
-                  {isAllSelected ? <span className="currency-selector__option-check" aria-hidden="true">✓</span> : null}
-                </button>
-              ) : null}
-              {sections.map((section) => (
-                <CurrencySection
-                  key={section.label}
-                  label={section.label}
-                  options={section.options}
-                  selectedCode={selectedCode}
-                  optionClassName={optionClassName}
-                  onSelect={(nextCode) => {
-                    onChange(nextCode);
-                    setOpen(false);
-                  }}
-                />
-              ))}
-            </>
-          ) : (
-            catalogOptions.map((option) => {
-              const isSelected = option.code === selectedCode;
-              return (
-                <button
-                  key={option.code}
-                  type="button"
-                  className={`currency-selector__option ${optionClassName ?? ""} ${isSelected ? "is-selected" : ""}`.trim()}
-                  role="option"
-                  aria-selected={isSelected}
-                  onClick={() => {
-                    onChange(option.code);
-                    setOpen(false);
-                  }}
-                >
-                  <span className="currency-selector__option-text">
-                    <strong>{option.symbol}</strong>
-                    <span>{option.name}</span>
-                  </span>
-                  {isSelected ? <span className="currency-selector__option-check" aria-hidden="true">✓</span> : null}
-                </button>
-              );
-            })
-          )}
-        </div>
-      ) : null}
+      {portalMenu ? (typeof document !== "undefined" && menuContent ? createPortal(menuContent, document.body) : null) : menuContent}
     </div>
   );
 }
