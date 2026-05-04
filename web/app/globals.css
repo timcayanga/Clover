@@ -12165,7 +12165,7 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-manual-type-toggle {
   display: flex;
   align-items: stretch;
-  gap: 4px;
+  gap: 3px;
   min-width: 0;
   width: fit-content;
 }
@@ -12173,18 +12173,18 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-manual-type-toggle__button {
   flex: 0 0 auto;
   min-width: 0;
-  min-height: 18px;
+  min-height: 14px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  padding: 1px 8px;
+  gap: 1px;
+  padding: 0 4px;
   border-radius: 999px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.96);
   color: var(--text);
   font: inherit;
-  font-size: 0.62rem;
+  font-size: 0.55rem;
   font-weight: 700;
   cursor: pointer;
   transition:
@@ -12202,11 +12202,11 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-type-toggle__button.is-active:first-of-type {
-  box-shadow: -3px 6px 14px rgba(3, 168, 192, 0.1), 0 0 0 2px rgba(3, 168, 192, 0.07);
+  box-shadow: -2px 5px 12px rgba(3, 168, 192, 0.09), 0 0 0 2px rgba(3, 168, 192, 0.06);
 }
 
 .transactions-manual-type-toggle__button.is-active:nth-of-type(2) {
-  box-shadow: 3px 6px 14px rgba(3, 168, 192, 0.1), 0 0 0 2px rgba(3, 168, 192, 0.07);
+  box-shadow: 2px 5px 12px rgba(3, 168, 192, 0.09), 0 0 0 2px rgba(3, 168, 192, 0.06);
 }
 
 .transactions-manual-type-toggle__button:focus-visible {
@@ -12526,23 +12526,6 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 8px;
 }
 
-.transactions-manual-type-help {
-  width: 18px;
-  height: 18px;
-  border: 1px solid rgba(3, 168, 192, 0.22);
-  border-radius: 999px;
-  background: rgba(3, 168, 192, 0.08);
-  color: var(--accent);
-  font: inherit;
-  font-size: 0.65rem;
-  font-weight: 800;
-  line-height: 1;
-  display: inline-grid;
-  place-items: center;
-  padding: 0;
-  cursor: help;
-}
-
 .transactions-manual-type-control {
   display: flex;
   align-items: center;
@@ -12550,9 +12533,9 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-type-symbol {
-  min-width: 18px;
+  min-width: 12px;
   color: var(--accent);
-  font-size: 0.95rem;
+  font-size: 0.78rem;
   font-weight: 800;
   line-height: 1;
   text-align: center;

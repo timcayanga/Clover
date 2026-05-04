@@ -1189,7 +1189,8 @@ function ActionIcon({
     | "summary"
     | "save"
     | "download"
-    | "more";
+    | "more"
+    | "account";
 }) {
   const common = {
     width: 14,
@@ -1305,6 +1306,14 @@ function ActionIcon({
           <circle cx="6" cy="12" r="1.4" />
           <circle cx="12" cy="12" r="1.4" />
           <circle cx="18" cy="12" r="1.4" />
+        </svg>
+      );
+    case "account":
+      return (
+        <svg {...common}>
+          <rect x="4" y="5" width="16" height="14" rx="3" />
+          <path d="M8 9h8" />
+          <path d="M8 13h6" />
         </svg>
       );
     default:
@@ -1571,7 +1580,7 @@ function TransactionsPageContent() {
   const detailAutosaveTimerRef = useRef<number | null>(null);
   const manualModalStyle = useMemo<React.CSSProperties>(
     () => ({
-      width: isCompactViewport ? "calc(100vw - 16px)" : "520px",
+      width: isCompactViewport ? "calc(100vw - 16px)" : "460px",
       maxHeight: isCompactViewport ? "calc(100dvh - 16px)" : "calc(100dvh - 24px)",
       overflow: "auto",
     }),
@@ -5632,14 +5641,6 @@ function TransactionsPageContent() {
                     </span>
                     <span>Credit</span>
                   </button>
-                  <button
-                    type="button"
-                    className="transactions-manual-type-help"
-                    title="Debit means money leaving this account. Credit means money coming in."
-                    aria-label="Debit means money leaving this account. Credit means money coming in."
-                  >
-                    i
-                  </button>
                 </div>
 
                 <div className="transactions-manual-name-row">
@@ -5686,7 +5687,7 @@ function TransactionsPageContent() {
                         aria-hidden="true"
                       />
                     ) : (
-                      <span aria-hidden="true">?</span>
+                      <ActionIcon name="account" />
                     )}
                   </button>
 
@@ -6079,14 +6080,6 @@ function TransactionsPageContent() {
               <label>
                 <span className="transactions-manual-type-label">
                   <span>Type</span>
-                  <button
-                    className="transactions-manual-type-help"
-                    type="button"
-                    title="Debit means money leaving the account. Credit means money coming in."
-                    aria-label="Type help"
-                  >
-                    i
-                  </button>
                 </span>
                 <div className="transactions-manual-type-control transaction-drawer-type-control">
                   <span className="transactions-manual-type-symbol" aria-hidden="true">
