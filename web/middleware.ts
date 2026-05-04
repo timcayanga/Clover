@@ -22,6 +22,11 @@ const isLocalHost = (request: NextRequest) => {
   return /^(localhost|127\.0\.0\.1|\[::1\]|::1)(:\d+)?$/i.test(host.trim());
 };
 
+const isStagingHost = (request: NextRequest) => {
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? request.nextUrl.hostname ?? "";
+  return host.split(",")[0].split(":")[0].trim().toLowerCase() === "staging.clover.ph";
+};
+
 const clerkAuthMiddleware = clerkMiddleware(async (auth, request) => {
   if (isPublicRoute(request)) {
     return NextResponse.next();
@@ -41,6 +46,13 @@ const clerkAuthMiddleware = clerkMiddleware(async (auth, request) => {
 
 export default function middleware(request: NextRequest, event: NextFetchEvent) {
   if (isLocalHost(request)) {
+    return NextResponse.next();
+  }
+
+  if (
+    isStagingHost(request) &&
+    (request.nextUrl.pathname.startsWith("/split-bill") || request.nextUrl.pathname.startsWith("/api/split-bill"))
+  ) {
     return NextResponse.next();
   }
 
