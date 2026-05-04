@@ -1659,6 +1659,9 @@ export const processImportFileText = async (
     !metadataForParse.endingBalance;
   const parsedRowsWithDates = countRowsWithParseableDates(parsedRows);
   const parsedDateCoverage = parsedRows.length > 0 ? parsedRowsWithDates / parsedRows.length : 0;
+  const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank"]);
+  const prefersVisionFallbackForInstitution =
+    typeof metadataForParse.institution === "string" && noisyVisionPreferredInstitutions.has(metadataForParse.institution);
   const suspiciousDateCoverage =
     (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && parsedRowsWithDates === 0
       ? true
@@ -1667,6 +1670,7 @@ export const processImportFileText = async (
     (importFile.fileType === "application/pdf" || imageImport) &&
     (!text.trim() ||
       parsedRows.length === 0 ||
+      (prefersVisionFallbackForInstitution && (parsedRows.length >= 10 || parsedDateCoverage < 0.85)) ||
       (metadataForParse.confidence ?? 0) < 70 ||
       !metadataForParse.accountNumber ||
       !hasKnownInstitution ||
