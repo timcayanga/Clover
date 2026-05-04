@@ -6,6 +6,7 @@ import { splitBillDraftFromReceiptPreview, type ReceiptPreviewResult } from "@/l
 
 type SplitBillImportModalProps = {
   open: boolean;
+  closeHref?: string;
 };
 
 const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
@@ -36,7 +37,7 @@ const validateFile = (file: File | null) => {
   return null;
 };
 
-export function SplitBillImportModal({ open }: SplitBillImportModalProps) {
+export function SplitBillImportModal({ open, closeHref = "/split-bill" }: SplitBillImportModalProps) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +48,7 @@ export function SplitBillImportModal({ open }: SplitBillImportModalProps) {
   }
 
   const closeModal = () => {
-    router.push("/split-bill");
+    router.push(closeHref);
     router.refresh();
   };
 

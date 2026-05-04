@@ -898,6 +898,11 @@ export function CloverShell({
 
   const openQuickAddTransaction = () => {
     closeChrome();
+    if (pathname?.startsWith("/split-bill")) {
+      router.push("/split-bill?add=manual");
+      return;
+    }
+
     router.push("/transactions?manual=1");
   };
 
@@ -1226,8 +1231,8 @@ export function CloverShell({
       <button
         className="shell-quick-add-button"
         type="button"
-        aria-label="Add transaction"
-        title="Add transaction"
+        aria-label={pathname?.startsWith("/split-bill") ? "Add split bill" : "Add transaction"}
+        title={pathname?.startsWith("/split-bill") ? "Add split bill" : "Add transaction"}
         onClick={openQuickAddTransaction}
       >
         <MenuIcon name="plus" />

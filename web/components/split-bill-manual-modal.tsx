@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 type SplitBillManualModalProps = {
   open: boolean;
+  closeHref?: string;
 };
 
 type SplitMode = "you-paid" | "you-owed" | "person-paid" | "person-owed";
@@ -34,7 +35,7 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   return payload;
 }
 
-export function SplitBillManualModal({ open }: SplitBillManualModalProps) {
+export function SplitBillManualModal({ open, closeHref = "/split-bill" }: SplitBillManualModalProps) {
   const router = useRouter();
   const [peopleText, setPeopleText] = useState("");
   const [people, setPeople] = useState<string[]>([]);
@@ -96,7 +97,7 @@ export function SplitBillManualModal({ open }: SplitBillManualModalProps) {
   };
 
   const closeModal = () => {
-    router.push("/split-bill");
+    router.push(closeHref);
     router.refresh();
   };
 
