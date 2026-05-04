@@ -27219,10 +27219,16 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 }
 
 .split-bill-add-menu__item {
+  display: block;
   padding: 10px 12px;
   border-radius: 12px;
   color: var(--text-primary);
   font-size: 0.94rem;
+  background: transparent;
+  border: 0;
+  width: 100%;
+  text-align: left;
+  font: inherit;
 }
 
 .split-bill-add-menu__item:hover {
@@ -27315,9 +27321,14 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   padding: 0 12px;
   color: var(--text-secondary);
   font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: none;
+}
+
+.split-bill-table__header span {
+  font-weight: 500;
+  color: var(--text);
 }
 
 .split-bill-table__row {

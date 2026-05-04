@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { CloverShell } from "@/components/clover-shell";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
@@ -9,6 +8,7 @@ import {
   splitBillItemOrderBy,
 } from "@/lib/split-bill";
 import { SplitBillHome } from "@/components/split-bill-home";
+import { SplitBillPageActions } from "@/components/split-bill-page-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -29,55 +29,6 @@ const billInclude = {
   },
   payments: true,
 };
-
-const buildSplitBillHref = (params: Record<string, string | null | undefined>) => {
-  const search = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value) {
-      search.set(key, value);
-    }
-  }
-
-  const query = search.toString();
-  return query ? `/split-bill?${query}` : "/split-bill";
-};
-
-const splitBillPageActions = ({ currencies, selectedCurrency }: { currencies: string[]; selectedCurrency: string }) => (
-  <div className="split-bill-page-actions">
-    <details className="split-bill-currency-menu">
-      <summary className="button button-secondary button-small">{selectedCurrency === "ALL" ? "All currencies" : selectedCurrency}</summary>
-      <div className="split-bill-add-menu__panel">
-        {["ALL", ...currencies].map((currency) => (
-          <Link
-            key={currency}
-            className="split-bill-add-menu__item"
-            href={buildSplitBillHref({ currency, add: null, group: null })}
-            prefetch={false}
-          >
-            {currency === "ALL" ? "All currencies" : currency}
-          </Link>
-        ))}
-      </div>
-    </details>
-
-    <details className="split-bill-add-menu">
-      <summary className="button button-primary button-small">Add Bill</summary>
-      <div className="split-bill-add-menu__panel">
-        <Link className="split-bill-add-menu__item" href={buildSplitBillHref({ add: "manual", currency: selectedCurrency })} prefetch={false}>
-          Add manually
-        </Link>
-        <Link className="split-bill-add-menu__item" href={buildSplitBillHref({ add: "import", currency: selectedCurrency })} prefetch={false}>
-          Import files
-        </Link>
-      </div>
-    </details>
-
-    <Link className="button button-secondary button-small" href={buildSplitBillHref({ group: "new", currency: selectedCurrency })} prefetch={false}>
-      Add Group
-    </Link>
-  </div>
-);
 
 export default async function SplitBillPage({ searchParams }: { searchParams?: Promise<{ add?: string; group?: string; currency?: string }> }) {
   const user = await getSplitBillCurrentUser();
@@ -113,14 +64,19 @@ export default async function SplitBillPage({ searchParams }: { searchParams?: P
     <CloverShell
       active="split-bill"
       title="Split Bill"
-      actions={showAddMode || showGroupMode ? null : splitBillPageActions({ currencies: normalizedCurrencies, selectedCurrency })}
+      actions={
+        <SplitBillPageActions
+          currencies={normalizedCurrencies}
+          selectedCurrency={selectedCurrency}
+          initialAddMode={showAddMode}
+          initialGroupMode={showGroupMode}
+        />
+      }
     >
       <SplitBillHome
         bills={bills.map((bill) => serializeSplitBillRecord(bill as Parameters<typeof serializeSplitBillRecord>[0]))}
         groups={groups}
         selectedCurrency={selectedCurrency}
-        initialAddMode={showAddMode}
-        initialGroupMode={showGroupMode}
       />
     </CloverShell>
   );

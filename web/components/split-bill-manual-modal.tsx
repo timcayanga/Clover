@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatCurrencySymbol } from "@/lib/currency-format";
 
 type SplitBillManualModalProps = {
   open: boolean;
   closeHref?: string;
+  onClose?: () => void;
 };
 
 type SplitMode = "you-paid" | "you-owed" | "person-paid" | "person-owed";
@@ -35,7 +37,7 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   return payload;
 }
 
-export function SplitBillManualModal({ open, closeHref = "/split-bill" }: SplitBillManualModalProps) {
+export function SplitBillManualModal({ open, closeHref = "/split-bill", onClose }: SplitBillManualModalProps) {
   const router = useRouter();
   const [peopleText, setPeopleText] = useState("");
   const [people, setPeople] = useState<string[]>([]);
@@ -97,6 +99,11 @@ export function SplitBillManualModal({ open, closeHref = "/split-bill" }: SplitB
   };
 
   const closeModal = () => {
+    if (onClose) {
+      onClose();
+      return;
+    }
+
     router.push(closeHref);
     router.refresh();
   };
@@ -202,8 +209,8 @@ export function SplitBillManualModal({ open, closeHref = "/split-bill" }: SplitB
   }
 
   return (
-    <div className="split-bill-modal" role="dialog" aria-modal="true" aria-label="Add manual split bill">
-      <section className="split-bill-modal__card glass split-bill-manual-modal">
+    <div className="split-bill-modal" role="presentation" onClick={closeModal}>
+      <section className="split-bill-modal__card glass split-bill-manual-modal" role="dialog" aria-modal="true" aria-label="Add manual split bill" onClick={(event) => event.stopPropagation()}>
         <div className="split-bill-manual-modal__head">
           <div>
             <p className="eyebrow">Add manually</p>
@@ -262,7 +269,7 @@ export function SplitBillManualModal({ open, closeHref = "/split-bill" }: SplitB
               <select className="split-bill-manual-modal__currency-chip" value={currency} onChange={(event) => setCurrency(event.target.value)}>
                 {currencyOptions.map((code) => (
                   <option key={code} value={code}>
-                    {code}
+                    {formatCurrencySymbol(code)}
                   </option>
                 ))}
               </select>

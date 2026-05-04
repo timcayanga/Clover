@@ -2,26 +2,18 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { formatSplitBillAmount, normalizeCurrencyCode, type SplitBillSerializedBill } from "@/lib/split-bill";
-import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
-import { SplitBillImportModal } from "@/components/split-bill-import-modal";
 
 type SplitBillGroupSummary = {
   id: string;
   name: string;
   members: Array<{ id: string; name: string; sortOrder: number }>;
-  _count?: {
-    bills: number;
-  };
 };
 
 type SplitBillHomeProps = {
   bills: SplitBillSerializedBill[];
   groups: SplitBillGroupSummary[];
   selectedCurrency?: string | null;
-  initialAddMode?: "manual" | "import" | null;
-  initialGroupMode?: "new" | null;
 };
 
 const formatDate = (value: string) =>
@@ -38,14 +30,6 @@ const getInitials = (name: string) =>
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("")
     .slice(0, 2) || "?"
-
-async function readJsonResponse<T>(response: Response): Promise<T> {
-  const payload = (await response.json()) as T & { error?: string };
-  if (!response.ok) {
-    throw new Error(payload?.error ?? "Request failed");
-  }
-  return payload;
-}
 
 const buildRowStatus = (transfers: SplitBillSerializedBill["settlement"]["transfers"]) =>
   transfers.length > 0 ? `${transfers.length} transfer${transfers.length === 1 ? "" : "s"}` : "Settled";
@@ -65,16 +49,9 @@ export function SplitBillHome({
   bills: initialBills,
   groups: initialGroups,
   selectedCurrency = "ALL",
-  initialAddMode,
-  initialGroupMode,
 }: SplitBillHomeProps) {
-  const router = useRouter();
   const [bills] = useState(initialBills);
-  const [groups, setGroups] = useState(initialGroups);
-  const [groupName, setGroupName] = useState("");
-  const [memberText, setMemberText] = useState("");
-  const [isSavingGroup, setIsSavingGroup] = useState(false);
-  const [groupError, setGroupError] = useState<string | null>(null);
+  const [groups] = useState(initialGroups);
 
   const visibleBills = useMemo(
     () => (selectedCurrency === "ALL" ? bills : bills.filter((bill) => normalizeCurrencyCode(bill.currency) === normalizeCurrencyCode(selectedCurrency))),
@@ -103,55 +80,6 @@ export function SplitBillHome({
       };
     });
   }, [bills, groups]);
-
-  const clearGroupForm = () => {
-    setGroupName("");
-    setMemberText("");
-    setGroupError(null);
-  };
-
-  const closeGroupModal = () => {
-    const base = new URLSearchParams();
-    if (selectedCurrency && selectedCurrency !== "ALL") {
-      base.set("currency", selectedCurrency);
-    }
-    router.push(`/split-bill${base.toString() ? `?${base.toString()}` : ""}`);
-    router.refresh();
-  };
-
-  const saveGroup = async () => {
-    setIsSavingGroup(true);
-    setGroupError(null);
-
-    try {
-      const members = memberText
-        .split(/\r?\n|,/)
-        .map((entry) => entry.trim())
-        .filter(Boolean)
-        .map((name, index) => ({ name, sortOrder: index }));
-      const payload = {
-        name: groupName.trim(),
-        members,
-      };
-
-      const response = await fetch("/api/split-bill-groups", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-      const result = await readJsonResponse<{ group: SplitBillGroupSummary }>(response);
-      setGroups((current) => [result.group, ...current]);
-      clearGroupForm();
-      closeGroupModal();
-      router.refresh();
-    } catch (error) {
-      setGroupError(error instanceof Error ? error.message : "Unable to save group");
-    } finally {
-      setIsSavingGroup(false);
-    }
-  };
 
   return (
     <div className="split-bill-home">
@@ -282,53 +210,6 @@ export function SplitBillHome({
         </div>
       </section>
 
-      {initialGroupMode === "new" ? (
-        <div className="split-bill-modal" role="dialog" aria-modal="true" aria-label="Add group">
-          <section className="split-bill-modal__card glass split-bill-group-modal">
-            <div className="split-bill-manual-modal__head">
-              <div>
-                <p className="eyebrow">Add group</p>
-                <h3>Save a new group</h3>
-              </div>
-              <button className="split-bill-icon-button" type="button" onClick={closeGroupModal} aria-label="Close group window">
-                ×
-              </button>
-            </div>
-
-            <label className="settings-field">
-              <span>Group name</span>
-              <input className="settings-input" value={groupName} onChange={(event) => setGroupName(event.target.value)} placeholder="Weekend trip crew" />
-            </label>
-
-            <label className="settings-field">
-              <span>People</span>
-              <textarea
-                className="settings-input split-bill-group-form__textarea"
-                value={memberText}
-                onChange={(event) => setMemberText(event.target.value)}
-                placeholder="One name per line or comma-separated"
-              />
-            </label>
-
-            {groupError ? <p className="split-bill-group-form__error">{groupError}</p> : null}
-
-            <div className="split-bill-manual-modal__actions">
-              <button className="button button-primary" type="button" onClick={() => void saveGroup()} disabled={isSavingGroup || !groupName.trim()}>
-                {isSavingGroup ? "Saving..." : "Create group"}
-              </button>
-            </div>
-          </section>
-        </div>
-      ) : null}
-
-      <SplitBillManualModal
-        open={initialAddMode === "manual"}
-        closeHref={selectedCurrency && selectedCurrency !== "ALL" ? `/split-bill?currency=${encodeURIComponent(selectedCurrency)}` : "/split-bill"}
-      />
-      <SplitBillImportModal
-        open={initialAddMode === "import"}
-        closeHref={selectedCurrency && selectedCurrency !== "ALL" ? `/split-bill?currency=${encodeURIComponent(selectedCurrency)}` : "/split-bill"}
-      />
     </div>
   );
 }

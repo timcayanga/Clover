@@ -7,6 +7,7 @@ import { splitBillDraftFromReceiptPreview, type ReceiptPreviewResult } from "@/l
 type SplitBillImportModalProps = {
   open: boolean;
   closeHref?: string;
+  onClose?: () => void;
 };
 
 const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
@@ -37,7 +38,7 @@ const validateFile = (file: File | null) => {
   return null;
 };
 
-export function SplitBillImportModal({ open, closeHref = "/split-bill" }: SplitBillImportModalProps) {
+export function SplitBillImportModal({ open, closeHref = "/split-bill", onClose }: SplitBillImportModalProps) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,6 +49,11 @@ export function SplitBillImportModal({ open, closeHref = "/split-bill" }: SplitB
   }
 
   const closeModal = () => {
+    if (onClose) {
+      onClose();
+      return;
+    }
+
     router.push(closeHref);
     router.refresh();
   };
@@ -93,8 +99,8 @@ export function SplitBillImportModal({ open, closeHref = "/split-bill" }: SplitB
   };
 
   return (
-    <div className="split-bill-modal" role="dialog" aria-modal="true" aria-label="Import receipt">
-      <section className="split-bill-modal__card glass split-bill-import-modal">
+    <div className="split-bill-modal" role="presentation" onClick={closeModal}>
+      <section className="split-bill-modal__card glass split-bill-import-modal" role="dialog" aria-modal="true" aria-label="Import receipt" onClick={(event) => event.stopPropagation()}>
         <div className="split-bill-manual-modal__head">
           <div>
             <p className="eyebrow">Import files</p>
