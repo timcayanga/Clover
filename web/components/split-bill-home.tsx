@@ -83,7 +83,7 @@ export function SplitBillHome({
 
   const visibleGroups = useMemo(() => {
     return groups.map((group) => {
-      const groupBills = visibleBills.filter((bill) => bill.group?.id === group.id);
+      const groupBills = bills.filter((bill) => bill.group?.id === group.id);
       const billsByCurrency = groupBillsByCurrency(groupBills);
       const currencies = Object.keys(billsByCurrency);
       const sharedCurrency = currencies.length === 1 ? currencies[0] : null;
@@ -102,7 +102,7 @@ export function SplitBillHome({
         status: groupBills.length === 0 ? "Empty" : groupBills.some((bill) => bill.settlement.transfers.length > 0) ? "Open" : "Settled",
       };
     });
-  }, [groups, visibleBills]);
+  }, [bills, groups]);
 
   const clearGroupForm = () => {
     setGroupName("");
@@ -163,16 +163,16 @@ export function SplitBillHome({
           </div>
         </div>
 
-        {visibleBills.length > 0 ? (
-          <div className="split-bill-table split-bill-table--bills" role="table" aria-label="Split bills">
-            <div className="split-bill-table__header" role="row">
-              <span role="columnheader">Description</span>
-              <span role="columnheader">Date</span>
-              <span role="columnheader">People</span>
-              <span role="columnheader">Total</span>
-              <span role="columnheader">Status</span>
-            </div>
-            {visibleBills.map((bill) => {
+        <div className="split-bill-table split-bill-table--bills" role="table" aria-label="Split bills">
+          <div className="split-bill-table__header" role="row">
+            <span role="columnheader">Description</span>
+            <span role="columnheader">Date</span>
+            <span role="columnheader">People</span>
+            <span role="columnheader">Total</span>
+            <span role="columnheader">Status</span>
+          </div>
+          {visibleBills.length > 0 ? (
+            visibleBills.map((bill) => {
               const status = buildRowStatus(bill.settlement.transfers);
               const sourceLabel = bill.sourceType === "receipt" ? "Receipt" : "Manual";
 
@@ -217,14 +217,18 @@ export function SplitBillHome({
                   </div>
                 </div>
               );
-            })}
-          </div>
-        ) : (
-          <div className="split-bill-empty">
-            <strong>No split bills yet.</strong>
-            <p>Add your first bill or upload a receipt to start.</p>
-          </div>
-        )}
+            })
+          ) : (
+            <div className="split-bill-empty">
+              <strong>No split bills yet.</strong>
+              <p>
+                {selectedCurrency && selectedCurrency !== "ALL"
+                  ? `Add your first ${selectedCurrency} bill or upload a receipt to start.`
+                  : "Add your first bill or upload a receipt to start."}
+              </p>
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="split-bill-panel panel glass">
@@ -235,15 +239,15 @@ export function SplitBillHome({
           </div>
         </div>
 
-        {visibleGroups.length > 0 ? (
-          <div className="split-bill-table split-bill-table--groups" role="table" aria-label="Split bill groups">
-            <div className="split-bill-table__header" role="row">
-              <span role="columnheader">Group</span>
-              <span role="columnheader">People</span>
-              <span role="columnheader">Total</span>
-              <span role="columnheader">Status</span>
-            </div>
-            {visibleGroups.map((group) => (
+        <div className="split-bill-table split-bill-table--groups" role="table" aria-label="Split bill groups">
+          <div className="split-bill-table__header" role="row">
+            <span role="columnheader">Group</span>
+            <span role="columnheader">People</span>
+            <span role="columnheader">Total</span>
+            <span role="columnheader">Status</span>
+          </div>
+          {visibleGroups.length > 0 ? (
+            visibleGroups.map((group) => (
               <div key={group.id} className="split-bill-table__row" role="row">
                 <div role="cell" className="split-bill-table__bill">
                   <strong>
@@ -269,13 +273,13 @@ export function SplitBillHome({
                 <div role="cell">{group.total}</div>
                 <div role="cell">{group.status}</div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="split-bill-empty">
-            <strong>No Groups Yet</strong>
-          </div>
-        )}
+            ))
+          ) : (
+            <div className="split-bill-empty">
+              <strong>No Groups Yet</strong>
+            </div>
+          )}
+        </div>
       </section>
 
       {initialGroupMode === "new" ? (

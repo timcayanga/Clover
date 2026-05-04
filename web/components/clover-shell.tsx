@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { persistSelectedWorkspaceId, readSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
@@ -480,6 +480,7 @@ export function CloverShell({
   const { signOut } = useClerk();
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const shellRef = useRef<HTMLDivElement | null>(null);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
   const searchResultsRef = useRef<HTMLDivElement | null>(null);
@@ -899,7 +900,13 @@ export function CloverShell({
   const openQuickAddTransaction = () => {
     closeChrome();
     if (pathname?.startsWith("/split-bill")) {
-      router.push("/split-bill?add=manual");
+      const query = new URLSearchParams();
+      const currency = searchParams.get("currency");
+      if (currency) {
+        query.set("currency", currency);
+      }
+      query.set("add", "manual");
+      router.push(`/split-bill?${query.toString()}`);
       return;
     }
 
