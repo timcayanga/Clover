@@ -12072,6 +12072,12 @@ input.transaction-inline-edit--amount::placeholder {
   object-fit: contain;
 }
 
+.transactions-manual-account-trigger svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
 .transactions-manual-account-trigger span {
   font-size: 0.85rem;
   font-weight: 700;
@@ -12161,23 +12167,24 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: stretch;
   gap: 4px;
   min-width: 0;
+  width: fit-content;
 }
 
 .transactions-manual-type-toggle__button {
-  flex: 1 1 0;
+  flex: 0 0 auto;
   min-width: 0;
-  min-height: 22px;
+  min-height: 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 3px;
-  padding: 1px 5px;
-  border-radius: 8px;
+  gap: 2px;
+  padding: 1px 8px;
+  border-radius: 999px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.96);
   color: var(--text);
   font: inherit;
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 700;
   cursor: pointer;
   transition:
@@ -12195,11 +12202,11 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-type-toggle__button.is-active:first-of-type {
-  box-shadow: -4px 8px 18px rgba(3, 168, 192, 0.12), 0 0 0 3px rgba(3, 168, 192, 0.08);
+  box-shadow: -3px 6px 14px rgba(3, 168, 192, 0.1), 0 0 0 2px rgba(3, 168, 192, 0.07);
 }
 
 .transactions-manual-type-toggle__button.is-active:nth-of-type(2) {
-  box-shadow: 4px 8px 18px rgba(3, 168, 192, 0.12), 0 0 0 3px rgba(3, 168, 192, 0.08);
+  box-shadow: 3px 6px 14px rgba(3, 168, 192, 0.1), 0 0 0 2px rgba(3, 168, 192, 0.07);
 }
 
 .transactions-manual-type-toggle__button:focus-visible {
@@ -27306,6 +27313,12 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   font-size: 0.84rem;
 }
 
+.split-bill-table__hint {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 0.88rem;
+}
+
 .split-bill-table__actions {
   display: flex;
   flex-wrap: wrap;
@@ -27707,7 +27720,7 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 }
 
 .split-bill-manual-modal {
-  width: min(680px, 100%);
+  width: min(460px, 100%);
 }
 
 .split-bill-manual-modal__head {
@@ -27735,6 +27748,15 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   gap: 10px;
 }
 
+.split-bill-manual-modal__people-row {
+  flex-wrap: wrap;
+}
+
+.split-bill-manual-modal__people-row .settings-input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
 .split-bill-manual-modal__amount-input {
   align-items: stretch;
 }
@@ -27753,6 +27775,7 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-left: auto;
 }
 
 .split-bill-manual-modal__chip {
@@ -27775,6 +27798,35 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   justify-content: flex-end;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.split-bill-import-modal {
+  width: min(440px, 100%);
+}
+
+.split-bill-import-modal__notes {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.split-bill-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--text-primary);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.split-bill-icon-button:hover {
+  background: rgba(3, 168, 192, 0.08);
 }
 
 @media (max-width: 1024px) {
@@ -27822,5 +27874,9 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   .split-bill-manual-modal__actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .split-bill-manual-modal__chips {
+    margin-left: 0;
   }
 }

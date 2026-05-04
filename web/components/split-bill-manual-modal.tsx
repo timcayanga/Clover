@@ -207,10 +207,9 @@ export function SplitBillManualModal({ open }: SplitBillManualModalProps) {
           <div>
             <p className="eyebrow">Add manually</p>
             <h3>Split Bill</h3>
-            <p className="split-bill-manual-modal__lead">Keep it simple. Add the people, describe the bill, and save.</p>
           </div>
-          <button className="button button-secondary button-small" type="button" onClick={closeModal}>
-            Close
+          <button className="split-bill-icon-button" type="button" onClick={closeModal} aria-label="Close manual bill window">
+            ×
           </button>
         </div>
 
@@ -218,11 +217,14 @@ export function SplitBillManualModal({ open }: SplitBillManualModalProps) {
           <label className="settings-field">
             <span>People</span>
             <div className="split-bill-manual-modal__people-row">
+              <button className="button button-secondary" type="button" onClick={addPeopleFromText}>
+                +
+              </button>
               <input
                 className="settings-input"
                 value={peopleText}
                 onChange={(event) => setPeopleText(event.target.value)}
-                placeholder="Add names, separated by commas"
+                placeholder="Type names, separated by commas"
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
@@ -230,24 +232,16 @@ export function SplitBillManualModal({ open }: SplitBillManualModalProps) {
                   }
                 }}
               />
-              <button className="button button-secondary" type="button" onClick={addPeopleFromText}>
-                +
-              </button>
+              <div className="split-bill-manual-modal__chips">
+                {people.map((person) => (
+                  <button key={person} className="split-bill-manual-modal__chip" type="button" onClick={() => removePerson(person)}>
+                    {person}
+                    <span aria-hidden="true">×</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </label>
-
-          <div className="split-bill-manual-modal__chips">
-            {people.length > 0 ? (
-              people.map((person) => (
-                <button key={person} className="split-bill-manual-modal__chip" type="button" onClick={() => removePerson(person)}>
-                  {person}
-                  <span aria-hidden="true">×</span>
-                </button>
-              ))
-            ) : (
-              <span className="split-bill-manual-modal__hint">Add people, then choose how the bill is split.</span>
-            )}
-          </div>
         </div>
 
         <label className="settings-field">
@@ -312,9 +306,6 @@ export function SplitBillManualModal({ open }: SplitBillManualModalProps) {
         <div className="split-bill-manual-modal__actions">
           <button className="button button-primary" type="button" onClick={() => void saveBill()} disabled={isSaving}>
             {isSaving ? "Saving..." : "Save bill"}
-          </button>
-          <button className="button button-secondary" type="button" onClick={closeModal}>
-            Cancel
           </button>
         </div>
       </section>

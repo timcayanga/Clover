@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatSplitBillAmount, type SplitBillSerializedBill } from "@/lib/split-bill";
 import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
+import { SplitBillImportModal } from "@/components/split-bill-import-modal";
 
 type SplitBillGroupSummary = {
   id: string;
@@ -150,7 +151,8 @@ export function SplitBillHome({ bills: initialBills, groups: initialGroups, init
         <div className="split-bill-panel__head">
           <div>
             <p className="eyebrow">Split Bills</p>
-            <h2>Recent split bills at a glance</h2>
+            <h2>Split Bills</h2>
+            <p className="split-bill-table__hint">Columns: Bill, Date, People, Total, Status, Actions.</p>
           </div>
         </div>
 
@@ -256,8 +258,7 @@ export function SplitBillHome({ bills: initialBills, groups: initialGroups, init
             ))
           ) : (
             <div className="split-bill-empty">
-              <strong>No groups yet.</strong>
-              <p>Create one below to save the names you split with most often.</p>
+              <strong>No Groups Yet</strong>
             </div>
           )}
         </div>
@@ -328,6 +329,7 @@ export function SplitBillHome({ bills: initialBills, groups: initialGroups, init
       ) : null}
 
       <SplitBillManualModal open={initialAddMode === "manual"} />
+      <SplitBillImportModal open={initialAddMode === "import"} />
     </div>
   );
 }

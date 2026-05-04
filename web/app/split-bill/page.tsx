@@ -19,7 +19,7 @@ const splitBillPageActions = (
         <Link className="split-bill-add-menu__item" href="/split-bill?add=manual" prefetch={false}>
           Add manually
         </Link>
-        <Link className="split-bill-add-menu__item" href="/split-bill/new" prefetch={false}>
+        <Link className="split-bill-add-menu__item" href="/split-bill?add=import" prefetch={false}>
           Import files
         </Link>
       </div>
@@ -79,7 +79,7 @@ export default async function SplitBillPage({ searchParams }: { searchParams?: P
     <CloverShell
       active="split-bill"
       title="Split Bill"
-      actions={splitBillPageActions}
+      actions={showAddMode ? null : splitBillPageActions}
     >
       <SplitBillHome bills={bills.map((bill) => serializeSplitBillRecord(bill as Parameters<typeof serializeSplitBillRecord>[0]))} groups={groups} initialAddMode={showAddMode} />
     </CloverShell>

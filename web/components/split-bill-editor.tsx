@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -27,6 +27,7 @@ type SplitBillEditorProps = {
 };
 
 const createDraftId = () => globalThis.crypto?.randomUUID?.() ?? `draft-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const RECEIPT_PREVIEW_STORAGE_KEY = "split-bill:receipt-preview";
 
 const makeInitialDraft = (initialBill?: SplitBillSerializedBill | null): SplitBillDraft => {
   const draft = initialBill ? splitBillDraftFromSerializedBill(initialBill) : createBlankSplitBillDraft();
@@ -60,6 +61,58 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
+
+  useEffect(() => {
+    if (mode !== "create" || initialBill) {
+      return;
+    }
+
+    const storedPreview = sessionStorage.getItem(RECEIPT_PREVIEW_STORAGE_KEY);
+    if (!storedPreview) {
+      return;
+    }
+
+    try {
+      const payload = JSON.parse(storedPreview) as {
+        preview?: ReceiptPreviewResult;
+        fileName?: string;
+        fileType?: string;
+      };
+
+      if (!payload.preview) {
+        return;
+      }
+
+      const receiptDraft = splitBillDraftFromReceiptPreview(payload.preview);
+
+      setDraft((current) => ({
+        ...current,
+        title: receiptDraft.title,
+        billDate: receiptDraft.billDate,
+        currency: receiptDraft.currency,
+        sourceType: "receipt",
+        merchantName: receiptDraft.merchantName,
+        receiptFileName: payload.fileName ?? "",
+        receiptMimeType: payload.fileType ?? "",
+        receiptText: receiptDraft.receiptText,
+        receiptConfidence: receiptDraft.receiptConfidence,
+        subtotal: receiptDraft.subtotal,
+        tax: receiptDraft.tax,
+        tip: receiptDraft.tip,
+        discount: receiptDraft.discount,
+        total: receiptDraft.total,
+        items: receiptDraft.items.map((item) => ({
+          ...item,
+          id: createDraftId(),
+          participantIds: [],
+        })),
+      }));
+    } catch {
+      // Ignore malformed preview state and fall back to the blank draft.
+    } finally {
+      sessionStorage.removeItem(RECEIPT_PREVIEW_STORAGE_KEY);
+    }
+  }, [initialBill, mode]);
 
   const selectedGroup = groups.find((group) => group.id === draft.groupId) ?? null;
   const settlement = buildSplitBillSettlement({
