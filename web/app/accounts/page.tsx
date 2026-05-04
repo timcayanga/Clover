@@ -2067,6 +2067,68 @@ function AccountsPageContent() {
     );
   };
 
+  const renderMobileListRow = (row: Account | InvestmentInstitutionCard, key: string) => {
+    if ("kind" in row && row.kind === "investment_institution") {
+      const accountBrand = getAccountBrand({
+        institution: row.institution,
+        name: row.institution,
+        type: "investment",
+      });
+
+      return (
+        <button
+          key={key}
+          type="button"
+          className="accounts-mobile-list-row"
+          onClick={() => openInvestmentInstitution(row)}
+        >
+          <span className="accounts-mobile-list-row__brand">
+            <AccountBrandMark accountBrand={accountBrand} label={row.institution} />
+            <span>
+              <strong>{row.institution}</strong>
+              <small>{getInvestmentInstitutionPreview(row.accounts)}</small>
+            </span>
+          </span>
+          <span className="accounts-mobile-list-row__end">
+            <strong>{formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}</strong>
+            <span className="accounts-mobile-list-row__chevron" aria-hidden="true">
+              ›
+            </span>
+          </span>
+        </button>
+      );
+    }
+
+    const accountBrand = getAccountBrand({
+      institution: row.institution,
+      name: row.name,
+      type: getEffectiveAccountType(row),
+    });
+
+    return (
+      <button
+        key={key}
+        type="button"
+        className="accounts-mobile-list-row"
+        onClick={() => openAccountDrawer(row)}
+      >
+        <span className="accounts-mobile-list-row__brand">
+          <AccountBrandMark accountBrand={accountBrand} label={getAccountDisplayName(row)} />
+          <span>
+            <strong>{getAccountCardTitle(row)}</strong>
+            <small>{getAccountCardEyebrow(row)}</small>
+          </span>
+        </span>
+        <span className="accounts-mobile-list-row__end">
+          <strong>{formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}</strong>
+          <span className="accounts-mobile-list-row__chevron" aria-hidden="true">
+            ›
+          </span>
+        </span>
+      </button>
+    );
+  };
+
   useEffect(() => {
     const active = addOpen || (importOpen && !importBackgroundOnly);
     document.body.toggleAttribute("data-clover-page-modal", active);
@@ -2572,7 +2634,10 @@ function AccountsPageContent() {
 
                     <div className="accounts-card-grid" aria-label={`${group.title} accounts`}>
                       {group.rows.map((row) => renderAccountCard(row, `${group.title}-${row.id}`))}
-                      </div>
+                    </div>
+                    <div className="accounts-mobile-list" aria-label={`${group.title} account list`}>
+                      {group.rows.map((row) => renderMobileListRow(row, `${group.title}-mobile-${row.id}`))}
+                    </div>
                     </article>
                 ))
               ) : (

@@ -14563,6 +14563,10 @@ input.transaction-inline-edit--amount::placeholder {
   display: none;
 }
 
+.accounts-mobile-list {
+  display: none;
+}
+
 .accounts-account-card {
   position: relative;
   display: grid;
@@ -14677,7 +14681,7 @@ input.transaction-inline-edit--amount::placeholder {
   position: absolute;
   inset: 1px;
   border-radius: 29px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   pointer-events: none;
 }
 
@@ -21510,17 +21514,103 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-group {
-    padding: 8px;
-    gap: 6px;
-    border-radius: 14px;
+    padding: 12px 0 0;
+    gap: 8px;
+    border-radius: 0;
+    border: 0;
+    border-top: 1px solid rgba(15, 23, 42, 0.1);
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .accounts-group:first-of-type {
+    border-top: 0;
+    padding-top: 4px;
   }
 
   .accounts-group__head h5 {
     font-size: 0.88rem;
+    color: #17263d;
   }
 
   .accounts-group__head p {
     font-size: 0.68rem;
+  }
+
+  .accounts-group__head {
+    padding: 0 2px;
+  }
+
+  .accounts-card-grid {
+    display: none;
+  }
+
+  .accounts-mobile-list {
+    display: grid;
+    gap: 0;
+  }
+
+  .accounts-mobile-list-row {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    padding: 12px 2px;
+    border-top: 1px solid rgba(15, 23, 42, 0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    text-align: left;
+    cursor: pointer;
+    width: 100%;
+  }
+
+  .accounts-mobile-list-row:first-child {
+    border-top: 0;
+    padding-top: 8px;
+  }
+
+  .accounts-mobile-list-row__brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+  }
+
+  .accounts-mobile-list-row .accounts-brand-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    flex-shrink: 0;
+  }
+
+  .accounts-mobile-list-row__brand strong,
+  .accounts-mobile-list-row__end strong {
+    display: block;
+    color: #18283d;
+    font-size: 0.94rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+
+  .accounts-mobile-list-row__brand small {
+    display: block;
+    color: #718198;
+    font-size: 0.8rem;
+    margin-top: 2px;
+  }
+
+  .accounts-mobile-list-row__end {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .accounts-mobile-list-row__chevron {
+    color: #7b8aa1;
+    font-size: 1rem;
+    line-height: 1;
   }
 
   .accounts-account-card {
