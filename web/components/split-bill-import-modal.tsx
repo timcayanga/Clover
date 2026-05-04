@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { splitBillDraftFromReceiptPreview, type ReceiptPreviewResult } from "@/lib/split-bill";
 
 type SplitBillImportModalProps = {
@@ -40,6 +40,20 @@ export function SplitBillImportModal({ open, onClose }: SplitBillImportModalProp
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    document.body.dataset.splitBillModalOpen = "true";
+
+    return () => {
+      if (document.body.dataset.splitBillModalOpen === "true") {
+        document.body.dataset.splitBillModalOpen = "false";
+      }
+    };
+  }, [open]);
 
   if (!open) {
     return null;

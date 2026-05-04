@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { useLayoutEffect, useRef, useState } from "react";
-import { formatCurrencySymbol } from "@/lib/currency-format";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { CurrencySelector } from "@/components/currency-selector";
 import { SplitBillImportModal } from "@/components/split-bill-import-modal";
 import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
 
@@ -12,7 +12,6 @@ type SplitBillPageActionsProps = {
 };
 
 export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBillPageActionsProps) {
-  const [isCurrencyMenuOpen, setIsCurrencyMenuOpen] = useState(false);
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [openAddMode, setOpenAddMode] = useState<"manual" | "import" | null>(null);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
@@ -21,6 +20,7 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
   const [isSavingGroup, setIsSavingGroup] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
   const isModalOpen = Boolean(openAddMode || isGroupModalOpen);
+  const router = useRouter();
 
   const closeAddModal = () => {
     setOpenAddMode(null);
@@ -30,7 +30,6 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
   const closeGroupModal = () => {
     setIsGroupModalOpen(false);
     setIsAddMenuOpen(false);
-    setIsCurrencyMenuOpen(false);
     setGroupName("");
     setGroupPeople([]);
     setGroupError(null);
@@ -39,7 +38,6 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
   useLayoutEffect(() => {
     if (openAddMode || isGroupModalOpen) {
       setIsAddMenuOpen(false);
-      setIsCurrencyMenuOpen(false);
     }
     document.body.dataset.splitBillModalOpen = isModalOpen ? "true" : "false";
     return () => {
@@ -84,26 +82,23 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
     <>
       {!isModalOpen ? (
         <div className="split-bill-page-actions">
-          <div className="split-bill-currency-menu">
-            <button className="button button-secondary button-small" type="button" onClick={() => setIsCurrencyMenuOpen((current) => !current)}>
-              {selectedCurrency === "ALL" ? "All Currencies" : formatCurrencySymbol(selectedCurrency)}
-            </button>
-            {isCurrencyMenuOpen ? (
-              <div className="split-bill-add-menu__panel">
-                {["ALL", ...currencies].map((currency) => (
-                  <Link
-                    key={currency}
-                    className="split-bill-add-menu__item"
-                    href={currency === "ALL" ? "/split-bill" : `/split-bill?currency=${encodeURIComponent(currency)}`}
-                    prefetch={false}
-                    onClick={() => setIsCurrencyMenuOpen(false)}
-                  >
-                    {currency === "ALL" ? "All Currencies" : formatCurrencySymbol(currency)}
-                  </Link>
-                ))}
-              </div>
-            ) : null}
-          </div>
+          <CurrencySelector
+            value={selectedCurrency === "ALL" ? "all" : selectedCurrency}
+            onChange={(nextCurrency) => {
+              router.push(nextCurrency === "all" ? "/split-bill" : `/split-bill?currency=${encodeURIComponent(nextCurrency)}`);
+            }}
+            options={currencies}
+            includeAllOption
+            allLabel="All Currencies"
+            ariaLabel="Select split bill currency"
+            className="transactions-currency-filter split-bill-currency-selector"
+            buttonClassName="transactions-currency-filter__button"
+            menuClassName="transactions-currency-filter__menu"
+            optionClassName="transactions-currency-filter__option"
+            menuAlignment="end"
+            showGroupedSections
+            portalMenu
+          />
 
           <div className="split-bill-add-menu">
             <button className="button button-primary button-small" type="button" onClick={() => setIsAddMenuOpen((current) => !current)}>

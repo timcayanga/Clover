@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { formatCurrencySymbol } from "@/lib/currency-format";
+import { CurrencySelector } from "@/components/currency-selector";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 
 type SplitBillManualModalProps = {
@@ -60,6 +60,20 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
     setSelectedPerson("");
     setError(null);
     setIsSaving(false);
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    document.body.dataset.splitBillModalOpen = "true";
+
+    return () => {
+      if (document.body.dataset.splitBillModalOpen === "true") {
+        document.body.dataset.splitBillModalOpen = "false";
+      }
+    };
   }, [open]);
 
   useEffect(() => {
@@ -233,13 +247,19 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
           <label className="settings-field">
             <span>Amount</span>
             <div className="split-bill-manual-modal__amount-input">
-              <select className="split-bill-manual-modal__currency-chip" value={currency} onChange={(event) => setCurrency(event.target.value)}>
-                {currencyOptions.map((code) => (
-                  <option key={code} value={code}>
-                    {formatCurrencySymbol(code)}
-                  </option>
-                ))}
-              </select>
+              <CurrencySelector
+                value={currency}
+                onChange={setCurrency}
+                options={currencyOptions}
+                ariaLabel="Select bill currency"
+                className="transactions-currency-filter split-bill-manual-modal__currency-selector"
+                buttonClassName="transactions-currency-filter__button split-bill-manual-modal__currency-button"
+                menuClassName="transactions-currency-filter__menu split-bill-manual-modal__currency-menu"
+                optionClassName="transactions-currency-filter__option"
+                menuAlignment="start"
+                showGroupedSections
+                portalMenu
+              />
               <input
                 className="settings-input"
                 inputMode="decimal"
