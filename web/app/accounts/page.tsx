@@ -2632,10 +2632,10 @@ function AccountsPageContent() {
                       </div>
                     </div>
 
-                    <div className="accounts-card-grid" aria-label={`${group.title} accounts`}>
+                    <div className="accounts-card-grid accounts-card-grid--desktop" aria-label={`${group.title} accounts`}>
                       {group.rows.map((row) => renderAccountCard(row, `${group.title}-${row.id}`))}
                     </div>
-                    <div className="accounts-mobile-list" aria-label={`${group.title} account list`}>
+                    <div className="accounts-mobile-list accounts-mobile-list--mobile" aria-label={`${group.title} account list`}>
                       {group.rows.map((row) => renderMobileListRow(row, `${group.title}-mobile-${row.id}`))}
                     </div>
                     </article>

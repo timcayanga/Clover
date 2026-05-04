@@ -14567,6 +14567,14 @@ input.transaction-inline-edit--amount::placeholder {
   display: none;
 }
 
+.accounts-card-grid--desktop {
+  display: grid;
+}
+
+.accounts-mobile-list--mobile {
+  display: none;
+}
+
 .accounts-account-card {
   position: relative;
   display: grid;
@@ -21545,7 +21553,12 @@ input.transaction-inline-edit--amount::placeholder {
     display: none;
   }
 
-  .accounts-mobile-list {
+  .accounts-card-grid--desktop {
+    display: none !important;
+  }
+
+  .accounts-mobile-list,
+  .accounts-mobile-list--mobile {
     display: grid;
     gap: 0;
   }
