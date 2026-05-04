@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatCurrencySymbol } from "@/lib/currency-format";
 import { SplitBillImportModal } from "@/components/split-bill-import-modal";
 import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
@@ -17,9 +17,10 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
   const [openAddMode, setOpenAddMode] = useState<"manual" | "import" | null>(null);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
-  const [memberText, setMemberText] = useState("");
+  const [groupPeople, setGroupPeople] = useState<string[]>([]);
   const [isSavingGroup, setIsSavingGroup] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
+  const isModalOpen = Boolean(openAddMode || isGroupModalOpen);
 
   const closeAddModal = () => {
     setOpenAddMode(null);
@@ -30,6 +31,9 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
     setIsGroupModalOpen(false);
     setIsAddMenuOpen(false);
     setIsCurrencyMenuOpen(false);
+    setGroupName("");
+    setGroupPeople([]);
+    setGroupError(null);
   };
 
   useEffect(() => {
@@ -39,16 +43,21 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
     }
   }, [isGroupModalOpen, openAddMode]);
 
+  useEffect(() => {
+    document.body.dataset.splitBillModalOpen = isModalOpen ? "true" : "false";
+    return () => {
+      if (document.body.dataset.splitBillModalOpen === "true") {
+        document.body.dataset.splitBillModalOpen = "false";
+      }
+    };
+  }, [isModalOpen]);
+
   const saveGroup = async () => {
     setIsSavingGroup(true);
     setGroupError(null);
 
     try {
-      const members = memberText
-        .split(/\r?\n|,/)
-        .map((entry) => entry.trim())
-        .filter(Boolean)
-        .map((name, index) => ({ name, sortOrder: index }));
+      const members = groupPeople.map((name, index) => ({ name, sortOrder: index }));
 
       const response = await fetch("/api/split-bill-groups", {
         method: "POST",
@@ -65,7 +74,7 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
       }
 
       setGroupName("");
-      setMemberText("");
+      setGroupPeople([]);
       closeGroupModal();
     } catch (error) {
       setGroupError(error instanceof Error ? error.message : "Unable to save group");
@@ -76,62 +85,64 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
 
   return (
     <>
-      <div className="split-bill-page-actions">
-        <div className="split-bill-currency-menu">
-          <button className="button button-secondary button-small" type="button" onClick={() => setIsCurrencyMenuOpen((current) => !current)}>
-            {selectedCurrency === "ALL" ? "All currencies" : formatCurrencySymbol(selectedCurrency)}
-          </button>
-          {isCurrencyMenuOpen ? (
-            <div className="split-bill-add-menu__panel">
-              {["ALL", ...currencies].map((currency) => (
-                <Link
-                  key={currency}
+      {!isModalOpen ? (
+        <div className="split-bill-page-actions">
+          <div className="split-bill-currency-menu">
+            <button className="button button-secondary button-small" type="button" onClick={() => setIsCurrencyMenuOpen((current) => !current)}>
+              {selectedCurrency === "ALL" ? "All currencies" : formatCurrencySymbol(selectedCurrency)}
+            </button>
+            {isCurrencyMenuOpen ? (
+              <div className="split-bill-add-menu__panel">
+                {["ALL", ...currencies].map((currency) => (
+                  <Link
+                    key={currency}
+                    className="split-bill-add-menu__item"
+                    href={currency === "ALL" ? "/split-bill" : `/split-bill?currency=${encodeURIComponent(currency)}`}
+                    prefetch={false}
+                    onClick={() => setIsCurrencyMenuOpen(false)}
+                  >
+                    {currency === "ALL" ? "All currencies" : formatCurrencySymbol(currency)}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="split-bill-add-menu">
+            <button className="button button-primary button-small" type="button" onClick={() => setIsAddMenuOpen((current) => !current)}>
+              Add Bill
+            </button>
+            {isAddMenuOpen ? (
+              <div className="split-bill-add-menu__panel">
+                <button
                   className="split-bill-add-menu__item"
-                  href={currency === "ALL" ? "/split-bill" : `/split-bill?currency=${encodeURIComponent(currency)}`}
-                  prefetch={false}
-                  onClick={() => setIsCurrencyMenuOpen(false)}
+                  type="button"
+                  onClick={() => {
+                    setIsAddMenuOpen(false);
+                    setOpenAddMode("manual");
+                  }}
                 >
-                  {currency === "ALL" ? "All currencies" : formatCurrencySymbol(currency)}
-                </Link>
-              ))}
-            </div>
-          ) : null}
-        </div>
+                  Add Expense
+                </button>
+                <button
+                  className="split-bill-add-menu__item"
+                  type="button"
+                  onClick={() => {
+                    setIsAddMenuOpen(false);
+                    setOpenAddMode("import");
+                  }}
+                >
+                  Upload Receipts
+                </button>
+              </div>
+            ) : null}
+          </div>
 
-        <div className="split-bill-add-menu">
-          <button className="button button-primary button-small" type="button" onClick={() => setIsAddMenuOpen((current) => !current)}>
-            Add Bill
+          <button className="button button-secondary button-small" type="button" onClick={() => setIsGroupModalOpen(true)}>
+            Add Group
           </button>
-          {isAddMenuOpen ? (
-            <div className="split-bill-add-menu__panel">
-              <button
-                className="split-bill-add-menu__item"
-                type="button"
-                onClick={() => {
-                  setIsAddMenuOpen(false);
-                  setOpenAddMode("manual");
-                }}
-              >
-                Add manually
-              </button>
-              <button
-                className="split-bill-add-menu__item"
-                type="button"
-                onClick={() => {
-                  setIsAddMenuOpen(false);
-                  setOpenAddMode("import");
-                }}
-              >
-                Import files
-              </button>
-            </div>
-          ) : null}
         </div>
-
-        <button className="button button-secondary button-small" type="button" onClick={() => setIsGroupModalOpen(true)}>
-          Add Group
-        </button>
-      </div>
+      ) : null}
 
       <SplitBillManualModal open={openAddMode === "manual"} onClose={closeAddModal} />
       <SplitBillImportModal open={openAddMode === "import"} onClose={closeAddModal} />
@@ -155,12 +166,7 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
 
             <label className="settings-field">
               <span>People</span>
-              <textarea
-                className="settings-input split-bill-group-form__textarea"
-                value={memberText}
-                onChange={(event) => setMemberText(event.target.value)}
-                placeholder="One name per line or comma-separated"
-              />
+              <SplitBillPeoplePicker people={groupPeople} onPeopleChange={setGroupPeople} />
             </label>
 
             {groupError ? <p className="split-bill-group-form__error">{groupError}</p> : null}
@@ -174,5 +180,76 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
         </div>
       ) : null}
     </>
+  );
+}
+
+function SplitBillPeoplePicker({
+  people,
+  onPeopleChange,
+}: {
+  people: string[];
+  onPeopleChange: (value: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (isAdding) {
+      inputRef.current?.focus();
+    }
+  }, [isAdding]);
+
+  return (
+    <div className="split-bill-people-picker">
+      <div className="split-bill-people-picker__chips">
+        {people.map((person) => (
+          <span key={person} className="split-bill-table__chip">
+            {person}
+          </span>
+        ))}
+      </div>
+      <div className="split-bill-manual-modal__people-row">
+        <button className="button button-secondary" type="button" onClick={() => setIsAdding(true)}>
+          +
+        </button>
+        {isAdding ? (
+          <>
+            <input
+              ref={inputRef}
+              className="settings-input"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder="Type a name"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  const next = draft.trim();
+                  if (!next) {
+                    return;
+                  }
+                  onPeopleChange(Array.from(new Set([...people, next])));
+                  setDraft("");
+                }
+              }}
+            />
+            <button
+              className="button button-secondary"
+              type="button"
+              onClick={() => {
+                const next = draft.trim();
+                if (!next) {
+                  return;
+                }
+                onPeopleChange(Array.from(new Set([...people, next])));
+                setDraft("");
+              }}
+            >
+              Add
+            </button>
+          </>
+        ) : null}
+      </div>
+    </div>
   );
 }

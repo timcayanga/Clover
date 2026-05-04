@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrencySymbol } from "@/lib/currency-format";
 
@@ -20,12 +20,6 @@ const splitModeOptions: Array<{ value: SplitMode; label: string }> = [
   { value: "person-owed", label: "Person is owed the full amount" },
 ];
 
-const parsePeople = (value: string) =>
-  value
-    .split(/,|\n/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
-
 const createId = () => globalThis.crypto?.randomUUID?.() ?? `manual-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
@@ -38,8 +32,9 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 
 export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProps) {
   const router = useRouter();
-  const [peopleText, setPeopleText] = useState("");
   const [people, setPeople] = useState<string[]>([]);
+  const [draftPerson, setDraftPerson] = useState("");
+  const [isAddingPeople, setIsAddingPeople] = useState(false);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("PHP");
@@ -47,14 +42,16 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
   const [selectedPerson, setSelectedPerson] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const personInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    setPeopleText("");
     setPeople([]);
+    setDraftPerson("");
+    setIsAddingPeople(false);
     setDescription("");
     setAmount("");
     setCurrency("PHP");
@@ -73,6 +70,12 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
     }
   }, [people, selectedPerson, splitMode]);
 
+  useEffect(() => {
+    if (isAddingPeople) {
+      personInputRef.current?.focus();
+    }
+  }, [isAddingPeople]);
+
   const payerName = useMemo(() => {
     if (splitMode === "you-paid" || splitMode === "you-owed") {
       return "You";
@@ -80,14 +83,15 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
     return selectedPerson.trim();
   }, [selectedPerson, splitMode]);
 
-  const addPeopleFromText = () => {
-    const nextPeople = parsePeople(peopleText);
-    if (nextPeople.length === 0) {
+  const addPerson = () => {
+    const nextPerson = draftPerson.trim();
+    if (!nextPerson) {
       return;
     }
 
-    setPeople((current) => Array.from(new Set([...current, ...nextPeople])));
-    setPeopleText("");
+    setPeople((current) => Array.from(new Set([...current, nextPerson])));
+    setDraftPerson("");
+    setIsAddingPeople(true);
   };
 
   const removePerson = (name: string) => {
@@ -206,43 +210,12 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
       <section className="split-bill-modal__card glass split-bill-manual-modal" role="dialog" aria-modal="true" aria-label="Add manual split bill" onClick={(event) => event.stopPropagation()}>
         <div className="split-bill-manual-modal__head">
           <div>
-            <p className="eyebrow">Add manually</p>
+            <p className="eyebrow">Add Expense</p>
             <h3>Split Bill</h3>
           </div>
           <button className="split-bill-icon-button" type="button" onClick={closeModal} aria-label="Close manual bill window">
             ×
           </button>
-        </div>
-
-        <div className="split-bill-manual-modal__people">
-          <label className="settings-field">
-            <span>People</span>
-            <div className="split-bill-manual-modal__people-row">
-              <button className="button button-secondary" type="button" onClick={addPeopleFromText}>
-                +
-              </button>
-              <input
-                className="settings-input"
-                value={peopleText}
-                onChange={(event) => setPeopleText(event.target.value)}
-                placeholder="Type names, separated by commas"
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    addPeopleFromText();
-                  }
-                }}
-              />
-              <div className="split-bill-manual-modal__chips">
-                {people.map((person) => (
-                  <button key={person} className="split-bill-manual-modal__chip" type="button" onClick={() => removePerson(person)}>
-                    {person}
-                    <span aria-hidden="true">×</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </label>
         </div>
 
         <label className="settings-field">
@@ -285,6 +258,47 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
                 </option>
               ))}
             </select>
+          </label>
+        </div>
+
+        <div className="split-bill-manual-modal__people">
+          <label className="settings-field">
+            <span>People</span>
+            <div className="split-bill-manual-modal__people-stack">
+              <div className="split-bill-manual-modal__chips">
+                {people.map((person) => (
+                  <button key={person} className="split-bill-manual-modal__chip" type="button" onClick={() => removePerson(person)}>
+                    {person}
+                    <span aria-hidden="true">×</span>
+                  </button>
+                ))}
+              </div>
+              <div className="split-bill-manual-modal__people-row">
+                <button className="button button-secondary" type="button" onClick={() => setIsAddingPeople(true)}>
+                  +
+                </button>
+                {isAddingPeople ? (
+                  <>
+                    <input
+                      ref={personInputRef}
+                      className="settings-input"
+                      value={draftPerson}
+                      onChange={(event) => setDraftPerson(event.target.value)}
+                      placeholder="Type a name"
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          addPerson();
+                        }
+                      }}
+                    />
+                    <button className="button button-secondary" type="button" onClick={addPerson}>
+                      Add
+                    </button>
+                  </>
+                ) : null}
+              </div>
+            </div>
           </label>
         </div>
 

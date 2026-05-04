@@ -93,7 +93,7 @@ export function SplitBillImportModal({ open, onClose }: SplitBillImportModalProp
       <section className="split-bill-modal__card glass split-bill-import-modal" role="dialog" aria-modal="true" aria-label="Import receipt" onClick={(event) => event.stopPropagation()}>
         <div className="split-bill-manual-modal__head">
           <div>
-            <p className="eyebrow">Import files</p>
+            <p className="eyebrow">Upload Receipts</p>
             <h3>Upload a receipt</h3>
             <p className="split-bill-manual-modal__lead">Choose one receipt file. Clover will preview it before you continue.</p>
           </div>

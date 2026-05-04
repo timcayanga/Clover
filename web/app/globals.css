@@ -12003,9 +12003,13 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .manual-form-layout--compact {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
+}
+
+.manual-form-layout--compact > * {
+  width: 100%;
 }
 
 .manual-form-layout__full {
@@ -12086,7 +12090,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-money-row {
   display: grid;
-  grid-template-columns: 18px minmax(100px, 120px) minmax(0, 1fr);
+  grid-template-columns: 18px minmax(106px, 120px) minmax(0, 1fr);
   gap: 10px;
   align-items: end;
   width: 100%;
@@ -12132,7 +12136,7 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 4px;
   flex-wrap: wrap;
 }
 
@@ -12151,6 +12155,8 @@ input.transaction-inline-edit--amount::placeholder {
   color: var(--accent);
   font-size: 0.92rem;
   font-weight: 600;
+  box-shadow: none;
+  text-shadow: none;
 }
 
 .transactions-manual-field {
@@ -12182,27 +12188,29 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-type-toggle {
   display: flex;
-  align-items: stretch;
+  align-items: center;
   gap: 3px;
   min-width: 0;
   width: fit-content;
+  align-self: flex-start;
 }
 
 .transactions-manual-type-toggle__button {
   flex: 0 0 auto;
   min-width: 0;
-  min-height: 0;
+  min-height: 24px;
+  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  padding: 0 10px;
+  gap: 4px;
+  padding: 0 8px;
   border-radius: 999px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.96);
   color: var(--text);
   font: inherit;
-  font-size: 0.6rem;
+  font-size: 0.58rem;
   font-weight: 700;
   white-space: nowrap;
   line-height: 1;
@@ -21377,7 +21385,7 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .transactions-manual-type-toggle {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
   .accounts-drawer-backdrop {
@@ -27776,6 +27784,8 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   padding: 24px;
   display: grid;
   gap: 16px;
+  border-radius: 28px;
+  overflow: hidden;
 }
 
 .split-bill-modal__card h3 {
@@ -27807,6 +27817,12 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 .split-bill-manual-modal__amount-row {
   display: grid;
   gap: 12px;
+}
+
+.split-bill-manual-modal__people-stack,
+.split-bill-people-picker {
+  display: grid;
+  gap: 10px;
 }
 
 .split-bill-manual-modal__people-row,
@@ -27844,6 +27860,12 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   flex-wrap: wrap;
   gap: 8px;
   margin-left: auto;
+}
+
+.split-bill-people-picker__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .split-bill-manual-modal__chip {
@@ -27899,6 +27921,7 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 
 .split-bill-group-modal {
   width: min(520px, 100%);
+  border-radius: 28px;
 }
 
 .split-bill-group-detail__meta {
@@ -27924,6 +27947,10 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+body[data-split-bill-modal-open="true"] .shell-quick-add-button {
+  display: none;
 }
 
 @media (max-width: 1024px) {
