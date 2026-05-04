@@ -4758,7 +4758,7 @@ html[data-theme="dark"] .reports-section-empty {
   color: rgba(71, 85, 105, 0.92);
   text-decoration: none;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   letter-spacing: -0.01em;
   box-shadow: none;
   white-space: nowrap;
@@ -4782,7 +4782,7 @@ html[data-theme="dark"] .reports-section-empty {
 :is(.reports-tab--active, .insights-tab--active, .investments-tab.is-active, .goals-tab--active) {
   color: var(--accent);
   border-color: var(--accent);
-  font-weight: 700;
+  font-weight: 500;
 }
 
 :is(.reports-tab--active, .insights-tab--active, .investments-tab.is-active, .goals-tab--active):hover,

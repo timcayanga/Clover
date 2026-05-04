@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useRef, useState, useTransition, type ChangeEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { UserProfile } from "@clerk/nextjs";
+import { useUser } from "@clerk/nextjs";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { BillingActions } from "@/components/billing-actions";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
@@ -270,18 +270,31 @@ export function SettingsHub({
   planUsage,
 }: SettingsHubProps) {
   const router = useRouter();
+  const { isLoaded, isSignedIn, user } = useUser();
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>("account");
   const [themeMode, setThemeMode] = useState<ThemeMode>("system");
   const [helperTextVisible, setHelperTextVisible] = useState(true);
   const [historyCutoff, setHistoryCutoff] = useState(() => new Date().toISOString().slice(0, 10));
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [accountMessage, setAccountMessage] = useState<string | null>(null);
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [photoMessage, setPhotoMessage] = useState<string | null>(null);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [newProfileName, setNewProfileName] = useState("");
   const [profileRenameDrafts, setProfileRenameDrafts] = useState<Record<string, string>>({});
   const [activeProfileId, setActiveProfileId] = useState(selectedProfileId);
+  const [firstNameDraft, setFirstNameDraft] = useState(firstName ?? "");
+  const [lastNameDraft, setLastNameDraft] = useState(lastName ?? "");
+  const [passwordCurrentDraft, setPasswordCurrentDraft] = useState("");
+  const [passwordNewDraft, setPasswordNewDraft] = useState("");
+  const [passwordConfirmDraft, setPasswordConfirmDraft] = useState("");
   const [isPending, startTransition] = useTransition();
+  const profileImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const activeProfile = profiles.find((profile) => profile.id === activeProfileId) ?? profiles[0] ?? null;
+  const primaryEmail = user?.primaryEmailAddress?.emailAddress ?? email;
+  const profileImage = user?.imageUrl ?? null;
+  const connectedAccounts = user?.externalAccounts ?? [];
 
   useEffect(() => {
     const initialTheme = readStoredThemeMode();
@@ -301,6 +314,11 @@ export function SettingsHub({
       }, {})
     );
   }, [profiles]);
+
+  useEffect(() => {
+    setFirstNameDraft(firstName ?? "");
+    setLastNameDraft(lastName ?? "");
+  }, [firstName, lastName]);
 
   useEffect(() => {
     const initialHelperText = readStoredHelperTextPreference();
@@ -357,6 +375,110 @@ export function SettingsHub({
 
     const blob = await response.blob();
     downloadBlob(blob, fileName);
+  };
+
+  const handleAccountSave = () => {
+    if (!isLoaded || !isSignedIn || !user) {
+      setAccountMessage("Sign in again to update your account.");
+      return;
+    }
+
+    const nextFirstName = firstNameDraft.trim();
+    const nextLastName = lastNameDraft.trim();
+
+    startTransition(async () => {
+      setAccountMessage(null);
+
+      try {
+        await user.update({
+          firstName: nextFirstName || undefined,
+          lastName: nextLastName || undefined,
+        });
+        await user.reload();
+        setAccountMessage("Account details updated.");
+      } catch (error) {
+        setAccountMessage(error instanceof Error ? error.message : "Unable to update account details.");
+      }
+    });
+  };
+
+  const handlePasswordSave = () => {
+    if (!isLoaded || !isSignedIn || !user) {
+      setPasswordMessage("Sign in again to update your password.");
+      return;
+    }
+
+    if (!passwordNewDraft.trim()) {
+      setPasswordMessage("Enter a new password first.");
+      return;
+    }
+
+    if (passwordNewDraft.trim() !== passwordConfirmDraft.trim()) {
+      setPasswordMessage("New passwords do not match.");
+      return;
+    }
+
+    startTransition(async () => {
+      setPasswordMessage(null);
+
+      try {
+        await user.updatePassword({
+          currentPassword: passwordCurrentDraft.trim() || undefined,
+          newPassword: passwordNewDraft.trim(),
+          signOutOfOtherSessions: true,
+        });
+        setPasswordCurrentDraft("");
+        setPasswordNewDraft("");
+        setPasswordConfirmDraft("");
+        setPasswordMessage("Password updated.");
+      } catch (error) {
+        setPasswordMessage(error instanceof Error ? error.message : "Unable to update your password.");
+      }
+    });
+  };
+
+  const handleProfileImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0] ?? null;
+    event.currentTarget.value = "";
+
+    if (!file || !isLoaded || !isSignedIn || !user) {
+      return;
+    }
+
+    startTransition(async () => {
+      setPhotoMessage(null);
+
+      try {
+        await user.setProfileImage({ file });
+        await user.reload();
+        setPhotoMessage("Profile picture updated.");
+      } catch (error) {
+        setPhotoMessage(error instanceof Error ? error.message : "Unable to update your profile picture.");
+      }
+    });
+  };
+
+  const handleDeleteAccount = () => {
+    if (!isLoaded || !isSignedIn || !user) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Delete your Clover account? This removes your profile and cannot be undone."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    startTransition(async () => {
+      try {
+        await user.delete();
+        window.location.assign("/");
+      } catch (error) {
+        setAccountMessage(error instanceof Error ? error.message : "Unable to delete your account.");
+      }
+    });
   };
 
   const runDelete = async (scope: "transactions" | "balances" | "accounts") => {
@@ -551,24 +673,6 @@ export function SettingsHub({
             <span>{activeProfile?.name ?? workspaceName}</span>
           </div>
         </Link>
-        <div className="settings-profile-summary">
-          <span className="settings-profile-summary__label">Active profile</span>
-          <strong>{activeProfile?.name ?? workspaceName}</strong>
-          <label className="settings-inline-field">
-            <span className="sr-only">Switch profile</span>
-            <select
-              value={activeProfileId}
-              onChange={(event) => handleProfileSwitch(event.target.value)}
-              aria-label="Switch profile"
-            >
-              {profiles.map((profile) => (
-                <option key={profile.id} value={profile.id}>
-                  {profile.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
         <div className="settings-hub__menu-list" role="tablist" aria-label="Settings sections">
           {(Object.keys(sectionCopy) as SettingsSectionKey[]).map((sectionKey) => {
             const section = sectionCopy[sectionKey];
@@ -597,12 +701,150 @@ export function SettingsHub({
             <div className="settings-section__intro settings-section__intro--single">
               <div>
                 <h4>Account Details</h4>
-                <p>Manage your sign-in identity, email, and security settings.</p>
               </div>
             </div>
 
-            <div className="settings-clerk-frame">
-              <UserProfile routing="virtual" />
+            <div className="settings-account-grid">
+              <article className="settings-action-card settings-account-card">
+                <div className="settings-account-card__head">
+                  <h5>Picture</h5>
+                </div>
+                <div className="settings-account-photo-row">
+                  <span className="settings-account-photo" aria-hidden="true">
+                    {profileImage ? <img src={profileImage} alt="" /> : <span>{(firstNameDraft || workspaceName).trim().slice(0, 1).toUpperCase()}</span>}
+                  </span>
+                  <div className="settings-account-photo-actions">
+                    <p>Update the photo used across Clover.</p>
+                    <input
+                      ref={profileImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={handleProfileImageChange}
+                    />
+                    <button
+                      type="button"
+                      className="button button-secondary button-small"
+                      onClick={() => profileImageInputRef.current?.click()}
+                      disabled={isPending}
+                    >
+                      Change picture
+                    </button>
+                    {photoMessage ? <p className="settings-helper">{photoMessage}</p> : null}
+                  </div>
+                </div>
+              </article>
+
+              <article className="settings-action-card settings-account-card">
+                <div className="settings-account-card__head">
+                  <h5>Account details</h5>
+                </div>
+                <div className="settings-account-form">
+                  <label className="settings-inline-field">
+                    <span>First name</span>
+                    <input value={firstNameDraft} onChange={(event) => setFirstNameDraft(event.target.value)} placeholder="First name" />
+                  </label>
+                  <label className="settings-inline-field">
+                    <span>Last name</span>
+                    <input value={lastNameDraft} onChange={(event) => setLastNameDraft(event.target.value)} placeholder="Last name" />
+                  </label>
+                  <label className="settings-inline-field">
+                    <span>Email</span>
+                    <input value={primaryEmail} readOnly />
+                  </label>
+                  <div className="settings-account-form__actions">
+                    <button
+                      type="button"
+                      className="button button-primary button-small"
+                      onClick={handleAccountSave}
+                      disabled={isPending}
+                    >
+                      Save account
+                    </button>
+                    {accountMessage ? <p className="settings-helper">{accountMessage}</p> : null}
+                  </div>
+                </div>
+              </article>
+
+              <article className="settings-action-card settings-account-card">
+                <div className="settings-account-card__head">
+                  <h5>Password</h5>
+                </div>
+                <div className="settings-account-form">
+                  <label className="settings-inline-field">
+                    <span>Current password</span>
+                    <input
+                      type="password"
+                      value={passwordCurrentDraft}
+                      onChange={(event) => setPasswordCurrentDraft(event.target.value)}
+                      placeholder="Enter current password"
+                      autoComplete="current-password"
+                    />
+                  </label>
+                  <label className="settings-inline-field">
+                    <span>New password</span>
+                    <input
+                      type="password"
+                      value={passwordNewDraft}
+                      onChange={(event) => setPasswordNewDraft(event.target.value)}
+                      placeholder="Enter new password"
+                      autoComplete="new-password"
+                    />
+                  </label>
+                  <label className="settings-inline-field">
+                    <span>Confirm new password</span>
+                    <input
+                      type="password"
+                      value={passwordConfirmDraft}
+                      onChange={(event) => setPasswordConfirmDraft(event.target.value)}
+                      placeholder="Confirm new password"
+                      autoComplete="new-password"
+                    />
+                  </label>
+                  <div className="settings-account-form__actions">
+                    <button
+                      type="button"
+                      className="button button-primary button-small"
+                      onClick={handlePasswordSave}
+                      disabled={isPending}
+                    >
+                      Update password
+                    </button>
+                    {passwordMessage ? <p className="settings-helper">{passwordMessage}</p> : null}
+                  </div>
+                </div>
+              </article>
+
+              <article className="settings-action-card settings-account-card">
+                <div className="settings-account-card__head">
+                  <h5>Social sign-ins and connected accounts</h5>
+                </div>
+                <div className="settings-account-connected-list">
+                  {connectedAccounts.length ? (
+                    connectedAccounts.map((account) => (
+                      <div key={account.id} className="settings-account-connected-item">
+                        <strong>{account.providerTitle()}</strong>
+                        <span>{account.accountIdentifier()}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="settings-account-connected-item">
+                      <strong>No connected accounts yet</strong>
+                      <span>Sign in with Google, Facebook, or another provider to link it here.</span>
+                    </div>
+                  )}
+                </div>
+              </article>
+
+              <article className="settings-action-card settings-account-card settings-account-card--danger">
+                <div className="settings-account-card__head">
+                  <h5>Delete account</h5>
+                </div>
+                <p>This permanently deletes your Clover account and all data tied to it.</p>
+                <button type="button" className="button button-danger button-small" onClick={handleDeleteAccount} disabled={isPending}>
+                  Delete account
+                </button>
+              </article>
             </div>
           </section>
         ) : null}
