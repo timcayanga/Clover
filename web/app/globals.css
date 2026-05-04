@@ -12204,6 +12204,7 @@ input.transaction-inline-edit--amount::placeholder {
   font: inherit;
   font-size: 0.6rem;
   font-weight: 700;
+  white-space: nowrap;
   line-height: 1;
   cursor: pointer;
   transition:
