@@ -10589,6 +10589,7 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 4px;
   justify-items: end;
   min-width: min(100%, 260px);
+  margin-right: 56px;
 }
 
 .transactions-footer-snapshot__metrics {
