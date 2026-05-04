@@ -10691,6 +10691,16 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 12px;
 }
 
+.manual-form-layout--compact {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.manual-form-layout--compact > * {
+  width: 100%;
+}
+
 .manual-form-layout__full {
   grid-column: span 2;
   min-width: 0;
