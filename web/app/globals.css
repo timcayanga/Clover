@@ -14583,14 +14583,14 @@ input.transaction-inline-edit--amount::placeholder {
   min-height: 210px;
   padding: 20px;
   border-radius: 30px;
-  border: 1px solid transparent;
+  border: 0;
   background: var(--brand-soft, rgba(255, 255, 255, 0.9));
   color: #162236;
   box-shadow:
-    0 18px 42px rgba(15, 23, 42, 0.14),
-    0 30px 76px color-mix(in srgb, var(--brand-accent) 12%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.38),
-    inset 0 -18px 30px rgba(255, 255, 255, 0.04);
+    0 20px 48px rgba(15, 23, 42, 0.16),
+    0 34px 88px color-mix(in srgb, var(--brand-accent) 14%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
+    inset 0 -16px 28px rgba(255, 255, 255, 0.05);
   cursor: pointer;
   transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
   overflow: hidden;
@@ -14600,80 +14600,68 @@ input.transaction-inline-edit--amount::placeholder {
   aspect-ratio: 1.58 / 1;
   min-height: 0;
   background:
-    linear-gradient(118deg, rgba(255, 255, 255, 0.18) 0%, transparent 26%, transparent 72%, rgba(255, 255, 255, 0.1) 100%),
-    radial-gradient(circle at 24% 28%, rgba(255, 255, 255, 0.18), transparent 18%),
-    radial-gradient(circle at 82% 82%, rgba(255, 255, 255, 0.08), transparent 24%),
     linear-gradient(
-      140deg,
-      color-mix(in srgb, var(--brand-accent) 80%, white 7%) 0%,
-      color-mix(in srgb, var(--brand-accent) 92%, white 4%) 46%,
-      color-mix(in srgb, var(--brand-accent) 80%, black 12%) 100%
+      145deg,
+      color-mix(in srgb, var(--brand-accent) 78%, white 10%) 0%,
+      color-mix(in srgb, var(--brand-accent) 96%, white 2%) 50%,
+      color-mix(in srgb, var(--brand-accent) 76%, black 14%) 100%
     );
   box-shadow:
     0 24px 54px rgba(15, 23, 42, 0.18),
-    0 34px 96px color-mix(in srgb, var(--brand-accent) 22%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    inset 0 -22px 36px rgba(255, 255, 255, 0.06);
+    0 36px 102px color-mix(in srgb, var(--brand-accent) 24%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    inset 0 -18px 32px rgba(255, 255, 255, 0.05);
 }
 
 .accounts-account-card[data-visual="ledger"] {
   aspect-ratio: 1.58 / 1;
   min-height: 0;
   background:
-    linear-gradient(118deg, rgba(255, 255, 255, 0.2) 0%, transparent 24%, transparent 76%, rgba(255, 255, 255, 0.08) 100%),
-    radial-gradient(circle at 28% 30%, rgba(255, 255, 255, 0.34), transparent 18%),
-    radial-gradient(circle at 82% 78%, rgba(255, 255, 255, 0.14), transparent 22%),
     linear-gradient(
       145deg,
-      color-mix(in srgb, var(--brand-accent) 24%, white) 0%,
-      color-mix(in srgb, var(--brand-accent) 16%, white) 52%,
-      color-mix(in srgb, var(--brand-accent) 28%, white) 100%
+      color-mix(in srgb, var(--brand-accent) 30%, white) 0%,
+      color-mix(in srgb, var(--brand-accent) 20%, white) 52%,
+      color-mix(in srgb, var(--brand-accent) 34%, white) 100%
     );
   box-shadow:
     0 18px 42px rgba(15, 23, 42, 0.12),
-    0 28px 70px color-mix(in srgb, var(--brand-accent) 14%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -18px 30px rgba(255, 255, 255, 0.14);
+    0 30px 76px color-mix(in srgb, var(--brand-accent) 16%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.34),
+    inset 0 -18px 30px rgba(255, 255, 255, 0.16);
 }
 
 .accounts-account-card[data-visual="cash"] {
   aspect-ratio: 1.58 / 1;
   min-height: 0;
   background:
-    linear-gradient(118deg, rgba(255, 255, 255, 0.22) 0%, transparent 24%, transparent 76%, rgba(255, 255, 255, 0.1) 100%),
-    radial-gradient(circle at 28% 30%, rgba(255, 255, 255, 0.36), transparent 18%),
-    radial-gradient(circle at 80% 78%, rgba(255, 255, 255, 0.16), transparent 22%),
     linear-gradient(
       145deg,
-      color-mix(in srgb, var(--brand-accent) 22%, white) 0%,
-      color-mix(in srgb, var(--brand-accent) 14%, white) 52%,
-      color-mix(in srgb, var(--brand-accent) 26%, white) 100%
+      color-mix(in srgb, var(--brand-accent) 28%, white) 0%,
+      color-mix(in srgb, var(--brand-accent) 18%, white) 52%,
+      color-mix(in srgb, var(--brand-accent) 32%, white) 100%
     );
   box-shadow:
     0 18px 42px rgba(15, 23, 42, 0.12),
-    0 28px 70px color-mix(in srgb, var(--brand-accent) 14%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.52),
-    inset 0 -18px 30px rgba(255, 255, 255, 0.14);
+    0 30px 76px color-mix(in srgb, var(--brand-accent) 16%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.36),
+    inset 0 -18px 30px rgba(255, 255, 255, 0.16);
 }
 
 .accounts-account-card[data-visual="investment"] {
   aspect-ratio: 1.58 / 1;
   min-height: 0;
   background:
-    linear-gradient(118deg, rgba(255, 255, 255, 0.22) 0%, transparent 24%, transparent 76%, rgba(255, 255, 255, 0.1) 100%),
-    radial-gradient(circle at 28% 30%, rgba(255, 255, 255, 0.34), transparent 18%),
-    radial-gradient(circle at 80% 78%, rgba(255, 255, 255, 0.14), transparent 22%),
     linear-gradient(
       145deg,
-      color-mix(in srgb, var(--brand-accent) 20%, white) 0%,
-      color-mix(in srgb, var(--brand-accent) 14%, white) 50%,
-      color-mix(in srgb, var(--brand-accent) 22%, white) 100%
+      color-mix(in srgb, var(--brand-accent) 26%, white) 0%,
+      color-mix(in srgb, var(--brand-accent) 18%, white) 50%,
+      color-mix(in srgb, var(--brand-accent) 28%, white) 100%
     );
   box-shadow:
     0 18px 42px rgba(15, 23, 42, 0.12),
-    0 28px 70px color-mix(in srgb, var(--brand-accent) 14%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -18px 30px rgba(255, 255, 255, 0.12);
+    0 30px 76px color-mix(in srgb, var(--brand-accent) 16%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.34),
+    inset 0 -18px 30px rgba(255, 255, 255, 0.14);
 }
 
 .accounts-account-card__link-overlay {
@@ -14701,14 +14689,31 @@ input.transaction-inline-edit--amount::placeholder {
   content: none;
 }
 
+.accounts-account-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(118deg, transparent 0%, transparent 28%, rgba(255, 255, 255, 0.14) 44%, rgba(255, 255, 255, 0.04) 58%, transparent 74%),
+    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.12), transparent 18%);
+  opacity: 0.9;
+}
+
+.accounts-account-card[data-visual="identity"]::after {
+  background:
+    linear-gradient(118deg, transparent 0%, transparent 24%, rgba(255, 255, 255, 0.18) 42%, rgba(255, 255, 255, 0.05) 58%, transparent 74%),
+    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.14), transparent 18%);
+}
+
 .accounts-account-card:hover,
 .accounts-account-card:focus-visible {
   transform: translateY(-2px);
   box-shadow:
-    0 24px 56px rgba(15, 23, 42, 0.18),
-    0 36px 100px color-mix(in srgb, var(--brand-accent) 20%, transparent),
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    inset 0 -20px 36px rgba(255, 255, 255, 0.08);
+    0 26px 58px rgba(15, 23, 42, 0.18),
+    0 40px 108px color-mix(in srgb, var(--brand-accent) 22%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 -20px 34px rgba(255, 255, 255, 0.08);
   outline: none;
 }
 
