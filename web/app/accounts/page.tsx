@@ -1131,6 +1131,12 @@ function AccountsPageContent() {
 
   useEffect(() => {
     if (!selectedWorkspaceId) {
+      if (workspacesLoading || workspaces.length > 0) {
+        setAccountsLoading(true);
+        setHasInitialWorkspaceDataLoaded(false);
+        return;
+      }
+
       setAccounts([]);
       setAccountRules([]);
       setTransactions([]);
@@ -1162,7 +1168,7 @@ function AccountsPageContent() {
     setAccountsLoading(true);
     setHasInitialWorkspaceDataLoaded(false);
     void loadWorkspaceData(selectedWorkspaceId);
-  }, [selectedWorkspaceId]);
+  }, [selectedWorkspaceId, workspacesLoading, workspaces.length]);
 
   useEffect(() => {
     if (!selectedWorkspaceId || typeof window === "undefined") {
