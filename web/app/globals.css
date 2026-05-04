@@ -959,7 +959,7 @@ body[data-clover-page-modal] .sidebar-backdrop {
 }
 
 body.transactions-manual-open .shell-quick-add-button {
-  display: none;
+  display: none !important;
 }
 
 .shell-quick-add-button:hover,

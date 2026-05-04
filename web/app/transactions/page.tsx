@@ -1569,6 +1569,14 @@ function TransactionsPageContent() {
   const [headerMenuPosition, setHeaderMenuPosition] = useState<{ top: number; left: number; width: number } | null>(null);
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
   const detailAutosaveTimerRef = useRef<number | null>(null);
+  const manualModalStyle = useMemo<React.CSSProperties>(
+    () => ({
+      width: isCompactViewport ? "calc(100vw - 16px)" : "520px",
+      maxHeight: isCompactViewport ? "calc(100dvh - 16px)" : "calc(100dvh - 24px)",
+      overflow: "auto",
+    }),
+    [isCompactViewport]
+  );
 
   useEffect(() => {
     document.body.classList.toggle("transactions-manual-open", manualOpen);
@@ -5583,6 +5591,7 @@ function TransactionsPageContent() {
         <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={() => setManualOpen(false)}>
           <section
             className="modal-card modal-card--manual glass"
+            style={manualModalStyle}
             role="dialog"
             aria-modal="true"
             aria-labelledby="add-transaction-title"
