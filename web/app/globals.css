@@ -12063,56 +12063,98 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-name-row {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
   align-items: center;
   width: 100%;
 }
 
 .transactions-manual-category-trigger,
 .transactions-manual-account-trigger {
-  width: 18px;
-  height: 18px;
-  display: inline-grid;
-  place-items: center;
-  border: 0;
-  background: transparent;
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  border: 1px solid rgba(3, 168, 192, 0.12);
+  background: rgba(3, 168, 192, 0.08);
   padding: 0;
   color: var(--accent);
   cursor: pointer;
   flex: 0 0 auto;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.transactions-manual-category-trigger:hover,
+.transactions-manual-category-trigger:focus-visible,
+.transactions-manual-account-trigger:hover,
+.transactions-manual-account-trigger:focus-visible {
+  border-color: rgba(3, 168, 192, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 0 0 3px rgba(3, 168, 192, 0.08);
+  outline: none;
 }
 
 .transactions-manual-category-trigger img {
-  width: 14px;
-  height: 14px;
-  display: block;
-}
-
-.transactions-manual-account-trigger img {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   display: block;
   object-fit: contain;
 }
 
-.transactions-manual-account-trigger svg {
-  width: 14px;
-  height: 14px;
-  display: block;
+.transaction-category-icon.transaction-category-icon--manual {
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  border: 0;
+  background: transparent;
 }
 
-.transactions-manual-account-trigger span {
-  font-size: 0.85rem;
-  font-weight: 700;
-  line-height: 1;
+.transaction-category-icon.transaction-category-icon--manual img {
+  width: 18px;
+  height: 18px;
+}
+
+.transactions-manual-account-trigger__badge {
+  width: 100%;
+  height: 100%;
+  display: inline-grid;
+  place-items: center;
+}
+
+.transactions-manual-account-trigger__badge .accounts-brand-mark {
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+}
+
+.transactions-manual-account-trigger__badge .accounts-brand-mark__logo,
+.transactions-manual-account-trigger__badge .accounts-brand-mark__fallback,
+.transactions-manual-account-trigger__badge .accounts-brand-mark__logo-fallback {
+  width: 18px;
+  height: 18px;
+}
+
+.transactions-manual-account-trigger__badge img,
+.transactions-manual-account-trigger__badge svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  object-fit: contain;
+}
+
+.transactions-manual-name-field input {
+  min-height: 42px;
 }
 
 .transactions-manual-money-row {
   display: grid;
-  grid-template-columns: 18px minmax(106px, 120px) minmax(0, 1fr);
+  grid-template-columns: 42px minmax(120px, 146px) minmax(0, 1fr);
   gap: 10px;
-  align-items: end;
+  align-items: center;
   width: 100%;
 }
 
@@ -12130,6 +12172,8 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-money-row__currency .transactions-manual-currency__button {
   width: 100%;
+  min-height: 42px;
+  height: 42px;
 }
 
 .transactions-manual-more-row {
@@ -12149,22 +12193,6 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   gap: 12px;
   width: 100%;
-}
-
-.manual-form-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 4px;
-  flex-wrap: wrap;
-}
-
-.manual-form-actions__right {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin-left: auto;
 }
 
 .transactions-manual-add-another {
@@ -12218,19 +12246,19 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-manual-type-toggle__button {
   flex: 0 0 auto;
   min-width: 0;
-  min-height: 24px;
-  height: 24px;
+  min-height: 22px;
+  height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 0 8px;
+  padding: 0 7px;
   border-radius: 999px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.96);
   color: var(--text);
   font: inherit;
-  font-size: 0.58rem;
+  font-size: 0.56rem;
   font-weight: 700;
   white-space: nowrap;
   line-height: 1;
@@ -12291,13 +12319,23 @@ input.transaction-inline-edit--amount::placeholder {
   grid-column: 1 / -1;
 }
 
+.manual-more-panel--compact {
+  gap: 10px;
+  align-self: stretch;
+}
+
+.manual-more-panel--compact > * {
+  width: 100%;
+}
+
 .transactions-manual-currency {
   width: 100%;
 }
 
 .transactions-manual-currency__button {
   width: 100%;
-  min-height: 38px;
+  min-height: 42px;
+  height: 42px;
   border-radius: 14px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.96);
@@ -12309,6 +12347,124 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-currency__option {
   min-height: 42px;
+}
+
+.manual-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.manual-form-actions__right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  flex-wrap: wrap;
+}
+
+.manual-more-panel__receipt-line-items {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding-top: 2px;
+}
+
+.manual-more-panel__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.manual-receipt-table {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+.manual-receipt-table__header,
+.manual-receipt-table__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(96px, 0.7fr) 26px;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.manual-receipt-table__header {
+  padding: 0 2px;
+  color: var(--muted-2);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.manual-receipt-table__cell {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.manual-receipt-table__cell input {
+  width: 100%;
+  min-width: 0;
+}
+
+.manual-receipt-table__cell--price input {
+  text-align: right;
+}
+
+.manual-receipt-table__remove,
+.manual-receipt-table__add-floater,
+.manual-receipt-table__add-button {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+}
+
+.manual-receipt-table__remove {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  align-self: center;
+}
+
+.manual-receipt-table__remove:hover,
+.manual-receipt-table__remove:focus-visible {
+  background: rgba(3, 168, 192, 0.08);
+  outline: none;
+}
+
+.manual-receipt-table__add-floater {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(3, 168, 192, 0.16);
+  background: rgba(3, 168, 192, 0.06);
+  color: var(--accent);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.manual-receipt-table__add-floater:hover,
+.manual-receipt-table__add-floater:focus-visible {
+  border-color: rgba(3, 168, 192, 0.28);
+  background: rgba(3, 168, 192, 0.1);
+  outline: none;
 }
 
 .manual-form-layout__triple {
