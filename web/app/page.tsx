@@ -124,8 +124,10 @@ export default function HomePage() {
       <Script id="landing-force-light-theme" strategy="beforeInteractive">
         {`
           try {
-            document.documentElement.dataset.theme = "light";
-            document.documentElement.style.colorScheme = "light";
+            if (window.location.pathname === "/") {
+              document.documentElement.dataset.theme = "light";
+              document.documentElement.style.colorScheme = "light";
+            }
           } catch (error) {}
         `}
       </Script>
@@ -133,7 +135,7 @@ export default function HomePage() {
 
       <ScrollReveal as="section" className="landing-hero">
         <div className="landing-hero__copy">
-          <h1>Turn money clutter into clarity.</h1>
+          <h1>Turn money clutter into clarity in minutes.</h1>
           <p className="landing-hero__lede">
             Clover helps you gather statements, receipts, and accounts so you can understand what is happening without digging through folders,
             PDFs, and spreadsheets.
@@ -205,30 +207,10 @@ export default function HomePage() {
 
       <ScrollReveal as="section" className="landing-trust">
         <div className="landing-trust__copy">
-          <p className="eyebrow">Trust and security</p>
-          <h2>Built to keep your data clear, private, and easy to review.</h2>
-          <p>
-            Clover is designed so your financial files, insights, and history stay organized and traceable while you stay in control of what
-            you upload and what you learn from it.
-          </p>
-        </div>
-
-        <div className="landing-trust__grid" aria-label="Trust and security highlights">
-          <article className="landing-trust-card">
-            <p className="landing-trust-card__eyebrow">Traceable files</p>
-            <h3>Your uploads stay tied to their source.</h3>
-            <p>Statements and receipts remain easy to reference later, so you can always go back to the original file if you need to.</p>
-          </article>
-          <article className="landing-trust-card">
-            <p className="landing-trust-card__eyebrow">Clear history</p>
-            <h3>Reviews and changes stay understandable.</h3>
-            <p>As you organize your money, Clover keeps the path from raw file to insight easier to follow.</p>
-          </article>
-          <article className="landing-trust-card">
-            <p className="landing-trust-card__eyebrow">Privacy-minded</p>
-            <h3>You keep control of the information you share.</h3>
-            <p>Clover is meant to help you manage money with confidence, not make your finances feel more exposed.</p>
-          </article>
+          <div className="landing-trust__statement">
+            <img src="/help-icons/privacy-security-data.png" alt="" aria-hidden="true" />
+            <h2>Built to keep your data clear, private, and easy to review.</h2>
+          </div>
         </div>
 
         <p className="landing-trust__note">
