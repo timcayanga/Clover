@@ -958,6 +958,10 @@ body[data-clover-page-modal] .sidebar-backdrop {
   transition: background 160ms ease, color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
 }
 
+body.transactions-manual-open .shell-quick-add-button {
+  display: none;
+}
+
 .shell-quick-add-button:hover,
 .shell-quick-add-button:focus-visible {
   background: var(--brand-gradient-alt);
@@ -11222,7 +11226,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .modal-card--manual {
-  width: min(400px, calc(100vw - 24px));
+  width: min(640px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
   overflow: auto;
 }
@@ -12001,7 +12005,7 @@ input.transaction-inline-edit--amount::placeholder {
 .manual-form-layout--compact {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 8px;
+  gap: 10px;
 }
 
 .manual-form-layout__full {
@@ -12074,16 +12078,21 @@ input.transaction-inline-edit--amount::placeholder {
   line-height: 1;
 }
 
-.manual-form-compact-row {
+.transactions-manual-money-row {
   display: grid;
-  grid-template-columns: 18px minmax(64px, 0.8fr) minmax(0, 2.2fr);
+  grid-template-columns: 18px minmax(0, 1fr) minmax(140px, 1.6fr);
   gap: 8px;
-  align-items: center;
+  align-items: end;
   width: 100%;
 }
 
-.manual-form-compact-row__currency,
-.manual-form-compact-row__amount {
+.transactions-manual-money-row__stack {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.transactions-manual-money-row__amount {
   min-width: 0;
 }
 
@@ -12157,18 +12166,18 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-manual-type-toggle__button {
   flex: 1 1 0;
   min-width: 0;
-  min-height: 24px;
+  min-height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
-  padding: 2px 6px;
+  gap: 3px;
+  padding: 1px 5px;
   border-radius: 8px;
   border: 1px solid var(--stroke);
   background: rgba(255, 255, 255, 0.96);
   color: var(--text);
   font: inherit;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   cursor: pointer;
   transition:
@@ -12205,6 +12214,7 @@ input.transaction-inline-edit--amount::placeholder {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+  margin-top: 2px;
 }
 
 .transactions-manual-more__chevron {
@@ -12223,6 +12233,7 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 8px;
   padding-top: 2px;
   width: 100%;
+  grid-column: 1 / -1;
 }
 
 .transactions-manual-currency {
@@ -21329,9 +21340,13 @@ input.transaction-inline-edit--amount::placeholder {
     grid-template-columns: 20px minmax(0, 1fr);
   }
 
-  .manual-form-compact-row {
-    grid-template-columns: 20px minmax(0, 0.95fr) minmax(0, 1.7fr);
+  .transactions-manual-money-row {
+    grid-template-columns: 20px minmax(0, 1fr) minmax(112px, 1.3fr);
     gap: 8px;
+  }
+
+  .transactions-manual-money-row__stack {
+    gap: 6px;
   }
 
   .manual-more-panel__stack {

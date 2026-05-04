@@ -1570,6 +1570,14 @@ function TransactionsPageContent() {
   const headerMenuRef = useRef<HTMLDivElement | null>(null);
   const detailAutosaveTimerRef = useRef<number | null>(null);
 
+  useEffect(() => {
+    document.body.classList.toggle("transactions-manual-open", manualOpen);
+
+    return () => {
+      document.body.classList.remove("transactions-manual-open");
+    };
+  }, [manualOpen]);
+
   const workspace = workspaces.find((entry) => entry.id === selectedWorkspaceId) ?? null;
   const workspaceTransactionCount = transactions.length;
   const otherCategoryId = useMemo(() => getOtherCategoryId(categories), [categories]);
@@ -5653,7 +5661,7 @@ function TransactionsPageContent() {
                   </label>
                 </div>
 
-                <div className="manual-form-compact-row">
+                <div className="transactions-manual-money-row">
                   <button
                     type="button"
                     className="transactions-manual-account-trigger"
@@ -5673,22 +5681,36 @@ function TransactionsPageContent() {
                     )}
                   </button>
 
-                  <label className="manual-form-layout__currency manual-form-compact-row__currency transactions-manual-field">
-                    Currency
-                    <CurrencySelector
-                      value={manualForm.currency}
-                      onChange={(value) => setManualForm((current) => ({ ...current, currency: value }))}
-                      options={currencyCatalogCodes}
-                      ariaLabel="Select transaction currency"
-                      className="transactions-manual-currency"
-                      buttonClassName="transactions-manual-currency__button"
-                      menuClassName="transactions-manual-currency__menu"
-                      optionClassName="transactions-manual-currency__option"
-                      menuAlignment="end"
-                    />
-                  </label>
+                  <div className="transactions-manual-money-row__stack">
+                    <label className="transactions-manual-field">
+                      Currency
+                      <CurrencySelector
+                        value={manualForm.currency}
+                        onChange={(value) => setManualForm((current) => ({ ...current, currency: value }))}
+                        options={currencyCatalogCodes}
+                        ariaLabel="Select transaction currency"
+                        className="transactions-manual-currency"
+                        buttonClassName="transactions-manual-currency__button"
+                        menuClassName="transactions-manual-currency__menu"
+                        optionClassName="transactions-manual-currency__option"
+                        menuAlignment="end"
+                      />
+                    </label>
 
-                  <label className="manual-form-layout__amount manual-form-compact-row__amount transactions-manual-field">
+                    <button
+                      type="button"
+                      className="accounts-add-more-link transactions-manual-more"
+                      onClick={() => setManualMoreOpen((current) => !current)}
+                      aria-expanded={manualMoreOpen}
+                    >
+                      <span>{manualMoreOpen ? "Less" : "More"}</span>
+                      <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
+                        <ActionIcon name="chevron-down" />
+                      </span>
+                    </button>
+                  </div>
+
+                  <label className="transactions-manual-field transactions-manual-money-row__amount">
                     Amount
                     <input
                       type="number"
@@ -5700,18 +5722,6 @@ function TransactionsPageContent() {
                     />
                   </label>
                 </div>
-
-                <button
-                  type="button"
-                  className="accounts-add-more-link transactions-manual-more"
-                  onClick={() => setManualMoreOpen((current) => !current)}
-                  aria-expanded={manualMoreOpen}
-                >
-                  <span>{manualMoreOpen ? "Less" : "More"}</span>
-                  <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
-                    <ActionIcon name="chevron-down" />
-                  </span>
-                </button>
 
                 {manualMoreOpen ? (
                   <div className="manual-more-panel manual-more-panel--compact">
