@@ -27951,7 +27951,11 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 }
 
 body[data-split-bill-modal-open="true"] .shell-quick-add-button {
-  display: none;
+  display: none !important;
+}
+
+body[data-split-bill-modal-open="true"] .split-bill-page-actions {
+  display: none !important;
 }
 
 @media (max-width: 1024px) {

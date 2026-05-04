@@ -3,12 +3,12 @@ import { CloverShell } from "@/components/clover-shell";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
 import {
   serializeSplitBillRecord,
-  normalizeCurrencyCode,
   splitBillGroupMemberOrderBy,
   splitBillItemOrderBy,
 } from "@/lib/split-bill";
 import { SplitBillHome } from "@/components/split-bill-home";
 import { SplitBillPageActions } from "@/components/split-bill-page-actions";
+import { getCurrencyCatalogCodes } from "@/lib/currencies";
 
 export const dynamic = "force-dynamic";
 
@@ -56,13 +56,13 @@ export default async function SplitBillPage({ searchParams }: { searchParams?: P
       },
     }),
   ]);
-  const normalizedCurrencies = Array.from(new Set(bills.map((bill) => normalizeCurrencyCode(bill.currency)).filter(Boolean))).sort();
+  const currencyCatalogCodes = getCurrencyCatalogCodes();
 
   return (
     <CloverShell
       active="split-bill"
       title="Split Bill"
-      actions={<SplitBillPageActions currencies={normalizedCurrencies} selectedCurrency={selectedCurrency} />}
+      actions={<SplitBillPageActions currencies={currencyCatalogCodes} selectedCurrency={selectedCurrency} />}
     >
       <SplitBillHome
         bills={bills.map((bill) => serializeSplitBillRecord(bill as Parameters<typeof serializeSplitBillRecord>[0]))}

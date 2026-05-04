@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCurrencySymbol } from "@/lib/currency-format";
+import { getCurrencyCatalogCodes } from "@/lib/currencies";
 
 type SplitBillManualModalProps = {
   open: boolean;
@@ -11,7 +12,7 @@ type SplitBillManualModalProps = {
 
 type SplitMode = "you-paid" | "you-owed" | "person-paid" | "person-owed";
 
-const currencyOptions = ["PHP", "USD", "EUR", "JPY"];
+const currencyOptions = getCurrencyCatalogCodes();
 
 const splitModeOptions: Array<{ value: SplitMode; label: string }> = [
   { value: "you-paid", label: "You paid, split equally" },

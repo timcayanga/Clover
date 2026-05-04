@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { formatCurrencySymbol } from "@/lib/currency-format";
 import { SplitBillImportModal } from "@/components/split-bill-import-modal";
 import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
@@ -36,21 +36,18 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
     setGroupError(null);
   };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (openAddMode || isGroupModalOpen) {
       setIsAddMenuOpen(false);
       setIsCurrencyMenuOpen(false);
     }
-  }, [isGroupModalOpen, openAddMode]);
-
-  useEffect(() => {
     document.body.dataset.splitBillModalOpen = isModalOpen ? "true" : "false";
     return () => {
       if (document.body.dataset.splitBillModalOpen === "true") {
         document.body.dataset.splitBillModalOpen = "false";
       }
     };
-  }, [isModalOpen]);
+  }, [isGroupModalOpen, isModalOpen, openAddMode]);
 
   const saveGroup = async () => {
     setIsSavingGroup(true);
@@ -89,7 +86,7 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
         <div className="split-bill-page-actions">
           <div className="split-bill-currency-menu">
             <button className="button button-secondary button-small" type="button" onClick={() => setIsCurrencyMenuOpen((current) => !current)}>
-              {selectedCurrency === "ALL" ? "All currencies" : formatCurrencySymbol(selectedCurrency)}
+              {selectedCurrency === "ALL" ? "All Currencies" : formatCurrencySymbol(selectedCurrency)}
             </button>
             {isCurrencyMenuOpen ? (
               <div className="split-bill-add-menu__panel">
@@ -101,7 +98,7 @@ export function SplitBillPageActions({ currencies, selectedCurrency }: SplitBill
                     prefetch={false}
                     onClick={() => setIsCurrencyMenuOpen(false)}
                   >
-                    {currency === "ALL" ? "All currencies" : formatCurrencySymbol(currency)}
+                    {currency === "ALL" ? "All Currencies" : formatCurrencySymbol(currency)}
                   </Link>
                 ))}
               </div>
