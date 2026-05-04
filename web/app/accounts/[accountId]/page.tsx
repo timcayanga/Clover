@@ -445,6 +445,7 @@ function AccountDetailPageContent() {
   const params = useParams<{ accountId: string }>();
   const accountPathSegment = params?.accountId ?? "";
   const accountId = extractAccountIdFromPathSegment(accountPathSegment);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
 
   const [account, setAccount] = useState<Account | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -484,6 +485,22 @@ function AccountDetailPageContent() {
   const [purchaseDeleteBusy, setPurchaseDeleteBusy] = useState<string | null>(null);
   const [dividendDeleteBusy, setDividendDeleteBusy] = useState<string | null>(null);
   const [hasInitialDataLoaded, setHasInitialDataLoaded] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia("(max-width: 960px)");
+    const syncViewport = () => setIsMobileViewport(mediaQuery.matches);
+
+    syncViewport();
+    mediaQuery.addEventListener("change", syncViewport);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncViewport);
+    };
+  }, []);
 
   useEffect(() => {
     document.title = account?.type === "investment" ? "Clover | Asset Details" : "Clover | Account";
@@ -1469,18 +1486,20 @@ function AccountDetailPageContent() {
           ? "View the full history for a single investment asset."
           : "View the full statement history for a single account."
       }
-      actions={mobileBackAction}
+      actions={isMobileViewport ? mobileBackAction : undefined}
       hideCompactBarKickerAndSubtitleOnMobile
       showTopbar={false}
     >
       <section className="accounts-detail__panel" style={accountBrandStyles}>
-        <div className="accounts-detail__header">
-          <div className="actions accounts-detail__desktop-actions">
-            <button className="button button-secondary" type="button" onClick={() => router.push("/accounts")}>
-              Back to Accounts
-            </button>
+        {!isMobileViewport ? (
+          <div className="accounts-detail__header">
+            <div className="actions accounts-detail__desktop-actions">
+              <button className="button button-secondary" type="button" onClick={() => router.push("/accounts")}>
+                Back to Accounts
+              </button>
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {account ? (
           <div className="accounts-detail__hero">

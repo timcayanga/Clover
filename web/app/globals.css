@@ -14673,14 +14673,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-account-card::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(120deg, rgba(255, 255, 255, 0.18), transparent 24%, transparent 70%, rgba(255, 255, 255, 0.1)),
-    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.16), transparent 28%);
-  opacity: 0.9;
-  pointer-events: none;
+  content: none;
 }
 
 .accounts-account-card:hover,
