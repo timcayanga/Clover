@@ -52,29 +52,15 @@ export function SplitBillHome({ bills: initialBills, groups: initialGroups }: Sp
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [isDeletingBillId, setIsDeletingBillId] = useState<string | null>(null);
 
-  const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? null;
-
-  const totalSettledBills = bills.length;
-  const totalPeople = new Set([
-    ...groups.flatMap((group) => group.members.map((member) => member.name)),
-    ...bills.flatMap((bill) => bill.participants.map((participant) => participant.name)),
-  ]).size;
-  const totalOwed = bills.reduce((sum, bill) => sum + bill.settlement.totalOwed, 0);
-  const totalPaid = bills.reduce((sum, bill) => sum + bill.settlement.totalPaid, 0);
-
-  const loadGroupIntoForm = () => {
-    if (!selectedGroup) {
-      return;
-    }
-
-    setGroupName(selectedGroup.name);
-    setMemberText(selectedGroup.members.map((member) => member.name).join("\n"));
-  };
-
   const clearGroupForm = () => {
     setSelectedGroupId("");
     setGroupName("");
     setMemberText("");
+  };
+
+  const addGroup = () => {
+    clearGroupForm();
+    document.getElementById("split-bill-groups-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const saveGroup = async () => {
@@ -166,227 +152,188 @@ export function SplitBillHome({ bills: initialBills, groups: initialGroups }: Sp
       <section className="split-bill-hero glass">
         <div className="split-bill-hero__copy">
           <span className="pill pill-accent">Split Bill</span>
-          <h1>Split a receipt, settle the balances, move on.</h1>
-          <p>
-            Keep Clover&apos;s bill sharing separate from transactions. Build ad hoc groups, import receipts for OCR, and see who owes whom in one place.
-          </p>
+          <h1>Keep shared bills simple.</h1>
+          <p>View your recent split bills, add a new receipt or manual bill, and save the groups you use most often.</p>
           <div className="split-bill-hero__actions">
             <Link className="button button-primary button-pill" href="/split-bill/new" prefetch={false}>
-              New bill
+              Add bill
             </Link>
-            <button className="button button-secondary button-pill" type="button" onClick={() => clearGroupForm()}>
-              New group
+            <button className="button button-secondary button-pill" type="button" onClick={addGroup}>
+              Add group
             </button>
           </div>
-        </div>
-
-        <div className="split-bill-hero__stats">
-          <article className="split-bill-stat">
-            <span>Recent bills</span>
-            <strong>{totalSettledBills}</strong>
-          </article>
-          <article className="split-bill-stat">
-            <span>People used</span>
-            <strong>{totalPeople}</strong>
-          </article>
-          <article className="split-bill-stat">
-            <span>Total owed</span>
-            <strong>{formatSplitBillAmount(totalOwed)}</strong>
-          </article>
-          <article className="split-bill-stat">
-            <span>Total paid</span>
-            <strong>{formatSplitBillAmount(totalPaid)}</strong>
-          </article>
         </div>
       </section>
 
-      <div className="split-bill-grid">
-        <section className="split-bill-panel panel glass">
-          <div className="split-bill-panel__head">
-            <div>
-              <p className="eyebrow">Recent bills</p>
-              <h2>Track what was split and who still owes.</h2>
-            </div>
-            <Link className="button button-secondary button-small" href="/split-bill/new" prefetch={false}>
-              Create bill
-            </Link>
+      <section className="split-bill-panel panel glass">
+        <div className="split-bill-panel__head">
+          <div>
+            <p className="eyebrow">Recent bills</p>
+            <h2>Your split bills at a glance</h2>
           </div>
+          <Link className="button button-secondary button-small" href="/split-bill/new" prefetch={false}>
+            Add bill
+          </Link>
+        </div>
 
-          {bills.length > 0 ? (
-            <div className="split-bill-list">
-              {bills.map((bill) => {
-                const nextTransfer = bill.settlement.transfers[0];
-                const netBalance = bill.settlement.participants.reduce((sum, participant) => sum + participant.balance, 0);
-
-                return (
-                  <article key={bill.id} className="split-bill-card">
-                    <div className="split-bill-card__head">
-                      <div>
-                        <h3>
-                          <Link href={`/split-bill/${bill.id}`} prefetch={false}>
-                            {bill.title}
-                          </Link>
-                        </h3>
-                        <p>
-                          {formatDate(bill.billDate)}
-                          {bill.group?.name ? ` · ${bill.group.name}` : ""}
-                        </p>
-                      </div>
-                      <div className="split-bill-card__meta">
-                        <span>{bill.sourceType === "receipt" ? "Receipt import" : "Manual bill"}</span>
-                        <strong>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</strong>
-                      </div>
-                    </div>
-
-                    <div className="split-bill-card__body">
-                      <div className="split-bill-card__summary">
-                        <span>Net balance</span>
-                        <strong>{formatSplitBillAmount(netBalance, bill.currency)}</strong>
-                      </div>
-                      <div className="split-bill-card__summary">
-                        <span>Participants</span>
-                        <strong>{bill.participants.length}</strong>
-                      </div>
-                      <div className="split-bill-card__summary">
-                        <span>Transfers</span>
-                        <strong>{bill.settlement.transfers.length}</strong>
-                      </div>
-                    </div>
-
-                    <div className="split-bill-card__footer">
-                      {nextTransfer ? (
-                        <span className="split-bill-card__hint">
-                          {nextTransfer.fromParticipantName} owes {nextTransfer.toParticipantName} {formatSplitBillAmount(nextTransfer.amount, bill.currency)}
-                        </span>
-                      ) : (
-                        <span className="split-bill-card__hint">All settled up.</span>
-                      )}
-                      <div className="split-bill-card__actions">
-                        <Link className="button button-secondary button-small" href={`/split-bill/${bill.id}`} prefetch={false}>
-                          View
-                        </Link>
-                        <Link className="button button-secondary button-small" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
-                          Edit
-                        </Link>
-                        <button
-                          className="button button-danger button-small"
-                          type="button"
-                          onClick={() => setDeleteTargetId(bill.id)}
-                          disabled={isDeletingBillId === bill.id}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                );
-              })}
+        {bills.length > 0 ? (
+          <div className="split-bill-table" role="table" aria-label="Recent split bills">
+            <div className="split-bill-table__header" role="row">
+              <span role="columnheader">Bill</span>
+              <span role="columnheader">Date</span>
+              <span role="columnheader">People</span>
+              <span role="columnheader">Total</span>
+              <span role="columnheader">Status</span>
+              <span role="columnheader">Actions</span>
             </div>
-          ) : (
-            <div className="split-bill-empty">
-              <strong>No split bills yet.</strong>
-              <p>Create a bill or import a receipt to start tracking shared expenses.</p>
-            </div>
-          )}
-        </section>
+            {bills.map((bill) => {
+              const status = bill.settlement.transfers.length > 0 ? `${bill.settlement.transfers.length} transfer${bill.settlement.transfers.length === 1 ? "" : "s"}` : "Settled";
+              const sourceLabel = bill.sourceType === "receipt" ? "Receipt" : "Manual";
 
-        <section className="split-bill-panel panel glass">
-          <div className="split-bill-panel__head">
-            <div>
-              <p className="eyebrow">Groups</p>
-              <h2>Save names you use often.</h2>
-            </div>
-            <button className="button button-secondary button-small" type="button" onClick={loadGroupIntoForm} disabled={!selectedGroup}>
-              Load group
-            </button>
-          </div>
-
-          <div className="split-bill-group-form">
-            <label className="settings-field">
-              <span>Saved group</span>
-              <select className="settings-input" value={selectedGroupId} onChange={(event) => setSelectedGroupId(event.target.value)}>
-                <option value="">Create new group</option>
-                {groups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="settings-field">
-              <span>Group name</span>
-              <input
-                className="settings-input"
-                value={groupName}
-                onChange={(event) => setGroupName(event.target.value)}
-                placeholder="Weekend trip crew"
-              />
-            </label>
-
-            <label className="settings-field">
-              <span>People</span>
-              <textarea
-                className="settings-input split-bill-group-form__textarea"
-                value={memberText}
-                onChange={(event) => setMemberText(event.target.value)}
-                placeholder="One name per line"
-              />
-            </label>
-
-            {groupError ? <p className="split-bill-group-form__error">{groupError}</p> : null}
-
-            <div className="split-bill-group-form__actions">
-              <button className="button button-primary" type="button" onClick={saveGroup} disabled={isSavingGroup || !groupName.trim()}>
-                {selectedGroupId ? "Save group" : "Create group"}
-              </button>
-              {selectedGroupId ? (
-                <button className="button button-secondary" type="button" onClick={deleteGroup} disabled={isSavingGroup}>
-                  Delete group
-                </button>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="split-bill-group-list">
-            {groups.length > 0 ? (
-              groups.map((group) => (
-                <article key={group.id} className="split-bill-group-card">
-                  <div className="split-bill-group-card__head">
-                    <div>
-                      <strong>{group.name}</strong>
-                      <p>{group.members.length} people · {group._count?.bills ?? 0} bills</p>
-                    </div>
-                    <button
-                      className="button button-secondary button-small"
-                      type="button"
-                      onClick={() => {
-                        setSelectedGroupId(group.id);
-                        setGroupName(group.name);
-                        setMemberText(group.members.map((member) => member.name).join("\n"));
-                      }}
-                    >
+              return (
+                <div key={bill.id} className="split-bill-table__row" role="row">
+                  <div role="cell" className="split-bill-table__bill">
+                    <strong>
+                      <Link href={`/split-bill/${bill.id}`} prefetch={false}>
+                        {bill.title}
+                      </Link>
+                    </strong>
+                    <span>
+                      {sourceLabel}
+                      {bill.group?.name ? ` · ${bill.group.name}` : ""}
+                    </span>
+                  </div>
+                  <div role="cell">{formatDate(bill.billDate)}</div>
+                  <div role="cell">{bill.participants.length}</div>
+                  <div role="cell">{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</div>
+                  <div role="cell">{status}</div>
+                  <div role="cell" className="split-bill-table__actions">
+                    <Link className="button button-secondary button-small" href={`/split-bill/${bill.id}`} prefetch={false}>
+                      View
+                    </Link>
+                    <Link className="button button-secondary button-small" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
                       Edit
+                    </Link>
+                    <button
+                      className="button button-danger button-small"
+                      type="button"
+                      onClick={() => setDeleteTargetId(bill.id)}
+                      disabled={isDeletingBillId === bill.id}
+                    >
+                      Delete
                     </button>
                   </div>
-                  <div className="split-bill-group-card__members">
-                    {group.members.length > 0 ? (
-                      group.members.map((member) => <span key={member.id}>{member.name}</span>)
-                    ) : (
-                      <span>No saved names yet.</span>
-                    )}
-                  </div>
-                </article>
-              ))
-            ) : (
-              <div className="split-bill-empty">
-                <strong>No groups yet.</strong>
-                <p>Use the form above to save the people you split with most often.</p>
-              </div>
-            )}
+                </div>
+              );
+            })}
           </div>
-        </section>
-      </div>
+        ) : (
+          <div className="split-bill-empty">
+            <strong>No split bills yet.</strong>
+            <p>Add your first bill or upload a receipt to start.</p>
+          </div>
+        )}
+      </section>
+
+      <section className="split-bill-panel panel glass" id="split-bill-groups">
+        <div className="split-bill-panel__head">
+          <div>
+            <p className="eyebrow">Groups</p>
+            <h2>Save names you use often</h2>
+          </div>
+          <button className="button button-secondary button-small" type="button" onClick={addGroup}>
+            Add group
+          </button>
+        </div>
+
+        <div className="split-bill-group-list">
+          {groups.length > 0 ? (
+            groups.map((group) => (
+              <article key={group.id} className="split-bill-group-card">
+                <div className="split-bill-group-card__head">
+                  <div>
+                    <strong>{group.name}</strong>
+                    <p>
+                      {group.members.length} people · {group._count?.bills ?? 0} bills
+                    </p>
+                  </div>
+                  <button
+                    className="button button-secondary button-small"
+                    type="button"
+                    onClick={() => {
+                      setSelectedGroupId(group.id);
+                      setGroupName(group.name);
+                      setMemberText(group.members.map((member) => member.name).join("\n"));
+                      document.getElementById("split-bill-groups-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                  >
+                    Edit
+                  </button>
+                </div>
+                <div className="split-bill-group-card__members">
+                  {group.members.length > 0 ? (
+                    group.members.map((member) => <span key={member.id}>{member.name}</span>)
+                  ) : (
+                    <span>No saved names yet.</span>
+                  )}
+                </div>
+              </article>
+            ))
+          ) : (
+            <div className="split-bill-empty">
+              <strong>No groups yet.</strong>
+              <p>Create one below to save the names you split with most often.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="split-bill-group-form" id="split-bill-groups-form">
+          <div className="split-bill-panel__head">
+            <div>
+              <p className="eyebrow">{selectedGroupId ? "Edit group" : "Add group"}</p>
+              <h3>{selectedGroupId ? "Update saved names" : "Save a new group"}</h3>
+            </div>
+          </div>
+
+          <label className="settings-field">
+            <span>Group name</span>
+            <input
+              className="settings-input"
+              value={groupName}
+              onChange={(event) => setGroupName(event.target.value)}
+              placeholder="Weekend trip crew"
+            />
+          </label>
+
+          <label className="settings-field">
+            <span>People</span>
+            <textarea
+              className="settings-input split-bill-group-form__textarea"
+              value={memberText}
+              onChange={(event) => setMemberText(event.target.value)}
+              placeholder="One name per line"
+            />
+          </label>
+
+          {groupError ? <p className="split-bill-group-form__error">{groupError}</p> : null}
+
+          <div className="split-bill-group-form__actions">
+            <button className="button button-primary" type="button" onClick={saveGroup} disabled={isSavingGroup || !groupName.trim()}>
+              {selectedGroupId ? "Save group" : "Create group"}
+            </button>
+            {selectedGroupId ? (
+              <>
+                <button className="button button-secondary" type="button" onClick={clearGroupForm} disabled={isSavingGroup}>
+                  Cancel
+                </button>
+                <button className="button button-secondary" type="button" onClick={deleteGroup} disabled={isSavingGroup}>
+                  Delete
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
+      </section>
 
       {deleteTargetId ? (
         <div className="split-bill-modal" role="dialog" aria-modal="true" aria-label="Delete split bill">
