@@ -15552,7 +15552,7 @@ input.transaction-inline-edit--amount::placeholder {
 .accounts-add-modal {
   width: min(640px, calc(100vw - 28px));
   max-height: calc(100dvh - 28px);
-  overflow: auto;
+  overflow: visible;
 }
 
 .accounts-add-grid {
