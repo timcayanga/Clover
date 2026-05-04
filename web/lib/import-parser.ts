@@ -397,6 +397,15 @@ const detectInstitutionFromText = (text: string) => {
     }
   }
 
+  if (
+    /PERIOD\s+COVERED/i.test(text) &&
+    /ACCOUNT\s+NUMBER/i.test(text) &&
+    /PHILIPPINE\s+PESO/i.test(text) &&
+    /\b\d{1,2}\s+[A-Z]{3}\s+\d{2,4}\b/i.test(text)
+  ) {
+    return "Security Bank";
+  }
+
   return null;
 };
 
@@ -602,8 +611,34 @@ const securityBankStatementMetadata = (text: string): DetectedStatementMetadata 
     return null;
   }
 
-  const accountNumber = detectAccountNumberFromText(normalized);
-  const accountName = formatSimpleBankAccountName("Security Bank", accountNumber);
+  const lines = normalized.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const accountLineIndex = lines.findIndex((line) => /ACCOUNT\s+NUMBER/i.test(line));
+  const accountNumberLabelText =
+    accountLineIndex >= 0 ? lines.slice(Math.max(0, accountLineIndex - 1), Math.min(lines.length, accountLineIndex + 4)).join(" ") : normalized;
+  const labeledAccountNumber =
+    accountNumberLabelText.match(/ACCOUNT\s+NUMBER.*?((?:\d[\d\s-]{6,}\d))/i)?.[1] ??
+    accountNumberLabelText.match(/\b(?:\d[\d\s-]{10,}\d)\b/g)?.map((candidate) => candidate.replace(/\D/g, "")).find((candidate) => candidate.length >= 8 && candidate.length <= 16) ??
+    null;
+  const accountNumber = labeledAccountNumber ?? detectAccountNumberFromText(normalized);
+  const accountNameLines =
+    accountLineIndex >= 0
+      ? lines.slice(accountLineIndex + 1, Math.min(lines.length, accountLineIndex + 12))
+      : lines.slice(0, Math.min(lines.length, 16));
+  const commaNameCandidate =
+    accountNameLines
+      .map((line) =>
+        normalizeWhitespace(line)
+          .replace(/\s*\([^)]*\)\s*$/, "")
+          .replace(/\s{2,}/g, " ")
+          .trim()
+      )
+      .filter((line) => /^[A-Za-z][A-Za-z.'-]+,\s*[A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*)*$/i.test(line))
+      .sort((left, right) => right.length - left.length)[0] ?? null;
+  const accountNameCandidate =
+    commaNameCandidate ??
+    extractAccountHolderNameFromLines(accountNameLines, null) ??
+    formatSimpleBankAccountName("Security Bank", accountNumber);
+  const accountName = accountNameCandidate;
   const periodMatch = compact.match(/PERIOD\s+COVERED\s*:\s*([A-Z]{3}\s+\d{1,2}\s+\d{4})\s+TO\s+([A-Z]{3}\s+\d{1,2}\s+\d{4})/i);
   const summaryMatch = compact.match(
     /BEGINNING\s+BALANCE\s+TOTAL\s+CREDITS\s+TOTAL\s+DEBITS\s+ENDING\s+BALANCE\s+([0-9,.-]+)\s+([0-9,.-]+)\s+([0-9,.-]+)\s+([0-9,.-]+)/i
@@ -683,7 +718,9 @@ const parseSecurityBankSavingsImportText = (text: string) => {
     const inferredType: TransactionType =
       /fee|charge|instapay\s+fee|bank charge|withheld tax/i.test(description)
         ? "expense"
-        : /transfer|tfr|atm\/b2c|withdrawal/i.test(description)
+        : /ibft|transfer|tfr/i.test(description)
+          ? "transfer"
+          : /atm\/b2c|atm withdrawal|atwd|atro|atrc|cash withdrawal/i.test(description)
           ? "transfer"
           : /credit|payroll|deposit|salary|refund|reversal/i.test(description)
             ? "income"
@@ -698,8 +735,10 @@ const parseSecurityBankSavingsImportText = (text: string) => {
         ? "Financial"
         : /credit|payroll|deposit|salary|refund|reversal/i.test(description) && inferredType === "income"
           ? "Income"
-          : /transfer|tfr|atm\/b2c|withdrawal/i.test(description)
+          : /ibft|transfer|tfr/i.test(description)
             ? "Transfers"
+            : /atm\/b2c|atm withdrawal|atwd|atro|atrc|cash withdrawal/i.test(description)
+              ? "Cash & ATM"
             : guessCategoryName(description, inferredType);
 
     const row: ParsedImportRow = {

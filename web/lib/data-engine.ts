@@ -170,6 +170,128 @@ const STATEMENT_TEMPLATE_COLUMNS = [
   "updatedAt",
 ] as const;
 
+const DOCUMENT_IMPORT_COLUMNS = [
+  "id",
+  "workspaceId",
+  "importFileId",
+  "accountId",
+  "documentFamily",
+  "documentSubtype",
+  "institution",
+  "accountName",
+  "accountNumber",
+  "currency",
+  "pageCount",
+  "confidence",
+  "sourceMetadata",
+  "rawPayload",
+  "extractedPayload",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const DOCUMENT_IMPORT_PAGE_COLUMNS = [
+  "id",
+  "documentImportId",
+  "pageNumber",
+  "imageName",
+  "pageType",
+  "visibleTitle",
+  "visibleDate",
+  "visibleCurrency",
+  "rawOcrText",
+  "layoutNotes",
+  "confidence",
+  "rawPayload",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const RECEIPT_DOCUMENT_COLUMNS = [
+  "id",
+  "workspaceId",
+  "documentImportId",
+  "accountId",
+  "transactionId",
+  "merchantRaw",
+  "merchantClean",
+  "transactionDate",
+  "transactionTime",
+  "currency",
+  "subtotal",
+  "tax",
+  "total",
+  "paymentMethod",
+  "accountMatch",
+  "confidence",
+  "rawPayload",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const INVESTMENT_SNAPSHOT_COLUMNS = [
+  "id",
+  "workspaceId",
+  "documentImportId",
+  "accountId",
+  "snapshotDate",
+  "portfolioName",
+  "currency",
+  "totalValue",
+  "costBasis",
+  "gainLossValue",
+  "gainLossPercent",
+  "confidence",
+  "rawPayload",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const INVESTMENT_HOLDING_COLUMNS = [
+  "id",
+  "workspaceId",
+  "investmentSnapshotId",
+  "documentImportId",
+  "accountId",
+  "rowIndex",
+  "assetName",
+  "assetSymbol",
+  "assetType",
+  "quantity",
+  "unitPrice",
+  "costBasis",
+  "marketValue",
+  "currentValue",
+  "gainLossValue",
+  "gainLossPercent",
+  "currency",
+  "status",
+  "confidence",
+  "rawPayload",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+const RECURRING_PATTERN_COLUMNS = [
+  "id",
+  "workspaceId",
+  "documentImportId",
+  "accountId",
+  "merchantRaw",
+  "merchantClean",
+  "amount",
+  "currency",
+  "frequency",
+  "firstSeenDate",
+  "lastSeenDate",
+  "nextExpectedDate",
+  "transactionCount",
+  "confidence",
+  "rawPayload",
+  "createdAt",
+  "updatedAt",
+] as const;
+
 const MERCHANT_RULE_COLUMNS = [
   "id",
   "workspaceId",
@@ -409,6 +531,15 @@ export const detectInstitutionFromText = (text: string | null | undefined) => {
     }
   }
 
+  if (
+    /PERIOD\s+COVERED/i.test(normalized) &&
+    /ACCOUNT\s+NUMBER/i.test(normalized) &&
+    /PHILIPPINE\s+PESO/i.test(normalized) &&
+    /\b\d{1,2}\s+[A-Z]{3}\s+\d{2,4}\b/i.test(normalized)
+  ) {
+    return "Security Bank";
+  }
+
   return null;
 };
 
@@ -433,10 +564,18 @@ export const detectStatementMetadataFromText = (text: string): StatementMetadata
   const metadata = detectStatementMetadata(text);
   const institution = metadata?.institution ?? detectInstitutionFromText(text);
   const accountNumber = metadata?.accountNumber ?? detectAccountNumber(text);
+  const normalizedText = normalizeWhitespace(text);
   const accountName =
     metadata?.accountName ??
     (institution && accountNumber ? `${institution} ${accountNumber.slice(-4)}` : institution ?? null);
-  const accountType = metadata?.accountType ?? inferAccountTypeFromStatement(institution, accountName, "bank");
+  const refinedAccountType =
+    metadata?.accountType ??
+    (institution && /maya/i.test(institution) && /\b(easy\s+credit|credit|billing\s+statement|payment\s+due\s+date|total\s+amount\s+due)\b/i.test(normalizedText)
+      ? "credit_card"
+      : null) ??
+    (institution && /maya/i.test(institution) && /\bsavings\b/i.test(normalizedText) ? "bank" : null) ??
+    (institution === "GoTyme" ? "bank" : null);
+  const accountType = refinedAccountType ?? inferAccountTypeFromStatement(institution, accountName, "bank");
   const confidence =
     metadata?.confidence ??
     Math.min(
@@ -714,6 +853,120 @@ export const getCompatibleStatementTemplateColumns = async () => {
   return compatible as string[];
 };
 
+export const getCompatibleDocumentImportColumns = async () => {
+  const cacheKey = "DocumentImport";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'DocumentImport'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = DOCUMENT_IMPORT_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleDocumentImportPageColumns = async () => {
+  const cacheKey = "DocumentImportPage";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'DocumentImportPage'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = DOCUMENT_IMPORT_PAGE_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleReceiptDocumentColumns = async () => {
+  const cacheKey = "ReceiptDocument";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'ReceiptDocument'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = RECEIPT_DOCUMENT_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleInvestmentSnapshotColumns = async () => {
+  const cacheKey = "InvestmentSnapshot";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'InvestmentSnapshot'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = INVESTMENT_SNAPSHOT_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleInvestmentHoldingColumns = async () => {
+  const cacheKey = "InvestmentHolding";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'InvestmentHolding'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = INVESTMENT_HOLDING_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
+export const getCompatibleRecurringPatternColumns = async () => {
+  const cacheKey = "RecurringPattern";
+  const cached = columnCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const columns = await prisma.$queryRaw<Array<{ column_name: string }>>`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'RecurringPattern'
+  `;
+
+  const existing = new Set(columns.map((column) => column.column_name));
+  const compatible = RECURRING_PATTERN_COLUMNS.filter((column) => existing.has(column));
+  columnCache.set(cacheKey, compatible as string[]);
+  return compatible as string[];
+};
+
 export const loadStatementTemplate = async (params: {
   workspaceId: string;
   fingerprint: string;
@@ -745,6 +998,28 @@ export const loadStatementTemplate = async (params: {
 
     throw error;
   }
+};
+
+const toNullableDecimal = (value: unknown) => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? new Prisma.Decimal(String(value)) : null;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.replace(/[%,$\s]/g, "").trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? new Prisma.Decimal(String(parsed)) : null;
+  }
+
+  return null;
 };
 
 export const getCompatibleMerchantRuleColumns = async () => {
@@ -919,6 +1194,372 @@ export const updateImportFileCompat = async (
   return fetchImportFileCompat(importFileId);
 };
 
+export const upsertDocumentImportCompat = async (params: {
+  workspaceId: string;
+  importFileId?: string | null;
+  accountId?: string | null;
+  documentFamily: string;
+  documentSubtype?: string | null;
+  institution?: string | null;
+  accountName?: string | null;
+  accountNumber?: string | null;
+  currency?: string | null;
+  pageCount?: number;
+  confidence?: number;
+  sourceMetadata?: Prisma.InputJsonValue | null;
+  rawPayload?: Prisma.InputJsonValue | null;
+  extractedPayload?: Prisma.InputJsonValue | null;
+}) => {
+  if (!(await hasCompatibleTable("DocumentImport")) || !params.importFileId) {
+    return null;
+  }
+
+  try {
+    return await prisma.documentImport.upsert({
+      where: {
+        importFileId: params.importFileId,
+      },
+      update: {
+        workspaceId: params.workspaceId,
+        accountId: params.accountId ?? null,
+        documentFamily: params.documentFamily,
+        documentSubtype: params.documentSubtype ?? null,
+        institution: params.institution ?? null,
+        accountName: params.accountName ?? null,
+        accountNumber: params.accountNumber ?? null,
+        currency: params.currency ?? "PHP",
+        pageCount: params.pageCount ?? 0,
+        confidence: params.confidence ?? 0,
+        sourceMetadata: params.sourceMetadata ?? null,
+        rawPayload: params.rawPayload ?? null,
+        extractedPayload: params.extractedPayload ?? null,
+      },
+      create: {
+        workspaceId: params.workspaceId,
+        importFileId: params.importFileId,
+        accountId: params.accountId ?? null,
+        documentFamily: params.documentFamily,
+        documentSubtype: params.documentSubtype ?? null,
+        institution: params.institution ?? null,
+        accountName: params.accountName ?? null,
+        accountNumber: params.accountNumber ?? null,
+        currency: params.currency ?? "PHP",
+        pageCount: params.pageCount ?? 0,
+        confidence: params.confidence ?? 0,
+        sourceMetadata: params.sourceMetadata ?? null,
+        rawPayload: params.rawPayload ?? null,
+        extractedPayload: params.extractedPayload ?? null,
+      },
+    });
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "DocumentImport") || isMissingDatabaseColumnError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const replaceDocumentImportPagesCompat = async (params: {
+  documentImportId?: string | null;
+  pages: Array<{
+    pageNumber: number;
+    imageName?: string | null;
+    pageType?: string | null;
+    visibleTitle?: string | null;
+    visibleDate?: string | null;
+    visibleCurrency?: string | null;
+    rawOcrText?: string | null;
+    layoutNotes?: string | null;
+    confidence?: number;
+    rawPayload?: Prisma.InputJsonValue | null;
+  }>;
+}) => {
+  if (!(await hasCompatibleTable("DocumentImportPage")) || !params.documentImportId) {
+    return null;
+  }
+
+  try {
+    await prisma.documentImportPage.deleteMany({
+      where: { documentImportId: params.documentImportId },
+    });
+
+    if (params.pages.length > 0) {
+      await prisma.documentImportPage.createMany({
+        data: params.pages.map((page) => ({
+          documentImportId: params.documentImportId as string,
+          pageNumber: page.pageNumber,
+          imageName: page.imageName ?? null,
+          pageType: page.pageType ?? null,
+          visibleTitle: page.visibleTitle ?? null,
+          visibleDate: page.visibleDate ?? null,
+          visibleCurrency: page.visibleCurrency ?? null,
+          rawOcrText: page.rawOcrText ?? null,
+          layoutNotes: page.layoutNotes ?? null,
+          confidence: page.confidence ?? 0,
+          rawPayload: page.rawPayload ?? null,
+        })),
+      });
+    }
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "DocumentImportPage") || isMissingDatabaseColumnError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const upsertReceiptDocumentCompat = async (params: {
+  workspaceId: string;
+  documentImportId?: string | null;
+  accountId?: string | null;
+  transactionId?: string | null;
+  merchantRaw?: string | null;
+  merchantClean?: string | null;
+  transactionDate?: Date | null;
+  transactionTime?: string | null;
+  currency?: string | null;
+  subtotal?: string | number | null;
+  tax?: string | number | null;
+  total?: string | number | null;
+  paymentMethod?: string | null;
+  accountMatch?: Prisma.InputJsonValue | null;
+  confidence?: number;
+  rawPayload?: Prisma.InputJsonValue | null;
+}) => {
+  if (!(await hasCompatibleTable("ReceiptDocument")) || !params.documentImportId) {
+    return null;
+  }
+
+  try {
+    return await prisma.receiptDocument.upsert({
+      where: { documentImportId: params.documentImportId },
+      update: {
+        workspaceId: params.workspaceId,
+        accountId: params.accountId ?? null,
+        transactionId: params.transactionId ?? null,
+        merchantRaw: params.merchantRaw ?? null,
+        merchantClean: params.merchantClean ?? null,
+        transactionDate: params.transactionDate ?? null,
+        transactionTime: params.transactionTime ?? null,
+        currency: params.currency ?? "PHP",
+        subtotal: toNullableDecimal(params.subtotal),
+        tax: toNullableDecimal(params.tax),
+        total: toNullableDecimal(params.total),
+        paymentMethod: params.paymentMethod ?? null,
+        accountMatch: params.accountMatch ?? null,
+        confidence: params.confidence ?? 0,
+        rawPayload: params.rawPayload ?? null,
+      },
+      create: {
+        workspaceId: params.workspaceId,
+        documentImportId: params.documentImportId,
+        accountId: params.accountId ?? null,
+        transactionId: params.transactionId ?? null,
+        merchantRaw: params.merchantRaw ?? null,
+        merchantClean: params.merchantClean ?? null,
+        transactionDate: params.transactionDate ?? null,
+        transactionTime: params.transactionTime ?? null,
+        currency: params.currency ?? "PHP",
+        subtotal: toNullableDecimal(params.subtotal),
+        tax: toNullableDecimal(params.tax),
+        total: toNullableDecimal(params.total),
+        paymentMethod: params.paymentMethod ?? null,
+        accountMatch: params.accountMatch ?? null,
+        confidence: params.confidence ?? 0,
+        rawPayload: params.rawPayload ?? null,
+      },
+    });
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "ReceiptDocument") || isMissingDatabaseColumnError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const upsertInvestmentSnapshotCompat = async (params: {
+  workspaceId: string;
+  documentImportId?: string | null;
+  accountId?: string | null;
+  snapshotDate?: Date | null;
+  portfolioName?: string | null;
+  currency?: string | null;
+  totalValue?: string | number | null;
+  costBasis?: string | number | null;
+  gainLossValue?: string | number | null;
+  gainLossPercent?: string | number | null;
+  confidence?: number;
+  rawPayload?: Prisma.InputJsonValue | null;
+}) => {
+  if (!(await hasCompatibleTable("InvestmentSnapshot")) || !params.documentImportId) {
+    return null;
+  }
+
+  try {
+    return await prisma.investmentSnapshot.upsert({
+      where: { documentImportId: params.documentImportId },
+      update: {
+        workspaceId: params.workspaceId,
+        accountId: params.accountId ?? null,
+        snapshotDate: params.snapshotDate ?? null,
+        portfolioName: params.portfolioName ?? null,
+        currency: params.currency ?? "PHP",
+        totalValue: toNullableDecimal(params.totalValue),
+        costBasis: toNullableDecimal(params.costBasis),
+        gainLossValue: toNullableDecimal(params.gainLossValue),
+        gainLossPercent: toNullableDecimal(params.gainLossPercent),
+        confidence: params.confidence ?? 0,
+        rawPayload: params.rawPayload ?? null,
+      },
+      create: {
+        workspaceId: params.workspaceId,
+        documentImportId: params.documentImportId,
+        accountId: params.accountId ?? null,
+        snapshotDate: params.snapshotDate ?? null,
+        portfolioName: params.portfolioName ?? null,
+        currency: params.currency ?? "PHP",
+        totalValue: toNullableDecimal(params.totalValue),
+        costBasis: toNullableDecimal(params.costBasis),
+        gainLossValue: toNullableDecimal(params.gainLossValue),
+        gainLossPercent: toNullableDecimal(params.gainLossPercent),
+        confidence: params.confidence ?? 0,
+        rawPayload: params.rawPayload ?? null,
+      },
+    });
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "InvestmentSnapshot") || isMissingDatabaseColumnError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const replaceInvestmentHoldingsCompat = async (params: {
+  workspaceId: string;
+  investmentSnapshotId?: string | null;
+  documentImportId?: string | null;
+  accountId?: string | null;
+  holdings: Array<{
+    rowIndex?: number | null;
+    assetName: string;
+    assetSymbol?: string | null;
+    assetType?: string | null;
+    quantity?: string | number | null;
+    unitPrice?: string | number | null;
+    costBasis?: string | number | null;
+    marketValue?: string | number | null;
+    currentValue?: string | number | null;
+    gainLossValue?: string | number | null;
+    gainLossPercent?: string | number | null;
+    currency?: string | null;
+    status?: string | null;
+    confidence?: number;
+    rawPayload?: Prisma.InputJsonValue | null;
+  }>;
+}) => {
+  if (!(await hasCompatibleTable("InvestmentHolding")) || !params.investmentSnapshotId) {
+    return null;
+  }
+
+  try {
+    await prisma.investmentHolding.deleteMany({
+      where: { investmentSnapshotId: params.investmentSnapshotId },
+    });
+
+    if (params.holdings.length > 0) {
+      await prisma.investmentHolding.createMany({
+        data: params.holdings.map((holding, index) => ({
+          workspaceId: params.workspaceId,
+          investmentSnapshotId: params.investmentSnapshotId as string,
+          documentImportId: params.documentImportId ?? null,
+          accountId: params.accountId ?? null,
+          rowIndex: holding.rowIndex ?? index + 1,
+          assetName: holding.assetName,
+          assetSymbol: holding.assetSymbol ?? null,
+          assetType: holding.assetType ?? null,
+          quantity: toNullableDecimal(holding.quantity),
+          unitPrice: toNullableDecimal(holding.unitPrice),
+          costBasis: toNullableDecimal(holding.costBasis),
+          marketValue: toNullableDecimal(holding.marketValue),
+          currentValue: toNullableDecimal(holding.currentValue),
+          gainLossValue: toNullableDecimal(holding.gainLossValue),
+          gainLossPercent: toNullableDecimal(holding.gainLossPercent),
+          currency: holding.currency ?? "PHP",
+          status: holding.status ?? null,
+          confidence: holding.confidence ?? 0,
+          rawPayload: holding.rawPayload ?? null,
+        })),
+      });
+    }
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "InvestmentHolding") || isMissingDatabaseColumnError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
+export const replaceRecurringPatternsCompat = async (params: {
+  workspaceId: string;
+  documentImportId?: string | null;
+  accountId?: string | null;
+  patterns: Array<{
+    merchantRaw: string;
+    merchantClean?: string | null;
+    amount?: string | number | null;
+    currency?: string | null;
+    frequency?: string | null;
+    firstSeenDate?: Date | null;
+    lastSeenDate?: Date | null;
+    nextExpectedDate?: Date | null;
+    transactionCount?: number;
+    confidence?: number;
+    rawPayload?: Prisma.InputJsonValue | null;
+  }>;
+}) => {
+  if (!(await hasCompatibleTable("RecurringPattern")) || !params.documentImportId) {
+    return null;
+  }
+
+  try {
+    await prisma.recurringPattern.deleteMany({
+      where: { documentImportId: params.documentImportId },
+    });
+
+    if (params.patterns.length > 0) {
+      await prisma.recurringPattern.createMany({
+        data: params.patterns.map((pattern) => ({
+          workspaceId: params.workspaceId,
+          documentImportId: params.documentImportId as string,
+          accountId: params.accountId ?? null,
+          merchantRaw: pattern.merchantRaw,
+          merchantClean: pattern.merchantClean ?? null,
+          amount: toNullableDecimal(pattern.amount),
+          currency: pattern.currency ?? "PHP",
+          frequency: (pattern.frequency ?? null) as any,
+          firstSeenDate: pattern.firstSeenDate ?? null,
+          lastSeenDate: pattern.lastSeenDate ?? null,
+          nextExpectedDate: pattern.nextExpectedDate ?? null,
+          transactionCount: pattern.transactionCount ?? 1,
+          confidence: pattern.confidence ?? 0,
+          rawPayload: pattern.rawPayload ?? null,
+        })),
+      });
+    }
+  } catch (error) {
+    if (isMissingDatabaseRelationError(error, "RecurringPattern") || isMissingDatabaseColumnError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+};
+
 export const deleteTransactionsByImportFileCompat = async (importFileId: string) => {
   const columns = new Set(await getCompatibleTransactionColumns());
   if (!columns.has("importFileId")) {
@@ -946,6 +1587,7 @@ type TransactionInsertParams = {
   accountId: string;
   importFileId?: string | null;
   categoryId?: string | null;
+  categoryName?: string | null;
   reviewStatus?: string;
   parserConfidence?: number;
   categoryConfidence?: number;
@@ -980,6 +1622,7 @@ const buildTransactionInsertRecord = async (params: TransactionInsertParams, col
   if (columnSet.has("accountId")) record.accountId = params.accountId;
   if (columnSet.has("importFileId") && params.importFileId !== undefined) record.importFileId = params.importFileId ?? null;
   if (columnSet.has("categoryId")) record.categoryId = params.categoryId ?? null;
+  if (columnSet.has("categoryName")) record.categoryName = params.categoryName ?? null;
   if (columnSet.has("reviewStatus")) record.reviewStatus = params.reviewStatus ?? "suggested";
   if (columnSet.has("parserConfidence")) record.parserConfidence = params.parserConfidence ?? 0;
   if (columnSet.has("categoryConfidence")) record.categoryConfidence = params.categoryConfidence ?? 0;
@@ -1054,6 +1697,7 @@ export const buildParsedTransactionInsertData = async (params: {
     if (amount === null) {
       return [];
     }
+    const currency = (row.currency ?? params.metadata.currency ?? "PHP").trim().toUpperCase();
 
     const record: Record<string, unknown> = {};
     if (columns.has("id")) record.id = crypto.randomUUID();
@@ -1064,7 +1708,7 @@ export const buildParsedTransactionInsertData = async (params: {
     if (columns.has("accountName")) record.accountName = row.accountName ?? null;
     if (columns.has("date")) record.date = parseDateValue(row.date ?? null);
     if (columns.has("amount")) record.amount = amount;
-    if (columns.has("currency")) record.currency = row.currency ?? params.metadata.currency ?? null;
+    if (columns.has("currency")) record.currency = currency;
     if (columns.has("merchantRaw")) record.merchantRaw = row.merchantRaw ?? null;
     if (columns.has("merchantClean")) record.merchantClean = row.merchantClean ?? row.merchantRaw ?? null;
     if (columns.has("type")) record.type = row.type ?? "expense";
@@ -1375,7 +2019,8 @@ export const buildStatementFingerprint = (
   text: string,
   metadata: ReturnType<typeof detectStatementMetadataFromText>,
   fileName?: string | null,
-  fileType?: string | null
+  fileType?: string | null,
+  documentFamily?: string | null
 ) => {
   const normalizedLines = text
     .split(/\r?\n/)
@@ -1397,6 +2042,7 @@ export const buildStatementFingerprint = (
     metadata.endDate ?? "",
     (fileName ?? "").toLowerCase(),
     (fileType ?? "").toLowerCase(),
+    (documentFamily ?? "").toLowerCase(),
     normalizedLines.join("\n"),
   ].join("|");
 
@@ -1833,11 +2479,31 @@ const readReviewOutputText = (value: unknown) => {
   return null;
 };
 
-const normalizeImportedAccountType = (value: unknown): AccountType => {
+const normalizeImportedAccountType = (value: unknown): ImportedAccountType => {
   const normalized = normalizeReviewText(value).toLowerCase();
 
-  if (normalized === "wallet" || normalized === "credit_card" || normalized === "cash" || normalized === "investment" || normalized === "other") {
+  if (
+    normalized === "bank" ||
+    normalized === "wallet" ||
+    normalized === "credit_card" ||
+    normalized === "cash" ||
+    normalized === "investment" ||
+    normalized === "other"
+  ) {
     return normalized;
+  }
+
+  if (
+    normalized === "loan" ||
+    normalized === "mortgage" ||
+    normalized === "line_of_credit" ||
+    normalized === "receivable" ||
+    normalized === "payable" ||
+    normalized === "bnpl" ||
+    normalized === "prepaid" ||
+    normalized === "insurance"
+  ) {
+    return "other";
   }
 
   return "bank";
@@ -2079,14 +2745,6 @@ export const enrichParsedRowsWithTraining = async (params: {
 
   const isRowLowConfidence = (details: { effectiveConfidence: number; categoryName: string; categoryReason?: string | null; rowType?: ParsedImportRow["type"] }) => {
     if (details.effectiveConfidence < 90) {
-      return true;
-    }
-
-    if (details.categoryName === "Other") {
-      return true;
-    }
-
-    if (details.categoryReason === "heuristic-other") {
       return true;
     }
 
