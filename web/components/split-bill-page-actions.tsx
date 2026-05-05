@@ -47,8 +47,9 @@ export function SplitBillPageActions({ currencies, selectedCurrency, onCurrencyC
   }, [isGroupModalOpen, isModalOpen, openAddMode]);
 
   useEffect(() => {
-    const handleOpenAdd = () => {
-      setOpenAddMode("manual");
+    const handleOpenAdd = (event: Event) => {
+      const detail = event instanceof CustomEvent ? (event.detail as { mode?: "manual" | "import" } | undefined) : undefined;
+      setOpenAddMode(detail?.mode === "import" ? "import" : "manual");
     };
 
     window.addEventListener("clover:open-split-bill-add", handleOpenAdd);
