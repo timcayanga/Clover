@@ -1384,7 +1384,7 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await sleep(1000);
+          await new Promise((resolve) => window.setTimeout(resolve, 1000));
           continue;
         }
 
@@ -3392,6 +3392,128 @@ export function ImportFilesModal({
         errorMessage: needsPasswordMessage,
       });
       return { status: "needs_password", importedRows: null, summary: null };
+      }
+
+      const recoverableStatus = importFileId
+        ? await fetch(`/api/imports/${importFileId}/status`)
+            .then(async (response) => {
+              if (!response.ok) {
+                return null;
+              }
+
+              return (await response.json()) as ImportStatusPayload;
+            })
+            .catch(() => null)
+        : null;
+      const recoverableImportFileId =
+        typeof importFileId === "string" && importFileId.trim() ? importFileId.trim() : null;
+      const recoverableIdentity = resolveStatementIdentityFromMetadata(recoverableStatus?.statementCheckpoint?.sourceMetadata);
+      const recoverableAccountId =
+        typeof recoverableStatus?.importFile?.accountId === "string" && recoverableStatus.importFile.accountId.trim()
+          ? recoverableStatus.importFile.accountId.trim()
+          : null;
+      const recoverableParsedRowsCount = Number(recoverableStatus?.parsedRowsCount ?? 0);
+      const recoverableConfirmedRowsCount = Number(recoverableStatus?.confirmedTransactionsCount ?? 0);
+      const hasRecoverableIdentity =
+        Boolean(recoverableIdentity?.accountName || recoverableIdentity?.institution || recoverableIdentity?.accountNumber);
+      const canRecoverFromProcessError =
+        Boolean(recoverableAccountId && !recoverableAccountId.startsWith("optimistic-")) ||
+        hasRecoverableIdentity;
+
+      if (canRecoverFromProcessError) {
+        const fallbackAccountId =
+          recoverableAccountId && !recoverableAccountId.startsWith("optimistic-")
+            ? recoverableAccountId
+            : await ensureTargetAccountId(
+                recoverableIdentity?.accountName ?? item.file.name,
+                recoverableIdentity?.institution ?? null,
+                recoverableIdentity?.accountType ??
+                  inferAccountTypeFromStatement(recoverableIdentity?.institution, recoverableIdentity?.accountName, "bank"),
+                recoverableIdentity?.accountNumber ?? null
+              );
+
+        const recoverablePreviewTransactions =
+          recoverableImportFileId && fallbackAccountId
+            ? await loadOptimisticPreviewTransactions(
+                recoverableImportFileId,
+                fallbackAccountId,
+                recoverableIdentity?.accountName ?? item.file.name,
+                recoverableIdentity?.institution ?? null
+              ).catch(() => [])
+            : [];
+        const recoveredSummary = buildOptimisticUploadSummary(
+          item.file.name,
+          Math.max(recoverableConfirmedRowsCount, recoverableParsedRowsCount),
+          fallbackAccountId,
+          recoverableIdentity?.accountName ?? item.file.name,
+          recoverableIdentity?.institution ?? null,
+          recoverableIdentity?.accountType ??
+            inferAccountTypeFromStatement(recoverableIdentity?.institution, recoverableIdentity?.accountName, "bank"),
+          item.optimisticAccountId ?? null,
+          toBalanceString(recoverableStatus?.statementCheckpoint?.endingBalance),
+          recoverablePreviewTransactions,
+          recoverableIdentity?.accountNumber ?? null
+        );
+        const finalizedRecoveredSummary: UploadInsightsSummary = {
+          ...recoveredSummary,
+          optimistic: false,
+        };
+
+        seedImportedWorkspaceCaches(workspaceId, finalizedRecoveredSummary);
+        void onImported(finalizedRecoveredSummary);
+        updateItem(itemId, {
+          status: "importing",
+          confirmationState: "staged",
+          error: null,
+          importFileId,
+          targetAccountId: fallbackAccountId,
+          importedRows: Math.max(recoverableConfirmedRowsCount, recoverableParsedRowsCount) || 0,
+          progress: IMPORT_PROGRESS.loadingAccount,
+          progressLabel: "Loading account",
+        });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "active",
+          fileName: item.file.name,
+          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount,
+          progress: IMPORT_PROGRESS.loadingAccount,
+          detail: getProgressDetail(
+            {
+              accountName: recoverableIdentity?.accountName ?? item.file.name,
+              institution: recoverableIdentity?.institution ?? null,
+              accountNumber: recoverableIdentity?.accountNumber ?? null,
+            },
+            Math.max(recoverableConfirmedRowsCount, recoverableParsedRowsCount)
+          ),
+          summary: null,
+          errorMessage: null,
+        });
+        if (recoverableImportFileId && fallbackAccountId) {
+          void monitorQueuedImportAndConfirm(itemId, recoverableImportFileId, fallbackAccountId, {
+            fileName: item.file.name,
+            fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
+            guessedAccountName: recoverableIdentity?.accountName ?? null,
+            guessedInstitution: recoverableIdentity?.institution ?? null,
+            guessedAccountNumber: recoverableIdentity?.accountNumber ?? null,
+            guessedAccountType: recoverableIdentity?.accountType ?? null,
+            accountName: recoverableIdentity?.accountName ?? null,
+            institution: recoverableIdentity?.institution ?? null,
+            accountNumber: recoverableIdentity?.accountNumber ?? null,
+            accountType: recoverableIdentity?.accountType ?? null,
+            optimisticAccountId: fallbackAccountId,
+            password: item.password.trim() || undefined,
+            previewTransactions: recoverablePreviewTransactions,
+          });
+        }
+
+        return {
+          status: "staged",
+          importedRows: Math.max(recoverableConfirmedRowsCount, recoverableParsedRowsCount) || null,
+          summary: finalizedRecoveredSummary,
+        };
       }
 
       capturePostHogClientEvent("import_failed", {

@@ -807,7 +807,9 @@ function AccountDetailPageContent() {
         typeof checkpoint.sourceMetadata?.accountName === "string" ? checkpoint.sourceMetadata.accountName : null,
         typeof checkpoint.sourceMetadata?.institution === "string" ? checkpoint.sourceMetadata.institution : null,
         typeof checkpoint.sourceMetadata?.accountNumber === "string" ? checkpoint.sourceMetadata.accountNumber : null,
-        typeof checkpoint.sourceMetadata?.accountType === "string" ? checkpoint.sourceMetadata.accountType : null
+        typeof (checkpoint.sourceMetadata as Record<string, unknown> | null | undefined)?.accountType === "string"
+          ? ((checkpoint.sourceMetadata as Record<string, unknown>).accountType as string)
+          : null
       );
       return checkpointKey === accountCheckpointKey;
     });
@@ -916,13 +918,14 @@ function AccountDetailPageContent() {
 
   const currentBalance = useMemo(
     () => {
+      const checkpoint = latestCheckpoint;
       const checkpointBalance =
-        latestCheckpoint?.endingBalance !== null && latestCheckpoint.endingBalance !== undefined
-          ? String(latestCheckpoint.endingBalance)
+        checkpoint?.endingBalance !== null && checkpoint?.endingBalance !== undefined
+          ? String(checkpoint.endingBalance)
           : null;
       const shouldPreserveImportedBalance =
         account?.source === "upload" &&
-        (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
+        (!checkpoint || checkpoint.status !== "reconciled") &&
         transactions.length === 0;
 
       const reconciledValue = checkpointBalance && (transactions.length === 0 || shouldPreserveImportedBalance)
@@ -932,7 +935,7 @@ function AccountDetailPageContent() {
           : deriveReconciledBalance({
               balance: account?.balance ?? null,
               transactions,
-              checkpoints: latestCheckpoint ? [latestCheckpoint] : [],
+              checkpoints: checkpoint ? [checkpoint] : [],
             });
 
       return normalizeAccountBalance(account?.type ?? null, parseAmount(reconciledValue));

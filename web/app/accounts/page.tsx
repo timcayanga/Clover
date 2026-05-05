@@ -571,12 +571,16 @@ const getCheckpointTrustLabel = (checkpoint: StatementCheckpoint | null | undefi
 };
 
 const getCheckpointIdentityKey = (checkpoint: StatementCheckpoint) =>
-  normalizeImportedAccountKey(
-    typeof checkpoint.sourceMetadata?.accountName === "string" ? checkpoint.sourceMetadata.accountName : null,
-    typeof checkpoint.sourceMetadata?.institution === "string" ? checkpoint.sourceMetadata.institution : null,
-    typeof checkpoint.sourceMetadata?.accountNumber === "string" ? checkpoint.sourceMetadata.accountNumber : null,
-    typeof checkpoint.sourceMetadata?.accountType === "string" ? checkpoint.sourceMetadata.accountType : null
-  );
+  (() => {
+    const sourceMetadata = checkpoint.sourceMetadata as Record<string, unknown> | null | undefined;
+    const accountType = typeof sourceMetadata?.accountType === "string" ? sourceMetadata.accountType : null;
+    return normalizeImportedAccountKey(
+      typeof sourceMetadata?.accountName === "string" ? sourceMetadata.accountName : null,
+      typeof sourceMetadata?.institution === "string" ? sourceMetadata.institution : null,
+      typeof sourceMetadata?.accountNumber === "string" ? sourceMetadata.accountNumber : null,
+      accountType
+    );
+  })();
 
 const getLastFourDigits = (value?: string | null) => {
   if (!value) {
