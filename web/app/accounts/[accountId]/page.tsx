@@ -331,13 +331,21 @@ function InlineEditableCell({
   );
 }
 
-function ActionIcon({ name }: { name: "warning" }) {
+function ActionIcon({ name }: { name: "warning" | "chevron-right" }) {
   if (name === "warning") {
     return (
       <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M12 3.75 20 19H4l8-15.25Z" />
         <path d="M12 9v4.75" />
         <path d="M12 16.5h.01" />
+      </svg>
+    );
+  }
+
+  if (name === "chevron-right") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m8 5 5 5-5 5" />
       </svg>
     );
   }
@@ -1146,6 +1154,23 @@ function AccountDetailPageContent() {
     },
     [transactions, transactionSortDirection, transactionSortField]
   );
+  const mobileTransactionGroups = useMemo(() => {
+    const groups: Array<{ date: string; label: string; transactions: Transaction[] }> = [];
+
+    for (const transaction of visibleTransactions) {
+      const dateKey = transaction.date.slice(0, 10);
+      const label = formatDate(dateKey);
+      const lastGroup = groups[groups.length - 1];
+
+      if (!lastGroup || lastGroup.date !== dateKey) {
+        groups.push({ date: dateKey, label, transactions: [transaction] });
+      } else {
+        lastGroup.transactions.push(transaction);
+      }
+    }
+
+    return groups;
+  }, [visibleTransactions]);
   const categoryOptions = useMemo(
     () => [{ value: "", label: "Other" }, ...categories.map((category) => ({ value: category.id, label: category.name }))],
     [categories]
@@ -1156,6 +1181,7 @@ function AccountDetailPageContent() {
   );
 
   const hasMoreTransactions = transactionTotalCount > transactions.length;
+  const hasVisibleTransactions = visibleTransactions.length > 0;
   const visibleTransactionIds = useMemo(() => visibleTransactions.map((transaction) => transaction.id), [visibleTransactions]);
   const allVisibleSelected =
     visibleTransactionIds.length > 0 && visibleTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
@@ -2211,166 +2237,233 @@ function AccountDetailPageContent() {
           </div>
           {transactionsError ? (
             <p className="panel-muted">{transactionsError}</p>
-          ) : visibleTransactions.length > 0 ? (
+          ) : hasVisibleTransactions ? (
             <>
-              <div className="accounts-detail__transaction-list" aria-label="Transaction history">
-                <div className="accounts-detail__transaction-header">
-                  <label className="accounts-detail__transaction-head-cell accounts-detail__transaction-head-cell--select">
-                    <input
-                      ref={selectAllTransactionsRef}
-                      type="checkbox"
-                      checked={allVisibleSelected}
-                      onChange={(event) => toggleAllVisibleTransactions(event.target.checked)}
-                      aria-label="Select all loaded transactions"
-                    />
-                  </label>
-                  <span className="accounts-detail__transaction-head-cell accounts-detail__transaction-head-cell--icon" aria-hidden="true" />
-                  <button
-                    className="accounts-detail__transaction-head-cell accounts-detail__transaction-head-cell--name"
-                    type="button"
-                    onClick={() => {
-                      if (transactionSortField === "name") {
-                        setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
-                        return;
-                      }
+              {!isMobileViewport ? (
+                <div className="accounts-detail__transaction-list" aria-label="Transaction history">
+                  <div className="line-item-header" role="row" aria-label="Transaction columns">
+                    <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
+                      <input
+                        ref={selectAllTransactionsRef}
+                        type="checkbox"
+                        checked={allVisibleSelected}
+                        onChange={(event) => toggleAllVisibleTransactions(event.target.checked)}
+                        aria-label="Select all loaded transactions"
+                      />
+                    </label>
+                    <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
+                    <button
+                      className="line-item-header-cell line-item-header-cell--name"
+                      type="button"
+                      onClick={() => {
+                        if (transactionSortField === "name") {
+                          setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+                          return;
+                        }
 
-                      setTransactionSortField("name");
-                      setTransactionSortDirection("desc");
-                    }}
-                    aria-label={`Sort by name${transactionSortField === "name" ? ` (${transactionSortDirection})` : ""}`}
-                  >
-                    Name{transactionSortField === "name" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
-                  </button>
-                  <button
-                    className="accounts-detail__transaction-head-cell"
-                    type="button"
-                    onClick={() => {
-                      if (transactionSortField === "date") {
-                        setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
-                        return;
-                      }
-
-                      setTransactionSortField("date");
-                      setTransactionSortDirection("desc");
-                    }}
-                    aria-label={`Sort by date${transactionSortField === "date" ? ` (${transactionSortDirection})` : ""}`}
-                  >
-                    Date{transactionSortField === "date" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
-                  </button>
-                  <button
-                    className="accounts-detail__transaction-head-cell"
-                    type="button"
-                    onClick={() => {
-                      if (transactionSortField === "category") {
-                        setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
-                        return;
-                      }
-
-                      setTransactionSortField("category");
-                      setTransactionSortDirection("desc");
-                    }}
-                    aria-label={`Sort by category${transactionSortField === "category" ? ` (${transactionSortDirection})` : ""}`}
-                  >
-                    Category{transactionSortField === "category" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
-                  </button>
-                  <button
-                    className="accounts-detail__transaction-head-cell accounts-detail__transaction-head-cell--amount"
-                    type="button"
-                    onClick={() => {
-                      if (transactionSortField === "amount") {
-                        setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
-                        return;
-                      }
-
-                      setTransactionSortField("amount");
-                      setTransactionSortDirection("desc");
-                    }}
-                    aria-label={`Sort by amount${transactionSortField === "amount" ? ` (${transactionSortDirection})` : ""}`}
-                  >
-                    Amount{transactionSortField === "amount" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
-                  </button>
-                  <span className="accounts-detail__transaction-head-cell accounts-detail__transaction-head-cell--chevron" aria-hidden="true" />
-                </div>
-                {visibleTransactions.map((transaction) => {
-                  const amount = Number(transaction.amount);
-                  const amountToneClass = transaction.type === "income" ? "positive" : "negative";
-                  const normalizedName = transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
-
-                  return (
-                    <div
-                      key={transaction.id}
-                      className={`accounts-detail__transaction-row ${transaction.isExcluded ? "is-muted" : ""} ${
-                        selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
-                      }`}
+                        setTransactionSortField("name");
+                        setTransactionSortDirection("desc");
+                      }}
+                      aria-label={`Sort by name${transactionSortField === "name" ? ` (${transactionSortDirection})` : ""}`}
                     >
-                      <label className="transaction-select-cell">
-                        <input
-                          type="checkbox"
-                          checked={selectedTransactionIds.includes(transaction.id)}
-                          onChange={(event) => toggleTransactionSelection(transaction.id, event.target.checked)}
-                          aria-label={`Select ${normalizedName}`}
-                        />
-                      </label>
-                      <div className="transaction-category-icon-cell" aria-hidden="true">
-                        <span className="transaction-category-icon" style={getCategoryIconTone(transaction.categoryName)}>
-                          <img src={getCategoryIconSrc(transaction.categoryName)} alt="" aria-hidden="true" />
-                        </span>
+                      Name{transactionSortField === "name" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
+                    </button>
+                    <button
+                      className="line-item-header-cell"
+                      type="button"
+                      onClick={() => {
+                        if (transactionSortField === "date") {
+                          setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+                          return;
+                        }
+
+                        setTransactionSortField("date");
+                        setTransactionSortDirection("desc");
+                      }}
+                      aria-label={`Sort by date${transactionSortField === "date" ? ` (${transactionSortDirection})` : ""}`}
+                    >
+                      Date{transactionSortField === "date" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
+                    </button>
+                    <span className="line-item-header-cell">Account</span>
+                    <button
+                      className="line-item-header-cell"
+                      type="button"
+                      onClick={() => {
+                        if (transactionSortField === "category") {
+                          setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+                          return;
+                        }
+
+                        setTransactionSortField("category");
+                        setTransactionSortDirection("desc");
+                      }}
+                      aria-label={`Sort by category${transactionSortField === "category" ? ` (${transactionSortDirection})` : ""}`}
+                    >
+                      Category{transactionSortField === "category" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
+                    </button>
+                    <button
+                      className="line-item-header-cell line-item-header-cell--amount"
+                      type="button"
+                      onClick={() => {
+                        if (transactionSortField === "amount") {
+                          setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+                          return;
+                        }
+
+                        setTransactionSortField("amount");
+                        setTransactionSortDirection("desc");
+                      }}
+                      aria-label={`Sort by amount${transactionSortField === "amount" ? ` (${transactionSortDirection})` : ""}`}
+                    >
+                      Amount{transactionSortField === "amount" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
+                    </button>
+                    <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
+                    <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
+                  </div>
+                  {visibleTransactions.map((transaction) => {
+                    const amount = Number(transaction.amount);
+                    const amountToneClass = transaction.type === "income" ? "positive" : "negative";
+                    const categoryValue = transaction.categoryId ?? "";
+                    const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+                    const normalizedName = transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
+
+                    return (
+                      <div
+                        key={transaction.id}
+                        className={`line-item ${transaction.isExcluded ? "is-muted" : ""} ${
+                          selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
+                        }`}
+                      >
+                        <label className="transaction-select-cell">
+                          <input
+                            type="checkbox"
+                            checked={selectedTransactionIds.includes(transaction.id)}
+                            onChange={(event) => toggleTransactionSelection(transaction.id, event.target.checked)}
+                            aria-label={`Select ${normalizedName}`}
+                          />
+                        </label>
+                        <div className="transaction-category-icon-cell" aria-hidden="true">
+                          <span className="transaction-category-icon" style={getCategoryIconTone(categoryLabel)}>
+                            <img src={getCategoryIconSrc(categoryLabel)} alt="" aria-hidden="true" />
+                          </span>
+                        </div>
+                        <div className="transaction-name-cell">
+                          <InlineEditableCell
+                            value={transaction.merchantClean ?? ""}
+                            displayValue={normalizedName}
+                            ariaLabel={`Edit name for ${normalizedName}`}
+                            kind="text"
+                            className="transaction-inline-edit transaction-inline-edit--name"
+                            onCommit={(value) => commitInlineEdit(transaction, "name", value)}
+                          />
+                        </div>
+                        <div className="transaction-date-cell">
+                          <InlineEditableCell
+                            value={transaction.date.slice(0, 10)}
+                            displayValue={formatDate(transaction.date)}
+                            ariaLabel={`Edit date for ${normalizedName}`}
+                            kind="date"
+                            className="transaction-inline-edit transaction-inline-edit--date"
+                            onCommit={(value) => commitInlineEdit(transaction, "date", value)}
+                          />
+                        </div>
+                        <div className="transaction-account-cell">
+                          <span className="transaction-inline-edit transaction-inline-edit--select">{accountCardName}</span>
+                        </div>
+                        <div className="transaction-category-cell">
+                          <InlineEditableCell
+                            value={categoryValue}
+                            displayValue={categoryLabel}
+                            ariaLabel={`Edit category for ${normalizedName}`}
+                            kind="select"
+                            className="transaction-inline-edit transaction-inline-edit--select"
+                            options={categoryOptions}
+                            onCommit={(value) => commitInlineEdit(transaction, "categoryId", value)}
+                          />
+                        </div>
+                        <div className={`transaction-amount-cell ${amountToneClass}`}>
+                          <InlineEditableCell
+                            value={transaction.amount}
+                            displayValue={formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}
+                            ariaLabel={`Edit amount for ${normalizedName}`}
+                            kind="number"
+                            className={`transaction-inline-edit transaction-inline-edit--amount ${amountToneClass}`}
+                            onCommit={(value) => commitInlineEdit(transaction, "amount", value)}
+                          />
+                        </div>
+                        <div className="transaction-notes-cell">
+                          <button
+                            type="button"
+                            className="button button-secondary button-small transaction-note-button"
+                            onClick={() => openTransactionDetail(transaction)}
+                            aria-label={`Open details for ${normalizedName}`}
+                          >
+                            <ActionIcon name="chevron-right" />
+                          </button>
+                        </div>
+                        <div className="transaction-warning-cell" aria-hidden="true" />
                       </div>
-                      <div className="accounts-detail__transaction-name">
-                        <InlineEditableCell
-                          value={transaction.merchantClean ?? ""}
-                          displayValue={normalizedName}
-                          ariaLabel={`Edit name for ${normalizedName}`}
-                          kind="text"
-                          className="transaction-inline-edit transaction-inline-edit--name"
-                          onCommit={(value) => commitInlineEdit(transaction, "name", value)}
-                        />
-                      </div>
-                      <div className="accounts-detail__transaction-date">
-                        <InlineEditableCell
-                          value={transaction.date.slice(0, 10)}
-                          displayValue={formatDate(transaction.date)}
-                          ariaLabel={`Edit date for ${normalizedName}`}
-                          kind="date"
-                          className="transaction-inline-edit transaction-inline-edit--date"
-                          onCommit={(value) => commitInlineEdit(transaction, "date", value)}
-                        />
-                      </div>
-                      <div className="accounts-detail__transaction-category">
-                        <InlineEditableCell
-                          value={transaction.categoryId ?? ""}
-                          displayValue={transaction.categoryName || "Other"}
-                          ariaLabel={`Edit category for ${normalizedName}`}
-                          kind="select"
-                          className="transaction-inline-edit transaction-inline-edit--select"
-                          options={categoryOptions}
-                          onCommit={(value) => commitInlineEdit(transaction, "categoryId", value)}
-                        />
-                      </div>
-                      <div className={`accounts-detail__transaction-amount ${amountToneClass}`}>
-                        <InlineEditableCell
-                          value={transaction.amount}
-                          displayValue={formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}
-                          ariaLabel={`Edit amount for ${normalizedName}`}
-                          kind="number"
-                          className={`transaction-inline-edit transaction-inline-edit--amount ${amountToneClass}`}
-                          onCommit={(value) => commitInlineEdit(transaction, "amount", value)}
-                        />
-                      </div>
-                      <div className="accounts-detail__transaction-actions">
-                        <button
-                          className="accounts-card-chevron accounts-detail__transaction-open"
-                          type="button"
-                          onClick={() => openTransactionDetail(transaction)}
-                          aria-label={`Open details for ${normalizedName}`}
-                        >
-                          <span aria-hidden="true">›</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="transactions-mobile-view">
+                  <div className="transactions-mobile-list">
+                    {mobileTransactionGroups.map((group) => (
+                      <section key={group.date} className="transactions-mobile-date-group">
+                        <div className="transactions-mobile-date-divider">
+                          <span>{group.label}</span>
+                        </div>
+                        <div className="transactions-mobile-date-group__rows">
+                          {group.transactions.map((transaction) => {
+                            const amount = Number(transaction.amount);
+                            const amountToneClass = transaction.type === "income" ? "positive" : "negative";
+                            const normalizedName = transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
+
+                            return (
+                              <article
+                                key={transaction.id}
+                                className={`transactions-mobile-simple-row${transaction.isExcluded ? " is-muted" : ""}`}
+                                tabIndex={0}
+                                role="button"
+                                aria-label={`${normalizedName}, ${formatDate(transaction.date)}, ${formatAccountAmount(
+                                  amount,
+                                  transaction.currency ?? account?.currency ?? "PHP"
+                                )}`}
+                                onClick={() => openTransactionDetail(transaction)}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    event.preventDefault();
+                                    openTransactionDetail(transaction);
+                                  }
+                                }}
+                              >
+                                <div className="transactions-mobile-simple-row__name">
+                                  <span className="transactions-mobile-simple-row__name-main">{normalizedName}</span>
+                                </div>
+                                <div className={`transactions-mobile-simple-row__amount ${amountToneClass}`}>
+                                  {formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}
+                                </div>
+                                <button
+                                  type="button"
+                                  className="icon-button transactions-mobile-simple-row__detail"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openTransactionDetail(transaction);
+                                  }}
+                                  aria-label={`Open details for ${normalizedName}`}
+                                >
+                                  <ActionIcon name="chevron-right" />
+                                </button>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                </div>
+              )}
               {bulkDeleteConfirmOpen ? (
                 <div className="detail-warning-box accounts-detail__transaction-delete-confirm" style={{ marginTop: 16 }}>
                   <div className="detail-warning-box__header">

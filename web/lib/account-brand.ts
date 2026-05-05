@@ -182,8 +182,8 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       logoSrcs: philippinesLogoWithVariants("maya"),
       fallbackIconSrc: walletIcon,
       accent: "#00C389",
-      background: "linear-gradient(135deg, rgba(0, 195, 137, 0.22), rgba(10, 159, 110, 0.10))",
-      foreground: "#0b3d2e",
+      background: "linear-gradient(135deg, rgba(7, 10, 14, 0.98), rgba(16, 20, 26, 0.96))",
+      foreground: "#f8fafc",
     }),
   },
   {
