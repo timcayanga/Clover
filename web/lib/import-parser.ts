@@ -7315,6 +7315,34 @@ const genericStatementDateStartPattern = new RegExp(
   "i"
 );
 
+const isGenericStatementBoilerplateLine = (line: string) => {
+  const normalized = normalizeWhitespace(line);
+  if (!normalized) {
+    return true;
+  }
+
+  return (
+    /^all figures/i.test(normalized) ||
+    /^page\s+\d+\s+of\s+\d+/i.test(normalized) ||
+    /^page\s*:\s*\d+/i.test(normalized) ||
+    /^request\s+date:/i.test(normalized) ||
+    /^statement\s+of\s+account\b/i.test(normalized) ||
+    /^account\s+number:/i.test(normalized) ||
+    /^name:/i.test(normalized) ||
+    /^joint\s+names:/i.test(normalized) ||
+    /^period\s+covered:/i.test(normalized) ||
+    /^transaction\s+date\s+check/i.test(normalized) ||
+    /^transaction\s*$/i.test(normalized) ||
+    /^date\s+check\s+no\.?/i.test(normalized) ||
+    /^date\s+description\s+debit/i.test(normalized) ||
+    /^date\s+details?\b/i.test(normalized) ||
+    /^code\s*$/i.test(normalized) ||
+    /(?:https?:\/\/|validateLogin\.do)/i.test(normalized) ||
+    /\b(?:rundate|runtime):/i.test(normalized) ||
+    /^\d{1,2}\/\d{1,2}\/\d{4}\s+[A-Za-z].*\bpage\b/i.test(normalized)
+  );
+};
+
 const isGenericBankStatementText = (text: string) => {
   const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
   const compactSignal = compactWhitespace(compactGenericSignalText(text));
@@ -7567,7 +7595,8 @@ const parseGenericStatementTransactionBlock = (
     /^date\s+(?:and\s+time|details?|description|transaction)/i.test(rowText) ||
     /^posted\s+date/i.test(rowText) ||
     /^running\s+balance$/i.test(rowText) ||
-    /^\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+to\s+\d{4}[-/]\d{1,2}[-/]\d{1,2}\b/i.test(rowText)
+    /^\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+to\s+\d{4}[-/]\d{1,2}[-/]\d{1,2}\b/i.test(rowText) ||
+    isGenericStatementBoilerplateLine(rowText)
   ) {
     return null;
   }
@@ -7702,7 +7731,7 @@ export const parseGenericBankStatementText = (
   let current: string[] = [];
 
   for (const line of lines.slice(firstDateIndex)) {
-    if (/^all figures/i.test(line) || /^page\s+\d+\s+of\s+\d+/i.test(line) || /^request date:/i.test(line)) {
+    if (isGenericStatementBoilerplateLine(line)) {
       continue;
     }
 

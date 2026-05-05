@@ -18,6 +18,9 @@ const GENERIC_PARSER_GUIDANCE = [
   "- Keep account number, opening balance, ending balance, payment due date, and amount due when visible.",
   "- Reject page headers, footers, legal text, reward banners, and summary noise as transactions.",
   "- Lower confidence when the OCR is blurry or when a balance cannot be reconciled cleanly.",
+  "- When OCR is character-spaced or fragmented, reconstruct the intended words first, then extract metadata and rows conservatively.",
+  "- If the statement summary and the detailed rows disagree, prefer the rows that are visibly tied to dates and amounts, and mark low confidence instead of inventing extra activity.",
+  "- If the page clearly shows a transaction table but the OCR is partial, return only the rows that can be supported by visible evidence instead of padding the list with guesswork.",
 ].join(" ");
 
 const GENERIC_NORMALIZATION_GUIDANCE = [
@@ -78,6 +81,36 @@ const GENERIC_FEW_SHOT_EXAMPLES = [
       amount: 320.53,
       type: "Debit",
       categoryName: "Financial",
+    },
+  },
+  {
+    source: "2019-08-08 213KGA0097 DM1 1,900,000.00 0.00 972,264.92",
+    parsed: {
+      transactionName: "213KGA0097 DM1",
+      normalizedName: "Bank Transfer",
+      amount: 1900000.0,
+      type: "Debit",
+      categoryName: "Transfers",
+    },
+  },
+  {
+    source: "May 19 3445 InstaPay Transfer Fee 8.00 75,310.55",
+    parsed: {
+      transactionName: "3445 InstaPay Transfer Fee",
+      normalizedName: "InstaPay Transfer Fee",
+      amount: 8.0,
+      type: "Debit",
+      categoryName: "Financial",
+    },
+  },
+  {
+    source: "May 19 3445 InstaPay Transfer 10,000.00 75,318.55",
+    parsed: {
+      transactionName: "3445 InstaPay Transfer",
+      normalizedName: "Bank Transfer",
+      amount: 10000.0,
+      type: "Debit",
+      categoryName: "Transfers",
     },
   },
 ].map((example) => JSON.stringify(example)).join("\n");
@@ -1169,11 +1202,21 @@ const responseLooksUseful = (metadata: DetectedStatementMetadata | null, rows: P
   const fileNameLike = genericName.length > 0 && (genericName.includes("imported-file") || genericName === "account" || genericName === "statement");
 
   if (rows.length === 0) {
-    return confidence < 90 || !hasStrongIdentity;
+    return false;
   }
 
   if (rows.length <= 2 && confidence < 80) {
     return true;
+  }
+
+  const missingStatementAnchors =
+    metadata?.openingBalance == null &&
+    metadata?.endingBalance == null &&
+    !metadata?.paymentDueDate &&
+    metadata?.totalAmountDue == null;
+  const weakDateCoverage = !metadata?.startDate || !metadata?.endDate;
+  if (rows.length >= 50 && confidence < 95 && (missingStatementAnchors || weakDateCoverage)) {
+    return false;
   }
 
   return confidence < 75 && (!hasStrongIdentity || fileNameLike);
