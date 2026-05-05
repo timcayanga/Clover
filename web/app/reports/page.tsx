@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
-import { EmptyDataCta } from "@/components/empty-data-cta";
 import type { ReportsQueueItem } from "@/components/reports-review-queue";
 import { ReportsRangeMenu } from "@/components/reports-range-menu";
 import { PostHogEvent } from "@/components/posthog-analytics";
@@ -15,6 +14,7 @@ import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-conte
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 import { getGoalPlanSummary, getGoalProgressSnapshot, normalizeGoalPlan, type GoalKey } from "@/lib/goals";
 import { RouteSplash } from "@/components/route-splash";
+import { ReportsTabPrefetcher } from "@/components/reports-tab-prefetcher";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { recordAppError } from "@/lib/error-logs";
@@ -1254,35 +1254,6 @@ async function ReportsStream({
             chart_type: "timeline",
           }}
         />
-        {selectedSection === "overview" && isEmptyWorkspace ? (
-          <div className="reports-empty-wrap">
-            <EmptyDataCta
-              className="reports-empty-state"
-              eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
-              title="Your reports are ready for new data."
-              copy="Add transactions and accounts, and Clover will fill in cash flow, spending, and review items for you."
-              illustration="/illustrations/clover-reports-chart-3d.png"
-              illustrationAlt="A 3D Clover reports chart illustration"
-              artClassName="transactions-empty-state__art--teal"
-              accountHref="/accounts"
-              transactionHref="/transactions?manual=1"
-              actions={
-                <>
-                  <Link className="button button-primary button-small" href="/accounts">
-                    Add an account
-                  </Link>
-                  <Link className="button button-secondary button-small" href="/transactions?manual=1">
-                    Add a transaction
-                  </Link>
-                  <Link className="button button-secondary button-small" href="/imports">
-                    Import files
-                  </Link>
-                </>
-              }
-            />
-          </div>
-        ) : null}
-
         {selectedSection === "overview" ? (
           <>
             <section className="reports-summary-grid reports-summary-grid--highlights reports-overview-grid">
@@ -1863,6 +1834,7 @@ async function ReportsPageStream({ searchParams }: { searchParams?: Promise<{ ra
         />
       }
     >
+      <ReportsTabPrefetcher currentRange={selectedRange} currentSection={selectedSection} isPro={isPro} />
       <ReportsStream active="reports" searchParams={resolvedSearchParams} />
     </CloverShell>
   );

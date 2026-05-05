@@ -4,7 +4,6 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
-import { EmptyDataCta } from "@/components/empty-data-cta";
 import { InfoTip as InsightInfoTip } from "@/components/info-tip";
 import { InsightsTabs } from "@/components/insights-tabs";
 import { PostHogEvent } from "@/components/posthog-analytics";
@@ -349,20 +348,6 @@ async function InsightsPageStream({
   const requestedTab = normalizeInsightsTab(resolvedSearchParams?.tab);
   const availableTabs: InsightsTab[] = ["summary", "spending", "patterns"];
   const selectedTab: InsightsTab = availableTabs.includes(requestedTab) ? requestedTab : "summary";
-  const titleAddon = (
-    <nav className="insights-tabs" aria-label="Insights sections">
-      {availableTabs.map((tab) => (
-        <Link
-          key={tab}
-          className={`insights-tab ${selectedTab === tab ? "insights-tab--active" : ""}`}
-          href={tab === "summary" ? "/insights" : `/insights?tab=${tab}`}
-          aria-current={selectedTab === tab ? "page" : undefined}
-        >
-          {insightsTabLabels[tab]}
-        </Link>
-      ))}
-    </nav>
-  );
   const isEmptyWorkspace = workspaceAccounts.length <= 1 && workspaceImportFiles.length === 0 && currentWindowTransactions.length === 0;
   const currencyCandidates = new Set(workspaceAccounts.map((account) => formatCurrencyCode(account.currency)).filter((currency) => currency.length > 0));
   const displayCurrency = currencyCandidates.size === 1 ? Array.from(currencyCandidates)[0] : "MIXED";
@@ -762,7 +747,6 @@ async function InsightsPageStream({
     <CloverShell
       active="insights"
       title="Insights"
-      titleAddon={titleAddon}
     >
       <PostHogEvent
         event="insight_generated"
@@ -819,24 +803,9 @@ async function InsightsPageStream({
           chart_type: "timeline",
         }}
       />
-      {isEmptyWorkspace ? (
-        <div className="insights-empty-wrap">
-          <EmptyDataCta
-            className="insights-empty-state"
-            eyebrow={isFreshResetWorkspace ? "Fresh start" : "No data yet"}
-            title="Import files to wake up your insights."
-            copy="Clover needs a statement or account activity before it can spot patterns, trends, and habits. Import files first for the fastest way to bring this page to life."
-            illustration="/illustrations/clover-insights-analytics-3d.png"
-            illustrationAlt="A 3D Clover analytics illustration"
-            importHref="/dashboard?import=1"
-            accountHref="/accounts"
-            transactionHref="/transactions?manual=1"
-          />
-        </div>
-      ) : null}
       <section className="insights-story">
         <InsightsTabs
-          selectedTab={selectedTab}
+          initialTab={selectedTab}
           summary={
           <article className="insights-snapshot insights-snapshot--hero glass">
           <div className="insights-snapshot__copy">
