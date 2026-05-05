@@ -3380,13 +3380,13 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .dashboard-home__balance-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
+  display: flex;
+  align-items: flex-start;
   gap: 20px;
-  align-items: stretch;
 }
 
 .dashboard-home__balance-main {
+  flex: 1 1 auto;
   display: grid;
   gap: 4px;
   align-content: start;
@@ -3408,6 +3408,7 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .dashboard-home__balance-side {
+  flex: 0 0 260px;
   display: grid;
   grid-template-columns: 1fr;
   gap: 8px;
@@ -3416,6 +3417,7 @@ body.transactions-manual-open .shell-quick-add-button {
   min-width: 0;
   justify-self: end;
   align-self: start;
+  margin-left: auto;
 }
 
 .dashboard-home__balance-side .dashboard-home__balance-mini-pill {

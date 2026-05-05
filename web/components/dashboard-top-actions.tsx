@@ -34,6 +34,11 @@ type ManualFormState = {
   merchantRaw: string;
   categoryId: string;
   type: "debit" | "credit";
+  description: string;
+  receiptLineItems: Array<{
+    description: string;
+    amount: string;
+  }>;
 };
 
 const formatToday = () => {
@@ -43,6 +48,11 @@ const formatToday = () => {
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
+
+const createEmptyReceiptLineItem = () => ({
+  description: "",
+  amount: "",
+});
 
 const normalizeName = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
 
@@ -155,9 +165,12 @@ function DashboardManualTransactionModal({
     merchantRaw: "",
     categoryId: "",
     type: "debit",
+    description: "",
+    receiptLineItems: [],
   }));
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
+  const [manualMoreOpen, setManualMoreOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
@@ -293,6 +306,7 @@ function DashboardManualTransactionModal({
   const handleClose = () => {
     setAccountMenuOpen(false);
     setCategoryMenuOpen(false);
+    setManualMoreOpen(false);
     onClose();
   };
 
@@ -332,6 +346,9 @@ function DashboardManualTransactionModal({
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    const submitter = event.nativeEvent instanceof SubmitEvent ? event.nativeEvent.submitter : null;
+    const submitMode = submitter instanceof HTMLElement ? submitter.getAttribute("data-submit-mode") : null;
+    const keepOpenAfterSave = submitMode === "add-another";
     setIsSaving(true);
     setError(null);
 
@@ -354,7 +371,13 @@ function DashboardManualTransactionModal({
           type: form.type === "credit" ? "income" : "expense",
           merchantRaw: form.merchantRaw,
           merchantClean: null,
-          description: null,
+          description: form.description.trim() || null,
+          receiptLineItems: form.receiptLineItems
+            .filter((entry) => entry.description.trim() || entry.amount.trim())
+            .map((entry) => ({
+              description: entry.description,
+              amount: entry.amount,
+            })),
           isTransfer: false,
           isExcluded: false,
         }),
@@ -363,6 +386,21 @@ function DashboardManualTransactionModal({
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.error ?? "Unable to create transaction.");
+      }
+
+      setError(null);
+      if (keepOpenAfterSave) {
+        setManualMoreOpen(false);
+        setForm((current) => ({
+          ...current,
+          amount: "",
+          merchantRaw: "",
+          description: "",
+          receiptLineItems: [],
+        }));
+        setCategoryMenuOpen(false);
+        setAccountMenuOpen(false);
+        return;
       }
 
       handleClose();
@@ -571,16 +609,142 @@ function DashboardManualTransactionModal({
 
             {error ? <p className="dashboard-manual-modal__error">{error}</p> : null}
 
-            <div className="manual-form-actions manual-form-actions--closed manual-form-actions--expanded">
-              <div className="manual-form-actions__right">
-                <button className="button button-secondary button-small" type="button" onClick={handleClose}>
-                  Cancel
-                </button>
-                <button className="button button-primary button-small" type="submit" disabled={isSaving || !accounts.length}>
-                  {isSaving ? "Saving..." : "Add transaction"}
-                </button>
-              </div>
+            <div className={`transactions-manual-more-row ${manualMoreOpen ? "is-open" : ""}`}>
+              <button
+                type="button"
+                className="transactions-manual-more"
+                onClick={() => setManualMoreOpen((current) => !current)}
+                aria-expanded={manualMoreOpen}
+              >
+                <span>{manualMoreOpen ? "Less" : "More"}</span>
+                <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
+                  ▾
+                </span>
+              </button>
+              {!manualMoreOpen ? (
+                <div className="manual-form-actions manual-form-actions--closed">
+                  <div className="manual-form-actions__right">
+                    <button className="transactions-manual-add-another" type="submit" data-submit-mode="add-another" disabled={isSaving}>
+                      Add another
+                    </button>
+                    <button className="button button-primary button-small" type="submit" data-submit-mode="close" disabled={isSaving || !accounts.length}>
+                      {isSaving ? "Saving..." : "Add transaction"}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
+            {manualMoreOpen ? (
+              <>
+                <div className="manual-more-panel manual-more-panel--compact">
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label">
+                    <span className="transactions-manual-field__label">Notes</span>
+                    <textarea
+                      value={form.description}
+                      onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
+                      placeholder="Optional note or review context"
+                    />
+                  </label>
+
+                  <div className="manual-more-panel__receipt-line-items">
+                    <div className="manual-more-panel__section-head">
+                      <span>Receipt line items</span>
+                    </div>
+
+                    {form.receiptLineItems.length === 0 ? (
+                      <p className="field-help field-help--compact">
+                        Optional. Add item lines if you want the receipt breakdown to follow the transaction.
+                      </p>
+                    ) : null}
+
+                    {form.receiptLineItems.length > 0 ? (
+                      <div className="manual-receipt-table" role="table" aria-label="Receipt line items">
+                        <div className="manual-receipt-table__header" role="row">
+                          <span role="columnheader">Item</span>
+                          <span role="columnheader">Price</span>
+                          <span aria-hidden="true" />
+                        </div>
+
+                        {form.receiptLineItems.map((lineItem, index) => (
+                          <div key={index} className="manual-receipt-table__row" role="row">
+                            <label className="manual-receipt-table__cell" role="cell">
+                              <span className="sr-only">Item</span>
+                              <input
+                                value={lineItem.description}
+                                onChange={(event) =>
+                                  setForm((current) => ({
+                                    ...current,
+                                    receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
+                                      entryIndex === index ? { ...entry, description: event.target.value } : entry
+                                    ),
+                                  }))
+                                }
+                                placeholder="Coffee"
+                              />
+                            </label>
+                            <label className="manual-receipt-table__cell manual-receipt-table__cell--price" role="cell">
+                              <span className="sr-only">Price</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={lineItem.amount}
+                                onChange={(event) =>
+                                  setForm((current) => ({
+                                    ...current,
+                                    receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
+                                      entryIndex === index ? { ...entry, amount: event.target.value } : entry
+                                    ),
+                                  }))
+                                }
+                                placeholder="0.00"
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              className="manual-receipt-table__remove"
+                              onClick={() =>
+                                setForm((current) => ({
+                                  ...current,
+                                  receiptLineItems: current.receiptLineItems.filter((_, entryIndex) => entryIndex !== index),
+                                }))
+                              }
+                              aria-label="Remove line item"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <button
+                      type="button"
+                      className="manual-receipt-table__add-floater"
+                      onClick={() =>
+                        setForm((current) => ({
+                          ...current,
+                          receiptLineItems: [...current.receiptLineItems, createEmptyReceiptLineItem()],
+                        }))
+                      }
+                      aria-label="Add receipt line item"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <div className="manual-form-actions manual-form-actions--expanded">
+                  <div className="manual-form-actions__right">
+                    <button className="transactions-manual-add-another" type="submit" data-submit-mode="add-another" disabled={isSaving}>
+                      Add another
+                    </button>
+                    <button className="button button-primary button-small" type="submit" data-submit-mode="close" disabled={isSaving || !accounts.length}>
+                      {isSaving ? "Saving..." : "Add transaction"}
+                    </button>
+                  </div>
+                </div>
+              </>
+            ) : null}
           </div>
         </form>
       </section>
@@ -626,6 +790,18 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [menuOpen]);
+
+  useEffect(() => {
+    const active = manualOpen || importOpen;
+    document.body.toggleAttribute("data-clover-page-modal", active);
+    if (!active) {
+      document.body.removeAttribute("data-clover-page-modal");
+    }
+
+    return () => {
+      document.body.removeAttribute("data-clover-page-modal");
+    };
+  }, [importOpen, manualOpen]);
 
   useEffect(() => {
     const manualParam = searchParams?.get("manual");
@@ -709,14 +885,16 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
             ▾
           </span>
         </button>
-        <div className="dashboard-top-actions__menu" hidden={!menuOpen}>
-          <button className="dashboard-top-actions__menu-item" type="button" onClick={openManualAdd}>
-            Add transaction
-          </button>
-          <button className="dashboard-top-actions__menu-item" type="button" onClick={openImportFiles}>
-            Import files
-          </button>
-        </div>
+        {menuOpen ? (
+          <div className="dashboard-top-actions__menu">
+            <button className="dashboard-top-actions__menu-item" type="button" onClick={openManualAdd}>
+              Add transaction
+            </button>
+            <button className="dashboard-top-actions__menu-item" type="button" onClick={openImportFiles}>
+              Import files
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {manualOpen ? (
