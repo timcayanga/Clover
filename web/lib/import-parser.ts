@@ -5256,6 +5256,10 @@ const inferGcashAccountNumberFromRows = (rows: ParsedImportRow[], fallback?: str
 
 const normalizeGcashMerchant = (description: string) => {
   let trimmed = decompactOcrText(description);
+  trimmed = trimmed.replace(
+    /^(?:\d{1,2}:\d{2}\s*)?(?:AM|PM)\s+(?=(?:Payment|Transfer|Cash|Buy|Send|Received|Sent|Add|Withdraw|Deposit|Bill|Bills|Top\s*Up|Load|Purchase|Card|ATM))/i,
+    ""
+  );
 
   const billsPaymentMatch = trimmed.match(/^Bills Payment to\s+(.+)$/i);
   if (billsPaymentMatch?.[1]) {

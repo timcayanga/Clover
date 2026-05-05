@@ -1321,6 +1321,7 @@ export const humanizeMerchantText = (value: string) => {
   }
 
   const replacements: Array<[RegExp, string]> = [
+    [/^(?:\d{1,2}:\d{2}\s*)?(?:AM|PM)\s+(?=(?:Payment|Transfer|Cash|Buy|Send|Received|Sent|Add|Withdraw|Deposit|Bill|Bills|Top\s*Up|Load|Purchase|Card|ATM))/i, ""],
     [/fundtransfer/gi, "Fund Transfer"],
     [/interestearned/gi, "Interest Earned"],
     [/taxwithheld/gi, "Tax Withheld"],

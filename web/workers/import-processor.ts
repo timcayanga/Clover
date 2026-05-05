@@ -2907,15 +2907,27 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
               createdAt: statementCheckpoint.createdAt.toISOString(),
             },
           ]
-        : [],
+    : [],
   });
   reconciledAccountBalance = statementEndingBalance ?? latestExplicitStatementBalance ?? fallbackReconciledBalance;
+  const currentAccountBalance = snapshotBalanceToString(account.balance);
+  const shouldPreserveUploadedAccountBalance =
+    account.source === "upload" &&
+    currentAccountBalance !== null &&
+    parseAmountValue(currentAccountBalance) !== null &&
+    parseAmountValue(currentAccountBalance) !== 0 &&
+    reconciledAccountBalance !== null &&
+    parseAmountValue(reconciledAccountBalance) === 0 &&
+    statementEndingBalance === null &&
+    latestExplicitStatementBalance === null;
+  const balanceToPersist = shouldPreserveUploadedAccountBalance ? currentAccountBalance : reconciledAccountBalance;
+  reconciledAccountBalance = balanceToPersist;
 
-  if (reconciledAccountBalance !== null) {
+  if (balanceToPersist !== null) {
     await tx.account.update({
       where: { id: resolvedAccountId },
       data: {
-        balance: reconciledAccountBalance,
+        balance: balanceToPersist,
       },
     });
   }
