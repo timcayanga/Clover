@@ -618,17 +618,13 @@ async function DashboardStream({
     const signedBalance = normalizeNetWorthBalance(account.type, reconcileAccountBalance(account));
     return sum + Math.max(signedBalance, 0);
   }, 0);
-  const todayTransactions = currentTransactions.filter((transaction) => transaction.date >= todayStart);
-  const currentSevenDayTransactions = currentTransactions.filter((transaction) => transaction.date >= sevenDaysAgo);
   const currentThirtyDayTransactions = currentTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo);
   const previousTransactionsWindow = currentTransactions.filter(
     (transaction) => transaction.date >= sixtyDaysAgo && transaction.date < thirtyDaysAgo
   );
   const currentSummary = comparePeriods(currentThirtyDayTransactions, previousTransactionsWindow);
-  const todaySummary = summarizeWindow(todayTransactions, "Today");
-  const weekSummary = summarizeWindow(currentSevenDayTransactions, "This week");
   const monthSummary = summarizeWindow(currentThirtyDayTransactions, "This month");
-  const activitySeries = buildDailyActivitySeries(currentSevenDayTransactions, 7);
+  const activitySeries = buildDailyActivitySeries(currentThirtyDayTransactions, 7);
   const peakActivityDay = activitySeries.reduce<DailyActivityPoint | null>((peak, point) => {
     if (!peak || point.count > peak.count || (point.count === peak.count && point.key > peak.key)) {
       return point;
@@ -639,8 +635,6 @@ async function DashboardStream({
   const previousNet = currentSummary.previous.income - currentSummary.previous.expense;
   const previousSavingsRate = currentSummary.previous.income > 0 ? previousNet / currentSummary.previous.income : null;
   const spendDelta = currentSummary.current.expense - currentSummary.previous.expense;
-  const recurringItem = buildRecurringTransactionSummaries(currentTransactions)[0] ?? null;
-  const recurringBalance = recurringItem ? recurringItem.amount / Math.max(recurringItem.count, 1) : 0;
   const reviewAttentionTransactions = currentThirtyDayTransactions.filter(
     (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || transaction.categoryConfidence < 70
   );
@@ -656,7 +650,7 @@ async function DashboardStream({
     currentSavingsRate,
     previousSavingsRate,
     spendDelta,
-    recurringShare: recurringItem ? recurringItem.amount / Math.max(currentSummary.current.expense, 1) : 0,
+    recurringShare: 0,
   }, displayCurrency);
   const goalProgressPercent = clamp(goalProgress.progressPercent ?? 0, 0, 100);
   const daysSinceLastImport = latestImport
@@ -664,85 +658,26 @@ async function DashboardStream({
     : null;
   const goalAction = goalProgress.nextAction;
   const goalProgressLabel = goalProgress.progressPercent === null ? "Set a target" : `${Math.round(goalProgress.progressPercent)}%`;
-  const topDriver = currentSummary.topCategory?.[0] ?? "No clear driver yet";
   const goalSummaryLabel = goalTargetAmount !== null ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}` : goalProgress.currentLabel;
   const totalBalanceLabel = formatCurrency(totalNetWorth, displayCurrency);
   const balanceHighlights = [
     {
-      key: "savings",
-      label: "Savings",
-      value: formatCurrency(savingsTotal, displayCurrency),
-      detail: savingsTotal > 0 ? "Spendable balance" : "No savings yet",
+      key: "income",
+      label: "Monthly Income",
+      value: formatCurrency(monthSummary.income, displayCurrency),
+      trend: currentSummary.incomeDelta,
     },
     {
       key: "expenses",
-      label: "Expenses",
+      label: "Monthly Expenses",
       value: formatCurrency(monthSummary.expense, displayCurrency),
-      detail: "This month",
+      trend: currentSummary.expenseDelta,
     },
-    ...(investmentsTotal > 0
-      ? [
-          {
-            key: "investments",
-            label: "Investments",
-            value: formatCurrency(investmentsTotal, displayCurrency),
-            detail: "Holdings",
-          },
-        ]
-      : []),
-    ...(recurringItem
-      ? [
-          {
-            key: "recurring",
-            label: "Recurring",
-            value: formatCurrency(recurringBalance, displayCurrency),
-            detail: `${recurringItem.count} repeat${recurringItem.count === 1 ? "" : "s"}`,
-          },
-        ]
-      : []),
   ];
   const goalHeroHeading = goalKey ? "Goal progress" : "Set a goal to track your progress";
   const goalHeroCopy = goalKey ? goalProgress.coachCopy : "Set a goal to track your progress.";
   const goalHeroActionLabel = goalKey ? "Open goals" : "Set a goal";
   const goalHeroActionHref = "/goals";
-  const movementWindows = [
-    {
-      label: "Today",
-      summary: todaySummary,
-      valueLabel: todaySummary.transactions > 0 ? formatSignedCurrency(todaySummary.net) : "No activity yet",
-      detailLabel:
-        todaySummary.transactions > 0
-          ? `${formatCurrency(todaySummary.income)} in · ${formatCurrency(todaySummary.expense)} out`
-          : "Import a statement to see today’s movement",
-      footLabel: todaySummary.transactions > 0 ? `${todaySummary.transactions} transaction${todaySummary.transactions === 1 ? "" : "s"}` : "0 transactions",
-    },
-    {
-      label: "7 days",
-      summary: weekSummary,
-      valueLabel: weekSummary.transactions > 0 ? formatSignedCurrency(weekSummary.net) : "No movement yet",
-      detailLabel:
-        weekSummary.transactions > 0
-          ? `${formatCurrency(weekSummary.income)} in · ${formatCurrency(weekSummary.expense)} out`
-          : "Seven-day movement will appear here",
-      footLabel:
-        weekSummary.transactions > 0
-          ? `${weekSummary.transactions} transaction${weekSummary.transactions === 1 ? "" : "s"} · ${weekSummary.activeDays} active day${weekSummary.activeDays === 1 ? "" : "s"}`
-          : "0 transactions",
-    },
-    {
-      label: "30 days",
-      summary: monthSummary,
-      valueLabel: monthSummary.transactions > 0 ? formatSignedCurrency(monthSummary.net) : "No movement yet",
-      detailLabel:
-        monthSummary.transactions > 0
-          ? `${formatCurrency(monthSummary.income)} in · ${formatCurrency(monthSummary.expense)} out`
-          : "Monthly movement will appear here",
-      footLabel:
-        monthSummary.transactions > 0
-          ? `${monthSummary.transactions} transaction${monthSummary.transactions === 1 ? "" : "s"} · ${monthSummary.activeDays} active day${monthSummary.activeDays === 1 ? "" : "s"}`
-          : "0 transactions",
-    },
-  ];
   const maxActivityCount = Math.max(...activitySeries.map((point) => point.count), 1);
   const activitySummaryLabel =
     peakActivityDay && peakActivityDay.count > 0
@@ -781,7 +716,7 @@ async function DashboardStream({
         <article className="dashboard-home__hero glass dashboard-home__hero--balance">
           <div className="dashboard-home__balance-layout">
             <div className="dashboard-home__balance-main">
-              <p className="eyebrow">Total balance</p>
+              <p className="eyebrow">My balance</p>
               <strong>{totalBalanceLabel}</strong>
             </div>
             <div className="dashboard-home__balance-side">
@@ -789,31 +724,14 @@ async function DashboardStream({
                 <div key={pill.key} className="dashboard-home__balance-mini-pill">
                   <p className="dashboard-home__balance-mini-label">{pill.label}</p>
                   <strong>{pill.value}</strong>
+                  <span className={pill.trend >= 0 ? "dashboard-home__balance-mini-trend positive" : "dashboard-home__balance-mini-trend negative"}>
+                    {pill.trend === 0 ? "0%" : `${pill.trend > 0 ? "+" : ""}${Math.abs(pill.trend).toFixed(0)}%`}
+                  </span>
                 </div>
               ))}
             </div>
           </div>
         </article>
-
-        <section className="dashboard-home__movement-grid">
-          {movementWindows.map((window) => (
-            <article key={window.label} className="dashboard-home__movement-card glass">
-              <div className="dashboard-home__movement-card-head">
-                <div>
-                  <p className="eyebrow">{window.label}</p>
-                  <strong>{window.valueLabel}</strong>
-                </div>
-                <span className={`dashboard-visual-pill ${window.summary.net >= 0 ? "positive" : "negative"}`}>
-                  {window.summary.net >= 0 ? "Up" : "Down"}
-                </span>
-              </div>
-              <p className="dashboard-home__movement-copy">{window.detailLabel}</p>
-              <div className="dashboard-home__movement-footer">
-                <span>{window.footLabel}</span>
-              </div>
-            </article>
-          ))}
-        </section>
 
         <article className="dashboard-home__activity-card glass">
           <div className="dashboard-home__summary-card-head">
@@ -839,18 +757,14 @@ async function DashboardStream({
           </div>
           <div className="dashboard-home__activity-metrics">
             <div className="dashboard-home__mini-card">
-              <span>Top spend</span>
-              <strong>{topDriver}</strong>
-              <small>{formatCurrency(currentSummary.topCategory?.[1] ?? 0)} this month</small>
+              <span>Monthly income</span>
+              <strong>{formatCurrency(monthSummary.income, displayCurrency)}</strong>
+              <small>{currentSummary.incomeDelta >= 0 ? "+" : ""}{Math.abs(currentSummary.incomeDelta).toFixed(0)}% vs last month</small>
             </div>
             <div className="dashboard-home__mini-card">
-              <span>Recurring</span>
-              <strong>{recurringItem ? recurringItem.name : "Nothing repeating yet"}</strong>
-              <small>
-                {recurringItem
-                  ? `${formatCurrency(recurringItem.amount / recurringItem.count)} per transaction · last seen ${formatRelativeDate(recurringItem.lastSeen)}`
-                  : "Clover will surface repeating bills here"}
-              </small>
+              <span>Monthly expenses</span>
+              <strong>{formatCurrency(monthSummary.expense, displayCurrency)}</strong>
+              <small>{currentSummary.expenseDelta >= 0 ? "+" : ""}{Math.abs(currentSummary.expenseDelta).toFixed(0)}% vs last month</small>
             </div>
           </div>
         </article>

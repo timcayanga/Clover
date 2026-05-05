@@ -3380,6 +3380,21 @@ body.transactions-manual-open .shell-quick-add-button {
   white-space: nowrap;
 }
 
+.dashboard-home__balance-mini-trend {
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+
+.dashboard-home__balance-mini-trend.positive {
+  color: #0d8f57;
+}
+
+.dashboard-home__balance-mini-trend.negative {
+  color: #d14343;
+}
+
 .dashboard-home__bottom-stack {
   display: grid;
   gap: 12px;
@@ -3437,49 +3452,6 @@ body.transactions-manual-open .shell-quick-add-button {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.dashboard-home__movement-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.dashboard-home__movement-card {
-  display: grid;
-  gap: 8px;
-  padding: 16px;
-  border: 1px solid var(--stroke);
-  border-radius: 28px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: var(--shadow-soft);
-}
-
-.dashboard-home__movement-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.dashboard-home__movement-card-head strong {
-  display: block;
-  font-size: 22px;
-  line-height: 1.05;
-  letter-spacing: -0.05em;
-}
-
-.dashboard-home__movement-copy {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-.dashboard-home__movement-footer {
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.45;
 }
 
 .dashboard-home__activity-card {
@@ -21808,18 +21780,6 @@ button.accounts-detail__transaction-head-cell {
   .dashboard-home__goal-card-copy strong,
   .dashboard-home__starter-card strong {
     font-size: 16px;
-  }
-
-  .dashboard-home__movement-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .dashboard-home__movement-card {
-    padding: 14px;
-  }
-
-  .dashboard-home__movement-card-head strong {
-    font-size: 20px;
   }
 
   .dashboard-home__activity-card {
