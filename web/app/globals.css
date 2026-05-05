@@ -3461,7 +3461,7 @@ body.transactions-manual-open .shell-quick-add-button {
 .dashboard-home__hero-mini-label {
   margin: 0;
   color: rgba(82, 89, 112, 0.74);
-  font-size: 8px;
+  font-size: 9px;
   line-height: 1.2;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -12576,7 +12576,7 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   width: 100%;
   gap: 10px;
-  align-items: center;
+  align-items: start;
   grid-template-columns: 38px minmax(0, 1fr);
 }
 
@@ -12627,6 +12627,7 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
+  margin-top: 18px;
 }
 
 .transactions-manual-inline-row__icon--account .accounts-brand-mark {
@@ -12654,6 +12655,14 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-inline-row__field {
   min-width: 0;
+}
+
+.transaction-drawer__merchant-raw {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+  letter-spacing: 0;
 }
 
 .manual-default-fields {
@@ -15254,7 +15263,7 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   grid-template-rows: auto 1fr auto;
   min-height: 100%;
-  padding: 18px;
+  padding: 18px 18px 24px;
   gap: 14px;
 }
 
@@ -23090,6 +23099,7 @@ button.accounts-detail__transaction-head-cell {
   .transactions-manual-inline-row__icon {
     width: 34px;
     height: 34px;
+    margin-top: 16px;
   }
 
   .transactions-manual-inline-row__icon--account .accounts-brand-mark {
