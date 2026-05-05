@@ -12,7 +12,7 @@ import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-conte
 import { getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import { deriveReconciledBalance } from "@/lib/account-balance";
-import { isLiabilityAccountType } from "@/lib/account-types";
+import { isLiabilityAccountType, isSpendableAccountType } from "@/lib/account-types";
 import { RouteSplash } from "@/components/route-splash";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
 import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
@@ -579,7 +579,7 @@ async function DashboardStream({
   const formatCurrency = (value: number, currency: string | null = displayCurrency) => formatCurrencyAmount(value, currency);
   const formatSignedCurrency = (value: number, currency: string | null = displayCurrency) =>
     `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency)}`;
-  const totalNetWorth = dashboardAccounts.reduce((sum, account) => {
+const totalNetWorth = dashboardAccounts.reduce((sum, account) => {
     const latestCheckpoint = account.statementCheckpoints[0] ?? null;
     const checkpointBalance =
       latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance ? latestCheckpoint.endingBalance : null;
@@ -593,6 +593,43 @@ async function DashboardStream({
     const signedBalance = normalizeNetWorthBalance(account.type, Number(reconciledBalance ?? account.balance ?? 0));
     return sum + signedBalance;
   }, 0);
+  const savingsTotal = dashboardAccounts.reduce((sum, account) => {
+    const latestCheckpoint = account.statementCheckpoints[0] ?? null;
+    const checkpointBalance =
+      latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance ? latestCheckpoint.endingBalance : null;
+    const reconciledBalance =
+      checkpointBalance ??
+      deriveReconciledBalance({
+        balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
+        transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
+        checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
+      });
+    const signedBalance = normalizeNetWorthBalance(account.type, Number(reconciledBalance ?? account.balance ?? 0));
+    if (!isSpendableAccountType(account.type as Parameters<typeof isSpendableAccountType>[0])) {
+      return sum;
+    }
+
+    return sum + Math.max(signedBalance, 0);
+  }, 0);
+  const investmentsTotal = dashboardAccounts.reduce((sum, account) => {
+    if (account.type !== "investment") {
+      return sum;
+    }
+
+    const latestCheckpoint = account.statementCheckpoints[0] ?? null;
+    const checkpointBalance =
+      latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance ? latestCheckpoint.endingBalance : null;
+    const reconciledBalance =
+      checkpointBalance ??
+      deriveReconciledBalance({
+        balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
+        transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
+        checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
+      });
+    const signedBalance = normalizeNetWorthBalance(account.type, Number(reconciledBalance ?? account.balance ?? 0));
+    return sum + Math.max(signedBalance, 0);
+  }, 0);
+  const recurringBalance = recurringItem ? recurringItem.amount / Math.max(recurringItem.count, 1) : 0;
   const todayTransactions = currentTransactions.filter((transaction) => transaction.date >= todayStart);
   const currentSevenDayTransactions = currentTransactions.filter((transaction) => transaction.date >= sevenDaysAgo);
   const currentThirtyDayTransactions = currentTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo);
@@ -646,7 +683,6 @@ async function DashboardStream({
     99
   );
   const confidenceLabel = confidenceScore >= 85 ? "High confidence" : confidenceScore >= 70 ? "Good confidence" : "Watch closely";
-  const latestImportLabel = latestImport ? `${latestImport.fileName} · ${latestImport.status} · ${formatRelativeDate(latestImport.uploadedAt)}` : null;
   const daysSinceLastImport = latestImport
     ? Math.max(0, Math.floor((now.getTime() - latestImport.uploadedAt.getTime()) / 86400000))
     : null;
@@ -655,9 +691,40 @@ async function DashboardStream({
   const topDriver = currentSummary.topCategory?.[0] ?? "No clear driver yet";
   const goalSummaryLabel = goalTargetAmount !== null ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}` : goalProgress.currentLabel;
   const totalBalanceLabel = formatCurrency(totalNetWorth, displayCurrency);
-  const heroSupportCopy = shouldShowStarterCard
-    ? "Import a statement to unlock your balance, movement, and goal snapshot."
-    : "Your balance, movement, and goals in one calm view.";
+  const balanceHighlights = [
+    {
+      key: "savings",
+      label: "Savings",
+      value: formatCurrency(savingsTotal, displayCurrency),
+      detail: savingsTotal > 0 ? "Spendable balance" : "No savings yet",
+    },
+    {
+      key: "expenses",
+      label: "Expenses",
+      value: formatCurrency(monthSummary.expense, displayCurrency),
+      detail: "This month",
+    },
+    ...(investmentsTotal > 0
+      ? [
+          {
+            key: "investments",
+            label: "Investments",
+            value: formatCurrency(investmentsTotal, displayCurrency),
+            detail: "Holdings",
+          },
+        ]
+      : []),
+    ...(recurringItem
+      ? [
+          {
+            key: "recurring",
+            label: "Recurring",
+            value: formatCurrency(recurringBalance, displayCurrency),
+            detail: `${recurringItem.count} repeat${recurringItem.count === 1 ? "" : "s"}`,
+          },
+        ]
+      : []),
+  ];
   const goalHeroHeading = goalKey ? "Goal progress" : "Set a goal to track your progress";
   const goalHeroCopy = goalKey ? goalProgress.coachCopy : "Set a goal to track your progress.";
   const goalHeroActionLabel = goalKey ? "Open goals" : "Set a goal";
@@ -737,9 +804,21 @@ async function DashboardStream({
       <section className="dashboard-home">
         <article className="dashboard-home__hero glass dashboard-home__hero--balance">
           <div className="dashboard-home__hero-copy">
-            <p className="eyebrow">Net worth</p>
-            <h3>{totalBalanceLabel}</h3>
-            <p>{heroSupportCopy}</p>
+            <div className="dashboard-home__balance-strip">
+              <div className="dashboard-home__balance-main-pill">
+                <p className="eyebrow">Net worth</p>
+                <strong>{totalBalanceLabel}</strong>
+              </div>
+              <div className="dashboard-home__balance-side">
+                {balanceHighlights.map((pill) => (
+                  <div key={pill.key} className="dashboard-home__balance-mini-pill">
+                    <p className="eyebrow">{pill.label}</p>
+                    <strong>{pill.value}</strong>
+                    <span>{pill.detail}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
 
           </div>
 
