@@ -195,18 +195,41 @@ function SplitBillPeoplePicker({
   const [isAdding, setIsAdding] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (isAdding) {
       inputRef.current?.focus();
     }
   }, [isAdding]);
 
+  const addPerson = () => {
+    const next = draft.trim();
+    if (!next) {
+      return;
+    }
+
+    onPeopleChange(Array.from(new Set([...people, next])));
+    setDraft("");
+    setIsAdding(true);
+  };
+
+  const removePerson = (name: string) => {
+    onPeopleChange(people.filter((person) => person !== name));
+  };
+
   return (
     <div className="split-bill-people-picker">
       <div className="split-bill-people-picker__chips">
         {people.map((person) => (
-          <span key={person} className="split-bill-table__chip">
-            {person}
+          <span key={person} className="split-bill-table__chip split-bill-table__chip--editable">
+            <span>{person}</span>
+            <button
+              className="split-bill-table__chip-remove"
+              type="button"
+              aria-label={`Remove ${person}`}
+              onClick={() => removePerson(person)}
+            >
+              ×
+            </button>
           </span>
         ))}
       </div>
@@ -215,40 +238,20 @@ function SplitBillPeoplePicker({
           +
         </button>
         {isAdding ? (
-          <>
-            <input
-              ref={inputRef}
-              className="settings-input"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="Type a name"
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  const next = draft.trim();
-                  if (!next) {
-                    return;
-                  }
-                  onPeopleChange(Array.from(new Set([...people, next])));
-                  setDraft("");
-                }
-              }}
-            />
-            <button
-              className="button button-secondary"
-              type="button"
-              onClick={() => {
-                const next = draft.trim();
-                if (!next) {
-                  return;
-                }
-                onPeopleChange(Array.from(new Set([...people, next])));
-                setDraft("");
-              }}
-            >
-              Add
-            </button>
-          </>
+          <input
+            ref={inputRef}
+            className="settings-input"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            placeholder="Type a name"
+            autoFocus
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addPerson();
+              }
+            }}
+          />
         ) : null}
       </div>
     </div>
