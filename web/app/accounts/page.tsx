@@ -832,21 +832,39 @@ function AccountsPageContent() {
   const initialWorkspaceId = readSelectedWorkspaceId();
   const deletingAccountIdFromQuery = searchParams?.get("deletingAccountId");
   const deletingWorkspaceIdFromQuery = searchParams?.get("deletingWorkspaceId");
-  const initialCachedWorkspace = null;
+  const initialCachedWorkspace = initialWorkspaceId ? getCachedAccountsWorkspace(initialWorkspaceId) : null;
+  const initialDeletedWorkspaceAccountIds = new Set(getDeletedWorkspaceAccountIds(initialWorkspaceId));
+  const initialDeletingWorkspaceAccountIds = new Set(getDeletingWorkspaceAccountIds(initialWorkspaceId));
+  const initialCachedAccounts = ((initialCachedWorkspace?.accounts as Account[] | undefined) ?? []).filter(
+    (account) => !initialDeletedWorkspaceAccountIds.has(account.id) && !initialDeletingWorkspaceAccountIds.has(account.id)
+  );
+  const initialCachedTransactions = ((initialCachedWorkspace?.transactions as Transaction[] | undefined) ?? []).filter(
+    (transaction) =>
+      !initialDeletedWorkspaceAccountIds.has(transaction.accountId) && !initialDeletingWorkspaceAccountIds.has(transaction.accountId)
+  );
+  const initialCachedStatementCheckpoints = (
+    (initialCachedWorkspace?.statementCheckpoints as StatementCheckpoint[] | undefined) ?? []
+  ).filter(
+    (checkpoint) =>
+      !checkpoint.accountId ||
+      (!initialDeletedWorkspaceAccountIds.has(checkpoint.accountId) && !initialDeletingWorkspaceAccountIds.has(checkpoint.accountId))
+  );
 
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState(initialWorkspaceId);
   const [selectedCurrency, setSelectedCurrency] = useState("PHP");
-  const [accounts, setAccounts] = useState<Account[]>([]);
-  const [accountRules, setAccountRules] = useState<AccountRule[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [statementCheckpoints, setStatementCheckpoints] = useState<StatementCheckpoint[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>(initialCachedAccounts);
+  const [accountRules, setAccountRules] = useState<AccountRule[]>(
+    (initialCachedWorkspace?.accountRules as AccountRule[] | undefined) ?? []
+  );
+  const [transactions, setTransactions] = useState<Transaction[]>(initialCachedTransactions);
+  const [statementCheckpoints, setStatementCheckpoints] = useState<StatementCheckpoint[]>(initialCachedStatementCheckpoints);
   const [drawerTransactions, setDrawerTransactions] = useState<Transaction[]>([]);
   const [drawerStatementCheckpoints, setDrawerStatementCheckpoints] = useState<StatementCheckpoint[]>([]);
   const [message, setMessage] = useState("Select a workspace to review accounts.");
   const [workspacesLoading, setWorkspacesLoading] = useState(true);
   const [accountsLoading, setAccountsLoading] = useState(false);
-  const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(false);
+  const [hasInitialWorkspaceDataLoaded, setHasInitialWorkspaceDataLoaded] = useState(Boolean(initialCachedWorkspace));
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
