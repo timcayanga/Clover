@@ -12553,16 +12553,16 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-row--name {
-  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr);
 }
 
 .transactions-manual-row--money {
-  grid-template-columns: 42px minmax(74px, 88px) minmax(0, 1fr);
+  grid-template-columns: 44px minmax(82px, 98px) minmax(0, 1fr);
 }
 
 .transactions-manual-row-icon {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -12570,18 +12570,19 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-row-icon--category .transaction-category-icon {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
 }
 
 .transactions-manual-row-icon--category .transaction-category-icon img {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 
 .transactions-manual-row-icon--account .accounts-brand-mark {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   border-radius: 16px;
 }
 
@@ -12721,20 +12722,20 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-manual-account-trigger__badge .accounts-brand-mark__logo,
 .transactions-manual-account-trigger__badge .accounts-brand-mark__fallback,
 .transactions-manual-account-trigger__badge .accounts-brand-mark__logo-fallback {
-  width: 18px;
-  height: 18px;
+  width: 100%;
+  height: 100%;
 }
 
 .transactions-manual-account-trigger__badge img,
 .transactions-manual-account-trigger__badge svg {
-  width: 18px;
-  height: 18px;
+  width: 100%;
+  height: 100%;
   display: block;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .transactions-manual-name-field input {
-  min-height: 42px;
+  min-height: 44px;
 }
 
 .manual-default-fields input[type="date"] {
@@ -12744,7 +12745,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-money-row {
   display: grid;
-  grid-template-columns: minmax(92px, 110px) minmax(0, 1fr);
+  grid-template-columns: minmax(78px, 94px) minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   width: 100%;
@@ -12764,9 +12765,9 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-money-row__currency .transactions-manual-currency__button {
   width: 100%;
-  min-height: 36px;
-  height: 36px;
-  padding-inline: 10px;
+  min-height: 40px;
+  height: 40px;
+  padding-inline: 8px;
   border-radius: 12px;
 }
 
@@ -12795,7 +12796,7 @@ input.transaction-inline-edit--amount::placeholder {
   border: 0;
   background: transparent;
   color: var(--accent);
-  font-size: 0.92rem;
+  font-size: 0.84rem;
   font-weight: 600;
   box-shadow: none;
   text-shadow: none;
@@ -12841,8 +12842,8 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-manual-type-toggle__button {
   flex: 0 0 auto;
   min-width: 0;
-  min-height: 24px;
-  height: 24px;
+  min-height: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -12853,7 +12854,7 @@ input.transaction-inline-edit--amount::placeholder {
   background: rgba(255, 255, 255, 0.96);
   color: var(--text);
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.84rem;
   font-weight: 700;
   white-space: nowrap;
   line-height: 1;
@@ -12898,7 +12899,7 @@ input.transaction-inline-edit--amount::placeholder {
   background: transparent;
   box-shadow: none;
   color: var(--accent);
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   font-weight: 600;
   text-shadow: none;
   min-height: 0;
@@ -12909,6 +12910,11 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   justify-content: center;
   transition: transform 150ms ease;
+}
+
+.transactions-manual-more__chevron svg {
+  width: 12px;
+  height: 12px;
 }
 
 .transactions-manual-more__chevron.is-open {
@@ -12965,6 +12971,7 @@ input.transaction-inline-edit--amount::placeholder {
 .manual-form-actions--closed {
   align-items: center;
   flex-wrap: nowrap;
+  justify-content: space-between;
 }
 
 .manual-form-actions--expanded {
@@ -22951,12 +22958,12 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .transactions-manual-row--name {
-    grid-template-columns: 36px minmax(0, 1fr);
+    grid-template-columns: 40px minmax(0, 1fr);
     gap: 8px;
   }
 
   .transactions-manual-row--money {
-    grid-template-columns: 36px minmax(64px, 78px) minmax(0, 1fr);
+    grid-template-columns: 40px minmax(76px, 90px) minmax(0, 1fr);
     gap: 8px;
   }
 
@@ -22983,18 +22990,18 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .transactions-manual-row-icon {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
   }
 
   .transactions-manual-row-icon--category .transaction-category-icon {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
   }
 
   .transactions-manual-row-icon--account .accounts-brand-mark {
-    width: 36px;
-    height: 36px;
+    width: 40px;
+    height: 40px;
   }
 
   .transactions-manual-row-icon--account .accounts-brand-mark__logo,
@@ -23011,25 +23018,20 @@ button.accounts-detail__transaction-head-cell {
     object-fit: cover;
   }
 
-  .transactions-manual-row-icon--category .transaction-category-icon {
-    background: rgba(3, 168, 192, 0.08);
-    border: 1px solid rgba(3, 168, 192, 0.12);
-  }
-
   .transactions-manual-row-icon--category .transaction-category-icon img {
     width: 18px;
     height: 18px;
   }
 
   .transactions-manual-type-toggle__button {
-    min-height: 22px;
-    height: 22px;
-    padding: 0 7px;
-    font-size: 0.8rem;
+    min-height: 24px;
+    height: 24px;
+    padding: 0 8px;
+    font-size: 0.84rem;
   }
 
   .transactions-manual-more {
-    font-size: 0.82rem;
+    font-size: 0.84rem;
   }
 
   .transactions-manual-money-row__stack {

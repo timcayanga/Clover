@@ -5800,6 +5800,7 @@ function TransactionsPageContent() {
                       menuClassName="transactions-manual-currency__menu"
                       optionClassName="transactions-manual-currency__option"
                       menuAlignment="end"
+                      showChevron={false}
                       portalMenu
                     />
                   </label>
@@ -5919,141 +5920,172 @@ function TransactionsPageContent() {
                   />
                 </label>
 
-                <button
-                  type="button"
-                  className="transactions-manual-more"
-                  onClick={() => setManualMoreOpen((current) => !current)}
-                  aria-expanded={manualMoreOpen}
-                >
-                  <span>{manualMoreOpen ? "Less" : "More"}</span>
-                  <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
-                    <ActionIcon name="chevron-down" />
-                  </span>
-                </button>
-
                 {manualMoreOpen ? (
-                  <div className="manual-more-panel manual-more-panel--compact">
-                    <label className="transactions-manual-field transactions-manual-field--embedded-label">
-                      <span className="transactions-manual-field__label">Notes</span>
-                      <textarea
-                        value={manualForm.description}
-                        onChange={(event) => setManualForm((current) => ({ ...current, description: event.target.value }))}
-                        placeholder="Optional note or review context"
-                      />
-                    </label>
-
-                    <div className="manual-more-panel__receipt-line-items">
-                      <div className="manual-more-panel__section-head">
-                        <span>Receipt line items</span>
-                      </div>
-
-                      {manualForm.receiptLineItems.length === 0 ? (
-                        <p className="field-help field-help--compact">
-                          Optional. Add item lines if you want the receipt breakdown to follow the transaction.
-                        </p>
-                      ) : null}
-
-                      {manualForm.receiptLineItems.length > 0 ? (
-                        <div className="manual-receipt-table" role="table" aria-label="Receipt line items">
-                          <div className="manual-receipt-table__header" role="row">
-                            <span role="columnheader">Item</span>
-                            <span role="columnheader">Price</span>
-                            <span aria-hidden="true" />
-                          </div>
-
-                          {manualForm.receiptLineItems.map((lineItem, index) => (
-                            <div key={index} className="manual-receipt-table__row" role="row">
-                              <label className="manual-receipt-table__cell" role="cell">
-                                <span className="sr-only">Item</span>
-                                <input
-                                  value={lineItem.description}
-                                  onChange={(event) =>
-                                    setManualForm((current) => ({
-                                      ...current,
-                                      receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
-                                        entryIndex === index ? { ...entry, description: event.target.value } : entry
-                                      ),
-                                    }))
-                                  }
-                                  placeholder="Coffee"
-                                />
-                              </label>
-                              <label className="manual-receipt-table__cell manual-receipt-table__cell--price" role="cell">
-                                <span className="sr-only">Price</span>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={lineItem.amount}
-                                  onChange={(event) =>
-                                    setManualForm((current) => ({
-                                      ...current,
-                                      receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
-                                        entryIndex === index ? { ...entry, amount: event.target.value } : entry
-                                      ),
-                                    }))
-                                  }
-                                  placeholder="0.00"
-                                />
-                              </label>
-                              <button
-                                type="button"
-                                className="manual-receipt-table__remove"
-                                onClick={() =>
-                                  setManualForm((current) => ({
-                                    ...current,
-                                    receiptLineItems: current.receiptLineItems.filter((_, entryIndex) => entryIndex !== index),
-                                  }))
-                                }
-                                aria-label="Remove line item"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-
+                  <button
+                    type="button"
+                    className="transactions-manual-more"
+                    onClick={() => setManualMoreOpen((current) => !current)}
+                    aria-expanded={manualMoreOpen}
+                  >
+                    <span>{manualMoreOpen ? "Less" : "More"}</span>
+                    <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
+                      <ActionIcon name="chevron-down" />
+                    </span>
+                  </button>
+                ) : (
+                  <div className="manual-form-actions manual-form-actions--closed">
+                    <button
+                      type="button"
+                      className="transactions-manual-more"
+                      onClick={() => setManualMoreOpen((current) => !current)}
+                      aria-expanded={manualMoreOpen}
+                    >
+                      <span>{manualMoreOpen ? "Less" : "More"}</span>
+                      <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
+                        <ActionIcon name="chevron-down" />
+                      </span>
+                    </button>
+                    <div className="manual-form-actions__right">
                       <button
-                        type="button"
-                        className="manual-receipt-table__add-floater"
-                        onClick={() =>
-                          setManualForm((current) => ({
-                            ...current,
-                            receiptLineItems: [...current.receiptLineItems, createEmptyReceiptLineItem()],
-                          }))
-                        }
-                        aria-label="Add receipt line item"
+                        className="transactions-manual-add-another"
+                        type="submit"
+                        data-submit-mode="add-another"
+                        disabled={isSaving}
                       >
-                        +
+                        Add another
                       </button>
-
-                      {manualReceiptLineItemHasValues ? (
-                        <div className="field-help">
-                          <div>Line-item total: {formatTransactionAmount(manualReceiptLineItemTotal, manualForm.currency)}</div>
-                          {manualReceiptLineItemMismatch ? (
-                            <div>Line items do not match the transaction amount yet.</div>
-                          ) : null}
-                        </div>
-                      ) : null}
+                      <button className="button button-primary" type="submit" data-submit-mode="close" disabled={isSaving}>
+                        {isSaving ? "Saving..." : "Add transaction"}
+                      </button>
                     </div>
                   </div>
-                ) : null}
+                )}
 
-                <div className="manual-form-actions manual-form-actions--closed manual-form-actions--expanded">
-                  <div className="manual-form-actions__right">
-                    <button
-                      className="transactions-manual-add-another"
-                      type="submit"
-                      data-submit-mode="add-another"
-                      disabled={isSaving}
-                    >
-                      Add another
-                    </button>
-                    <button className="button button-primary" type="submit" data-submit-mode="close" disabled={isSaving}>
-                      {isSaving ? "Saving..." : "Add transaction"}
-                    </button>
-                  </div>
-                </div>
+                {manualMoreOpen ? (
+                  <>
+                    <div className="manual-more-panel manual-more-panel--compact">
+                      <label className="transactions-manual-field transactions-manual-field--embedded-label">
+                        <span className="transactions-manual-field__label">Notes</span>
+                        <textarea
+                          value={manualForm.description}
+                          onChange={(event) => setManualForm((current) => ({ ...current, description: event.target.value }))}
+                          placeholder="Optional note or review context"
+                        />
+                      </label>
+
+                      <div className="manual-more-panel__receipt-line-items">
+                        <div className="manual-more-panel__section-head">
+                          <span>Receipt line items</span>
+                        </div>
+
+                        {manualForm.receiptLineItems.length === 0 ? (
+                          <p className="field-help field-help--compact">
+                            Optional. Add item lines if you want the receipt breakdown to follow the transaction.
+                          </p>
+                        ) : null}
+
+                        {manualForm.receiptLineItems.length > 0 ? (
+                          <div className="manual-receipt-table" role="table" aria-label="Receipt line items">
+                            <div className="manual-receipt-table__header" role="row">
+                              <span role="columnheader">Item</span>
+                              <span role="columnheader">Price</span>
+                              <span aria-hidden="true" />
+                            </div>
+
+                            {manualForm.receiptLineItems.map((lineItem, index) => (
+                              <div key={index} className="manual-receipt-table__row" role="row">
+                                <label className="manual-receipt-table__cell" role="cell">
+                                  <span className="sr-only">Item</span>
+                                  <input
+                                    value={lineItem.description}
+                                    onChange={(event) =>
+                                      setManualForm((current) => ({
+                                        ...current,
+                                        receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
+                                          entryIndex === index ? { ...entry, description: event.target.value } : entry
+                                        ),
+                                      }))
+                                    }
+                                    placeholder="Coffee"
+                                  />
+                                </label>
+                                <label className="manual-receipt-table__cell manual-receipt-table__cell--price" role="cell">
+                                  <span className="sr-only">Price</span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={lineItem.amount}
+                                    onChange={(event) =>
+                                      setManualForm((current) => ({
+                                        ...current,
+                                        receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
+                                          entryIndex === index ? { ...entry, amount: event.target.value } : entry
+                                        ),
+                                      }))
+                                    }
+                                    placeholder="0.00"
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  className="manual-receipt-table__remove"
+                                  onClick={() =>
+                                    setManualForm((current) => ({
+                                      ...current,
+                                      receiptLineItems: current.receiptLineItems.filter((_, entryIndex) => entryIndex !== index),
+                                    }))
+                                  }
+                                  aria-label="Remove line item"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        <button
+                          type="button"
+                          className="manual-receipt-table__add-floater"
+                          onClick={() =>
+                            setManualForm((current) => ({
+                              ...current,
+                              receiptLineItems: [...current.receiptLineItems, createEmptyReceiptLineItem()],
+                            }))
+                          }
+                          aria-label="Add receipt line item"
+                        >
+                          +
+                        </button>
+
+                        {manualReceiptLineItemHasValues ? (
+                          <div className="field-help">
+                            <div>Line-item total: {formatTransactionAmount(manualReceiptLineItemTotal, manualForm.currency)}</div>
+                            {manualReceiptLineItemMismatch ? (
+                              <div>Line items do not match the transaction amount yet.</div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="manual-form-actions manual-form-actions--expanded">
+                      <div className="manual-form-actions__right">
+                        <button
+                          className="transactions-manual-add-another"
+                          type="submit"
+                          data-submit-mode="add-another"
+                          disabled={isSaving}
+                        >
+                          Add another
+                        </button>
+                        <button className="button button-primary" type="submit" data-submit-mode="close" disabled={isSaving}>
+                          {isSaving ? "Saving..." : "Add transaction"}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : null}
               </div>
             </form>
           </section>
