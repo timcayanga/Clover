@@ -3298,7 +3298,9 @@ body.transactions-manual-open .shell-quick-add-button {
   padding: 18px;
   border: 1px solid var(--stroke);
   border-radius: 32px;
-  background: linear-gradient(135deg, rgba(3, 168, 192, 0.98) 0%, rgba(94, 211, 208, 0.98) 100%);
+  background:
+    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.22), transparent 30%),
+    linear-gradient(135deg, rgba(3, 168, 192, 0.98) 0%, rgba(94, 211, 208, 0.98) 100%);
   box-shadow: var(--shadow);
 }
 
@@ -3308,9 +3310,9 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .dashboard-home__balance-layout {
-  display: grid;
-  grid-template-columns: minmax(220px, 1.15fr) minmax(0, 0.85fr);
-  gap: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
   align-items: center;
 }
 
@@ -3340,6 +3342,8 @@ body.transactions-manual-open .shell-quick-add-button {
   grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
   gap: 8px;
   align-content: start;
+  width: min(100%, 444px);
+  margin-left: auto;
 }
 
 .dashboard-home__balance-mini-pill .eyebrow {
@@ -21758,6 +21762,7 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .dashboard-home__balance-layout {
+    display: grid;
     grid-template-columns: 1fr;
     gap: 8px;
   }
@@ -21776,7 +21781,8 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .dashboard-home__balance-side {
-    grid-template-columns: 1fr;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 6px;
   }
 
