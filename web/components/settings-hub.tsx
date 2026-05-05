@@ -148,7 +148,6 @@ const themeOptions: Array<{
 }> = [
   { value: "light", label: "Light", helper: "Bright, high-contrast profile view." },
   { value: "dark", label: "Dark", helper: "Muted contrast for low-light sessions." },
-  { value: "system", label: "System preferences", helper: "Follows the device preference automatically." },
 ];
 
 const planCards = [
@@ -273,7 +272,7 @@ export function SettingsHub({
   const router = useRouter();
   const { isLoaded, isSignedIn, user } = useUser();
   const [activeSection, setActiveSection] = useState<SettingsSectionKey>("account");
-  const [themeMode, setThemeMode] = useState<ThemeMode>("system");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("light");
   const [helperTextVisible, setHelperTextVisible] = useState(true);
   const [historyCutoff, setHistoryCutoff] = useState(() => new Date().toISOString().slice(0, 10));
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -298,7 +297,8 @@ export function SettingsHub({
   const connectedAccounts = user?.externalAccounts ?? [];
 
   useEffect(() => {
-    const initialTheme = readStoredThemeMode();
+    const storedTheme = readStoredThemeMode();
+    const initialTheme = storedTheme === "dark" ? "dark" : "light";
     setThemeMode(initialTheme);
     applyThemeMode(initialTheme);
   }, []);
@@ -330,37 +330,6 @@ export function SettingsHub({
   useEffect(() => {
     window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
     applyThemeMode(themeMode);
-
-    if (themeMode !== "system") {
-      return;
-    }
-
-    const darkMediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-    const lightMediaQuery = window.matchMedia("(prefers-color-scheme: light)");
-    const handleChange = () => applyThemeMode("system");
-    if ("addEventListener" in darkMediaQuery) {
-      darkMediaQuery.addEventListener("change", handleChange);
-    } else {
-      darkMediaQuery.addListener(handleChange);
-    }
-    if ("addEventListener" in lightMediaQuery) {
-      lightMediaQuery.addEventListener("change", handleChange);
-    } else {
-      lightMediaQuery.addListener(handleChange);
-    }
-
-    return () => {
-      if ("removeEventListener" in darkMediaQuery) {
-        darkMediaQuery.removeEventListener("change", handleChange);
-      } else {
-        darkMediaQuery.removeListener(handleChange);
-      }
-      if ("removeEventListener" in lightMediaQuery) {
-        lightMediaQuery.removeEventListener("change", handleChange);
-      } else {
-        lightMediaQuery.removeListener(handleChange);
-      }
-    };
   }, [themeMode]);
 
   useEffect(() => {

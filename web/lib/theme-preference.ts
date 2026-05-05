@@ -1,47 +1,24 @@
-export type ThemeMode = "light" | "dark" | "system";
+export type ThemeMode = "light" | "dark";
 
 export const THEME_STORAGE_KEY = "clover.settings-theme";
 export const THEME_RESOLVED_COOKIE_KEY = "clover.theme-resolved";
 const THEME_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 export function isThemeMode(value: unknown): value is ThemeMode {
-  return value === "light" || value === "dark" || value === "system";
+  return value === "light" || value === "dark";
 }
 
 export function getResolvedTheme(mode: ThemeMode) {
-  if (mode !== "system") {
-    return mode;
-  }
-
-  return getSystemTheme();
-}
-
-export function getSystemTheme() {
-  if (typeof window === "undefined") {
-    return "light";
-  }
-
-  const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
-  const lightQuery = window.matchMedia("(prefers-color-scheme: light)");
-
-  if (lightQuery.matches) {
-    return "light";
-  }
-
-  if (darkQuery.matches) {
-    return "dark";
-  }
-
-  return "light";
+  return mode;
 }
 
 export function readStoredThemeMode() {
   if (typeof window === "undefined") {
-    return "system" as ThemeMode;
+    return "light" as ThemeMode;
   }
 
   const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return isThemeMode(stored) ? stored : "system";
+  return isThemeMode(stored) ? stored : "light";
 }
 
 export function applyThemeMode(mode: ThemeMode) {

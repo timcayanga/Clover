@@ -99,23 +99,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
                   pathname === "/onboarding";
                 const mode = isLightOnlyRoute
                   ? "light"
-                  : saved === "light" || saved === "dark" || saved === "system"
+                  : saved === "light" || saved === "dark"
                     ? saved
-                    : "system";
-                const resolved =
-                  mode === "system"
-                    ? (() => {
-                        const lightQuery = window.matchMedia("(prefers-color-scheme: light)");
-                        const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
-                        if (lightQuery.matches) {
-                          return "light";
-                        }
-                        if (darkQuery.matches) {
-                          return "dark";
-                        }
-                        return "light";
-                      })()
-                    : mode;
+                    : "light";
+                const resolved = mode;
                 document.documentElement.dataset.theme = resolved;
                 document.documentElement.style.colorScheme = resolved;
               } catch (error) {}
