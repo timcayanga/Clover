@@ -367,6 +367,57 @@ const looksCharacterSpacedGenericLine = (value: string) => {
   return singleCharacterTokens / tokens.length >= 0.6;
 };
 
+const normalizeCharacterSpacedGenericLine = (value: string) => {
+  const collapsed = normalizeWhitespace(value).split(/\s+/).join("");
+  if (!collapsed) {
+    return "";
+  }
+
+  const restoreCompactedInstallmentSuffix = (input: string) =>
+    input.replace(/(?<prefix>[:A-Za-z-])(?<numerator>\d{1,2})\/(?<tail>\d[\d,]*\.\d{2})$/g, (match, prefix: string, numerator: string, tail: string) => {
+      const normalizedTail = tail.replace(/,/g, "");
+      const tailMatch = normalizedTail.match(/^(?<integer>\d+)\.(?<decimal>\d{2})$/);
+      if (!tailMatch?.groups?.integer || !tailMatch.groups.decimal) {
+        return match;
+      }
+
+      for (const denominatorLength of [2, 1] as const) {
+        if (tailMatch.groups.integer.length <= denominatorLength) {
+          continue;
+        }
+
+        const denominator = tailMatch.groups.integer.slice(0, denominatorLength);
+        const amountInteger = tailMatch.groups.integer.slice(denominatorLength);
+        const denominatorValue = Number(denominator);
+        if (!Number.isFinite(denominatorValue) || denominatorValue < 1 || denominatorValue > 36) {
+          continue;
+        }
+
+        const amountValue = Number(`${amountInteger}.${tailMatch.groups.decimal}`);
+        if (!Number.isFinite(amountValue) || amountValue <= 0) {
+          continue;
+        }
+
+        const formattedAmount = amountValue.toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+        return `${prefix}${numerator}/${denominator} ${formattedAmount}`;
+      }
+
+      return match;
+    });
+
+  return restoreCompactedInstallmentSuffix(decompactOcrText(restoreGenericCompactLabels(collapsed)))
+    .replace(new RegExp(`(${monthNamePattern})\\s*(\\d{1,2})(?=${monthNamePattern})`, "gi"), "$1 $2 ")
+    .replace(new RegExp(`(${monthNamePattern})\\s*(\\d{1,2})(?=[A-Z])`, "gi"), "$1 $2 ")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]{2,})([0-9][0-9,.-]*\.\d{2})/g, "$1 $2")
+    .replace(/([0-9][0-9,.-]*\.\d{2})([A-Z][a-z])/g, "$1 $2")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
 const normalizeGenericOcrText = (text: string) =>
   text
     .split(/\r?\n/)
@@ -380,7 +431,7 @@ const normalizeGenericOcrText = (text: string) =>
         return normalized;
       }
 
-      return restoreGenericCompactLabels(normalizeWhitespace(normalized).split(/\s+/).join(""));
+      return normalizeCharacterSpacedGenericLine(normalized);
     })
     .join("\n");
 
@@ -465,10 +516,10 @@ const parseMoney = (value?: string | null) => {
 };
 
 const institutionPatterns: Array<{ name: string; pattern: RegExp }> = [
-  { name: "BPI Family Savings Bank", pattern: /\bBPI\s+FAMILY\s+SAVINGS\s+BANK\b/i },
-  { name: "Bank of the Philippine Islands", pattern: /\bBANK OF THE PHILIPPINE ISLANDS\b/i },
-  { name: "BPI", pattern: /\bBPI\b/i },
-  { name: "BDO Unibank, Inc.", pattern: /\bBDO\s+UNIBANK(?:,\s*INC\.?)?\b/i },
+  { name: "BPI Family Savings Bank", pattern: /\bBPI\s+FAMILY\s+SAVINGS\s+BANK\b|BPIFAMILYSAVINGSBANK/i },
+  { name: "Bank of the Philippine Islands", pattern: /\bBANK OF THE PHILIPPINE ISLANDS\b|BANKOFTHEPHILIPPINEISLANDS/i },
+  { name: "BPI", pattern: /\bBPI\b|BPIEXPRESS|BPIEASY|BPIFAMILY/i },
+  { name: "BDO Unibank, Inc.", pattern: /\bBDO\s+UNIBANK(?:,\s*INC\.?)?\b|BDOUNIBANK/i },
   { name: "BDO", pattern: /\b(BDO|BANCO DE ORO)\b/i },
   { name: "Metrobank", pattern: /\b(METROBANK|METROPOLITAN BANK)\b/i },
   { name: "Security Bank", pattern: /\b(SECURITY BANK|SECURITY BANK CORPORATION)\b/i },
@@ -497,8 +548,9 @@ const institutionPatterns: Array<{ name: string; pattern: RegExp }> = [
 ];
 
 const detectInstitutionFromText = (text: string) => {
+  const compact = compactGenericSignalLine(text);
   for (const institution of institutionPatterns) {
-    if (institution.pattern.test(text)) {
+    if (institution.pattern.test(text) || institution.pattern.test(compact)) {
       return institution.name;
     }
   }
@@ -657,13 +709,13 @@ const extractStatementDateFromText = (text: string) => {
     return null;
   }
 
-  const parsed = new Date(statementMatch[1]);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  return parseDateValue(statementMatch[1]);
 };
 
 const detectBalanceFromText = (text: string) => {
   const compact = restoreGenericCompactLabels(normalizeWhitespace(text).replace(/\s+/g, ""));
   const openingBalance =
+    parseMoney(text.match(/PREVIOUS\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
     parseMoney(text.match(/(?:BEGINNING|OPENING|STARTING)\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
     parseMoney(text.match(/(?:BEGINNING|OPENING|STARTING)\s*([0-9,]+\.\d{2})\s+BALANCE/i)?.[1]) ??
     parseMoney(text.match(/(?:BEGINNING|OPENING|STARTING)\s+BALANCE\s*(?:\r?\n|\s)+(?:PHP|P|₱)?\s*([0-9][0-9,\s]*\.\d{2})/i)?.[1]) ??
@@ -2174,7 +2226,14 @@ const parseMariBankImportText = (text: string, context: ImportParseContext = {})
     return null;
   }
 
-  const filteredRows = rows.sort((a, b) => (a.date === b.date ? a.amount.localeCompare(b.amount) : a.date.localeCompare(b.date)));
+  const filteredRows = rows.sort((a, b) => {
+    const leftDate = a.date ?? "";
+    const rightDate = b.date ?? "";
+    if (leftDate === rightDate) {
+      return (a.amount ?? "").localeCompare(b.amount ?? "");
+    }
+    return leftDate.localeCompare(rightDate);
+  });
   const seenCategories = new Set<string>();
   const selectedRows = filteredRows.filter((row) => {
     if (seenCategories.has(row.categoryName)) {
@@ -3030,7 +3089,7 @@ const extractAccountHolderNameFromLines = (lines: string[], accountLineIndex: nu
     }
 
     if (
-      /^(?:STATEMENT|ACCOUNT|CURRENCY|ADDRESS|BRGY|DATE|PAGE|CREDIT CARD ACCOUNT|PHILIPPINE NATIONAL BANK|BDO UNIBANK|METROBANK|TOTAL|BALANCE|CREDIT LIMIT|REMINDERS|TRANSACTION DETAILS|CONNECT WITH US|FOR INQUIRIES|REGULATED BY|DEPOSITS ARE INSURED|THIS IS TO CERTIFY|MONEY THAT YOU MUST|REQUESTED DATE|PRINTED BY|PESO ACCOUNT DETAILS|PAYMENT DUE|CLIENT NAME|CUSTOMER NAME|BANK NAME|ACCOUNT NUMBER|ACCOUNT NO\.?|CARD NUMBER|CARDHOLDER|PREFERRED NICKNAME)/i.test(
+      /^(?:STATEMENT|ACCOUNT|CURRENCY|ADDRESS|BRGY|DATE|PAGE|CARD TYPE|CREDIT CARD ACCOUNT|PHILIPPINE NATIONAL BANK|BDO UNIBANK|METROBANK|TOTAL|BALANCE|CREDIT LIMIT|REMINDERS|TRANSACTION DETAILS|CONNECT WITH US|FOR INQUIRIES|REGULATED BY|DEPOSITS ARE INSURED|THIS IS TO CERTIFY|MONEY THAT YOU MUST|REQUESTED DATE|PRINTED BY|PESO ACCOUNT DETAILS|PAYMENT DUE|CLIENT NAME|CUSTOMER NAME|BANK NAME|ACCOUNT NUMBER|ACCOUNT NO\.?|CARD NUMBER|CARDHOLDER|PREFERRED NICKNAME)/i.test(
       normalized
       )
     ) {
@@ -3050,6 +3109,14 @@ const extractAccountHolderNameFromLines = (lines: string[], accountLineIndex: nu
     }
 
     if (/PURCHASES\s+AND\s+ADVANCES|FOR\s+BEST\s+RESULTS|FOR\s+BILLING\s+CONCERNS|THANK\s+YOU\s+FOR\s+BANKING|PLEASE\s+KEEP\s+THIS\s+STATEMENT|THIS\s+IS\s+TO\s+CERTIFY/i.test(normalized)) {
+      return false;
+    }
+
+    if (
+      /\b(?:AVERAGE\s+DAILY|VALUED\s+CLIENT|FINANCIAL\s+PARTNER|CUSTOMER\s+SERVICE|PLEASE\s+EXAMINE|MAXIMUM\s+DEPOSIT\s+INSURANCE|CHANGE\s+OF\s+ADDRESS|NO\s+PREMIUM\s+PAYMENTS|NO\s+MEDICAL\s+CHECKUPS|THANK\s+YOU)\b/i.test(
+        normalized
+      )
+    ) {
       return false;
     }
 
@@ -3084,6 +3151,24 @@ const extractAccountHolderNameFromLines = (lines: string[], accountLineIndex: nu
     /(?:^|\b)SHORT\s+NAME\s*[:\-]?\s*(.+)/i,
     /(?:^|\b)NAME\s*[:\-]?\s*(.+)/i,
   ];
+
+  const preparedForIndex = lines.findIndex((entry) => /prepared\s+for/i.test(entry));
+  if (preparedForIndex >= 0) {
+    const preparedWindow = lines.slice(preparedForIndex + 1, Math.min(lines.length, preparedForIndex + 9));
+    const preparedValue = preparedWindow.find((entry) => {
+      const normalized = normalizeWhitespace(entry);
+      return (
+        normalized &&
+        !/^(?:reference\s+no\.?|customer\s+number|statement\s+date|payment\s+due\s+date|credit\s+limit|total\s+amount\s+due|min(?:imum)?\s+amount\s+due|\*)/i.test(
+          normalized
+        ) &&
+        isLikelyAccountHolderName(normalized)
+      );
+    });
+    if (preparedValue) {
+      return cleanAccountHolderCandidate(preparedValue);
+    }
+  }
 
   for (const line of lines) {
     for (const pattern of labeledPatterns) {
@@ -7706,29 +7791,37 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
     refinedAccountType === "credit_card"
       ? statementDate ?? rawEndDate ?? signalEndDate ?? lineEndDate
       : rawEndDate ?? signalEndDate ?? lineEndDate ?? statementDate;
+  const finalInstitution =
+    institution === "BPI" && /BPIFAMILYSAVINGSBANK|EASYSAVER/i.test(compactWhitespace(signalLines.slice(0, 20).join(" ")))
+      ? "BPI Family Savings Bank"
+    : institution === "BPI"
+        ? "Bank of the Philippine Islands"
+        : institution === "BDO"
+          ? "BDO Unibank, Inc."
+          : institution;
 
-  if (!institution && !accountNumber && !startDate && !endDate && openingBalance === null && endingBalance === null) {
+  if (!finalInstitution && !accountNumber && !startDate && !endDate && openingBalance === null && endingBalance === null) {
     return null;
   }
 
   return {
-    institution,
+    institution: finalInstitution,
     accountNumber,
     accountName: finalizedAccountName,
-    accountType: inferAccountTypeFromStatement(institution, finalizedAccountName, "bank"),
+    accountType: inferredAccountType,
     openingBalance,
-    endingBalance,
+    endingBalance: inferredAccountType === "credit_card" && totalAmountDue !== null ? totalAmountDue : endingBalance,
     paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
     totalAmountDue,
     startDate: startDate ? startDate.toISOString() : null,
     endDate: endDate ? endDate.toISOString() : null,
     confidence: scoreMetadataConfidence({
-      institution,
+      institution: finalInstitution,
       accountNumber,
       accountName: finalizedAccountName,
-      accountType: inferAccountTypeFromStatement(institution, finalizedAccountName, "bank"),
+      accountType: inferredAccountType,
       openingBalance,
-      endingBalance,
+      endingBalance: inferredAccountType === "credit_card" && totalAmountDue !== null ? totalAmountDue : endingBalance,
       paymentDueDate: paymentDueDate ? paymentDueDate.toISOString() : null,
       totalAmountDue,
       startDate: startDate ? startDate.toISOString() : null,
@@ -7933,6 +8026,127 @@ const parseGenericStatementTransactionBlock = (
   } satisfies ParsedImportRow;
 };
 
+const classifyGenericCreditCardTransaction = (description: string, signedAmount: number) => {
+  const lower = description.toLowerCase();
+  if (/payment\s*-\s*thank\s*you|\bpayment\b/.test(lower) && signedAmount < 0) {
+    return { type: "income" as TransactionType, categoryName: "Financial" };
+  }
+
+  if (/finance\s+charge|late\s+payment|documentary\s+stamp|interest|cash\s+advance/.test(lower)) {
+    return { type: "expense" as TransactionType, categoryName: "Financial" };
+  }
+
+  if (/credit-?to-?cash|installment/.test(lower)) {
+    return { type: "expense" as TransactionType, categoryName: "Financial" };
+  }
+
+  return {
+    type: signedAmount < 0 ? ("income" as TransactionType) : ("expense" as TransactionType),
+    categoryName: guessCategoryName(description, signedAmount < 0 ? "income" : "expense"),
+  };
+};
+
+const parseGenericCreditCardText = (
+  text: string,
+  context: ImportParseContext = {},
+  options: { institutionAwareNormalization?: boolean } = {}
+) => {
+  const genericText = normalizeGenericOcrText(text);
+  const metadata = parseGenericStatementMetadata(genericText, context);
+  if (!metadata || metadata.accountType !== "credit_card") {
+    return null;
+  }
+
+  const lines = text
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => {
+      let normalized = decompactOcrText(line);
+      if (looksCharacterSpacedGenericLine(normalized)) {
+        normalized = normalizeCharacterSpacedGenericLine(normalized);
+      }
+      normalized = restoreGenericCompactLabels(normalized)
+        .replace(new RegExp(`(${monthNamePattern})\\s*(\\d{1,2})(?=${monthNamePattern})`, "gi"), "$1 $2 ")
+        .replace(new RegExp(`(${monthNamePattern})\\s*(\\d{1,2})(?=[A-Z])`, "gi"), "$1 $2 ")
+        .replace(/([a-z])([A-Z])/g, "$1 $2");
+      return normalizeWhitespace(normalized);
+    })
+    .filter(Boolean);
+  const yearHint = metadata.endDate
+    ? new Date(metadata.endDate).getUTCFullYear()
+    : new Date().getUTCFullYear();
+  const rowPattern = new RegExp(
+    `^(?<date>${monthNamePattern}\\s+\\d{1,2})\\s+(?<posted>${monthNamePattern}\\s+\\d{1,2})\\s+(?<description>.+?)\\s*(?<amount>(?:-\\s*)?(?:PHP|P|₱)?\\s*[0-9][0-9,.-]*\\.\\d{2})$`,
+    "i"
+  );
+  const rows: ParsedImportRow[] = [];
+
+  for (const line of lines) {
+    if (
+      /^(?:statement of account|transaction\s+post\s+date|date|installment amortization:?|s\.?i\.?p\.?\s+balance\s+summary|bpi express credit|prepared for|reference no\.?|customer number|statement date|payment due date|credit limit|total amount due|min(?:imum)? amount due|past due amount|unbilled installment amount)/i.test(
+        line
+      )
+    ) {
+      continue;
+    }
+
+    const financeChargeMatch = line.match(/^finance\s+charge\s+(-?(?:PHP|P|₱)?\s*[0-9][0-9,.-]*\.\d{2})$/i);
+    if (financeChargeMatch) {
+      const amount = parseMoney(financeChargeMatch[1]);
+      if (amount === null || amount <= 0) {
+        continue;
+      }
+      rows.push({
+        date: metadata.endDate ? metadata.endDate.slice(0, 10) : undefined,
+        amount: Math.abs(amount).toFixed(2),
+        merchantRaw: "Finance Charge",
+        merchantClean: summarizeMerchantText("Finance Charge", options.institutionAwareNormalization === false ? null : metadata.institution),
+        description: "Finance Charge",
+        categoryName: "Financial",
+        accountName: metadata.accountName ?? metadata.institution ?? "Account",
+        institution: metadata.institution ?? undefined,
+        type: "expense",
+        confidence: 86,
+        rawPayload: { bank: metadata.institution ?? "Unknown", kind: "generic_credit_card_transaction", line },
+      });
+      continue;
+    }
+
+    const match = line.match(rowPattern);
+    if (!match?.groups?.date || !match.groups.description || !match.groups.amount) {
+      continue;
+    }
+
+    const date = parseGenericStatementDateText(match.groups.date, yearHint);
+    const amount = parseMoney(match.groups.amount);
+    if (!date || amount === null) {
+      continue;
+    }
+
+    const description = normalizeWhitespace(match.groups.description);
+    if (!description) {
+      continue;
+    }
+
+    const { type, categoryName } = classifyGenericCreditCardTransaction(description, amount);
+    rows.push({
+      date: date.toISOString().slice(0, 10),
+      amount: Math.abs(amount).toFixed(2),
+      merchantRaw: humanizeMerchantText(description),
+      merchantClean: summarizeMerchantText(description, options.institutionAwareNormalization === false ? null : metadata.institution),
+      description,
+      categoryName,
+      accountName: metadata.accountName ?? metadata.institution ?? "Account",
+      institution: metadata.institution ?? undefined,
+      type,
+      confidence: 86,
+      rawPayload: { bank: metadata.institution ?? "Unknown", kind: "generic_credit_card_transaction", line },
+    });
+  }
+
+  return rows.length > 0 ? { metadata, rows } : { metadata, rows: [] };
+};
+
 export const parseGenericBankStatementText = (
   text: string,
   context: ImportParseContext = {},
@@ -8022,6 +8236,11 @@ export const parseImportTextGenericOnly = (
   fileType: string,
   context: ImportParseContext = {}
 ) => {
+  const genericCardParsed = parseGenericCreditCardText(text, context, { institutionAwareNormalization: false });
+  if (genericCardParsed && genericCardParsed.rows.length > 0) {
+    return genericCardParsed.rows;
+  }
+
   const genericParsed = parseGenericBankStatementText(text, context, { institutionAwareNormalization: false });
   if (genericParsed) {
     return genericParsed.rows;
