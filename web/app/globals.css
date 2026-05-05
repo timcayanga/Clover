@@ -14621,64 +14621,112 @@ input.transaction-inline-edit--amount::placeholder {
   aspect-ratio: 1.58 / 1;
   min-height: 0;
   background:
+    radial-gradient(
+      ellipse at 52% 56%,
+      color-mix(in srgb, white 18%, transparent) 0%,
+      color-mix(in srgb, white 8%, transparent) 24%,
+      transparent 58%
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.06) 0px,
+      rgba(255, 255, 255, 0.06) 1px,
+      rgba(255, 255, 255, 0) 1px,
+      rgba(255, 255, 255, 0) 8px
+    ),
     linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--brand-accent) 78%, white 10%) 0%,
-      color-mix(in srgb, var(--brand-accent) 96%, white 2%) 50%,
-      color-mix(in srgb, var(--brand-accent) 76%, black 14%) 100%
+      180deg,
+      color-mix(in srgb, var(--brand-accent) 84%, white 6%) 0%,
+      color-mix(in srgb, var(--brand-accent) 94%, white 1%) 52%,
+      color-mix(in srgb, var(--brand-accent) 78%, black 12%) 100%
     );
   box-shadow:
     0 24px 54px rgba(15, 23, 42, 0.18),
-    0 36px 102px color-mix(in srgb, var(--brand-accent) 24%, transparent),
-    inset 0 -18px 32px rgba(255, 255, 255, 0.04);
+    0 36px 102px color-mix(in srgb, var(--brand-accent) 24%, transparent);
 }
 
 .accounts-account-card[data-visual="ledger"] {
   aspect-ratio: 1.58 / 1;
   min-height: 0;
   background:
+    radial-gradient(
+      ellipse at 52% 56%,
+      rgba(255, 255, 255, 0.24) 0%,
+      rgba(255, 255, 255, 0.1) 26%,
+      transparent 58%
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.05) 0px,
+      rgba(255, 255, 255, 0.05) 1px,
+      rgba(255, 255, 255, 0) 1px,
+      rgba(255, 255, 255, 0) 8px
+    ),
     linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--brand-accent) 30%, white) 0%,
-      color-mix(in srgb, var(--brand-accent) 20%, white) 52%,
-      color-mix(in srgb, var(--brand-accent) 34%, white) 100%
+      180deg,
+      color-mix(in srgb, var(--brand-accent) 28%, white) 0%,
+      color-mix(in srgb, var(--brand-accent) 18%, white) 50%,
+      color-mix(in srgb, var(--brand-accent) 32%, white) 100%
     );
   box-shadow:
     0 18px 42px rgba(15, 23, 42, 0.12),
-    0 30px 76px color-mix(in srgb, var(--brand-accent) 16%, transparent),
-    inset 0 -18px 30px rgba(255, 255, 255, 0.12);
+    0 30px 76px color-mix(in srgb, var(--brand-accent) 16%, transparent);
 }
 
 .accounts-account-card[data-visual="cash"] {
   aspect-ratio: 1.58 / 1;
   min-height: 0;
   background:
+    radial-gradient(
+      ellipse at 52% 56%,
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.1) 24%,
+      transparent 58%
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.05) 0px,
+      rgba(255, 255, 255, 0.05) 1px,
+      rgba(255, 255, 255, 0) 1px,
+      rgba(255, 255, 255, 0) 8px
+    ),
     linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--brand-accent) 28%, white) 0%,
-      color-mix(in srgb, var(--brand-accent) 18%, white) 52%,
-      color-mix(in srgb, var(--brand-accent) 32%, white) 100%
+      180deg,
+      color-mix(in srgb, var(--brand-accent) 24%, white) 0%,
+      color-mix(in srgb, var(--brand-accent) 16%, white) 50%,
+      color-mix(in srgb, var(--brand-accent) 28%, white) 100%
     );
   box-shadow:
     0 18px 42px rgba(15, 23, 42, 0.12),
-    0 30px 76px color-mix(in srgb, var(--brand-accent) 16%, transparent),
-    inset 0 -18px 30px rgba(255, 255, 255, 0.12);
+    0 30px 76px color-mix(in srgb, var(--brand-accent) 16%, transparent);
 }
 
 .accounts-account-card[data-visual="investment"] {
   aspect-ratio: 1.58 / 1;
   min-height: 0;
   background:
+    radial-gradient(
+      ellipse at 52% 56%,
+      rgba(255, 255, 255, 0.2) 0%,
+      rgba(255, 255, 255, 0.08) 24%,
+      transparent 58%
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.045) 0px,
+      rgba(255, 255, 255, 0.045) 1px,
+      rgba(255, 255, 255, 0) 1px,
+      rgba(255, 255, 255, 0) 8px
+    ),
     linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--brand-accent) 26%, white) 0%,
-      color-mix(in srgb, var(--brand-accent) 18%, white) 50%,
-      color-mix(in srgb, var(--brand-accent) 28%, white) 100%
+      180deg,
+      color-mix(in srgb, var(--brand-accent) 24%, white) 0%,
+      color-mix(in srgb, var(--brand-accent) 16%, white) 50%,
+      color-mix(in srgb, var(--brand-accent) 26%, white) 100%
     );
   box-shadow:
     0 18px 42px rgba(15, 23, 42, 0.12),
-    0 30px 76px color-mix(in srgb, var(--brand-accent) 16%, transparent),
-    inset 0 -18px 30px rgba(255, 255, 255, 0.11);
+    0 30px 76px color-mix(in srgb, var(--brand-accent) 16%, transparent);
 }
 
 .accounts-account-card__link-overlay {
