@@ -75,7 +75,7 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
-    match: /\b(BDO|BANCO DE ORO)\b/i,
+    match: /\b(BDO|BDO UNIBANK|BANCO DE ORO)\b/i,
     brand: makeBrand({
       label: "BDO",
       logoSrcs: philippinesLogoWithVariants("bdo"),
@@ -85,7 +85,7 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
-    match: /\b(METROBANK|METROPOLITAN BANK)\b/i,
+    match: /\b(METROBANK|METROPOLITAN BANK|METROPOLITAN BANK AND TRUST COMPANY)\b/i,
     brand: makeBrand({
       label: "Metrobank",
       logoSrc: philippinesLogoPath("metrobank.png?v=20260427"),
@@ -116,7 +116,7 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
-    match: /\bRCBC\b/i,
+    match: /\b(RCBC|RIZAL COMMERCIAL BANKING)\b/i,
     brand: makeBrand({
       label: "RCBC",
       logoSrcs: philippinesLogoWithVariants("rcbc"),
@@ -126,7 +126,7 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
-    match: /\bUNIONBANK\b/i,
+    match: /\b(UNIONBANK|UNION BANK)\b/i,
     brand: makeBrand({
       label: "UnionBank",
       logoSrcs: philippinesLogoWithVariants("unionbank"),
@@ -176,14 +176,14 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
-    match: /\bMAYA\b/i,
+    match: /\b(MAYA|MAYA BANK)\b/i,
     brand: makeBrand({
       label: "Maya",
       logoSrcs: philippinesLogoWithVariants("maya"),
       fallbackIconSrc: walletIcon,
-      accent: "#34E6C7",
-      background: "linear-gradient(135deg, rgba(52, 230, 199, 0.18), rgba(11, 31, 58, 0.08))",
-      foreground: "#0b1f3a",
+      accent: "#00C389",
+      background: "linear-gradient(135deg, rgba(0, 195, 137, 0.22), rgba(10, 159, 110, 0.10))",
+      foreground: "#0b3d2e",
     }),
   },
   {

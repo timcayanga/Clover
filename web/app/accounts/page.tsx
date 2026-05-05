@@ -3313,6 +3313,9 @@ function AccountsPageContent() {
 
             if (importedAccountId) {
               setTransactions((current) => {
+                if (previewTransactions.length === 0) {
+                  return current;
+                }
                 const withoutImportedPlaceholders = current.filter(
                   (transaction) => !(transaction.source === "upload" && transaction.accountId === importedAccountId)
                 );

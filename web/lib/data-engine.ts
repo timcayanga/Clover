@@ -570,10 +570,15 @@ export const detectStatementMetadataFromText = (text: string): StatementMetadata
     (institution && accountNumber ? `${institution} ${accountNumber.slice(-4)}` : institution ?? null);
   const refinedAccountType =
     metadata?.accountType ??
-    (institution && /maya/i.test(institution) && /\b(easy\s+credit|credit|billing\s+statement|payment\s+due\s+date|total\s+amount\s+due)\b/i.test(normalizedText)
-      ? "credit_card"
+    (institution && /maya/i.test(institution)
+      ? /\b(maya\s+easy\s+credit|maya\s+credit|easy\s+credit|billing\s+statement|payment\s+due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit)\b/i.test(normalizedText)
+        ? "credit_card"
+        : /\b(wallet|cash\s*(?:in|out)|send\s+money|received\s+money|fund\s+transfer|transfer\s+to\s+maya\s+savings|auto\s*cash[- ]?in)\b/i.test(normalizedText)
+          ? "wallet"
+          : /\b(savings|consumer\s+savings|account\s+summary|running\s+balance|starting\s+balance|ending\s+balance|interest\s+earned)\b/i.test(normalizedText)
+            ? "bank"
+            : "bank"
       : null) ??
-    (institution && /maya/i.test(institution) && /\bsavings\b/i.test(normalizedText) ? "bank" : null) ??
     (institution === "GoTyme" ? "bank" : null);
   const accountType = refinedAccountType ?? inferAccountTypeFromStatement(institution, accountName, "bank");
   const confidence =

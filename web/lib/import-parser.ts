@@ -77,6 +77,26 @@ export const inferAccountTypeFromStatement = (
 ): ImportedAccountType => {
   const normalized = `${institution ?? ""} ${accountName ?? ""}`.toLowerCase();
 
+  if (/maya/.test(normalized)) {
+    if (
+      /(maya\s+easy\s+credit|maya\s+credit|easy\s+credit|billing\s+statement|payment\s+due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit)/.test(
+        normalized
+      )
+    ) {
+      return "credit_card";
+    }
+
+    if (/(wallet|cash\s*(?:in|out)|send\s+money|received\s+money|fund\s+transfer|transfer\s+to\s+maya\s+savings|auto\s*cash[- ]?in)/.test(normalized)) {
+      return "wallet";
+    }
+
+    if (/(savings|consumer\s+savings|account\s+summary|running\s+balance|starting\s+balance|ending\s+balance|interest\s+earned)/.test(normalized)) {
+      return "bank";
+    }
+
+    return "bank";
+  }
+
   if (
     /(maya\s+easy\s+credit|maya\s+credit|easy\s+credit|credit card|visa platinum|mastercard|amex|card ending|payment due date|total amount due|minimum amount due|credit limit)/.test(
       normalized

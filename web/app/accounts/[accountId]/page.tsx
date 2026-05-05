@@ -68,6 +68,7 @@ type Account = {
 type Transaction = {
   id: string;
   accountId: string;
+  categoryId: string | null;
   amount: string;
   currency?: string | null;
   type: "income" | "expense" | "transfer";
@@ -81,8 +82,37 @@ type Transaction = {
   importFileId?: string | null;
 };
 
+type Category = {
+  id: string;
+  name: string;
+  type: "income" | "expense" | "transfer";
+};
+
 type AccountTransactionSortField = "name" | "date" | "category" | "type" | "amount";
 type AccountTransactionSortDirection = "asc" | "desc";
+
+type EditableTransactionField = "name" | "date" | "categoryId" | "amount";
+
+type InlineEditableCellProps = {
+  value: string;
+  displayValue: string;
+  ariaLabel: string;
+  kind: "text" | "date" | "number" | "select";
+  onCommit: (value: string) => Promise<void> | void;
+  options?: Array<{ value: string; label: string }>;
+  className?: string;
+};
+
+type TransactionDetailDraft = {
+  merchantClean: string;
+  date: string;
+  categoryId: string;
+  amount: string;
+  currency: string;
+  type: "debit" | "credit" | "transfer";
+  description: string;
+  isExcluded: boolean;
+};
 
 type ImportFile = {
   id: string;
@@ -178,6 +208,130 @@ const formatCardAccountNumber = (value: string | null | undefined) => {
 
   return cleaned;
 };
+
+function InlineEditableCell({
+  value,
+  displayValue,
+  ariaLabel,
+  kind,
+  onCommit,
+  options = [],
+  className,
+}: InlineEditableCellProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const fieldRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
+
+  useEffect(() => {
+    if (!editing) {
+      setDraft(value);
+    }
+  }, [editing, value]);
+
+  useEffect(() => {
+    if (!editing) {
+      return;
+    }
+
+    const field = fieldRef.current;
+    field?.focus();
+    if (field instanceof HTMLInputElement) {
+      field.select();
+    }
+  }, [editing]);
+
+  const openEditor = () => {
+    setDraft(value);
+    setEditing(true);
+  };
+
+  const cancelEditor = () => {
+    setDraft(value);
+    setEditing(false);
+  };
+
+  const commit = async (nextValue = draft) => {
+    const normalized = kind === "text" ? nextValue.trim() : nextValue;
+    if (normalized === value) {
+      setEditing(false);
+      return;
+    }
+
+    try {
+      await onCommit(normalized);
+      setEditing(false);
+    } catch {
+      setDraft(value);
+      setEditing(false);
+    }
+  };
+
+  if (kind === "select") {
+    return (
+      <select
+        ref={(node) => {
+          fieldRef.current = node;
+        }}
+        className={className}
+        value={draft}
+        aria-label={ariaLabel}
+        onFocus={() => setDraft(value)}
+        onChange={(event) => {
+          const next = event.target.value;
+          setDraft(next);
+          if (next === value) {
+            return;
+          }
+
+          void Promise.resolve(onCommit(next)).catch(() => {
+            setDraft(value);
+          });
+        }}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    );
+  }
+
+  if (editing) {
+    return (
+      <input
+        ref={(node) => {
+          fieldRef.current = node;
+        }}
+        className={className}
+        value={draft}
+        aria-label={ariaLabel}
+        type={kind}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => {
+          void commit();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            event.preventDefault();
+            void commit();
+          }
+
+          if (event.key === "Escape") {
+            event.preventDefault();
+            cancelEditor();
+          }
+        }}
+      />
+    );
+  }
+
+  return (
+    <button type="button" className={className} onClick={openEditor} aria-label={ariaLabel}>
+      {displayValue}
+    </button>
+  );
+}
 
 function ActionIcon({ name }: { name: "warning" }) {
   if (name === "warning") {
@@ -403,6 +557,20 @@ const getTransactionTypeLabel = (type: Transaction["type"]) => {
 const getTransactionSortLabel = (transaction: Transaction) =>
   transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
 
+const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => ({
+  merchantClean: transaction.merchantClean ?? transaction.merchantRaw,
+  date: transaction.date.slice(0, 10),
+  categoryId: transaction.categoryId ?? "",
+  amount: transaction.amount,
+  currency: transaction.currency ?? "PHP",
+  type: transaction.type === "income" ? "credit" : transaction.type === "transfer" ? "transfer" : "debit",
+  description: transaction.description ?? "",
+  isExcluded: transaction.isExcluded,
+});
+
+const detailDraftTypeToTransactionType = (type: TransactionDetailDraft["type"]) =>
+  type === "credit" ? "income" : type === "transfer" ? "transfer" : "expense";
+
 const getTransactionSortFieldValue = (transaction: Transaction, field: AccountTransactionSortField) => {
   switch (field) {
     case "name":
@@ -442,6 +610,7 @@ function AccountDetailPageContent() {
 
   const [account, setAccount] = useState<Account | null>(null);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [transactionPage, setTransactionPage] = useState(1);
   const [transactionTotalCount, setTransactionTotalCount] = useState(0);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
@@ -459,6 +628,9 @@ function AccountDetailPageContent() {
   const [transactionSortDirection, setTransactionSortDirection] = useState<AccountTransactionSortDirection>("desc");
   const [accountEditDraft, setAccountEditDraft] = useState({ name: "", accountNumber: "" });
   const [accountEditSaveState, setAccountEditSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
+  const [isSavingTransactionDetail, setIsSavingTransactionDetail] = useState(false);
   const [investmentEditDraft, setInvestmentEditDraft] = useState<InvestmentEditDraft | null>(null);
   const [investmentAutosaveState, setInvestmentAutosaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [investmentPurchases, setInvestmentPurchases] = useState<InvestmentPurchase[]>([]);
@@ -663,27 +835,37 @@ function AccountDetailPageContent() {
           router.replace(canonicalPath);
         }
 
-        void fetch(`/api/imports?workspaceId=${nextAccount.workspaceId}`)
-          .then(async (response) => {
-            if (!response.ok || cancelled) {
-              if (!cancelled && !response.ok) {
-                setImportFiles([]);
-              }
+        void Promise.all([
+          fetch(`/api/imports?workspaceId=${nextAccount.workspaceId}`),
+          fetch(`/api/categories?workspaceId=${encodeURIComponent(nextAccount.workspaceId)}`),
+        ])
+          .then(async ([importsResponse, categoriesResponse]) => {
+            if (cancelled) {
               return;
             }
 
-            const importsPayload = (await response.json()) as { importFiles?: ImportFile[] } | null;
-            if (!cancelled) {
+            if (importsResponse.ok) {
+              const importsPayload = (await importsResponse.json()) as { importFiles?: ImportFile[] } | null;
               setImportFiles(
                 Array.isArray(importsPayload?.importFiles)
                   ? importsPayload.importFiles.filter((importFile) => !importFile.accountId || importFile.accountId === nextAccount.id)
                   : []
               );
+            } else {
+              setImportFiles([]);
+            }
+
+            if (categoriesResponse.ok) {
+              const categoriesPayload = (await categoriesResponse.json()) as { categories?: Category[] } | null;
+              setCategories(Array.isArray(categoriesPayload?.categories) ? categoriesPayload.categories : []);
+            } else {
+              setCategories([]);
             }
           })
           .catch(() => {
             if (!cancelled) {
               setImportFiles([]);
+              setCategories([]);
             }
           });
 
@@ -715,6 +897,16 @@ function AccountDetailPageContent() {
               const nextTransactions = Array.isArray(transactionsPayload?.transactions)
                 ? transactionsPayload.transactions
                 : [];
+              if (cachedTransactions.length > 0 && nextTransactions.length === 0) {
+                setTransactions(cachedTransactions);
+                setTransactionPage(typeof transactionsPayload?.page === "number" ? transactionsPayload.page : 1);
+                setTransactionTotalCount(Math.max(cachedTransactions.length, accountTransactionsLookup?.totalCount ?? cachedTransactions.length));
+                setTransactionsError(null);
+                setTransactionsLoading(false);
+                setMessage("");
+                setHasInitialDataLoaded(true);
+                return;
+              }
               const mergedTransactions = mergeImportedWorkspaceTransactions(cachedTransactions, nextTransactions);
               setTransactions(mergedTransactions);
               setTransactionPage(typeof transactionsPayload?.page === "number" ? transactionsPayload.page : 1);
@@ -972,6 +1164,14 @@ function AccountDetailPageContent() {
     },
     [transactions, transactionSortDirection, transactionSortField]
   );
+  const categoryOptions = useMemo(
+    () => categories.map((category) => ({ value: category.id, label: category.name })),
+    [categories]
+  );
+  const detailSelectedCategory = useMemo(
+    () => categories.find((category) => category.id === (detailDraft?.categoryId ?? "")) ?? null,
+    [categories, detailDraft?.categoryId]
+  );
 
   const hasMoreTransactions = transactionTotalCount > transactions.length;
   const visibleTransactionIds = useMemo(() => visibleTransactions.map((transaction) => transaction.id), [visibleTransactions]);
@@ -1050,6 +1250,107 @@ function AccountDetailPageContent() {
       setTransactionsError(error instanceof Error ? error.message : "Unable to load more transactions.");
     } finally {
       setTransactionsLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedTransaction) {
+      return;
+    }
+
+    const nextSelectedTransaction = transactions.find((entry) => entry.id === selectedTransaction.id) ?? null;
+    if (!nextSelectedTransaction) {
+      setSelectedTransaction(null);
+      setDetailDraft(null);
+      return;
+    }
+
+    setSelectedTransaction(nextSelectedTransaction);
+  }, [selectedTransaction, transactions]);
+
+  const updateTransaction = async (transactionId: string, body: Record<string, unknown>) => {
+    const response = await fetch(`/api/transactions/${transactionId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to update transaction.");
+    }
+
+    const payload = await response.json();
+    const updated = payload.transaction as Transaction;
+    setTransactions((current) => current.map((entry) => (entry.id === updated.id ? { ...entry, ...updated } : entry)));
+    setSelectedTransaction((current) => (current?.id === updated.id ? { ...current, ...updated } : current));
+    setDetailDraft((current) => (current && selectedTransaction?.id === updated.id ? createDetailDraft({ ...updated }) : current));
+    return updated;
+  };
+
+  const commitInlineEdit = async (transaction: Transaction, field: EditableTransactionField, value: string) => {
+    if (field === "name") {
+      await updateTransaction(transaction.id, {
+        merchantClean: value.trim() || null,
+      });
+      setMessage("Transaction updated.");
+      return;
+    }
+
+    if (field === "date") {
+      await updateTransaction(transaction.id, {
+        date: value,
+      });
+      setMessage("Transaction updated.");
+      return;
+    }
+
+    if (field === "categoryId") {
+      await updateTransaction(transaction.id, {
+        categoryId: value || null,
+      });
+      setMessage("Transaction updated.");
+      return;
+    }
+
+    await updateTransaction(transaction.id, {
+      amount: value,
+    });
+    setMessage("Transaction updated.");
+  };
+
+  const openTransactionDetail = (transaction: Transaction) => {
+    setSelectedTransaction(transaction);
+    setDetailDraft(createDetailDraft(transaction));
+  };
+
+  const closeTransactionDetail = () => {
+    setSelectedTransaction(null);
+    setDetailDraft(null);
+  };
+
+  const persistDetailDraft = async () => {
+    if (!selectedTransaction || !detailDraft) {
+      return;
+    }
+
+    setIsSavingTransactionDetail(true);
+    try {
+      await updateTransaction(selectedTransaction.id, {
+        merchantClean: detailDraft.merchantClean.trim() || null,
+        date: detailDraft.date,
+        categoryId: detailDraft.categoryId || null,
+        amount: detailDraft.amount,
+        currency: detailDraft.currency.trim().toUpperCase() || selectedTransaction.currency || account?.currency || "PHP",
+        type: detailDraftTypeToTransactionType(detailDraft.type),
+        description: detailDraft.description.trim() || null,
+        isExcluded: detailDraft.isExcluded,
+      });
+      setMessage("Transaction details updated.");
+      closeTransactionDetail();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update transaction.");
+    } finally {
+      setIsSavingTransactionDetail(false);
     }
   };
 
@@ -1506,20 +1807,6 @@ function AccountDetailPageContent() {
       { accountIds: [account.id] },
       { pageSize: "all" }
     );
-    router.push(`/transactions?${params.toString()}`);
-  };
-
-  const openTransactionDetail = (transaction: Transaction) => {
-    if (!account) {
-      return;
-    }
-
-    const params = buildTransactionQuerySearchParams(
-      account.workspaceId,
-      { accountIds: [account.id] },
-      { pageSize: "all" }
-    );
-    params.set("review", transaction.id);
     router.push(`/transactions?${params.toString()}`);
   };
 
@@ -1984,9 +2271,9 @@ function AccountDetailPageContent() {
                       setTransactionSortField("name");
                       setTransactionSortDirection("desc");
                     }}
-                    aria-label={`Sort by transaction${transactionSortField === "name" ? ` (${transactionSortDirection})` : ""}`}
+                    aria-label={`Sort by name${transactionSortField === "name" ? ` (${transactionSortDirection})` : ""}`}
                   >
-                    Transaction{transactionSortField === "name" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
+                    Name{transactionSortField === "name" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
                   </button>
                   <button
                     className="line-item-header-cell"
@@ -2021,22 +2308,6 @@ function AccountDetailPageContent() {
                     Category{transactionSortField === "category" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
                   </button>
                   <button
-                    className="line-item-header-cell"
-                    type="button"
-                    onClick={() => {
-                      if (transactionSortField === "type") {
-                        setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
-                        return;
-                      }
-
-                      setTransactionSortField("type");
-                      setTransactionSortDirection("desc");
-                    }}
-                    aria-label={`Sort by type${transactionSortField === "type" ? ` (${transactionSortDirection})` : ""}`}
-                  >
-                    Type{transactionSortField === "type" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
-                  </button>
-                  <button
                     className="line-item-header-cell line-item-header-cell--amount"
                     type="button"
                     onClick={() => {
@@ -2057,11 +2328,7 @@ function AccountDetailPageContent() {
                 {visibleTransactions.map((transaction) => {
                   const amount = Number(transaction.amount);
                   const amountToneClass = transaction.type === "income" ? "positive" : "negative";
-                  const merchantDisplay = transaction.merchantClean || transaction.merchantRaw;
-                  const subtext =
-                    transaction.description && transaction.description.trim() && transaction.description !== merchantDisplay
-                      ? transaction.description
-                      : "";
+                  const normalizedName = transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
 
                   return (
                     <div
@@ -2069,20 +2336,13 @@ function AccountDetailPageContent() {
                       className={`line-item accounts-detail__transaction-row ${transaction.isExcluded ? "is-muted" : ""} ${
                         selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
                       }`}
-                      tabIndex={0}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          openTransactionDetail(transaction);
-                        }
-                      }}
                     >
                       <label className="transaction-select-cell">
                         <input
                           type="checkbox"
                           checked={selectedTransactionIds.includes(transaction.id)}
                           onChange={(event) => toggleTransactionSelection(transaction.id, event.target.checked)}
-                          aria-label={`Select ${merchantDisplay}`}
+                          aria-label={`Select ${normalizedName}`}
                         />
                       </label>
                       <div className="transaction-category-icon-cell" aria-hidden="true">
@@ -2091,21 +2351,52 @@ function AccountDetailPageContent() {
                         </span>
                       </div>
                       <div className="accounts-detail__transaction-name">
-                        <strong>{merchantDisplay}</strong>
-                        {subtext ? <span>{subtext}</span> : null}
+                        <InlineEditableCell
+                          value={transaction.merchantClean ?? ""}
+                          displayValue={normalizedName}
+                          ariaLabel={`Edit name for ${normalizedName}`}
+                          kind="text"
+                          className="transaction-inline-edit transaction-inline-edit--name"
+                          onCommit={(value) => commitInlineEdit(transaction, "name", value)}
+                        />
                       </div>
-                      <div className="accounts-detail__transaction-date">{formatDate(transaction.date)}</div>
-                      <div className="accounts-detail__transaction-category">{transaction.categoryName || "Other"}</div>
-                      <div className="accounts-detail__transaction-type">{getTransactionTypeLabel(transaction.type)}</div>
+                      <div className="accounts-detail__transaction-date">
+                        <InlineEditableCell
+                          value={transaction.date.slice(0, 10)}
+                          displayValue={formatDate(transaction.date)}
+                          ariaLabel={`Edit date for ${normalizedName}`}
+                          kind="date"
+                          className="transaction-inline-edit transaction-inline-edit--date"
+                          onCommit={(value) => commitInlineEdit(transaction, "date", value)}
+                        />
+                      </div>
+                      <div className="accounts-detail__transaction-category">
+                        <InlineEditableCell
+                          value={transaction.categoryId ?? ""}
+                          displayValue={transaction.categoryName || "Other"}
+                          ariaLabel={`Edit category for ${normalizedName}`}
+                          kind="select"
+                          className="transaction-inline-edit transaction-inline-edit--select"
+                          options={categoryOptions}
+                          onCommit={(value) => commitInlineEdit(transaction, "categoryId", value)}
+                        />
+                      </div>
                       <div className={`accounts-detail__transaction-amount ${amountToneClass}`}>
-                        <span>{formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}</span>
+                        <InlineEditableCell
+                          value={transaction.amount}
+                          displayValue={formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}
+                          ariaLabel={`Edit amount for ${normalizedName}`}
+                          kind="number"
+                          className={`transaction-inline-edit transaction-inline-edit--amount ${amountToneClass}`}
+                          onCommit={(value) => commitInlineEdit(transaction, "amount", value)}
+                        />
                       </div>
                       <div className="accounts-detail__transaction-actions">
                         <button
                           className="accounts-card-chevron accounts-detail__transaction-open"
                           type="button"
                           onClick={() => openTransactionDetail(transaction)}
-                          aria-label={`Open details for ${merchantDisplay}`}
+                          aria-label={`Open details for ${normalizedName}`}
                         >
                           <span aria-hidden="true">›</span>
                         </button>
@@ -2157,6 +2448,151 @@ function AccountDetailPageContent() {
             <p className="panel-muted">No transactions are linked to this account yet.</p>
           )}
         </div>
+
+        {selectedTransaction ? (
+          <div className="modal-backdrop modal-backdrop--transaction-detail" role="presentation" onClick={closeTransactionDetail}>
+            <section
+              className="modal-card modal-card--wide transaction-drawer transaction-drawer--sidepanel"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="account-transaction-detail-title"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="modal-head transaction-drawer__head">
+                <div className="transaction-drawer__head-title">
+                  <button
+                    className="icon-button transaction-drawer__back-button"
+                    type="button"
+                    onClick={closeTransactionDetail}
+                    aria-label="Back to account details"
+                  >
+                    ‹
+                  </button>
+                  <div>
+                    <p className="eyebrow">Transaction details</p>
+                    <h4 id="account-transaction-detail-title">
+                      {detailDraft?.merchantClean?.trim() || selectedTransaction.merchantClean || selectedTransaction.merchantRaw}
+                    </h4>
+                  </div>
+                </div>
+                <button className="icon-button transaction-drawer__close-button" type="button" onClick={closeTransactionDetail} aria-label="Close transaction details">
+                  ×
+                </button>
+              </div>
+
+              <div className="transaction-drawer-form transaction-drawer-form--single">
+                <label>
+                  Name
+                  <input
+                    value={detailDraft?.merchantClean ?? selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw}
+                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, merchantClean: event.target.value } : current))}
+                    placeholder="Normalized transaction name"
+                  />
+                </label>
+
+                <label>
+                  Date
+                  <input
+                    type="date"
+                    value={detailDraft?.date ?? selectedTransaction.date.slice(0, 10)}
+                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, date: event.target.value } : current))}
+                  />
+                </label>
+
+                <label>
+                  Category
+                  <div className="transaction-drawer-select">
+                    <span className="transaction-drawer-select__icon" aria-hidden="true">
+                      <span className="transaction-category-icon transaction-drawer-category-icon" style={getCategoryIconTone(detailSelectedCategory?.name ?? "Other")}>
+                        <img src={getCategoryIconSrc(detailSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
+                      </span>
+                    </span>
+                    <select
+                      value={detailDraft?.categoryId ?? ""}
+                      onChange={(event) => setDetailDraft((current) => (current ? { ...current, categoryId: event.target.value } : current))}
+                    >
+                      <option value="">Other</option>
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </label>
+
+                <label>
+                  Amount
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={detailDraft?.amount ?? selectedTransaction.amount}
+                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, amount: event.target.value } : current))}
+                  />
+                </label>
+
+                <label>
+                  Type
+                  <div className="transactions-manual-type-control transaction-drawer-type-control">
+                    <span className="transactions-manual-type-symbol" aria-hidden="true">
+                      {(detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit")) === "credit"
+                        ? "+"
+                        : (detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit")) === "transfer"
+                          ? "↔"
+                          : "-"}
+                    </span>
+                    <select
+                      value={detailDraft?.type ?? (selectedTransaction.type === "income" ? "credit" : selectedTransaction.type === "transfer" ? "transfer" : "debit")}
+                      onChange={(event) =>
+                        setDetailDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                type: event.target.value as TransactionDetailDraft["type"],
+                              }
+                            : current
+                        )
+                      }
+                    >
+                      <option value="debit">Debit</option>
+                      <option value="credit">Credit</option>
+                      <option value="transfer">Transfer</option>
+                    </select>
+                  </div>
+                </label>
+
+                <label className="transaction-drawer-form__notes">
+                  Notes
+                  <textarea
+                    value={detailDraft?.description ?? ""}
+                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, description: event.target.value } : current))}
+                    placeholder="Optional note"
+                  />
+                </label>
+
+                <label className="transaction-drawer-form__notes">
+                  <span className="transaction-drawer-field-label">
+                    <span>Exclude from totals</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={detailDraft?.isExcluded ?? selectedTransaction.isExcluded}
+                    onChange={(event) => setDetailDraft((current) => (current ? { ...current, isExcluded: event.target.checked } : current))}
+                  />
+                </label>
+
+                <div className="detail-warning-actions">
+                  <button className="button button-secondary button-small" type="button" onClick={closeTransactionDetail} disabled={isSavingTransactionDetail}>
+                    Cancel
+                  </button>
+                  <button className="button button-primary button-small" type="button" onClick={() => void persistDetailDraft()} disabled={isSavingTransactionDetail}>
+                    {isSavingTransactionDetail ? "Saving..." : "Save changes"}
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : null}
 
         {importSummaries.length > 0 ? (
           <div className="accounts-detail__imports glass" style={{ marginTop: 20 }}>
