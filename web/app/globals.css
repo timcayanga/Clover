@@ -14515,6 +14515,19 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 8px;
 }
 
+.accounts-group__title-row {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.accounts-group__title-row strong {
+  color: #17263d;
+  font-size: 0.88rem;
+  letter-spacing: -0.02em;
+}
+
 .accounts-group__head-title {
   display: inline-flex;
   align-items: center;

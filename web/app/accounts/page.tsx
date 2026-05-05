@@ -1932,7 +1932,6 @@ function AccountsPageContent() {
               <div className="accounts-account-card__brand">
                 <AccountBrandMark accountBrand={accountBrand} label={row.institution} />
                 <div>
-                  <span>Investments</span>
                   <strong>{row.institution}</strong>
                 </div>
               </div>
@@ -2029,14 +2028,13 @@ function AccountsPageContent() {
         />
 
         <div className="accounts-account-card__content">
-          <div className="accounts-account-card__head">
-            <div className="accounts-account-card__brand">
-              <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
-              <div>
-                <span>{formatAccountTypeLabel(getEffectiveAccountType(row))}</span>
-                <strong>{accountDisplayName}</strong>
+            <div className="accounts-account-card__head">
+              <div className="accounts-account-card__brand">
+                <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
+                <div>
+                  <strong>{accountDisplayName}</strong>
+                </div>
               </div>
-            </div>
             <div className="accounts-account-card__actions">
               {warning ? (
                 <span className="accounts-warning-wrap">
@@ -2075,9 +2073,6 @@ function AccountsPageContent() {
             <div className="accounts-account-card__balance-row">
               <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
                 {formatAccountAmount(balanceValue, row.currency)}
-              </div>
-              <div className={`accounts-account-card__tone ${isLiability ? "is-liability" : "is-asset"}`}>
-                {isLiability ? "Liability" : "Asset"}
               </div>
               {isDeleting ? <div className="accounts-account-card__status-note">Deleting</div> : null}
               {!isDeleting && isLoading ? <div className="accounts-account-card__status-note">Loading</div> : null}
@@ -2647,8 +2642,9 @@ function AccountsPageContent() {
                 accountGroups.map((group) => (
                   <article key={group.title} className="accounts-group glass">
                     <div className="accounts-group__head">
-                      <div>
+                      <div className="accounts-group__title-row">
                         <h5>{group.title}</h5>
+                        <strong>{formatAggregateAmount(group.total, group.rows)}</strong>
                       </div>
                     </div>
 
