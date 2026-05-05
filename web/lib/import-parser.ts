@@ -338,6 +338,8 @@ const restoreGenericCompactLabels = (value: string) =>
     .replace(/CUSTOMERNUMBER/gi, "CUSTOMER NUMBER ")
     .replace(/ACCOUNTNUMBER/gi, "ACCOUNT NUMBER ")
     .replace(/ACCOUNTSUMMARY/gi, "ACCOUNT SUMMARY ")
+    .replace(/ACCOUNTSUMMARYFORTHEPERIOD/gi, "ACCOUNT SUMMARY FOR THE PERIOD ")
+    .replace(/PERIODCOVERED/gi, "PERIOD COVERED ")
     .replace(/STATEMENTDATE/gi, "STATEMENT DATE ")
     .replace(/STATEMENTOFACCOUNT/gi, "STATEMENT OF ACCOUNT ")
     .replace(/PAYMENTDUEDATE/gi, "PAYMENT DUE DATE ")
@@ -345,6 +347,7 @@ const restoreGenericCompactLabels = (value: string) =>
     .replace(/MINIMUMAMOUNTDUE/gi, "MINIMUM AMOUNT DUE ")
     .replace(/PREVIOUSBALANCE/gi, "PREVIOUS BALANCE ")
     .replace(/ENDINGBALANCE/gi, "ENDING BALANCE ")
+    .replace(/BALANCETHISSTATEMENT/gi, "BALANCE THIS STATEMENT ")
     .replace(/CREDITLIMIT/gi, "CREDIT LIMIT ")
     .replace(/TRANSACTIONDETAILS/gi, "TRANSACTION DETAILS ")
     .replace(/POSTDATE/gi, "POST DATE ")
@@ -385,7 +388,7 @@ const compactGenericSignalText = (value: string) =>
 const isGenericMetadataPlaceholder = (value?: string | null) =>
   Boolean(value) &&
   /^(?:CUSTOMER NUMBER|ACCOUNT NUMBER|ACCOUNT NO\.?|STATEMENT DATE|PAYMENT DUE DATE|TOTAL AMOUNT DUE|MINIMUM AMOUNT DUE|STARTING BALANCE|BEGINNING BALANCE|ENDING BALANCE)$/i.test(
-    normalizeWhitespace(value)
+    normalizeWhitespace(value ?? "")
   );
 
 export const getTrailingBalanceFromParsedRows = (rows: ParsedImportRow[]) => {
@@ -523,9 +526,13 @@ const detectAccountNumberFromText = (text: string) => {
 
 const detectStatementDatesFromText = (text: string) => {
   const rangeMatch =
-    text.match(/(?:STATEMENT\s*PERIOD|PERIOD\s*COVERED|FROM)\s*[:\-]?\s*(.+?)\s*(?:TO|THRU|THROUGH|[-–—])\s*(.+?)(?:\s{2,}|$)/i) ??
-    text.match(/FOR\s+THE\s+PERIOD\s+(.+?)\s*(?:TO|THRU|THROUGH|[-–—])\s*(.+?)(?:\s{2,}|$)/i) ??
-    text.match(/(?:STATEMENT\s*PERIOD|PERIOD\s*COVERED|FROM)\s*[:\-]?\s*([A-Z]{3,9}\s*\d{1,2}\s*,?\s*\d{4})\s*[–—-]\s*([A-Z]{3,9}\s*\d{1,2}\s*,?\s*\d{4})(?:\s{2,}|$)/i) ??
+    text.match(
+      /(?:STATEMENT\s*PERIOD|PERIOD\s*COVERED|FROM)\s*[:\-]?\s*(.+?)\s*(?:TO|THRU|THROUGH|[-–—])\s*(.+?)(?=\s{2,}|$|\s+(?:NO|ACCOUNT)\b)/i
+    ) ??
+    text.match(/FOR\s+THE\s+PERIOD\s+(.+?)\s*(?:TO|THRU|THROUGH|[-–—])\s*(.+?)(?=\s{2,}|$|\s+(?:NO|ACCOUNT)\b)/i) ??
+    text.match(
+      /(?:STATEMENT\s*PERIOD|PERIOD\s*COVERED|FROM)\s*[:\-]?\s*([A-Z]{3,9}\s*\d{1,2}\s*,?\s*\d{4})\s*[–—-]\s*([A-Z]{3,9}\s*\d{1,2}\s*,?\s*\d{4})(?=\s{2,}|$|\s+(?:NO|ACCOUNT)\b)/i
+    ) ??
     text.match(/(?:START\s*DATE|BEGINNING\s*DATE)\s*[:\-]?\s*(.+?)\s*(?:END\s*DATE|ENDING\s*DATE)\s*[:\-]?\s*(.+?)(?:\s{2,}|$)/i);
 
   const parseLooseDate = (value?: string | null) => {
@@ -561,9 +568,11 @@ const extractStatementDateFromText = (text: string) => {
 const detectBalanceFromText = (text: string) => {
   const openingBalance =
     parseMoney(text.match(/(?:BEGINNING|OPENING|STARTING)\s+BALANCE\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
+    parseMoney(text.match(/(?:BEGINNING|OPENING|STARTING)\s*([0-9,]+\.\d{2})\s+BALANCE/i)?.[1]) ??
     null;
   const endingBalance =
     parseMoney(text.match(/(?:ENDING|CLOSING|BALANCE\s+THIS\s+STATEMENT)\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
+    parseMoney(text.match(/(?:ENDING|CLOSING)\s*([0-9,]+\.\d{2})\s+BALANCE/i)?.[1]) ??
     null;
 
   return {
@@ -3006,9 +3015,11 @@ const extractFormattedAccountNumberFromLines = (lines: string[]) => {
     /ACCOUNT\s+NO\.?\s*[:\-]?\s*([0-9][0-9\s-]{6,}?)(?=\s*(?:\(|$))/i,
     /ACCOUNT\s+#\s*[:\-]?\s*([0-9][0-9\s-]{6,}?)(?=\s*(?:\(|$))/i,
     /CARD\s+NUMBER\s*[:\-]?\s*([0-9][0-9\s-]{6,}?)(?=\s*(?:\(|$))/i,
+    /(?:ACCOUNT|CARD|CUSTOMER)\s*(?:NO\.?|NUMBER|#)?\s*[:\-]?\s*([0-9][0-9\s-]{6,})/i,
+    /\bNO\.?\s*[:\-]?\s*((?:\d{2,6}\s*-\s*){1,4}\d{2,6}\s*-?)/i,
   ];
 
-  for (const line of lines) {
+  for (const [index, line] of lines.entries()) {
     for (const pattern of accountPatterns) {
       const match = line.match(pattern);
       if (!match?.[1]) {
@@ -3016,9 +3027,20 @@ const extractFormattedAccountNumberFromLines = (lines: string[]) => {
       }
 
       const raw = normalizeWhitespace(match[1]).replace(/\s+/g, "");
+      if (/-$/.test(raw)) {
+        const nextDigits = normalizeWhitespace(lines[index + 1] ?? "").replace(/\D/g, "");
+        const trimmedNextDigits = nextDigits.replace(/^20\d{2}/, "");
+        const tail =
+          (trimmedNextDigits.match(/\d{2,4}$/)?.[0] ?? trimmedNextDigits.slice(-4)).replace(/^20(?=\d{2}$)/, "");
+        const merged = `${raw}${tail}`.replace(/--+/g, "-");
+        if (merged.replace(/\D/g, "").length >= 8) {
+          return merged;
+        }
+      }
+
       const digits = raw.replace(/\D/g, "");
       if (digits.length >= 8) {
-        return raw;
+        return raw.replace(/-+$/, "");
       }
     }
   }
@@ -7264,10 +7286,9 @@ const parseGoTymeImportText = (text: string, context: ImportParseContext = {}) =
 
   const firstRawPayload =
     rows[0]?.rawPayload && typeof rows[0].rawPayload === "object" ? (rows[0].rawPayload as Record<string, unknown>) : null;
+  const lastRow = rows[rows.length - 1];
   const lastRawPayload =
-    rows.at(-1)?.rawPayload && typeof rows.at(-1).rawPayload === "object"
-      ? (rows.at(-1).rawPayload as Record<string, unknown>)
-      : null;
+    lastRow?.rawPayload && typeof lastRow.rawPayload === "object" ? (lastRow.rawPayload as Record<string, unknown>) : null;
   const firstCredit = parseMoney(typeof firstRawPayload?.creditText === "string" ? firstRawPayload.creditText : null);
   const firstDebit = parseMoney(typeof firstRawPayload?.debitText === "string" ? firstRawPayload.debitText : null);
   const firstBalance = parseMoney(typeof firstRawPayload?.balanceText === "string" ? firstRawPayload.balanceText : null);
@@ -7378,6 +7399,11 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
     normalizeAccountNumberCandidate(context.accountNumber) ??
     detectAccountNumberFromText(normalized) ??
     detectAccountNumberFromText(signalText);
+  const accountNumberDisplaySuffix = (accountNumberCandidate ?? "").replace(/\D/g, "").slice(-4);
+  const provisionalAccountNameSuffix =
+    inferAccountTypeFromStatement(institution, institution, "bank") === "wallet" && !explicitAccountNumber
+      ? ""
+      : accountNumberDisplaySuffix;
   const { startDate: rawStartDate, endDate: rawEndDate } = detectStatementDatesFromText(normalized);
   const { startDate: signalStartDate, endDate: signalEndDate } = detectStatementDatesFromText(signalText);
   const statementDate = extractStatementDateFromText(signalText) ?? extractStatementDateFromText(normalized);
@@ -7419,12 +7445,12 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
     psBankAccountName ||
     cleanAccountHolderDisplayName(extractAccountHolderNameFromLines(lines, accountNumberLineIndex >= 0 ? accountNumberLineIndex : null)) ||
     cleanAccountHolderDisplayName(extractAccountHolderNameFromLines(lines.slice(0, Math.min(lines.length, 16)))) ||
-    (institution && accountNumberCandidate
-      ? `${institution} ${accountNumberCandidate.slice(-4)}`
+    (institution && provisionalAccountNameSuffix
+      ? `${institution} ${provisionalAccountNameSuffix}`
       : institution
         ? institution
-        : accountNumberCandidate
-          ? `Account ${accountNumberCandidate.slice(-4)}`
+        : provisionalAccountNameSuffix
+          ? `Account ${provisionalAccountNameSuffix}`
           : null);
   const preferredExtractedAccountName =
     extractedAccountName && !isGenericMetadataPlaceholder(extractedAccountName)
@@ -7432,12 +7458,12 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
       : null;
   const provisionalAccountName =
     preferredExtractedAccountName ??
-    (institution && accountNumberCandidate
-      ? `${institution} ${accountNumberCandidate.slice(-4)}`
+    (institution && provisionalAccountNameSuffix
+      ? `${institution} ${provisionalAccountNameSuffix}`
       : institution
         ? institution
-        : accountNumberCandidate
-          ? `Account ${accountNumberCandidate.slice(-4)}`
+        : provisionalAccountNameSuffix
+          ? `Account ${provisionalAccountNameSuffix}`
           : null);
   const refinedAccountType =
     /payment\s+due\s+date|due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit|statement\s+date/i.test(normalized) &&
@@ -7447,16 +7473,18 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
         ? "credit_card"
       : null;
   const inferredAccountType = refinedAccountType ?? inferAccountTypeFromStatement(institution, provisionalAccountName, "bank");
+  const accountNumberNameSuffix =
+    inferredAccountType === "wallet" && !explicitAccountNumber ? "" : accountNumberDisplaySuffix;
   const accountNumber =
     inferredAccountType === "wallet" && !explicitAccountNumber ? null : accountNumberCandidate;
   const finalizedAccountName =
     preferredExtractedAccountName ??
-    (institution && accountNumber
-      ? `${institution} ${accountNumber.slice(-4)}`
+    (institution && accountNumberNameSuffix
+      ? `${institution} ${accountNumberNameSuffix}`
       : institution
         ? institution
-        : accountNumber
-          ? `Account ${accountNumber.slice(-4)}`
+        : accountNumberNameSuffix
+          ? `Account ${accountNumberNameSuffix}`
           : null);
   const startDate = rawStartDate ?? signalStartDate;
   const endDate =
@@ -8060,10 +8088,9 @@ const parseMayaSavingsImportText = (text: string, context: ImportParseContext = 
 
   const firstRawPayload =
     rows[0]?.rawPayload && typeof rows[0].rawPayload === "object" ? (rows[0].rawPayload as Record<string, unknown>) : null;
+  const lastRow = rows[rows.length - 1];
   const lastRawPayload =
-    rows.at(-1)?.rawPayload && typeof rows.at(-1).rawPayload === "object"
-      ? (rows.at(-1).rawPayload as Record<string, unknown>)
-      : null;
+    lastRow?.rawPayload && typeof lastRow.rawPayload === "object" ? (lastRow.rawPayload as Record<string, unknown>) : null;
   const firstRow = rows[0];
   const firstRowAmount = firstRow?.amount ? parseMoney(firstRow.amount) : null;
   const firstRowBalance =
