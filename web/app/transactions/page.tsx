@@ -5767,11 +5767,6 @@ function TransactionsPageContent() {
                 </div>
 
                 <div className="transactions-manual-row transactions-manual-row--name">
-                  <span className="transactions-manual-row-icon transactions-manual-row-icon--category" aria-hidden="true">
-                    <span className="transaction-category-icon transaction-category-icon--manual" style={getCategoryIconTone(manualSelectedCategory?.name ?? "Other")}>
-                      <img src={getCategoryIconSrc(manualSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
-                    </span>
-                  </span>
                   <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-name-field">
                     <span className="transactions-manual-field__label">Name</span>
                     <input
@@ -5785,9 +5780,6 @@ function TransactionsPageContent() {
                 </div>
 
                 <div className="transactions-manual-row transactions-manual-row--money">
-                  <span className="transactions-manual-row-icon transactions-manual-row-icon--account" aria-hidden="true">
-                    <AccountBrandMark accountBrand={manualSelectedAccountBrand} label={manualSelectedAccount ? getAccountDisplayName(manualSelectedAccount) : "Cash"} />
-                  </span>
                   <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-money-row__currency">
                     <span className="transactions-manual-field__label">Currency</span>
                     <CurrencySelector
@@ -5817,98 +5809,110 @@ function TransactionsPageContent() {
                   </label>
                 </div>
 
-                <label className="transactions-manual-field transactions-manual-field--embedded-label">
-                  <span className="transactions-manual-field__label">Account</span>
-                  <div className="transactions-manual-picker">
-                    <div className="transactions-manual-picker__control">
-                      <button
-                        type="button"
-                        className="transactions-manual-picker__button transactions-manual-picker__button--plain"
-                        aria-expanded={manualAccountMenuOpen}
-                        onClick={() => {
-                          setManualCategoryMenuOpen(false);
-                          setManualAccountMenuOpen((current) => !current);
-                        }}
-                      >
-                        <span className="transactions-manual-picker__text">
-                          {manualSelectedAccount ? getAccountDisplayName(manualSelectedAccount) : "Cash"}
-                        </span>
-                        <span className="transactions-manual-picker__chevron" aria-hidden="true">
-                          <ActionIcon name="chevron-down" />
-                        </span>
-                      </button>
-                      {manualAccountMenuOpen ? (
-                        <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose account">
-                          {accounts.map((account) => {
-                            const accountDisplayName = getAccountDisplayName(account);
+                <div className="transactions-manual-inline-row transactions-manual-inline-row--account">
+                  <span className="transactions-manual-inline-row__icon transactions-manual-inline-row__icon--account" aria-hidden="true">
+                    <AccountBrandMark accountBrand={manualSelectedAccountBrand} label={manualSelectedAccount ? getAccountDisplayName(manualSelectedAccount) : "Cash"} />
+                  </span>
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
+                    <span className="transactions-manual-field__label">Account</span>
+                    <div className="transactions-manual-picker">
+                      <div className="transactions-manual-picker__control">
+                        <button
+                          type="button"
+                          className="transactions-manual-picker__button transactions-manual-picker__button--plain"
+                          aria-expanded={manualAccountMenuOpen}
+                          onClick={() => {
+                            setManualCategoryMenuOpen(false);
+                            setManualAccountMenuOpen((current) => !current);
+                          }}
+                        >
+                          <span className="transactions-manual-picker__text">
+                            {manualSelectedAccount ? getAccountDisplayName(manualSelectedAccount) : "Cash"}
+                          </span>
+                          <span className="transactions-manual-picker__chevron" aria-hidden="true">
+                            <ActionIcon name="chevron-down" />
+                          </span>
+                        </button>
+                        {manualAccountMenuOpen ? (
+                          <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose account">
+                            {accounts.map((account) => {
+                              const accountDisplayName = getAccountDisplayName(account);
 
-                            return (
+                              return (
+                                <button
+                                  key={account.id}
+                                  type="button"
+                                  className={`transactions-manual-picker__option ${
+                                    account.id === manualForm.accountId ? "is-selected" : ""
+                                  }`}
+                                  onClick={() => {
+                                    setManualForm((current) => ({ ...current, accountId: account.id }));
+                                    setManualAccountMenuOpen(false);
+                                  }}
+                                >
+                                  <span className="transactions-manual-picker__option-text">
+                                    <strong>{accountDisplayName}</strong>
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
+                <div className="transactions-manual-inline-row transactions-manual-inline-row--category">
+                  <span className="transactions-manual-inline-row__icon transactions-manual-inline-row__icon--category" aria-hidden="true">
+                    <span className="transaction-category-icon transaction-category-icon--manual" style={getCategoryIconTone(manualSelectedCategory?.name ?? "Other")}>
+                      <img src={getCategoryIconSrc(manualSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
+                    </span>
+                  </span>
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
+                    <span className="transactions-manual-field__label">Category</span>
+                    <div className="transactions-manual-picker">
+                      <div className="transactions-manual-picker__control">
+                        <button
+                          type="button"
+                          className="transactions-manual-picker__button transactions-manual-picker__button--plain"
+                          aria-expanded={manualCategoryMenuOpen}
+                          onClick={() => {
+                            setManualAccountMenuOpen(false);
+                            setManualCategoryMenuOpen((current) => !current);
+                          }}
+                        >
+                          <span className="transactions-manual-picker__text">{manualSelectedCategory?.name ?? "Other"}</span>
+                          <span className="transactions-manual-picker__chevron" aria-hidden="true">
+                            <ActionIcon name="chevron-down" />
+                          </span>
+                        </button>
+                        {manualCategoryMenuOpen ? (
+                          <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose category">
+                            {categories.map((category) => (
                               <button
-                                key={account.id}
+                                key={category.id}
                                 type="button"
                                 className={`transactions-manual-picker__option ${
-                                  account.id === manualForm.accountId ? "is-selected" : ""
+                                  category.id === manualSelectedCategoryId ? "is-selected" : ""
                                 }`}
                                 onClick={() => {
-                                  setManualForm((current) => ({ ...current, accountId: account.id }));
-                                  setManualAccountMenuOpen(false);
+                                  setManualCategoryTouched(true);
+                                  setManualForm((current) => ({ ...current, categoryId: category.id }));
+                                  setManualCategoryMenuOpen(false);
                                 }}
                               >
                                 <span className="transactions-manual-picker__option-text">
-                                  <strong>{accountDisplayName}</strong>
+                                  <strong>{category.name}</strong>
                                 </span>
                               </button>
-                            );
-                          })}
-                        </div>
-                      ) : null}
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                </label>
-
-                <label className="transactions-manual-field transactions-manual-field--embedded-label">
-                  <span className="transactions-manual-field__label">Category</span>
-                  <div className="transactions-manual-picker">
-                    <div className="transactions-manual-picker__control">
-                      <button
-                        type="button"
-                        className="transactions-manual-picker__button transactions-manual-picker__button--plain"
-                        aria-expanded={manualCategoryMenuOpen}
-                        onClick={() => {
-                          setManualAccountMenuOpen(false);
-                          setManualCategoryMenuOpen((current) => !current);
-                        }}
-                      >
-                        <span className="transactions-manual-picker__text">{manualSelectedCategory?.name ?? "Other"}</span>
-                        <span className="transactions-manual-picker__chevron" aria-hidden="true">
-                          <ActionIcon name="chevron-down" />
-                        </span>
-                      </button>
-                      {manualCategoryMenuOpen ? (
-                        <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose category">
-                          {categories.map((category) => (
-                            <button
-                              key={category.id}
-                              type="button"
-                              className={`transactions-manual-picker__option ${
-                                category.id === manualSelectedCategoryId ? "is-selected" : ""
-                              }`}
-                              onClick={() => {
-                                setManualCategoryTouched(true);
-                                setManualForm((current) => ({ ...current, categoryId: category.id }));
-                                setManualCategoryMenuOpen(false);
-                              }}
-                            >
-                              <span className="transactions-manual-picker__option-text">
-                                <strong>{category.name}</strong>
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
-                </label>
+                  </label>
+                </div>
 
                 <label className="transactions-manual-field transactions-manual-field--embedded-label">
                   <span className="transactions-manual-field__label">Date</span>

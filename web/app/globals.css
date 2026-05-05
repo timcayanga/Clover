@@ -207,12 +207,25 @@ body[data-clover-page-modal] .app-shell {
   grid-template-columns: minmax(0, 1fr);
 }
 
+body.dashboard-modal-open .app-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 body[data-clover-page-modal] .sidebar,
 body[data-clover-page-modal] .sidebar-backdrop {
   display: none;
 }
 
+body.dashboard-modal-open .sidebar,
+body.dashboard-modal-open .sidebar-backdrop {
+  display: none;
+}
+
 body[data-clover-page-modal] .shell-quick-add-button {
+  display: none !important;
+}
+
+body.dashboard-modal-open .shell-quick-add-button {
   display: none !important;
 }
 
@@ -3380,8 +3393,9 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .dashboard-home__balance-layout {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 20px;
 }
 
@@ -3408,12 +3422,13 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .dashboard-home__balance-side {
-  flex: 0 0 260px;
+  flex: 0 0 auto;
   display: grid;
   grid-template-columns: 1fr;
   gap: 8px;
+  justify-items: end;
   align-content: start;
-  width: 100%;
+  width: max-content;
   min-width: 0;
   justify-self: end;
   align-self: start;
@@ -3422,6 +3437,7 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .dashboard-home__balance-side .dashboard-home__balance-mini-pill {
   width: 100%;
+  min-width: 0;
 }
 
 .dashboard-home__balance-mini-pill .eyebrow {
@@ -11760,7 +11776,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .modal-card--manual {
-  width: min(520px, calc(100vw - 24px));
+  width: min(420px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px);
   overflow: auto;
 }
@@ -12555,11 +12571,19 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-row--name {
-  grid-template-columns: 44px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .transactions-manual-row--money {
-  grid-template-columns: 44px minmax(82px, 98px) minmax(0, 1fr);
+  grid-template-columns: minmax(72px, 88px) minmax(0, 1.2fr);
+}
+
+.transactions-manual-inline-row {
+  display: grid;
+  width: 100%;
+  gap: 10px;
+  align-items: center;
+  grid-template-columns: 38px minmax(0, 1fr);
 }
 
 .transactions-manual-row-icon {
@@ -12583,9 +12607,9 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-row-icon--account .accounts-brand-mark {
-  width: 44px;
-  height: 44px;
-  border-radius: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
 }
 
 .transactions-manual-row-icon--account .accounts-brand-mark__logo,
@@ -12734,6 +12758,42 @@ input.transaction-inline-edit--amount::placeholder {
   height: 100%;
   display: block;
   object-fit: cover;
+}
+
+.transactions-manual-inline-row__icon {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.transactions-manual-inline-row__icon--account .accounts-brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+}
+
+.transactions-manual-inline-row__icon--account .accounts-brand-mark__fallback,
+.transactions-manual-inline-row__icon--account .accounts-brand-mark__logo-fallback {
+  width: 58%;
+  height: 58%;
+}
+
+.transactions-manual-inline-row__icon--category .transaction-category-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+}
+
+.transactions-manual-inline-row__icon--category .transaction-category-icon img {
+  width: 18px;
+  height: 18px;
+}
+
+.transactions-manual-inline-row__field {
+  min-width: 0;
 }
 
 .transactions-manual-name-field input {
@@ -12991,7 +13051,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-money-row {
-  grid-template-columns: 42px minmax(68px, 80px) minmax(0, 1fr);
+  grid-template-columns: minmax(66px, 78px) minmax(0, 1.35fr);
 }
 
 .transactions-manual-money-row__currency .transactions-manual-currency__button {
@@ -13002,6 +13062,10 @@ input.transaction-inline-edit--amount::placeholder {
 
 .manual-form-actions__left .transactions-manual-more {
   margin-right: auto;
+}
+
+.manual-form-actions--closed .transactions-manual-more {
+  align-self: center;
 }
 
 .manual-more-panel__receipt-line-items {
@@ -22960,12 +23024,17 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .transactions-manual-row--name {
-    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
 
   .transactions-manual-row--money {
-    grid-template-columns: 40px minmax(76px, 90px) minmax(0, 1fr);
+    grid-template-columns: minmax(64px, 76px) minmax(0, 1.35fr);
+    gap: 8px;
+  }
+
+  .transactions-manual-inline-row {
+    grid-template-columns: 34px minmax(0, 1fr);
     gap: 8px;
   }
 
@@ -23023,6 +23092,28 @@ button.accounts-detail__transaction-head-cell {
   .transactions-manual-row-icon--category .transaction-category-icon img {
     width: 18px;
     height: 18px;
+  }
+
+  .transactions-manual-inline-row__icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .transactions-manual-inline-row__icon--account .accounts-brand-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 13px;
+  }
+
+  .transactions-manual-inline-row__icon--category .transaction-category-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 13px;
+  }
+
+  .transactions-manual-inline-row__icon--category .transaction-category-icon img {
+    width: 16px;
+    height: 16px;
   }
 
   .transactions-manual-type-toggle__button {
