@@ -3388,68 +3388,41 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .dashboard-home__hero--balance {
-  grid-template-columns: 1fr;
-  align-items: stretch;
+  position: relative;
+  min-height: 152px;
+  padding-right: 352px;
 }
 
-.dashboard-home__balance-layout {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  width: 100%;
-}
-
-.dashboard-home__balance-main {
-  flex: 1 1 auto;
+.dashboard-home__hero-main {
   display: grid;
   gap: 4px;
+  min-height: 102px;
   align-content: start;
-  min-height: 0;
   padding: 2px 4px 2px 2px;
-  background: transparent;
-  box-shadow: none;
 }
 
-.dashboard-home__balance-main .eyebrow {
+.dashboard-home__hero-main .eyebrow {
   color: rgba(255, 255, 255, 0.82);
 }
 
-.dashboard-home__balance-main strong {
+.dashboard-home__hero-main strong {
   color: #fff;
   font-size: clamp(1.55rem, 3vw, 2.2rem);
   line-height: 0.98;
   letter-spacing: -0.06em;
 }
 
-.dashboard-home__balance-side {
+.dashboard-home__hero-aside {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 318px;
   display: grid;
-  grid-template-columns: 1fr;
   gap: 8px;
-  justify-items: stretch;
-  align-content: start;
-  width: 300px;
-  max-width: 300px;
-  min-width: 0;
-  justify-self: end;
-  align-self: start;
-  margin-left: 0;
 }
 
-.dashboard-home__balance-side--desktop {
-  margin-left: auto;
-}
-
-.dashboard-home__balance-side .dashboard-home__balance-mini-pill {
-  width: 100%;
-  min-width: 0;
-}
-
-.dashboard-home__balance-mini-pill .eyebrow {
-  color: rgba(82, 89, 112, 0.74);
-}
-
-.dashboard-home__balance-mini-pill {
+.dashboard-home__hero-mini-pill,
+.dashboard-home__hero-mobile-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3462,32 +3435,25 @@ body.transactions-manual-open .shell-quick-add-button {
   box-shadow: 0 10px 22px rgba(5, 84, 87, 0.08);
 }
 
-.dashboard-home__balance-mobile-metrics {
-  display: none;
-}
-
-.dashboard-home__balance-mobile-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 14px 16px;
+.dashboard-home__hero-mobile-card {
   border-radius: 22px;
+  padding: 14px 16px;
 }
 
-.dashboard-home__balance-mini-copy {
+.dashboard-home__hero-mini-copy {
   display: grid;
   gap: 2px;
 }
 
-.dashboard-home__balance-mini-pill strong {
+.dashboard-home__hero-mini-pill strong,
+.dashboard-home__hero-mobile-card strong {
   text-align: right;
   font-size: clamp(0.8rem, 0.95vw, 0.95rem);
   line-height: 1.05;
   letter-spacing: -0.035em;
 }
 
-.dashboard-home__balance-mini-label {
+.dashboard-home__hero-mini-label {
   margin: 0;
   color: rgba(82, 89, 112, 0.74);
   font-size: 9px;
@@ -3497,19 +3463,23 @@ body.transactions-manual-open .shell-quick-add-button {
   white-space: nowrap;
 }
 
-.dashboard-home__balance-mini-trend {
+.dashboard-home__hero-mini-trend {
   font-size: 10px;
   line-height: 1;
   letter-spacing: -0.03em;
   font-weight: 600;
 }
 
-.dashboard-home__balance-mini-trend.positive {
+.dashboard-home__hero-mini-trend.positive {
   color: #0d8f57;
 }
 
-.dashboard-home__balance-mini-trend.negative {
+.dashboard-home__hero-mini-trend.negative {
   color: #d14343;
+}
+
+.dashboard-home__hero-mobile-metrics {
+  display: none;
 }
 
 .dashboard-manual-modal {
@@ -22133,20 +22103,27 @@ button.accounts-detail__transaction-head-cell {
     gap: 0;
   }
 
-  .dashboard-home__balance-layout {
+  .dashboard-home__hero--balance {
+    min-height: 0;
+    padding-right: 16px;
+  }
+
+  .dashboard-home__hero-main {
+    min-height: 0;
+    padding: 0 0 4px;
+  }
+
+  .dashboard-home__hero-aside {
     display: none;
   }
 
-  .dashboard-home__balance-mini-pill {
-    border-radius: 22px;
-  }
-
-  .dashboard-home__balance-mobile-metrics {
+  .dashboard-home__hero-mobile-metrics {
     display: grid;
     gap: 10px;
+    margin-top: 10px;
   }
 
-  .dashboard-home__balance-mobile-card {
+  .dashboard-home__hero-mobile-card {
     min-height: 40px;
   }
 

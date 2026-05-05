@@ -681,36 +681,34 @@ async function DashboardStream({
         }}
       />
       <section className="dashboard-home">
-        <article className="dashboard-home__hero glass dashboard-home__hero--balance">
-          <div className="dashboard-home__balance-layout">
-            <div className="dashboard-home__balance-main">
-              <p className="eyebrow">My balance</p>
-              <strong>{totalBalanceLabel}</strong>
-            </div>
-            <div className="dashboard-home__balance-side dashboard-home__balance-side--desktop">
-              {balanceHighlights.map((pill) => (
-                <div key={pill.key} className="dashboard-home__balance-mini-pill">
-                  <div className="dashboard-home__balance-mini-copy">
-                    <p className="dashboard-home__balance-mini-label">{pill.label}</p>
-                    <strong>{pill.value}</strong>
-                  </div>
-                  <span className={pill.trend >= 0 ? "dashboard-home__balance-mini-trend positive" : "dashboard-home__balance-mini-trend negative"}>
-                    {pill.trend === 0 ? "0%" : `${pill.trend > 0 ? "+" : ""}${Math.abs(pill.trend).toFixed(0)}%`}
-                  </span>
+        <article className="dashboard-home__hero dashboard-home__hero--fresh glass">
+          <div className="dashboard-home__hero-main">
+            <p className="eyebrow">My balance</p>
+            <strong>{totalBalanceLabel}</strong>
+          </div>
+          <div className="dashboard-home__hero-aside" aria-label="Monthly balance summary">
+            {balanceHighlights.map((pill) => (
+              <div key={pill.key} className="dashboard-home__hero-mini-pill">
+                <div className="dashboard-home__hero-mini-copy">
+                  <p className="dashboard-home__hero-mini-label">{pill.label}</p>
+                  <strong>{pill.value}</strong>
                 </div>
-              ))}
-            </div>
+                <span className={pill.trend >= 0 ? "dashboard-home__hero-mini-trend positive" : "dashboard-home__hero-mini-trend negative"}>
+                  {pill.trend === 0 ? "0%" : `${pill.trend > 0 ? "+" : ""}${Math.abs(pill.trend).toFixed(0)}%`}
+                </span>
+              </div>
+            ))}
           </div>
         </article>
 
-        <section className="dashboard-home__balance-mobile-metrics" aria-label="Monthly balance summary">
+        <section className="dashboard-home__hero-mobile-metrics" aria-label="Monthly balance summary">
           {balanceHighlights.map((pill) => (
-            <article key={pill.key} className="dashboard-home__balance-mobile-card glass">
-              <div className="dashboard-home__balance-mini-copy">
-                <p className="dashboard-home__balance-mini-label">{pill.label}</p>
+            <article key={pill.key} className="dashboard-home__hero-mobile-card glass">
+              <div className="dashboard-home__hero-mini-copy">
+                <p className="dashboard-home__hero-mini-label">{pill.label}</p>
                 <strong>{pill.value}</strong>
               </div>
-              <span className={pill.trend >= 0 ? "dashboard-home__balance-mini-trend positive" : "dashboard-home__balance-mini-trend negative"}>
+              <span className={pill.trend >= 0 ? "dashboard-home__hero-mini-trend positive" : "dashboard-home__hero-mini-trend negative"}>
                 {pill.trend === 0 ? "0%" : `${pill.trend > 0 ? "+" : ""}${Math.abs(pill.trend).toFixed(0)}%`}
               </span>
             </article>
