@@ -284,8 +284,19 @@ const mergeImportedAccount = <T extends CachedRecord>(items: T[], account: Impor
     const numeric = Number(normalized);
     return Number.isFinite(numeric);
   };
+  const parseBalanceValue = (value: string) => {
+    const normalized = value.replace(/[^0-9.-]/g, "");
+    return normalized ? Number(normalized) : null;
+  };
   const currentHasMeaningfulBalance = hasMeaningfulBalance(currentBalance);
   const incomingHasMeaningfulBalance = hasMeaningfulBalance(incomingBalance);
+  const currentBalanceValue = currentHasMeaningfulBalance ? parseBalanceValue(currentBalance) : null;
+  const incomingBalanceValue = incomingHasMeaningfulBalance ? parseBalanceValue(incomingBalance) : null;
+  const shouldPreserveCurrentBalance =
+    currentHasMeaningfulBalance &&
+    currentBalanceValue !== null &&
+    currentBalanceValue !== 0 &&
+    incomingBalanceValue === 0;
 
   const merged: CachedRecord = {
     ...current,
@@ -293,11 +304,13 @@ const mergeImportedAccount = <T extends CachedRecord>(items: T[], account: Impor
     name: incomingName || currentName || account.name || current.name,
     institution: incomingInstitution || currentInstitution || account.institution || current.institution,
     accountNumber: incomingAccountNumber || currentAccountNumber || account.accountNumber || current.accountNumber,
-    balance: incomingHasMeaningfulBalance
-      ? account.balance
-      : currentHasMeaningfulBalance
-        ? current.balance
-        : account.balance ?? current.balance ?? null,
+    balance: shouldPreserveCurrentBalance
+      ? current.balance
+      : incomingHasMeaningfulBalance
+        ? account.balance
+        : currentHasMeaningfulBalance
+          ? current.balance
+          : account.balance ?? current.balance ?? null,
     source:
       typeof account.source === "string" && account.source.trim()
         ? account.source

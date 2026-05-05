@@ -1975,6 +1975,10 @@ function AccountsPageContent() {
         normalizeImportedAccountKey(row.name, row.institution, row.accountNumber, row.type)
       ) ??
       null;
+    const checkpointBalance =
+      latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
+        ? String(latestCheckpoint.endingBalance)
+        : null;
     const fallbackAccountNumber =
       row.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null;
     const shouldFormatUploadAccountName = row.source === "upload" || Boolean(fallbackAccountNumber);
@@ -1983,6 +1987,12 @@ function AccountsPageContent() {
         ? formatUploadAccountDisplayName(row.name, row.institution, fallbackAccountNumber, row.type)
         : getAccountDisplayName(row);
     const hasVisibleBalance = row.balance !== null && row.balance.trim() !== "";
+    const shouldPreferCheckpointBalance =
+      row.source === "upload" &&
+      checkpointBalance !== null &&
+      checkpointBalance.trim() !== "" &&
+      (!hasVisibleBalance || Number(row.balance) === 0);
+    const displayedBalance = shouldPreferCheckpointBalance ? checkpointBalance : row.balance;
     const isLoading =
       row.source === "upload" &&
       (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
@@ -1993,7 +2003,7 @@ function AccountsPageContent() {
       type: getEffectiveAccountType(row),
     });
     const cardVisual = getAccountCardVisual(getEffectiveAccountType(row));
-    const balanceValue = Math.abs(value);
+    const balanceValue = Math.abs(parseAmount(displayedBalance));
     const cardEyebrow = getAccountCardEyebrow(row);
 
     return (
@@ -2061,6 +2071,9 @@ function AccountsPageContent() {
             <div className="accounts-account-card__balance-row">
               <div className={`accounts-account-card__amount ${isLiability ? "is-liability" : "is-asset"}`}>
                 {formatAccountAmount(balanceValue, row.currency)}
+              </div>
+              <div className={`accounts-account-card__tone ${isLiability ? "is-liability" : "is-asset"}`}>
+                {isLiability ? "Liability" : "Asset"}
               </div>
               {isDeleting ? <div className="accounts-account-card__status-note">Deleting</div> : null}
               {!isDeleting && isLoading ? <div className="accounts-account-card__status-note">Loading</div> : null}

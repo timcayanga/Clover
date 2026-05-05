@@ -917,7 +917,7 @@ function AccountDetailPageContent() {
   const currentBalance = useMemo(
     () => {
       const checkpointBalance =
-        latestCheckpoint?.status === "reconciled" && latestCheckpoint.endingBalance !== null
+        latestCheckpoint?.endingBalance !== null && latestCheckpoint.endingBalance !== undefined
           ? String(latestCheckpoint.endingBalance)
           : null;
       const shouldPreserveImportedBalance =
@@ -925,7 +925,7 @@ function AccountDetailPageContent() {
         (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
         transactions.length === 0;
 
-      const reconciledValue = checkpointBalance
+      const reconciledValue = checkpointBalance && (transactions.length === 0 || shouldPreserveImportedBalance)
         ? checkpointBalance
         : shouldPreserveImportedBalance
           ? account?.balance ?? null

@@ -14768,6 +14768,30 @@ input.transaction-inline-edit--amount::placeholder {
   line-height: 1;
 }
 
+.accounts-account-card__tone {
+  align-self: flex-end;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  padding: 5px 8px;
+  text-transform: uppercase;
+}
+
+.accounts-account-card__tone.is-asset {
+  background: rgba(74, 192, 108, 0.12);
+  border-color: rgba(74, 192, 108, 0.22);
+  color: var(--good);
+}
+
+.accounts-account-card__tone.is-liability {
+  background: rgba(214, 87, 126, 0.12);
+  border-color: rgba(214, 87, 126, 0.24);
+  color: var(--bad);
+}
+
 .accounts-account-card[data-visual="identity"] .accounts-account-card__brand strong,
 .accounts-account-card[data-visual="identity"] .accounts-account-card__brand span,
 .accounts-account-card[data-visual="identity"] .accounts-account-card__amount.is-asset,
