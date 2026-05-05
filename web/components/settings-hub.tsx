@@ -12,6 +12,7 @@ import { type BillingInterval } from "@/lib/billing-plans";
 import { applyHelperTextPreference, HELPER_TEXT_STORAGE_KEY, readStoredHelperTextPreference } from "@/lib/helper-text-preference";
 import { getPlanDisplayLabel } from "@/lib/user-limits";
 import { applyThemeMode, readStoredThemeMode, THEME_STORAGE_KEY, type ThemeMode } from "@/lib/theme-preference";
+import { clearAllWorkspaceCaches } from "@/lib/workspace-cache";
 import { persistSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 
 type SettingsSectionKey = "account" | "profiles" | "display" | "data" | "categories" | "plan";
@@ -498,6 +499,9 @@ export function SettingsHub({
     if (!response.ok) {
       throw new Error(payload.error ?? "Unable to update data.");
     }
+
+    clearAllWorkspaceCaches();
+    router.refresh();
 
     return payload.deleted ?? 0;
   };
@@ -1131,6 +1135,9 @@ export function SettingsHub({
                           throw new Error(payload.error ?? "Unable to delete Clover data.");
                         }
 
+                        persistSelectedWorkspaceId("");
+                        syncSelectedWorkspaceCookie();
+                        clearAllWorkspaceCaches();
                         window.location.assign("/dashboard");
                       })
                     }
