@@ -418,8 +418,68 @@ const normalizeCharacterSpacedGenericLine = (value: string) => {
     .trim();
 };
 
+const stitchGenericOcrLines = (lines: string[]) => {
+  const stitched: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    let current = normalizeWhitespace(lines[index] ?? "");
+    if (!current) {
+      continue;
+    }
+
+    while (index + 1 < lines.length) {
+      const next = normalizeWhitespace(lines[index + 1] ?? "");
+      if (!next) {
+        index += 1;
+        continue;
+      }
+
+      if (
+        /(?:,|-)$/.test(current) &&
+        (new RegExp(`^(?:\\d{2,4}|${monthNamePattern}|\\d{1,2}\\b)`, "i")).test(next)
+      ) {
+        current = normalizeWhitespace(`${current} ${next}`);
+        index += 1;
+        continue;
+      }
+
+      const monthWithoutDay = current.match(new RegExp(`^(?<month>${monthNamePattern})(?!\\s+\\d{1,2}\\b)(?<rest>.*)$`, "i"));
+      if (monthWithoutDay?.groups?.month) {
+        const nextDayOnly = next.match(/^(?<day>\d{1,2})$/);
+        const nextDayWithRest = next.match(/^(?<day>\d{1,2})\s+(?<rest>.+)$/);
+        if (nextDayOnly?.groups?.day) {
+          current = normalizeWhitespace(`${monthWithoutDay.groups.month} ${nextDayOnly.groups.day}${monthWithoutDay.groups.rest ?? ""}`);
+          index += 1;
+          continue;
+        }
+
+        if (nextDayWithRest?.groups?.day && nextDayWithRest.groups.rest) {
+          current = normalizeWhitespace(
+            `${monthWithoutDay.groups.month} ${nextDayWithRest.groups.day}${monthWithoutDay.groups.rest ?? ""} ${nextDayWithRest.groups.rest}`
+          );
+          index += 1;
+          continue;
+        }
+      }
+
+      if (new RegExp(`^${monthNamePattern}$`, "i").test(current) && /^\d{1,2}\s+.+$/.test(next)) {
+        current = normalizeWhitespace(`${current} ${next}`);
+        index += 1;
+        continue;
+      }
+
+      break;
+    }
+
+    stitched.push(current);
+  }
+
+  return stitched;
+};
+
 const normalizeGenericOcrText = (text: string) =>
-  text
+  stitchGenericOcrLines(
+    text
     .split(/\r?\n/)
     .map((line) => {
       const normalized = decompactOcrText(line);
@@ -433,7 +493,7 @@ const normalizeGenericOcrText = (text: string) =>
 
       return normalizeCharacterSpacedGenericLine(normalized);
     })
-    .join("\n");
+  ).join("\n");
 
 const compactGenericSignalLine = (value: string) =>
   (() => {
@@ -667,16 +727,19 @@ const detectStatementDatesFromText = (text: string) => {
 
   const exactNamedRange =
     text.match(new RegExp(`ACCOUNT\\s+SUMMARY\\s+FOR\\s+THE\\s+PERIOD\\s+(${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4})\\s*[–—-]\\s*(${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4})`, "i")) ??
+    text.match(new RegExp(`ACCOUNT\\s+SUMMARY\\s+FOR\\s+THE\\s+PERIOD\\s+(${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4})\\s*[–—-]\\s*(${monthNamePattern}\\s+\\d{1,2})(?=\\b|\\s|,)`, "i")) ??
     text.match(new RegExp(`FOR\\s+(${monthNamePattern}\\s+\\d{1,2})\\s*(?:TO|THRU|THROUGH|[-–—])\\s*(${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4})`, "i")) ??
     text.match(new RegExp(`FOR\\s+(${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4})\\s*(?:TO|THRU|THROUGH|[-–—])\\s*(${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4})`, "i")) ??
     compact.match(new RegExp(`ACCOUNTSUMMARYFORTHEPERIOD(${monthNamePattern}\\d{1,2},?\\d{4})[–—-](${monthNamePattern}\\d{1,2},?\\d{4})`, "i")) ??
+    compact.match(new RegExp(`ACCOUNTSUMMARYFORTHEPERIOD(${monthNamePattern}\\d{1,2},?\\d{4})[–—-](${monthNamePattern}\\d{1,2})(?=\\b|ACCOUNT|NO)`, "i")) ??
     compact.match(new RegExp(`FOR(${monthNamePattern}\\d{1,2})[–—-](${monthNamePattern}\\d{1,2},?\\d{4})(?=$|ACCOUNT|CUSTOMER|ACCOUNTNUMBER|ACCOUNTSUMMARY)`, "i")) ??
     compact.match(new RegExp(`FOR(${monthNamePattern}\\d{1,2},?\\d{4})[–—-](${monthNamePattern}\\d{1,2},?\\d{4})(?=$|ACCOUNT|CUSTOMER|ACCOUNTNUMBER|ACCOUNTSUMMARY)`, "i"));
   if (exactNamedRange) {
-    const endDate = parseLooseDate(exactNamedRange[2]);
-    const fallbackYear = endDate?.getUTCFullYear() ?? null;
+    const startDate = parseLooseDate(exactNamedRange[1]);
+    const fallbackYear = startDate?.getUTCFullYear() ?? null;
+    const endDate = parseLooseDate(exactNamedRange[2], fallbackYear);
     return {
-      startDate: parseLooseDate(exactNamedRange[1], fallbackYear),
+      startDate,
       endDate,
     };
   }
@@ -3089,8 +3152,8 @@ const extractAccountHolderNameFromLines = (lines: string[], accountLineIndex: nu
     }
 
     if (
-      /^(?:STATEMENT|ACCOUNT|CURRENCY|ADDRESS|BRGY|DATE|PAGE|CARD TYPE|CREDIT CARD ACCOUNT|PHILIPPINE NATIONAL BANK|BDO UNIBANK|METROBANK|TOTAL|BALANCE|CREDIT LIMIT|REMINDERS|TRANSACTION DETAILS|CONNECT WITH US|FOR INQUIRIES|REGULATED BY|DEPOSITS ARE INSURED|THIS IS TO CERTIFY|MONEY THAT YOU MUST|REQUESTED DATE|PRINTED BY|PESO ACCOUNT DETAILS|PAYMENT DUE|CLIENT NAME|CUSTOMER NAME|BANK NAME|ACCOUNT NUMBER|ACCOUNT NO\.?|CARD NUMBER|CARDHOLDER|PREFERRED NICKNAME)/i.test(
-      normalized
+      /^(?:STATEMENT|ACCOUNT|CURRENCY|ADDRESS|BRGY|DATE|PAGE|CARD TYPE|CREDIT CARD ACCOUNT|PHILIPPINE NATIONAL BANK|BDO UNIBANK|METROBANK|TOTAL|BALANCE|CREDIT LIMIT|REMINDERS|TRANSACTION DETAILS|TRANSACTIONSFROM|CONNECT WITH US|FOR INQUIRIES|REGULATED BY|DEPOSITS ARE INSURED|THIS IS TO CERTIFY|MONEY THAT YOU MUST|REQUESTED DATE|PRINTED BY|PESO ACCOUNT DETAILS|PAYMENT DUE|CLIENT NAME|CUSTOMER NAME|BANK NAME|ACCOUNT NUMBER|ACCOUNT NO\.?|CARD NUMBER|CARDHOLDER|PREFERRED NICKNAME)/i.test(
+        normalized
       )
     ) {
       return false;
@@ -3260,6 +3323,20 @@ const extractFormattedAccountNumberFromLines = (lines: string[]) => {
       const digits = raw.replace(/\D/g, "");
       if (digits.length >= 8) {
         return raw.replace(/-+$/, "");
+      }
+    }
+
+    const trailingFragmentMatch = normalizedLine.match(/\b(\d{2,6}(?:\s*-\s*\d{2,6}){1,3}\s*-\s*)$/);
+    if (trailingFragmentMatch?.[1]) {
+      const nextDigits = lines
+        .slice(index + 1, Math.min(lines.length, index + 4))
+        .map((entry) => normalizeWhitespace(entry).replace(/\D/g, ""))
+        .find((entry) => entry.length >= 2 && entry.length <= 4);
+      if (nextDigits) {
+        const merged = `${normalizeWhitespace(trailingFragmentMatch[1]).replace(/\s+/g, "")}${nextDigits}`.replace(/--+/g, "-");
+        if (merged.replace(/\D/g, "").length >= 8) {
+          return merged.replace(/-+$/, "");
+        }
       }
     }
   }
@@ -7791,14 +7868,17 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
     refinedAccountType === "credit_card"
       ? statementDate ?? rawEndDate ?? signalEndDate ?? lineEndDate
       : rawEndDate ?? signalEndDate ?? lineEndDate ?? statementDate;
+  const topBpiSignal = compactWhitespace(signalLines.slice(0, 12).join(" "));
   const finalInstitution =
-    institution === "BPI" && /BPIFAMILYSAVINGSBANK|EASYSAVER/i.test(compactWhitespace(signalLines.slice(0, 20).join(" ")))
-      ? "BPI Family Savings Bank"
-    : institution === "BPI"
-        ? "Bank of the Philippine Islands"
+    institution === "BPI Family Savings Bank" && !/BPIFAMILYSAVINGSBANK|EASYSAVER/i.test(topBpiSignal)
+      ? "Bank of the Philippine Islands"
+    : institution === "BPI" && /BPIFAMILYSAVINGSBANK|EASYSAVER/i.test(topBpiSignal)
+        ? "BPI Family Savings Bank"
+      : institution === "BPI"
+          ? "Bank of the Philippine Islands"
         : institution === "BDO"
-          ? "BDO Unibank, Inc."
-          : institution;
+            ? "BDO Unibank, Inc."
+            : institution;
 
   if (!finalInstitution && !accountNumber && !startDate && !endDate && openingBalance === null && endingBalance === null) {
     return null;
