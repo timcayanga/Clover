@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
@@ -81,6 +81,9 @@ type Transaction = {
   source?: string | null;
   importFileId?: string | null;
 };
+
+type AccountTransactionSortField = "name" | "date" | "category" | "type" | "amount";
+type AccountTransactionSortDirection = "asc" | "desc";
 
 type ImportFile = {
   id: string;
@@ -425,6 +428,26 @@ const getTransactionTypeLabel = (type: Transaction["type"]) => {
   return formatTransactionDirectionLabel(type);
 };
 
+const getTransactionSortLabel = (transaction: Transaction) =>
+  transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
+
+const getTransactionSortFieldValue = (transaction: Transaction, field: AccountTransactionSortField) => {
+  switch (field) {
+    case "name":
+      return getTransactionSortLabel(transaction);
+    case "date":
+      return new Date(transaction.date).getTime();
+    case "category":
+      return transaction.categoryName?.trim() || "Other";
+    case "type":
+      return getTransactionTypeLabel(transaction.type);
+    case "amount":
+      return Number(transaction.amount);
+    default:
+      return "";
+  }
+};
+
 const formatAccountType = (value: string) => formatAccountTypeLabel(value);
 
 export default function AccountDetailPage() {
@@ -459,8 +482,11 @@ function AccountDetailPageContent() {
   const [message, setMessage] = useState("Loading account history...");
   const [deleteAction, setDeleteAction] = useState<"activity" | "account" | null>(null);
   const [deleteBusy, setDeleteBusy] = useState<false | "activity" | "account">(false);
-  const [transactionDeleteTarget, setTransactionDeleteTarget] = useState<Transaction | null>(null);
-  const [transactionDeleteBusy, setTransactionDeleteBusy] = useState(false);
+  const [selectedTransactionIds, setSelectedTransactionIds] = useState<string[]>([]);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+  const [bulkDeleteBusy, setBulkDeleteBusy] = useState(false);
+  const [transactionSortField, setTransactionSortField] = useState<AccountTransactionSortField>("date");
+  const [transactionSortDirection, setTransactionSortDirection] = useState<AccountTransactionSortDirection>("desc");
   const [accountEditDraft, setAccountEditDraft] = useState({ name: "", accountNumber: "" });
   const [accountEditSaveState, setAccountEditSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [investmentEditDraft, setInvestmentEditDraft] = useState<InvestmentEditDraft | null>(null);
@@ -485,6 +511,7 @@ function AccountDetailPageContent() {
   const [purchaseDeleteBusy, setPurchaseDeleteBusy] = useState<string | null>(null);
   const [dividendDeleteBusy, setDividendDeleteBusy] = useState<string | null>(null);
   const [hasInitialDataLoaded, setHasInitialDataLoaded] = useState(false);
+  const selectAllTransactionsRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -913,7 +940,7 @@ function AccountDetailPageContent() {
     [account?.balance, account?.source, account?.type, latestCheckpoint, transactions]
   );
   const accountDisplayName = account
-    ? account.source === "upload"
+    ? account.source === "upload" || Boolean(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber)
       ? formatUploadAccountDisplayName(
           account.name,
           account.institution,
@@ -941,11 +968,76 @@ function AccountDetailPageContent() {
   );
 
   const visibleTransactions = useMemo(
-    () => transactions.filter((transaction) => transaction.merchantRaw !== "Beginning balance"),
-    [transactions]
+    () => {
+      const filtered = transactions.filter((transaction) => transaction.merchantRaw !== "Beginning balance");
+      const directionMultiplier = transactionSortDirection === "asc" ? 1 : -1;
+
+      return [...filtered].sort((left, right) => {
+        const leftValue = getTransactionSortFieldValue(left, transactionSortField);
+        const rightValue = getTransactionSortFieldValue(right, transactionSortField);
+
+        if (typeof leftValue === "number" && typeof rightValue === "number") {
+          return (leftValue - rightValue) * directionMultiplier;
+        }
+
+        return String(leftValue).localeCompare(String(rightValue), undefined, { sensitivity: "base", numeric: true }) * directionMultiplier;
+      });
+    },
+    [transactions, transactionSortDirection, transactionSortField]
   );
 
   const hasMoreTransactions = transactionTotalCount > transactions.length;
+  const visibleTransactionIds = useMemo(() => visibleTransactions.map((transaction) => transaction.id), [visibleTransactions]);
+  const allVisibleSelected =
+    visibleTransactionIds.length > 0 && visibleTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
+  const someVisibleSelected = visibleTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
+
+  useEffect(() => {
+    if (!selectAllTransactionsRef.current) {
+      return;
+    }
+
+    selectAllTransactionsRef.current.indeterminate = someVisibleSelected && !allVisibleSelected;
+  }, [allVisibleSelected, someVisibleSelected]);
+
+  useEffect(() => {
+    setSelectedTransactionIds((current) => current.filter((transactionId) => transactions.some((transaction) => transaction.id === transactionId)));
+    setBulkDeleteConfirmOpen(false);
+  }, [transactions]);
+
+  const toggleTransactionSelection = (transactionId: string, selected: boolean) => {
+    setSelectedTransactionIds((current) => {
+      const next = new Set(current);
+      if (selected) {
+        next.add(transactionId);
+      } else {
+        next.delete(transactionId);
+      }
+
+      return Array.from(next);
+    });
+  };
+
+  const toggleAllVisibleTransactions = (selected: boolean) => {
+    setSelectedTransactionIds((current) => {
+      const next = new Set(current);
+      if (selected) {
+        visibleTransactionIds.forEach((transactionId) => next.add(transactionId));
+      } else {
+        visibleTransactionIds.forEach((transactionId) => next.delete(transactionId));
+      }
+
+      return Array.from(next);
+    });
+  };
+
+  const openBulkDeleteConfirm = () => {
+    if (selectedTransactionIds.length === 0) {
+      return;
+    }
+
+    setBulkDeleteConfirmOpen(true);
+  };
 
   const loadMoreTransactions = async () => {
     if (!account || transactionsLoadingMore || !hasMoreTransactions) {
@@ -984,23 +1076,27 @@ function AccountDetailPageContent() {
     }
   };
 
-  const deleteTransaction = async (transaction: Transaction) => {
-    if (!account) {
+  const deleteSelectedTransactions = async () => {
+    if (!account || selectedTransactionIds.length === 0) {
       return;
     }
 
-    setTransactionDeleteBusy(true);
+    const transactionIds = [...selectedTransactionIds];
+    const count = transactionIds.length;
+    setBulkDeleteBusy(true);
     try {
-      await deleteTransactionRemote(transaction.id);
-      applyOptimisticWorkspaceTransactionDeletion(account.workspaceId, transaction.id);
-      setTransactions((current) => current.filter((entry) => entry.id !== transaction.id));
-      setTransactionTotalCount((current) => Math.max(0, current - 1));
-      setTransactionDeleteTarget(null);
-      setMessage("Transaction deleted.");
+      await Promise.all(transactionIds.map((transactionId) => deleteTransactionRemote(transactionId)));
+      transactionIds.forEach((transactionId) => applyOptimisticWorkspaceTransactionDeletion(account.workspaceId, transactionId));
+      const transactionIdSet = new Set(transactionIds);
+      setTransactions((current) => current.filter((entry) => !transactionIdSet.has(entry.id)));
+      setTransactionTotalCount((current) => Math.max(0, current - count));
+      setSelectedTransactionIds([]);
+      setBulkDeleteConfirmOpen(false);
+      setMessage(`${count} transaction${count === 1 ? "" : "s"} deleted.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to delete transaction.");
     } finally {
-      setTransactionDeleteBusy(false);
+      setBulkDeleteBusy(false);
     }
   };
 
@@ -1894,6 +1990,14 @@ function AccountDetailPageContent() {
             </div>
             <div className="accounts-detail__transactions-actions">
               <span className="accounts-summary-chip is-neutral">{`${visibleTransactions.length} of ${transactionTotalCount} loaded`}</span>
+              {selectedTransactionIds.length > 0 ? (
+                <>
+                  <span className="accounts-summary-chip is-neutral">{`${selectedTransactionIds.length} selected`}</span>
+                  <button className="button button-secondary button-small" type="button" onClick={openBulkDeleteConfirm}>
+                    Delete selected
+                  </button>
+                </>
+              ) : null}
               <button className="button button-secondary button-small" type="button" onClick={openTransactionsPage} disabled={!account}>
                 Open in Transactions
               </button>
@@ -1905,22 +2009,97 @@ function AccountDetailPageContent() {
             <>
               <div className="accounts-detail__transaction-list" aria-label="Transaction history">
                 <div className="line-item-header accounts-detail__transaction-header">
+                  <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
+                    <input
+                      ref={selectAllTransactionsRef}
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={(event) => toggleAllVisibleTransactions(event.target.checked)}
+                      aria-label="Select all loaded transactions"
+                    />
+                  </label>
                   <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
-                  <button className="line-item-header-cell line-item-header-cell--name" type="button">
-                    Transaction
+                  <button
+                    className="line-item-header-cell line-item-header-cell--name"
+                    type="button"
+                    onClick={() => {
+                      if (transactionSortField === "name") {
+                        setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+                        return;
+                      }
+
+                      setTransactionSortField("name");
+                      setTransactionSortDirection("desc");
+                    }}
+                    aria-label={`Sort by transaction${transactionSortField === "name" ? ` (${transactionSortDirection})` : ""}`}
+                  >
+                    Transaction{transactionSortField === "name" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
                   </button>
-                  <button className="line-item-header-cell" type="button">
-                    Date
+                  <button
+                    className="line-item-header-cell"
+                    type="button"
+                    onClick={() => {
+                      if (transactionSortField === "date") {
+                        setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+                        return;
+                      }
+
+                      setTransactionSortField("date");
+                      setTransactionSortDirection("desc");
+                    }}
+                    aria-label={`Sort by date${transactionSortField === "date" ? ` (${transactionSortDirection})` : ""}`}
+                  >
+                    Date{transactionSortField === "date" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
                   </button>
-                  <button className="line-item-header-cell" type="button">
-                    Category
+                  <button
+                    className="line-item-header-cell"
+                    type="button"
+                    onClick={() => {
+                      if (transactionSortField === "category") {
+                        setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+                        return;
+                      }
+
+                      setTransactionSortField("category");
+                      setTransactionSortDirection("desc");
+                    }}
+                    aria-label={`Sort by category${transactionSortField === "category" ? ` (${transactionSortDirection})` : ""}`}
+                  >
+                    Category{transactionSortField === "category" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
                   </button>
-                  <button className="line-item-header-cell" type="button">
-                    Type
+                  <button
+                    className="line-item-header-cell"
+                    type="button"
+                    onClick={() => {
+                      if (transactionSortField === "type") {
+                        setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+                        return;
+                      }
+
+                      setTransactionSortField("type");
+                      setTransactionSortDirection("desc");
+                    }}
+                    aria-label={`Sort by type${transactionSortField === "type" ? ` (${transactionSortDirection})` : ""}`}
+                  >
+                    Type{transactionSortField === "type" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
                   </button>
-                  <button className="line-item-header-cell line-item-header-cell--amount" type="button">
-                    Amount
+                  <button
+                    className="line-item-header-cell line-item-header-cell--amount"
+                    type="button"
+                    onClick={() => {
+                      if (transactionSortField === "amount") {
+                        setTransactionSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+                        return;
+                      }
+
+                      setTransactionSortField("amount");
+                      setTransactionSortDirection("desc");
+                    }}
+                    aria-label={`Sort by amount${transactionSortField === "amount" ? ` (${transactionSortDirection})` : ""}`}
+                  >
+                    Amount{transactionSortField === "amount" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
                   </button>
+                  <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
                 </div>
                 {visibleTransactions.map((transaction) => {
                   const amount = Number(transaction.amount);
@@ -1932,7 +2111,27 @@ function AccountDetailPageContent() {
                       : "";
 
                   return (
-                    <div key={transaction.id} className={`line-item accounts-detail__transaction-row ${transaction.isExcluded ? "is-muted" : ""}`}>
+                    <div
+                      key={transaction.id}
+                      className={`line-item accounts-detail__transaction-row ${transaction.isExcluded ? "is-muted" : ""} ${
+                        selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
+                      }`}
+                      tabIndex={0}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          openTransactionDetail(transaction);
+                        }
+                      }}
+                    >
+                      <label className="transaction-select-cell">
+                        <input
+                          type="checkbox"
+                          checked={selectedTransactionIds.includes(transaction.id)}
+                          onChange={(event) => toggleTransactionSelection(transaction.id, event.target.checked)}
+                          aria-label={`Select ${merchantDisplay}`}
+                        />
+                      </label>
                       <div className="transaction-category-icon-cell" aria-hidden="true">
                         <span className="transaction-category-icon" style={getCategoryIconTone(transaction.categoryName)}>
                           <img src={getCategoryIconSrc(transaction.categoryName)} alt="" aria-hidden="true" />
@@ -1947,56 +2146,48 @@ function AccountDetailPageContent() {
                       <div className="accounts-detail__transaction-type">{getTransactionTypeLabel(transaction.type)}</div>
                       <div className={`accounts-detail__transaction-amount ${amountToneClass}`}>
                         <span>{formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}</span>
-                        <div className="accounts-detail__transaction-actions">
-                          <button
-                            className="button button-secondary button-small accounts-detail__transaction-delete"
-                            type="button"
-                            onClick={() => setTransactionDeleteTarget(transaction)}
-                            disabled={transactionDeleteBusy}
-                          >
-                            Delete
-                          </button>
-                          <button
-                            className="accounts-card-chevron accounts-detail__transaction-open"
-                            type="button"
-                            onClick={() => openTransactionDetail(transaction)}
-                            aria-label={`Open details for ${merchantDisplay}`}
-                          >
-                            <span aria-hidden="true">›</span>
-                          </button>
-                        </div>
+                      </div>
+                      <div className="accounts-detail__transaction-actions">
+                        <button
+                          className="accounts-card-chevron accounts-detail__transaction-open"
+                          type="button"
+                          onClick={() => openTransactionDetail(transaction)}
+                          aria-label={`Open details for ${merchantDisplay}`}
+                        >
+                          <span aria-hidden="true">›</span>
+                        </button>
                       </div>
                     </div>
                   );
                 })}
               </div>
-              {transactionDeleteTarget ? (
+              {bulkDeleteConfirmOpen ? (
                 <div className="detail-warning-box accounts-detail__transaction-delete-confirm" style={{ marginTop: 16 }}>
                   <div className="detail-warning-box__header">
                     <span className="detail-warning-box__icon" aria-hidden="true">
                       <ActionIcon name="warning" />
                     </span>
-                    <strong>Delete this transaction?</strong>
+                    <strong>
+                      Delete {selectedTransactionIds.length} selected transaction{selectedTransactionIds.length === 1 ? "" : "s"}?
+                    </strong>
                   </div>
-                  <p>
-                    This will remove <strong>{transactionDeleteTarget.merchantClean || transactionDeleteTarget.merchantRaw}</strong> from this account and from your transactions list.
-                  </p>
+                  <p>This will remove the selected transactions from this account and from your transactions list.</p>
                   <div className="detail-warning-actions">
                     <button
                       className="button button-secondary button-small"
                       type="button"
-                      onClick={() => setTransactionDeleteTarget(null)}
-                      disabled={transactionDeleteBusy}
+                      onClick={() => setBulkDeleteConfirmOpen(false)}
+                      disabled={bulkDeleteBusy}
                     >
                       Cancel
                     </button>
                     <button
                       className="button button-danger button-small"
                       type="button"
-                      onClick={() => void deleteTransaction(transactionDeleteTarget)}
-                      disabled={transactionDeleteBusy}
+                      onClick={() => void deleteSelectedTransactions()}
+                      disabled={bulkDeleteBusy || selectedTransactionIds.length === 0}
                     >
-                      {transactionDeleteBusy ? "Deleting..." : "Yes, delete transaction"}
+                      {bulkDeleteBusy ? "Deleting..." : "Yes, delete selected"}
                     </button>
                   </div>
                 </div>

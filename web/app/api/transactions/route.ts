@@ -51,6 +51,7 @@ type TransactionApiRow = {
   isExcluded: boolean;
   createdAt: string;
   warningReason: string | null;
+  rawPayload: Prisma.JsonValue;
 };
 
 type TransactionSummaryRow = {
@@ -113,7 +114,7 @@ const getTransactionWarningReason = (transaction: TransactionSummaryRow, duplica
   }
 
   if (!transaction.categoryId && !(categoryName ?? "").trim()) {
-    return "Needs category review";
+    return null;
   }
 
   if ((duplicateCounts.get(signature) ?? 0) > 1) {
@@ -148,6 +149,7 @@ const mapTransactionRow = (transaction: {
   isTransfer: boolean;
   isExcluded: boolean;
   warningReason: string | null;
+  rawPayload: Prisma.JsonValue;
 }): TransactionApiRow => ({
   id: transaction.id,
   workspaceId: transaction.workspaceId,
@@ -172,6 +174,14 @@ const mapTransactionRow = (transaction: {
   isExcluded: transaction.isExcluded,
   createdAt: transaction.createdAt.toISOString(),
   warningReason: transaction.warningReason,
+  rawPayload: transaction.rawPayload,
+});
+
+const receiptLineItemSchema = z.object({
+  description: z.string().min(1),
+  quantity: z.union([z.string(), z.number()]).nullable().optional(),
+  unitPrice: z.union([z.string(), z.number()]).nullable().optional(),
+  amount: z.union([z.string(), z.number()]).nullable().optional(),
 });
 
 const transactionSchema = z.object({
@@ -185,6 +195,7 @@ const transactionSchema = z.object({
   merchantRaw: z.string().min(1),
   merchantClean: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
+  receiptLineItems: z.array(receiptLineItemSchema).optional(),
   isTransfer: z.boolean().optional(),
   isExcluded: z.boolean().optional(),
 });
@@ -585,6 +596,13 @@ export async function POST(request: Request) {
         merchantRaw: payload.merchantRaw,
         merchantClean: payload.merchantClean ?? null,
         description: payload.description ?? null,
+        receiptLineItems:
+          payload.receiptLineItems?.map((item) => ({
+            description: item.description,
+            quantity: item.quantity === undefined || item.quantity === null ? null : item.quantity.toString(),
+            unitPrice: item.unitPrice === undefined || item.unitPrice === null ? null : item.unitPrice.toString(),
+            amount: item.amount === undefined || item.amount === null ? null : item.amount.toString(),
+          })) ?? [],
         isTransfer: payload.isTransfer ?? false,
         isExcluded: payload.isExcluded ?? false,
         reviewStatus: "confirmed",
@@ -598,6 +616,13 @@ export async function POST(request: Request) {
           merchantRaw: payload.merchantRaw,
           merchantClean: payload.merchantClean ?? null,
           description: payload.description ?? null,
+          receiptLineItems:
+            payload.receiptLineItems?.map((item) => ({
+              description: item.description,
+              quantity: item.quantity === undefined || item.quantity === null ? null : item.quantity,
+              unitPrice: item.unitPrice === undefined || item.unitPrice === null ? null : item.unitPrice,
+              amount: item.amount === undefined || item.amount === null ? null : item.amount,
+            })) ?? [],
         },
         normalizedPayload: {
           merchantClean: payload.merchantClean ?? payload.merchantRaw,

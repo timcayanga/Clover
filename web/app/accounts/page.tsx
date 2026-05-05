@@ -1977,8 +1977,9 @@ function AccountsPageContent() {
       null;
     const fallbackAccountNumber =
       row.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null;
+    const shouldFormatUploadAccountName = row.source === "upload" || Boolean(fallbackAccountNumber);
     const accountDisplayName =
-      row.source === "upload"
+      shouldFormatUploadAccountName
         ? formatUploadAccountDisplayName(row.name, row.institution, fallbackAccountNumber, row.type)
         : getAccountDisplayName(row);
     const hasVisibleBalance = row.balance !== null && row.balance.trim() !== "";
@@ -2019,7 +2020,7 @@ function AccountsPageContent() {
               <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
               <div>
                 <span>{formatAccountTypeLabel(getEffectiveAccountType(row))}</span>
-                <strong>{cardVisual === "identity" ? cardEyebrow : accountDisplayName}</strong>
+                <strong>{accountDisplayName}</strong>
               </div>
             </div>
             <div className="accounts-account-card__actions">
