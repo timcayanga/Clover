@@ -721,7 +721,14 @@ function AccountDetailPageContent() {
           .then(async (response) => {
             if (!response.ok || cancelled) {
               if (!cancelled && !response.ok) {
-                setTransactionsError("Unable to load account transactions.");
+                if (cachedTransactions.length > 0) {
+                  setTransactions(cachedTransactions);
+                  setTransactionTotalCount(Math.max(cachedTransactions.length, accountTransactionsLookup?.totalCount ?? cachedTransactions.length));
+                  setTransactionsError(null);
+                  setMessage("");
+                } else {
+                  setTransactionsError("Unable to load account transactions.");
+                }
                 setTransactionsLoading(false);
                 setHasInitialDataLoaded(true);
               }
@@ -754,7 +761,14 @@ function AccountDetailPageContent() {
           })
           .catch(() => {
             if (!cancelled) {
-              setTransactionsError("Unable to load account transactions.");
+              if (cachedTransactions.length > 0) {
+                setTransactions(cachedTransactions);
+                setTransactionTotalCount(Math.max(cachedTransactions.length, accountTransactionsLookup?.totalCount ?? cachedTransactions.length));
+                setTransactionsError(null);
+                setMessage("");
+              } else {
+                setTransactionsError("Unable to load account transactions.");
+              }
               setTransactionsLoading(false);
               setHasInitialDataLoaded(true);
             }
