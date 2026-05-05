@@ -22,7 +22,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
       style={{
         background: accountBrand.background,
         color: accountBrand.foreground,
-        boxShadow: `inset 0 0 0 1px ${accountBrand.accent}55`,
+        boxShadow: `inset 0 0 0 1px ${accountBrand.accent}30`,
       }}
       title={accountBrand.label}
     >
