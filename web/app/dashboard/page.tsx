@@ -782,70 +782,18 @@ async function DashboardStream({
           <div className="dashboard-home__hero-copy">
             <div className="dashboard-home__balance-strip">
               <div className="dashboard-home__balance-main-pill">
-                <p className="eyebrow">Net worth</p>
+                <p className="eyebrow">Total balance</p>
                 <strong>{totalBalanceLabel}</strong>
               </div>
               <div className="dashboard-home__balance-side">
                 {balanceHighlights.map((pill) => (
                   <div key={pill.key} className="dashboard-home__balance-mini-pill">
-                    <p className="eyebrow">{pill.label}</p>
+                    <p className="dashboard-home__balance-mini-label">{pill.label}</p>
                     <strong>{pill.value}</strong>
-                    <span>{pill.detail}</span>
                   </div>
                 ))}
               </div>
             </div>
-
-          </div>
-
-          <div className="dashboard-home__hero-side">
-            {shouldShowStarterCard ? (
-              <div className="dashboard-home__starter-card">
-                <p className="eyebrow">Get started</p>
-                <strong>Import files to unlock your dashboard.</strong>
-                <p>Bring in a statement and Clover will populate balance, movement, and goal progress in one place.</p>
-                <div className="dashboard-home__starter-actions">
-                  <Link className="button button-primary button-small" href="/dashboard?import=1">
-                    Import files
-                  </Link>
-                  <Link className="button button-secondary button-small" href="/accounts">
-                    Add an account
-                  </Link>
-                </div>
-              </div>
-            ) : goalKey ? (
-              <div className="dashboard-home__goal-card">
-                <div
-                  className="dashboard-home__ring dashboard-home__ring--compact"
-                  style={{
-                    background: `conic-gradient(var(--accent) 0 ${goalProgressPercent}%, rgba(15, 23, 42, 0.08) ${goalProgressPercent}% 100%)`,
-                  }}
-                >
-                  <div className="dashboard-home__ring-inner">
-                    <strong>{goalProgress.progressPercent === null ? "Set" : `${Math.round(goalProgress.progressPercent)}%`}</strong>
-                    <span>{goalProgress.bandLabel}</span>
-                  </div>
-                </div>
-                <div className="dashboard-home__goal-card-copy">
-                  <p className="eyebrow">Goal progress</p>
-            <strong>{goalSummaryLabel}</strong>
-            <p>{goalHeroCopy}</p>
-            <small>{goalProgressLabel} complete · {goalAction}</small>
-            <Link className="button button-secondary button-small" href={goalHeroActionHref}>
-              {goalHeroActionLabel}
-            </Link>
-          </div>
-              </div>
-            ) : (
-              <div className="dashboard-home__goal-card dashboard-home__goal-card--empty">
-                <p className="eyebrow">Track progress</p>
-                <strong>{goalHeroHeading}</strong>
-                <p>{goalHeroCopy}</p>
-                <Link className="button button-secondary button-small" href={goalHeroActionHref}>
-                  {goalHeroActionLabel}
-                </Link>
-              </div>
-            )}
           </div>
         </article>
 
@@ -908,6 +856,58 @@ async function DashboardStream({
             </div>
           </div>
         </article>
+
+        <div className="dashboard-home__bottom-stack">
+          <div className="dashboard-home__hero-side">
+            {shouldShowStarterCard ? (
+              <div className="dashboard-home__starter-card">
+                <p className="eyebrow">Get started</p>
+                <strong>Import files to unlock your dashboard.</strong>
+                <p>Bring in a statement and Clover will populate balance, movement, and goal progress in one place.</p>
+                <div className="dashboard-home__starter-actions">
+                  <Link className="button button-primary button-small" href="/dashboard?import=1">
+                    Import files
+                  </Link>
+                  <Link className="button button-secondary button-small" href="/accounts">
+                    Add an account
+                  </Link>
+                </div>
+              </div>
+            ) : goalKey ? (
+              <div className="dashboard-home__goal-card">
+                <div
+                  className="dashboard-home__ring dashboard-home__ring--compact"
+                  style={{
+                    background: `conic-gradient(var(--accent) 0 ${goalProgressPercent}%, rgba(15, 23, 42, 0.08) ${goalProgressPercent}% 100%)`,
+                  }}
+                >
+                  <div className="dashboard-home__ring-inner">
+                    <strong>{goalProgress.progressPercent === null ? "Set" : `${Math.round(goalProgress.progressPercent)}%`}</strong>
+                    <span>{goalProgress.bandLabel}</span>
+                  </div>
+                </div>
+                <div className="dashboard-home__goal-card-copy">
+                  <p className="eyebrow">Track progress</p>
+                  <strong>{goalSummaryLabel}</strong>
+                  <p>{goalHeroCopy}</p>
+                  <small>{goalProgressLabel} complete · {goalAction}</small>
+                  <Link className="button button-secondary button-small" href={goalHeroActionHref}>
+                    {goalHeroActionLabel}
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="dashboard-home__goal-card dashboard-home__goal-card--empty">
+                <p className="eyebrow">Track progress</p>
+                <strong>{goalHeroHeading}</strong>
+                <p>{goalHeroCopy}</p>
+                <Link className="button button-secondary button-small" href={goalHeroActionHref}>
+                  {goalHeroActionLabel}
+                </Link>
+              </div>
+            )}
+          </div>
+        </div>
 
         <DashboardImportLauncher
           workspaceId={workspaceSummary.id}
