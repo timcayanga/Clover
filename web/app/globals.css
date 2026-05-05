@@ -3302,6 +3302,10 @@ body.transactions-manual-open .shell-quick-add-button {
   box-shadow: var(--shadow);
 }
 
+.dashboard-home__hero.glass.dashboard-home__hero--balance {
+  background: linear-gradient(135deg, #03a8c0 0%, #5ed3d0 100%);
+}
+
 .dashboard-top-actions {
   position: relative;
   display: flex;
@@ -3377,8 +3381,8 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .dashboard-home__balance-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 20px;
   align-items: start;
 }
 
@@ -3408,8 +3412,13 @@ body.transactions-manual-open .shell-quick-add-button {
   grid-template-columns: 1fr;
   gap: 8px;
   align-content: start;
-  width: min(300px, 100%);
+  width: max-content;
+  min-width: min(300px, 100%);
   justify-self: end;
+}
+
+.dashboard-home__balance-side .dashboard-home__balance-mini-pill {
+  width: min(300px, 100%);
 }
 
 .dashboard-home__balance-mini-pill .eyebrow {
@@ -22038,6 +22047,7 @@ button.accounts-detail__transaction-head-cell {
 
   .dashboard-home__balance-side {
     width: 100%;
+    min-width: 0;
     grid-template-columns: 1fr;
     gap: 6px;
     justify-self: stretch;
