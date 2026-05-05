@@ -1659,9 +1659,18 @@ export const processImportFileText = async (
     !metadataForParse.endingBalance;
   const parsedRowsWithDates = countRowsWithParseableDates(parsedRows);
   const parsedDateCoverage = parsedRows.length > 0 ? parsedRowsWithDates / parsedRows.length : 0;
+  const looksCharacterSpacedOcr = /(?:\b[A-Z]\s+){8,}[A-Z]\b/.test(textForParse);
+  const genericIdentityLooksWeak =
+    !metadataForParse.accountName ||
+    metadataForParse.accountName === metadataForParse.institution ||
+    /^Account\s+\d{4}$/i.test(metadataForParse.accountName) ||
+    /^(CUSTOMER NUMBER|ACCOUNT NUMBER)$/i.test(metadataForParse.accountName);
   const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank"]);
   const prefersVisionFallbackForInstitution =
     typeof metadataForParse.institution === "string" && noisyVisionPreferredInstitutions.has(metadataForParse.institution);
+  const genericParseLooksSuspicious =
+    (importFile.fileType === "application/pdf" || imageImport) &&
+    (looksCharacterSpacedOcr || genericIdentityLooksWeak || (metadataForParse.confidence ?? 0) < 75);
   const suspiciousDateCoverage =
     (importFile.fileType === "application/pdf" || imageImport) && parsedRows.length >= 6 && parsedRowsWithDates === 0
       ? true
@@ -1674,6 +1683,7 @@ export const processImportFileText = async (
       (metadataForParse.confidence ?? 0) < 70 ||
       !metadataForParse.accountNumber ||
       !hasKnownInstitution ||
+      genericParseLooksSuspicious ||
       gcashSuspiciouslySparse ||
       suspiciousDateCoverage);
   if (shouldUseVisionFallback && !pageImages) {
@@ -1692,8 +1702,8 @@ export const processImportFileText = async (
             fileName,
           },
           options.password,
-          !text.trim() ? 6 : gcashSuspiciouslySparse ? 3 : 2,
-          !text.trim() ? 2.0 : gcashSuspiciouslySparse ? 1.35 : 1.1,
+          !text.trim() ? 6 : looksCharacterSpacedOcr || genericParseLooksSuspicious ? 4 : gcashSuspiciouslySparse ? 3 : 2,
+          !text.trim() ? 2.0 : looksCharacterSpacedOcr || genericParseLooksSuspicious ? 1.6 : gcashSuspiciouslySparse ? 1.35 : 1.1,
           options.pdfJsBaseUrl,
           !text.trim() || imageImport
         );
