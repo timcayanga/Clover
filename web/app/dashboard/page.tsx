@@ -15,6 +15,7 @@ import { isLiabilityAccountType, isSpendableAccountType } from "@/lib/account-ty
 import { RouteSplash } from "@/components/route-splash";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
 import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
+import { DashboardTopActions } from "@/components/dashboard-top-actions";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
@@ -342,13 +343,7 @@ function DashboardStreamFallback() {
   );
 }
 
-async function DashboardStream({
-  user,
-  resolvedSearchParams,
-}: {
-  user: Awaited<ReturnType<typeof getOrCreateCurrentUser>>;
-  resolvedSearchParams?: { import?: string };
-}) {
+async function resolveDashboardWorkspaceSummary(user: Awaited<ReturnType<typeof getOrCreateCurrentUser>>) {
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
   const workspaceSelect = {
@@ -429,6 +424,18 @@ async function DashboardStream({
   if (!workspaceSummary) {
     redirect("/dashboard");
   }
+
+  return workspaceSummary;
+}
+
+async function DashboardStream({
+  user,
+  resolvedSearchParams,
+}: {
+  user: Awaited<ReturnType<typeof getOrCreateCurrentUser>>;
+  resolvedSearchParams?: { import?: string };
+}) {
+  const workspaceSummary = await resolveDashboardWorkspaceSummary(user);
 
   const cashAccountCount = workspaceSummary.accounts.filter((account) => account.type === "cash").length;
   const shouldShowStarterCard =
@@ -514,7 +521,7 @@ async function DashboardStream({
         })
       : Promise.resolve([]);
 
-  const shouldLoadTransactions = !selectedWorkspaceData || workspaceSummary._count.transactions > 0;
+  const shouldLoadTransactions = workspaceSummary._count.transactions > 0;
   const transactionsPromise = shouldLoadTransactions
     ? prisma.transaction.findMany({
         where: {
@@ -821,11 +828,24 @@ async function DashboardPageStream({
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
     redirect("/onboarding");
   }
+  const workspaceSummary = await resolveDashboardWorkspaceSummary(user);
 
   return (
     <CloverShell
       active="dashboard"
       title="Dashboard"
+      actions={
+        <DashboardTopActions
+          workspaceId={workspaceSummary.id}
+          accounts={workspaceSummary.accounts.map((account) => ({
+            id: account.id,
+            name: account.name,
+            institution: account.institution,
+            type: account.type,
+            currency: account.currency,
+          }))}
+        />
+      }
     >
       <Suspense fallback={<DashboardStreamFallback />}>
         <DashboardStream user={user} resolvedSearchParams={resolvedSearchParams} />
