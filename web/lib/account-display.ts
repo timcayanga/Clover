@@ -70,3 +70,25 @@ export const getAccountDisplayName = (account: AccountDisplayInput) => {
   const trimmedName = normalizeWhitespace(account.name ?? "");
   return trimmedName || "Account";
 };
+
+export const getAccountCardName = (account: AccountDisplayInput) => {
+  if (account.type === "cash") {
+    return "Cash";
+  }
+
+  if (account.type === "investment") {
+    const trimmedName = normalizeWhitespace(account.name ?? "");
+    if (trimmedName) {
+      return trimmedName;
+    }
+
+    return normalizeWhitespace(account.institution ?? "") || "Investment";
+  }
+
+  if (account.source === "upload") {
+    return resolveBankLabel(account);
+  }
+
+  const trimmedName = normalizeWhitespace(account.name ?? "");
+  return trimmedName || resolveBankLabel(account);
+};

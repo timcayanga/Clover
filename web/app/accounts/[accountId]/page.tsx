@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEven
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
-import { AccountBrandMark } from "@/components/account-brand-mark";
-import { formatUploadAccountDisplayName, getAccountDisplayName } from "@/lib/account-display";
+import { FinancialAccountCard } from "@/components/financial-account-card";
+import { getAccountCardName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import { deriveReconciledBalance } from "@/lib/account-balance";
@@ -39,7 +39,6 @@ import {
   isMarketInvestmentSubtype,
 } from "@/lib/investments";
 import {
-  formatAccountTypeLabel,
   isLiabilityAccountType,
 } from "@/lib/account-types";
 
@@ -165,33 +164,6 @@ const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
 const normalizeAccountBalance = (type: Account["type"] | null | undefined, value: number) =>
   isLiabilityAccountType(type) ? -Math.abs(value) : Math.abs(value);
-
-const isIdentityAccountType = (value: Account["type"] | null | undefined) =>
-  value === "bank" || value === "wallet" || value === "credit_card" || value === "prepaid";
-
-const getAccountCardVisual = (value: Account["type"] | null | undefined) => {
-  if (value === "investment") {
-    return "investment";
-  }
-
-  return isIdentityAccountType(value) ? "identity" : "ledger";
-};
-
-const getAccountCardTitle = (account: Account) => {
-  if (account.type === "cash") {
-    return "Cash";
-  }
-
-  return getAccountDisplayName(account);
-};
-
-const getInvestmentPreview = (account: Account) =>
-  [
-    account.investmentSymbol?.trim(),
-    account.investmentSubtype ? getInvestmentSubtypeLabel(account.investmentSubtype) : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
 
 const formatCardAccountNumber = (value: string | null | undefined) => {
   const cleaned = (value ?? "").trim();
@@ -447,8 +419,6 @@ const getTransactionSortFieldValue = (transaction: Transaction, field: AccountTr
       return "";
   }
 };
-
-const formatAccountType = (value: string) => formatAccountTypeLabel(value);
 
 export default function AccountDetailPage() {
   useEffect(() => {
@@ -956,19 +926,19 @@ function AccountDetailPageContent() {
     },
     [account?.balance, account?.source, account?.type, latestCheckpoint, transactions]
   );
-  const accountDisplayName = account
-    ? account.source === "upload" || Boolean(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber)
-      ? formatUploadAccountDisplayName(
-          account.name,
-          account.institution,
-          account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null,
-          account.type
-        )
-      : getAccountDisplayName(account)
-    : "Account";
   const accountCardNumber = account
     ? formatCardAccountNumber(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null)
     : "";
+  const accountCardName = account
+    ? getAccountCardName({
+        name: account.type === "investment" ? accountEditDraft.name || account.name : accountEditDraft.name || account.name,
+        institution: account.institution,
+        accountNumber: account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null,
+        type: account.type,
+        source: account.source,
+      })
+    : "Account";
+  const liveCardNumber = formatCardAccountNumber(accountEditDraft.accountNumber || accountCardNumber);
   const hasVisibleBalance = account?.balance !== null && account?.balance !== undefined && String(account.balance).trim() !== "";
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {
@@ -1634,48 +1604,14 @@ function AccountDetailPageContent() {
               </div>
             ) : null}
 
-            <article
-              className="accounts-account-card accounts-detail__hero-card glass"
-              style={{
-                ["--brand-accent" as string]: accountBrand.accent,
-                ["--brand-soft" as string]: accountBrand.background,
-              }}
-              data-visual={getAccountCardVisual(account.type)}
-            >
-              <div className="accounts-account-card__content">
-                <div className="accounts-account-card__head">
-                  <div className="accounts-account-card__brand">
-                    <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
-                    <div>
-                      {getAccountCardVisual(account.type) === "identity" ? (
-                        <>
-                          <strong>{accountDisplayName}</strong>
-                          {accountCardNumber ? <span>{accountCardNumber}</span> : null}
-                        </>
-                      ) : (
-                        <>
-                          <span>{formatAccountType(account.type)}</span>
-                          <strong>{accountDisplayName}</strong>
-                          {accountCardNumber ? <span>{accountCardNumber}</span> : null}
-                        </>
-                      )}
-                      {account.type === "investment" ? <span>{getInvestmentPreview(account) || accountBrand.label}</span> : null}
-                    </div>
-                  </div>
-                </div>
-                <div className="accounts-account-card__body">
-                  <div className="accounts-account-card__balance-row">
-                    <div
-                      className={`accounts-account-card__amount ${
-                        isLiabilityAccountType(account.type) ? "is-liability" : "is-asset"
-                      }`}
-                    >
-                      {formatAccountAmount(Math.abs(currentBalance), account.currency)}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </article>
+            <FinancialAccountCard
+              className="accounts-detail__hero-card"
+              accountBrand={accountBrand}
+              name={accountCardName}
+              accountNumber={liveCardNumber}
+              amount={formatAccountAmount(Math.abs(currentBalance), account.currency)}
+              showChevron={false}
+            />
 
             {account.type !== "investment" ? (
               <div className="accounts-detail__identity-edit">

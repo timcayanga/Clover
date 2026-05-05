@@ -14578,7 +14578,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 280px));
+  grid-template-columns: repeat(auto-fill, minmax(272px, 272px));
   gap: 14px;
 }
 
@@ -14596,6 +14596,184 @@ input.transaction-inline-edit--amount::placeholder {
 
 .accounts-mobile-list--mobile {
   display: none;
+}
+
+.financial-account-card {
+  --card-accent: #0ea5b7;
+  position: relative;
+  width: min(100%, 272px);
+  aspect-ratio: 1.586 / 1;
+  border-radius: 28px;
+  overflow: hidden;
+  isolation: isolate;
+  background:
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--card-accent) 80%, #07111d 20%) 0%,
+      color-mix(in srgb, var(--card-accent) 92%, #11233b 8%) 58%,
+      color-mix(in srgb, var(--card-accent) 76%, #060f19 24%) 100%
+    );
+  box-shadow:
+    0 18px 36px rgba(8, 15, 26, 0.2),
+    0 34px 80px color-mix(in srgb, var(--card-accent) 24%, transparent),
+    0 6px 0 rgba(255, 255, 255, 0.05) inset,
+    0 -10px 22px rgba(255, 255, 255, 0.05) inset;
+  color: #ffffff;
+}
+
+.financial-account-card::before,
+.financial-account-card::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.financial-account-card::before {
+  inset: 12px 14px 16px;
+  border-radius: 22px;
+  background:
+    linear-gradient(
+      130deg,
+      rgba(255, 255, 255, 0.34) 0%,
+      rgba(255, 255, 255, 0.14) 16%,
+      rgba(255, 255, 255, 0) 38%,
+      rgba(255, 255, 255, 0.08) 62%,
+      rgba(255, 255, 255, 0) 100%
+    ),
+    radial-gradient(circle at 64% 72%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 38%);
+  opacity: 0.74;
+}
+
+.financial-account-card::after {
+  inset: 18px 16px 20px;
+  border-radius: 22px;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.12) 0px,
+    rgba(255, 255, 255, 0.12) 1px,
+    rgba(255, 255, 255, 0) 1px,
+    rgba(255, 255, 255, 0) 8px
+  );
+  opacity: 0.18;
+}
+
+.financial-account-card[data-state="deleting"],
+.financial-account-card[data-state="loading"] {
+  opacity: 0.78;
+  filter: saturate(0.88);
+}
+
+.financial-account-card.is-interactive {
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.financial-account-card.is-interactive:hover,
+.financial-account-card.is-interactive:focus-within {
+  transform: translateY(-3px);
+  box-shadow:
+    0 24px 44px rgba(8, 15, 26, 0.24),
+    0 42px 96px color-mix(in srgb, var(--card-accent) 28%, transparent),
+    0 6px 0 rgba(255, 255, 255, 0.05) inset,
+    0 -10px 22px rgba(255, 255, 255, 0.05) inset;
+}
+
+.financial-account-card__overlay {
+  appearance: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+
+.financial-account-card__content {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100%;
+  padding: 18px;
+  gap: 14px;
+}
+
+.financial-account-card__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.financial-account-card .accounts-brand-mark {
+  width: 50px;
+  height: 50px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 10px 18px rgba(8, 15, 26, 0.18),
+    0 1px 0 rgba(255, 255, 255, 0.12) inset;
+}
+
+.financial-account-card__chevron {
+  appearance: none;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  min-height: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.32rem;
+  line-height: 1;
+  box-shadow:
+    0 10px 20px rgba(8, 15, 26, 0.18),
+    0 1px 0 rgba(255, 255, 255, 0.14) inset;
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+}
+
+.financial-account-card__chevron:disabled {
+  opacity: 1;
+  cursor: default;
+}
+
+.financial-account-card__meta {
+  align-self: end;
+  display: grid;
+  gap: 6px;
+}
+
+.financial-account-card__name {
+  display: block;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  text-wrap: balance;
+}
+
+.financial-account-card__number {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.financial-account-card__amount {
+  font-size: 1.72rem;
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1;
 }
 
 .accounts-account-card {
@@ -15199,7 +15377,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-detail__hero-card {
-  width: min(100%, 300px);
+  width: min(100%, 272px);
 }
 
 .accounts-detail__identity-edit {
@@ -21764,7 +21942,7 @@ input.transaction-inline-edit--amount::placeholder {
   .accounts-mobile-featured__rail {
     display: grid;
     grid-auto-flow: column;
-    grid-auto-columns: minmax(248px, 82vw);
+    grid-auto-columns: 272px;
     gap: 12px;
     overflow-x: auto;
     padding-bottom: 4px;
@@ -21776,8 +21954,12 @@ input.transaction-inline-edit--amount::placeholder {
     display: none;
   }
 
-  .accounts-mobile-featured__rail .accounts-account-card {
+  .accounts-mobile-featured__rail .financial-account-card {
     scroll-snap-align: start;
+  }
+
+  .financial-account-card {
+    width: 272px;
   }
 
   .accounts-account-card__head {
@@ -21843,7 +22025,7 @@ input.transaction-inline-edit--amount::placeholder {
   }
 
   .accounts-detail__hero-card {
-    width: min(100%, 260px);
+    width: min(100%, 272px);
   }
 
   .accounts-detail__identity-edit {
