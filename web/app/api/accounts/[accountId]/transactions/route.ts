@@ -20,6 +20,7 @@ const resolveAccountTransactionsRouteUserId = async () => {
 type TransactionApiRow = {
   id: string;
   accountId: string;
+  categoryId: string | null;
   amount: string;
   type: "income" | "expense" | "transfer";
   date: string;
@@ -41,13 +42,14 @@ const mapTransactionRow = (transaction: {
   merchantRaw: string;
   merchantClean: string | null;
   rawPayload: Prisma.JsonValue;
-  category: { name: string } | null;
+  category: { id: string; name: string } | null;
   description: string | null;
   isExcluded: boolean;
   importFileId: string | null;
 }): TransactionApiRow => ({
   id: transaction.id,
   accountId: transaction.accountId,
+  categoryId: transaction.category?.id ?? null,
   amount: transaction.amount.toString(),
   type: transaction.type,
   date: transaction.date.toISOString(),
@@ -157,6 +159,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
           isExcluded: true,
           category: {
             select: {
+              id: true,
               name: true,
             },
           },

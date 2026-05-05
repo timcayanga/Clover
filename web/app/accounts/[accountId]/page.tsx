@@ -11,8 +11,6 @@ import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { extractAccountIdFromPathSegment, getAccountPath } from "@/lib/account-path";
-import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
-import { formatTransactionDirectionLabel } from "@/lib/transaction-directions";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
@@ -88,7 +86,7 @@ type Category = {
   type: "income" | "expense" | "transfer";
 };
 
-type AccountTransactionSortField = "name" | "date" | "category" | "type" | "amount";
+type AccountTransactionSortField = "name" | "date" | "category" | "amount";
 type AccountTransactionSortDirection = "asc" | "desc";
 
 type EditableTransactionField = "name" | "date" | "categoryId" | "amount";
@@ -550,10 +548,6 @@ const buildImportSummaries = (transactions: Transaction[], importFiles: ImportFi
   return Array.from(groups.values()).sort((left, right) => new Date(right.latestDate).getTime() - new Date(left.latestDate).getTime());
 };
 
-const getTransactionTypeLabel = (type: Transaction["type"]) => {
-  return formatTransactionDirectionLabel(type);
-};
-
 const getTransactionSortLabel = (transaction: Transaction) =>
   transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
 
@@ -579,8 +573,6 @@ const getTransactionSortFieldValue = (transaction: Transaction, field: AccountTr
       return new Date(transaction.date).getTime();
     case "category":
       return transaction.categoryName?.trim() || "Other";
-    case "type":
-      return getTransactionTypeLabel(transaction.type);
     case "amount":
       return Number(transaction.amount);
     default:
@@ -897,16 +889,6 @@ function AccountDetailPageContent() {
               const nextTransactions = Array.isArray(transactionsPayload?.transactions)
                 ? transactionsPayload.transactions
                 : [];
-              if (cachedTransactions.length > 0 && nextTransactions.length === 0) {
-                setTransactions(cachedTransactions);
-                setTransactionPage(typeof transactionsPayload?.page === "number" ? transactionsPayload.page : 1);
-                setTransactionTotalCount(Math.max(cachedTransactions.length, accountTransactionsLookup?.totalCount ?? cachedTransactions.length));
-                setTransactionsError(null);
-                setTransactionsLoading(false);
-                setMessage("");
-                setHasInitialDataLoaded(true);
-                return;
-              }
               const mergedTransactions = mergeImportedWorkspaceTransactions(cachedTransactions, nextTransactions);
               setTransactions(mergedTransactions);
               setTransactionPage(typeof transactionsPayload?.page === "number" ? transactionsPayload.page : 1);
@@ -1165,7 +1147,7 @@ function AccountDetailPageContent() {
     [transactions, transactionSortDirection, transactionSortField]
   );
   const categoryOptions = useMemo(
-    () => categories.map((category) => ({ value: category.id, label: category.name })),
+    () => [{ value: "", label: "Other" }, ...categories.map((category) => ({ value: category.id, label: category.name }))],
     [categories]
   );
   const detailSelectedCategory = useMemo(
@@ -1797,19 +1779,6 @@ function AccountDetailPageContent() {
     return () => window.clearTimeout(timeout);
   }, [account, investmentEditDraft]);
 
-  const openTransactionsPage = () => {
-    if (!account) {
-      return;
-    }
-
-    const params = buildTransactionQuerySearchParams(
-      account.workspaceId,
-      { accountIds: [account.id] },
-      { pageSize: "all" }
-    );
-    router.push(`/transactions?${params.toString()}`);
-  };
-
   const deleteAccount = async () => {
     if (!accountId) {
       return;
@@ -2238,9 +2207,6 @@ function AccountDetailPageContent() {
                   </button>
                 </>
               ) : null}
-              <button className="button button-secondary button-small" type="button" onClick={openTransactionsPage} disabled={!account}>
-                Open in Transactions
-              </button>
             </div>
           </div>
           {transactionsError ? (
@@ -2248,8 +2214,8 @@ function AccountDetailPageContent() {
           ) : visibleTransactions.length > 0 ? (
             <>
               <div className="accounts-detail__transaction-list" aria-label="Transaction history">
-                <div className="line-item-header accounts-detail__transaction-header">
-                  <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
+                <div className="accounts-detail__transaction-header">
+                  <label className="accounts-detail__transaction-head-cell accounts-detail__transaction-head-cell--select">
                     <input
                       ref={selectAllTransactionsRef}
                       type="checkbox"
@@ -2258,9 +2224,9 @@ function AccountDetailPageContent() {
                       aria-label="Select all loaded transactions"
                     />
                   </label>
-                  <span className="line-item-header-cell line-item-header-cell--icon" aria-hidden="true" />
+                  <span className="accounts-detail__transaction-head-cell accounts-detail__transaction-head-cell--icon" aria-hidden="true" />
                   <button
-                    className="line-item-header-cell line-item-header-cell--name"
+                    className="accounts-detail__transaction-head-cell accounts-detail__transaction-head-cell--name"
                     type="button"
                     onClick={() => {
                       if (transactionSortField === "name") {
@@ -2276,7 +2242,7 @@ function AccountDetailPageContent() {
                     Name{transactionSortField === "name" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
                   </button>
                   <button
-                    className="line-item-header-cell"
+                    className="accounts-detail__transaction-head-cell"
                     type="button"
                     onClick={() => {
                       if (transactionSortField === "date") {
@@ -2292,7 +2258,7 @@ function AccountDetailPageContent() {
                     Date{transactionSortField === "date" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
                   </button>
                   <button
-                    className="line-item-header-cell"
+                    className="accounts-detail__transaction-head-cell"
                     type="button"
                     onClick={() => {
                       if (transactionSortField === "category") {
@@ -2308,7 +2274,7 @@ function AccountDetailPageContent() {
                     Category{transactionSortField === "category" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
                   </button>
                   <button
-                    className="line-item-header-cell line-item-header-cell--amount"
+                    className="accounts-detail__transaction-head-cell accounts-detail__transaction-head-cell--amount"
                     type="button"
                     onClick={() => {
                       if (transactionSortField === "amount") {
@@ -2323,7 +2289,7 @@ function AccountDetailPageContent() {
                   >
                     Amount{transactionSortField === "amount" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
                   </button>
-                  <span className="line-item-header-cell line-item-header-cell--spacer" aria-hidden="true" />
+                  <span className="accounts-detail__transaction-head-cell accounts-detail__transaction-head-cell--chevron" aria-hidden="true" />
                 </div>
                 {visibleTransactions.map((transaction) => {
                   const amount = Number(transaction.amount);
@@ -2333,7 +2299,7 @@ function AccountDetailPageContent() {
                   return (
                     <div
                       key={transaction.id}
-                      className={`line-item accounts-detail__transaction-row ${transaction.isExcluded ? "is-muted" : ""} ${
+                      className={`accounts-detail__transaction-row ${transaction.isExcluded ? "is-muted" : ""} ${
                         selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
                       }`}
                     >

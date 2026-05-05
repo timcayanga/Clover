@@ -96,7 +96,7 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
-    match: /\bSECURITY BANK\b/i,
+    match: /\b(SECURITY BANK|SECURITY BANK CORPORATION)\b/i,
     brand: makeBrand({
       label: "Security Bank",
       logoSrcs: philippinesLogoWithVariants("security bank", "security-bank"),
@@ -136,7 +136,7 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
-    match: /\bAUB\b/i,
+    match: /\b(AUB|ASIA UNITED BANK)\b/i,
     brand: makeBrand({
       label: "AUB",
       logoSrcs: philippinesLogoWithVariants("aub"),
@@ -166,7 +166,7 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
-    match: /\bCHINABANK\b/i,
+    match: /\b(CHINABANK|CHINA BANKING CORPORATION)\b/i,
     brand: makeBrand({
       label: "Chinabank",
       logoSrcs: philippinesLogoWithVariants("china bank", "chinabank"),
@@ -318,7 +318,7 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
-    match: /\bPSBANK\b/i,
+    match: /\b(PSBANK|PHILIPPINE SAVINGS BANK)\b/i,
     brand: makeBrand({
       label: "PSBank",
       logoSrcs: philippinesLogoWithVariants("psbank"),
@@ -498,7 +498,7 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
     }),
   },
   {
-    match: /\bDBP\b/i,
+    match: /\b(DBP|DEVELOPMENT BANK OF THE PHILIPPINES)\b/i,
     brand: makeBrand({
       label: "DBP",
       logoSrcs: philippinesLogoWithVariants("dbp"),
