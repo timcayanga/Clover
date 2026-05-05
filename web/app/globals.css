@@ -3293,14 +3293,14 @@ body.transactions-manual-open .shell-quick-add-button {
   position: relative;
   overflow: hidden;
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 0;
   padding: 18px;
   border: 1px solid var(--stroke);
   border-radius: 32px;
   background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.12), transparent 32%),
-    radial-gradient(circle at 84% 12%, rgba(34, 197, 94, 0.12), transparent 28%),
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.16), transparent 32%),
+    radial-gradient(circle at 84% 12%, rgba(94, 211, 208, 0.16), transparent 28%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(247, 250, 251, 0.93));
   box-shadow: var(--shadow);
 }
@@ -3310,72 +3310,64 @@ body.transactions-manual-open .shell-quick-add-button {
   align-items: stretch;
 }
 
-.dashboard-home__hero-copy {
+.dashboard-home__balance-layout {
   display: grid;
-  gap: 0;
-  align-content: start;
+  grid-template-columns: minmax(280px, 1.15fr) minmax(0, 0.85fr);
+  gap: 12px;
+  align-items: start;
 }
 
-.dashboard-home__balance-strip {
+.dashboard-home__balance-main {
   display: grid;
-  grid-template-columns: minmax(260px, 1.1fr) minmax(0, 0.9fr);
-  gap: 12px;
-  padding: 14px;
+  gap: 8px;
+  align-content: center;
+  min-height: 100%;
+  padding: 18px 20px;
   border-radius: 32px;
-  background: linear-gradient(135deg, rgba(7, 98, 104, 0.98) 0%, rgba(14, 158, 154, 0.96) 52%, rgba(194, 249, 232, 0.98) 100%);
+  background: linear-gradient(135deg, rgba(3, 168, 192, 0.96) 0%, rgba(94, 211, 208, 0.98) 100%);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
     0 16px 34px rgba(5, 84, 87, 0.14);
 }
 
-.dashboard-home__balance-main-pill,
-.dashboard-home__balance-mini-pill {
-  display: grid;
-  gap: 6px;
-  align-content: start;
-  padding: 18px 18px 16px;
-  border-radius: 28px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 10px 22px rgba(5, 84, 87, 0.08);
+.dashboard-home__balance-main .eyebrow {
+  color: rgba(255, 255, 255, 0.82);
 }
 
-.dashboard-home__balance-main-pill {
-  min-height: 100%;
-  justify-content: center;
-}
-
-.dashboard-home__balance-main-pill .eyebrow,
-.dashboard-home__balance-mini-pill .eyebrow {
-  color: rgba(82, 89, 112, 0.74);
-}
-
-.dashboard-home__balance-main-pill strong {
-  font-size: clamp(1.55rem, 3.2vw, 2.35rem);
+.dashboard-home__balance-main strong {
+  color: #fff;
+  font-size: clamp(1.55rem, 3vw, 2.2rem);
   line-height: 0.98;
   letter-spacing: -0.06em;
 }
 
 .dashboard-home__balance-side {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(164px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 8px;
   align-content: start;
+}
+
+.dashboard-home__balance-mini-pill .eyebrow {
+  color: rgba(82, 89, 112, 0.74);
 }
 
 .dashboard-home__balance-mini-pill {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 11px 14px;
-  min-height: 60px;
+  gap: 8px;
+  padding: 9px 10px;
+  min-height: 48px;
   border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 10px 22px rgba(5, 84, 87, 0.08);
 }
 
 .dashboard-home__balance-mini-pill strong {
   text-align: right;
-  font-size: clamp(0.95rem, 1.25vw, 1.18rem);
+  font-size: clamp(0.88rem, 1.05vw, 1.05rem);
   line-height: 1.05;
   letter-spacing: -0.035em;
 }
@@ -3383,16 +3375,11 @@ body.transactions-manual-open .shell-quick-add-button {
 .dashboard-home__balance-mini-label {
   margin: 0;
   color: rgba(82, 89, 112, 0.74);
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.2;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   white-space: nowrap;
-}
-
-.dashboard-home__hero-side {
-  display: grid;
-  align-items: center;
 }
 
 .dashboard-home__bottom-stack {
@@ -12361,7 +12348,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .manual-default-fields {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(132px, 1.06fr) minmax(0, 0.97fr) minmax(0, 0.97fr);
   gap: 12px;
   width: 100%;
 }
@@ -12497,6 +12484,11 @@ input.transaction-inline-edit--amount::placeholder {
   min-height: 42px;
 }
 
+.manual-default-fields input[type="date"] {
+  font-size: 0.86rem;
+  letter-spacing: -0.01em;
+}
+
 .transactions-manual-money-row {
   display: grid;
   grid-template-columns: minmax(92px, 116px) minmax(0, 1fr);
@@ -12554,6 +12546,7 @@ input.transaction-inline-edit--amount::placeholder {
   font-weight: 600;
   box-shadow: none;
   text-shadow: none;
+  white-space: nowrap;
 }
 
 .transactions-manual-field {
@@ -12595,8 +12588,8 @@ input.transaction-inline-edit--amount::placeholder {
 .transactions-manual-type-toggle__button {
   flex: 0 0 auto;
   min-width: 0;
-  min-height: 22px;
-  height: 22px;
+  min-height: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -12607,7 +12600,7 @@ input.transaction-inline-edit--amount::placeholder {
   background: rgba(255, 255, 255, 0.96);
   color: var(--text);
   font: inherit;
-  font-size: 0.56rem;
+  font-size: 0.54rem;
   font-weight: 700;
   white-space: nowrap;
   line-height: 1;
@@ -12718,6 +12711,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .manual-form-actions--closed {
   align-items: center;
+  flex-wrap: nowrap;
 }
 
 .manual-form-actions--expanded {
@@ -12730,6 +12724,8 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 10px;
   margin-left: auto;
   flex-wrap: wrap;
+  flex-shrink: 0;
+  width: auto;
 }
 
 .manual-more-panel__receipt-line-items {
@@ -21763,30 +21759,26 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .dashboard-home__hero {
-    grid-template-columns: 1fr;
     padding: 16px;
-    gap: 12px;
+    gap: 0;
   }
 
-  .dashboard-home__balance-strip {
+  .dashboard-home__balance-layout {
     grid-template-columns: 1fr;
     gap: 10px;
-    padding: 12px;
-    border-radius: 28px;
   }
 
-  .dashboard-home__balance-main-pill,
   .dashboard-home__balance-mini-pill {
     border-radius: 22px;
   }
 
-  .dashboard-home__balance-main-pill {
-    padding: 16px 16px 14px;
+  .dashboard-home__balance-main {
+    padding: 15px 15px 14px;
   }
 
   .dashboard-home__balance-mini-pill {
-    min-height: 54px;
-    padding: 10px 12px;
+    min-height: 44px;
+    padding: 8px 10px;
   }
 
   .dashboard-home__balance-side {
@@ -22723,7 +22715,7 @@ button.accounts-detail__transaction-head-cell {
 
   .manual-form-actions__left,
   .manual-form-actions__right {
-    width: 100%;
+    width: auto;
   }
 
   .manual-form-actions__right {
@@ -22732,6 +22724,7 @@ button.accounts-detail__transaction-head-cell {
 
   .manual-form-actions--closed {
     gap: 10px;
+    flex-wrap: nowrap;
   }
 
   .transactions-manual-type-toggle {

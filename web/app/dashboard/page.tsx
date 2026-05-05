@@ -779,20 +779,18 @@ async function DashboardStream({
       />
       <section className="dashboard-home">
         <article className="dashboard-home__hero glass dashboard-home__hero--balance">
-          <div className="dashboard-home__hero-copy">
-            <div className="dashboard-home__balance-strip">
-              <div className="dashboard-home__balance-main-pill">
-                <p className="eyebrow">Total balance</p>
-                <strong>{totalBalanceLabel}</strong>
-              </div>
-              <div className="dashboard-home__balance-side">
-                {balanceHighlights.map((pill) => (
-                  <div key={pill.key} className="dashboard-home__balance-mini-pill">
-                    <p className="dashboard-home__balance-mini-label">{pill.label}</p>
-                    <strong>{pill.value}</strong>
-                  </div>
-                ))}
-              </div>
+          <div className="dashboard-home__balance-layout">
+            <div className="dashboard-home__balance-main">
+              <p className="eyebrow">Total balance</p>
+              <strong>{totalBalanceLabel}</strong>
+            </div>
+            <div className="dashboard-home__balance-side">
+              {balanceHighlights.map((pill) => (
+                <div key={pill.key} className="dashboard-home__balance-mini-pill">
+                  <p className="dashboard-home__balance-mini-label">{pill.label}</p>
+                  <strong>{pill.value}</strong>
+                </div>
+              ))}
             </div>
           </div>
         </article>
