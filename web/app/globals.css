@@ -14629,24 +14629,24 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .financial-account-card::before {
-  inset: 12px 14px 16px;
-  border-radius: 22px;
+  inset: 0;
+  border-radius: inherit;
   background:
     linear-gradient(
       130deg,
       rgba(255, 255, 255, 0.34) 0%,
-      rgba(255, 255, 255, 0.14) 16%,
-      rgba(255, 255, 255, 0) 38%,
-      rgba(255, 255, 255, 0.08) 62%,
+      rgba(255, 255, 255, 0.16) 14%,
+      rgba(255, 255, 255, 0.06) 34%,
+      rgba(255, 255, 255, 0.12) 64%,
       rgba(255, 255, 255, 0) 100%
     ),
-    radial-gradient(circle at 64% 72%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 38%);
-  opacity: 0.74;
+    radial-gradient(circle at 66% 74%, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 42%);
+  opacity: 0.86;
 }
 
 .financial-account-card::after {
-  inset: 18px 16px 20px;
-  border-radius: 22px;
+  inset: 0;
+  border-radius: inherit;
   background: repeating-linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.12) 0px,
@@ -14654,7 +14654,7 @@ input.transaction-inline-edit--amount::placeholder {
     rgba(255, 255, 255, 0) 1px,
     rgba(255, 255, 255, 0) 8px
   );
-  opacity: 0.18;
+  opacity: 0.12;
 }
 
 .financial-account-card[data-state="deleting"],
@@ -14770,7 +14770,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .financial-account-card__amount {
-  font-size: 1.72rem;
+  font-size: 1.54rem;
   font-weight: 800;
   letter-spacing: -0.05em;
   line-height: 1;
@@ -15148,6 +15148,11 @@ input.transaction-inline-edit--amount::placeholder {
   margin: auto;
   object-fit: contain;
   object-position: center;
+}
+
+.accounts-brand-mark.is-light-fallback .accounts-brand-mark__fallback,
+.accounts-brand-mark.is-light-fallback .accounts-brand-mark__logo-fallback {
+  filter: brightness(0) invert(1);
 }
 
 .institution-detail-page {

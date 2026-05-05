@@ -3,6 +3,22 @@
 import { useEffect, useState } from "react";
 import type { AccountBrand } from "@/lib/account-brand";
 
+const parseHexChannel = (value: string) => Number.parseInt(value, 16) / 255;
+
+const getRelativeLuminance = (hex: string) => {
+  const normalized = hex.trim().replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) {
+    return 0.5;
+  }
+
+  const channels = [normalized.slice(0, 2), normalized.slice(2, 4), normalized.slice(4, 6)].map((channel) => {
+    const value = parseHexChannel(channel);
+    return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+};
+
 export function AccountBrandMark({ accountBrand, label }: { accountBrand: AccountBrand; label: string }) {
   const [failed, setFailed] = useState(false);
   const [logoIndex, setLogoIndex] = useState(0);
@@ -10,6 +26,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
   const currentLogoSrc = logoCandidates[logoIndex] ?? null;
   const hasBrandLogo = Boolean(accountBrand.logoSrcs.length || accountBrand.logoSrc);
   const logoResetKey = `${accountBrand.logoSrc ?? ""}::${accountBrand.logoSrcs.join("|")}::${accountBrand.fallbackIconSrc}::${label}`;
+  const shouldUseLightFallback = getRelativeLuminance(accountBrand.accent) < 0.32;
 
   useEffect(() => {
     setFailed(false);
@@ -18,7 +35,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
 
   return (
     <span
-      className="accounts-brand-mark"
+      className={`accounts-brand-mark${shouldUseLightFallback ? " is-light-fallback" : ""}`}
       style={{
         background: accountBrand.background,
         color: accountBrand.foreground,
