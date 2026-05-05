@@ -3389,7 +3389,7 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .dashboard-home__hero--balance {
   position: relative;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 338px);
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
   align-items: start;
   gap: 16px;
   min-height: 152px;
@@ -3420,7 +3420,7 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 8px;
   justify-self: end;
   align-self: start;
-  width: min(338px, 100%);
+  width: min(220px, 100%);
 }
 
 .dashboard-home__hero-mini-pill,
