@@ -887,8 +887,9 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
       logoSrc: null,
       logoSrcs: [],
       fallbackIconSrc: othersIcon,
-      accent: "#64748B",
-      background: "linear-gradient(135deg, rgba(100, 116, 139, 0.16), rgba(100, 116, 139, 0.06))",
+      accent: "#A8B0BC",
+      background: "linear-gradient(135deg, rgba(212, 217, 223, 0.94), rgba(166, 173, 184, 0.88))",
+      foreground: "#111827",
     });
   }
 
@@ -897,7 +898,8 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
     logoSrc: null,
     logoSrcs: [],
     fallbackIconSrc: bankIcon,
-    accent: "#0EA5B7",
-    background: "linear-gradient(135deg, rgba(14, 165, 183, 0.16), rgba(14, 165, 183, 0.06))",
+    accent: "#A8B0BC",
+    background: "linear-gradient(135deg, rgba(212, 217, 223, 0.94), rgba(166, 173, 184, 0.88))",
+    foreground: "#111827",
   });
 };
