@@ -5,6 +5,7 @@ import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { buildTransactionQueryWhere } from "@/lib/transaction-query";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
+import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,7 @@ const mapTransactionRow = (transaction: {
   description: string | null;
   isExcluded: boolean;
   importFileId: string | null;
+  institution?: string | null;
 }): TransactionApiRow => ({
   id: transaction.id,
   accountId: transaction.accountId,
@@ -54,8 +56,19 @@ const mapTransactionRow = (transaction: {
   type: transaction.type,
   date: transaction.date.toISOString(),
   merchantRaw: transaction.merchantRaw,
-  merchantClean: transaction.merchantClean,
-  categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
+  merchantClean: getEffectiveTransactionMerchantName({
+    merchantClean: transaction.merchantClean,
+    merchantRaw: transaction.merchantRaw,
+    institution: transaction.institution ?? null,
+  }),
+  categoryName: getEffectiveTransactionCategoryName({
+    categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
+    rawPayload: transaction.rawPayload,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    institution: transaction.institution ?? null,
+    type: transaction.type,
+  }),
   description: transaction.description,
   isExcluded: transaction.isExcluded,
   importFileId: transaction.importFileId,
@@ -81,6 +94,15 @@ const getLastFourDigits = (value?: string | null) => {
   return digits.length >= 4 ? digits.slice(-4) : null;
 };
 
+const normalizeLegacyTransactionVisibility = async (workspaceId: string) => {
+  await prisma.$executeRaw`
+    UPDATE "Transaction"
+    SET "isExcluded" = false
+    WHERE "workspaceId" = ${workspaceId}
+      AND "isExcluded" IS NULL
+  `;
+};
+
 export async function GET(request: Request, { params }: { params: Promise<{ accountId: string }> }) {
   try {
     const userId = await resolveAccountTransactionsRouteUserId();
@@ -97,6 +119,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
     }
 
     await assertWorkspaceAccess(userId, account.workspaceId);
+    await normalizeLegacyTransactionVisibility(account.workspaceId);
 
     const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const pageSize = Math.max(1, Number(searchParams.get("pageSize") ?? "25") || 25);
@@ -157,6 +180,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
           rawPayload: true,
           description: true,
           isExcluded: true,
+          account: {
+            select: {
+              institution: true,
+            },
+          },
           category: {
             select: {
               id: true,
@@ -172,7 +200,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
     ]);
 
     return NextResponse.json({
-      transactions: rows.map(mapTransactionRow),
+      transactions: rows.map((row) =>
+        mapTransactionRow({
+          ...row,
+          institution: row.account?.institution ?? account.institution ?? null,
+        })
+      ),
       page,
       pageSize,
       totalCount,

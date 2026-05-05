@@ -9,6 +9,7 @@ import { capturePostHogServerEvent } from "@/lib/analytics";
 import { countWorkspaceTransactions } from "@/lib/plan-access";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
+import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import {
   buildTransactionQueryWhere,
   buildTransactionQueryOrderBy,
@@ -72,7 +73,7 @@ type TransactionSummaryRow = {
   currency: string;
   description: string | null;
   category: { name: string } | null;
-  account: { name: string } | null;
+  account: { name: string; institution: string | null } | null;
   createdAt: Date;
   isTransfer: boolean;
   isExcluded: boolean;
@@ -128,7 +129,7 @@ const mapTransactionRow = (transaction: {
   id: string;
   workspaceId: string;
   accountId: string;
-  account: { name: string };
+  account: { name: string; institution: string | null };
   categoryId: string | null;
   rawPayload: Prisma.JsonValue;
   category: { name: string } | null;
@@ -156,7 +157,6 @@ const mapTransactionRow = (transaction: {
   accountId: transaction.accountId,
   accountName: transaction.account.name,
   categoryId: transaction.categoryId,
-  categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
   reviewStatus: transaction.reviewStatus,
   parserConfidence: transaction.parserConfidence,
   categoryConfidence: transaction.categoryConfidence,
@@ -168,13 +168,25 @@ const mapTransactionRow = (transaction: {
   currency: transaction.currency,
   type: transaction.type,
   merchantRaw: transaction.merchantRaw,
-  merchantClean: transaction.merchantClean,
+  merchantClean: getEffectiveTransactionMerchantName({
+    merchantClean: transaction.merchantClean,
+    merchantRaw: transaction.merchantRaw,
+    institution: transaction.account.institution,
+  }),
   description: transaction.description,
   isTransfer: transaction.isTransfer,
   isExcluded: transaction.isExcluded,
   createdAt: transaction.createdAt.toISOString(),
   warningReason: transaction.warningReason,
   rawPayload: transaction.rawPayload,
+  categoryName: getEffectiveTransactionCategoryName({
+    categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
+    rawPayload: transaction.rawPayload,
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: transaction.merchantClean,
+    institution: transaction.account.institution,
+    type: transaction.type,
+  }),
 });
 
 const receiptLineItemSchema = z.object({
@@ -315,6 +327,7 @@ export async function GET(request: Request) {
             account: {
               select: {
                 name: true,
+                institution: true,
               },
             },
             createdAt: true,
@@ -435,6 +448,7 @@ export async function GET(request: Request) {
         account: {
           select: {
             name: true,
+            institution: true,
           },
         },
         createdAt: true,
@@ -645,6 +659,7 @@ export async function POST(request: Request) {
         account: {
           select: {
             name: true,
+            institution: true,
           },
         },
         category: {

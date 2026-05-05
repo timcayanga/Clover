@@ -16,6 +16,47 @@ export type AccountBrand = {
 
 const normalize = (value?: string | null) => String(value ?? "").trim().toLowerCase();
 
+const parseHexColor = (value: string) => {
+  const normalized = value.trim().replace("#", "");
+  if (!/^[0-9a-f]{6}$/i.test(normalized)) {
+    return null;
+  }
+
+  return {
+    r: Number.parseInt(normalized.slice(0, 2), 16),
+    g: Number.parseInt(normalized.slice(2, 4), 16),
+    b: Number.parseInt(normalized.slice(4, 6), 16),
+  };
+};
+
+const getColorLuminance = (value: string) => {
+  const parsed = parseHexColor(value);
+  if (!parsed) {
+    return 0.5;
+  }
+
+  const channels = [parsed.r, parsed.g, parsed.b].map((channel) => {
+    const normalized = channel / 255;
+    return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+  });
+
+  return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+};
+
+const inferForeground = (accent: string, background: string) => {
+  const accentLuminance = getColorLuminance(accent);
+  if (accentLuminance <= 0.46) {
+    return "#f8fafc";
+  }
+
+  const backgroundHexMatch = background.match(/#([0-9a-f]{6})/i);
+  if (backgroundHexMatch?.[1]) {
+    return getColorLuminance(`#${backgroundHexMatch[1]}`) <= 0.46 ? "#f8fafc" : "#0f172a";
+  }
+
+  return "#0f172a";
+};
+
 const iconPath = (fileName: string) => `/assets/banks/${fileName}`;
 
 const philippinesLogoPath = (fileName: string) => `/assets/banks/philippines/${fileName}`;
@@ -35,7 +76,7 @@ const makeBrand = (params: {
   fallbackIconSrc: params.fallbackIconSrc,
   accent: params.accent,
   background: params.background,
-  foreground: params.foreground ?? "#0f172a",
+  foreground: params.foreground ?? inferForeground(params.accent, params.background),
 });
 
 const bankIcon = iconPath("bank.png");
@@ -141,8 +182,9 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       label: "AUB",
       logoSrcs: philippinesLogoWithVariants("aub"),
       fallbackIconSrc: bankIcon,
-      accent: "#D61F26",
-      background: "linear-gradient(135deg, rgba(214, 31, 38, 0.16), rgba(214, 31, 38, 0.06))",
+      accent: "#B61B24",
+      background: "linear-gradient(135deg, #8F111B 0%, #B61B24 48%, #C62B31 100%)",
+      foreground: "#f8fafc",
     }),
   },
   {
@@ -772,8 +814,9 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
       logoSrc: null,
       logoSrcs: [],
       fallbackIconSrc: cashIcon,
-      accent: "#16A34A",
-      background: "linear-gradient(135deg, rgba(22, 163, 74, 0.16), rgba(22, 163, 74, 0.06))",
+      accent: "#0F9F5C",
+      background: "linear-gradient(135deg, #0B6E42 0%, #10A760 52%, #0E8A51 100%)",
+      foreground: "#f8fafc",
     });
   }
 
@@ -789,8 +832,9 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
       logoSrc: null,
       logoSrcs: [],
       fallbackIconSrc: walletIcon,
-      accent: "#0284C7",
-      background: "linear-gradient(135deg, rgba(2, 132, 199, 0.16), rgba(2, 132, 199, 0.06))",
+      accent: "#0A72E8",
+      background: "linear-gradient(135deg, #0750B8 0%, #1085F5 52%, #0C67D8 100%)",
+      foreground: "#f8fafc",
     });
   }
 
@@ -832,8 +876,9 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
                 : type === "bnpl"
                   ? bnplIcon
                   : liabilityIcon,
-      accent: "#DC2626",
-      background: "linear-gradient(135deg, rgba(220, 38, 38, 0.16), rgba(220, 38, 38, 0.06))",
+      accent: "#C63B57",
+      background: "linear-gradient(135deg, #7F1734 0%, #B12752 45%, #D3566E 100%)",
+      foreground: "#f8fafc",
     });
   }
 
@@ -843,8 +888,9 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
       logoSrc: null,
       logoSrcs: [],
       fallbackIconSrc: investmentIcon,
-      accent: "#7C3AED",
-      background: "linear-gradient(135deg, rgba(124, 58, 237, 0.16), rgba(124, 58, 237, 0.06))",
+      accent: "#5B4BFF",
+      background: "linear-gradient(135deg, #312E81 0%, #4F46E5 48%, #6D5CFF 100%)",
+      foreground: "#f8fafc",
     });
   }
 
@@ -854,8 +900,9 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
       logoSrc: null,
       logoSrcs: [],
       fallbackIconSrc: receivableIcon,
-      accent: "#059669",
-      background: "linear-gradient(135deg, rgba(5, 150, 105, 0.16), rgba(5, 150, 105, 0.06))",
+      accent: "#0E9B7B",
+      background: "linear-gradient(135deg, #0F5F5F 0%, #118A87 46%, #15B9A4 100%)",
+      foreground: "#f8fafc",
     });
   }
 
@@ -865,8 +912,9 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
       logoSrc: null,
       logoSrcs: [],
       fallbackIconSrc: prepaidIcon,
-      accent: "#0284C7",
-      background: "linear-gradient(135deg, rgba(2, 132, 199, 0.16), rgba(2, 132, 199, 0.06))",
+      accent: "#0A8FB2",
+      background: "linear-gradient(135deg, #0B4D6A 0%, #0F7494 48%, #10A5C6 100%)",
+      foreground: "#f8fafc",
     });
   }
 
@@ -876,8 +924,9 @@ export const getAccountBrand = (params: AccountBrandInput): AccountBrand => {
       logoSrc: null,
       logoSrcs: [],
       fallbackIconSrc: insuranceIcon,
-      accent: "#7C3AED",
-      background: "linear-gradient(135deg, rgba(124, 58, 237, 0.16), rgba(124, 58, 237, 0.06))",
+      accent: "#4E5FD7",
+      background: "linear-gradient(135deg, #2D3A8C 0%, #4152B8 48%, #6C7CF2 100%)",
+      foreground: "#f8fafc",
     });
   }
 

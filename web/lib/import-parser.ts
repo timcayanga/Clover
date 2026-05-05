@@ -1387,12 +1387,11 @@ const guessAubSavingsCategoryName = (description: string, type: TransactionType)
   const lower = description.toLowerCase();
   const compact = compactWhitespace(description).toLowerCase();
   if (/^beginning balance$/i.test(description)) return "Opening Balance";
-  if (/atmwd|atmwithdrawal/.test(compact)) return "Transfers";
+  if (/atmwd|atmwithdrawal/.test(compact)) return "Financial";
   if (/afcinq|atm fee inquiry/.test(lower)) return "Financial";
-  if (/instapay credit|credit movement|cash deposit|interest earned|\bint\b/.test(lower)) return "Income";
-  if (/instapay debit|debit movement|check issued|check deposit|cash withdrawal|encashment|internal clearing|internal clearing on-us|on-us transaction/.test(lower)) {
-    return "Transfers";
-  }
+  if (/instapay credit|instapay debit/.test(lower)) return "Transfers";
+  if (/credit movement|cash deposit|check deposit|interest earned|\bint\b/.test(lower)) return "Income";
+  if (/debit movement|check issued|cash withdrawal|encashment|internal clearing|internal clearing on-us|on-us transaction/.test(lower)) return "Financial";
   if (/tax|service fee - below minimum|finance charge/.test(lower)) return "Financial";
   return guessCategoryName(description, type);
 };
