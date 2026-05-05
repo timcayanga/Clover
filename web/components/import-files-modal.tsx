@@ -418,11 +418,12 @@ const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsight
   if (!importedAccount.accountNumber && typeof currentAccount?.accountNumber === "string" && currentAccount.accountNumber.trim()) {
     importedAccount.accountNumber = currentAccount.accountNumber.trim();
   }
-  if ((!importedAccount.balance || importedAccount.balance.trim() === "") && typeof currentAccount?.balance === "string") {
-    const currentBalance = currentAccount.balance.trim();
-    if (currentBalance) {
-      importedAccount.balance = currentBalance;
-    }
+  const currentBalance = typeof currentAccount?.balance === "string" ? currentAccount.balance.trim() : "";
+  const importedBalance = typeof importedAccount.balance === "string" ? importedAccount.balance.trim() : "";
+  const importedIsZeroish = importedBalance !== "" && Number(importedBalance) === 0;
+  const currentIsNonZero = currentBalance !== "" && Number(currentBalance) !== 0;
+  if ((!importedBalance || (summary.optimistic !== false && importedIsZeroish)) && currentIsNonZero) {
+    importedAccount.balance = currentBalance;
   }
 
   syncImportedWorkspaceAccountCaches(workspaceId, importedAccount);
@@ -1262,7 +1263,19 @@ export function ImportFilesModal({
   };
 
   const updateItem = (id: string, patch: Partial<QueuedFile>) => {
-    setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+    setItems((current) =>
+      current.map((item) => {
+        if (item.id !== id) {
+          return item;
+        }
+
+        if (item.status === "error" && patch.status && patch.status !== "error") {
+          return item;
+        }
+
+        return { ...item, ...patch };
+      })
+    );
   };
 
   const confirmItemImport = async (

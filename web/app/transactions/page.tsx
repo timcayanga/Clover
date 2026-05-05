@@ -6508,12 +6508,20 @@ function TransactionsPageContent() {
                 });
                 const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
                 if (existingIndex >= 0) {
+                  const existingAccount = current[existingIndex];
+                  const existingBalance = typeof existingAccount.balance === "string" ? existingAccount.balance.trim() : "";
+                  const optimisticBalance = typeof optimisticAccount.balance === "string" ? optimisticAccount.balance.trim() : "";
+                  const shouldPreserveExistingBalance =
+                    existingBalance !== "" &&
+                    Number(existingBalance) !== 0 &&
+                    optimisticBalance !== "" &&
+                    Number(optimisticBalance) === 0;
                   return withoutMatchingUploads.map((account) =>
                     account.id === optimisticAccount.id
                       ? {
                           ...account,
                           ...optimisticAccount,
-                          balance: optimisticAccount.balance ?? account.balance,
+                          balance: shouldPreserveExistingBalance ? existingAccount.balance : optimisticAccount.balance ?? account.balance,
                         }
                       : account
                   );
