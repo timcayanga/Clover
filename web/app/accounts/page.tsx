@@ -2107,6 +2107,7 @@ function AccountsPageContent() {
       name: row.name,
       type: getEffectiveAccountType(row),
     });
+    const accountDisplayName = getAccountDisplayName(row);
 
     return (
       <button
