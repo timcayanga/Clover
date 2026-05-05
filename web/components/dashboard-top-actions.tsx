@@ -2,8 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-
-import { formatCurrencyAmount } from "@/lib/currency-format";
+import { ImportFilesModal } from "@/components/import-files-modal";
+import { AccountBrandMark } from "@/components/account-brand-mark";
+import { CurrencySelector } from "@/components/currency-selector";
+import { getAccountBrand } from "@/lib/account-brand";
+import { getAccountDisplayName } from "@/lib/account-display";
+import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 
 type DashboardTopActionsProps = {
   workspaceId: string;
@@ -16,13 +20,20 @@ type DashboardTopActionsProps = {
   }>;
 };
 
+type DashboardCategory = {
+  id: string;
+  name: string;
+  type: string;
+};
+
 type ManualFormState = {
   accountId: string;
   amount: string;
   currency: string;
   date: string;
   merchantRaw: string;
-  type: "expense" | "income";
+  categoryId: string;
+  type: "debit" | "credit";
 };
 
 const formatToday = () => {
@@ -33,40 +44,142 @@ const formatToday = () => {
   return `${year}-${month}-${day}`;
 };
 
+const normalizeName = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
+
+const getOtherCategoryId = (categories: DashboardCategory[]) =>
+  categories.find((category) => normalizeName(category.name) === "other")?.id ?? "";
+
+const getCategoryIconSrc = (categoryName: string | null | undefined) => {
+  switch (normalizeName(categoryName)) {
+    case "income":
+      return "/category-icons/income.svg";
+    case "food & dining":
+      return "/category-icons/food.svg";
+    case "transport":
+      return "/category-icons/transport.svg";
+    case "housing":
+      return "/category-icons/housing.svg";
+    case "bills & utilities":
+    case "utilities":
+      return "/category-icons/utilities.svg";
+    case "travel & lifestyle":
+      return "/category-icons/travel.svg";
+    case "entertainment":
+      return "/category-icons/entertainment.svg";
+    case "shopping":
+      return "/category-icons/shopping.svg";
+    case "health & wellness":
+      return "/category-icons/health.svg";
+    case "education":
+      return "/category-icons/education.svg";
+    case "financial":
+      return "/category-icons/financial.png";
+    case "gifts & donations":
+      return "/category-icons/gift.svg";
+    case "business":
+      return "/category-icons/business.png";
+    case "transfers":
+      return "/category-icons/transfer.svg";
+    case "other":
+      return "/category-icons/other.svg";
+    case "groceries":
+      return "/category-icons/groceries.svg";
+    case "medical":
+      return "/category-icons/medical.svg";
+    case "salary":
+      return "/category-icons/salary.svg";
+    case "investments":
+    case "investment":
+      return "/category-icons/investments.svg";
+    default:
+      return "/category-icons/default.svg";
+  }
+};
+
+const getCategoryIconTone = (categoryName: string | null | undefined) => {
+  switch (normalizeName(categoryName)) {
+    case "income":
+    case "salary":
+      return { backgroundColor: "rgba(34, 197, 94, 0.14)", borderColor: "rgba(34, 197, 94, 0.24)" };
+    case "food & dining":
+    case "groceries":
+      return { backgroundColor: "rgba(249, 115, 22, 0.14)", borderColor: "rgba(249, 115, 22, 0.24)" };
+    case "transport":
+      return { backgroundColor: "rgba(59, 130, 246, 0.14)", borderColor: "rgba(59, 130, 246, 0.24)" };
+    case "housing":
+      return { backgroundColor: "rgba(168, 85, 247, 0.14)", borderColor: "rgba(168, 85, 247, 0.24)" };
+    case "bills & utilities":
+    case "utilities":
+      return { backgroundColor: "rgba(14, 165, 233, 0.14)", borderColor: "rgba(14, 165, 233, 0.24)" };
+    case "travel & lifestyle":
+      return { backgroundColor: "rgba(236, 72, 153, 0.14)", borderColor: "rgba(236, 72, 153, 0.24)" };
+    case "entertainment":
+      return { backgroundColor: "rgba(245, 158, 11, 0.14)", borderColor: "rgba(245, 158, 11, 0.24)" };
+    case "shopping":
+      return { backgroundColor: "rgba(244, 63, 94, 0.14)", borderColor: "rgba(244, 63, 94, 0.24)" };
+    case "health & wellness":
+    case "medical":
+      return { backgroundColor: "rgba(16, 185, 129, 0.14)", borderColor: "rgba(16, 185, 129, 0.24)" };
+    case "education":
+      return { backgroundColor: "rgba(99, 102, 241, 0.14)", borderColor: "rgba(99, 102, 241, 0.24)" };
+    case "financial":
+      return { backgroundColor: "rgba(14, 165, 233, 0.14)", borderColor: "rgba(14, 165, 233, 0.24)" };
+    case "gifts & donations":
+      return { backgroundColor: "rgba(217, 70, 239, 0.14)", borderColor: "rgba(217, 70, 239, 0.24)" };
+    case "business":
+      return { backgroundColor: "rgba(20, 184, 166, 0.14)", borderColor: "rgba(20, 184, 166, 0.24)" };
+    case "transfers":
+      return { backgroundColor: "rgba(3, 168, 192, 0.14)", borderColor: "rgba(3, 168, 192, 0.24)" };
+    case "investments":
+    case "investment":
+      return { backgroundColor: "rgba(124, 58, 237, 0.14)", borderColor: "rgba(124, 58, 237, 0.24)" };
+    default:
+      return { backgroundColor: "rgba(3, 168, 192, 0.12)", borderColor: "rgba(3, 168, 192, 0.18)" };
+  }
+};
+
 function DashboardManualTransactionModal({
   workspaceId,
   accounts,
   onClose,
-}: DashboardTopActionsProps & { onClose: () => void }) {
+}: DashboardTopActionsProps & {
+  onClose: () => void;
+}) {
   const router = useRouter();
-  const defaultAccountId = accounts[0]?.id ?? "";
+  const [categories, setCategories] = useState<DashboardCategory[]>([]);
   const [form, setForm] = useState<ManualFormState>(() => ({
-    accountId: defaultAccountId,
+    accountId: accounts[0]?.id ?? "",
     amount: "",
-    currency: accounts[0]?.currency ?? "PHP",
+    currency: formatCurrencyCode(accounts[0]?.currency ?? "PHP"),
     date: formatToday(),
     merchantRaw: "",
-    type: "expense",
+    categoryId: "",
+    type: "debit",
   }));
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [categoryMenuOpen, setCategoryMenuOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const rootRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     document.body.classList.add("transactions-manual-open");
+    document.body.setAttribute("data-clover-page-modal", "true");
     return () => {
       document.body.classList.remove("transactions-manual-open");
+      document.body.removeAttribute("data-clover-page-modal");
     };
   }, []);
 
   useEffect(() => {
-    if (!form.accountId && defaultAccountId) {
+    if (!form.accountId && accounts[0]) {
       setForm((current) => ({
         ...current,
-        accountId: defaultAccountId,
-        currency: accounts.find((account) => account.id === defaultAccountId)?.currency ?? current.currency,
+        accountId: accounts[0].id,
+        currency: formatCurrencyCode(accounts[0].currency),
       }));
     }
-  }, [accounts, defaultAccountId, form.accountId]);
+  }, [accounts, form.accountId]);
 
   useEffect(() => {
     const selectedAccount = accounts.find((account) => account.id === form.accountId);
@@ -74,23 +187,148 @@ function DashboardManualTransactionModal({
       return;
     }
 
-    setForm((current) =>
-      current.currency === selectedAccount.currency
-        ? current
-        : {
-            ...current,
-            currency: selectedAccount.currency,
-          }
-    );
-  }, [accounts, form.accountId]);
+    const nextCurrency = formatCurrencyCode(selectedAccount.currency);
+    if (form.currency !== nextCurrency) {
+      setForm((current) => ({
+        ...current,
+        currency: nextCurrency,
+      }));
+    }
+  }, [accounts, form.accountId, form.currency]);
 
-  const selectedAccount = useMemo(
-    () => accounts.find((account) => account.id === form.accountId) ?? accounts[0] ?? null,
-    [accounts, form.accountId]
+  useEffect(() => {
+    if (categories.length === 0) {
+      return;
+    }
+
+    const fallbackCategoryId = getOtherCategoryId(categories) || categories[0]?.id || "";
+    if (!form.categoryId) {
+      setForm((current) => ({
+        ...current,
+        categoryId: fallbackCategoryId,
+      }));
+    }
+  }, [categories, form.categoryId]);
+
+  useEffect(() => {
+    if (!rootRef.current) {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setAccountMenuOpen(false);
+        setCategoryMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setAccountMenuOpen(false);
+        setCategoryMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadCategories = async () => {
+      try {
+        const response = await fetch(`/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`);
+        const payload = (await response.json().catch(() => ({}))) as { categories?: Array<{ id: string; name: string; type: string }>; error?: string };
+        if (!response.ok) {
+          throw new Error(payload.error ?? "Unable to load categories.");
+        }
+
+        if (!active) {
+          return;
+        }
+
+        setCategories(Array.isArray(payload.categories) ? payload.categories : []);
+      } catch {
+        if (active) {
+          setCategories([]);
+        }
+      }
+    };
+
+    void loadCategories();
+
+    return () => {
+      active = false;
+    };
+  }, [workspaceId]);
+
+  const defaultAccountId = accounts[0]?.id ?? "";
+  const selectedAccount =
+    accounts.find((account) => account.id === form.accountId) ??
+    accounts.find((account) => account.id === defaultAccountId) ??
+    null;
+  const selectedAccountBrand = getAccountBrand({
+    institution: selectedAccount?.institution ?? null,
+    name: selectedAccount?.name ?? null,
+    type: selectedAccount?.type ?? null,
+  });
+  const selectedCategory =
+    categories.find((category) => category.id === form.categoryId) ??
+    categories.find((category) => normalizeName(category.name) === "other") ??
+    categories[0] ??
+    null;
+  const accountCurrencyCodes = useMemo(
+    () => Array.from(new Set(accounts.map((account) => formatCurrencyCode(account.currency)).filter(Boolean))),
+    [accounts]
   );
+  const otherCategoryId = getOtherCategoryId(categories);
+  const previewLabel = formatCurrencyAmount(Number(form.amount || 0), form.currency || selectedAccount?.currency || "PHP");
 
-  const currencyLabel = selectedAccount?.currency ?? form.currency;
-  const amountLabel = form.amount ? formatCurrencyAmount(Number(form.amount || 0), currencyLabel) : formatCurrencyAmount(0, currencyLabel);
+  const handleClose = () => {
+    setAccountMenuOpen(false);
+    setCategoryMenuOpen(false);
+    onClose();
+  };
+
+  const ensureDefaultAccount = async () => {
+    const existingCashAccount = accounts.find(
+      (account) => normalizeName(account.type) === "cash" || normalizeName(account.name) === "cash"
+    );
+    if (existingCashAccount) {
+      return existingCashAccount.id;
+    }
+
+    const response = await fetch("/api/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        workspaceId,
+        name: "Cash",
+        institution: "Cash",
+        type: "cash",
+        currency: "PHP",
+        source: "manual",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to create a default account for this workspace.");
+    }
+
+    const payload = (await response.json().catch(() => ({}))) as { account?: { id?: string; currency?: string } };
+    const accountId = payload.account?.id ?? "";
+    if (!accountId) {
+      throw new Error("Default account was not created.");
+    }
+
+    return accountId;
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -98,17 +336,22 @@ function DashboardManualTransactionModal({
     setError(null);
 
     try {
+      const accountId = form.accountId || (await ensureDefaultAccount());
+      const account = accounts.find((entry) => entry.id === accountId) ?? null;
+      const currency = formatCurrencyCode(form.currency || account?.currency || "PHP");
+      const categoryId = form.categoryId || otherCategoryId || null;
+
       const response = await fetch("/api/transactions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workspaceId,
-          accountId: form.accountId,
-          categoryId: null,
+          accountId,
+          categoryId,
           date: form.date,
           amount: form.amount,
-          currency: currencyLabel,
-          type: form.type,
+          currency,
+          type: form.type === "credit" ? "income" : "expense",
           merchantRaw: form.merchantRaw,
           merchantClean: null,
           description: null,
@@ -122,7 +365,7 @@ function DashboardManualTransactionModal({
         throw new Error(payload?.error ?? "Unable to create transaction.");
       }
 
-      onClose();
+      handleClose();
       router.refresh();
     } catch (submissionError) {
       setError(submissionError instanceof Error ? submissionError.message : "Unable to create transaction.");
@@ -132,104 +375,212 @@ function DashboardManualTransactionModal({
   };
 
   return (
-    <div className="modal-backdrop dashboard-manual-modal__backdrop" role="presentation" onClick={onClose}>
+    <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={handleClose}>
       <section
-        className="modal-card modal-card--manual dashboard-manual-modal glass"
+        className="modal-card modal-card--manual glass"
+        ref={rootRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="dashboard-manual-modal-title"
+        aria-labelledby="dashboard-manual-title"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="modal-head dashboard-manual-modal__head">
+        <div className="modal-head">
           <div>
-            <p className="eyebrow">Add transaction</p>
-            <h4 id="dashboard-manual-modal-title">Log a transaction</h4>
+            <p className="eyebrow">Transactions</p>
+            <h4 id="dashboard-manual-title">Add transaction</h4>
           </div>
-          <button className="icon-button" type="button" onClick={onClose} aria-label="Close add transaction">
+          <button className="icon-button" type="button" onClick={handleClose} aria-label="Close add transaction">
             ×
           </button>
         </div>
 
-        <p className="dashboard-manual-modal__copy">
-          Add it here and Clover will keep you on the Dashboard.
-        </p>
+        <p className="modal-copy">Log it here and keep Clover on the Dashboard.</p>
 
-        <form className="dashboard-manual-modal__form" onSubmit={handleSubmit}>
-          <label className="dashboard-manual-modal__field">
-            <span>Name</span>
-            <input
-              value={form.merchantRaw}
-              onChange={(event) => setForm((current) => ({ ...current, merchantRaw: event.target.value }))}
-              placeholder="Salary, groceries, rent..."
-              required
-            />
-          </label>
-
-          <div className="dashboard-manual-modal__row">
-            <label className="dashboard-manual-modal__field">
-              <span>Date</span>
-              <input
-                type="date"
-                value={form.date}
-                onChange={(event) => setForm((current) => ({ ...current, date: event.target.value }))}
-                required
-              />
-            </label>
-
-            <label className="dashboard-manual-modal__field">
-              <span>Type</span>
-              <select
-                value={form.type}
-                onChange={(event) => setForm((current) => ({ ...current, type: event.target.value as ManualFormState["type"] }))}
+        <form onSubmit={handleSubmit}>
+          <div className="manual-form-layout manual-form-layout--compact">
+            <div className="transactions-manual-type-toggle" role="group" aria-label="Transaction type">
+              <button
+                type="button"
+                className={`transactions-manual-type-toggle__button ${form.type === "debit" ? "is-active" : ""}`}
+                onClick={() => setForm((current) => ({ ...current, type: "debit" }))}
+                aria-pressed={form.type === "debit"}
               >
-                <option value="expense">Expense</option>
-                <option value="income">Income</option>
-              </select>
-            </label>
-          </div>
-
-          <div className="dashboard-manual-modal__row">
-            <label className="dashboard-manual-modal__field">
-              <span>Account</span>
-              <select
-                value={form.accountId}
-                onChange={(event) => setForm((current) => ({ ...current, accountId: event.target.value }))}
-                required
+                <span className="transactions-manual-type-symbol" aria-hidden="true">
+                  −
+                </span>
+                <span>Debit</span>
+              </button>
+              <button
+                type="button"
+                className={`transactions-manual-type-toggle__button ${form.type === "credit" ? "is-active" : ""}`}
+                onClick={() => setForm((current) => ({ ...current, type: "credit" }))}
+                aria-pressed={form.type === "credit"}
               >
-                {accounts.map((account) => (
-                  <option key={account.id} value={account.id}>
-                    {account.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <span className="transactions-manual-type-symbol" aria-hidden="true">
+                  +
+                </span>
+                <span>Credit</span>
+              </button>
+            </div>
 
-            <label className="dashboard-manual-modal__field">
-              <span>Amount</span>
-              <input
-                inputMode="decimal"
-                value={form.amount}
-                onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))}
-                placeholder="0.00"
-                required
-              />
-            </label>
-          </div>
+            <div className="transactions-manual-row transactions-manual-row--name">
+              <span className="transactions-manual-row-icon transactions-manual-row-icon--category" aria-hidden="true">
+                <span className="transaction-category-icon transaction-category-icon--manual" style={getCategoryIconTone(selectedCategory?.name ?? "Other")}>
+                  <img src={getCategoryIconSrc(selectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
+                </span>
+              </span>
+              <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-name-field">
+                <span className="transactions-manual-field__label">Name</span>
+                <input
+                  value={form.merchantRaw}
+                  onChange={(event) => setForm((current) => ({ ...current, merchantRaw: event.target.value }))}
+                  placeholder="Salary, groceries, rent..."
+                  required
+                />
+              </label>
+            </div>
 
-          <label className="dashboard-manual-modal__field">
-            <span>Preview</span>
-            <div className="dashboard-manual-modal__preview">{amountLabel || "₱0.00"}</div>
-          </label>
+            <div className="transactions-manual-row transactions-manual-row--money">
+              <span className="transactions-manual-row-icon transactions-manual-row-icon--account" aria-hidden="true">
+                <AccountBrandMark accountBrand={selectedAccountBrand} label={selectedAccount ? getAccountDisplayName(selectedAccount) : "Cash"} />
+              </span>
+              <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-money-row__currency">
+                <span className="transactions-manual-field__label">Currency</span>
+                <CurrencySelector
+                  value={form.currency}
+                  onChange={(value) => setForm((current) => ({ ...current, currency: value }))}
+                  options={accountCurrencyCodes}
+                  ariaLabel="Select transaction currency"
+                  className="transactions-manual-currency"
+                  buttonClassName="transactions-manual-currency__button"
+                  menuClassName="transactions-manual-currency__menu"
+                  optionClassName="transactions-manual-currency__option"
+                  menuAlignment="end"
+                  portalMenu
+                />
+              </label>
+              <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-money-row__amount">
+                <span className="transactions-manual-field__label">Amount</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.amount}
+                  onChange={(event) => setForm((current) => ({ ...current, amount: event.target.value }))}
+                  placeholder="0.00"
+                  required
+                />
+              </label>
+            </div>
 
-          {error ? <p className="dashboard-manual-modal__error">{error}</p> : null}
+            <div className="transactions-manual-field transactions-manual-field--embedded-label">
+              <span className="transactions-manual-field__label">Account</span>
+              <div className="transactions-manual-picker">
+                <div className="transactions-manual-picker__control">
+                  <button
+                    type="button"
+                    className="transactions-manual-picker__button transactions-manual-picker__button--plain"
+                    aria-expanded={accountMenuOpen}
+                    onClick={() => {
+                      setCategoryMenuOpen(false);
+                      setAccountMenuOpen((current) => !current);
+                    }}
+                  >
+                    <span className="transactions-manual-picker__text">{selectedAccount ? getAccountDisplayName(selectedAccount) : "Cash"}</span>
+                    <span className="transactions-manual-picker__chevron" aria-hidden="true">
+                      ▾
+                    </span>
+                  </button>
+                  {accountMenuOpen ? (
+                    <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose account">
+                      {accounts.map((account) => (
+                        <button
+                          key={account.id}
+                          type="button"
+                          className={`transactions-manual-picker__option ${account.id === form.accountId ? "is-selected" : ""}`}
+                          onClick={() => {
+                            setForm((current) => ({ ...current, accountId: account.id, currency: formatCurrencyCode(account.currency) }));
+                            setAccountMenuOpen(false);
+                          }}
+                        >
+                          <span className="transactions-manual-picker__brand" aria-hidden="true">
+                            <AccountBrandMark accountBrand={getAccountBrand(account)} label={getAccountDisplayName(account)} />
+                          </span>
+                          <span className="transactions-manual-picker__option-text">
+                            <strong>{getAccountDisplayName(account)}</strong>
+                            <span>{account.institution ?? account.type}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
 
-          <div className="dashboard-manual-modal__actions">
-            <button className="button button-secondary button-small" type="button" onClick={onClose}>
-              Cancel
-            </button>
-            <button className="button button-primary button-small" type="submit" disabled={isSaving || !accounts.length}>
-              {isSaving ? "Saving..." : "Add transaction"}
-            </button>
+            <div className="transactions-manual-field transactions-manual-field--embedded-label">
+              <span className="transactions-manual-field__label">Category</span>
+              <div className="transactions-manual-picker">
+                <div className="transactions-manual-picker__control">
+                  <button
+                    type="button"
+                    className="transactions-manual-picker__button transactions-manual-picker__button--plain"
+                    aria-expanded={categoryMenuOpen}
+                    onClick={() => {
+                      setAccountMenuOpen(false);
+                      setCategoryMenuOpen((current) => !current);
+                    }}
+                  >
+                    <span className="transactions-manual-picker__text">{selectedCategory?.name ?? "Other"}</span>
+                    <span className="transactions-manual-picker__chevron" aria-hidden="true">
+                      ▾
+                    </span>
+                  </button>
+                  {categoryMenuOpen ? (
+                    <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose category">
+                      {categories.map((category) => (
+                        <button
+                          key={category.id}
+                          type="button"
+                          className={`transactions-manual-picker__option ${category.id === form.categoryId ? "is-selected" : ""}`}
+                          onClick={() => {
+                            setForm((current) => ({ ...current, categoryId: category.id }));
+                            setCategoryMenuOpen(false);
+                          }}
+                        >
+                          <span className="transactions-manual-picker__category-icon" aria-hidden="true">
+                            <span className="transaction-category-icon transaction-category-icon--manual" style={getCategoryIconTone(category.name)}>
+                              <img src={getCategoryIconSrc(category.name)} alt="" aria-hidden="true" />
+                            </span>
+                          </span>
+                          <span className="transactions-manual-picker__option-text">
+                            <strong>{category.name}</strong>
+                            <span>{category.type}</span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <div className="transactions-manual-field transactions-manual-field--embedded-label">
+              <span className="transactions-manual-field__label">Preview</span>
+              <div className="dashboard-manual-modal__preview">{previewLabel}</div>
+            </div>
+
+            {error ? <p className="dashboard-manual-modal__error">{error}</p> : null}
+
+            <div className="manual-form-actions manual-form-actions--closed manual-form-actions--expanded">
+              <div className="manual-form-actions__right">
+                <button className="button button-secondary button-small" type="button" onClick={handleClose}>
+                  Cancel
+                </button>
+                <button className="button button-primary button-small" type="submit" disabled={isSaving || !accounts.length}>
+                  {isSaving ? "Saving..." : "Add transaction"}
+                </button>
+              </div>
+            </div>
           </div>
         </form>
       </section>
@@ -242,8 +593,13 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
   const searchParams = useSearchParams();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
-  const manualOpen = searchParams?.get("manual") === "1";
+  const defaultImportAccountId =
+    accounts.find((account) => normalizeName(account.type) !== "cash" && normalizeName(account.type) !== "other" && normalizeName(account.type) !== "investment")?.id ??
+    accounts[0]?.id ??
+    null;
 
   useEffect(() => {
     if (!menuOpen) {
@@ -272,24 +628,67 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
   }, [menuOpen]);
 
   useEffect(() => {
+    const manualParam = searchParams?.get("manual");
+    const importParam = searchParams?.get("import");
+
+    if (manualParam === "1") {
+      setMenuOpen(false);
+      setImportOpen(false);
+      setManualOpen(true);
+      window.history.replaceState({}, "", "/dashboard");
+      return;
+    }
+
+    if (importParam === "1") {
+      setMenuOpen(false);
+      setManualOpen(false);
+      setImportOpen(true);
+      window.history.replaceState({}, "", "/dashboard");
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     const handleOpenManual = () => {
-      router.replace("/dashboard?manual=1");
+      setMenuOpen(false);
+      setImportOpen(false);
+      setManualOpen(true);
+    };
+    const handleOpenImport = () => {
+      setMenuOpen(false);
+      setManualOpen(false);
+      setImportOpen(true);
     };
 
     window.addEventListener("clover:open-transaction-add", handleOpenManual);
+    window.addEventListener("clover:open-dashboard-import", handleOpenImport);
     return () => {
       window.removeEventListener("clover:open-transaction-add", handleOpenManual);
+      window.removeEventListener("clover:open-dashboard-import", handleOpenImport);
     };
-  }, [router]);
+  }, []);
+
+  const closeManual = () => {
+    setManualOpen(false);
+    window.history.replaceState({}, "", "/dashboard");
+  };
+
+  const closeImport = () => {
+    setImportOpen(false);
+    window.history.replaceState({}, "", "/dashboard");
+  };
 
   const openManualAdd = () => {
     setMenuOpen(false);
-    router.replace("/dashboard?manual=1");
+    setImportOpen(false);
+    setManualOpen(true);
+    window.history.replaceState({}, "", "/dashboard");
   };
 
   const openImportFiles = () => {
     setMenuOpen(false);
-    router.replace("/dashboard?import=1");
+    setManualOpen(false);
+    setImportOpen(true);
+    window.history.replaceState({}, "", "/dashboard");
   };
 
   return (
@@ -320,7 +719,25 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
         </div>
       </div>
 
-      {manualOpen ? <DashboardManualTransactionModal workspaceId={workspaceId} accounts={accounts} onClose={() => router.replace("/dashboard")} /> : null}
+      {manualOpen ? (
+        <DashboardManualTransactionModal
+          workspaceId={workspaceId}
+          accounts={accounts}
+          onClose={closeManual}
+        />
+      ) : null}
+
+      <ImportFilesModal
+        open={importOpen}
+        workspaceId={workspaceId}
+        accounts={accounts}
+        defaultAccountId={defaultImportAccountId}
+        onClose={closeImport}
+        onImported={async () => {
+          router.refresh();
+          closeImport();
+        }}
+      />
     </>
   );
 }

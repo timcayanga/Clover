@@ -14,8 +14,8 @@ import { deriveReconciledBalance } from "@/lib/account-balance";
 import { isLiabilityAccountType, isSpendableAccountType } from "@/lib/account-types";
 import { RouteSplash } from "@/components/route-splash";
 import { PostHogEvent, PostHogPersonProperties } from "@/components/posthog-analytics";
-import { DashboardImportLauncher } from "@/components/dashboard-import-launcher";
 import { DashboardTopActions } from "@/components/dashboard-top-actions";
+import { DashboardImportTrigger } from "@/components/dashboard-import-trigger";
 import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
@@ -430,10 +430,8 @@ async function resolveDashboardWorkspaceSummary(user: Awaited<ReturnType<typeof 
 
 async function DashboardStream({
   user,
-  resolvedSearchParams,
 }: {
   user: Awaited<ReturnType<typeof getOrCreateCurrentUser>>;
-  resolvedSearchParams?: { import?: string };
 }) {
   const workspaceSummary = await resolveDashboardWorkspaceSummary(user);
 
@@ -588,10 +586,6 @@ async function DashboardStream({
     return Number(reconciledBalance ?? account.balance ?? 0);
   };
 
-  const totalNetWorth = normalizedDashboardAccounts.reduce((sum, account) => {
-    const signedBalance = normalizeNetWorthBalance(account.type, reconcileAccountBalance(account));
-    return sum + signedBalance;
-  }, 0);
   const savingsTotal = normalizedDashboardAccounts.reduce((sum, account) => {
     const signedBalance = normalizeNetWorthBalance(account.type, reconcileAccountBalance(account));
     if (!isSpendableAccountType(account.type as Parameters<typeof isSpendableAccountType>[0])) {
@@ -649,7 +643,7 @@ async function DashboardStream({
   const goalAction = goalProgress.nextAction;
   const goalProgressLabel = goalProgress.progressPercent === null ? "Set a target" : `${Math.round(goalProgress.progressPercent)}%`;
   const goalSummaryLabel = goalTargetAmount !== null ? `${formatCurrency(goalProgress.currentAmount)} of ${formatCurrency(goalTargetAmount)}` : goalProgress.currentLabel;
-  const totalBalanceLabel = formatCurrency(totalNetWorth, displayCurrency);
+  const totalBalanceLabel = formatCurrency(savingsTotal, displayCurrency);
   const balanceHighlights = [
     {
       key: "income",
@@ -677,15 +671,15 @@ async function DashboardStream({
     <>
       <PostHogPersonProperties
         distinctId={user.clerkUserId}
-        properties={{
-          workspace_name: workspaceSummary.name,
-          account_count: workspaceSummary._count.accounts,
-          cash_account_count: cashAccountCount,
-          tracked_balance_total: Number(totalNetWorth.toFixed(2)),
-          tracked_balance_currency: displayCurrency,
-          transaction_count: workspaceSummary._count.transactions,
-          import_count: workspaceSummary._count.importFiles,
-          review_attention_count: reviewAttentionCount,
+          properties={{
+            workspace_name: workspaceSummary.name,
+            account_count: workspaceSummary._count.accounts,
+            cash_account_count: cashAccountCount,
+            tracked_balance_total: Number(savingsTotal.toFixed(2)),
+            tracked_balance_currency: displayCurrency,
+            transaction_count: workspaceSummary._count.transactions,
+            import_count: workspaceSummary._count.importFiles,
+            review_attention_count: reviewAttentionCount,
           goal: goalKey ?? null,
           financial_experience: user.financialExperience,
           last_import_at: latestImport?.uploadedAt.toISOString() ?? null,
@@ -757,9 +751,9 @@ async function DashboardStream({
                 <strong>Import files to unlock your dashboard.</strong>
                 <p>Bring in a statement and Clover will populate balance, movement, and goal progress in one place.</p>
                 <div className="dashboard-home__starter-actions">
-                  <Link className="button button-primary button-small" href="/dashboard?import=1">
+                  <DashboardImportTrigger className="button button-primary button-small">
                     Import files
-                  </Link>
+                  </DashboardImportTrigger>
                   <Link className="button button-secondary button-small" href="/accounts">
                     Add an account
                   </Link>
@@ -801,28 +795,12 @@ async function DashboardStream({
           </div>
         </div>
 
-        <DashboardImportLauncher
-          workspaceId={workspaceSummary.id}
-          accounts={workspaceSummary.accounts.map((account) => ({
-            id: account.id,
-            name: account.name,
-            institution: account.institution,
-            type: account.type,
-            currency: account.currency,
-          }))}
-          initialOpen={resolvedSearchParams?.import === "1"}
-        />
       </section>
     </>
   );
 }
 
-async function DashboardPageStream({
-  searchParams,
-}: {
-  searchParams?: Promise<{ import?: string }>;
-}) {
-  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+async function DashboardPageStream() {
   const session = await getSessionContext();
   const user = await getOrCreateCurrentUser(session.userId);
   if (!session.isGuest && !hasCompletedOnboarding(user)) {
@@ -846,18 +824,18 @@ async function DashboardPageStream({
           }))}
         />
       }
-    >
+      >
       <Suspense fallback={<DashboardStreamFallback />}>
-        <DashboardStream user={user} resolvedSearchParams={resolvedSearchParams} />
+        <DashboardStream user={user} />
       </Suspense>
     </CloverShell>
   );
 }
 
-export default function DashboardPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ import?: string }>;
-}) {
-  return <RouteSplash label="dashboard"><DashboardPageStream searchParams={searchParams} /></RouteSplash>;
+export default function DashboardPage() {
+  return (
+    <RouteSplash label="dashboard">
+      <DashboardPageStream />
+    </RouteSplash>
+  );
 }
