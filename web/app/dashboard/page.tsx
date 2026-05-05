@@ -681,7 +681,10 @@ async function DashboardStream({
         }}
       />
       <section className="dashboard-home">
-        <article className="dashboard-home__hero dashboard-home__hero--fresh glass">
+        <article
+          className="dashboard-home__hero dashboard-home__hero--fresh glass"
+          style={{ background: "linear-gradient(135deg, #03A8C0 0%, #5ED3D0 100%)" }}
+        >
           <div className="dashboard-home__hero-main">
             <p className="eyebrow">My balance</p>
             <strong>{totalBalanceLabel}</strong>
@@ -689,10 +692,8 @@ async function DashboardStream({
           <div className="dashboard-home__hero-aside" aria-label="Monthly balance summary">
             {balanceHighlights.map((pill) => (
               <div key={pill.key} className="dashboard-home__hero-mini-pill">
-                <div className="dashboard-home__hero-mini-copy">
-                  <p className="dashboard-home__hero-mini-label">{pill.label}</p>
-                  <strong>{pill.value}</strong>
-                </div>
+                <span className="dashboard-home__hero-mini-label">{pill.label}</span>
+                <strong className="dashboard-home__hero-mini-value">{pill.value}</strong>
                 <span className={pill.trend >= 0 ? "dashboard-home__hero-mini-trend positive" : "dashboard-home__hero-mini-trend negative"}>
                   {pill.trend === 0 ? "0%" : `${pill.trend > 0 ? "+" : ""}${Math.abs(pill.trend).toFixed(0)}%`}
                 </span>
@@ -704,10 +705,8 @@ async function DashboardStream({
         <section className="dashboard-home__hero-mobile-metrics" aria-label="Monthly balance summary">
           {balanceHighlights.map((pill) => (
             <article key={pill.key} className="dashboard-home__hero-mobile-card glass">
-              <div className="dashboard-home__hero-mini-copy">
-                <p className="dashboard-home__hero-mini-label">{pill.label}</p>
-                <strong>{pill.value}</strong>
-              </div>
+              <span className="dashboard-home__hero-mini-label">{pill.label}</span>
+              <strong className="dashboard-home__hero-mini-value">{pill.value}</strong>
               <span className={pill.trend >= 0 ? "dashboard-home__hero-mini-trend positive" : "dashboard-home__hero-mini-trend negative"}>
                 {pill.trend === 0 ? "0%" : `${pill.trend > 0 ? "+" : ""}${Math.abs(pill.trend).toFixed(0)}%`}
               </span>
