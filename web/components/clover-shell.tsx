@@ -899,18 +899,22 @@ export function CloverShell({
 
   const openQuickAddTransaction = () => {
     closeChrome();
-    if (pathname?.startsWith("/split-bill")) {
-      const query = new URLSearchParams();
-      const currency = searchParams.get("currency");
-      if (currency) {
-        query.set("currency", currency);
-      }
-      query.set("add", "manual");
-      router.push(`/split-bill?${query.toString()}`);
+    if (pathname?.startsWith("/recurring")) {
+      window.dispatchEvent(new Event("clover:open-recurring-add"));
       return;
     }
 
-    router.push("/transactions?manual=1");
+    if (pathname?.startsWith("/investments")) {
+      window.dispatchEvent(new Event("clover:open-investment-add"));
+      return;
+    }
+
+    if (pathname?.startsWith("/split-bill")) {
+      window.dispatchEvent(new Event("clover:open-split-bill-add"));
+      return;
+    }
+
+    window.dispatchEvent(new Event("clover:open-transaction-add"));
   };
 
   const handleSignOut = () => {
@@ -1238,8 +1242,20 @@ export function CloverShell({
       <button
         className="shell-quick-add-button"
         type="button"
-        aria-label={pathname?.startsWith("/split-bill") ? "Add split bill" : "Add transaction"}
-        title={pathname?.startsWith("/split-bill") ? "Add split bill" : "Add transaction"}
+        aria-label={
+          pathname?.startsWith("/recurring")
+            ? "Add recurring"
+            : pathname?.startsWith("/split-bill")
+              ? "Add split bill"
+              : "Add transaction"
+        }
+        title={
+          pathname?.startsWith("/recurring")
+            ? "Add recurring"
+            : pathname?.startsWith("/split-bill")
+              ? "Add split bill"
+              : "Add transaction"
+        }
         onClick={openQuickAddTransaction}
       >
         <MenuIcon name="plus" />

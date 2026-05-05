@@ -12446,6 +12446,15 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   gap: 4px;
   margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent);
+  font-size: 0.92rem;
+  font-weight: 600;
+  text-shadow: none;
+  min-height: 0;
 }
 
 .transactions-manual-more__chevron {

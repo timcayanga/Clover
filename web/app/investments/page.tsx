@@ -768,6 +768,17 @@ export default function InvestmentsPage() {
     </button>
   );
 
+  useEffect(() => {
+    const handleOpenAdd = () => {
+      setAddOpen(true);
+    };
+
+    window.addEventListener("clover:open-investment-add", handleOpenAdd);
+    return () => {
+      window.removeEventListener("clover:open-investment-add", handleOpenAdd);
+    };
+  }, []);
+
   const beginEditingAccount = (account: Account) => {
     setEditingAccountId(account.id);
     setEditingDraft(serializeInvestmentEditDraft(account));

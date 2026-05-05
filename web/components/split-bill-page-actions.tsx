@@ -46,6 +46,17 @@ export function SplitBillPageActions({ currencies, selectedCurrency, onCurrencyC
     };
   }, [isGroupModalOpen, isModalOpen, openAddMode]);
 
+  useEffect(() => {
+    const handleOpenAdd = () => {
+      setOpenAddMode("manual");
+    };
+
+    window.addEventListener("clover:open-split-bill-add", handleOpenAdd);
+    return () => {
+      window.removeEventListener("clover:open-split-bill-add", handleOpenAdd);
+    };
+  }, []);
+
   const saveGroup = async () => {
     setIsSavingGroup(true);
     setGroupError(null);

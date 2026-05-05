@@ -2241,6 +2241,17 @@ function TransactionsPageContent() {
   }, [urlSearchParams]);
 
   useEffect(() => {
+    const handleOpenManual = () => {
+      void openManualAdd();
+    };
+
+    window.addEventListener("clover:open-transaction-add", handleOpenManual);
+    return () => {
+      window.removeEventListener("clover:open-transaction-add", handleOpenManual);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!isWorkspaceDataReady) {
       return;
     }
@@ -5793,7 +5804,7 @@ function TransactionsPageContent() {
                 <div className="manual-form-actions">
                   <button
                     type="button"
-                    className="accounts-add-more-link transactions-manual-more"
+                    className="transactions-manual-more"
                     onClick={() => setManualMoreOpen((current) => !current)}
                     aria-expanded={manualMoreOpen}
                   >
