@@ -489,7 +489,6 @@ async function DashboardStream({
       ? prisma.account.findMany({
           where: {
             workspaceId: workspaceSummary.id,
-            currency: preferredDashboardCurrency,
           },
           select: {
             id: true,
@@ -579,7 +578,12 @@ async function DashboardStream({
   const formatCurrency = (value: number, currency: string | null = displayCurrency) => formatCurrencyAmount(value, currency);
   const formatSignedCurrency = (value: number, currency: string | null = displayCurrency) =>
     `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency)}`;
-const totalNetWorth = dashboardAccounts.reduce((sum, account) => {
+
+  const normalizedDashboardAccounts = dashboardAccounts.filter(
+    (account) => formatCurrencyCode(account.currency) === displayCurrency
+  );
+
+  const reconcileAccountBalance = (account: (typeof dashboardAccounts)[number]) => {
     const latestCheckpoint = account.statementCheckpoints[0] ?? null;
     const checkpointBalance =
       latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance ? latestCheckpoint.endingBalance : null;
@@ -590,46 +594,30 @@ const totalNetWorth = dashboardAccounts.reduce((sum, account) => {
         transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
         checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
       });
-    const signedBalance = normalizeNetWorthBalance(account.type, Number(reconciledBalance ?? account.balance ?? 0));
+
+    return Number(reconciledBalance ?? account.balance ?? 0);
+  };
+
+  const totalNetWorth = normalizedDashboardAccounts.reduce((sum, account) => {
+    const signedBalance = normalizeNetWorthBalance(account.type, reconcileAccountBalance(account));
     return sum + signedBalance;
   }, 0);
-  const savingsTotal = dashboardAccounts.reduce((sum, account) => {
-    const latestCheckpoint = account.statementCheckpoints[0] ?? null;
-    const checkpointBalance =
-      latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance ? latestCheckpoint.endingBalance : null;
-    const reconciledBalance =
-      checkpointBalance ??
-      deriveReconciledBalance({
-        balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
-        transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
-        checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
-      });
-    const signedBalance = normalizeNetWorthBalance(account.type, Number(reconciledBalance ?? account.balance ?? 0));
+  const savingsTotal = normalizedDashboardAccounts.reduce((sum, account) => {
+    const signedBalance = normalizeNetWorthBalance(account.type, reconcileAccountBalance(account));
     if (!isSpendableAccountType(account.type as Parameters<typeof isSpendableAccountType>[0])) {
       return sum;
     }
 
     return sum + Math.max(signedBalance, 0);
   }, 0);
-  const investmentsTotal = dashboardAccounts.reduce((sum, account) => {
+  const investmentsTotal = normalizedDashboardAccounts.reduce((sum, account) => {
     if (account.type !== "investment") {
       return sum;
     }
 
-    const latestCheckpoint = account.statementCheckpoints[0] ?? null;
-    const checkpointBalance =
-      latestCheckpoint?.status !== "mismatch" && latestCheckpoint?.endingBalance ? latestCheckpoint.endingBalance : null;
-    const reconciledBalance =
-      checkpointBalance ??
-      deriveReconciledBalance({
-        balance: account.balance as Parameters<typeof deriveReconciledBalance>[0]["balance"],
-        transactions: account.transactions as unknown as Parameters<typeof deriveReconciledBalance>[0]["transactions"],
-        checkpoints: latestCheckpoint ? ([latestCheckpoint] as unknown as Parameters<typeof deriveReconciledBalance>[0]["checkpoints"]) : [],
-      });
-    const signedBalance = normalizeNetWorthBalance(account.type, Number(reconciledBalance ?? account.balance ?? 0));
+    const signedBalance = normalizeNetWorthBalance(account.type, reconcileAccountBalance(account));
     return sum + Math.max(signedBalance, 0);
   }, 0);
-  const recurringBalance = recurringItem ? recurringItem.amount / Math.max(recurringItem.count, 1) : 0;
   const todayTransactions = currentTransactions.filter((transaction) => transaction.date >= todayStart);
   const currentSevenDayTransactions = currentTransactions.filter((transaction) => transaction.date >= sevenDaysAgo);
   const currentThirtyDayTransactions = currentTransactions.filter((transaction) => transaction.date >= thirtyDaysAgo);
@@ -652,6 +640,7 @@ const totalNetWorth = dashboardAccounts.reduce((sum, account) => {
   const previousSavingsRate = currentSummary.previous.income > 0 ? previousNet / currentSummary.previous.income : null;
   const spendDelta = currentSummary.current.expense - currentSummary.previous.expense;
   const recurringItem = buildRecurringTransactionSummaries(currentTransactions)[0] ?? null;
+  const recurringBalance = recurringItem ? recurringItem.amount / Math.max(recurringItem.count, 1) : 0;
   const reviewAttentionTransactions = currentThirtyDayTransactions.filter(
     (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || transaction.categoryConfidence < 70
   );
