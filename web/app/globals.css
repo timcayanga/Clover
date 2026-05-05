@@ -3298,10 +3298,7 @@ body.transactions-manual-open .shell-quick-add-button {
   padding: 18px;
   border: 1px solid var(--stroke);
   border-radius: 32px;
-  background:
-    radial-gradient(circle at top left, rgba(3, 168, 192, 0.16), transparent 32%),
-    radial-gradient(circle at 84% 12%, rgba(94, 211, 208, 0.16), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(247, 250, 251, 0.93));
+  background: linear-gradient(135deg, rgba(3, 168, 192, 0.98) 0%, rgba(94, 211, 208, 0.98) 100%);
   box-shadow: var(--shadow);
 }
 
@@ -3312,22 +3309,19 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .dashboard-home__balance-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 1.15fr) minmax(0, 0.85fr);
-  gap: 12px;
-  align-items: start;
+  grid-template-columns: minmax(220px, 1.15fr) minmax(0, 0.85fr);
+  gap: 10px;
+  align-items: center;
 }
 
 .dashboard-home__balance-main {
   display: grid;
-  gap: 8px;
-  align-content: center;
-  min-height: 100%;
-  padding: 18px 20px;
-  border-radius: 32px;
-  background: linear-gradient(135deg, rgba(3, 168, 192, 0.96) 0%, rgba(94, 211, 208, 0.98) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.24),
-    0 16px 34px rgba(5, 84, 87, 0.14);
+  gap: 4px;
+  align-content: start;
+  min-height: 0;
+  padding: 2px 4px 2px 2px;
+  background: transparent;
+  box-shadow: none;
 }
 
 .dashboard-home__balance-main .eyebrow {
@@ -3343,7 +3337,7 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .dashboard-home__balance-side {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
   gap: 8px;
   align-content: start;
 }
@@ -3356,9 +3350,9 @@ body.transactions-manual-open .shell-quick-add-button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 9px 10px;
-  min-height: 48px;
+  gap: 6px;
+  padding: 7px 8px;
+  min-height: 40px;
   border-radius: 999px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(255, 255, 255, 0.98);
@@ -3367,7 +3361,7 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .dashboard-home__balance-mini-pill strong {
   text-align: right;
-  font-size: clamp(0.88rem, 1.05vw, 1.05rem);
+  font-size: clamp(0.8rem, 0.95vw, 0.95rem);
   line-height: 1.05;
   letter-spacing: -0.035em;
 }
@@ -3375,9 +3369,9 @@ body.transactions-manual-open .shell-quick-add-button {
 .dashboard-home__balance-mini-label {
   margin: 0;
   color: rgba(82, 89, 112, 0.74);
-  font-size: 10px;
+  font-size: 9px;
   line-height: 1.2;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   white-space: nowrap;
 }
@@ -21765,7 +21759,7 @@ button.accounts-detail__transaction-head-cell {
 
   .dashboard-home__balance-layout {
     grid-template-columns: 1fr;
-    gap: 10px;
+    gap: 8px;
   }
 
   .dashboard-home__balance-mini-pill {
@@ -21773,17 +21767,17 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .dashboard-home__balance-main {
-    padding: 15px 15px 14px;
+    padding: 0 0 4px;
   }
 
   .dashboard-home__balance-mini-pill {
-    min-height: 44px;
-    padding: 8px 10px;
+    min-height: 40px;
+    padding: 7px 9px;
   }
 
   .dashboard-home__balance-side {
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: 6px;
   }
 
   .dashboard-home__hero-copy h3 {
