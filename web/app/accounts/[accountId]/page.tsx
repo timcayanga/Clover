@@ -897,13 +897,18 @@ function AccountDetailPageContent() {
               const nextTransactions = Array.isArray(transactionsPayload?.transactions)
                 ? transactionsPayload.transactions
                 : [];
-              const mergedTransactions = mergeImportedWorkspaceTransactions(cachedTransactions, nextTransactions);
+              const mergedTransactions =
+                nextTransactions.length > 0
+                  ? mergeImportedWorkspaceTransactions(cachedTransactions, nextTransactions)
+                  : cachedTransactions.length > 0
+                    ? cachedTransactions
+                    : [];
               setTransactions(mergedTransactions);
               setTransactionPage(typeof transactionsPayload?.page === "number" ? transactionsPayload.page : 1);
               setTransactionTotalCount(
                 typeof transactionsPayload?.totalCount === "number" && transactionsPayload.totalCount > 0
                   ? Math.max(transactionsPayload.totalCount, mergedTransactions.length)
-                  : mergedTransactions.length
+                  : Math.max(mergedTransactions.length, cachedTransactions.length)
               );
               setTransactionsError(null);
               setTransactionsLoading(false);
@@ -1089,12 +1094,14 @@ function AccountDetailPageContent() {
         checkpoint?.endingBalance !== null && checkpoint?.endingBalance !== undefined
           ? String(checkpoint.endingBalance)
           : null;
+      const currentAccountBalance = parseAmount(account?.balance ?? null);
+      const currentAccountBalanceIsNonZero =
+        currentAccountBalance !== null && Number.isFinite(currentAccountBalance) && currentAccountBalance !== 0;
       const shouldPreserveImportedBalance =
         account?.source === "upload" &&
-        (!checkpoint || checkpoint.status !== "reconciled") &&
-        transactions.length === 0;
+        (!checkpoint || checkpoint.status !== "reconciled");
 
-      const reconciledValue = checkpointBalance && (transactions.length === 0 || shouldPreserveImportedBalance)
+      const reconciledValue = checkpointBalance && !(shouldPreserveImportedBalance && currentAccountBalanceIsNonZero)
         ? checkpointBalance
         : shouldPreserveImportedBalance
           ? account?.balance ?? null
@@ -2240,7 +2247,7 @@ function AccountDetailPageContent() {
           ) : hasVisibleTransactions ? (
             <>
               {!isMobileViewport ? (
-                <div className="accounts-detail__transaction-list" aria-label="Transaction history">
+                <div className="accounts-detail__transaction-list accounts-detail__transaction-list--compact" aria-label="Transaction history">
                   <div className="line-item-header" role="row" aria-label="Transaction columns">
                     <label className="line-item-header-cell line-item-header-cell--select line-item-header-cell--select-all">
                       <input
@@ -2284,7 +2291,6 @@ function AccountDetailPageContent() {
                     >
                       Date{transactionSortField === "date" ? (transactionSortDirection === "asc" ? " ↑" : " ↓") : ""}
                     </button>
-                    <span className="line-item-header-cell">Account</span>
                     <button
                       className="line-item-header-cell"
                       type="button"
@@ -2322,7 +2328,7 @@ function AccountDetailPageContent() {
                   </div>
                   {visibleTransactions.map((transaction) => {
                     const amount = Number(transaction.amount);
-                    const amountToneClass = transaction.type === "income" ? "positive" : "negative";
+                    const amountToneClass = transaction.type === "transfer" ? "neutral" : transaction.type === "income" ? "positive" : "negative";
                     const categoryValue = transaction.categoryId ?? "";
                     const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
                     const normalizedName = transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
@@ -2367,9 +2373,6 @@ function AccountDetailPageContent() {
                             onCommit={(value) => commitInlineEdit(transaction, "date", value)}
                           />
                         </div>
-                        <div className="transaction-account-cell">
-                          <span className="transaction-inline-edit transaction-inline-edit--select">{accountCardName}</span>
-                        </div>
                         <div className="transaction-category-cell">
                           <InlineEditableCell
                             value={categoryValue}
@@ -2410,14 +2413,14 @@ function AccountDetailPageContent() {
                 <div className="transactions-mobile-view">
                   <div className="transactions-mobile-list">
                     {mobileTransactionGroups.map((group) => (
-                      <section key={group.date} className="transactions-mobile-date-group">
-                        <div className="transactions-mobile-date-divider">
-                          <span>{group.label}</span>
-                        </div>
+                  <section key={group.date} className="transactions-mobile-date-group">
+                    <div className="transactions-mobile-date-divider">
+                      <span>{`------- ${group.label} -------`}</span>
+                    </div>
                         <div className="transactions-mobile-date-group__rows">
                           {group.transactions.map((transaction) => {
                             const amount = Number(transaction.amount);
-                            const amountToneClass = transaction.type === "income" ? "positive" : "negative";
+                            const amountToneClass = transaction.type === "transfer" ? "neutral" : transaction.type === "income" ? "positive" : "negative";
                             const normalizedName = transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
 
                             return (

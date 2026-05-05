@@ -422,7 +422,7 @@ const seedImportedWorkspaceCaches = (workspaceId: string, summary: UploadInsight
   const importedBalance = typeof importedAccount.balance === "string" ? importedAccount.balance.trim() : "";
   const importedIsZeroish = importedBalance !== "" && Number(importedBalance) === 0;
   const currentIsNonZero = currentBalance !== "" && Number(currentBalance) !== 0;
-  if ((!importedBalance || (summary.optimistic !== false && importedIsZeroish)) && currentIsNonZero) {
+  if ((!importedBalance || importedIsZeroish) && currentIsNonZero) {
     importedAccount.balance = currentBalance;
   }
 
@@ -748,7 +748,7 @@ export function ImportFilesModal({
   const [validationNotice, setValidationNotice] = useState<string | null>(null);
   const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
-  const [monthlyUploadLimit, setMonthlyUploadLimit] = useState(10);
+  const [monthlyUploadLimit, setMonthlyUploadLimit] = useState<number | null>(10);
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [qaRunsByItemId, setQaRunsByItemId] = useState<Record<string, QaRunSummary | null>>({});
   const [qaLoadingByItemId, setQaLoadingByItemId] = useState<Record<string, boolean>>({});
@@ -973,10 +973,19 @@ export function ImportFilesModal({
 
         const payload = await response.json();
         const nextPlanTier = payload?.user?.planTier === "pro" ? "pro" : "free";
-        const nextMonthlyUploadLimit = Number(payload?.user?.monthlyUploadLimit ?? 10);
+        const nextMonthlyUploadLimit =
+          payload?.user?.monthlyUploadLimit === null || payload?.user?.monthlyUploadLimit === undefined
+            ? null
+            : Number(payload.user.monthlyUploadLimit);
         if (!cancelled) {
           setPlanTier(nextPlanTier);
-          setMonthlyUploadLimit(Number.isFinite(nextMonthlyUploadLimit) && nextMonthlyUploadLimit >= 0 ? nextMonthlyUploadLimit : 10);
+          setMonthlyUploadLimit(
+            nextMonthlyUploadLimit === null
+              ? null
+              : Number.isFinite(nextMonthlyUploadLimit) && nextMonthlyUploadLimit >= 0
+                ? nextMonthlyUploadLimit
+                : 10
+          );
         }
       } catch {
         if (!cancelled) {
@@ -1111,7 +1120,7 @@ export function ImportFilesModal({
       flushSync(() => {
         setItems((current) => {
         const existing = new Set(current.map((item) => fileKey(item.file)));
-        const fileQueueLimit = Math.max(0, monthlyUploadLimit);
+        const fileQueueLimit = monthlyUploadLimit === null ? Number.POSITIVE_INFINITY : Math.max(0, monthlyUploadLimit);
         const availableSlots = Math.max(0, fileQueueLimit - current.length);
       let skippedTooMany = 0;
       let additionsCount = 0;
@@ -1192,11 +1201,13 @@ export function ImportFilesModal({
         validationMessage = `Warning: ${validationIssues.join(" ")}`;
       } else if (skippedTooMany > 0) {
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"}; skipped ${skippedTooMany} file${skippedTooMany === 1 ? "" : "s"} over the ${monthlyUploadLimit}-file limit.`;
-        showPlanLimitNudge({
-          planTier,
-          limitType: "upload_limit",
-          limitValue: monthlyUploadLimit,
-        });
+        if (monthlyUploadLimit !== null) {
+          showPlanLimitNudge({
+            planTier,
+            limitType: "upload_limit",
+            limitValue: monthlyUploadLimit,
+          });
+        }
       } else if (additions.length > 0) {
         feedbackMessage = `Added ${additions.length} file${additions.length === 1 ? "" : "s"} to the queue.`;
       } else {
@@ -1364,7 +1375,37 @@ export function ImportFilesModal({
           if (limitPayload) {
             showPlanLimitNudge(limitPayload);
           }
-          const confirmError = formatImportFailureMessage(summaryContext.fileName, payload.error || "Unable to confirm this import.");
+          const confirmErrorMessage = String(payload.error ?? "Unable to confirm this import.");
+          const recoverableConfirmError =
+            /account not found|import file not found|parsed rows|still processing|not ready|finalizing|loading account|loading transactions|checkpoint|pending|queued|unable to confirm|cannot confirm|timed out|error code i-104|error code i-105|couldn't save that import|couldn't keep tracking that file|wasn't able to finish this import/i.test(
+              confirmErrorMessage.toLowerCase()
+            );
+          if (recoverableConfirmError && stagedAttempt < 29) {
+            updateItem(itemId, {
+              status: "importing",
+              confirmationState: "pending",
+              progress: Math.max(92, finalizingProgress),
+              progressLabel: "Finalizing import",
+              targetAccountId: resolvedAccountId,
+            });
+            publishImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "active",
+              fileName: summaryContext.fileName,
+              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount,
+              progress: Math.max(92, finalizingProgress),
+              detail: "Clover is still finalizing the import",
+              summary: null,
+              errorMessage: null,
+            });
+            await new Promise((resolve) => window.setTimeout(resolve, 1000));
+            continue;
+          }
+
+          const confirmError = formatImportFailureMessage(summaryContext.fileName, confirmErrorMessage);
           capturePostHogClientEvent("import_failed", {
             error_stage: "confirm",
             error_code: String(payload.error ?? "unable_to_confirm"),

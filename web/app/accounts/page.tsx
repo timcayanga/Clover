@@ -903,6 +903,8 @@ function AccountsPageContent() {
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
+  const isLocalDevBrowser =
+    typeof window !== "undefined" && /^(localhost|127\.0\.0\.1|\[::1\]|::1)$/i.test(window.location.hostname);
   const [deletingAccountIds, setDeletingAccountIds] = useState<string[]>(
     () => {
       const ids = new Set(getDeletingWorkspaceAccountIds(deletingWorkspaceIdFromQuery ?? initialWorkspaceId));
@@ -927,8 +929,14 @@ function AccountsPageContent() {
       const nextPlanTier = payload?.user?.planTier === "pro" ? "pro" : "free";
       const nextLimits = payload?.user
         ? {
-            accountLimit: Number(payload.user.accountLimit ?? 5),
-            monthlyUploadLimit: Number(payload.user.monthlyUploadLimit ?? 10),
+            accountLimit:
+              payload.user.accountLimit === null || payload.user.accountLimit === undefined
+                ? null
+                : Number(payload.user.accountLimit),
+            monthlyUploadLimit:
+              payload.user.monthlyUploadLimit === null || payload.user.monthlyUploadLimit === undefined
+                ? null
+                : Number(payload.user.monthlyUploadLimit),
             transactionLimit:
               payload.user.transactionLimit === null || payload.user.transactionLimit === undefined
                 ? null
@@ -973,11 +981,13 @@ function AccountsPageContent() {
                           latestCheckpoint?.status === "reconciled" && latestCheckpoint.endingBalance !== null
                             ? String(latestCheckpoint.endingBalance)
                             : null;
+                        const currentAccountBalance = parseAmount(account.balance);
+                        const currentAccountBalanceIsNonZero =
+                          currentAccountBalance !== null && Number.isFinite(currentAccountBalance) && currentAccountBalance !== 0;
                         const shouldPreserveImportedBalance =
                           account.source === "upload" &&
-                          (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
-                          accountTransactions.length === 0;
-                        const reconciledBalance = checkpointBalance
+                          (!latestCheckpoint || latestCheckpoint.status !== "reconciled");
+                        const reconciledBalance = checkpointBalance && !(shouldPreserveImportedBalance && currentAccountBalanceIsNonZero)
                           ? checkpointBalance
                           : shouldPreserveImportedBalance
                             ? account.balance
@@ -1853,7 +1863,7 @@ function AccountsPageContent() {
       closeChrome();
     });
 
-    if (planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
+    if (!isLocalDevBrowser && planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
       showPlanLimitNudge({
         planTier,
         limitType: "account_limit",
@@ -1874,7 +1884,7 @@ function AccountsPageContent() {
       closeChrome();
     });
 
-    if (planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
+    if (!isLocalDevBrowser && planLimits?.accountLimit != null && nonCashAccountCount >= planLimits.accountLimit) {
       showPlanLimitNudge({
         planTier,
         limitType: "account_limit",

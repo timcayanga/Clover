@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import type { AccountBrand } from "@/lib/account-brand";
 
@@ -25,22 +26,42 @@ export function FinancialAccountCard({
   showChevron = true,
 }: FinancialAccountCardProps) {
   const interactive = typeof onOpen === "function";
+  const isMayaCard = accountBrand.label.trim().toLowerCase() === "maya";
+  const cardBackground = isMayaCard
+    ? "linear-gradient(135deg, rgba(3, 6, 10, 0.99), rgba(10, 14, 20, 0.98))"
+    : accountBrand.background;
+  const cardAccent = isMayaCard ? "#05070A" : accountBrand.accent;
+  const cardForeground = isMayaCard ? "#f8fafc" : accountBrand.foreground;
+  const handleOpen = () => {
+    onOpen?.();
+  };
 
   return (
     <article
       className={["financial-account-card", interactive ? "is-interactive" : null, className].filter(Boolean).join(" ")}
-      style={{ ["--card-accent" as string]: accountBrand.accent }}
+      data-brand-label={accountBrand.label}
+      style={
+        {
+          ["--card-accent" as string]: cardAccent,
+          background: cardBackground,
+          color: cardForeground,
+        } as CSSProperties
+      }
       data-state={state}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onClick={interactive ? handleOpen : undefined}
+      onKeyDown={
+        interactive
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleOpen();
+              }
+            }
+          : undefined
+      }
     >
-      {interactive ? (
-        <button
-          className="financial-account-card__overlay"
-          type="button"
-          onClick={onOpen}
-          aria-label={openLabel ?? `Open ${name}`}
-        />
-      ) : null}
-
       <div className="financial-account-card__content">
         <div className="financial-account-card__top">
           <AccountBrandMark accountBrand={accountBrand} label={name} />
@@ -50,7 +71,7 @@ export function FinancialAccountCard({
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
-                onOpen?.();
+                handleOpen();
               }}
               aria-label={openLabel ?? `Open ${name}`}
               disabled={!interactive}

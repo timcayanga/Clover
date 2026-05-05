@@ -5376,7 +5376,7 @@ function TransactionsPageContent() {
                 {mobileTransactionGroups.map((group) => (
                   <section key={group.date} className="transactions-mobile-date-group">
                     <div className="transactions-mobile-date-divider">
-                      <span>{`------- ${group.label} -------`}</span>
+                      <span>{`-------${group.label}-------`}</span>
                     </div>
                     <div className="transactions-mobile-date-group__rows">
                       {group.transactions.map((transaction) => {
