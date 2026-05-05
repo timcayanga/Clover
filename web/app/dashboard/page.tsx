@@ -652,17 +652,10 @@ const totalNetWorth = dashboardAccounts.reduce((sum, account) => {
   const previousSavingsRate = currentSummary.previous.income > 0 ? previousNet / currentSummary.previous.income : null;
   const spendDelta = currentSummary.current.expense - currentSummary.previous.expense;
   const recurringItem = buildRecurringTransactionSummaries(currentTransactions)[0] ?? null;
-  const uncategorizedTransactions = currentThirtyDayTransactions.filter(
-    (transaction) => !transaction.category?.name || !transaction.merchantClean
-  );
   const reviewAttentionTransactions = currentThirtyDayTransactions.filter(
     (transaction) => transaction.reviewStatus !== "confirmed" || transaction.categoryId === null || transaction.categoryConfidence < 70
   );
   const reviewAttentionCount = reviewAttentionTransactions.length;
-  const reviewCoverageText =
-    currentThirtyDayTransactions.length > 0
-      ? `${Math.round((currentSummary.current.confirmed / currentThirtyDayTransactions.length) * 100)}% of the last 30 days is confirmed or edited`
-      : "No recent transactions to score yet";
   const goalKey = user.primaryGoal as GoalKey | null;
   const goalTargetAmount = user.goalTargetAmount !== null ? Number(user.goalTargetAmount) : null;
   const goalProgress = getGoalProgressSnapshot({
@@ -677,12 +670,6 @@ const totalNetWorth = dashboardAccounts.reduce((sum, account) => {
     recurringShare: recurringItem ? recurringItem.amount / Math.max(currentSummary.current.expense, 1) : 0,
   }, displayCurrency);
   const goalProgressPercent = clamp(goalProgress.progressPercent ?? 0, 0, 100);
-  const confidenceScore = clamp(
-    Math.round(66 + currentTransactions.length * 0.12 - reviewAttentionCount * 2.2 - uncategorizedTransactions.length * 1.4),
-    35,
-    99
-  );
-  const confidenceLabel = confidenceScore >= 85 ? "High confidence" : confidenceScore >= 70 ? "Good confidence" : "Watch closely";
   const daysSinceLastImport = latestImport
     ? Math.max(0, Math.floor((now.getTime() - latestImport.uploadedAt.getTime()) / 86400000))
     : null;
@@ -928,13 +915,6 @@ const totalNetWorth = dashboardAccounts.reduce((sum, account) => {
                 {recurringItem
                   ? `${formatCurrency(recurringItem.amount / recurringItem.count)} per transaction · last seen ${formatRelativeDate(recurringItem.lastSeen)}`
                   : "Clover will surface repeating bills here"}
-              </small>
-            </div>
-            <div className="dashboard-home__mini-card">
-              <span>Trust</span>
-              <strong>{Math.round(confidenceScore)}%</strong>
-              <small>
-                {confidenceLabel} · {reviewCoverageText}
               </small>
             </div>
           </div>
