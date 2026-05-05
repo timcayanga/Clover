@@ -167,11 +167,9 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
             )}
           </div>
           <div className="split-bill-table__footer">
-            {hasMoreBills ? (
-              <button className="split-bill-table__more-link" type="button" onClick={() => setShowAllBills((current) => !current)}>
-                All Bills
-              </button>
-            ) : null}
+            <button className="split-bill-table__more-link" type="button" onClick={() => setShowAllBills((current) => !current)}>
+              All Bills
+            </button>
           </div>
         </section>
 
@@ -248,6 +246,83 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
               </button>
             </div>
           </section>
+        </div>
+      </section>
+
+      <section className="split-bill-panel panel glass split-bill-desktop-home">
+        <div className="split-bill-panel__head">
+          <div>
+            <p className="eyebrow">Bills</p>
+            <h2>Recent bills</h2>
+          </div>
+        </div>
+
+        <div className="split-bill-table split-bill-table--bills" role="table" aria-label="Split bills">
+          <div className="split-bill-table__header" role="row">
+            <span role="columnheader">Description</span>
+            <span role="columnheader">Date</span>
+            <span role="columnheader">People</span>
+            <span role="columnheader">Total</span>
+            <span role="columnheader">Status</span>
+          </div>
+          {recentBills.length > 0 ? (
+            recentBills.map((bill) => {
+              const status = buildRowStatus(bill.settlement.transfers);
+              const sourceLabel = bill.sourceType === "receipt" ? "Receipt" : "Manual";
+
+              return (
+                <div key={bill.id} className="split-bill-table__row" role="row">
+                  <div role="cell" className="split-bill-table__bill">
+                    <strong>
+                      <Link href={`/split-bill/${bill.id}/edit`} prefetch={false}>
+                        {bill.title}
+                      </Link>
+                    </strong>
+                    <span>
+                      {sourceLabel}
+                      {bill.group?.name ? ` · ${bill.group.name}` : ""}
+                    </span>
+                  </div>
+                  <div role="cell">
+                    <Link className="split-bill-table__inline-link" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
+                      {formatDate(bill.billDate)}
+                    </Link>
+                  </div>
+                  <div role="cell" className="split-bill-table__chips">
+                    {bill.participants.length > 0 ? (
+                      bill.participants.map((participant) => (
+                        <span key={participant.id} className="split-bill-table__chip" title={participant.name}>
+                          {getInitials(participant.name)}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="split-bill-subtle-empty">No people yet</span>
+                    )}
+                  </div>
+                  <div role="cell">
+                    <Link className="split-bill-table__inline-link" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
+                      {bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}
+                    </Link>
+                  </div>
+                  <div role="cell">
+                    <Link className="split-bill-table__inline-link" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
+                      {status}
+                    </Link>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="split-bill-empty">
+              <strong>No split bills yet.</strong>
+              <p>Add your first bill or upload a receipt to start.</p>
+            </div>
+          )}
+        </div>
+        <div className="split-bill-table__footer">
+          <button className="split-bill-table__more-link" type="button" onClick={() => setShowAllBills((current) => !current)}>
+            All Bills
+          </button>
         </div>
       </section>
 
