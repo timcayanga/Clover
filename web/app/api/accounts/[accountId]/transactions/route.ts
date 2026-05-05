@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { buildTransactionQueryWhere } from "@/lib/transaction-query";
+import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,15 @@ const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefin
   return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
 };
 
+const getLastFourDigits = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const digits = String(value).replace(/\D/g, "");
+  return digits.length >= 4 ? digits.slice(-4) : null;
+};
+
 export async function GET(request: Request, { params }: { params: Promise<{ accountId: string }> }) {
   try {
     const userId = await resolveAccountTransactionsRouteUserId();
@@ -88,7 +98,45 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
 
     const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
     const pageSize = Math.max(1, Number(searchParams.get("pageSize") ?? "25") || 25);
-    const accountIds = [accountId];
+    const identityKey = normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+    const accountLastFour = getLastFourDigits(account.accountNumber ?? account.name);
+    const siblingAccounts = await prisma.account.findMany({
+      where: {
+        workspaceId: account.workspaceId,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        institution: true,
+        type: true,
+        accountNumber: true,
+      },
+    });
+    const accountIds = siblingAccounts
+      .filter((candidate) => {
+        const candidateKey = normalizeImportedAccountKey(
+          candidate.name,
+          candidate.institution,
+          candidate.accountNumber,
+          candidate.type
+        );
+        const candidateLastFour = getLastFourDigits(candidate.accountNumber ?? candidate.name);
+
+        return (
+          candidate.id === accountId ||
+          candidateKey === identityKey ||
+          Boolean(
+            account.institution &&
+              candidate.institution &&
+              account.institution.trim().toLowerCase() === candidate.institution.trim().toLowerCase() &&
+              accountLastFour &&
+              candidateLastFour &&
+              accountLastFour === candidateLastFour
+          )
+        );
+      })
+      .map((candidate) => candidate.id);
     const where = buildTransactionQueryWhere(account.workspaceId, { accountIds });
     const skip = (page - 1) * pageSize;
 

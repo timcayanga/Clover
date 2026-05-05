@@ -226,6 +226,15 @@ const getWorkspaceCurrencyCodes = async (workspaceId: string) => {
   return codes.length > 0 ? codes : ["PHP"];
 };
 
+const normalizeLegacyTransactionVisibility = async (workspaceId: string) => {
+  await prisma.$executeRaw`
+    UPDATE "Transaction"
+    SET "isExcluded" = false
+    WHERE "workspaceId" = ${workspaceId}
+      AND "isExcluded" IS NULL
+  `;
+};
+
 export async function GET(request: Request) {
   try {
     const userId = await resolveTransactionsRouteUserId();
@@ -237,6 +246,7 @@ export async function GET(request: Request) {
     }
 
     await assertWorkspaceAccess(userId, workspaceId);
+    await normalizeLegacyTransactionVisibility(workspaceId);
 
     const filters: TransactionQueryFilters = parseTransactionQueryFilters(searchParams);
     const where = buildTransactionQueryWhere(workspaceId, filters);
