@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import { ImportFilesModal } from "@/components/import-files-modal";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
@@ -174,8 +174,16 @@ function DashboardManualTransactionModal({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const rootRef = useRef<HTMLElement | null>(null);
+  const manualModalStyle = useMemo<CSSProperties>(
+    () => ({
+      width: "min(420px, calc(100vw - 24px))",
+      maxHeight: "calc(100dvh - 24px)",
+      overflow: "auto",
+    }),
+    []
+  );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.body.classList.add("transactions-manual-open");
     document.body.setAttribute("data-clover-page-modal", "true");
     return () => {
@@ -416,6 +424,7 @@ function DashboardManualTransactionModal({
     <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={handleClose}>
       <section
         className="modal-card modal-card--manual glass"
+        style={manualModalStyle}
         ref={rootRef}
         role="dialog"
         aria-modal="true"
@@ -432,7 +441,7 @@ function DashboardManualTransactionModal({
           </button>
         </div>
 
-        <p className="modal-copy">Log it here and keep Clover on the Dashboard.</p>
+        <p className="modal-copy">Add it here and Clover will keep you on the Dashboard.</p>
 
         <form onSubmit={handleSubmit}>
           <div className="manual-form-layout manual-form-layout--compact">
@@ -754,7 +763,6 @@ function DashboardManualTransactionModal({
 
 export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActionsProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
@@ -791,27 +799,25 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
     };
   }, [menuOpen]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const active = manualOpen || importOpen;
+    document.body.classList.toggle("dashboard-modal-open", active);
     document.body.toggleAttribute("data-clover-page-modal", active);
-    if (!active) {
-      document.body.removeAttribute("data-clover-page-modal");
-    }
 
     return () => {
+      document.body.classList.remove("dashboard-modal-open");
       document.body.removeAttribute("data-clover-page-modal");
     };
   }, [importOpen, manualOpen]);
 
   useEffect(() => {
-    const manualParam = searchParams?.get("manual");
-    const importParam = searchParams?.get("import");
+    const manualParam = new URLSearchParams(window.location.search).get("manual");
+    const importParam = new URLSearchParams(window.location.search).get("import");
 
     if (manualParam === "1") {
       setMenuOpen(false);
       setImportOpen(false);
       setManualOpen(true);
-      window.history.replaceState({}, "", "/dashboard");
       return;
     }
 
@@ -819,9 +825,8 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
       setMenuOpen(false);
       setManualOpen(false);
       setImportOpen(true);
-      window.history.replaceState({}, "", "/dashboard");
     }
-  }, [searchParams]);
+  }, []);
 
   useEffect(() => {
     const handleOpenManual = () => {
@@ -845,11 +850,13 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
 
   const closeManual = () => {
     setManualOpen(false);
+    setMenuOpen(false);
     window.history.replaceState({}, "", "/dashboard");
   };
 
   const closeImport = () => {
     setImportOpen(false);
+    setMenuOpen(false);
     window.history.replaceState({}, "", "/dashboard");
   };
 
@@ -857,14 +864,12 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
     setMenuOpen(false);
     setImportOpen(false);
     setManualOpen(true);
-    window.history.replaceState({}, "", "/dashboard");
   };
 
   const openImportFiles = () => {
     setMenuOpen(false);
     setManualOpen(false);
     setImportOpen(true);
-    window.history.replaceState({}, "", "/dashboard");
   };
 
   return (

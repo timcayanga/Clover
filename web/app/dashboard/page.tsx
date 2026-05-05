@@ -276,22 +276,6 @@ function DashboardStreamFallback() {
           <span className="skeleton-block skeleton-block--line" style={{ width: "min(100%, 340px)", height: 38, borderRadius: 999 }} />
           <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 380px)" }} />
         </div>
-        <div className="dashboard-home__hero-side">
-          <div className="dashboard-home__goal-card dashboard-home__goal-card--loading">
-            <div className="dashboard-home__ring dashboard-home__ring--compact dashboard-home__ring--loading">
-              <div className="dashboard-home__ring-inner">
-                <span className="skeleton-block skeleton-block--line skeleton-block--line-short" />
-                <span className="skeleton-block skeleton-block--line skeleton-block--line-long" />
-              </div>
-            </div>
-            <div className="dashboard-home__goal-card-copy">
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 92 }} />
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 220px)" }} />
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-long" style={{ width: "min(100%, 180px)" }} />
-              <span className="skeleton-block skeleton-block--line skeleton-block--line-short" style={{ width: 160 }} />
-            </div>
-          </div>
-        </div>
       </article>
 
       <section className="dashboard-home__movement-grid">
