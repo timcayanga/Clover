@@ -29226,6 +29226,11 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   gap: 8px;
 }
 
+.split-bill-table__footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .split-bill-table__header,
 .split-bill-table__row {
   display: grid;
