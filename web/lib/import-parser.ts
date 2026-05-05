@@ -636,9 +636,23 @@ const securityBankStatementMetadata = (text: string): DetectedStatementMetadata 
       .sort((left, right) => right.length - left.length)[0] ?? null;
   const accountNameCandidate =
     commaNameCandidate ??
-    extractAccountHolderNameFromLines(accountNameLines, null) ??
-    formatSimpleBankAccountName("Security Bank", accountNumber);
-  const accountName = accountNameCandidate;
+    (() => {
+      const extracted = extractAccountHolderNameFromLines(accountNameLines, null);
+      if (!extracted) {
+        return null;
+      }
+
+      if (/(?:ATM|DEPOSIT|WITHDRAWAL|TRANSFER|TRANSACTIONS?|BALANCE|SUMMARY|ACCOUNT|CARD|CREDIT|DEBIT)/i.test(extracted)) {
+        return null;
+      }
+
+      return extracted;
+    })() ??
+    null;
+  const accountName =
+    accountNumber
+      ? formatSimpleBankAccountName("Security Bank", accountNumber)
+      : accountNameCandidate ?? "Security Bank";
   const periodMatch = compact.match(/PERIOD\s+COVERED\s*:\s*([A-Z]{3}\s+\d{1,2}\s+\d{4})\s+TO\s+([A-Z]{3}\s+\d{1,2}\s+\d{4})/i);
   const summaryMatch = compact.match(
     /BEGINNING\s+BALANCE\s+TOTAL\s+CREDITS\s+TOTAL\s+DEBITS\s+ENDING\s+BALANCE\s+([0-9,.-]+)\s+([0-9,.-]+)\s+([0-9,.-]+)\s+([0-9,.-]+)/i
@@ -2167,8 +2181,14 @@ const bpiStatementMetadata = (text: string): DetectedStatementMetadata | null =>
     accountNumber && /^\d{10}$/.test(accountNumber)
       ? `${accountNumber.slice(0, 4)}-${accountNumber.slice(4, 8)}-${accountNumber.slice(8, 10)}`
       : accountNumber;
+  const extractedAccountName = extractAccountHolderNameFromLines(lines, accountLineIndex);
+  const isNoisyBpiAccountName =
+    extractedAccountName !== null &&
+    /(?:ATM|DEPOSIT|WITHDRAWAL|TRANSFER|TRANSACTIONS?|BALANCE|SUMMARY|ACCOUNT|CARD|CREDIT|DEBIT)/i.test(
+      extractedAccountName
+    );
   const accountName =
-    extractAccountHolderNameFromLines(lines, accountLineIndex) ??
+    (!isNoisyBpiAccountName && extractedAccountName ? extractedAccountName : null) ??
     (accountNumber ? `BPI ${accountNumber.replace(/\D/g, "").slice(-4)}` : "BPI");
 
   const periodMatch =
