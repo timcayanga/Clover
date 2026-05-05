@@ -32,28 +32,33 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
           where: { importFileId: importId },
         })
       : null;
+    const isImageImport = String(importFile.fileType ?? "").toLowerCase().startsWith("image/");
+    const checkpointImportMode =
+      statementCheckpoint && typeof statementCheckpoint.sourceMetadata === "object" && statementCheckpoint.sourceMetadata && "importMode" in statementCheckpoint.sourceMetadata
+        ? String((statementCheckpoint.sourceMetadata as { importMode?: unknown }).importMode ?? "")
+        : "";
+    const isDocumentImportMode = checkpointImportMode.length > 0 && checkpointImportMode !== "statement";
     const checkpointRowCount = Number(statementCheckpoint?.rowCount ?? 0);
+    const selfHealDelayMs = isImageImport || isDocumentImportMode ? 2_000 : 15_000;
+    const hasParsedRows = parsedRowsCountBefore > 0 || checkpointRowCount > 0;
+    const hasConfirmedRows = confirmedTransactionsCountBefore > 0 || statementCheckpoint?.status === "reconciled";
     const shouldSelfHeal =
-      parsedRowsCountBefore === 0 &&
-      confirmedTransactionsCountBefore === 0 &&
-      importAgeMs > 15_000 &&
-      ((importFile.status === "processing" || importFile.status === "queued") ||
-        (importFile.status === "done" && checkpointRowCount === 0));
+      importAgeMs > selfHealDelayMs &&
+      ((parsedRowsCountBefore === 0 && confirmedTransactionsCountBefore === 0 && ((importFile.status === "processing" || importFile.status === "queued") || (importFile.status === "done" && checkpointRowCount === 0))) ||
+        (importFile.status === "done" && hasParsedRows && !hasConfirmedRows));
 
     if (shouldSelfHeal) {
-      try {
-        const { processImportFileText } = await import("@/workers/import-processor");
-        await processImportFileText(importId, { actorUserId: null });
-        const refreshedImportFile = await fetchImportFileCompat(importId);
-        if (refreshedImportFile) {
-          importFile = refreshedImportFile;
+      void (async () => {
+        try {
+          const { processImportFileText } = await import("@/workers/import-processor");
+          await processImportFileText(importId, { actorUserId: null });
+        } catch (error) {
+          console.warn("Unable to self-heal stalled import status", {
+            importId,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
-      } catch (error) {
-        console.warn("Unable to self-heal stalled import status", {
-          importId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
+      })();
     }
 
     let parsedRowsCount = Math.max(Number(importFile.parsedRowsCount ?? 0), checkpointRowCount);
@@ -67,11 +72,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         ? "failed"
         : confirmedTransactionsCount > 0
           ? "confirmed"
-          : importFile.status === "done"
-            ? "done"
-            : parsedRowsCount > 0
-              ? "staged"
-              : "processing";
+          : importFile.status === "done" && hasParsedRows
+            ? "staged"
+            : importFile.status === "done"
+              ? "done"
+              : parsedRowsCount > 0
+                ? "staged"
+                : "processing";
 
     return NextResponse.json({
       importFile: {

@@ -5352,6 +5352,18 @@ const looksLikeGcashRecordTail = (value: string) =>
 
 const guessGcashCategoryName = (description: string, type: TransactionType) => {
   const merchant = normalizeGcashMerchant(description);
+  if (/^payment to\b/i.test(description)) {
+    return "Shopping";
+  }
+
+  if (/^buy load\b/i.test(description)) {
+    return "Bills & Utilities";
+  }
+
+  if (/^(?:received gcash from|cash in|add money|received money)\b/i.test(description)) {
+    return "Income";
+  }
+
   if (type === "transfer") {
     return "Transfers";
   }
@@ -5385,19 +5397,20 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
   const merchantClean = normalizeGcashMerchant(description);
   const type: TransactionType =
     /^Received GCash from/i.test(description) ||
-    /^Sent GCash to/i.test(description) ||
-    /^Transfer from/i.test(description) ||
-    /^Transfer to/i.test(description) ||
     /^Cash In/i.test(description) ||
-    /^Cash Out/i.test(description) ||
     /^Add Money/i.test(description) ||
-    /^Send Money/i.test(description) ||
-    /^Received Money/i.test(description) ||
-    /^(?:Payment to)\s+.*(?:bank|capital|securities|exchange|pdax|bancnet|loan|wallet)/i.test(description)
-      ? "transfer"
-      : /refund|reversal|cashback|reward|interest/i.test(description)
-        ? "income"
-        : "expense";
+    /^Received Money/i.test(description)
+      ? "income"
+      : /^Sent GCash to/i.test(description) ||
+        /^Transfer from/i.test(description) ||
+        /^Transfer to/i.test(description) ||
+        /^Cash Out/i.test(description) ||
+        /^Send Money/i.test(description) ||
+        /^(?:Payment to)\s+.*(?:bank|capital|securities|exchange|pdax|bancnet|loan|wallet)/i.test(description)
+        ? "transfer"
+        : /refund|reversal|cashback|reward|interest/i.test(description)
+          ? "income"
+          : "expense";
 
   const categoryName = guessGcashCategoryName(description, type);
   const date = parseDateValue(dateMatch[0]);

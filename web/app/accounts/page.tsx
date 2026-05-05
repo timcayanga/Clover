@@ -1535,6 +1535,12 @@ function AccountsPageContent() {
         }),
       },
       {
+        title: "Credit Cards",
+        tone: "liability",
+        itemLabel: "account",
+        rows: visibleAccounts.filter((account) => isLiabilityAccountType(getEffectiveAccountType(account))),
+      },
+      {
         title: "Wallets",
         tone: "assets",
         itemLabel: "account",
@@ -1547,12 +1553,6 @@ function AccountsPageContent() {
         rows: buildInvestmentInstitutionCards(
           visibleAccounts.filter((account) => getEffectiveAccountType(account) === "investment")
         ),
-      },
-      {
-        title: "Liabilities",
-        tone: "liability",
-        itemLabel: "account",
-        rows: visibleAccounts.filter((account) => isLiabilityAccountType(getEffectiveAccountType(account))),
       },
       {
         title: "Tracked assets",
@@ -1975,7 +1975,12 @@ function AccountsPageContent() {
         normalizeImportedAccountKey(row.name, row.institution, row.accountNumber, row.type)
       ) ??
       null;
-    const accountDisplayName = getAccountDisplayName(row);
+    const fallbackAccountNumber =
+      row.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null;
+    const accountDisplayName =
+      row.source === "upload"
+        ? formatUploadAccountDisplayName(row.name, row.institution, fallbackAccountNumber, row.type)
+        : getAccountDisplayName(row);
     const hasVisibleBalance = row.balance !== null && row.balance.trim() !== "";
     const isLoading =
       row.source === "upload" &&
@@ -2014,7 +2019,7 @@ function AccountsPageContent() {
               <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
               <div>
                 <span>{formatAccountTypeLabel(getEffectiveAccountType(row))}</span>
-                <strong>{cardVisual === "identity" ? cardEyebrow : getAccountCardTitle(row)}</strong>
+                <strong>{cardVisual === "identity" ? cardEyebrow : accountDisplayName}</strong>
               </div>
             </div>
             <div className="accounts-account-card__actions">
@@ -2111,9 +2116,9 @@ function AccountsPageContent() {
         onClick={() => openAccountDrawer(row)}
       >
         <span className="accounts-mobile-list-row__brand">
-          <AccountBrandMark accountBrand={accountBrand} label={getAccountDisplayName(row)} />
+          <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
           <span>
-            <strong>{getAccountCardTitle(row)}</strong>
+            <strong>{accountDisplayName}</strong>
             <small>{getAccountCardEyebrow(row)}</small>
           </span>
         </span>
@@ -2584,7 +2589,7 @@ function AccountsPageContent() {
             </article>
             <article className="accounts-overview-card glass">
               <p className="eyebrow">
-                Liabilities
+                Credit Cards
                 <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.liabilities} />
               </p>
               <strong className="accounts-overview-card__amount is-danger">{formatAggregateAmount(totals.liabilities, visibleAccounts)}</strong>

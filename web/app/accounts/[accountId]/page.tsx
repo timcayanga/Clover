@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
-import { getAccountDisplayName } from "@/lib/account-display";
+import { formatUploadAccountDisplayName, getAccountDisplayName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import { deriveReconciledBalance } from "@/lib/account-balance";
@@ -912,8 +912,19 @@ function AccountDetailPageContent() {
     },
     [account?.balance, account?.source, account?.type, latestCheckpoint, transactions]
   );
-  const accountDisplayName = account ? getAccountDisplayName(account) : "Account";
-  const accountCardNumber = account ? formatCardAccountNumber(account.accountNumber) : "";
+  const accountDisplayName = account
+    ? account.source === "upload"
+      ? formatUploadAccountDisplayName(
+          account.name,
+          account.institution,
+          account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null,
+          account.type
+        )
+      : getAccountDisplayName(account)
+    : "Account";
+  const accountCardNumber = account
+    ? formatCardAccountNumber(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null)
+    : "";
   const hasVisibleBalance = account?.balance !== null && account?.balance !== undefined && String(account.balance).trim() !== "";
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {
@@ -1525,13 +1536,13 @@ function AccountDetailPageContent() {
                     <div>
                       {getAccountCardVisual(account.type) === "identity" ? (
                         <>
-                          <strong>{getAccountCardTitle(account)}</strong>
+                          <strong>{accountDisplayName}</strong>
                           {accountCardNumber ? <span>{accountCardNumber}</span> : null}
                         </>
                       ) : (
                         <>
                           <span>{formatAccountType(account.type)}</span>
-                          <strong>{getAccountCardTitle(account)}</strong>
+                          <strong>{accountDisplayName}</strong>
                           {accountCardNumber ? <span>{accountCardNumber}</span> : null}
                         </>
                       )}

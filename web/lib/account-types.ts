@@ -23,12 +23,12 @@ export const TRACKED_ASSET_ACCOUNT_TYPES = ["receivable", "prepaid", "insurance"
 
 export const ACCOUNT_TYPE_SECTIONS = [
   {
-    label: "Everyday money",
-    options: ["bank", "wallet", "cash", "prepaid"] as const,
+    label: "Credit Cards",
+    options: ["credit_card", "loan", "mortgage", "line_of_credit", "bnpl", "payable"] as const,
   },
   {
-    label: "Borrowing & obligations",
-    options: ["credit_card", "loan", "mortgage", "line_of_credit", "bnpl", "payable"] as const,
+    label: "Everyday money",
+    options: ["bank", "wallet", "cash", "prepaid"] as const,
   },
   {
     label: "Growth & protection",
