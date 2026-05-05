@@ -1627,6 +1627,23 @@ function TransactionsPageContent() {
     [accounts]
   );
   const accountNameById = useMemo(() => new Map(accounts.map((account) => [account.id, getAccountDisplayName(account)] as const)), [accounts]);
+  const accountBrandById = useMemo(
+    () =>
+      new Map(
+        accounts.map(
+          (account) =>
+            [
+              account.id,
+              getAccountBrand({
+                institution: account.institution ?? null,
+                name: account.name,
+                type: account.type,
+              }),
+            ] as const
+        )
+      ),
+    [accounts]
+  );
   const accountKeyById = useMemo(
     () =>
       new Map(
@@ -1637,17 +1654,6 @@ function TransactionsPageContent() {
   const manualSelectedAccount = useMemo(
     () => accounts.find((account) => account.id === manualForm.accountId) ?? null,
     [accounts, manualForm.accountId]
-  );
-  const manualSelectedAccountBrand = useMemo(
-    () =>
-      manualSelectedAccount
-        ? getAccountBrand({
-            name: manualSelectedAccount.name,
-            institution: manualSelectedAccount.institution,
-            type: manualSelectedAccount.type,
-          })
-        : null,
-    [manualSelectedAccount]
   );
   const manualSelectedCategoryId = manualForm.categoryId || otherCategoryId;
   const manualSelectedCategory = useMemo(
@@ -5119,10 +5125,16 @@ function TransactionsPageContent() {
                 const warningReason = warningReasonFor(transaction);
                 const amount = Number(transaction.amount);
                 const isPositive = transaction.type === "income";
-                const amountToneClass = isPositive ? "positive" : "negative";
+                const amountToneClass = transaction.type === "transfer" ? "neutral" : isPositive ? "positive" : "negative";
                 const categoryValue = transaction.categoryId ?? otherCategoryId;
                 const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
                 const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
+                const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
+                const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
+                  institution: accountInstitution,
+                  name: accountDisplayName,
+                  type: transaction.type === "transfer" ? "bank" : transaction.type === "income" ? "bank" : "other",
+                });
                 const merchantSummary = summarizeTransactionMerchantText(
                   transaction.merchantClean ?? transaction.merchantRaw,
                   accountInstitution
@@ -5189,9 +5201,10 @@ function TransactionsPageContent() {
                       />
                     </div>
                     <div className="transaction-account-cell">
+                      <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
                       <InlineEditableCell
                         value={transaction.accountId}
-                        displayValue={accountNameById.get(transaction.accountId) ?? transaction.accountName}
+                        displayValue={accountDisplayName}
                         ariaLabel={`Edit account for ${transaction.merchantRaw}`}
                         kind="select"
                         className="transaction-inline-edit transaction-inline-edit--select"
@@ -5352,8 +5365,14 @@ function TransactionsPageContent() {
                     <div className="transactions-mobile-date-group__rows">
                       {group.transactions.map((transaction) => {
                         const amount = Number(transaction.amount);
-                        const amountToneClass = transaction.type === "income" ? "positive" : "negative";
-                        const merchantSummary = summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
+                const amountToneClass = transaction.type === "transfer" ? "neutral" : transaction.type === "income" ? "positive" : "negative";
+                const merchantSummary = summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
+                const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
+                const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
+                  institution: accountInstitutionById.get(transaction.accountId) ?? null,
+                  name: accountDisplayName,
+                  type: transaction.type === "transfer" ? "bank" : transaction.type === "income" ? "bank" : "other",
+                });
 
                         return (
                           <article
@@ -5382,9 +5401,15 @@ function TransactionsPageContent() {
                             }}
                           >
                             <div className="transactions-mobile-simple-row__name">
+                              <span className="transactions-mobile-simple-row__category-icon" aria-hidden="true">
+                                <img src={getCategoryIconSrc(transaction.categoryName ?? categories.find((category) => category.id === (transaction.categoryId ?? otherCategoryId))?.name ?? "Other")} alt="" aria-hidden="true" />
+                              </span>
                               <span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span>
                             </div>
                             <div className={`transactions-mobile-simple-row__amount ${amountToneClass}`}>
+                              <span className="transactions-mobile-simple-row__account-brand" aria-hidden="true">
+                                <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
+                              </span>
                               {formatTransactionAmount(amount, transaction.currency)}
                             </div>
                             <button
@@ -5725,56 +5750,125 @@ function TransactionsPageContent() {
                   </button>
                 </div>
 
-                <div className="transactions-manual-name-row">
-                  <button
-                    type="button"
-                    className="transactions-manual-category-trigger"
-                    onClick={() => setManualMoreOpen(true)}
-                    aria-label="Open more transaction details"
-                    aria-expanded={manualMoreOpen}
-                    title="Open more transaction details"
-                  >
-                    <span className="transaction-category-icon transaction-category-icon--manual" aria-hidden="true">
-                      <img src={getCategoryIconSrc(manualSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
-                    </span>
-                  </button>
+                <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-name-field">
+                  <span className="transactions-manual-field__label">Name</span>
+                  <input
+                    ref={manualNameInputRef}
+                    value={manualForm.merchantRaw}
+                    onChange={(event) => setManualForm((current) => ({ ...current, merchantRaw: event.target.value }))}
+                    placeholder="Lunch in Makati"
+                    required
+                  />
+                </label>
 
-                  <label className="transactions-manual-field transactions-manual-name-field">
-                    Name
+                <div className="manual-default-fields">
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label">
+                    <span className="transactions-manual-field__label">Date</span>
                     <input
-                      ref={manualNameInputRef}
-                      value={manualForm.merchantRaw}
-                      onChange={(event) => setManualForm((current) => ({ ...current, merchantRaw: event.target.value }))}
-                      placeholder="Lunch in Makati"
+                      type="date"
+                      value={manualForm.date}
+                      onChange={(event) => setManualForm((current) => ({ ...current, date: event.target.value }))}
                       required
                     />
+                  </label>
+
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label">
+                    <span className="transactions-manual-field__label">Account</span>
+                    <div className="transactions-manual-picker">
+                      <div className="transactions-manual-picker__control">
+                        <button
+                          type="button"
+                          className="transactions-manual-picker__button transactions-manual-picker__button--plain"
+                          aria-expanded={manualAccountMenuOpen}
+                          onClick={() => {
+                            setManualCategoryMenuOpen(false);
+                            setManualAccountMenuOpen((current) => !current);
+                          }}
+                        >
+                          <span className="transactions-manual-picker__text">
+                            {manualSelectedAccount ? getAccountDisplayName(manualSelectedAccount) : "Cash"}
+                          </span>
+                          <span className="transactions-manual-picker__chevron" aria-hidden="true">
+                            <ActionIcon name="chevron-down" />
+                          </span>
+                        </button>
+                        {manualAccountMenuOpen ? (
+                          <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose account">
+                            {accounts.map((account) => {
+                              const accountDisplayName = getAccountDisplayName(account);
+
+                              return (
+                                <button
+                                  key={account.id}
+                                  type="button"
+                                  className={`transactions-manual-picker__option ${
+                                    account.id === manualForm.accountId ? "is-selected" : ""
+                                  }`}
+                                  onClick={() => {
+                                    setManualForm((current) => ({ ...current, accountId: account.id }));
+                                    setManualAccountMenuOpen(false);
+                                  }}
+                                >
+                                  <span className="transactions-manual-picker__option-text">
+                                    <strong>{accountDisplayName}</strong>
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  </label>
+
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label">
+                    <span className="transactions-manual-field__label">Category</span>
+                    <div className="transactions-manual-picker">
+                      <div className="transactions-manual-picker__control">
+                        <button
+                          type="button"
+                          className="transactions-manual-picker__button transactions-manual-picker__button--plain"
+                          aria-expanded={manualCategoryMenuOpen}
+                          onClick={() => {
+                            setManualAccountMenuOpen(false);
+                            setManualCategoryMenuOpen((current) => !current);
+                          }}
+                        >
+                          <span className="transactions-manual-picker__text">{manualSelectedCategory?.name ?? "Other"}</span>
+                          <span className="transactions-manual-picker__chevron" aria-hidden="true">
+                            <ActionIcon name="chevron-down" />
+                          </span>
+                        </button>
+                        {manualCategoryMenuOpen ? (
+                          <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose category">
+                            {categories.map((category) => (
+                              <button
+                                key={category.id}
+                                type="button"
+                                className={`transactions-manual-picker__option ${
+                                  category.id === manualSelectedCategoryId ? "is-selected" : ""
+                                }`}
+                                onClick={() => {
+                                  setManualCategoryTouched(true);
+                                  setManualForm((current) => ({ ...current, categoryId: category.id }));
+                                  setManualCategoryMenuOpen(false);
+                                }}
+                              >
+                                <span className="transactions-manual-picker__option-text">
+                                  <strong>{category.name}</strong>
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
                   </label>
                 </div>
 
                 <div className="transactions-manual-money-row">
-                  <button
-                    type="button"
-                    className="transactions-manual-account-trigger"
-                    aria-label="Open more transaction details"
-                    aria-expanded={manualMoreOpen}
-                    title="Open more transaction details"
-                    onClick={() => setManualMoreOpen(true)}
-                  >
-                    <span className="transactions-manual-account-trigger__badge" aria-hidden="true">
-                      {manualSelectedAccountBrand ? (
-                        <img
-                          src={manualSelectedAccountBrand.logoSrc ?? manualSelectedAccountBrand.fallbackIconSrc}
-                          alt=""
-                          aria-hidden="true"
-                        />
-                      ) : (
-                        <ActionIcon name="account" />
-                      )}
-                    </span>
-                  </button>
-
-                  <label className="transactions-manual-field transactions-manual-money-row__currency">
-                    Currency
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-money-row__currency">
+                    <span className="transactions-manual-field__label">Currency</span>
                     <CurrencySelector
                       value={manualForm.currency}
                       onChange={(value) => setManualForm((current) => ({ ...current, currency: value }))}
@@ -5788,8 +5882,8 @@ function TransactionsPageContent() {
                     />
                   </label>
 
-                  <label className="transactions-manual-field transactions-manual-money-row__amount">
-                    Amount
+                  <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-money-row__amount">
+                    <span className="transactions-manual-field__label">Amount</span>
                     <input
                       type="number"
                       step="0.01"
@@ -5801,276 +5895,171 @@ function TransactionsPageContent() {
                   </label>
                 </div>
 
-                <div className="manual-form-actions">
-                  <button
-                    type="button"
-                    className="transactions-manual-more"
-                    onClick={() => setManualMoreOpen((current) => !current)}
-                    aria-expanded={manualMoreOpen}
-                  >
-                    <span>{manualMoreOpen ? "Less" : "More"}</span>
-                    <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
-                      <ActionIcon name="chevron-down" />
-                    </span>
-                  </button>
-
-                  <div className="manual-form-actions__right">
+                {!manualMoreOpen ? (
+                  <div className="manual-form-actions manual-form-actions--closed">
                     <button
-                      className="transactions-manual-add-another"
-                      type="submit"
-                      data-submit-mode="add-another"
-                      disabled={isSaving}
+                      type="button"
+                      className="transactions-manual-more"
+                      onClick={() => setManualMoreOpen((current) => !current)}
+                      aria-expanded={manualMoreOpen}
                     >
-                      Add another
+                      <span>{manualMoreOpen ? "Less" : "More"}</span>
+                      <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
+                        <ActionIcon name="chevron-down" />
+                      </span>
                     </button>
-                    <button className="button button-primary" type="submit" data-submit-mode="close" disabled={isSaving}>
-                      {isSaving ? "Saving..." : "Add transaction"}
-                    </button>
-                  </div>
-                </div>
 
-                {manualMoreOpen ? (
-                  <div className="manual-more-panel manual-more-panel--compact">
-                    <label className="transactions-manual-field">
-                      Date
-                      <input
-                        type="date"
-                        value={manualForm.date}
-                        onChange={(event) => setManualForm((current) => ({ ...current, date: event.target.value }))}
-                        required
-                      />
-                    </label>
-
-                    <label className="transactions-manual-field">
-                      Account
-                      <div className="transactions-manual-picker">
-                        <div className="transactions-manual-picker__control">
-                          <button
-                            type="button"
-                            className="transactions-manual-picker__button"
-                            aria-expanded={manualAccountMenuOpen}
-                            onClick={() => {
-                              setManualCategoryMenuOpen(false);
-                              setManualAccountMenuOpen((current) => !current);
-                            }}
-                          >
-                            {manualSelectedAccountBrand ? (
-                              <span className="transactions-manual-picker__brand">
-                                <AccountBrandMark
-                                  accountBrand={manualSelectedAccountBrand}
-                                  label={manualSelectedAccount ? getAccountDisplayName(manualSelectedAccount) : "Selected account"}
-                                />
-                              </span>
-                            ) : (
-                              <span className="transactions-manual-picker__brand transactions-manual-picker__brand--fallback" aria-hidden="true">
-                                <ActionIcon name="account" />
-                              </span>
-                            )}
-                            <span className="transactions-manual-picker__text">
-                              {manualSelectedAccount ? getAccountDisplayName(manualSelectedAccount) : "Cash"}
-                            </span>
-                            <span className="transactions-manual-picker__chevron" aria-hidden="true">
-                              <ActionIcon name="chevron-down" />
-                            </span>
-                          </button>
-                          {manualAccountMenuOpen ? (
-                            <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose account">
-                              {accounts.map((account) => {
-                                const accountBrand = getAccountBrand({
-                                  name: account.name,
-                                  institution: account.institution,
-                                  type: account.type,
-                                });
-                                const accountDisplayName = getAccountDisplayName(account);
-
-                                return (
-                                  <button
-                                    key={account.id}
-                                    type="button"
-                                    className={`transactions-manual-picker__option ${
-                                      account.id === manualForm.accountId ? "is-selected" : ""
-                                    }`}
-                                    onClick={() => {
-                                      setManualForm((current) => ({ ...current, accountId: account.id }));
-                                      setManualAccountMenuOpen(false);
-                                    }}
-                                  >
-                                    <span className="transactions-manual-picker__brand">
-                                      <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
-                                    </span>
-                                    <span className="transactions-manual-picker__option-text">
-                                      <strong>{accountDisplayName}</strong>
-                                    </span>
-                                  </button>
-                                );
-                              })}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </label>
-
-                    <label className="transactions-manual-field">
-                      Category
-                      <div className="transactions-manual-picker">
-                        <div className="transactions-manual-picker__control">
-                          <button
-                            type="button"
-                            className="transactions-manual-picker__button"
-                            aria-expanded={manualCategoryMenuOpen}
-                            onClick={() => {
-                              setManualAccountMenuOpen(false);
-                              setManualCategoryMenuOpen((current) => !current);
-                            }}
-                          >
-                            <span
-                              className="transaction-category-icon transactions-manual-picker__category-icon"
-                              style={getCategoryIconTone(manualSelectedCategory?.name ?? "Other")}
-                            >
-                              <img src={getCategoryIconSrc(manualSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
-                            </span>
-                            <span className="transactions-manual-picker__text">{manualSelectedCategory?.name ?? "Other"}</span>
-                            <span className="transactions-manual-picker__chevron" aria-hidden="true">
-                              <ActionIcon name="chevron-down" />
-                            </span>
-                          </button>
-                          {manualCategoryMenuOpen ? (
-                            <div className="transactions-manual-picker__menu" role="listbox" aria-label="Choose category">
-                              {categories.map((category) => (
-                                <button
-                                  key={category.id}
-                                  type="button"
-                                  className={`transactions-manual-picker__option ${
-                                    category.id === manualSelectedCategoryId ? "is-selected" : ""
-                                  }`}
-                                  onClick={() => {
-                                    setManualCategoryTouched(true);
-                                    setManualForm((current) => ({ ...current, categoryId: category.id }));
-                                    setManualCategoryMenuOpen(false);
-                                  }}
-                                >
-                                  <span
-                                    className="transaction-category-icon transactions-manual-picker__category-icon"
-                                    style={getCategoryIconTone(category.name)}
-                                  >
-                                    <img src={getCategoryIconSrc(category.name)} alt="" aria-hidden="true" />
-                                  </span>
-                                  <span className="transactions-manual-picker__option-text">
-                                    <strong>{category.name}</strong>
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </label>
-
-                    <label className="transactions-manual-field">
-                      Notes
-                      <textarea
-                        value={manualForm.description}
-                        onChange={(event) => setManualForm((current) => ({ ...current, description: event.target.value }))}
-                        placeholder="Optional note or review context"
-                      />
-                    </label>
-
-                    <div className="manual-more-panel__receipt-line-items">
-                      <div className="manual-more-panel__section-head">
-                        <span>Receipt line items</span>
-                      </div>
-
-                      {manualForm.receiptLineItems.length === 0 ? (
-                        <p className="field-help field-help--compact">
-                          Optional. Add item lines if you want the receipt breakdown to follow the transaction.
-                        </p>
-                      ) : null}
-
-                      {manualForm.receiptLineItems.length > 0 ? (
-                        <div className="manual-receipt-table" role="table" aria-label="Receipt line items">
-                          <div className="manual-receipt-table__header" role="row">
-                            <span role="columnheader">Item</span>
-                            <span role="columnheader">Price</span>
-                            <span aria-hidden="true" />
-                          </div>
-
-                          {manualForm.receiptLineItems.map((lineItem, index) => (
-                            <div key={index} className="manual-receipt-table__row" role="row">
-                              <label className="manual-receipt-table__cell" role="cell">
-                                <span className="sr-only">Item</span>
-                                <input
-                                  value={lineItem.description}
-                                  onChange={(event) =>
-                                    setManualForm((current) => ({
-                                      ...current,
-                                      receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
-                                        entryIndex === index ? { ...entry, description: event.target.value } : entry
-                                      ),
-                                    }))
-                                  }
-                                  placeholder="Coffee"
-                                />
-                              </label>
-                              <label className="manual-receipt-table__cell manual-receipt-table__cell--price" role="cell">
-                                <span className="sr-only">Price</span>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={lineItem.amount}
-                                  onChange={(event) =>
-                                    setManualForm((current) => ({
-                                      ...current,
-                                      receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
-                                        entryIndex === index ? { ...entry, amount: event.target.value } : entry
-                                      ),
-                                    }))
-                                  }
-                                  placeholder="0.00"
-                                />
-                              </label>
-                              <button
-                                type="button"
-                                className="manual-receipt-table__remove"
-                                onClick={() =>
-                                  setManualForm((current) => ({
-                                    ...current,
-                                    receiptLineItems: current.receiptLineItems.filter((_, entryIndex) => entryIndex !== index),
-                                  }))
-                                }
-                                aria-label="Remove line item"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      ) : null}
-
+                    <div className="manual-form-actions__right">
                       <button
-                        type="button"
-                        className="manual-receipt-table__add-floater"
-                        onClick={() =>
-                          setManualForm((current) => ({
-                            ...current,
-                            receiptLineItems: [...current.receiptLineItems, createEmptyReceiptLineItem()],
-                          }))
-                        }
-                        aria-label="Add receipt line item"
+                        className="transactions-manual-add-another"
+                        type="submit"
+                        data-submit-mode="add-another"
+                        disabled={isSaving}
                       >
-                        +
+                        Add another
                       </button>
-
-                      {manualReceiptLineItemHasValues ? (
-                        <div className="field-help">
-                          <div>Line-item total: {formatTransactionAmount(manualReceiptLineItemTotal, manualForm.currency)}</div>
-                          {manualReceiptLineItemMismatch ? (
-                            <div>Line items do not match the transaction amount yet.</div>
-                          ) : null}
-                        </div>
-                      ) : null}
+                      <button className="button button-primary" type="submit" data-submit-mode="close" disabled={isSaving}>
+                        {isSaving ? "Saving..." : "Add transaction"}
+                      </button>
                     </div>
                   </div>
-                ) : null}
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      className="transactions-manual-more transactions-manual-more--open"
+                      onClick={() => setManualMoreOpen((current) => !current)}
+                      aria-expanded={manualMoreOpen}
+                    >
+                      <span>{manualMoreOpen ? "Less" : "More"}</span>
+                      <span className={`transactions-manual-more__chevron ${manualMoreOpen ? "is-open" : ""}`} aria-hidden="true">
+                        <ActionIcon name="chevron-down" />
+                      </span>
+                    </button>
+
+                    <div className="manual-more-panel manual-more-panel--compact">
+                      <label className="transactions-manual-field transactions-manual-field--embedded-label">
+                        <span className="transactions-manual-field__label">Notes</span>
+                        <textarea
+                          value={manualForm.description}
+                          onChange={(event) => setManualForm((current) => ({ ...current, description: event.target.value }))}
+                          placeholder="Optional note or review context"
+                        />
+                      </label>
+
+                      <div className="manual-more-panel__receipt-line-items">
+                        <div className="manual-more-panel__section-head">
+                          <span>Receipt line items</span>
+                        </div>
+
+                        {manualForm.receiptLineItems.length === 0 ? (
+                          <p className="field-help field-help--compact">
+                            Optional. Add item lines if you want the receipt breakdown to follow the transaction.
+                          </p>
+                        ) : null}
+
+                        {manualForm.receiptLineItems.length > 0 ? (
+                          <div className="manual-receipt-table" role="table" aria-label="Receipt line items">
+                            <div className="manual-receipt-table__header" role="row">
+                              <span role="columnheader">Item</span>
+                              <span role="columnheader">Price</span>
+                              <span aria-hidden="true" />
+                            </div>
+
+                            {manualForm.receiptLineItems.map((lineItem, index) => (
+                              <div key={index} className="manual-receipt-table__row" role="row">
+                                <label className="manual-receipt-table__cell" role="cell">
+                                  <span className="sr-only">Item</span>
+                                  <input
+                                    value={lineItem.description}
+                                    onChange={(event) =>
+                                      setManualForm((current) => ({
+                                        ...current,
+                                        receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
+                                          entryIndex === index ? { ...entry, description: event.target.value } : entry
+                                        ),
+                                      }))
+                                    }
+                                    placeholder="Coffee"
+                                  />
+                                </label>
+                                <label className="manual-receipt-table__cell manual-receipt-table__cell--price" role="cell">
+                                  <span className="sr-only">Price</span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={lineItem.amount}
+                                    onChange={(event) =>
+                                      setManualForm((current) => ({
+                                        ...current,
+                                        receiptLineItems: current.receiptLineItems.map((entry, entryIndex) =>
+                                          entryIndex === index ? { ...entry, amount: event.target.value } : entry
+                                        ),
+                                      }))
+                                    }
+                                    placeholder="0.00"
+                                  />
+                                </label>
+                                <button
+                                  type="button"
+                                  className="manual-receipt-table__remove"
+                                  onClick={() =>
+                                    setManualForm((current) => ({
+                                      ...current,
+                                      receiptLineItems: current.receiptLineItems.filter((_, entryIndex) => entryIndex !== index),
+                                    }))
+                                  }
+                                  aria-label="Remove line item"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+
+                        <button
+                          type="button"
+                          className="manual-receipt-table__add-floater"
+                          onClick={() =>
+                            setManualForm((current) => ({
+                              ...current,
+                              receiptLineItems: [...current.receiptLineItems, createEmptyReceiptLineItem()],
+                            }))
+                          }
+                          aria-label="Add receipt line item"
+                        >
+                          +
+                        </button>
+
+                        {manualReceiptLineItemHasValues ? (
+                          <div className="field-help">
+                            <div>Line-item total: {formatTransactionAmount(manualReceiptLineItemTotal, manualForm.currency)}</div>
+                            {manualReceiptLineItemMismatch ? (
+                              <div>Line items do not match the transaction amount yet.</div>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="manual-form-actions manual-form-actions--closed manual-form-actions--expanded">
+                      <div className="manual-form-actions__right">
+                        <button
+                          className="transactions-manual-add-another"
+                          type="submit"
+                          data-submit-mode="add-another"
+                          disabled={isSaving}
+                        >
+                          Add another
+                        </button>
+                        <button className="button button-primary" type="submit" data-submit-mode="close" disabled={isSaving}>
+                          {isSaving ? "Saving..." : "Add transaction"}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </form>
           </section>
