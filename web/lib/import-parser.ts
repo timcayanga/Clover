@@ -353,8 +353,19 @@ const restoreGenericCompactLabels = (value: string) =>
     .replace(/POSTDATE/gi, "POST DATE ")
     .replace(/TRANSACTIONDATE/gi, "TRANSACTION DATE ")
     .replace(new RegExp(`(${monthNamePattern})(\\d{1,2})(,?)(\\d{4})`, "gi"), "$1 $2$3 $4")
+    .replace(new RegExp(`(${monthNamePattern})(\\d{1,2})(?=\\b)`, "gi"), "$1 $2")
     .replace(/\s+/g, " ")
     .trim();
+
+const looksCharacterSpacedGenericLine = (value: string) => {
+  const tokens = normalizeWhitespace(value).split(/\s+/).filter(Boolean);
+  if (tokens.length < 6) {
+    return false;
+  }
+
+  const singleCharacterTokens = tokens.filter((token) => /^[A-Za-z0-9.,:;+\-₱P]$/.test(token)).length;
+  return singleCharacterTokens / tokens.length >= 0.6;
+};
 
 const normalizeGenericOcrText = (text: string) =>
   text
@@ -365,19 +376,22 @@ const normalizeGenericOcrText = (text: string) =>
         return normalized;
       }
 
-      const tokens = normalized.split(" ");
-      const singleCharacterTokens = tokens.filter((token) => /^[A-Za-z0-9]$/.test(token)).length;
-      const looksCharacterSpaced = tokens.length >= 6 && singleCharacterTokens / tokens.length >= 0.65;
-      if (!looksCharacterSpaced) {
+      if (!looksCharacterSpacedGenericLine(normalized)) {
         return normalized;
       }
 
-      return restoreGenericCompactLabels(tokens.join(""));
+      return restoreGenericCompactLabels(normalizeWhitespace(normalized).split(/\s+/).join(""));
     })
     .join("\n");
 
 const compactGenericSignalLine = (value: string) =>
-  restoreGenericCompactLabels(normalizeWhitespace(value).replace(/\s+/g, ""));
+  (() => {
+    const normalized = decompactOcrText(value);
+    const collapsed = looksCharacterSpacedGenericLine(normalized)
+      ? normalizeWhitespace(normalized).split(/\s+/).join("")
+      : normalizeWhitespace(normalized).replace(/\s+/g, "");
+    return restoreGenericCompactLabels(collapsed);
+  })();
 
 const compactGenericSignalText = (value: string) =>
   value
@@ -422,9 +436,19 @@ const MAX_DECIMAL_AMOUNT = 9_999_999_999_999_999.99;
 
 const parseMoney = (value?: string | null) => {
   if (!value) return null;
-  const cleaned = String(value).replace(/[^0-9.-]/g, "");
+  let cleaned = String(value).replace(/[^0-9,.-]/g, "");
   if (!cleaned || cleaned === "-" || cleaned === "." || cleaned === "-.") {
     return null;
+  }
+
+  if (cleaned.includes(",") && cleaned.includes(".")) {
+    cleaned = cleaned.replace(/,/g, "");
+  } else if ((cleaned.match(/\./g) ?? []).length > 1) {
+    const negative = cleaned.startsWith("-");
+    const unsigned = negative ? cleaned.slice(1) : cleaned;
+    const parts = unsigned.split(".");
+    const decimal = parts.pop() ?? "";
+    cleaned = `${negative ? "-" : ""}${parts.join("")}.${decimal}`;
   }
 
   const normalized =
@@ -497,10 +521,29 @@ const detectInstitutionFromLines = (lines: string[]) => {
 
 const detectAccountNumberFromText = (text: string) => {
   const lines = text.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const labeledLinePatterns = [
+    /\b(?:ACCOUNT\s*(?:NBR|NO|NUMBER|#)?|ACCT\s*(?:NBR|NO|NUMBER|#)?|A\/C\s*(?:NBR|NO|NUMBER|#)?|CARD\s*(?:NO|NUMBER|#)?|CUSTOMER\s*(?:NO|NUMBER|#)?)\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i,
+    /\bACCOUNT\s+SUMMARY\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i,
+  ];
+  for (const line of lines) {
+    const normalizedLine = normalizeWhitespace(decompactOcrText(line));
+    const compactLine = compactGenericSignalLine(normalizedLine);
+    for (const pattern of labeledLinePatterns) {
+      const match =
+        line.match(pattern) ??
+        normalizedLine.match(pattern) ??
+        compactLine.match(pattern) ??
+        compactLine.replace(/\s+/g, "").match(/(?:ACCOUNTNUMBER|ACCOUNTNO|ACCOUNTNBR|ACCOUNT#|CARDNUMBER|CUSTOMERNUMBER|ACCOUNTSUMMARY)([0-9][0-9-]{6,})/i);
+      const normalizedCandidate = normalizeAccountNumberCandidate(match?.[1] ?? null);
+      if (normalizedCandidate) {
+        return normalizedCandidate;
+      }
+    }
+  }
   const joinedText = lines.join(" ");
   const labeledAccountSection =
     joinedText.match(
-      /\b(?:ACCOUNT\s*(?:NO|NUMBER|#)?|ACCT\s*(?:NO|NUMBER|#)?|A\/C\s*(?:NO|NUMBER|#)?|CARD\s*(?:NO|NUMBER|#)?|CUSTOMER\s*(?:NO|NUMBER|#)?)\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i
+      /\b(?:ACCOUNT\s*(?:NBR|NO|NUMBER|#)?|ACCT\s*(?:NBR|NO|NUMBER|#)?|A\/C\s*(?:NBR|NO|NUMBER|#)?|CARD\s*(?:NO|NUMBER|#)?|CUSTOMER\s*(?:NO|NUMBER|#)?|ACCOUNT\s+SUMMARY)\s*[:\-]?\s*((?:\d[\d\s-]{6,}\d))/i
     )?.[1] ?? "";
   const normalizedLabeled = normalizeAccountNumberCandidate(labeledAccountSection);
   if (normalizedLabeled) {
@@ -561,7 +604,8 @@ const detectStatementDatesFromText = (text: string) => {
 
   const exactIsoRange =
     text.match(/(?:STATEMENT\s*PERIOD|PERIOD\s*COVERED)\s*[:\-]?\s*FROM\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2})/i) ??
-    text.match(/FOR\s+THE\s+PERIOD\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2})/i);
+    text.match(/FOR\s+THE\s+PERIOD\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2})/i) ??
+    text.match(/BAL\s+AS\s+OF\s+(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/i);
   if (exactIsoRange) {
     return {
       startDate: parseLooseDate(exactIsoRange[1]),
@@ -572,8 +616,10 @@ const detectStatementDatesFromText = (text: string) => {
   const exactNamedRange =
     text.match(new RegExp(`ACCOUNT\\s+SUMMARY\\s+FOR\\s+THE\\s+PERIOD\\s+(${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4})\\s*[–—-]\\s*(${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4})`, "i")) ??
     text.match(new RegExp(`FOR\\s+(${monthNamePattern}\\s+\\d{1,2})\\s*(?:TO|THRU|THROUGH|[-–—])\\s*(${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4})`, "i")) ??
+    text.match(new RegExp(`FOR\\s+(${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4})\\s*(?:TO|THRU|THROUGH|[-–—])\\s*(${monthNamePattern}\\s+\\d{1,2},?\\s*\\d{4})`, "i")) ??
     compact.match(new RegExp(`ACCOUNTSUMMARYFORTHEPERIOD(${monthNamePattern}\\d{1,2},?\\d{4})[–—-](${monthNamePattern}\\d{1,2},?\\d{4})`, "i")) ??
-    compact.match(new RegExp(`FOR(${monthNamePattern}\\d{1,2})[–—-](${monthNamePattern}\\d{1,2},?\\d{4})`, "i"));
+    compact.match(new RegExp(`FOR(${monthNamePattern}\\d{1,2})[–—-](${monthNamePattern}\\d{1,2},?\\d{4})(?=$|ACCOUNT|CUSTOMER|ACCOUNTNUMBER|ACCOUNTSUMMARY)`, "i")) ??
+    compact.match(new RegExp(`FOR(${monthNamePattern}\\d{1,2},?\\d{4})[–—-](${monthNamePattern}\\d{1,2},?\\d{4})(?=$|ACCOUNT|CUSTOMER|ACCOUNTNUMBER|ACCOUNTSUMMARY)`, "i"));
   if (exactNamedRange) {
     const endDate = parseLooseDate(exactNamedRange[2]);
     const fallbackYear = endDate?.getUTCFullYear() ?? null;
@@ -628,6 +674,9 @@ const detectBalanceFromText = (text: string) => {
     parseMoney(text.match(/(?:ENDING|CLOSING)\s*([0-9,]+\.\d{2})\s+BALANCE/i)?.[1]) ??
     parseMoney(text.match(/(?:ENDING|CLOSING)\s+BALANCE\s*(?:\r?\n|\s)+(?:PHP|P|₱)?\s*([0-9][0-9,\s]*\.\d{2})/i)?.[1]) ??
     parseMoney(text.match(/BALANCE\s*(?:\r?\n|\s)+(?:PHP|P|₱)?\s*([0-9][0-9,\s]*\.\d{2})/i)?.[1]) ??
+    parseMoney(text.match(/(?:^|\n)\s*CURRENT\s+(?:BALANCE\s*)?([0-9][0-9,\s]*\.\d{2})(?=\s|$)/i)?.[1]) ??
+    parseMoney(text.match(/(?:CUR(?:RENT)?\s+BALANCE|CUR\s+BALANCE)\s*[:\-]?\s*([0-9,]+\.\d{2})/i)?.[1]) ??
+    parseMoney(compact.match(/(?:CURRENTBALANCE|CURRENT)([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(compact.match(/(?:ENDINGBALANCE|CLOSINGBALANCE|BALANCETHISSTATEMENT|BALANCE)([0-9,]+\.\d{2})/i)?.[1] ?? null) ??
     null;
 
@@ -2970,7 +3019,7 @@ const extractAccountHolderNameFromLines = (lines: string[], accountLineIndex: nu
       .trim();
 
   const isLikelyAccountHolderName = (value: string) => {
-    const normalized = cleanAccountHolderCandidate(value);
+  const normalized = cleanAccountHolderCandidate(value);
 
     if (!normalized || normalized.length < 3) {
       return false;
@@ -2985,6 +3034,10 @@ const extractAccountHolderNameFromLines = (lines: string[], accountLineIndex: nu
       normalized
       )
     ) {
+      return false;
+    }
+
+    if (/\b(?:AND\s+SIGNATURE|CLIENT.?S\s+NAME|CONFORME)\b/i.test(normalized)) {
       return false;
     }
 
@@ -3018,7 +3071,7 @@ const extractAccountHolderNameFromLines = (lines: string[], accountLineIndex: nu
       return false;
     }
 
-    return tokens.every((token) => /^[A-Za-z][A-Za-z.'-,]*$/.test(token));
+    return tokens.every((token) => /^[\p{L}][\p{L}.'’, -]*$/u.test(token));
   };
 
   const labeledPatterns = [
@@ -3028,6 +3081,7 @@ const extractAccountHolderNameFromLines = (lines: string[], accountLineIndex: nu
     /(?:^|\b)CUSTOMER\s+NAME\s*[:\-]?\s*(.+)/i,
     /(?:^|\b)CARDHOLDER\s*[:\-]?\s*(.+)/i,
     /(?:^|\b)PREFERRED\s+NICKNAME\s*[:\-]?\s*(.+)/i,
+    /(?:^|\b)SHORT\s+NAME\s*[:\-]?\s*(.+)/i,
     /(?:^|\b)NAME\s*[:\-]?\s*(.+)/i,
   ];
 
@@ -3047,6 +3101,21 @@ const extractAccountHolderNameFromLines = (lines: string[], accountLineIndex: nu
       if (value && isLikelyAccountHolderName(value)) {
         return cleanAccountHolderCandidate(value);
       }
+    }
+
+    const currencyCodeTail = normalizeWhitespace(line).match(/CURRENCY\s+CODE\s*[:\-]?\s*\d+\s+[A-Z]{3}\s+(.+)/i);
+    if (currencyCodeTail?.[1]) {
+      const value = currencyCodeTail[1]
+        .replace(/\b(?:PHONE\s+NUMBER|BUSINESS\s+PHONE|SOCIAL\s+SECURITY\s+NUMBER|TAX\s+ID\s+NUMBER)\b.*$/i, "")
+        .trim();
+      if (value && isLikelyAccountHolderName(value)) {
+        return cleanAccountHolderCandidate(value);
+      }
+    }
+
+    const balanceTail = normalizeWhitespace(line).match(/^([\p{L}][\p{L}.'’, -]{2,}?)\s+(?:CUR(?:RENT)?\s+BALANCE|BALANCE)\b/iu);
+    if (balanceTail?.[1] && isLikelyAccountHolderName(balanceTail[1])) {
+      return cleanAccountHolderCandidate(balanceTail[1]);
     }
   }
 
@@ -7409,7 +7478,7 @@ const parseGoTymeImportText = (text: string, context: ImportParseContext = {}) =
 };
 
 const genericStatementDateStartPattern = new RegExp(
-  `^(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\b`,
+  `^(?:-?\\s*\\d{2}[-/]\\d{2}(?:[-/]\\d{2,4})?|\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\b`,
   "i"
 );
 
@@ -7445,10 +7514,10 @@ const isGenericBankStatementText = (text: string) => {
   const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
   const compactSignal = compactWhitespace(compactGenericSignalText(text));
   const hasTopMetadata =
-    /(?:account\s+number|account\s+no\.?|account\s*#|customer\s+number|payment\s+due\s+date|payment\s+amount|total\s+amount\s+due|minimum\s+amount\s+due|opening\s+balance|closing\s+balance|ending\s+balance|available\s+balance|running\s+balance)/i.test(
+    /(?:account\s+number|account\s+no\.?|account\s*#|account\s+nbr|customer\s+number|payment\s+due\s+date|payment\s+amount|total\s+amount\s+due|minimum\s+amount\s+due|opening\s+balance|closing\s+balance|ending\s+balance|available\s+balance|current\s+balance|cur\s+balance|running\s+balance|bal\s+as\s+of)/i.test(
       normalized
     ) ||
-    /(?:ACCOUNTNUMBER|ACCOUNTNO|CUSTOMERNUMBER|PAYMENTDUEDATE|TOTALAMOUNTDUE|MINIMUMAMOUNTDUE|OPENINGBALANCE|BEGINNINGBALANCE|CLOSINGBALANCE|ENDINGBALANCE|AVAILABLEBALANCE|RUNNINGBALANCE)/i.test(
+    /(?:ACCOUNTNUMBER|ACCOUNTNO|ACCOUNTNBR|CUSTOMERNUMBER|PAYMENTDUEDATE|TOTALAMOUNTDUE|MINIMUMAMOUNTDUE|OPENINGBALANCE|BEGINNINGBALANCE|CLOSINGBALANCE|ENDINGBALANCE|AVAILABLEBALANCE|CURRENTBALANCE|CURBALANCE|RUNNINGBALANCE|BALASOF)/i.test(
       compactSignal
     );
   const hasTransactionShell =
@@ -7464,12 +7533,12 @@ const isGenericBankStatementText = (text: string) => {
 
 const parseGenericStatementDateText = (value: string, yearHint?: number | null) => {
   const normalized = normalizeWhitespace(value).replace(/,\s*/g, " ").trim();
-  const direct = parseDateValue(normalized);
-  if (direct && direct.getUTCFullYear() >= 1990 && direct.getUTCFullYear() <= new Date().getUTCFullYear() + 1) {
-    return direct;
-  }
-
   if (yearHint) {
+    const monthDayNoYear = normalized.match(/^(\d{1,2})[-/](\d{1,2})$/);
+    if (monthDayNoYear) {
+      return parseDateValue(`${monthDayNoYear[1]}/${monthDayNoYear[2]}/${yearHint}`);
+    }
+
     const leadingMonthWithNoiseYear = normalized.match(new RegExp(`^(${monthNamePattern})\\s+(\\d{1,2})\\s+\\d{2,4}$`, "i"));
     if (leadingMonthWithNoiseYear) {
       return parseDateValue(`${leadingMonthWithNoiseYear[1]} ${leadingMonthWithNoiseYear[2]} ${yearHint}`);
@@ -7489,6 +7558,11 @@ const parseGenericStatementDateText = (value: string, yearHint?: number | null) 
     if (noYearTrailingMonth) {
       return parseDateValue(`${noYearTrailingMonth[1]} ${noYearTrailingMonth[2]} ${yearHint}`);
     }
+  }
+
+  const direct = parseDateValue(normalized);
+  if (direct && direct.getUTCFullYear() >= 1990 && direct.getUTCFullYear() <= new Date().getUTCFullYear() + 1) {
+    return direct;
   }
 
   return null;
@@ -7533,6 +7607,21 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
   const { startDate: rawStartDate, endDate: rawEndDate } = detectStatementDatesFromText(normalized);
   const { startDate: signalStartDate, endDate: signalEndDate } = detectStatementDatesFromText(signalText);
   const statementDate = extractStatementDateFromText(signalText) ?? extractStatementDateFromText(normalized);
+  const fallbackYearHint = rawEndDate?.getUTCFullYear() ?? signalEndDate?.getUTCFullYear() ?? statementDate?.getUTCFullYear() ?? null;
+  const datedLines = lines
+    .filter((line) => genericStatementDateStartPattern.test(line) && !isGenericStatementBoilerplateLine(line))
+    .map((line) => {
+      const match = line.match(
+        new RegExp(
+          `^(?:-\\s*)?(?<date>(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{2}[-/]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\b`,
+          "i"
+        )
+      );
+      return match?.groups?.date ? parseGenericStatementDateText(match.groups.date, fallbackYearHint) : null;
+    })
+    .filter((date): date is Date => Boolean(date));
+  const lineStartDate = datedLines[0] ?? null;
+  const lineEndDate = datedLines.at(-1) ?? null;
   const { openingBalance: rawOpeningBalance, endingBalance: rawEndingBalance } = detectBalanceFromText(normalized);
   const { openingBalance: signalOpeningBalance, endingBalance: signalEndingBalance } = detectBalanceFromText(signalText);
   const openingBalance = rawOpeningBalance ?? signalOpeningBalance;
@@ -7612,11 +7701,11 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
         : accountNumberNameSuffix
           ? `Account ${accountNumberNameSuffix}`
           : null);
-  const startDate = rawStartDate ?? signalStartDate;
+  const startDate = rawStartDate ?? signalStartDate ?? lineStartDate;
   const endDate =
     refinedAccountType === "credit_card"
-      ? statementDate ?? rawEndDate ?? signalEndDate
-      : rawEndDate ?? signalEndDate ?? statementDate;
+      ? statementDate ?? rawEndDate ?? signalEndDate ?? lineEndDate
+      : rawEndDate ?? signalEndDate ?? lineEndDate ?? statementDate;
 
   if (!institution && !accountNumber && !startDate && !endDate && openingBalance === null && endingBalance === null) {
     return null;
@@ -7707,7 +7796,7 @@ const parseGenericStatementTransactionBlock = (
 
   const dateMatch = rowText.match(
     new RegExp(
-      `^(?<date>(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\s+(?<body>.+)$`,
+      `^(?:-\\s*)?(?<date>(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{2}[-/]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\s+(?<body>.+)$`,
       "i"
     )
   );
