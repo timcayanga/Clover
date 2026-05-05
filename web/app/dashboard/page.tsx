@@ -687,7 +687,7 @@ async function DashboardStream({
               <p className="eyebrow">My balance</p>
               <strong>{totalBalanceLabel}</strong>
             </div>
-            <div className="dashboard-home__balance-side">
+            <div className="dashboard-home__balance-side dashboard-home__balance-side--desktop">
               {balanceHighlights.map((pill) => (
                 <div key={pill.key} className="dashboard-home__balance-mini-pill">
                   <div className="dashboard-home__balance-mini-copy">
@@ -702,6 +702,20 @@ async function DashboardStream({
             </div>
           </div>
         </article>
+
+        <section className="dashboard-home__balance-mobile-metrics" aria-label="Monthly balance summary">
+          {balanceHighlights.map((pill) => (
+            <article key={pill.key} className="dashboard-home__balance-mobile-card glass">
+              <div className="dashboard-home__balance-mini-copy">
+                <p className="dashboard-home__balance-mini-label">{pill.label}</p>
+                <strong>{pill.value}</strong>
+              </div>
+              <span className={pill.trend >= 0 ? "dashboard-home__balance-mini-trend positive" : "dashboard-home__balance-mini-trend negative"}>
+                {pill.trend === 0 ? "0%" : `${pill.trend > 0 ? "+" : ""}${Math.abs(pill.trend).toFixed(0)}%`}
+              </span>
+            </article>
+          ))}
+        </section>
 
         <article className="dashboard-home__activity-card glass">
           <div className="dashboard-home__summary-card-head">

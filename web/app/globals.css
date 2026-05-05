@@ -3393,9 +3393,9 @@ body.transactions-manual-open .shell-quick-add-button {
 }
 
 .dashboard-home__balance-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 300px);
-  align-items: start;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 18px;
   width: 100%;
 }
@@ -3428,12 +3428,16 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 8px;
   justify-items: stretch;
   align-content: start;
-  width: 100%;
+  width: 300px;
   max-width: 300px;
   min-width: 0;
   justify-self: end;
   align-self: start;
   margin-left: 0;
+}
+
+.dashboard-home__balance-side--desktop {
+  margin-left: auto;
 }
 
 .dashboard-home__balance-side .dashboard-home__balance-mini-pill {
@@ -3456,6 +3460,19 @@ body.transactions-manual-open .shell-quick-add-button {
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 10px 22px rgba(5, 84, 87, 0.08);
+}
+
+.dashboard-home__balance-mobile-metrics {
+  display: none;
+}
+
+.dashboard-home__balance-mobile-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 22px;
 }
 
 .dashboard-home__balance-mini-copy {
@@ -22117,30 +22134,20 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .dashboard-home__balance-layout {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 8px;
+    display: none;
   }
 
   .dashboard-home__balance-mini-pill {
     border-radius: 22px;
   }
 
-  .dashboard-home__balance-main {
-    padding: 0 0 4px;
+  .dashboard-home__balance-mobile-metrics {
+    display: grid;
+    gap: 10px;
   }
 
-  .dashboard-home__balance-mini-pill {
+  .dashboard-home__balance-mobile-card {
     min-height: 40px;
-    padding: 7px 9px;
-  }
-
-  .dashboard-home__balance-side {
-    width: 100%;
-    min-width: 0;
-    grid-template-columns: 1fr;
-    gap: 6px;
-    justify-self: stretch;
   }
 
   .dashboard-top-actions {
