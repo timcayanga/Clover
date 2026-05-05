@@ -19443,6 +19443,18 @@ button.accounts-detail__transaction-head-cell {
   gap: 8px;
 }
 
+@keyframes accounts-featured-card-settle {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @media (max-width: 1024px) {
   .admin-users__grid {
     grid-template-columns: 1fr;
@@ -21791,24 +21803,47 @@ button.accounts-detail__transaction-head-cell {
     display: none;
   }
 
+  .accounts-page {
+    gap: 14px;
+  }
+
+  .accounts-page__sticky {
+    order: 2;
+  }
+
+  .accounts-main-grid {
+    order: 3;
+  }
+
   .accounts-overview-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(132px, 1fr);
+    gap: 8px;
+    overflow-x: auto;
+    padding: 2px 2px 6px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .accounts-overview-grid::-webkit-scrollbar {
+    display: none;
   }
 
   .accounts-overview-card {
-    min-height: 62px;
-    padding: 7px 8px;
+    min-height: 56px;
+    padding: 8px 10px;
     border-radius: 16px;
+    scroll-snap-align: start;
   }
 
   .accounts-overview-card .eyebrow {
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     font-size: 0.5rem;
   }
 
   .accounts-overview-card__amount {
-    font-size: 1rem;
+    font-size: 0.96rem;
     line-height: 1.05;
   }
 
@@ -22000,7 +22035,8 @@ button.accounts-detail__transaction-head-cell {
 
   .accounts-mobile-featured {
     display: grid;
-    gap: 8px;
+    gap: 10px;
+    margin-bottom: 2px;
   }
 
   .accounts-mobile-featured__head {
@@ -22024,13 +22060,14 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .accounts-mobile-featured__rail {
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 272px;
-    gap: 12px;
+    display: flex;
+    gap: 16px;
     overflow-x: auto;
-    padding-bottom: 4px;
-    scroll-snap-type: x proximity;
+    padding: 6px calc(50% - 136px) 22px;
+    scroll-padding-inline: calc(50% - 136px);
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
   }
 
@@ -22039,11 +22076,36 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .accounts-mobile-featured__rail .financial-account-card {
-    scroll-snap-align: start;
+    flex: 0 0 272px;
+    scroll-snap-align: center;
+    transform-origin: center bottom;
+    transition:
+      transform 220ms ease,
+      box-shadow 220ms ease,
+      filter 220ms ease;
+    animation: accounts-featured-card-settle 360ms ease both;
   }
 
   .financial-account-card {
     width: 272px;
+  }
+
+  .accounts-mobile-featured__rail .financial-account-card:first-child {
+    animation-delay: 40ms;
+  }
+
+  .accounts-mobile-featured__rail .financial-account-card:nth-child(2) {
+    animation-delay: 90ms;
+  }
+
+  .accounts-mobile-featured__rail .financial-account-card:nth-child(3) {
+    animation-delay: 140ms;
+  }
+
+  .accounts-mobile-featured__rail .financial-account-card {
+    box-shadow:
+      0 20px 40px rgba(8, 15, 26, 0.16),
+      0 28px 56px color-mix(in srgb, var(--card-accent) 18%, transparent);
   }
 
   .accounts-account-card__head {

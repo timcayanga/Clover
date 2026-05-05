@@ -2462,6 +2462,17 @@ function AccountsPageContent() {
       }
     >
       <div className="accounts-page">
+        {featuredAccountRows.length > 0 ? (
+          <section className="accounts-mobile-featured" aria-label="Featured accounts">
+            <div className="accounts-mobile-featured__head">
+              <h5>Featured accounts</h5>
+              <span>Swipe left or right</span>
+            </div>
+            <div className="accounts-mobile-featured__rail">
+              {featuredAccountRows.map((row) => renderAccountCard(row, `featured-${row.id}`))}
+            </div>
+          </section>
+        ) : null}
         <div className="accounts-page__sticky">
           <section className="accounts-overview-grid">
             <article className="accounts-overview-card glass">
@@ -2487,7 +2498,7 @@ function AccountsPageContent() {
             </article>
             <article className="accounts-overview-card glass">
               <p className="eyebrow">
-                Credit Cards
+                Liabilities
                 <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.liabilities} />
               </p>
               <strong className="accounts-overview-card__amount is-danger">{formatAggregateAmount(totals.liabilities, visibleAccounts)}</strong>
@@ -2498,17 +2509,6 @@ function AccountsPageContent() {
         <section className="accounts-main-grid">
           <div className="accounts-list-column">
             <div className="accounts-sections">
-              {featuredAccountRows.length > 0 ? (
-                <section className="accounts-mobile-featured" aria-label="Featured accounts">
-                  <div className="accounts-mobile-featured__head">
-                    <h5>Featured accounts</h5>
-                    <span>Swipe left or right</span>
-                  </div>
-                  <div className="accounts-mobile-featured__rail">
-                    {featuredAccountRows.map((row) => renderAccountCard(row, `featured-${row.id}`))}
-                  </div>
-                </section>
-              ) : null}
               {accounts.length === 0 ? (
                 <div className="empty-state accounts-empty-state">
                   <strong>It's quiet in here.</strong>
