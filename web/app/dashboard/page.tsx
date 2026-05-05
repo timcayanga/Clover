@@ -7,7 +7,6 @@ import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
-import { buildRecurringTransactionSummaries } from "@/lib/recurring";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { getGoalProgressSnapshot, type GoalKey } from "@/lib/goals";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
@@ -109,22 +108,6 @@ const formatCurrency = (value: number, currency?: string | null) => formatCurren
 
 const formatSignedCurrency = (value: number, currency?: string | null) =>
   `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "MIXED")}`;
-
-const formatRelativeDate = (value: Date, now = new Date()) => {
-  const diffMinutes = Math.round((value.getTime() - now.getTime()) / 60000);
-  const diffHours = Math.round(diffMinutes / 60);
-  const diffDays = Math.round(diffHours / 24);
-
-  if (Math.abs(diffMinutes) < 60) {
-    return relativeTimeFormatter.format(diffMinutes, "minute");
-  }
-
-  if (Math.abs(diffHours) < 24) {
-    return relativeTimeFormatter.format(diffHours, "hour");
-  }
-
-  return relativeTimeFormatter.format(diffDays, "day");
-};
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 
@@ -722,8 +705,10 @@ async function DashboardStream({
             <div className="dashboard-home__balance-side">
               {balanceHighlights.map((pill) => (
                 <div key={pill.key} className="dashboard-home__balance-mini-pill">
-                  <p className="dashboard-home__balance-mini-label">{pill.label}</p>
-                  <strong>{pill.value}</strong>
+                  <div className="dashboard-home__balance-mini-copy">
+                    <p className="dashboard-home__balance-mini-label">{pill.label}</p>
+                    <strong>{pill.value}</strong>
+                  </div>
                   <span className={pill.trend >= 0 ? "dashboard-home__balance-mini-trend positive" : "dashboard-home__balance-mini-trend negative"}>
                     {pill.trend === 0 ? "0%" : `${pill.trend > 0 ? "+" : ""}${Math.abs(pill.trend).toFixed(0)}%`}
                   </span>
@@ -754,18 +739,6 @@ async function DashboardStream({
                 </div>
               );
             })}
-          </div>
-          <div className="dashboard-home__activity-metrics">
-            <div className="dashboard-home__mini-card">
-              <span>Monthly income</span>
-              <strong>{formatCurrency(monthSummary.income, displayCurrency)}</strong>
-              <small>{currentSummary.incomeDelta >= 0 ? "+" : ""}{Math.abs(currentSummary.incomeDelta).toFixed(0)}% vs last month</small>
-            </div>
-            <div className="dashboard-home__mini-card">
-              <span>Monthly expenses</span>
-              <strong>{formatCurrency(monthSummary.expense, displayCurrency)}</strong>
-              <small>{currentSummary.expenseDelta >= 0 ? "+" : ""}{Math.abs(currentSummary.expenseDelta).toFixed(0)}% vs last month</small>
-            </div>
           </div>
         </article>
 

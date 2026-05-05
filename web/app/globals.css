@@ -3298,9 +3298,7 @@ body.transactions-manual-open .shell-quick-add-button {
   padding: 18px;
   border: 1px solid var(--stroke);
   border-radius: 32px;
-  background:
-    radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.22), transparent 30%),
-    linear-gradient(135deg, rgba(3, 168, 192, 0.98) 0%, rgba(94, 211, 208, 0.98) 100%);
+  background: linear-gradient(135deg, #03a8c0 0%, #5ed3d0 100%);
   box-shadow: var(--shadow);
 }
 
@@ -3339,10 +3337,10 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .dashboard-home__balance-side {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  grid-template-columns: 1fr;
   gap: 8px;
   align-content: start;
-  width: min(100%, 444px);
+  width: min(100%, 270px);
   margin-left: auto;
 }
 
@@ -3361,6 +3359,11 @@ body.transactions-manual-open .shell-quick-add-button {
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(255, 255, 255, 0.98);
   box-shadow: 0 10px 22px rgba(5, 84, 87, 0.08);
+}
+
+.dashboard-home__balance-mini-copy {
+  display: grid;
+  gap: 2px;
 }
 
 .dashboard-home__balance-mini-pill strong {
@@ -10119,16 +10122,14 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   color: var(--muted-2);
   font-size: 0.7rem;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  justify-content: center;
 }
 
 .transactions-mobile-date-divider::before,
 .transactions-mobile-date-divider::after {
-  content: "";
-  flex: 1;
-  height: 1px;
-  background: rgba(15, 23, 42, 0.08);
+  content: none;
 }
 
 .transactions-mobile-date-divider span {
@@ -10189,6 +10190,17 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 
 .transactions-mobile-simple-row__amount.negative {
   color: var(--negative);
+}
+
+.transactions-mobile-simple-row__amount.neutral,
+.transaction-amount-cell.neutral {
+  color: var(--text);
+}
+
+.transactions-mobile-simple-row__account-brand .accounts-brand-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 7px;
 }
 
 .transactions-mobile-simple-row__detail {
@@ -10419,7 +10431,8 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
   gap: 10px;
   align-items: center;
-  padding: 8px 4px;
+  padding: 5px 4px;
+  min-height: 42px;
   border-bottom: 1px solid rgba(215, 228, 233, 0.82);
   border-radius: 0 !important;
   font-size: 0.88rem;
@@ -10693,6 +10706,25 @@ input.transaction-inline-edit--amount::placeholder {
 .transaction-category-cell,
 .transaction-amount-cell {
   font-size: 0.84rem;
+}
+
+.transaction-account-cell {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.transaction-account-cell .accounts-brand-mark {
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
+.transaction-account-cell .transaction-inline-edit--select {
+  min-width: 0;
 }
 
 .transaction-amount-cell {
@@ -14810,6 +14842,11 @@ input.transaction-inline-edit--amount::placeholder {
   color: #ffffff;
 }
 
+.financial-account-card[data-brand-label="Maya"] {
+  --card-accent: #05070a;
+  background: linear-gradient(135deg, rgba(3, 6, 10, 0.99), rgba(10, 14, 20, 0.98)) !important;
+}
+
 .financial-account-card::before,
 .financial-account-card::after {
   content: "";
@@ -15779,11 +15816,17 @@ input.transaction-inline-edit--amount::placeholder {
   overflow: visible;
 }
 
+.accounts-detail__transaction-list--compact .line-item-header,
+.accounts-detail__transaction-list--compact .line-item {
+  grid-template-columns: 28px 40px minmax(0, 2.15fr) minmax(104px, 0.84fr) minmax(118px, 0.92fr) minmax(120px, 0.9fr) 34px 34px;
+  gap: 8px;
+}
+
 .accounts-detail__transaction-header,
 .accounts-detail__transaction-row {
   display: grid;
-  grid-template-columns: 32px 40px minmax(0, 2.6fr) minmax(130px, 0.95fr) minmax(132px, 1fr) minmax(116px, 0.9fr) 38px;
-  gap: 10px;
+  grid-template-columns: 32px 40px minmax(0, 2.55fr) minmax(120px, 0.92fr) minmax(126px, 0.96fr) minmax(110px, 0.84fr) 38px;
+  gap: 8px;
   width: 100%;
 }
 
@@ -15803,11 +15846,12 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-detail__transaction-row {
-  padding: 6px 4px;
+  padding: 4px 4px;
   align-items: center;
   border-bottom: 1px solid rgba(215, 228, 233, 0.82);
   background: rgba(255, 255, 255, 0.98);
   transition: background-color 160ms ease, box-shadow 160ms ease;
+  min-height: 42px;
 }
 
 .accounts-detail__transaction-row.is-muted {
@@ -21754,7 +21798,7 @@ button.accounts-detail__transaction-head-cell {
 
   .dashboard-home__balance-side {
     width: 100%;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
     gap: 6px;
   }
 
@@ -21800,14 +21844,6 @@ button.accounts-detail__transaction-head-cell {
 
   .dashboard-home__activity-bar-fill {
     max-width: 20px;
-  }
-
-  .dashboard-home__activity-metrics {
-    grid-template-columns: 1fr;
-  }
-
-  .dashboard-home__mini-card {
-    padding: 12px 13px;
   }
 
   .dashboard-home__ring {
