@@ -95,127 +95,135 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
 
   return (
     <div className="split-bill-home">
-      <section className="split-bill-mobile-home panel glass">
-        <div className="split-bill-mobile-home__cards">
-          {recentBills.length > 0 ? (
-            recentBills.map((bill) => {
-              const status = buildRowStatus(bill.settlement.transfers);
-              const sourceLabel = bill.sourceType === "receipt" ? "Receipt" : "Manual";
+      <section className="split-bill-mobile-home">
+        <div className="split-bill-mobile-home__bills panel glass">
+          <div className="split-bill-mobile-home__cards">
+            {recentBills.length > 0 ? (
+              recentBills.map((bill) => {
+                const status = buildRowStatus(bill.settlement.transfers);
+                const sourceLabel = bill.sourceType === "receipt" ? "Receipt" : "Manual";
 
-              return (
-                <article key={bill.id} className="split-bill-mobile-card">
-                  <div className="split-bill-mobile-card__head">
-                    <div>
-                      <strong>
-                        <Link href={`/split-bill/${bill.id}/edit`} prefetch={false}>
-                          {bill.title}
-                        </Link>
-                      </strong>
-                      <span>
-                        {formatDate(bill.billDate)}
-                        {bill.group?.name ? ` · ${bill.group.name}` : ""}
-                      </span>
-                    </div>
-                    <strong>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</strong>
-                  </div>
-                  <div className="split-bill-mobile-card__meta">
-                    <span>{sourceLabel}</span>
-                    <span>{status}</span>
-                  </div>
-                  <div className="split-bill-mobile-card__avatars">
-                    {bill.participants.length > 0 ? (
-                      bill.participants.map((participant) => (
-                        <span key={participant.id} className="split-bill-person-avatar" title={participant.name} style={getAvatarStyle(participant.name)}>
-                          {getInitials(participant.name)}
+                return (
+                  <article key={bill.id} className="split-bill-mobile-card">
+                    <div className="split-bill-mobile-card__head">
+                      <div>
+                        <strong>
+                          <Link href={`/split-bill/${bill.id}/edit`} prefetch={false}>
+                            {bill.title}
+                          </Link>
+                        </strong>
+                        <span>
+                          {formatDate(bill.billDate)}
+                          {bill.group?.name ? ` · ${bill.group.name}` : ""}
                         </span>
-                      ))
-                    ) : (
-                      <span className="split-bill-subtle-empty">No people yet</span>
-                    )}
-                  </div>
-                </article>
-              );
-            })
-          ) : (
-            <div className="split-bill-empty">
-              <strong>No split bills yet.</strong>
-              <p>Add your first bill or upload a receipt to start.</p>
+                      </div>
+                      <strong>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</strong>
+                    </div>
+                    <div className="split-bill-mobile-card__meta">
+                      <span>{sourceLabel}</span>
+                      <span>{status}</span>
+                    </div>
+                    <div className="split-bill-mobile-card__avatars">
+                      {bill.participants.length > 0 ? (
+                        bill.participants.map((participant) => (
+                          <span key={participant.id} className="split-bill-person-avatar" title={participant.name} style={getAvatarStyle(participant.name)}>
+                            {getInitials(participant.name)}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="split-bill-subtle-empty">No people yet</span>
+                      )}
+                    </div>
+                  </article>
+                );
+              })
+            ) : (
+              <div className="split-bill-empty">
+                <strong>No split bills yet.</strong>
+                <p>Add your first bill or upload a receipt to start.</p>
+              </div>
+            )}
+          </div>
+          {hasMoreBills ? (
+            <button className="split-bill-table__more-link" type="button" onClick={() => setShowAllBills((current) => !current)}>
+              All Bills
+            </button>
+          ) : null}
+        </div>
+
+        <div className="split-bill-mobile-home__sections">
+          <section className="split-bill-mobile-home__section">
+            <div className="split-bill-mobile-home__section-head">
+              <div>
+                <p className="eyebrow">People</p>
+                <h3>Saved names</h3>
+              </div>
             </div>
-          )}
-        </div>
-        {hasMoreBills ? (
-          <button className="split-bill-table__more-link" type="button" onClick={() => setShowAllBills((current) => !current)}>
-            All Bills
-          </button>
-        ) : null}
 
-        <div className="split-bill-mobile-home__section-head">
-          <div>
-            <p className="eyebrow">People</p>
-            <h3>Saved names</h3>
-          </div>
-        </div>
+            <div className="split-bill-mobile-home__people">
+              {people.length > 0 ? (
+                people.map((person) => (
+                  <span key={person} className="split-bill-mobile-home__person">
+                    <span className="split-bill-person-avatar split-bill-person-avatar--small" style={getAvatarStyle(person)}>
+                      {getInitials(person)}
+                    </span>
+                    <span>{person}</span>
+                  </span>
+                ))
+              ) : (
+                <span className="split-bill-subtle-empty">No saved names yet</span>
+              )}
+            </div>
+            <div className="split-bill-mobile-home__footer">
+              <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-people"))}>
+                Add People
+              </button>
+            </div>
+          </section>
 
-        <div className="split-bill-mobile-home__people">
-          {people.length > 0 ? (
-            people.map((person) => (
-              <span key={person} className="split-bill-mobile-home__person">
-                <span className="split-bill-person-avatar split-bill-person-avatar--small" style={getAvatarStyle(person)}>
-                  {getInitials(person)}
-                </span>
-                <span>{person}</span>
-              </span>
-            ))
-          ) : (
-            <span className="split-bill-subtle-empty">No saved names yet</span>
-          )}
-        </div>
-        <div className="split-bill-mobile-home__footer">
-          <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-people"))}>
-            Add People
-          </button>
-        </div>
+          <section className="split-bill-mobile-home__section">
+            <div className="split-bill-mobile-home__section-head">
+              <div>
+                <p className="eyebrow">Groups</p>
+                <h3>Saved groups</h3>
+              </div>
+            </div>
 
-        <div className="split-bill-mobile-home__section-head">
-          <div>
-            <p className="eyebrow">Groups</p>
-            <h3>Saved groups</h3>
-          </div>
-        </div>
-
-        <div className="split-bill-mobile-home__groups">
-          {visibleGroups.length > 0 ? (
-            visibleGroups.map((group) => (
-              <Link key={group.id} href={`/split-bill/groups/${group.id}`} prefetch={false} className="split-bill-mobile-group-card">
-                <div className="split-bill-mobile-group-card__head">
-                  <strong>{group.name}</strong>
-                  <span>{group.total}</span>
-                </div>
-                <div className="split-bill-mobile-group-card__meta">
-                  <span>{group.members.length} member{group.members.length === 1 ? "" : "s"}</span>
-                  <span>{group.status}</span>
-                </div>
-                <div className="split-bill-mobile-group-card__avatars">
-                  {group.members.length > 0 ? (
-                    group.members.map((member) => (
-                      <span key={member.id} className="split-bill-person-avatar split-bill-person-avatar--small" title={member.name} style={getAvatarStyle(member.name)}>
-                        {getInitials(member.name)}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="split-bill-subtle-empty">No people yet</span>
-                  )}
-                </div>
-              </Link>
-            ))
-          ) : (
-            <span className="split-bill-subtle-empty">No groups yet</span>
-          )}
-        </div>
-        <div className="split-bill-mobile-home__footer">
-          <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-group"))}>
-            Add Group
-          </button>
+            <div className="split-bill-mobile-home__groups">
+              {visibleGroups.length > 0 ? (
+                visibleGroups.map((group) => (
+                  <Link key={group.id} href={`/split-bill/groups/${group.id}`} prefetch={false} className="split-bill-mobile-group-card">
+                    <div className="split-bill-mobile-group-card__head">
+                      <strong>{group.name}</strong>
+                      <span>{group.total}</span>
+                    </div>
+                    <div className="split-bill-mobile-group-card__meta">
+                      <span>{group.members.length} member{group.members.length === 1 ? "" : "s"}</span>
+                      <span>{group.status}</span>
+                    </div>
+                    <div className="split-bill-mobile-group-card__avatars">
+                      {group.members.length > 0 ? (
+                        group.members.map((member) => (
+                          <span key={member.id} className="split-bill-person-avatar split-bill-person-avatar--small" title={member.name} style={getAvatarStyle(member.name)}>
+                            {getInitials(member.name)}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="split-bill-subtle-empty">No people yet</span>
+                      )}
+                    </div>
+                  </Link>
+                ))
+              ) : (
+                <span className="split-bill-subtle-empty">No groups yet</span>
+              )}
+            </div>
+            <div className="split-bill-mobile-home__footer">
+              <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-group"))}>
+                Add Group
+              </button>
+            </div>
+          </section>
         </div>
       </section>
 
@@ -296,63 +304,65 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
         ) : null}
       </section>
 
-      <section className="split-bill-panel panel glass split-bill-desktop-home">
-        <div className="split-bill-panel__head">
-          <div>
-            <p className="eyebrow">People</p>
-            <h2>Saved names</h2>
+      <div className="split-bill-desktop-home split-bill-desktop-home__secondary">
+        <section className="split-bill-panel panel glass">
+          <div className="split-bill-panel__head">
+            <div>
+              <p className="eyebrow">Groups</p>
+              <h2>Saved groups</h2>
+            </div>
           </div>
-        </div>
 
-        <div className="split-bill-home__people-list">
-          {people.length > 0 ? (
-            people.map((person) => (
-              <span key={person} className="split-bill-home__person">
-                <span className="split-bill-person-avatar split-bill-person-avatar--small" style={getAvatarStyle(person)}>
-                  {getInitials(person)}
-                </span>
-                <span>{person}</span>
-              </span>
-            ))
-          ) : (
-            <span className="split-bill-subtle-empty">No saved names yet</span>
-          )}
-        </div>
-        <div className="split-bill-home__bottom-actions">
-          <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-people"))}>
-            Add People
-          </button>
-        </div>
-      </section>
-
-      <section className="split-bill-panel panel glass split-bill-desktop-home">
-        <div className="split-bill-panel__head">
-          <div>
-            <p className="eyebrow">Groups</p>
-            <h2>Saved groups</h2>
+          <div className="split-bill-home__groups-list">
+            {visibleGroups.length > 0 ? (
+              visibleGroups.map((group) => (
+                <Link key={group.id} href={`/split-bill/groups/${group.id}`} prefetch={false} className="split-bill-home__group-row">
+                  <strong>{group.name}</strong>
+                  <span>
+                    {group.members.length} member{group.members.length === 1 ? "" : "s"} · {group.total} · {group.status}
+                  </span>
+                </Link>
+              ))
+            ) : (
+              <span className="split-bill-subtle-empty">No groups yet</span>
+            )}
           </div>
-        </div>
+          <div className="split-bill-home__bottom-actions">
+            <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-group"))}>
+              Add Group
+            </button>
+          </div>
+        </section>
 
-        <div className="split-bill-home__groups-list">
-          {visibleGroups.length > 0 ? (
-            visibleGroups.map((group) => (
-              <Link key={group.id} href={`/split-bill/groups/${group.id}`} prefetch={false} className="split-bill-home__group-row">
-                <strong>{group.name}</strong>
-                <span>
-                  {group.members.length} member{group.members.length === 1 ? "" : "s"} · {group.total} · {group.status}
+        <section className="split-bill-panel panel glass">
+          <div className="split-bill-panel__head">
+            <div>
+              <p className="eyebrow">People</p>
+              <h2>Saved names</h2>
+            </div>
+          </div>
+
+          <div className="split-bill-home__people-list">
+            {people.length > 0 ? (
+              people.map((person) => (
+                <span key={person} className="split-bill-home__person">
+                  <span className="split-bill-person-avatar split-bill-person-avatar--small" style={getAvatarStyle(person)}>
+                    {getInitials(person)}
+                  </span>
+                  <span>{person}</span>
                 </span>
-              </Link>
-            ))
-          ) : (
-            <span className="split-bill-subtle-empty">No groups yet</span>
-          )}
-        </div>
-        <div className="split-bill-home__bottom-actions">
-          <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-group"))}>
-            Add Group
-          </button>
-        </div>
-      </section>
+              ))
+            ) : (
+              <span className="split-bill-subtle-empty">No saved names yet</span>
+            )}
+          </div>
+          <div className="split-bill-home__bottom-actions">
+            <button className="button button-secondary button-small" type="button" onClick={() => window.dispatchEvent(new Event("clover:open-split-bill-people"))}>
+              Add People
+            </button>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

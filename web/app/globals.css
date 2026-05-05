@@ -3381,9 +3381,9 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .dashboard-home__balance-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 260px);
   gap: 20px;
-  align-items: start;
+  align-items: stretch;
 }
 
 .dashboard-home__balance-main {
@@ -3412,13 +3412,14 @@ body.transactions-manual-open .shell-quick-add-button {
   grid-template-columns: 1fr;
   gap: 8px;
   align-content: start;
-  width: max-content;
-  min-width: min(300px, 100%);
+  width: 100%;
+  min-width: 0;
   justify-self: end;
+  align-self: start;
 }
 
 .dashboard-home__balance-side .dashboard-home__balance-mini-pill {
-  width: min(300px, 100%);
+  width: 100%;
 }
 
 .dashboard-home__balance-mini-pill .eyebrow {
@@ -29308,6 +29309,12 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   justify-content: flex-end;
 }
 
+.split-bill-desktop-home__secondary {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .split-bill-table__actions {
   display: flex;
   flex-wrap: wrap;
@@ -29337,7 +29344,25 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 .split-bill-mobile-home {
   display: none;
   gap: 16px;
+}
+
+.split-bill-mobile-home__bills,
+.split-bill-mobile-home__section {
+  display: grid;
+  gap: 16px;
+}
+
+.split-bill-mobile-home__bills {
   padding: 18px;
+}
+
+.split-bill-mobile-home__sections {
+  display: grid;
+  gap: 16px;
+}
+
+.split-bill-mobile-home__section {
+  padding: 0 18px 18px;
 }
 
 .split-bill-mobile-home__hero {
@@ -30101,6 +30126,10 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .split-bill-desktop-home {
+    display: none;
+  }
+
+  .split-bill-desktop-home__secondary {
     display: none;
   }
 
