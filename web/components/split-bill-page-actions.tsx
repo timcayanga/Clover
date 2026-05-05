@@ -1,25 +1,22 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { CurrencySelector } from "@/components/currency-selector";
+import { useRouter } from "next/navigation";
 import { SplitBillImportModal } from "@/components/split-bill-import-modal";
 import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
+import { SplitBillPersonModal } from "@/components/split-bill-person-modal";
 
-type SplitBillPageActionsProps = {
-  currencies: string[];
-  selectedCurrency: string;
-  onCurrencyChange: (value: string) => void;
-};
-
-export function SplitBillPageActions({ currencies, selectedCurrency, onCurrencyChange }: SplitBillPageActionsProps) {
+export function SplitBillPageActions() {
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
   const [openAddMode, setOpenAddMode] = useState<"manual" | "import" | null>(null);
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false);
+  const [isPersonModalOpen, setIsPersonModalOpen] = useState(false);
   const [groupName, setGroupName] = useState("");
   const [groupPeople, setGroupPeople] = useState<string[]>([]);
   const [isSavingGroup, setIsSavingGroup] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
-  const isModalOpen = Boolean(openAddMode || isGroupModalOpen);
+  const isModalOpen = Boolean(openAddMode || isGroupModalOpen || isPersonModalOpen);
+  const router = useRouter();
 
   const closeAddModal = () => {
     setOpenAddMode(null);
@@ -34,8 +31,13 @@ export function SplitBillPageActions({ currencies, selectedCurrency, onCurrencyC
     setGroupError(null);
   };
 
+  const closePersonModal = () => {
+    setIsPersonModalOpen(false);
+    setIsAddMenuOpen(false);
+  };
+
   useLayoutEffect(() => {
-    if (openAddMode || isGroupModalOpen) {
+    if (openAddMode || isGroupModalOpen || isPersonModalOpen) {
       setIsAddMenuOpen(false);
     }
     document.body.dataset.splitBillModalOpen = isModalOpen ? "true" : "false";
@@ -52,9 +54,21 @@ export function SplitBillPageActions({ currencies, selectedCurrency, onCurrencyC
       setOpenAddMode(detail?.mode === "import" ? "import" : "manual");
     };
 
+    const handleOpenGroup = () => {
+      setIsGroupModalOpen(true);
+    };
+
+    const handleOpenPeople = () => {
+      setIsPersonModalOpen(true);
+    };
+
     window.addEventListener("clover:open-split-bill-add", handleOpenAdd);
+    window.addEventListener("clover:open-split-bill-group", handleOpenGroup);
+    window.addEventListener("clover:open-split-bill-people", handleOpenPeople);
     return () => {
       window.removeEventListener("clover:open-split-bill-add", handleOpenAdd);
+      window.removeEventListener("clover:open-split-bill-group", handleOpenGroup);
+      window.removeEventListener("clover:open-split-bill-people", handleOpenPeople);
     };
   }, []);
 
@@ -93,22 +107,6 @@ export function SplitBillPageActions({ currencies, selectedCurrency, onCurrencyC
     <>
       {!isModalOpen ? (
         <div className="split-bill-page-actions">
-          <CurrencySelector
-            value={selectedCurrency === "ALL" ? "all" : selectedCurrency}
-            onChange={onCurrencyChange}
-            options={currencies}
-            includeAllOption
-            allLabel="All Currencies"
-            ariaLabel="Select split bill currency"
-            className="transactions-currency-filter split-bill-currency-selector"
-            buttonClassName="transactions-currency-filter__button"
-            menuClassName="transactions-currency-filter__menu"
-            optionClassName="transactions-currency-filter__option"
-            menuAlignment="end"
-            showGroupedSections
-            portalMenu
-          />
-
           <div className="split-bill-add-menu">
             <button className="button button-primary button-small" type="button" onClick={() => setIsAddMenuOpen((current) => !current)}>
               Add Bill
@@ -139,14 +137,16 @@ export function SplitBillPageActions({ currencies, selectedCurrency, onCurrencyC
             ) : null}
           </div>
 
-          <button className="button button-secondary button-small" type="button" onClick={() => setIsGroupModalOpen(true)}>
-            Add Group
-          </button>
         </div>
       ) : null}
 
       <SplitBillManualModal open={openAddMode === "manual"} onClose={closeAddModal} />
       <SplitBillImportModal open={openAddMode === "import"} onClose={closeAddModal} />
+      <SplitBillPersonModal
+        open={isPersonModalOpen}
+        onClose={closePersonModal}
+        onSaved={() => router.refresh()}
+      />
 
       {isGroupModalOpen ? (
         <div className="split-bill-modal" role="presentation" onClick={closeGroupModal}>

@@ -6,7 +6,6 @@ import {
   splitBillItemOrderBy,
 } from "@/lib/split-bill";
 import { SplitBillWorkspace } from "@/components/split-bill-workspace";
-import { getCurrencyCatalogCodes } from "@/lib/currencies";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +27,10 @@ const billInclude = {
   payments: true,
 };
 
-export default async function SplitBillPage({ searchParams }: { searchParams?: Promise<{ add?: string; group?: string; currency?: string }> }) {
+export default async function SplitBillPage() {
   const user = await getSplitBillCurrentUser();
-  const params = searchParams ? await searchParams : undefined;
-  const selectedCurrency = params?.currency ? params.currency.toUpperCase() : "ALL";
 
-  const [bills, groups] = await Promise.all([
+  const [bills, groups, people] = await Promise.all([
     prisma.splitBill.findMany({
       where: { userId: user.id },
       orderBy: [{ billDate: "desc" }, { updatedAt: "desc" }],
@@ -53,15 +50,17 @@ export default async function SplitBillPage({ searchParams }: { searchParams?: P
         },
       },
     }),
+    prisma.splitBillPerson.findMany({
+      where: { userId: user.id },
+      orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+    }),
   ]);
-  const currencyCatalogCodes = getCurrencyCatalogCodes();
 
   return (
     <SplitBillWorkspace
       bills={bills.map((bill) => serializeSplitBillRecord(bill as Parameters<typeof serializeSplitBillRecord>[0]))}
       groups={groups}
-      currencies={currencyCatalogCodes}
-      selectedCurrency={selectedCurrency}
+      people={people.map((person) => person.name)}
     />
   );
 }

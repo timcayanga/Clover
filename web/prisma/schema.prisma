@@ -163,6 +163,7 @@ model User {
   workspaces               Workspace[]
   goalSettings             GoalSetting[]
   splitBillGroups          SplitBillGroup[]
+  splitBillPeople          SplitBillPerson[]
   splitBills               SplitBill[]
   billingSubscription      BillingSubscription?
   billingEvents            BillingEvent[]
@@ -790,6 +791,17 @@ model SplitBillGroup {
   user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   members   SplitBillGroupMember[]
   bills     SplitBill[]
+
+  @@index([userId])
+}
+
+model SplitBillPerson {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
