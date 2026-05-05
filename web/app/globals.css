@@ -15263,7 +15263,7 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   grid-template-rows: auto 1fr auto;
   min-height: 100%;
-  padding: 18px 18px 24px;
+  padding: 18px 18px 30px;
   gap: 14px;
 }
 
@@ -15340,7 +15340,8 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 1.34rem;
   font-weight: 800;
   letter-spacing: -0.05em;
-  line-height: 1;
+  line-height: 1.08;
+  padding-bottom: 4px;
 }
 
 .accounts-account-card {
