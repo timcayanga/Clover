@@ -17,6 +17,7 @@ import { useSearchParams } from "next/navigation";
 import { CloverShell, useCloverChrome } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
@@ -5233,9 +5234,7 @@ function TransactionsPageContent() {
                       />
                     </label>
                     <div className="transaction-category-icon-cell" aria-hidden="true">
-                      <span className="transaction-category-icon" style={getCategoryIconTone(categoryLabel)}>
-                        <img src={getCategoryIconSrc(categoryLabel)} alt="" aria-hidden="true" />
-                      </span>
+                      <CategoryBrandMark categoryName={categoryLabel} size={24} radius={8} />
                     </div>
                     <div className="transaction-name-cell">
                       <InlineEditableCell
@@ -5464,9 +5463,12 @@ function TransactionsPageContent() {
                             }}
                           >
                             <div className="transactions-mobile-simple-row__name">
-                              <span className="transactions-mobile-simple-row__category-icon" aria-hidden="true">
-                                <img src={getCategoryIconSrc(transaction.categoryName ?? categories.find((category) => category.id === (transaction.categoryId ?? otherCategoryId))?.name ?? "Other")} alt="" aria-hidden="true" />
-                              </span>
+                              <CategoryBrandMark
+                                categoryName={transaction.categoryName ?? categories.find((category) => category.id === (transaction.categoryId ?? otherCategoryId))?.name ?? "Other"}
+                                size={24}
+                                radius={8}
+                                className="transactions-mobile-simple-row__category-icon"
+                              />
                               <span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span>
                             </div>
                             <div className={`transactions-mobile-simple-row__amount-group ${amountToneClass}`}>
@@ -5912,9 +5914,12 @@ function TransactionsPageContent() {
 
                 <div className="transactions-manual-inline-row transactions-manual-inline-row--category">
                   <span className="transactions-manual-inline-row__icon transactions-manual-inline-row__icon--category" aria-hidden="true">
-                    <span className="transaction-category-icon transaction-category-icon--manual" style={getCategoryIconTone(manualSelectedCategory?.name ?? "Other")}>
-                      <img src={getCategoryIconSrc(manualSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
-                    </span>
+                    <CategoryBrandMark
+                      categoryName={manualSelectedCategory?.name ?? "Other"}
+                      size="100%"
+                      radius={18}
+                      className="transactions-manual-inline-row__icon-badge"
+                    />
                   </span>
                   <label className="transactions-manual-field transactions-manual-field--embedded-label transactions-manual-inline-row__field">
                     <span className="transactions-manual-field__label">Category</span>
@@ -6263,9 +6268,7 @@ function TransactionsPageContent() {
                 </span>
                 <div className="transaction-drawer-select">
                   <span className="transaction-drawer-select__icon" aria-hidden="true">
-                    <span className="transaction-category-icon transaction-drawer-category-icon" style={getCategoryIconTone(detailSelectedCategory?.name ?? "Other")}>
-                      <img src={getCategoryIconSrc(detailSelectedCategory?.name ?? "Other")} alt="" aria-hidden="true" />
-                    </span>
+                    <CategoryBrandMark categoryName={detailSelectedCategory?.name ?? "Other"} size={24} radius={8} className="transaction-drawer-category-icon" />
                   </span>
                   <select
                     value={detailDraft?.categoryId ?? otherCategoryId}
