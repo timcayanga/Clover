@@ -63,8 +63,11 @@ export function FinancialAccountCard({
       }
     >
       <div className="financial-account-card__content">
-        <div className="financial-account-card__top">
-          <AccountBrandMark accountBrand={accountBrand} label={name} />
+        <div className="financial-account-card__head">
+          <div className="financial-account-card__identity">
+            <AccountBrandMark accountBrand={accountBrand} label={name} />
+            <strong className="financial-account-card__name">{name}</strong>
+          </div>
           {showChevron ? (
             <button
               className="financial-account-card__chevron"
@@ -82,8 +85,7 @@ export function FinancialAccountCard({
         </div>
 
         <div className="financial-account-card__meta">
-          <strong className="financial-account-card__name">{name}</strong>
-          {accountNumber ? <span className="financial-account-card__number">{accountNumber}</span> : null}
+          {accountNumber ? <span className="financial-account-card__number">{accountNumber}</span> : <span aria-hidden="true" />}
         </div>
 
         <div className="financial-account-card__amount">{amount}</div>

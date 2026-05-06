@@ -2456,7 +2456,12 @@ function AccountsPageContent() {
     exportPdf();
   };
 
-  if (!hasInitialWorkspaceDataLoaded) {
+  const showColdLoadGuard =
+    Boolean(selectedWorkspaceId) &&
+    accounts.length === 0 &&
+    (workspacesLoading || accountsLoading || !hasInitialWorkspaceDataLoaded);
+
+  if (!hasInitialWorkspaceDataLoaded || showColdLoadGuard) {
     return <CloverLoadingScreen label="accounts" />;
   }
 

@@ -3452,7 +3452,7 @@ body.transactions-manual-open .shell-quick-add-button {
 .dashboard-home__hero-mini-value,
 .dashboard-home__hero-mobile-card strong {
   text-align: right;
-  font-size: clamp(1.1rem, 1.45vw, 1.3rem);
+  font-size: clamp(1rem, 1.25vw, 1.15rem);
   line-height: 1.05;
   letter-spacing: -0.035em;
   white-space: nowrap;
@@ -3461,7 +3461,7 @@ body.transactions-manual-open .shell-quick-add-button {
 .dashboard-home__hero-mini-label {
   margin: 0;
   color: rgba(82, 89, 112, 0.74);
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.2;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -15285,16 +15285,24 @@ input.transaction-inline-edit--amount::placeholder {
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto auto 1fr auto;
   min-height: 100%;
   padding: 18px 18px 30px;
-  gap: 14px;
+  gap: 10px;
 }
 
-.financial-account-card__top {
+.financial-account-card__head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
+}
+
+.financial-account-card__identity {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
   gap: 12px;
 }
 
@@ -15337,9 +15345,9 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .financial-account-card__meta {
-  align-self: end;
+  min-height: 1.2rem;
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .financial-account-card__name {
@@ -15348,7 +15356,7 @@ input.transaction-inline-edit--amount::placeholder {
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.1;
-  text-wrap: balance;
+  text-wrap: pretty;
 }
 
 .financial-account-card__number {
@@ -15358,6 +15366,7 @@ input.transaction-inline-edit--amount::placeholder {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.82);
+  padding-left: 2px;
 }
 
 .financial-account-card__amount {
@@ -15365,7 +15374,8 @@ input.transaction-inline-edit--amount::placeholder {
   font-weight: 800;
   letter-spacing: -0.05em;
   line-height: 1.08;
-  padding-bottom: 4px;
+  align-self: end;
+  padding-bottom: 8px;
 }
 
 .accounts-account-card {
@@ -22159,12 +22169,12 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .dashboard-home__hero-mini-label {
-    font-size: 13px;
+    font-size: 11px;
   }
 
   .dashboard-home__hero-mini-value,
   .dashboard-home__hero-mobile-card strong {
-    font-size: clamp(1.02rem, 4.2vw, 1.16rem);
+    font-size: clamp(0.98rem, 4vw, 1.08rem);
   }
 
   .dashboard-home__hero-mobile-metrics {
