@@ -12576,7 +12576,7 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   width: 100%;
   gap: 10px;
-  align-items: start;
+  align-items: center;
   grid-template-columns: 38px minmax(0, 1fr);
 }
 
@@ -12627,7 +12627,7 @@ input.transaction-inline-edit--amount::placeholder {
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
-  margin-top: 18px;
+  margin-top: 0;
 }
 
 .transactions-manual-inline-row__icon--account .accounts-brand-mark {
@@ -12663,6 +12663,30 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 0.82rem;
   line-height: 1.4;
   letter-spacing: 0;
+}
+
+.transaction-drawer__merchant-stack {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.transaction-drawer__merchant-item {
+  display: grid;
+  gap: 2px;
+}
+
+.transaction-drawer__merchant-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.transaction-drawer__merchant-value {
+  color: var(--text-strong);
+  font-size: 0.95rem;
+  line-height: 1.4;
 }
 
 .manual-default-fields {
@@ -23100,7 +23124,7 @@ button.accounts-detail__transaction-head-cell {
   .transactions-manual-inline-row__icon {
     width: 34px;
     height: 34px;
-    margin-top: 16px;
+    margin-top: 0;
   }
 
   .transactions-manual-inline-row__icon--account .accounts-brand-mark {
@@ -23118,6 +23142,14 @@ button.accounts-detail__transaction-head-cell {
   .transactions-manual-inline-row__icon--category .transaction-category-icon img {
     width: 16px;
     height: 16px;
+  }
+
+  .transaction-drawer__merchant-stack {
+    gap: 2px;
+  }
+
+  .transaction-drawer__merchant-value {
+    font-size: 0.9rem;
   }
 
   .transactions-manual-type-toggle__button {

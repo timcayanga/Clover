@@ -29,7 +29,7 @@ import type { UploadInsightsSummary } from "@/components/upload-insights-toast";
 import { getAccountDisplayName, formatUploadAccountDisplayName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
 import { guessCategoryName, inferAccountTypeFromStatement } from "@/lib/import-parser";
-import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
+import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
@@ -1001,8 +1001,6 @@ const normalizeMerchantGroupKey = (value: string) =>
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
-
-const humanizeTransactionMerchantText = (value: string) => humanizeMerchantText(value);
 
 const summarizeTransactionMerchantText = (value: string, institution?: string | null) =>
   summarizeMerchantText(value, institution);
@@ -2664,6 +2662,22 @@ function TransactionsPageContent() {
   );
 
   const selectedTransactionWarningReason = selectedTransaction ? detailWarningReasonFor(selectedTransaction) : null;
+  const detailTransactionSummary = useMemo(() => {
+    if (!selectedTransaction) {
+      return "";
+    }
+
+    return summarizeTransactionMerchantText(
+      detailDraft?.merchantClean ?? selectedTransaction.merchantClean ?? selectedTransaction.merchantRaw,
+      accountInstitutionById.get(selectedTransaction.accountId) ?? null
+    );
+  }, [accountInstitutionById, detailDraft?.merchantClean, selectedTransaction]);
+  const detailTransactionRawName = selectedTransaction?.merchantRaw.trim() ?? "";
+  const hasDistinctDetailRawName = Boolean(
+    detailTransactionRawName &&
+      detailTransactionSummary &&
+      detailTransactionRawName.toLowerCase() !== detailTransactionSummary.toLowerCase()
+  );
   const hasDetailDraftChanges = useMemo(() => {
     if (!selectedTransaction || !detailDraft) {
       return false;
@@ -4173,7 +4187,6 @@ function TransactionsPageContent() {
             transaction.merchantClean ?? transaction.merchantRaw,
             accountInstitution
           );
-          const merchantDisplay = humanizeTransactionMerchantText(transaction.merchantRaw);
 
           return `
             <tr>
@@ -4188,7 +4201,6 @@ function TransactionsPageContent() {
               <td>
                 <div class="name-cell">
                   <div class="name-cell__summary">${escapeHtml(merchantSummary)}</div>
-                  ${merchantDisplay.toLowerCase() !== merchantSummary.toLowerCase() ? `<div class="name-cell__subtext">${escapeHtml(merchantDisplay)}</div>` : ""}
                 </div>
               </td>
               <td>${escapeHtml(formatDate(transaction.date))}</td>
@@ -5155,8 +5167,6 @@ function TransactionsPageContent() {
                   transaction.merchantClean ?? transaction.merchantRaw,
                   accountInstitution
                 );
-                const merchantDisplay = humanizeTransactionMerchantText(transaction.merchantRaw);
-                const showMerchantSubtext = merchantDisplay && merchantDisplay.toLowerCase() !== merchantSummary.toLowerCase();
                 const sourceClass =
                   transaction.source === "manual"
                     ? "line-item--manual"
@@ -5204,7 +5214,6 @@ function TransactionsPageContent() {
                         className="transaction-inline-edit transaction-inline-edit--name"
                         onCommit={(value) => commitInlineEdit(transaction, "name", value)}
                       />
-                      {showMerchantSubtext ? <small className="transaction-subtext">{merchantDisplay}</small> : null}
                     </div>
                     <div className="transaction-date-cell">
                       <InlineEditableCell
@@ -6117,7 +6126,8 @@ function TransactionsPageContent() {
                 </button>
                 <div>
                   <p className="eyebrow">Transaction details</p>
-                  <h4 id="transaction-notes-title">{detailDraft?.merchantClean || detailDraft?.merchantRaw || selectedTransaction.merchantRaw}</h4>
+                  <h4 id="transaction-notes-title">{detailTransactionSummary || selectedTransaction.merchantRaw}</h4>
+                  {hasDistinctDetailRawName ? <p className="transaction-drawer__merchant-raw">{detailTransactionRawName}</p> : null}
                 </div>
               </div>
               <button className="icon-button transaction-drawer__close-button" type="button" onClick={closeTransactionDetail} aria-label="Close transaction details">
