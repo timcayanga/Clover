@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEven
 import { useParams, useRouter } from "next/navigation";
 import { CloverShell } from "@/components/clover-shell";
 import { CloverLoadingScreen } from "@/components/clover-loading-screen";
+import { AccountBrandMark } from "@/components/account-brand-mark";
 import { FinancialAccountCard } from "@/components/financial-account-card";
 import { getAccountCardName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
