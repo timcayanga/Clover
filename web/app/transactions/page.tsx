@@ -15,7 +15,6 @@ import {
 import { flushSync } from "react-dom";
 import { useSearchParams } from "next/navigation";
 import { CloverShell, useCloverChrome } from "@/components/clover-shell";
-import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CategoryBrandMark } from "@/components/category-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
@@ -1637,7 +1636,7 @@ function TransactionsPageContent() {
   const [planLimits, setPlanLimits] = useState<UserLimits | null>(null);
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
-  const [hasInitialTransactionsLoaded, setHasInitialTransactionsLoaded] = useState(false);
+  const [, setHasInitialTransactionsLoaded] = useState(false);
   const [hasLoadedWorkspaceList, setHasLoadedWorkspaceList] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [workspaceCurrencyCodes, setWorkspaceCurrencyCodes] = useState<string[]>(() => ["PHP"]);
@@ -4945,10 +4944,6 @@ function TransactionsPageContent() {
       setMobileSearchOpen(false);
     }
   }, [isCompactViewport]);
-
-  if (!hasInitialTransactionsLoaded) {
-    return <CloverLoadingScreen label="transactions" />;
-  }
 
   return (
     <CloverShell active="transactions" title="Transactions" actions={transactionsShellActions}>
