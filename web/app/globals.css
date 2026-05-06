@@ -3452,7 +3452,7 @@ body.transactions-manual-open .shell-quick-add-button {
 .dashboard-home__hero-mini-value,
 .dashboard-home__hero-mobile-card strong {
   text-align: right;
-  font-size: clamp(0.8rem, 0.95vw, 0.95rem);
+  font-size: clamp(1.1rem, 1.45vw, 1.3rem);
   line-height: 1.05;
   letter-spacing: -0.035em;
   white-space: nowrap;
@@ -3461,7 +3461,7 @@ body.transactions-manual-open .shell-quick-add-button {
 .dashboard-home__hero-mini-label {
   margin: 0;
   color: rgba(82, 89, 112, 0.74);
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1.2;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -22159,7 +22159,12 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .dashboard-home__hero-mini-label {
-    font-size: 9px;
+    font-size: 13px;
+  }
+
+  .dashboard-home__hero-mini-value,
+  .dashboard-home__hero-mobile-card strong {
+    font-size: clamp(1.02rem, 4.2vw, 1.16rem);
   }
 
   .dashboard-home__hero-mobile-metrics {
