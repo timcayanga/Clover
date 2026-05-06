@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import {
   useCallback,
+  useLayoutEffect,
   useEffect,
   useMemo,
   useRef,
@@ -1567,6 +1568,7 @@ function TransactionsPageContent() {
   const [planLimitNudge, setPlanLimitNudge] = useState<PlanLimitPayload | null>(null);
   const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
   const [hasInitialTransactionsLoaded, setHasInitialTransactionsLoaded] = useState(false);
+  const [hasLoadedWorkspaceList, setHasLoadedWorkspaceList] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [workspaceCurrencyCodes, setWorkspaceCurrencyCodes] = useState<string[]>(() => ["PHP"]);
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
@@ -1691,14 +1693,18 @@ function TransactionsPageContent() {
   );
 
   const loadWorkspaces = async () => {
-    const response = await fetch("/api/workspaces");
-    if (!response.ok) return;
-    const data = await response.json();
-    const items = Array.isArray(data.workspaces) ? data.workspaces : [];
-    setWorkspaces(items);
-    setSelectedWorkspaceId((current) => {
-      return chooseWorkspaceId(items, current);
-    });
+    try {
+      const response = await fetch("/api/workspaces");
+      if (!response.ok) return;
+      const data = await response.json();
+      const items = Array.isArray(data.workspaces) ? data.workspaces : [];
+      setWorkspaces(items);
+      setSelectedWorkspaceId((current) => {
+        return chooseWorkspaceId(items, current);
+      });
+    } finally {
+      setHasLoadedWorkspaceList(true);
+    }
   };
 
   const loadWorkspaceMetadata = async (workspaceId: string, options?: { skipImports?: boolean; background?: boolean }) => {
@@ -2009,7 +2015,7 @@ function TransactionsPageContent() {
     persistSelectedWorkspaceId(selectedWorkspaceId);
   }, [selectedWorkspaceId]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setSelectedTransactionIds([]);
     setSelectedTransaction(null);
     setDetailDraft(null);
@@ -2036,8 +2042,8 @@ function TransactionsPageContent() {
         firstReviewTransactionIndex: null,
       });
       setWorkspaceCurrencyCodes(["PHP"]);
-      setIsWorkspaceDataReady(true);
-      setHasInitialTransactionsLoaded(true);
+      setIsWorkspaceDataReady(hasLoadedWorkspaceList);
+      setHasInitialTransactionsLoaded(hasLoadedWorkspaceList);
       return;
     }
 
@@ -2063,7 +2069,7 @@ function TransactionsPageContent() {
     setIsWorkspaceDataReady(false);
     setHasInitialTransactionsLoaded(false);
     void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true });
-  }, [selectedWorkspaceId]);
+  }, [hasLoadedWorkspaceList, selectedWorkspaceId]);
 
   useEffect(() => {
     if (!selectedWorkspaceId || typeof window === "undefined") {
