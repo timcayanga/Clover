@@ -10621,8 +10621,8 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
   gap: 10px;
   align-items: center;
-  padding: 7px 4px;
-  min-height: 46px;
+  padding: 8px 4px;
+  min-height: 48px;
   border-bottom: 1px solid rgba(215, 228, 233, 0.82);
   border-radius: 0 !important;
   font-size: 0.86rem;
@@ -10751,7 +10751,7 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 .transaction-category-icon {
   width: 24px;
   height: 24px;
-  border-radius: 8px;
+  border-radius: 7px;
   background: rgba(3, 168, 192, 0.08);
   border: 1px solid rgba(3, 168, 192, 0.12);
   display: inline-flex;
@@ -10909,7 +10909,7 @@ input.transaction-inline-edit--amount::placeholder {
 .transaction-account-cell .accounts-brand-mark {
   width: 24px;
   height: 24px;
-  border-radius: 8px;
+  border-radius: 7px;
   flex: 0 0 auto;
 }
 
@@ -12623,8 +12623,8 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   width: 100%;
   gap: 10px;
-  align-items: center;
-  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: stretch;
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .transactions-manual-row-icon {
@@ -12668,19 +12668,20 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-inline-row__icon {
-  width: 44px;
-  height: 44px;
+  width: auto;
+  height: 100%;
+  aspect-ratio: 1 / 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
   margin-top: 0;
-  align-self: center;
+  align-self: stretch;
 }
 
 .transactions-manual-inline-row__icon--account .accounts-brand-mark {
-  width: 44px;
-  height: 44px;
+  width: 100%;
+  height: 100%;
   border-radius: 16px;
 }
 
@@ -12691,8 +12692,8 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-inline-row__icon--category .transaction-category-icon {
-  width: 44px;
-  height: 44px;
+  width: 100%;
+  height: 100%;
   border-radius: 16px;
 }
 
@@ -12703,6 +12704,8 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-inline-row__field {
   min-width: 0;
+  align-self: stretch;
+  width: 100%;
 }
 
 .transaction-drawer__merchant-raw {
@@ -12906,6 +12909,11 @@ input.transaction-inline-edit--amount::placeholder {
   height: 44px;
   padding-inline: 8px;
   border-radius: 12px;
+}
+
+.transactions-manual-money-row__amount input {
+  min-height: 44px;
+  height: 44px;
 }
 
 .transactions-manual-more-row {
@@ -23128,9 +23136,9 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .transactions-manual-inline-row {
-    grid-template-columns: 40px minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr);
     gap: 8px;
-    align-items: center;
+    align-items: stretch;
   }
 
   .transactions-manual-field--embedded-label {
@@ -23192,21 +23200,22 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .transactions-manual-inline-row__icon {
-    width: 40px;
-    height: 40px;
+    width: auto;
+    height: 100%;
+    aspect-ratio: 1 / 1;
     margin-top: 0;
-    align-self: center;
+    align-self: stretch;
   }
 
   .transactions-manual-inline-row__icon--account .accounts-brand-mark {
-    width: 40px;
-    height: 40px;
+    width: 100%;
+    height: 100%;
     border-radius: 13px;
   }
 
   .transactions-manual-inline-row__icon--category .transaction-category-icon {
-    width: 40px;
-    height: 40px;
+    width: 100%;
+    height: 100%;
     border-radius: 13px;
   }
 
