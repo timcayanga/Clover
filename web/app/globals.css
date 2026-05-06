@@ -10751,13 +10751,14 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 .transaction-category-icon {
   width: 24px;
   height: 24px;
-  border-radius: 8px;
+  border-radius: 6px;
   background: rgba(3, 168, 192, 0.08);
   border: 1px solid rgba(3, 168, 192, 0.12);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  clip-path: inset(0 round 6px);
 }
 
 .transaction-category-icon img {
@@ -12835,11 +12836,12 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transaction-category-icon.transaction-category-icon--manual {
-  width: 44px;
-  height: 44px;
-  border-radius: 16px;
+  width: 100%;
+  height: 100%;
+  border-radius: 18px;
   background: rgba(3, 168, 192, 0.08);
   border: 1px solid rgba(3, 168, 192, 0.12);
+  clip-path: inset(0 round 18px);
 }
 
 .transaction-category-icon.transaction-category-icon--manual img {
