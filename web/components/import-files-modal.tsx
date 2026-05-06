@@ -801,6 +801,15 @@ export function ImportFilesModal({
       errorMessage: snapshot.errorMessage ?? null,
       updatedAt: Date.now(),
     };
+    const previousSnapshot = lastImportActivityRef.current;
+    if (
+      previousSnapshot &&
+      nextSnapshot.status === "active" &&
+      previousSnapshot.workspaceId === nextSnapshot.workspaceId &&
+      previousSnapshot.fileName === nextSnapshot.fileName
+    ) {
+      nextSnapshot.progress = Math.max(previousSnapshot.progress ?? 0, nextSnapshot.progress ?? 0);
+    }
     lastImportActivityRef.current = nextSnapshot;
     setImportActivity(nextSnapshot);
   };
@@ -1635,8 +1644,39 @@ export function ImportFilesModal({
           processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
           processingIdentity?.accountType ?? summaryContext.accountType ?? null
         );
+        const checkpointBalance = toBalanceString(statementCheckpoint?.endingBalance);
+        const hasRecoverableImportSignal = Boolean(
+          parsedRowsCount > 0 ||
+            confirmedTransactionsCount > 0 ||
+            checkpointBalance ||
+            statementCheckpoint?.accountId ||
+            processingIdentity?.accountName ||
+            processingIdentity?.accountNumber
+        );
 
         if (importFile?.status === "failed") {
+          if (hasRecoverableImportSignal && attempt < 239) {
+            updateItem(itemId, {
+              status: "importing",
+              progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
+              progressLabel: "Finalizing import",
+            });
+            publishImportActivity({
+              workspaceId,
+              surface: importActivitySurfaceRef.current,
+              status: "active",
+              fileName: summaryContext.fileName,
+              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+              fileTotal: items.length,
+              completedFiles: completedFileCount,
+              progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
+              detail: "Clover is finalizing the imported account",
+              summary: null,
+              errorMessage: null,
+            });
+            await sleep(800);
+            continue;
+          }
           const limitPayload = parsePlanLimitMessage(processingMessage, planTier);
           if (limitPayload) {
             showPlanLimitNudge(limitPayload);
@@ -2725,6 +2765,28 @@ export function ImportFilesModal({
       const processingMessage = typeof importFile?.processingMessage === "string" ? importFile.processingMessage : null;
 
       if (importStatus === "failed") {
+        if ((parsedRowsCount > 0 || confirmedTransactionsCount > 0) && attempt < 239) {
+          updateItem(itemId, {
+            status: "importing",
+            progress: 92,
+            progressLabel: "Finalizing import",
+          });
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "active",
+            fileName,
+            fileIndex: items.findIndex((item) => item.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount,
+            progress: 92,
+            detail: "Clover is finalizing the imported file",
+            summary: null,
+            errorMessage: null,
+          });
+          await sleep(800);
+          continue;
+        }
         closeImportAfterError(
           itemId,
           "background",

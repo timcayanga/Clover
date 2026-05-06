@@ -284,6 +284,8 @@ const formatDate = (value: string) =>
 const parseAmount = (value: string | null | undefined) => Number(value ?? 0);
 
 const formatAccountAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
+const formatDisplayAccountAmount = (value: number, currency?: string | null) =>
+  formatCurrencyAmount(Math.abs(value), currency ?? "PHP");
 
 const formatCardAccountNumber = (value: string | null | undefined) => {
   const cleaned = (value ?? "").trim();
@@ -324,11 +326,11 @@ const getInvestmentInstitutionPreview = (accounts: Account[]) =>
 const formatAggregateAmount = (value: number, accounts: Array<{ currency: string }>) => {
   const currencies = getCurrencyCodes(accounts);
   if (currencies.length === 0) {
-    return formatAccountAmount(value, "PHP");
+    return formatDisplayAccountAmount(value, "PHP");
   }
 
   if (currencies.length === 1) {
-    return formatAccountAmount(value, currencies[0]);
+    return formatDisplayAccountAmount(value, currencies[0]);
   }
 
   return "Mixed currencies";
@@ -2431,7 +2433,7 @@ function AccountsPageContent() {
                     <tr>
                       <td>${account.name}</td>
                       <td>${getAccountDisplayType(account)}</td>
-                      <td>${formatAccountAmount(parseAmount(account.balance), account.currency)}</td>
+                      <td>${formatDisplayAccountAmount(parseAmount(account.balance), account.currency)}</td>
                       <td><span class="currency-symbol">${formatCurrencySymbol(account.currency)}</span></td>
                       <td>${formatDate(account.updatedAt)}</td>
                     </tr>`

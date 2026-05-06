@@ -2408,6 +2408,7 @@ function AccountDetailPageContent() {
                   {visibleTransactions.map((transaction) => {
                     const amount = Number(transaction.amount);
                     const amountToneClass = transaction.type === "transfer" ? "neutral" : transaction.type === "income" ? "positive" : "negative";
+                    const categoryValue = transaction.categoryId ?? "";
                     const categoryLabel = getDisplayTransactionCategoryName(transaction, categories, account?.institution);
                     const normalizedName = transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
 
