@@ -44,6 +44,30 @@ const getColorLuminance = (value: string) => {
 };
 
 const inferForeground = (accent: string, background: string) => {
+  const rgbaMatch = background.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+  if (rgbaMatch) {
+    const rgbHex = `#${[rgbaMatch[1], rgbaMatch[2], rgbaMatch[3]]
+      .map((channel) => Number(channel).toString(16).padStart(2, "0"))
+      .join("")}`;
+    return getColorLuminance(rgbHex) <= 0.46 ? "#f8fafc" : "#0f172a";
+  }
+
+  const hexMatch = background.match(/#([0-9a-f]{3,8})/i);
+  if (hexMatch) {
+    const rawHex = hexMatch[0];
+    const normalizedHex =
+      rawHex.length === 4
+        ? `#${rawHex
+            .slice(1)
+            .split("")
+            .map((channel) => `${channel}${channel}`)
+            .join("")}`
+        : rawHex.length >= 7
+          ? rawHex.slice(0, 7)
+          : rawHex;
+    return getColorLuminance(normalizedHex) <= 0.46 ? "#f8fafc" : "#0f172a";
+  }
+
   const accentLuminance = getColorLuminance(accent);
   if (accentLuminance <= 0.46) {
     return "#f8fafc";
@@ -162,8 +186,9 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       label: "RCBC",
       logoSrcs: philippinesLogoWithVariants("rcbc"),
       fallbackIconSrc: bankIcon,
-      accent: "#1FA8E0",
-      background: "linear-gradient(135deg, rgba(31, 168, 224, 0.18), rgba(31, 168, 224, 0.06))",
+      accent: "#0A8ED8",
+      background: "linear-gradient(135deg, #0A6FB0 0%, #0A8ED8 52%, #29B1F0 100%)",
+      foreground: "#f8fafc",
     }),
   },
   {

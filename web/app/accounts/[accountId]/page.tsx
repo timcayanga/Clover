@@ -78,6 +78,7 @@ type Transaction = {
   isExcluded: boolean;
   source?: string | null;
   importFileId?: string | null;
+  rawPayload?: unknown;
 };
 
 type Category = {
@@ -572,6 +573,78 @@ const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => 
 
 const detailDraftTypeToTransactionType = (type: TransactionDetailDraft["type"]) =>
   type === "credit" ? "income" : type === "transfer" ? "transfer" : "expense";
+
+const isMeaningfulCategoryName = (value?: string | null) => {
+  const normalized = (value ?? "").trim().toLowerCase();
+  return Boolean(normalized && normalized !== "other");
+};
+
+const getRawPayloadCategoryName = (rawPayload: unknown) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const candidate = payload.categoryName ?? payload.category ?? payload.normalizedCategory;
+  return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
+};
+
+const inferClientCategoryName = (merchantText: string, type: Transaction["type"]) => {
+  const lower = merchantText.trim().toLowerCase();
+
+  if (!lower) {
+    return type === "income" ? "Income" : type === "transfer" ? "Transfers" : "Other";
+  }
+
+  if (
+    /transfer|instapay|fund transfer|wallet transfer|cash[- ]?in|auto cash[- ]?in|pm transfer|incoming transfer|outgoing transfer/.test(
+      lower
+    )
+  ) {
+    return "Transfers";
+  }
+
+  if (/finance charge|service charge|processing fee|documentary stamp|annual fee|interest/.test(lower)) {
+    return "Financial";
+  }
+
+  return type === "income" ? "Income" : type === "transfer" ? "Transfers" : "Other";
+};
+
+const getDisplayTransactionCategoryName = (
+  transaction: Transaction,
+  categories: Category[],
+  institution?: string | null
+) => {
+  const categoryById =
+    transaction.categoryId && transaction.categoryId.trim()
+      ? categories.find((category) => category.id === transaction.categoryId)?.name ?? null
+      : null;
+
+  const directCategory = categoryById ?? transaction.categoryName;
+  if (isMeaningfulCategoryName(directCategory)) {
+    return directCategory ?? "Other";
+  }
+
+  const rawPayloadCategory = getRawPayloadCategoryName(transaction.rawPayload);
+  if (isMeaningfulCategoryName(rawPayloadCategory)) {
+    return rawPayloadCategory ?? "Other";
+  }
+
+  const merchantText = transaction.merchantClean?.trim() || transaction.merchantRaw.trim();
+  const institutionLower = (institution ?? "").trim().toLowerCase();
+  if (institutionLower === "aub") {
+    if (/internal clearing|encashment|check issued|atm withdrawal|atm fee inquiry|finance charge|tax withheld|service fee|debit movement/.test(merchantText.toLowerCase())) {
+      return "Financial";
+    }
+
+    if (/cash deposit|check deposit|interest earned|credit movement/.test(merchantText.toLowerCase())) {
+      return "Income";
+    }
+  }
+
+  return inferClientCategoryName(merchantText, transaction.type);
+};
 
 const getTransactionSortFieldValue = (transaction: Transaction, field: AccountTransactionSortField) => {
   switch (field) {
@@ -1149,8 +1222,14 @@ function AccountDetailPageContent() {
       const directionMultiplier = transactionSortDirection === "asc" ? 1 : -1;
 
       return [...filtered].sort((left, right) => {
-        const leftValue = getTransactionSortFieldValue(left, transactionSortField);
-        const rightValue = getTransactionSortFieldValue(right, transactionSortField);
+        const leftValue =
+          transactionSortField === "category"
+            ? getDisplayTransactionCategoryName(left, categories, account?.institution)
+            : getTransactionSortFieldValue(left, transactionSortField);
+        const rightValue =
+          transactionSortField === "category"
+            ? getDisplayTransactionCategoryName(right, categories, account?.institution)
+            : getTransactionSortFieldValue(right, transactionSortField);
 
         if (typeof leftValue === "number" && typeof rightValue === "number") {
           return (leftValue - rightValue) * directionMultiplier;
@@ -1159,7 +1238,7 @@ function AccountDetailPageContent() {
         return String(leftValue).localeCompare(String(rightValue), undefined, { sensitivity: "base", numeric: true }) * directionMultiplier;
       });
     },
-    [transactions, transactionSortDirection, transactionSortField]
+    [account?.institution, categories, transactions, transactionSortDirection, transactionSortField]
   );
   const mobileTransactionGroups = useMemo(() => {
     const groups: Array<{ date: string; label: string; transactions: Transaction[] }> = [];
@@ -2329,8 +2408,7 @@ function AccountDetailPageContent() {
                   {visibleTransactions.map((transaction) => {
                     const amount = Number(transaction.amount);
                     const amountToneClass = transaction.type === "transfer" ? "neutral" : transaction.type === "income" ? "positive" : "negative";
-                    const categoryValue = transaction.categoryId ?? "";
-                    const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+                    const categoryLabel = getDisplayTransactionCategoryName(transaction, categories, account?.institution);
                     const normalizedName = transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
 
                     return (

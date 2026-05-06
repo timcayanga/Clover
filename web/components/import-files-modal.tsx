@@ -1284,7 +1284,19 @@ export function ImportFilesModal({
           return item;
         }
 
-        return { ...item, ...patch };
+        const nextProgress =
+          typeof patch.progress === "number" &&
+          patch.status !== "error" &&
+          patch.status !== "done" &&
+          item.status !== "error"
+            ? Math.max(item.progress ?? 0, patch.progress)
+            : patch.progress;
+
+        return {
+          ...item,
+          ...patch,
+          ...(nextProgress === undefined ? {} : { progress: nextProgress }),
+        };
       })
     );
   };

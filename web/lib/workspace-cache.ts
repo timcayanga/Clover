@@ -213,6 +213,30 @@ const createImportedAccountCandidates = (account: ImportedWorkspaceAccount) => {
 
 const normalizeCategoryName = (value?: string | null) => normalizeMerchantText(value);
 
+const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
+  const dateValue =
+    typeof entry.date === "string" && entry.date.trim()
+      ? entry.date.slice(0, 10)
+      : "";
+  const amountValue =
+    entry.amount === null || entry.amount === undefined || entry.amount === ""
+      ? ""
+      : String(entry.amount).trim();
+  const merchantValue = normalizeMerchantText(
+    typeof entry.merchantClean === "string" && entry.merchantClean.trim()
+      ? entry.merchantClean
+      : typeof entry.merchantRaw === "string"
+        ? entry.merchantRaw
+        : ""
+  );
+
+  if (!dateValue && !amountValue && !merchantValue) {
+    return "";
+  }
+
+  return [dateValue, amountValue, merchantValue].join("|");
+};
+
 const isGenericCategoryName = (value?: string | null) => {
   const normalized = normalizeCategoryName(value);
   return (
@@ -391,27 +415,27 @@ const mergeImportedTransactions = <T extends CachedRecord>(items: T[], transacti
   }
 
   const matchedIds = new Set<string>();
-  const matchedImportFileIds = new Set<string>();
+  const matchedSignatures = new Set<string>();
   const nextTransactions: T[] = transactions.map((incoming) => {
     const incomingId = typeof incoming.id === "string" ? incoming.id : "";
-    const incomingImportFileId = typeof incoming.importFileId === "string" ? incoming.importFileId : "";
+    const incomingSignature = getImportedTransactionSignature(incoming);
     const match = items.find((entry) => {
       const entryId = typeof entry.id === "string" ? entry.id : "";
-      const entryImportFileId = typeof entry.importFileId === "string" ? entry.importFileId : "";
+      const entrySignature = getImportedTransactionSignature(entry);
       return (
         entryId === incomingId ||
-        (incomingImportFileId && entryImportFileId === incomingImportFileId)
+        Boolean(incomingSignature && entrySignature && incomingSignature === entrySignature)
       );
     });
 
     if (match) {
       const entryId = typeof match.id === "string" ? match.id : "";
-      const entryImportFileId = typeof match.importFileId === "string" ? match.importFileId : "";
+      const entrySignature = getImportedTransactionSignature(match);
       if (entryId) {
         matchedIds.add(entryId);
       }
-      if (entryImportFileId) {
-        matchedImportFileIds.add(entryImportFileId);
+      if (entrySignature) {
+        matchedSignatures.add(entrySignature);
       }
       return mergeImportedTransactionRecord(match, incoming);
     }
@@ -421,8 +445,8 @@ const mergeImportedTransactions = <T extends CachedRecord>(items: T[], transacti
 
   const remaining = items.filter((entry) => {
     const id = typeof entry.id === "string" ? entry.id : "";
-    const importFileId = typeof entry.importFileId === "string" ? entry.importFileId : "";
-    return !matchedIds.has(id) && !matchedImportFileIds.has(importFileId);
+    const signature = getImportedTransactionSignature(entry);
+    return !matchedIds.has(id) && !matchedSignatures.has(signature);
   });
 
   return [...nextTransactions, ...remaining];
