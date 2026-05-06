@@ -3363,6 +3363,10 @@ function AccountsPageContent() {
             if (optimisticAccount) {
               setAccounts((current) => {
                 const withoutMatchingUploads = current.filter((account) => {
+                  if (account.id === optimisticAccount.id) {
+                    return true;
+                  }
+
                   if (account.source !== "upload") {
                     return true;
                   }
@@ -3377,8 +3381,7 @@ function AccountsPageContent() {
                   const shouldPreserveExistingBalance =
                     existingBalance !== "" &&
                     Number(existingBalance) !== 0 &&
-                    optimisticBalance !== "" &&
-                    Number(optimisticBalance) === 0;
+                    (optimisticBalance === "" || Number(optimisticBalance) === 0);
                   return withoutMatchingUploads.map((account) =>
                     account.id === optimisticAccount.id
                       ? {

@@ -5157,10 +5157,10 @@ function TransactionsPageContent() {
             ) : transactionsSummary.totalCount > 0 ? (
               visibleTransactions.map((transaction, index) => {
                 const warningReason = warningReasonFor(transaction);
-                const categoryValue = transaction.categoryId ?? otherCategoryId;
-                const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
                 const amount = Number(transaction.amount);
                 const isPositive = transaction.type === "income";
+                const categoryValue = transaction.categoryId ?? otherCategoryId;
+                const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
                 const isTransferTransaction =
                   transaction.isTransfer || transaction.type === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
                 const amountToneClass = isTransferTransaction ? "neutral" : isPositive ? "positive" : "negative";
@@ -5398,20 +5398,21 @@ function TransactionsPageContent() {
                     <div className="transactions-mobile-date-group__rows">
                       {group.transactions.map((transaction) => {
                         const amount = Number(transaction.amount);
-                        const merchantSummary = summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
-                        const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
-                        const accountBrand = accountBrandById.get(transaction.accountId) ??
-                          getAccountBrand({
-                            institution: accountInstitutionById.get(transaction.accountId) ?? null,
-                            name: accountDisplayName,
-                            type: transaction.type === "transfer" ? "bank" : transaction.type === "income" ? "bank" : "other",
-                          });
                         const categoryValue = transaction.categoryId ?? otherCategoryId;
                         const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
                         const isPositive = transaction.type === "income";
                         const isTransferTransaction =
                           transaction.isTransfer || transaction.type === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
                         const amountToneClass = isTransferTransaction ? "neutral" : isPositive ? "positive" : "negative";
+                        const merchantSummary = summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
+                        const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
+                        const accountBrand =
+                          accountBrandById.get(transaction.accountId) ??
+                          getAccountBrand({
+                            institution: accountInstitutionById.get(transaction.accountId) ?? null,
+                            name: accountDisplayName,
+                            type: transaction.type === "transfer" ? "bank" : transaction.type === "income" ? "bank" : "other",
+                          });
 
                         return (
                           <article
@@ -6574,6 +6575,10 @@ function TransactionsPageContent() {
             if (optimisticAccount) {
               setAccounts((current) => {
                 const withoutMatchingUploads = current.filter((account) => {
+                  if (account.id === optimisticAccount.id) {
+                    return true;
+                  }
+
                   if (account.source !== "upload") {
                     return true;
                   }
@@ -6588,8 +6593,7 @@ function TransactionsPageContent() {
                   const shouldPreserveExistingBalance =
                     existingBalance !== "" &&
                     Number(existingBalance) !== 0 &&
-                    optimisticBalance !== "" &&
-                    Number(optimisticBalance) === 0;
+                    (optimisticBalance === "" || Number(optimisticBalance) === 0);
                   return withoutMatchingUploads.map((account) =>
                     account.id === optimisticAccount.id
                       ? {
