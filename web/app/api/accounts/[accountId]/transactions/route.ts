@@ -23,6 +23,7 @@ type TransactionApiRow = {
   accountId: string;
   categoryId: string | null;
   amount: string;
+  currency: string;
   type: "income" | "expense" | "transfer";
   date: string;
   merchantRaw: string;
@@ -32,6 +33,8 @@ type TransactionApiRow = {
   isExcluded: boolean;
   importFileId: string | null;
   source: string;
+  rawPayload: Prisma.JsonValue;
+  createdAt: string;
 };
 
 const mapTransactionRow = (transaction: {
@@ -39,6 +42,7 @@ const mapTransactionRow = (transaction: {
   accountId: string;
   date: Date;
   amount: Prisma.Decimal | bigint | number | string;
+  currency: string;
   type: "income" | "expense" | "transfer";
   merchantRaw: string;
   merchantClean: string | null;
@@ -47,12 +51,14 @@ const mapTransactionRow = (transaction: {
   description: string | null;
   isExcluded: boolean;
   importFileId: string | null;
+  createdAt: Date;
   institution?: string | null;
 }): TransactionApiRow => ({
   id: transaction.id,
   accountId: transaction.accountId,
   categoryId: transaction.category?.id ?? null,
   amount: transaction.amount.toString(),
+  currency: transaction.currency,
   type: transaction.type,
   date: transaction.date.toISOString(),
   merchantRaw: transaction.merchantRaw,
@@ -73,6 +79,8 @@ const mapTransactionRow = (transaction: {
   isExcluded: transaction.isExcluded,
   importFileId: transaction.importFileId,
   source: transaction.importFileId ? "upload" : "manual",
+  rawPayload: transaction.rawPayload,
+  createdAt: transaction.createdAt.toISOString(),
 });
 
 const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefined) => {
@@ -174,12 +182,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
           accountId: true,
           date: true,
           amount: true,
+          currency: true,
           type: true,
           merchantRaw: true,
           merchantClean: true,
           rawPayload: true,
           description: true,
           isExcluded: true,
+          createdAt: true,
           account: {
             select: {
               institution: true,

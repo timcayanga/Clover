@@ -589,11 +589,26 @@ const getRawPayloadCategoryName = (rawPayload: unknown) => {
   return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
 };
 
-const inferClientCategoryName = (merchantText: string, type: Transaction["type"]) => {
+const inferClientCategoryName = (merchantText: string, type: Transaction["type"], institution?: string | null) => {
   const lower = merchantText.trim().toLowerCase();
+  const institutionLower = (institution ?? "").trim().toLowerCase();
 
   if (!lower) {
     return type === "income" ? "Income" : type === "transfer" ? "Transfers" : "Other";
+  }
+
+  if (institutionLower === "aub") {
+    if (
+      /internal clearing|encashment|check issued|atm withdrawal|atm fee inquiry|finance charge|tax withheld|service fee|debit movement/.test(
+        lower
+      )
+    ) {
+      return "Financial";
+    }
+
+    if (/cash deposit|check deposit|interest earned|credit movement/.test(lower)) {
+      return "Income";
+    }
   }
 
   if (
@@ -620,7 +635,6 @@ const getDisplayTransactionCategoryName = (
     transaction.categoryId && transaction.categoryId.trim()
       ? categories.find((category) => category.id === transaction.categoryId)?.name ?? null
       : null;
-
   const directCategory = categoryById ?? transaction.categoryName;
   if (isMeaningfulCategoryName(directCategory)) {
     return directCategory ?? "Other";
@@ -632,18 +646,7 @@ const getDisplayTransactionCategoryName = (
   }
 
   const merchantText = transaction.merchantClean?.trim() || transaction.merchantRaw.trim();
-  const institutionLower = (institution ?? "").trim().toLowerCase();
-  if (institutionLower === "aub") {
-    if (/internal clearing|encashment|check issued|atm withdrawal|atm fee inquiry|finance charge|tax withheld|service fee|debit movement/.test(merchantText.toLowerCase())) {
-      return "Financial";
-    }
-
-    if (/cash deposit|check deposit|interest earned|credit movement/.test(merchantText.toLowerCase())) {
-      return "Income";
-    }
-  }
-
-  return inferClientCategoryName(merchantText, transaction.type);
+  return inferClientCategoryName(merchantText, transaction.type, institution);
 };
 
 const getTransactionSortFieldValue = (transaction: Transaction, field: AccountTransactionSortField) => {

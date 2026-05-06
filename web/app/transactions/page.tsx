@@ -6585,7 +6585,17 @@ function TransactionsPageContent() {
 
                   return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) !== importedAccountKey;
                 });
-                const existingIndex = current.findIndex((account) => account.id === optimisticAccount.id);
+                const existingIndex = current.findIndex((account) => {
+                  if (account.id === optimisticAccount.id) {
+                    return true;
+                  }
+
+                  if (account.source !== "upload") {
+                    return false;
+                  }
+
+                  return normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === importedAccountKey;
+                });
                 if (existingIndex >= 0) {
                   const existingAccount = current[existingIndex];
                   const existingBalance = typeof existingAccount.balance === "string" ? existingAccount.balance.trim() : "";
@@ -6595,7 +6605,9 @@ function TransactionsPageContent() {
                     Number(existingBalance) !== 0 &&
                     (optimisticBalance === "" || Number(optimisticBalance) === 0);
                   return withoutMatchingUploads.map((account) =>
-                    account.id === optimisticAccount.id
+                    account.id === optimisticAccount.id ||
+                    (account.source === "upload" &&
+                      normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === importedAccountKey)
                       ? {
                           ...account,
                           ...optimisticAccount,

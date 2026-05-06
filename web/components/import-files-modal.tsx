@@ -356,6 +356,28 @@ const toBalanceString = (value: unknown): string | null => {
   }
 };
 
+const pickStableBalance = (...values: Array<unknown>) => {
+  let firstMeaningful: string | null = null;
+
+  for (const value of values) {
+    const normalized = toBalanceString(value);
+    if (!normalized) {
+      continue;
+    }
+
+    if (firstMeaningful === null) {
+      firstMeaningful = normalized;
+    }
+
+    const numeric = Number(normalized.replace(/[^0-9.-]/g, ""));
+    if (Number.isFinite(numeric) && numeric !== 0) {
+      return normalized;
+    }
+  }
+
+  return firstMeaningful;
+};
+
 const buildImportedWorkspaceAccount = (summary: UploadInsightsSummary) => {
   const accountId = summary.accountId ?? summary.optimisticAccountId ?? null;
   if (!accountId || !summary.accountName) {
@@ -1582,6 +1604,7 @@ export function ImportFilesModal({
       accountNumber: string | null;
       accountType: UploadInsightsSummary["accountType"];
       optimisticAccountId: string | null;
+      initialBalance?: string | null;
       password?: string;
       previewTransactions?: NonNullable<UploadInsightsSummary["previewTransactions"]>;
     }
@@ -1645,6 +1668,7 @@ export function ImportFilesModal({
           processingIdentity?.accountType ?? summaryContext.accountType ?? null
         );
         const checkpointBalance = toBalanceString(statementCheckpoint?.endingBalance);
+        const stableOptimisticBalance = pickStableBalance(checkpointBalance, summaryContext.initialBalance);
         const hasRecoverableImportSignal = Boolean(
           parsedRowsCount > 0 ||
             confirmedTransactionsCount > 0 ||
@@ -1755,7 +1779,7 @@ export function ImportFilesModal({
               processingIdentity?.institution ?? null,
               processingIdentity?.accountType ?? summaryContext.accountType ?? null,
               summaryContext.optimisticAccountId,
-              toBalanceString(statementCheckpoint?.endingBalance),
+              stableOptimisticBalance,
               fallbackPreviewTransactions,
               processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
             );
@@ -1893,7 +1917,7 @@ export function ImportFilesModal({
             processingIdentity?.institution ?? summaryContext.institution ?? null,
             processingIdentity?.accountType ?? summaryContext.accountType ?? null,
             summaryContext.optimisticAccountId,
-            toBalanceString(statementCheckpoint?.endingBalance),
+            stableOptimisticBalance,
             fallbackPreviewTransactions,
             processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
           );
@@ -1997,7 +2021,7 @@ export function ImportFilesModal({
               processingIdentity?.institution ?? summaryContext.institution ?? null,
               processingIdentity?.accountType ?? summaryContext.accountType ?? null,
               summaryContext.optimisticAccountId,
-              toBalanceString(statementCheckpoint?.endingBalance),
+              stableOptimisticBalance,
               fallbackPreviewTransactions
             );
 
@@ -2162,7 +2186,7 @@ export function ImportFilesModal({
                 null,
                 null,
                 summaryContext.optimisticAccountId,
-                null,
+                stableOptimisticBalance,
                 fallbackPreviewTransactions,
                 summaryContext.accountNumber ?? null
               );
@@ -3363,6 +3387,7 @@ export function ImportFilesModal({
           accountNumber: statementIdentity?.accountNumber ?? null,
           accountType: statementIdentity?.accountType ?? null,
           optimisticAccountId: hasStatementIdentity ? optimisticAccountId : canUseOptimisticGuess ? item.optimisticAccountId : null,
+          initialBalance: optimisticSummary?.balance ?? null,
           password: item.password.trim() || undefined,
           previewTransactions,
         });
@@ -3475,6 +3500,7 @@ export function ImportFilesModal({
           accountNumber: statementIdentity?.accountNumber ?? null,
           accountType: statementIdentity?.accountType ?? null,
           optimisticAccountId: null,
+          initialBalance: optimisticPreviewSummary?.balance ?? null,
           password: item.password.trim() || undefined,
         });
       }
@@ -3632,6 +3658,7 @@ export function ImportFilesModal({
             accountNumber: recoverableIdentity?.accountNumber ?? null,
             accountType: recoverableIdentity?.accountType ?? null,
             optimisticAccountId: fallbackAccountId,
+            initialBalance: finalizedRecoveredSummary.balance ?? null,
             password: item.password.trim() || undefined,
             previewTransactions: recoverablePreviewTransactions,
           });
