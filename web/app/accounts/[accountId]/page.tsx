@@ -2535,11 +2535,13 @@ function AccountDetailPageContent() {
                                   </span>
                                   <span className="transactions-mobile-simple-row__name-main">{normalizedName}</span>
                                 </div>
-                                <div className={`transactions-mobile-simple-row__amount ${amountToneClass}`}>
+                                <div className={`transactions-mobile-simple-row__amount-group ${amountToneClass}`}>
                                   <span className="transactions-mobile-simple-row__account-brand" aria-hidden="true">
                                     <AccountBrandMark accountBrand={accountBrand} label={accountCardName} />
                                   </span>
-                                  {formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}
+                                  <span className="transactions-mobile-simple-row__amount">
+                                    {formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}
+                                  </span>
                                 </div>
                                 <button
                                   type="button"

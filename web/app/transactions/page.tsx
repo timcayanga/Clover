@@ -5427,7 +5427,9 @@ function TransactionsPageContent() {
                         const isTransferTransaction =
                           transaction.isTransfer || transaction.type === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
                         const amountToneClass = isTransferTransaction ? "neutral" : transaction.type === "income" ? "positive" : "negative";
-                const merchantSummary = summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
+                        const merchantSummary =
+                          transaction.merchantClean?.trim() ||
+                          summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
                 const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
                 const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
                   institution: accountInstitutionById.get(transaction.accountId) ?? null,
@@ -5467,11 +5469,11 @@ function TransactionsPageContent() {
                               </span>
                               <span className="transactions-mobile-simple-row__name-main">{merchantSummary}</span>
                             </div>
-                            <div className={`transactions-mobile-simple-row__amount ${amountToneClass}`}>
+                            <div className={`transactions-mobile-simple-row__amount-group ${amountToneClass}`}>
                               <span className="transactions-mobile-simple-row__account-brand" aria-hidden="true">
                                 <AccountBrandMark accountBrand={accountBrand} label={accountDisplayName} />
                               </span>
-                              {formatTransactionAmount(amount, transaction.currency)}
+                              <span className="transactions-mobile-simple-row__amount">{formatTransactionAmount(amount, transaction.currency)}</span>
                             </div>
                             <button
                               type="button"

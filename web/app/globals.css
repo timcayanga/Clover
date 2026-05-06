@@ -10351,7 +10351,25 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 .transactions-mobile-simple-row__name {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.transactions-mobile-simple-row__category-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
+}
+
+.transactions-mobile-simple-row__category-icon img {
+  display: block;
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
 }
 
 .transactions-mobile-simple-row__name-main {
@@ -10364,33 +10382,40 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   font-weight: 600;
 }
 
-.transactions-mobile-simple-row__amount {
+.transactions-mobile-simple-row__amount-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   justify-self: end;
+}
+
+.transactions-mobile-simple-row__amount {
   font-size: 0.92rem;
   font-weight: 700;
   letter-spacing: -0.01em;
+  white-space: nowrap;
 }
 
+.transactions-mobile-simple-row__amount-group.positive,
 .transactions-mobile-simple-row__amount.positive {
   color: var(--positive);
 }
 
+.transactions-mobile-simple-row__amount-group.negative,
 .transactions-mobile-simple-row__amount.negative {
   color: var(--negative);
 }
 
+.transactions-mobile-simple-row__amount-group.neutral,
 .transactions-mobile-simple-row__amount.neutral,
 .transaction-amount-cell.neutral {
   color: var(--text);
 }
 
 .transactions-mobile-simple-row__account-brand .accounts-brand-mark {
-  width: 20px;
-  height: 20px;
-  border-radius: 7px;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
 }
 
 .transactions-mobile-simple-row__detail {
@@ -10621,8 +10646,8 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
   gap: 10px;
   align-items: center;
-  padding: 8px 4px;
-  min-height: 48px;
+  padding: 5px 4px;
+  min-height: 42px;
   border-bottom: 1px solid rgba(215, 228, 233, 0.82);
   border-radius: 0 !important;
   font-size: 0.86rem;
@@ -10758,13 +10783,11 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  aspect-ratio: 1 / 1;
-  clip-path: inset(0 round 8px);
 }
 
 .transaction-category-icon img {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   display: block;
 }
 
@@ -11071,55 +11094,29 @@ input.transaction-inline-edit--amount::placeholder {
 .transaction-note-button {
   width: auto;
   min-width: 0;
-  min-height: 0;
-  height: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--accent);
   box-shadow: none;
-  border-radius: 0;
-  line-height: 1;
+  justify-content: center;
 }
 
 .transaction-note-button:hover,
 .transaction-note-button:focus-visible {
   background: transparent;
   box-shadow: none;
+  border: 0;
   outline: none;
 }
 
 .transaction-note-button svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
-.transactions-mobile-simple-row__detail {
-  width: auto;
-  height: auto;
-  min-width: 0;
-  min-height: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.transaction-note-button--plain {
   padding: 2px;
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  box-shadow: none;
-  border-radius: 0;
-  justify-self: end;
-  line-height: 1;
-}
-
-.transactions-mobile-simple-row__detail:hover,
-.transactions-mobile-simple-row__detail:focus-visible {
-  background: transparent;
-  box-shadow: none;
-  outline: none;
 }
 
 .warning-chip,
@@ -12625,8 +12622,8 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   width: 100%;
   gap: 10px;
-  align-items: stretch;
-  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  grid-template-columns: 38px minmax(0, 1fr);
 }
 
 .transactions-manual-row-icon {
@@ -12645,14 +12642,14 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-row-icon--category .transaction-category-icon img {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
 }
 
 .transactions-manual-row-icon--account .accounts-brand-mark {
-  width: 44px;
-  height: 44px;
-  border-radius: 16px;
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
 }
 
 .transactions-manual-row-icon--account .accounts-brand-mark__logo,
@@ -12670,48 +12667,41 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-inline-row__icon {
-  --transactions-manual-icon-size: 52px;
-  width: var(--transactions-manual-icon-size);
-  min-width: var(--transactions-manual-icon-size);
-  height: 100%;
+  width: 38px;
+  height: 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
   margin-top: 0;
-  align-self: stretch;
+  align-self: center;
 }
 
 .transactions-manual-inline-row__icon--account .accounts-brand-mark {
-  width: 100%;
-  height: 100%;
-  border-radius: 18px;
-  aspect-ratio: 1 / 1;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
 }
 
 .transactions-manual-inline-row__icon--account .accounts-brand-mark__fallback,
 .transactions-manual-inline-row__icon--account .accounts-brand-mark__logo-fallback {
-  width: 40%;
-  height: 40%;
+  width: 50%;
+  height: 50%;
 }
 
 .transactions-manual-inline-row__icon--category .transaction-category-icon {
-  width: 100%;
-  height: 100%;
-  border-radius: 18px;
-  aspect-ratio: 1 / 1;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
 }
 
 .transactions-manual-inline-row__icon--category .transaction-category-icon img {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .transactions-manual-inline-row__field {
   min-width: 0;
-  align-self: stretch;
-  width: 100%;
-  flex: 1 1 auto;
 }
 
 .transaction-drawer__merchant-raw {
@@ -12840,12 +12830,11 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transaction-category-icon.transaction-category-icon--manual {
-  width: 100%;
-  height: 100%;
-  border-radius: 18px;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
   background: rgba(3, 168, 192, 0.08);
   border: 1px solid rgba(3, 168, 192, 0.12);
-  clip-path: inset(0 round 18px);
 }
 
 .transaction-category-icon.transaction-category-icon--manual img {
@@ -12892,7 +12881,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-money-row {
   display: grid;
-  grid-template-columns: minmax(60px, 74px) minmax(0, 1.5fr);
+  grid-template-columns: minmax(78px, 94px) minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   width: 100%;
@@ -12912,15 +12901,10 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-money-row__currency .transactions-manual-currency__button {
   width: 100%;
-  min-height: 44px;
-  height: 44px;
+  min-height: 40px;
+  height: 40px;
   padding-inline: 8px;
   border-radius: 12px;
-}
-
-.transactions-manual-money-row__amount input {
-  min-height: 44px;
-  height: 44px;
 }
 
 .transactions-manual-more-row {
@@ -13141,7 +13125,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-money-row {
-  grid-template-columns: minmax(60px, 72px) minmax(0, 1.55fr);
+  grid-template-columns: minmax(66px, 78px) minmax(0, 1.35fr);
 }
 
 .manual-form-actions--closed .transactions-manual-more {
@@ -13149,8 +13133,8 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-money-row__currency .transactions-manual-currency__button {
-  min-height: 44px;
-  height: 44px;
+  min-height: 34px;
+  height: 34px;
   padding-inline: 8px;
 }
 
@@ -16046,54 +16030,58 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 12px;
 }
 
-.accounts-detail__hero-card {
-  width: min(100%, 272px);
-}
+  .accounts-detail__hero-card {
+    width: min(100%, 272px);
+  }
 
-.accounts-detail__identity-edit {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
-  width: min(100%, 640px);
-}
+  .accounts-detail__identity-edit {
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-items: center;
+    gap: 14px;
+    width: min(100%, 640px);
+  }
 
-.accounts-detail__identity-field {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-}
+  .accounts-detail__identity-field {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    width: min(100%, 320px);
+    text-align: center;
+  }
 
-.accounts-detail__identity-field span {
-  color: var(--muted-2);
-  font-size: 0.82rem;
+  .accounts-detail__identity-field span {
+    color: var(--muted-2);
+    font-size: 0.82rem;
   font-weight: 500;
 }
 
-.accounts-detail__identity-field input {
-  appearance: none;
-  width: 100%;
-  min-height: 40px;
-  padding: 0;
+  .accounts-detail__identity-field input {
+    appearance: none;
+    width: 100%;
+    min-height: 40px;
+    padding: 0;
   border: 0;
   border-bottom: 1px solid rgba(148, 163, 184, 0.38);
   border-radius: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  box-shadow: none;
-}
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    text-align: center;
+    box-shadow: none;
+  }
 
 .accounts-detail__identity-field input:focus {
   outline: none;
   border-bottom-color: rgba(3, 168, 192, 0.58);
 }
 
-.accounts-detail__identity-status {
-  grid-column: 1 / -1;
-  color: var(--muted);
-  font-size: 0.8rem;
-  min-height: 1.2em;
-}
+  .accounts-detail__identity-status {
+    color: var(--muted);
+    font-size: 0.8rem;
+    min-height: 1.2em;
+    text-align: center;
+  }
 
 .accounts-detail__panel::before {
   content: none !important;
@@ -16222,18 +16210,18 @@ input.transaction-inline-edit--amount::placeholder {
   font-size: 0.8rem;
 }
 
-.accounts-detail__transactions {
-  display: grid;
-  gap: 12px;
-  margin-top: 20px;
+  .accounts-detail__transactions {
+    display: grid;
+    gap: 12px;
+    margin-top: 20px;
   padding: 18px;
   border-radius: 22px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(249, 251, 252, 0.92);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.86),
-    0 12px 30px rgba(15, 23, 42, 0.06);
-}
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.86),
+      0 12px 30px rgba(15, 23, 42, 0.06);
+  }
 
 .accounts-detail__transactions-actions {
   display: flex;
@@ -23165,9 +23153,9 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .transactions-manual-inline-row {
-  gap: 8px;
-  align-items: stretch;
-  grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 8px;
+    align-items: stretch;
   }
 
   .transactions-manual-field--embedded-label {
@@ -23200,13 +23188,11 @@ button.accounts-detail__transaction-head-cell {
   .transactions-manual-row-icon--category .transaction-category-icon {
     width: 40px;
     height: 40px;
-    border-radius: 13px;
   }
 
   .transactions-manual-row-icon--account .accounts-brand-mark {
     width: 40px;
     height: 40px;
-    border-radius: 13px;
   }
 
   .transactions-manual-row-icon--account .accounts-brand-mark__logo,
@@ -23229,34 +23215,27 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .transactions-manual-inline-row__icon {
-    --transactions-manual-icon-size: 44px;
+    width: 34px;
     height: 100%;
     margin-top: 0;
     align-self: stretch;
   }
 
   .transactions-manual-inline-row__icon--account .accounts-brand-mark {
-    width: 100%;
-    height: 100%;
-    border-radius: 14px;
-    aspect-ratio: 1 / 1;
+    width: 34px;
+    height: 34px;
+    border-radius: 13px;
   }
 
   .transactions-manual-inline-row__icon--category .transaction-category-icon {
-    width: 100%;
-    height: 100%;
-    border-radius: 14px;
-    aspect-ratio: 1 / 1;
+    width: 34px;
+    height: 34px;
+    border-radius: 13px;
   }
 
   .transactions-manual-inline-row__icon--category .transaction-category-icon img {
     width: 16px;
     height: 16px;
-  }
-
-  .transactions-manual-money-row__currency .transactions-manual-currency__button {
-    min-height: 42px;
-    height: 42px;
   }
 
   .transaction-drawer__merchant-stack {
