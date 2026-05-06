@@ -10621,8 +10621,8 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   grid-template-columns: 28px 40px minmax(0, 2.2fr) minmax(110px, 0.85fr) minmax(130px, 0.95fr) minmax(150px, 1fr) minmax(110px, 0.8fr) 40px 40px;
   gap: 10px;
   align-items: center;
-  padding: 5px 4px;
-  min-height: 42px;
+  padding: 7px 4px;
+  min-height: 46px;
   border-bottom: 1px solid rgba(215, 228, 233, 0.82);
   border-radius: 0 !important;
   font-size: 0.86rem;
@@ -12624,12 +12624,12 @@ input.transaction-inline-edit--amount::placeholder {
   width: 100%;
   gap: 10px;
   align-items: center;
-  grid-template-columns: 42px minmax(0, 1fr);
+  grid-template-columns: 44px minmax(0, 1fr);
 }
 
 .transactions-manual-row-icon {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -12637,9 +12637,9 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-row-icon--category .transaction-category-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
 }
 
 .transactions-manual-row-icon--category .transaction-category-icon img {
@@ -12648,9 +12648,9 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-row-icon--account .accounts-brand-mark {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
 }
 
 .transactions-manual-row-icon--account .accounts-brand-mark__logo,
@@ -12668,8 +12668,8 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-inline-row__icon {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -12679,21 +12679,21 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-inline-row__icon--account .accounts-brand-mark {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
 }
 
 .transactions-manual-inline-row__icon--account .accounts-brand-mark__fallback,
 .transactions-manual-inline-row__icon--account .accounts-brand-mark__logo-fallback {
-  width: 48%;
-  height: 48%;
+  width: 46%;
+  height: 46%;
 }
 
 .transactions-manual-inline-row__icon--category .transaction-category-icon {
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
 }
 
 .transactions-manual-inline-row__icon--category .transaction-category-icon img {
@@ -12831,9 +12831,9 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transaction-category-icon.transaction-category-icon--manual {
-  width: 42px;
-  height: 42px;
-  border-radius: 999px;
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
   background: rgba(3, 168, 192, 0.08);
   border: 1px solid rgba(3, 168, 192, 0.12);
 }
@@ -12882,7 +12882,7 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-money-row {
   display: grid;
-  grid-template-columns: minmax(70px, 86px) minmax(0, 1.4fr);
+  grid-template-columns: minmax(60px, 74px) minmax(0, 1.5fr);
   gap: 10px;
   align-items: center;
   width: 100%;
@@ -12902,8 +12902,8 @@ input.transaction-inline-edit--amount::placeholder {
 
 .transactions-manual-money-row__currency .transactions-manual-currency__button {
   width: 100%;
-  min-height: 42px;
-  height: 42px;
+  min-height: 44px;
+  height: 44px;
   padding-inline: 8px;
   border-radius: 12px;
 }
@@ -13126,7 +13126,7 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-money-row {
-  grid-template-columns: minmax(64px, 78px) minmax(0, 1.45fr);
+  grid-template-columns: minmax(60px, 72px) minmax(0, 1.55fr);
 }
 
 .manual-form-actions--closed .transactions-manual-more {
@@ -13134,8 +13134,8 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-money-row__currency .transactions-manual-currency__button {
-  min-height: 42px;
-  height: 42px;
+  min-height: 44px;
+  height: 44px;
   padding-inline: 8px;
 }
 
