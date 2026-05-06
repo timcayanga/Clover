@@ -28,6 +28,7 @@ import {
   clearDeletedWorkspaceAccount,
   deletedAccountsWorkspaceCacheKey,
   getCachedAccountsWorkspace,
+  getCachedTransactionsWorkspace,
   getDeletedWorkspaceAccountIds,
   getDeletingWorkspaceAccountIds,
   persistAccountsWorkspaceCache,
@@ -288,6 +289,34 @@ const mergeOptimisticImportedAccount = (currentAccounts: Account[], optimisticAc
   });
 
   return [mergedAccount, ...remainingAccounts];
+};
+
+const getCachedWorkspaceHydration = (workspaceId: string) => {
+  if (!workspaceId) {
+    return null;
+  }
+
+  const accountsSnapshot = getCachedAccountsWorkspace(workspaceId);
+  if (accountsSnapshot) {
+    return {
+      accounts: (accountsSnapshot.accounts as Account[] | undefined) ?? [],
+      accountRules: (accountsSnapshot.accountRules as AccountRule[] | undefined) ?? [],
+      transactions: (accountsSnapshot.transactions as Transaction[] | undefined) ?? [],
+      statementCheckpoints: (accountsSnapshot.statementCheckpoints as StatementCheckpoint[] | undefined) ?? [],
+    };
+  }
+
+  const transactionsSnapshot = getCachedTransactionsWorkspace(workspaceId);
+  if (!transactionsSnapshot) {
+    return null;
+  }
+
+  return {
+    accounts: (transactionsSnapshot.accounts as Account[] | undefined) ?? [],
+    accountRules: [] as AccountRule[],
+    transactions: (transactionsSnapshot.transactions as Transaction[] | undefined) ?? [],
+    statementCheckpoints: [] as StatementCheckpoint[],
+  };
 };
 
 type AccountRule = {
@@ -904,7 +933,7 @@ function AccountsPageContent() {
   const initialWorkspaceId = readSelectedWorkspaceId();
   const deletingAccountIdFromQuery = searchParams?.get("deletingAccountId");
   const deletingWorkspaceIdFromQuery = searchParams?.get("deletingWorkspaceId");
-  const initialCachedWorkspace = initialWorkspaceId ? getCachedAccountsWorkspace(initialWorkspaceId) : null;
+  const initialCachedWorkspace = initialWorkspaceId ? getCachedWorkspaceHydration(initialWorkspaceId) : null;
   const initialDeletedWorkspaceAccountIds = new Set(getDeletedWorkspaceAccountIds(initialWorkspaceId));
   const initialDeletingWorkspaceAccountIds = new Set(getDeletingWorkspaceAccountIds(initialWorkspaceId));
   const initialCachedAccounts = ((initialCachedWorkspace?.accounts as Account[] | undefined) ?? []).filter(
@@ -1206,7 +1235,7 @@ function AccountsPageContent() {
       return false;
     }
 
-    const cachedSnapshot = getCachedAccountsWorkspace(workspaceId);
+    const cachedSnapshot = getCachedWorkspaceHydration(workspaceId);
     deletedAccountIdsRef.current = new Set(getDeletedWorkspaceAccountIds(workspaceId));
     deletingAccountIdsRef.current = new Set(getDeletingWorkspaceAccountIds(workspaceId));
     setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
