@@ -122,6 +122,8 @@ type ImportFile = {
   accountId?: string | null;
 };
 
+const normalizeCategoryName = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
+
 type StatementCheckpoint = {
   id: string;
   accountId: string | null;
@@ -2503,9 +2505,7 @@ function AccountDetailPageContent() {
                         <div className="transactions-mobile-date-group__rows">
                           {group.transactions.map((transaction) => {
                             const amount = Number(transaction.amount);
-                            const categoryValue = transaction.categoryId ?? otherCategoryId;
-                            const categoryLabel =
-                              transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+                            const categoryLabel = getDisplayTransactionCategoryName(transaction, categories, account?.institution);
                             const isTransferTransaction =
                               transaction.type === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
                             const amountToneClass = isTransferTransaction ? "neutral" : transaction.type === "income" ? "positive" : "negative";
