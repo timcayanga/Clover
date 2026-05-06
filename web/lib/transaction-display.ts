@@ -22,16 +22,50 @@ const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefin
 const getAubCategoryOverride = (merchantText: string) => {
   const lower = merchantText.toLowerCase();
 
-  if (/internal clearing|encashment|check issued|atm withdrawal|atm fee inquiry|finance charge|tax withheld|service fee|debit movement/.test(lower)) {
+  if (
+    /internal clearing|encashment|check issued|atm withdrawal|atm fee inquiry|finance charge|tax withheld|service fee|debit movement|\bicc\b|\bilnsdm1?\b|\bdm1\b|\benc\b|\bck1\b/.test(
+      lower
+    )
+  ) {
     return "Financial";
   }
 
-  if (/cash deposit|check deposit|interest earned|credit movement/.test(lower)) {
+  if (/cash deposit|check deposit|interest earned|credit movement|\bnftc\b|\bwftc\b|\bcd\b|\bpdck3\b|\bint\b/.test(lower)) {
     return "Income";
   }
 
   if (/instapay credit|instapay debit|fund transfer/.test(lower)) {
     return "Transfers";
+  }
+
+  return null;
+};
+
+const getGcashCategoryOverride = (merchantText: string) => {
+  const lower = merchantText.toLowerCase();
+
+  if (
+    /auto cash-?in|gcash cash in|wallet transfer|gcash transfer|cash in|cash out|send money|received money|received gcash|sent gcash|fund transfer/.test(
+      lower
+    )
+  ) {
+    return "Transfers";
+  }
+
+  if (/buy load|load transaction/.test(lower)) {
+    return "Bills & Utilities";
+  }
+
+  if (/boost campaign|cashback|reward/.test(lower)) {
+    return "Income";
+  }
+
+  if (/interest applied|interest boost reward|transfer fee|service fee|finance charge/.test(lower)) {
+    return "Financial";
+  }
+
+  if (/payment to|bills payment/.test(lower)) {
+    return "Shopping";
   }
 
   return null;
@@ -44,7 +78,8 @@ export const getEffectiveTransactionMerchantName = (params: {
 }) => {
   const cleaned = params.merchantClean?.trim();
   if (cleaned) {
-    return cleaned;
+    const summarizedClean = summarizeMerchantText(cleaned, params.institution);
+    return summarizedClean || cleaned;
   }
 
   const summarized = summarizeMerchantText(params.merchantRaw, params.institution);
@@ -75,10 +110,17 @@ export const getEffectiveTransactionCategoryName = (params: {
     institution: params.institution,
   });
 
-  if ((params.institution ?? "").trim().toLowerCase() === "aub") {
+  if (/\b(?:aub|asia united bank)\b/i.test((params.institution ?? "").trim())) {
     const aubOverride = getAubCategoryOverride(effectiveMerchantName);
     if (aubOverride) {
       return aubOverride;
+    }
+  }
+
+  if (/\bgcash\b/i.test((params.institution ?? "").trim())) {
+    const gcashOverride = getGcashCategoryOverride(effectiveMerchantName || params.merchantRaw);
+    if (gcashOverride) {
+      return gcashOverride;
     }
   }
 

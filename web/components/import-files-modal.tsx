@@ -298,6 +298,60 @@ const importedAccountIdentityKey = (name: string | null, institution: string | n
     .replace(/\D/g, "")
     .slice(-4)}`;
 
+const findKnownImportedBalance = (
+  accounts: AccountOption[],
+  params: {
+    accountId?: string | null;
+    accountName?: string | null;
+    institution?: string | null;
+    accountNumber?: string | null;
+    accountType?: UploadAccountType;
+  }
+) => {
+  const normalizedName = params.accountName
+    ? formatUploadAccountDisplayName(
+        params.accountName,
+        params.institution ?? null,
+        params.accountNumber ?? null,
+        params.accountType ?? null
+      )
+    : null;
+  const targetIdentityKey = normalizedName
+    ? importedAccountIdentityKey(normalizedName, params.institution ?? null, params.accountNumber ?? null)
+    : null;
+  const targetInstitution = (params.institution ?? "").trim().toLowerCase();
+  const targetLastFour = extractLastFourDigits(params.accountNumber ?? normalizedName ?? null);
+
+  const matched = accounts.find((account) => {
+    if (params.accountId && account.id === params.accountId) {
+      return true;
+    }
+
+    const accountIdentityKey = importedAccountIdentityKey(
+      typeof account.name === "string" ? account.name : null,
+      typeof account.institution === "string" ? account.institution : null,
+      typeof account.accountNumber === "string" ? account.accountNumber : null
+    );
+    if (targetIdentityKey && accountIdentityKey === targetIdentityKey) {
+      return true;
+    }
+
+    const accountInstitution = (account.institution ?? "").trim().toLowerCase();
+    const accountLastFour = extractLastFourDigits(account.accountNumber ?? account.name ?? null);
+
+    return Boolean(
+      targetInstitution &&
+        accountInstitution &&
+        targetInstitution === accountInstitution &&
+        targetLastFour &&
+        accountLastFour &&
+        targetLastFour === accountLastFour
+    );
+  });
+
+  return pickStableBalance((matched as { balance?: unknown } | undefined)?.balance ?? null);
+};
+
 const PDF_ENCRYPTION_MARKERS = ["/Encrypt", "/Standard", "/V 2", "/V 4", "/V 5"];
 
 const buildOptimisticUploadSummary = (
@@ -1669,11 +1723,17 @@ export function ImportFilesModal({
         );
         const checkpointBalance = toBalanceString(statementCheckpoint?.endingBalance);
         const stableOptimisticBalance = pickStableBalance(checkpointBalance, summaryContext.initialBalance);
+        const checkpointAccountId =
+          statementCheckpoint && typeof statementCheckpoint === "object" && "accountId" in statementCheckpoint
+            ? typeof (statementCheckpoint as { accountId?: unknown }).accountId === "string"
+              ? (statementCheckpoint as { accountId?: string | null }).accountId ?? null
+              : null
+            : null;
         const hasRecoverableImportSignal = Boolean(
           parsedRowsCount > 0 ||
             confirmedTransactionsCount > 0 ||
             checkpointBalance ||
-            statementCheckpoint?.accountId ||
+            checkpointAccountId ||
             processingIdentity?.accountName ||
             processingIdentity?.accountNumber
         );
@@ -2332,7 +2392,18 @@ export function ImportFilesModal({
             resolvedAccountType ??
               inferAccountTypeFromStatement(resolvedIdentity.institution, resolvedIdentity.accountName, "bank"),
             summaryContext.optimisticAccountId,
-            null,
+            pickStableBalance(
+              findKnownImportedBalance(accounts, {
+                accountId: resolvedAccountId,
+                accountName: resolvedIdentity.accountName ?? null,
+                institution: resolvedIdentity.institution ?? null,
+                accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
+                accountType:
+                  resolvedAccountType ??
+                  inferAccountTypeFromStatement(resolvedIdentity.institution, resolvedIdentity.accountName, "bank"),
+              }),
+              summaryContext.initialBalance
+            ),
             summaryContext.previewTransactions ?? [],
             resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null
           );
@@ -3321,6 +3392,15 @@ export function ImportFilesModal({
                   accountType: inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank"),
                 }
               : null;
+        const knownOptimisticBalance = optimisticIdentity
+          ? findKnownImportedBalance(accounts, {
+              accountId: optimisticAccountId,
+              accountName: optimisticIdentity.accountName ?? null,
+              institution: optimisticIdentity.institution ?? null,
+              accountNumber: statementIdentity?.accountNumber ?? null,
+              accountType: optimisticIdentity.accountType ?? statementAccountType,
+            })
+          : null;
         const optimisticSummary = optimisticIdentity
           ? ({
               ...buildOptimisticUploadSummary(
@@ -3331,7 +3411,7 @@ export function ImportFilesModal({
                 optimisticIdentity.institution ?? null,
                 optimisticIdentity.accountType ?? statementAccountType,
                 optimisticAccountId,
-                null,
+                knownOptimisticBalance,
                 previewTransactions,
                 statementIdentity?.accountNumber ?? null
               ),
@@ -3417,6 +3497,13 @@ export function ImportFilesModal({
               statementIdentity?.institution ?? null
             )
           : [];
+      const knownPreviewBalance = findKnownImportedBalance(accounts, {
+        accountId: targetAccountId,
+        accountName: statementIdentity?.accountName ?? null,
+        institution: statementIdentity?.institution ?? null,
+        accountNumber: statementIdentity?.accountNumber ?? null,
+        accountType: statementAccountType,
+      });
         const optimisticPreviewSummary =
           targetAccountId
             ? ({
@@ -3428,7 +3515,7 @@ export function ImportFilesModal({
                 statementIdentity?.institution ?? null,
                 statementAccountType,
                 targetAccountId,
-                null,
+                knownPreviewBalance,
                 previewTransactions,
                 statementIdentity?.accountNumber ?? null
               ),

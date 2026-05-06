@@ -223,6 +223,22 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
   ],
   GCash: [
     {
+      patterns: [/\b(?:edl\/)?mbpay\b.*\bgcashcashin\b/i, /\bgcashcashin\b/i],
+      replacement: "Auto Cash-In",
+    },
+    {
+      patterns: [/\bwallet\s*transfer\b/i],
+      replacement: "Wallet Transfer",
+    },
+    {
+      patterns: [/\bboost\s+campaign\b/i],
+      replacement: "Boost Campaign",
+    },
+    {
+      patterns: [/\binterest\s+applied\b/i],
+      replacement: "Interest Applied",
+    },
+    {
       patterns: [/buy\s+load\s+transaction/i, /buyloadtransaction/i],
       replacement: "Buy Load",
     },

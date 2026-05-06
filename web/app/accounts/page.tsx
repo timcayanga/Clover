@@ -146,6 +146,34 @@ const getImportedAccountKey = (
   accountType?: string | null
 ) => normalizeImportedAccountKey(name, institution, accountNumber ?? null, accountType ?? null);
 
+const getImportedAccountLastFour = (value?: string | null) => {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  return digits.length >= 4 ? digits.slice(-4) : null;
+};
+
+const matchesImportedAccountIdentity = (left: Account, right: Account) => {
+  const leftKey = getImportedAccountKey(left.name, left.institution, left.accountNumber, left.type);
+  const rightKey = getImportedAccountKey(right.name, right.institution, right.accountNumber, right.type);
+  if (leftKey === rightKey) {
+    return true;
+  }
+
+  const leftInstitution = (left.institution ?? "").trim().toLowerCase();
+  const rightInstitution = (right.institution ?? "").trim().toLowerCase();
+  const leftLastFour = getImportedAccountLastFour(left.accountNumber ?? left.name);
+  const rightLastFour = getImportedAccountLastFour(right.accountNumber ?? right.name);
+
+  return Boolean(
+    leftInstitution &&
+      rightInstitution &&
+      leftInstitution === rightInstitution &&
+      leftLastFour &&
+      rightLastFour &&
+      leftLastFour === rightLastFour &&
+      left.type === right.type
+  );
+};
+
 const mergeImportedPreviewTransactions = (
   currentTransactions: Transaction[],
   previewTransactions: NonNullable<UploadInsightsSummary["previewTransactions"]>
@@ -174,16 +202,12 @@ const mergeAccountsWithOptimisticImports = (
     )
   );
   const mergedFetchedAccounts = visibleFetchedAccounts.map((account) => {
-    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
     const optimistic = visibleCurrentAccounts.find((currentAccount) => {
       if (currentAccount.source !== "upload") {
         return false;
       }
 
-      return (
-        getImportedAccountKey(currentAccount.name, currentAccount.institution, currentAccount.accountNumber, currentAccount.type) ===
-        accountKey
-      );
+      return matchesImportedAccountIdentity(currentAccount, account);
     });
     if (!optimistic) {
       return account;
@@ -214,7 +238,7 @@ const mergeAccountsWithOptimisticImports = (
     }
 
     const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
-    return !fetchedById.has(account.id) && !fetchedByKey.has(accountKey);
+    return !fetchedById.has(account.id) && !visibleFetchedAccounts.some((fetchedAccount) => matchesImportedAccountIdentity(account, fetchedAccount)) && !fetchedByKey.has(accountKey);
   });
 
   return [...preservedCurrentAccounts, ...optimisticAccounts, ...mergedFetchedAccounts];
@@ -3371,7 +3395,7 @@ function AccountsPageContent() {
                     return true;
                   }
 
-                  return getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) !== importedAccountKey;
+                  return !matchesImportedAccountIdentity(account, optimisticAccount);
                 });
                 const existingIndex = current.findIndex((account) => {
                   if (account.id === optimisticAccount.id) {
@@ -3382,7 +3406,7 @@ function AccountsPageContent() {
                     return false;
                   }
 
-                  return getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === importedAccountKey;
+                  return matchesImportedAccountIdentity(account, optimisticAccount);
                 });
                 if (existingIndex >= 0) {
                   const existingAccount = current[existingIndex];
@@ -3394,8 +3418,7 @@ function AccountsPageContent() {
                     (optimisticBalance === "" || Number(optimisticBalance) === 0);
                   return withoutMatchingUploads.map((account) =>
                     account.id === optimisticAccount.id ||
-                    (account.source === "upload" &&
-                      getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === importedAccountKey)
+                    (account.source === "upload" && matchesImportedAccountIdentity(account, optimisticAccount))
                       ? {
                           ...account,
                           ...optimisticAccount,
