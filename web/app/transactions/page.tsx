@@ -5157,11 +5157,13 @@ function TransactionsPageContent() {
             ) : transactionsSummary.totalCount > 0 ? (
               visibleTransactions.map((transaction, index) => {
                 const warningReason = warningReasonFor(transaction);
-                const amount = Number(transaction.amount);
-                const isPositive = transaction.type === "income";
-                const amountToneClass = transaction.type === "transfer" ? "neutral" : isPositive ? "positive" : "negative";
                 const categoryValue = transaction.categoryId ?? otherCategoryId;
                 const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+                const amount = Number(transaction.amount);
+                const isPositive = transaction.type === "income";
+                const isTransferTransaction =
+                  transaction.isTransfer || transaction.type === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
+                const amountToneClass = isTransferTransaction ? "neutral" : isPositive ? "positive" : "negative";
                 const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
                 const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
                 const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
@@ -5273,7 +5275,7 @@ function TransactionsPageContent() {
                     <div className="transaction-notes-cell">
                       <button
                         type="button"
-                        className="button button-secondary button-small transaction-note-button"
+                        className="transaction-note-button transaction-note-button--plain"
                         onClick={() => openTransactionDetail(transaction)}
                         aria-label={`Open details for ${transaction.merchantRaw}`}
                       >
@@ -5396,14 +5398,20 @@ function TransactionsPageContent() {
                     <div className="transactions-mobile-date-group__rows">
                       {group.transactions.map((transaction) => {
                         const amount = Number(transaction.amount);
-                const amountToneClass = transaction.type === "transfer" ? "neutral" : transaction.type === "income" ? "positive" : "negative";
-                const merchantSummary = summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
-                const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
-                const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
-                  institution: accountInstitutionById.get(transaction.accountId) ?? null,
-                  name: accountDisplayName,
-                  type: transaction.type === "transfer" ? "bank" : transaction.type === "income" ? "bank" : "other",
-                });
+                        const merchantSummary = summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
+                        const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
+                        const accountBrand = accountBrandById.get(transaction.accountId) ??
+                          getAccountBrand({
+                            institution: accountInstitutionById.get(transaction.accountId) ?? null,
+                            name: accountDisplayName,
+                            type: transaction.type === "transfer" ? "bank" : transaction.type === "income" ? "bank" : "other",
+                          });
+                        const categoryValue = transaction.categoryId ?? otherCategoryId;
+                        const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+                        const isPositive = transaction.type === "income";
+                        const isTransferTransaction =
+                          transaction.isTransfer || transaction.type === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
+                        const amountToneClass = isTransferTransaction ? "neutral" : isPositive ? "positive" : "negative";
 
                         return (
                           <article
@@ -5445,7 +5453,7 @@ function TransactionsPageContent() {
                             </div>
                             <button
                               type="button"
-                              className="icon-button transactions-mobile-simple-row__detail"
+                              className="transactions-mobile-simple-row__detail transactions-mobile-simple-row__detail--plain"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 openTransactionDetail(transaction);
