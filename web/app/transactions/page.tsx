@@ -1046,6 +1046,7 @@ const getConfidenceLabel = (value: number) => {
 const inferTransactionConfidenceSignals = (transaction: Transaction, warningReason: string | null): TransactionConfidenceSignal[] => {
   const source = transaction.source ?? "upload";
   const hasWarning = Boolean(warningReason);
+  const isDuplicateWarning = warningReason === "Review similar transaction";
   const sourceBoost = source === "manual" ? 6 : source === "upload" ? 0 : -4;
 
   const nameValue = Math.max(
@@ -1059,9 +1060,9 @@ const inferTransactionConfidenceSignals = (transaction: Transaction, warningReas
       98,
       (!transaction.categoryId ? 28 : 86) +
         sourceBoost +
-        (warningReason === "Possible duplicate" ? -8 : 0) +
+        (isDuplicateWarning ? -8 : 0) +
         (warningReason === "Needs category review" ? -20 : 0) +
-        (hasWarning && warningReason !== "Possible duplicate" ? -4 : 0)
+        (hasWarning && !isDuplicateWarning ? -4 : 0)
     )
   );
 
@@ -1850,7 +1851,7 @@ function TransactionsPageContent() {
       const fetchedTransactions = Array.isArray(payload.transactions) ? payload.transactions : [];
       const mergedTransactions = options?.append
         ? appendUniqueTransactions(transactionsRef.current, fetchedTransactions)
-        : mergeImportedWorkspaceTransactions(transactionsRef.current, fetchedTransactions);
+        : fetchedTransactions;
       const responseCurrencyCodes = Array.isArray(payload.currencyCodes)
         ? payload.currencyCodes.map((value: unknown) => formatCurrencyCode(String(value ?? ""))).filter(Boolean)
         : [];
@@ -2146,7 +2147,30 @@ function TransactionsPageContent() {
     dateFilterAnchor,
     customStart,
     customEnd,
+    sortField,
+    sortDirection,
+    amountMin,
+    amountMax,
     transactionsPage,
+    transactionsPageSize,
+  ]);
+
+  useEffect(() => {
+    setTransactionsPage(1);
+  }, [
+    query,
+    currencyFilter,
+    categoryFilters,
+    accountFilters,
+    typeFilters,
+    dateFilterMode,
+    dateFilterAnchor,
+    customStart,
+    customEnd,
+    sortField,
+    sortDirection,
+    amountMin,
+    amountMax,
     transactionsPageSize,
   ]);
 
@@ -2662,7 +2686,7 @@ function TransactionsPageContent() {
 
     if (transaction.warningReason) {
       if (transaction.warningReason === "Possible duplicate") {
-        return null;
+        return "Review similar transaction";
       }
 
       if (transaction.warningReason === "Needs category review") {
@@ -2678,6 +2702,8 @@ function TransactionsPageContent() {
 
     return null;
   };
+
+  const isDuplicateWarningTransaction = (transaction: Transaction) => transaction.warningReason === "Possible duplicate";
 
   const detailWarningReasonFor = (transaction: Transaction) => {
     return warningReasonFor(transaction);
@@ -2907,7 +2933,7 @@ function TransactionsPageContent() {
       }
     );
 
-    if (warningReasonFor(transaction) === "Possible duplicate" && outcome === "rejected") {
+    if (isDuplicateWarningTransaction(transaction) && outcome === "rejected") {
       capturePostHogClientEvent("transaction_split", {
         workspace_id: selectedWorkspaceId || null,
         transaction_id: transaction.id,
