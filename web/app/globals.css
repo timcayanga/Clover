@@ -12620,11 +12620,10 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-inline-row {
-  display: grid;
+  display: flex;
   width: 100%;
   gap: 10px;
   align-items: stretch;
-  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .transactions-manual-row-icon {
@@ -12668,9 +12667,9 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .transactions-manual-inline-row__icon {
-  width: auto;
+  width: 44px;
+  min-width: 44px;
   height: 100%;
-  aspect-ratio: 1 / 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -12706,6 +12705,7 @@ input.transaction-inline-edit--amount::placeholder {
   min-width: 0;
   align-self: stretch;
   width: 100%;
+  flex: 1 1 auto;
 }
 
 .transaction-drawer__merchant-raw {
@@ -23136,7 +23136,6 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .transactions-manual-inline-row {
-    grid-template-columns: auto minmax(0, 1fr);
     gap: 8px;
     align-items: stretch;
   }
@@ -23200,9 +23199,9 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .transactions-manual-inline-row__icon {
-    width: auto;
+    width: 40px;
+    min-width: 40px;
     height: 100%;
-    aspect-ratio: 1 / 1;
     margin-top: 0;
     align-self: stretch;
   }
