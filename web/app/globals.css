@@ -22880,6 +22880,28 @@ button.accounts-detail__transaction-head-cell {
     grid-template-columns: 1fr;
     gap: 10px;
     width: 100%;
+    justify-items: center;
+  }
+
+  .accounts-detail__identity-field {
+    width: min(100%, 320px);
+    text-align: center;
+  }
+
+  .accounts-detail__identity-field input {
+    text-align: center;
+  }
+
+  .accounts-detail__identity-status {
+    text-align: center;
+  }
+
+  .accounts-detail__transactions {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
   }
 
   .accounts-detail__summary .status-card {

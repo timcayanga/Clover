@@ -2495,14 +2495,19 @@ function AccountDetailPageContent() {
                 <div className="transactions-mobile-view">
                   <div className="transactions-mobile-list">
                     {mobileTransactionGroups.map((group) => (
-                  <section key={group.date} className="transactions-mobile-date-group">
-                    <div className="transactions-mobile-date-divider">
-                      <span>{`------- ${group.label} -------`}</span>
-                    </div>
+                      <section key={group.date} className="transactions-mobile-date-group">
+                        <div className="transactions-mobile-date-divider">
+                          <span>{`-------${group.label}-------`}</span>
+                        </div>
                         <div className="transactions-mobile-date-group__rows">
                           {group.transactions.map((transaction) => {
                             const amount = Number(transaction.amount);
-                            const amountToneClass = transaction.type === "transfer" ? "neutral" : transaction.type === "income" ? "positive" : "negative";
+                            const categoryValue = transaction.categoryId ?? otherCategoryId;
+                            const categoryLabel =
+                              transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+                            const isTransferTransaction =
+                              transaction.type === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
+                            const amountToneClass = isTransferTransaction ? "neutral" : transaction.type === "income" ? "positive" : "negative";
                             const normalizedName = transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
 
                             return (
@@ -2524,14 +2529,20 @@ function AccountDetailPageContent() {
                                 }}
                               >
                                 <div className="transactions-mobile-simple-row__name">
+                                  <span className="transactions-mobile-simple-row__category-icon" aria-hidden="true">
+                                    <img src={getCategoryIconSrc(categoryLabel)} alt="" aria-hidden="true" />
+                                  </span>
                                   <span className="transactions-mobile-simple-row__name-main">{normalizedName}</span>
                                 </div>
                                 <div className={`transactions-mobile-simple-row__amount ${amountToneClass}`}>
+                                  <span className="transactions-mobile-simple-row__account-brand" aria-hidden="true">
+                                    <AccountBrandMark accountBrand={accountBrand} label={accountCardName} />
+                                  </span>
                                   {formatAccountAmount(amount, transaction.currency ?? account?.currency ?? "PHP")}
                                 </div>
                                 <button
                                   type="button"
-                                  className="icon-button transactions-mobile-simple-row__detail"
+                                  className="transactions-mobile-simple-row__detail transactions-mobile-simple-row__detail--plain"
                                   onClick={(event) => {
                                     event.stopPropagation();
                                     openTransactionDetail(transaction);
