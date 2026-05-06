@@ -3389,7 +3389,7 @@ body.transactions-manual-open .shell-quick-add-button {
 
 .dashboard-home__hero--balance {
   position: relative;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 170px);
   align-items: start;
   gap: 16px;
   min-height: 152px;
@@ -3420,7 +3420,7 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 8px;
   justify-self: end;
   align-self: start;
-  width: min(220px, 100%);
+  width: min(170px, 100%);
 }
 
 .dashboard-home__hero-mini-pill,
@@ -3461,7 +3461,7 @@ body.transactions-manual-open .shell-quick-add-button {
 .dashboard-home__hero-mini-label {
   margin: 0;
   color: rgba(82, 89, 112, 0.74);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.2;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -22156,6 +22156,10 @@ button.accounts-detail__transaction-head-cell {
 
   .dashboard-home__hero-aside {
     display: none;
+  }
+
+  .dashboard-home__hero-mini-label {
+    font-size: 9px;
   }
 
   .dashboard-home__hero-mobile-metrics {
