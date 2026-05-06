@@ -2,6 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { BillingActions } from "@/components/billing-actions";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
+import { analyticsOnceKey, PostHogEvent } from "@/components/posthog-analytics";
 import { getEnv } from "@/lib/env";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getUserBillingSubscription } from "@/lib/paypal-billing";
@@ -68,6 +69,16 @@ export default async function PricingPage() {
           <p>Choose a plan that fits the way you want to understand your money.</p>
           <p>Start free if you want to explore Clover first. Upgrade to Pro when you need higher limits, fuller investing tools, and richer reports, insights, and goals.</p>
         </header>
+
+        <PostHogEvent
+          event="upgrade_prompt_viewed"
+          onceKey={analyticsOnceKey("upgrade_prompt_viewed", `pricing:${user?.id ?? "guest"}`)}
+          properties={{
+            plan_tier: user?.planTier ?? "guest",
+            prompt_location: "pricing_page",
+            cta_href: user ? "/settings#billing" : "/sign-up",
+          }}
+        />
 
         <section className="pricing-page__comparison" aria-label="Clover pricing plans">
           <article className="pricing-card">

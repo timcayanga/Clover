@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
+import { capturePostHogServerEvent } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ wo
         createdAt: true,
         updatedAt: true,
       },
+    });
+
+    void capturePostHogServerEvent("workspace_updated", userId, {
+      workspace_id: workspace.id,
+      workspace_name: workspace.name,
+      workspace_type: workspace.type,
     });
 
     return NextResponse.json({ workspace });
@@ -105,6 +112,10 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
 
     await prisma.workspace.delete({
       where: { id: workspaceId },
+    });
+
+    void capturePostHogServerEvent("workspace_deleted", userId, {
+      workspace_id: workspaceId,
     });
 
     return NextResponse.json({ ok: true });

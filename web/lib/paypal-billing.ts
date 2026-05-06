@@ -7,6 +7,7 @@ import {
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getEnv } from "@/lib/env";
+import { capturePostHogServerEvent } from "@/lib/analytics";
 import { getBillingPlanById, type BillingInterval } from "@/lib/billing-plans";
 
 export type PayPalWebhookBody = {
@@ -445,6 +446,9 @@ async function applyBillingSubscriptionSnapshot(
   const existing = await prisma.billingSubscription.findUnique({
     where: { userId: user.id },
   });
+  const wasPro = existing?.planTier === PlanTier.pro;
+  const wasActive = existing?.status === BillingSubscriptionStatus.active;
+  const wasCancelled = existing?.status === BillingSubscriptionStatus.cancelled;
 
   const rawPayload: Prisma.InputJsonValue = toJsonValue(snapshot.rawPayload);
 
@@ -480,6 +484,33 @@ async function applyBillingSubscriptionSnapshot(
     await prisma.user.update({
       where: { id: user.id },
       data: { planTier },
+    });
+  }
+
+  if (snapshot.status === BillingSubscriptionStatus.active && !wasActive) {
+    void capturePostHogServerEvent("billing_success", user.id, {
+      billing_status: snapshot.status,
+      plan_tier: planTier,
+      interval: snapshot.interval ?? null,
+      provider_subscription_id: snapshot.providerSubscriptionId,
+    });
+
+    if (!wasPro) {
+      void capturePostHogServerEvent("trial_to_paid_conversion", user.id, {
+        billing_status: snapshot.status,
+        plan_tier: planTier,
+        interval: snapshot.interval ?? null,
+        provider_subscription_id: snapshot.providerSubscriptionId,
+      });
+    }
+  }
+
+  if (snapshot.status === BillingSubscriptionStatus.cancelled && !wasCancelled) {
+    void capturePostHogServerEvent("billing_cancelled", user.id, {
+      billing_status: snapshot.status,
+      plan_tier: planTier,
+      interval: snapshot.interval ?? null,
+      provider_subscription_id: snapshot.providerSubscriptionId,
     });
   }
 

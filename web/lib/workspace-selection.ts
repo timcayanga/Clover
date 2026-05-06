@@ -4,6 +4,32 @@ export type WorkspaceLike = {
   id: string;
 };
 
+const captureWorkspaceSwitch = (previousWorkspaceId: string, workspaceId: string) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const posthogWindow = window as Window & {
+    posthog?: { capture: (event: string, properties?: Record<string, unknown>) => void };
+    __posthogQueue?: Array<() => void>;
+  };
+
+  const emit = () => {
+    posthogWindow.posthog?.capture("workspace_switched", {
+      previous_workspace_id: previousWorkspaceId,
+      next_workspace_id: workspaceId,
+    });
+  };
+
+  if (posthogWindow.posthog) {
+    emit();
+    return;
+  }
+
+  posthogWindow.__posthogQueue ??= [];
+  posthogWindow.__posthogQueue.push(emit);
+};
+
 export const readSelectedWorkspaceId = () => {
   if (typeof window === "undefined") {
     return "";
@@ -17,10 +43,16 @@ export const persistSelectedWorkspaceId = (workspaceId: string) => {
     return;
   }
 
+  const previousWorkspaceId = window.localStorage.getItem(selectedWorkspaceKey) ?? "";
+
   if (!workspaceId) {
     window.localStorage.removeItem(selectedWorkspaceKey);
     document.cookie = `${selectedWorkspaceKey}=; Path=/; Max-Age=0; SameSite=Lax`;
     return;
+  }
+
+  if (previousWorkspaceId && previousWorkspaceId !== workspaceId) {
+    captureWorkspaceSwitch(previousWorkspaceId, workspaceId);
   }
 
   window.localStorage.setItem(selectedWorkspaceKey, workspaceId);

@@ -199,6 +199,16 @@ const MAX_PAGE_SIZE = 100;
 const PRODUCTION_USER_WHERE: Prisma.UserWhereInput = {
   environment: "production",
 };
+const ACTIVE_TRANSACTION_WHERE: Prisma.TransactionWhereInput = {
+  deletedAt: null,
+  isExcluded: false,
+  isTransfer: false,
+};
+const ACTIVE_IMPORT_WHERE: Prisma.ImportFileWhereInput = {
+  status: {
+    not: "deleted",
+  },
+};
 
 function getFullName(user: Pick<User, "firstName" | "lastName" | "email">) {
   return [user.firstName, user.lastName].filter(Boolean).join(" ").trim() || user.email;
@@ -424,6 +434,7 @@ async function fetchUserMetrics(userIds: string[]) {
       FROM "Transaction" t
       INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
       WHERE w."userId" IN (${Prisma.join(userIdFragments)})
+        AND t."deletedAt" IS NULL
       GROUP BY w."userId"
     `),
     prisma.$queryRaw<Array<{ userId: string; activeAccountCount: bigint }>>(Prisma.sql`
@@ -457,6 +468,7 @@ async function fetchUserMetrics(userIds: string[]) {
       WHERE w."userId" IN (${Prisma.join(userIdFragments)})
         AND t."isExcluded" = false
         AND t."isTransfer" = false
+        AND t."deletedAt" IS NULL
       GROUP BY w."userId"
     `),
     prisma.$queryRaw<Array<{ userId: string; monthlyUploads: bigint }>>(Prisma.sql`
@@ -466,6 +478,7 @@ async function fetchUserMetrics(userIds: string[]) {
       WHERE w."userId" IN (${Prisma.join(userIdFragments)})
         AND i."uploadedAt" >= ${startOfMonth}
         AND i."uploadedAt" < ${nextMonth}
+        AND i."status" <> 'deleted'
       GROUP BY w."userId"
     `),
     prisma.$queryRaw<Array<{ userId: string; recentErrorCount: bigint }>>(Prisma.sql`
@@ -483,11 +496,13 @@ async function fetchUserMetrics(userIds: string[]) {
         FROM "Transaction" t
         INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
         WHERE w."userId" IN (${Prisma.join(userIdFragments)})
+          AND t."deletedAt" IS NULL
         UNION ALL
         SELECT w."userId", i."uploadedAt" AS "activityAt"
         FROM "ImportFile" i
         INNER JOIN "Workspace" w ON w."id" = i."workspaceId"
         WHERE w."userId" IN (${Prisma.join(userIdFragments)})
+          AND i."status" <> 'deleted'
       ) AS activity
       GROUP BY activity."userId"
     `),
@@ -580,6 +595,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
     }),
     prisma.transaction.count({
       where: {
+        ...ACTIVE_TRANSACTION_WHERE,
         workspace: {
           user: PRODUCTION_USER_WHERE,
         },
@@ -592,6 +608,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
       INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
       WHERE t."isExcluded" = false
         AND t."isTransfer" = false
+        AND t."deletedAt" IS NULL
     `),
     prisma.$queryRaw<Array<{ total: Prisma.Decimal | string | number | null }>>(Prisma.sql`
       SELECT COALESCE(SUM(GREATEST(COALESCE(a."balance", 0), 0)), 0) AS total
@@ -603,6 +620,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
     prisma.importFile.count({
       where: {
         uploadedAt: { gte: startOfMonth },
+        ...ACTIVE_IMPORT_WHERE,
         workspace: {
           user: PRODUCTION_USER_WHERE,
         },
@@ -632,12 +650,14 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
         INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
         INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
         WHERE t."date" >= ${thirtyDaysAgo}
+          AND t."deletedAt" IS NULL
         UNION
         SELECT w."userId", i."workspaceId"
         FROM "ImportFile" i
         INNER JOIN "Workspace" w ON w."id" = i."workspaceId"
         INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
         WHERE i."uploadedAt" >= ${thirtyDaysAgo}
+          AND i."status" <> 'deleted'
       ) AS source_user
     `),
     prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
@@ -648,12 +668,14 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
         INNER JOIN "Workspace" w ON w."id" = t."workspaceId"
         INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
         WHERE t."createdAt" >= ${sevenDaysAgo}
+          AND t."deletedAt" IS NULL
         UNION
         SELECT w."userId"
         FROM "ImportFile" i
         INNER JOIN "Workspace" w ON w."id" = i."workspaceId"
         INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
         WHERE i."uploadedAt" >= ${sevenDaysAgo}
+          AND i."status" <> 'deleted'
       ) AS source_user
     `),
     prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
@@ -665,6 +687,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
         INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
         WHERE t."createdAt" >= ${fourteenDaysAgo}
           AND t."createdAt" < ${sevenDaysAgo}
+          AND t."deletedAt" IS NULL
         UNION
         SELECT w."userId"
         FROM "ImportFile" i
@@ -672,11 +695,13 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
         INNER JOIN "User" u ON u."id" = w."userId" AND u."environment" = 'production'
         WHERE i."uploadedAt" >= ${fourteenDaysAgo}
           AND i."uploadedAt" < ${sevenDaysAgo}
+          AND i."status" <> 'deleted'
       ) AS source_user
     `),
     prisma.importFile.count({
       where: {
         uploadedAt: { gte: sevenDaysAgo },
+        ...ACTIVE_IMPORT_WHERE,
         workspace: {
           user: PRODUCTION_USER_WHERE,
         },
@@ -685,6 +710,7 @@ async function fetchAdminOverview(): Promise<AdminUserOverview> {
     prisma.importFile.count({
       where: {
         uploadedAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo },
+        ...ACTIVE_IMPORT_WHERE,
         workspace: {
           user: PRODUCTION_USER_WHERE,
         },
@@ -1034,7 +1060,7 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
     workspaces,
   ] = await Promise.all([
     prisma.transaction.findMany({
-      where: { workspace: { userId: user.id } },
+      where: { workspace: { userId: user.id }, ...ACTIVE_TRANSACTION_WHERE },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       take: 10,
       select: {
@@ -1051,7 +1077,7 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
       },
     }),
     prisma.importFile.findMany({
-      where: { workspace: { userId: user.id } },
+      where: { workspace: { userId: user.id }, ...ACTIVE_IMPORT_WHERE },
       orderBy: [{ uploadedAt: "desc" }, { createdAt: "desc" }],
       take: 10,
       select: {
@@ -1112,8 +1138,12 @@ export async function getAdminUserDetail(userId: string): Promise<AdminUserDetai
         _count: {
           select: {
             accounts: true,
-            transactions: true,
-            importFiles: true,
+            transactions: {
+              where: ACTIVE_TRANSACTION_WHERE,
+            },
+            importFiles: {
+              where: ACTIVE_IMPORT_WHERE,
+            },
           },
         },
       },

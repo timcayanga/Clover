@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { wipeLocalUserData } from "@/lib/account-management";
+import { capturePostHogServerEvent } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,12 @@ export async function POST() {
     }
 
     await wipeLocalUserData(userId);
+    void capturePostHogServerEvent("account_wiped", userId, {
+      wipe_scope: "all_app_data",
+    });
+    void capturePostHogServerEvent("account_reset", userId, {
+      reset_scope: "all_app_data",
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

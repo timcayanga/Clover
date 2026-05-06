@@ -114,6 +114,21 @@ export async function PUT(request: Request) {
       source: "goals",
     });
 
+    void capturePostHogServerEvent("goal_updated", userId, {
+      primary_goal: nextGoal ?? null,
+      target_amount: nextTargetAmount ? Number(nextTargetAmount.toString()) : null,
+      goal_target_mode: nextGoalPlan?.targetMode ?? null,
+      goal_target_cadence: nextGoalPlan?.cadence ?? null,
+      goal_target_purpose: nextGoalPlan?.purpose ?? null,
+      source: "goals",
+    });
+
+    if (nextGoal === null && nextTargetAmount === null && nextGoalPlan === null) {
+      void capturePostHogServerEvent("goal_reset", userId, {
+        source: "goals",
+      });
+    }
+
     return NextResponse.json({
       user: {
         id: updated.id,

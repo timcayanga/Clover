@@ -10,6 +10,7 @@ type ImportUploadDockProps = {
   completedFiles: number;
   progress: number;
   detail: string;
+  tone?: "default" | "error" | "success";
   onClose?: () => void;
 };
 
@@ -23,6 +24,7 @@ export function ImportUploadDock({
   completedFiles,
   progress,
   detail,
+  tone = "default",
   onClose,
 }: ImportUploadDockProps) {
   if (!open) {
@@ -39,7 +41,7 @@ export function ImportUploadDock({
       : "Clover is getting things ready";
 
   return (
-    <div className="import-upload-dock" role="status" aria-live="polite">
+    <div className={`import-upload-dock import-upload-dock--${tone}`} role="status" aria-live="polite">
       <div className="import-upload-dock__inner glass">
         <div className="import-upload-dock__header">
           <div>

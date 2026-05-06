@@ -686,6 +686,7 @@ export async function POST(request: Request) {
           source: "manual_transaction_creation",
           confidence: 100,
           notes: payload.accountId ? "Manual transaction created in the app." : null,
+          actorUserId: userId,
         }).catch(() => {
           // Background learning should never block a user-facing save.
         });
@@ -698,6 +699,7 @@ export async function POST(request: Request) {
       account_id: transaction.accountId,
       category_id: resolvedCategoryId,
       amount: Number(transaction.amount),
+      amount_signed: Number(transaction.amount),
       currency: transaction.currency,
       transaction_type: transaction.type,
       source: "manual",

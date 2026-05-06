@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import type { AnalyticsEventName } from "@/lib/analytics";
+import { formatCurrencyAmount } from "@/lib/currency-format";
 import { humanizeMerchantText, summarizeMerchantText } from "@/lib/merchant-labels";
 import { formatTransactionDirectionLabel } from "@/lib/transaction-directions";
 
@@ -39,6 +40,7 @@ type ReviewTransaction = {
   description: string | null;
   isTransfer: boolean;
   isExcluded: boolean;
+  rawPayload?: Record<string, unknown> | null;
 };
 
 type Draft = {
@@ -62,12 +64,6 @@ type ReviewWorkbenchProps = {
   categories: ReviewCategory[];
 };
 
-const currencyFormatter = new Intl.NumberFormat("en-PH", {
-  style: "currency",
-  currency: "PHP",
-  minimumFractionDigits: 2,
-});
-
 const formatDate = (value: string) =>
   new Date(value).toLocaleDateString("en-PH", {
     month: "short",
@@ -86,6 +82,9 @@ const confidenceLabel = (value: number) => {
   if (value >= 70) return "Moderate confidence";
   return "Needs attention";
 };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
 
 const nextItemId = (items: ReviewTransaction[], currentId: string) => {
   const currentIndex = items.findIndex((item) => item.id === currentId);
@@ -165,6 +164,18 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
   const currentCategoryName = currentCategory?.name ?? current?.categoryName ?? "Uncategorized";
   const currentAccountName = currentAccount?.name ?? current?.accountName ?? "Unknown account";
   const currentAmount = current ? Number(current.amount) : 0;
+  const currentRawPayload = current?.rawPayload && isRecord(current.rawPayload) ? current.rawPayload : null;
+  const currentImportMode = typeof currentRawPayload?.importMode === "string" ? currentRawPayload.importMode : null;
+  const currentDocumentType = typeof currentRawPayload?.documentType === "string" ? currentRawPayload.documentType : null;
+  const receiptAccountMatch = isRecord(currentRawPayload?.receiptAccountMatch) ? currentRawPayload.receiptAccountMatch : null;
+  const receiptAccountMatchName =
+    receiptAccountMatch && typeof receiptAccountMatch.account_name === "string" ? receiptAccountMatch.account_name : null;
+  const receiptAccountMatchLast4 =
+    receiptAccountMatch && typeof receiptAccountMatch.account_last4 === "string" ? receiptAccountMatch.account_last4 : null;
+  const receiptAccountMatchConfidence =
+    receiptAccountMatch && typeof receiptAccountMatch.confidence === "number" ? receiptAccountMatch.confidence : null;
+  const receiptAccountMatchReason =
+    receiptAccountMatch && typeof receiptAccountMatch.reason === "string" ? receiptAccountMatch.reason : null;
   const draftChanged = (() => {
     if (!current || !currentDraft) {
       return false;
@@ -301,6 +312,14 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
         workspace_id: workspaceId,
         transaction_id: transactionId,
         review_status: reviewStatusValue,
+        transaction_amount: current ? Number(current.amount) : null,
+        transaction_account: current?.accountName ?? null,
+        transaction_category: current?.categoryName ?? null,
+        merchant_raw: current?.merchantRaw ?? null,
+        merchant_clean: current?.merchantClean ?? current?.merchantRaw ?? null,
+        parser_confidence: current?.parserConfidence ?? null,
+        category_confidence: current?.categoryConfidence ?? null,
+        account_match_confidence: current?.accountMatchConfidence ?? null,
       });
       setStatus(message);
     } catch (error) {
@@ -414,6 +433,14 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
             workspace_id: workspaceId,
             transaction_id: transaction.id,
             review_status: body.reviewStatus as string,
+            transaction_amount: Number(transaction.amount),
+            transaction_account: transaction.accountName,
+            transaction_category: transaction.categoryName ?? null,
+            merchant_raw: transaction.merchantRaw,
+            merchant_clean: transaction.merchantClean ?? transaction.merchantRaw,
+            parser_confidence: transaction.parserConfidence,
+            category_confidence: transaction.categoryConfidence,
+            account_match_confidence: transaction.accountMatchConfidence,
           }
         );
       }
@@ -621,6 +648,10 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
           <div className="review-workbench__transaction-head">
             <div>
               <p className="review-workbench__active-tag">Active review item</p>
+              <div className="review-workbench__tag-row">
+                {currentImportMode ? <span className="pill pill-subtle">Image {currentImportMode}</span> : null}
+                {currentDocumentType && currentDocumentType !== currentImportMode ? <span className="pill pill-subtle">{currentDocumentType}</span> : null}
+              </div>
               <p className="review-workbench__title">{summarizeMerchantText(current.merchantClean ?? current.merchantRaw)}</p>
               {humanizeMerchantText(current.merchantRaw).toLowerCase() !==
               summarizeMerchantText(current.merchantClean ?? current.merchantRaw).toLowerCase() ? (
@@ -638,7 +669,7 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
             <div>
               <span className="review-workbench__meta-label">Amount</span>
               <strong className={current.type === "income" ? "positive" : "negative"}>
-                {currencyFormatter.format(currentAmount)}
+                {formatCurrencyAmount(currentAmount, current.currency)}
               </strong>
             </div>
             <div>
@@ -697,6 +728,29 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
               </div>
             </div>
           </div>
+
+          {currentImportMode === "receipt" ? (
+            <div className="review-workbench__image-panel">
+              <div>
+                <p className="eyebrow">Receipt match</p>
+                <strong>
+                  {receiptAccountMatchName
+                    ? receiptAccountMatchLast4
+                      ? `${receiptAccountMatchName} ${receiptAccountMatchLast4}`
+                      : receiptAccountMatchName
+                    : "No clear account match"}
+                </strong>
+                <p className="panel-muted">
+                  {receiptAccountMatchReason ??
+                    "Clover will keep this row in review if the card or wallet association is not clear enough."}
+                </p>
+              </div>
+              <div className="review-workbench__image-score">
+                <span>Match confidence</span>
+                <strong>{receiptAccountMatchConfidence ?? 0}%</strong>
+              </div>
+            </div>
+          ) : null}
 
           <div className="review-workbench__edit-grid">
             <label>

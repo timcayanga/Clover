@@ -3,6 +3,7 @@ import { enqueueImportProcessing } from "@/lib/import-queue";
 import { ensureImportProcessingWorker } from "@/lib/import-worker-runtime";
 import { prisma } from "@/lib/prisma";
 import { updateImportFileCompat } from "@/lib/data-engine";
+import { getConfiguredPdfJsBaseUrl } from "@/lib/import-file-text.server";
 
 const FAILED_IMPORT_RECOVERY_DELAY_MS = 10_000;
 const STALLED_IMPORT_RECOVERY_DELAY_MS = 2 * 60 * 1000;
@@ -65,6 +66,7 @@ const recoverImportFiles = async (limit: number) => {
 
     await enqueueImportProcessing({
       importFileId: importFile.id,
+      pdfJsBaseUrl: getConfiguredPdfJsBaseUrl(),
     });
 
     recovered.push({

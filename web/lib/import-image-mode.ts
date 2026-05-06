@@ -1,4 +1,4 @@
-export type ImportImageMode = "statement" | "receipt" | "notes";
+export type ImportImageMode = "statement" | "receipt" | "notes" | "portfolio" | "account_detail";
 
 export const IMPORT_IMAGE_MODES: Array<{
   value: ImportImageMode;
@@ -8,7 +8,7 @@ export const IMPORT_IMAGE_MODES: Array<{
   {
     value: "statement",
     label: "Statement screenshot",
-    helper: "Use when the image is a bank statement, transaction history, or account summary.",
+    helper: "Use when the image is a bank statement, wallet history, transaction history, or account summary.",
   },
   {
     value: "receipt",
@@ -20,10 +20,20 @@ export const IMPORT_IMAGE_MODES: Array<{
     label: "Notes screenshot",
     helper: "Use when the image comes from a notes app or checklist with transaction entries.",
   },
+  {
+    value: "portfolio",
+    label: "Portfolio screen",
+    helper: "Use when the image shows holdings, positions, market value, or investment performance instead of a transaction ledger.",
+  },
+  {
+    value: "account_detail",
+    label: "Account details",
+    helper: "Use when the image is an account summary, time deposit screen, balance detail page, or product snapshot.",
+  },
 ];
 
 export const isImportImageMode = (value: unknown): value is ImportImageMode =>
-  value === "statement" || value === "receipt" || value === "notes";
+  value === "statement" || value === "receipt" || value === "notes" || value === "portfolio" || value === "account_detail";
 
 export const normalizeImportImageMode = (value: unknown): ImportImageMode => {
   if (isImportImageMode(value)) {

@@ -1,3 +1,5 @@
+import { formatCurrencyAmount } from "@/lib/currency-format";
+
 export type GoalKey =
   | "save_more"
   | "pay_down_debt"
@@ -310,7 +312,7 @@ export const normalizeGoalPlan = (
   };
 };
 
-export const getGoalPlanSummary = (plan: GoalPlan | null, monthlyIncome: number | null) => {
+export const getGoalPlanSummary = (plan: GoalPlan | null, monthlyIncome: number | null, currency?: string | null) => {
   if (!plan) {
     return null;
   }
@@ -326,7 +328,7 @@ export const getGoalPlanSummary = (plan: GoalPlan | null, monthlyIncome: number 
       title: `${goal.title} ${plan.targetPercent}% of salary`,
       detail:
         resolvedMonthly !== null
-          ? `Aim to set aside ${formatCompactCurrency(resolvedMonthly)} per month${purposeText}.`
+          ? `Aim to set aside ${formatCompactCurrency(resolvedMonthly, currency)} per month${purposeText}.`
           : `Aim to set aside ${plan.targetPercent}% of salary each month${purposeText}.`,
       subtitle: `${goalTargetModeLabels.percent} · ${goalTargetCadenceLabels[plan.cadence]}`,
       targetAmount: resolvedMonthly,
@@ -339,7 +341,7 @@ export const getGoalPlanSummary = (plan: GoalPlan | null, monthlyIncome: number 
     title: `${goal.title} ${cadenceLabel}`,
     detail:
       amount !== null
-        ? `Aim to move ${formatCompactCurrency(amount)} ${cadenceLabel === "annual" ? "each year" : "each month"}${purposeText}.`
+        ? `Aim to move ${formatCompactCurrency(amount, currency)} ${cadenceLabel === "annual" ? "each year" : "each month"}${purposeText}.`
         : `Set a clear ${targetModeLabel} target${purposeText}.`,
     subtitle: `${goalTargetModeLabels[plan.targetMode]} · ${goalTargetCadenceLabels[plan.cadence]}`,
     targetAmount: monthlyEquivalent,
@@ -479,7 +481,8 @@ export const getGoalProgressSnapshot = ({
   investmentGainLoss,
   investmentFlow,
   investmentHoldings,
-}: GoalProgressContext): GoalProgressSnapshot => {
+}: GoalProgressContext,
+currency?: string | null): GoalProgressSnapshot => {
   const planTargetAmount =
     goalPlan?.targetMode === "percent" && monthlyIncome !== null && goalPlan.targetPercent !== null
       ? monthlyIncome * (goalPlan.targetPercent / 100)
@@ -544,7 +547,7 @@ export const getGoalProgressSnapshot = ({
         ? behaviorIsImproving
           ? "You are under the cap and your spending trend is improving. That is the kind of month that builds confidence."
           : "You are under the cap. Protect the progress by keeping one more flexible category in check."
-        : `You are over the cap by ${formatCompactCurrency(overBudget)}. Trim one leak and you can close the gap.`,
+        : `You are over the cap by ${formatCompactCurrency(overBudget, currency)}. Trim one leak and you can close the gap.`,
       nextAction: achieved
         ? "Keep the biggest categories under review so the cap holds through month-end."
         : spendingIsRising
@@ -637,7 +640,7 @@ export const getGoalProgressSnapshot = ({
                 : "You are building resilience one consistent transfer at a time."
             : achieved
               ? investmentContext !== null
-                ? `You already have ${formatCompactCurrency(investmentContext)} invested${investmentGainLossValue !== null ? ` and ${investmentGainLossValue >= 0 ? "gained" : "lost"} ${formatCompactCurrency(Math.abs(investmentGainLossValue))}` : ""}. Keep building the base${planPurpose}.`
+                ? `You already have ${formatCompactCurrency(investmentContext, currency)} invested${investmentGainLossValue !== null ? ` and ${investmentGainLossValue >= 0 ? "gained" : "lost"} ${formatCompactCurrency(Math.abs(investmentGainLossValue), currency)}` : ""}. Keep building the base${planPurpose}.`
                 : `You have a clean surplus to invest${planPurpose}. Keep the habit steady.`
               : spendingIsRising
                 ? `Spending pressure is reducing the investing runway${planPurpose}. Cut one flexible category before month-end.`
@@ -671,13 +674,20 @@ export const getGoalProgressSnapshot = ({
   };
 };
 
-const formatCompactCurrency = (value: number) =>
-  new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(value);
+const formatCompactCurrency = (value: number, currency?: string | null) => {
+  const normalized = (currency ?? "PHP").toUpperCase();
+
+  try {
+    return new Intl.NumberFormat("en-PH", {
+      style: "currency",
+      currency: normalized,
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(value);
+  } catch {
+    return formatCurrencyAmount(value, normalized);
+  }
+};
 
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 

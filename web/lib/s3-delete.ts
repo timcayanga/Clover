@@ -1,4 +1,6 @@
 import { DeleteObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { rm } from "node:fs/promises";
+import { getLocalImportObjectPath } from "./s3";
 import { getEnv } from "./env";
 
 let client: S3Client | null = null;
@@ -21,6 +23,11 @@ const getClient = () => {
 };
 
 export const deleteImportObject = async (key: string) => {
+  if (process.env.NODE_ENV !== "production") {
+    await rm(getLocalImportObjectPath(key), { force: true });
+    return;
+  }
+
   const env = getEnv();
   if (!env.R2_BUCKET_NAME) {
     throw new Error("Missing bucket name");

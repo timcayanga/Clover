@@ -420,11 +420,16 @@ const normalizeCharacterSpacedGenericLine = (value: string) => {
 
 const stitchGenericOcrLines = (lines: string[]) => {
   const stitched: string[] = [];
+  let lastLeadingMonth: string | null = null;
 
   for (let index = 0; index < lines.length; index += 1) {
     let current = normalizeWhitespace(lines[index] ?? "");
     if (!current) {
       continue;
+    }
+
+    if (lastLeadingMonth && /^\d{1,2}\s+.+$/.test(current) && !genericStatementDateStartPattern.test(current)) {
+      current = normalizeWhitespace(`${lastLeadingMonth} ${current}`);
     }
 
     while (index + 1 < lines.length) {
@@ -468,10 +473,21 @@ const stitchGenericOcrLines = (lines: string[]) => {
         continue;
       }
 
+      if (
+        genericStatementDateStartPattern.test(current) &&
+        (/^-?(?:PHP|P|₱)?\s*[0-9][0-9,]*\.\d{2}$/.test(next) || /^\d$/.test(next))
+      ) {
+        current = normalizeWhitespace(`${current} ${next}`);
+        index += 1;
+        continue;
+      }
+
       break;
     }
 
     stitched.push(current);
+    const leadingMonthMatch = current.match(new RegExp(`^(?<month>${monthNamePattern})\\b`, "i"));
+    lastLeadingMonth = leadingMonthMatch?.groups?.month ?? lastLeadingMonth;
   }
 
   return stitched;
@@ -749,7 +765,7 @@ const detectStatementDatesFromText = (text: string) => {
       /(?:STATEMENT\s*PERIOD|PERIOD\s*COVERED)\s*[:\-]?\s*FROM\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2})\s*(?:TO|THRU|THROUGH|[-–—])\s*(\d{4}[/-]\d{1,2}[/-]\d{1,2})(?=\s{2,}|$|\s+(?:NO|ACCOUNT)\b)/i
     ) ??
     text.match(
-      /(?:STATEMENT\s*PERIOD|PERIOD\s*COVERED|FROM)\s*[:\-]?\s*(.+?)\s*(?:TO|THRU|THROUGH|[-–—])\s*(.+?)(?=\s{2,}|$|\s+(?:NO|ACCOUNT)\b)/i
+      /(?:STATEMENT\s*PERIOD|PERIOD\s*COVERED)\s*[:\-]?\s*(.+?)\s*(?:TO|THRU|THROUGH|[-–—])\s*(.+?)(?=\s{2,}|$|\s+(?:NO|ACCOUNT)\b)/i
     ) ??
     text.match(/FOR\s+THE\s+PERIOD\s+(.+?)\s*(?:TO|THRU|THROUGH|[-–—])\s*(.+?)(?=\s{2,}|$|\s+(?:NO|ACCOUNT)\b)/i) ??
     text.match(
@@ -3129,8 +3145,9 @@ const normalizeBdoText = (text: string) =>
     .join("\n");
 
 const extractAccountHolderNameFromLines = (lines: string[], accountLineIndex: number | null = null) => {
+  const normalizedLines = lines.map((line) => normalizeWhitespace(decompactOcrText(line)));
   const cleanAccountHolderCandidate = (value: string) =>
-    normalizeWhitespace(value)
+    normalizeWhitespace(decompactOcrText(value))
       .replace(/\s*\([^)]*\)\s*$/, "")
       .replace(
         /\s+(?:Runtime|Run\s*Date|Rundate|Page|Printed\s+by|Printed\s+on|As\s+of|Billing\s+Period|Statement\s+Date|Date\s+Printed|Generated\s+on|Created\s+on|Downloaded\s+on)\b.*$/i,
@@ -3215,9 +3232,9 @@ const extractAccountHolderNameFromLines = (lines: string[], accountLineIndex: nu
     /(?:^|\b)NAME\s*[:\-]?\s*(.+)/i,
   ];
 
-  const preparedForIndex = lines.findIndex((entry) => /prepared\s+for/i.test(entry));
+  const preparedForIndex = normalizedLines.findIndex((entry) => /prepared\s+for/i.test(entry));
   if (preparedForIndex >= 0) {
-    const preparedWindow = lines.slice(preparedForIndex + 1, Math.min(lines.length, preparedForIndex + 9));
+    const preparedWindow = normalizedLines.slice(preparedForIndex + 1, Math.min(normalizedLines.length, preparedForIndex + 9));
     const preparedValue = preparedWindow.find((entry) => {
       const normalized = normalizeWhitespace(entry);
       return (
@@ -3233,7 +3250,7 @@ const extractAccountHolderNameFromLines = (lines: string[], accountLineIndex: nu
     }
   }
 
-  for (const line of lines) {
+  for (const line of normalizedLines) {
     for (const pattern of labeledPatterns) {
       const match = line.match(pattern);
       if (!match?.[1]) {
@@ -3269,8 +3286,8 @@ const extractAccountHolderNameFromLines = (lines: string[], accountLineIndex: nu
 
   const candidateLines =
     accountLineIndex !== null && accountLineIndex > 0
-      ? lines.slice(Math.max(0, accountLineIndex - 8), Math.min(lines.length, accountLineIndex + 4))
-      : lines.slice(0, 16);
+      ? normalizedLines.slice(Math.max(0, accountLineIndex - 8), Math.min(normalizedLines.length, accountLineIndex + 4))
+      : normalizedLines.slice(0, 16);
 
   for (const line of candidateLines) {
     const normalized = cleanAccountHolderCandidate(line);
@@ -3346,15 +3363,31 @@ const extractFormattedAccountNumberFromLines = (lines: string[]) => {
 
 const cleanAccountHolderDisplayName = (value: string | null | undefined) =>
   value
-    ? normalizeWhitespace(value)
-        .replace(/\s*\([^)]*\)\s*$/, "")
-        .replace(
-          /\s+(?:Runtime|Run\s*Date|Rundate|Page|Printed\s+by|Printed\s+on|As\s+of|Billing\s+Period|Statement\s+Date|Date\s+Printed|Generated\s+on|Created\s+on|Downloaded\s+on)\b.*$/i,
-          ""
-        )
-        .replace(/\s+[0-9][0-9\s:./-]*$/, "")
-        .replace(/\s{2,}/g, " ")
-        .trim()
+    ? (() => {
+        const cleaned = normalizeWhitespace(decompactOcrText(value))
+          .replace(/\s*\([^)]*\)\s*$/, "")
+          .replace(
+            /\s+(?:Runtime|Run\s*Date|Rundate|Page|Printed\s+by|Printed\s+on|As\s+of|Billing\s+Period|Statement\s+Date|Date\s+Printed|Generated\s+on|Created\s+on|Downloaded\s+on)\b.*$/i,
+            ""
+          )
+          .replace(/\s+[0-9][0-9\s:./-]*$/, "")
+          .replace(/\s{2,}/g, " ")
+          .trim();
+        if (
+          /^(?:N\s*\/?\s*A|NONE|UNKNOWN)$/i.test(cleaned) ||
+          /^(?:STATEMENT\s+OF\s+ACCOUNT|ACCOUNT\s+SUMMARY\s+FOR\s+THE\s+PERIOD)$/i.test(cleaned) ||
+          /^(?:INDIVIDUAL(?:\s+[A-Z])?|CUSTOMER\s+DETAILS)$/i.test(cleaned) ||
+          /^(?:CARD\s+NUMBER|NATIONAL\s+CAPITAL\s+REGION)$/i.test(cleaned) ||
+          /\band\s+available\s+points\b/i.test(cleaned) ||
+          /^(?:CUSTOMER\s+DETAILS|BANK\s+INFORMATION(?:\s+CUSTOMER\s+INFORMATION)?)$/i.test(cleaned) ||
+          /\b(?:TRANSACTIONS?|DEPOSIT|WITHDRAWAL|SUMMARY|PERIOD|BALANCE|CREDITS?|DEBITS?|SERVICE\s+CHARGES?|INTEREST\s+EARNED|CUSTOMER\s+DETAILS|BANK\s+INFORMATION)\b/i.test(
+            cleaned
+          )
+        ) {
+          return null;
+        }
+        return cleaned;
+      })()
     : null;
 
 type GenericStatementAmountMode =
@@ -7644,6 +7677,27 @@ const genericStatementDateStartPattern = new RegExp(
   "i"
 );
 
+const isGenericStatementRangeHeaderLine = (line: string) => {
+  const normalized = normalizeWhitespace(line);
+  return (
+    /account\s+summary\s+for\s+the\s+period/i.test(normalized) ||
+    /period\s+covered/i.test(normalized) ||
+    /statement\s+period/i.test(normalized)
+  );
+};
+
+const isGenericStatementTableHeaderLine = (line: string) => {
+  const normalized = normalizeWhitespace(decompactOcrText(line));
+  const compact = compactWhitespace(normalized).toUpperCase();
+  return (
+    /\bDATE\b.*\bDESC(?:RIPTION)?\b.*\bBALANCE\b/i.test(normalized) ||
+    /\bDAT\b.*\bDESCRIPTIOR?\b.*\bBALANC\b/i.test(normalized) ||
+    /^DATEDESCRIPTION.*BALANCE$/i.test(compact) ||
+    /^DATDESCRIPTIOR?DETAIL.*BALANC[CE]?$/i.test(compact) ||
+    /TRANSACTIONDATECHECK.*BALANCE/i.test(compact)
+  );
+};
+
 const isGenericStatementBoilerplateLine = (line: string) => {
   const normalized = normalizeWhitespace(line);
   if (!normalized) {
@@ -7652,6 +7706,7 @@ const isGenericStatementBoilerplateLine = (line: string) => {
 
   return (
     /^all figures/i.test(normalized) ||
+    /^proof\s+of\s+account\b/i.test(normalized) ||
     /^page\s+\d+\s+of\s+\d+/i.test(normalized) ||
     /^page\s*:\s*\d+/i.test(normalized) ||
     /^request\s+date:/i.test(normalized) ||
@@ -7660,6 +7715,11 @@ const isGenericStatementBoilerplateLine = (line: string) => {
     /^name:/i.test(normalized) ||
     /^joint\s+names:/i.test(normalized) ||
     /^period\s+covered:/i.test(normalized) ||
+    /^beginning\s+balance\b/i.test(normalized) ||
+    /^balance\s+this\s+statement\b/i.test(normalized) ||
+    /^ending\s+balance\b/i.test(normalized) ||
+    /^total\s+debit\b/i.test(normalized) ||
+    /^total\s+credit\b/i.test(normalized) ||
     /^transaction\s+date\s+check/i.test(normalized) ||
     /^transaction\s*$/i.test(normalized) ||
     /^date\s+check\s+no\.?/i.test(normalized) ||
@@ -7730,6 +7790,66 @@ const parseGenericStatementDateText = (value: string, yearHint?: number | null) 
   return null;
 };
 
+const choosePreferredStatementRange = (
+  rawStartDate: Date | null,
+  rawEndDate: Date | null,
+  signalStartDate: Date | null,
+  signalEndDate: Date | null,
+  lineStartDate: Date | null,
+  lineEndDate: Date | null,
+  statementDate: Date | null,
+  isCreditCard: boolean
+) => {
+  const isReasonableDate = (value: Date | null) =>
+    Boolean(value) && value!.getUTCFullYear() >= 1990 && value!.getUTCFullYear() <= new Date().getUTCFullYear() + 1;
+  const rangeScore = (start: Date | null, end: Date | null) => {
+    if (!start || !end || !isReasonableDate(start) || !isReasonableDate(end)) {
+      return -1;
+    }
+    const span = end.getTime() - start.getTime();
+    return span >= 0 ? span : -1;
+  };
+
+  if (isCreditCard) {
+    return {
+      startDate: null as Date | null,
+      endDate:
+        (isReasonableDate(statementDate) ? statementDate : null) ??
+        (rangeScore(signalStartDate, signalEndDate) >= 0 ? signalEndDate : null) ??
+        (isReasonableDate(rawEndDate) ? rawEndDate : null) ??
+        (isReasonableDate(lineEndDate) ? lineEndDate : null),
+    };
+  }
+
+  const rawScore = rangeScore(rawStartDate, rawEndDate);
+  const signalScore = rangeScore(signalStartDate, signalEndDate);
+  const lineScore = rangeScore(lineStartDate, lineEndDate);
+
+  if (signalScore >= 0 && signalScore >= rawScore && signalScore >= lineScore) {
+    return { startDate: signalStartDate, endDate: signalEndDate };
+  }
+
+  if (rawScore >= 0 && rawScore >= lineScore) {
+    return { startDate: rawStartDate, endDate: rawEndDate };
+  }
+
+  if (lineScore >= 0) {
+    return { startDate: lineStartDate, endDate: lineEndDate };
+  }
+
+  return {
+    startDate:
+      (isReasonableDate(signalStartDate) ? signalStartDate : null) ??
+      (isReasonableDate(rawStartDate) ? rawStartDate : null) ??
+      (isReasonableDate(lineStartDate) ? lineStartDate : null),
+    endDate:
+      (isReasonableDate(signalEndDate) ? signalEndDate : null) ??
+      (isReasonableDate(rawEndDate) ? rawEndDate : null) ??
+      (isReasonableDate(lineEndDate) ? lineEndDate : null) ??
+      (isReasonableDate(statementDate) ? statementDate : null),
+  };
+};
+
 export const parseGenericStatementMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
   const genericText = normalizeGenericOcrText(text);
 
@@ -7737,6 +7857,16 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
     return null;
   }
 
+  const rawLines = splitStatementLines(text);
+  const rawNormalizedLines = rawLines
+    .map((line) => {
+      const normalized = decompactOcrText(line);
+      if (!normalized) {
+        return normalized;
+      }
+      return looksCharacterSpacedGenericLine(normalized) ? normalizeCharacterSpacedGenericLine(normalized) : normalizeWhitespace(normalized);
+    })
+    .filter(Boolean);
   const normalized = normalizeWhitespace(genericText).replace(/\u00a0/g, " ");
   const lines = splitStatementLines(genericText);
   const signalLines = lines.map((line) => compactGenericSignalLine(line));
@@ -7768,10 +7898,16 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
       : accountNumberDisplaySuffix;
   const { startDate: rawStartDate, endDate: rawEndDate } = detectStatementDatesFromText(normalized);
   const { startDate: signalStartDate, endDate: signalEndDate } = detectStatementDatesFromText(signalText);
+  const topHeaderText = lines.slice(0, Math.min(lines.length, 24)).join("\n");
+  const topHeaderSignalText = signalLines.slice(0, Math.min(signalLines.length, 24)).join("\n");
+  const { startDate: headerStartDate, endDate: headerEndDate } =
+    detectStatementDatesFromText(topHeaderText);
+  const { startDate: headerSignalStartDate, endDate: headerSignalEndDate } =
+    detectStatementDatesFromText(topHeaderSignalText);
   const statementDate = extractStatementDateFromText(signalText) ?? extractStatementDateFromText(normalized);
   const fallbackYearHint = rawEndDate?.getUTCFullYear() ?? signalEndDate?.getUTCFullYear() ?? statementDate?.getUTCFullYear() ?? null;
   const datedLines = lines
-    .filter((line) => genericStatementDateStartPattern.test(line) && !isGenericStatementBoilerplateLine(line))
+    .filter((line) => genericStatementDateStartPattern.test(line) && !isGenericStatementBoilerplateLine(line) && !isGenericStatementRangeHeaderLine(line))
     .map((line) => {
       const match = line.match(
         new RegExp(
@@ -7805,6 +7941,44 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
     parseMoney(normalized.match(/amount\s+due\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(signalText.match(/total\s+amount\s+due\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
     parseMoney(signalText.match(/amount\s+due\s*[:\-]?\s*(?:PHP|P|₱)?\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+  const rawPreparedForIndex = rawNormalizedLines.findIndex((line) => /prepared\s+for/i.test(line));
+  const rawTopHumanName = [
+    ...(
+      rawPreparedForIndex >= 0
+        ? rawNormalizedLines.slice(rawPreparedForIndex + 1, Math.min(rawNormalizedLines.length, rawPreparedForIndex + 8))
+        : []
+    ),
+    ...rawNormalizedLines.slice(0, Math.min(rawNormalizedLines.length, 20)),
+  ]
+    .map((line) => cleanAccountHolderDisplayName(line))
+    .find((line) => {
+      if (!line) {
+        return false;
+      }
+
+      if (
+        /^(?:BANK OF THE PHILIPPINE ISLANDS|BPI FAMILY SAVINGS BANK|ASIA UNITED BANK|AUB|BDO UNIBANK|METROBANK|PHILIPPINE NATIONAL BANK|UNIONBANK|RCBC|SECURITY BANK|LANDBANK|PSBANK|CHINABANK|GCASH|MAYA|GO TYME|GOTYME|MARI BANK|UCPB|CIMB)\b/i.test(
+          line
+        )
+      ) {
+        return false;
+      }
+
+      if (
+        /[0-9]/.test(line) ||
+        /^(?:from|plus|less|beginning|ending|balance|total)\b/i.test(line) ||
+        /\b(?:CITY|BARANGAY|BRGY|PROVINCE|STREET|AVENUE|ROAD|VILLAGE|LAGUNA|PHILIPPINES)\b/i.test(line)
+      ) {
+        return false;
+      }
+
+      const tokens = line.split(/\s+/).filter(Boolean);
+      if (tokens.length < 2 || tokens.length > 6) {
+        return false;
+      }
+
+      return tokens.every((token) => /^[\p{L}][\p{L}.'’-]*$/u.test(token));
+    });
   const psBankAccountName =
     institution === "PSBank" && accountNumberLineIndex >= 0
       ? cleanAccountHolderDisplayName(
@@ -7820,6 +7994,9 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
   const extractedAccountName =
     context.accountName?.trim() ||
     psBankAccountName ||
+    rawTopHumanName ||
+    cleanAccountHolderDisplayName(extractAccountHolderNameFromLines(rawNormalizedLines.slice(0, Math.min(rawNormalizedLines.length, 24)))) ||
+    cleanAccountHolderDisplayName(extractAccountHolderNameFromLines(rawNormalizedLines, accountNumberLineIndex >= 0 ? accountNumberLineIndex : null)) ||
     cleanAccountHolderDisplayName(extractAccountHolderNameFromLines(lines, accountNumberLineIndex >= 0 ? accountNumberLineIndex : null)) ||
     cleanAccountHolderDisplayName(extractAccountHolderNameFromLines(lines.slice(0, Math.min(lines.length, 16)))) ||
     (institution && provisionalAccountNameSuffix
@@ -7843,8 +8020,11 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
           ? `Account ${provisionalAccountNameSuffix}`
           : null);
   const refinedAccountType =
-    /payment\s+due\s+date|due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit|statement\s+date/i.test(normalized) &&
-    /(card|visa|mastercard|amex|credit|rewards|platinum)/i.test(normalized)
+    (paymentDueDate || totalAmountDue !== null) &&
+    /payment\s+due\s+date|due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit|statement\s+date/i.test(normalized)
+      ? "credit_card"
+      : /payment\s+due\s+date|due\s+date|total\s+amount\s+due|minimum\s+amount\s+due|credit\s+limit|statement\s+date/i.test(normalized) &&
+          /(card|visa|mastercard|amex|credit|rewards|platinum)/i.test(normalized)
       ? "credit_card"
       : /PAYMENTDUEDATE|TOTALAMOUNTDUE|MINIMUMAMOUNTDUE|CREDITLIMIT|STATEMENTDATE/i.test(compactWhitespace(signalText))
         ? "credit_card"
@@ -7863,11 +8043,18 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
         : accountNumberNameSuffix
           ? `Account ${accountNumberNameSuffix}`
           : null);
-  const startDate = rawStartDate ?? signalStartDate ?? lineStartDate;
-  const endDate =
+  const selectedRange = choosePreferredStatementRange(
+    headerSignalStartDate ?? headerStartDate ?? rawStartDate,
+    headerSignalEndDate ?? headerEndDate ?? rawEndDate,
+    signalStartDate,
+    signalEndDate,
+    lineStartDate,
+    lineEndDate,
+    statementDate,
     refinedAccountType === "credit_card"
-      ? statementDate ?? rawEndDate ?? signalEndDate ?? lineEndDate
-      : rawEndDate ?? signalEndDate ?? lineEndDate ?? statementDate;
+  );
+  const startDate = selectedRange.startDate;
+  const endDate = selectedRange.endDate;
   const topBpiSignal = compactWhitespace(signalLines.slice(0, 12).join(" "));
   const finalInstitution =
     institution === "BPI Family Savings Bank" && !/BPIFAMILYSAVINGSBANK|EASYSAVER/i.test(topBpiSignal)
@@ -7878,7 +8065,11 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
           ? "Bank of the Philippine Islands"
         : institution === "BDO"
             ? "BDO Unibank, Inc."
-            : institution;
+        : institution === "Security Bank"
+            ? "Security Bank Corporation"
+          : institution === "UnionBank"
+              ? "UnionBank of the Philippines"
+        : institution;
 
   if (!finalInstitution && !accountNumber && !startDate && !endDate && openingBalance === null && endingBalance === null) {
     return null;
@@ -7940,12 +8131,133 @@ const classifyGenericStatementTransaction = (description: string, credit: number
   return { type: "expense" as TransactionType, categoryName: guessCategoryName(description, "expense") };
 };
 
+const anchorGenericTransactionDateToStatementRange = (date: Date, startDate: Date | null, endDate: Date | null) => {
+  if (!startDate || !endDate) {
+    return date;
+  }
+
+  const startYear = startDate.getUTCFullYear();
+  const endYear = endDate.getUTCFullYear();
+  if (startYear === endYear) {
+    return date;
+  }
+
+  const month = date.getUTCMonth();
+  const day = date.getUTCDate();
+  const startMonth = startDate.getUTCMonth();
+  const startDay = startDate.getUTCDate();
+  const endMonth = endDate.getUTCMonth();
+  const endDay = endDate.getUTCDate();
+
+  if (month > endMonth || (month === endMonth && day > endDay)) {
+    return new Date(Date.UTC(startYear, month, day, 12));
+  }
+
+  if (month < startMonth || (month === startMonth && day < startDay)) {
+    return new Date(Date.UTC(endYear, month, day, 12));
+  }
+
+  return date;
+};
+
+const recoverMergedOcrAmountFromText = (amountText: string, targetAmount: number) => {
+  if (!Number.isFinite(targetAmount) || targetAmount <= 0) {
+    return null;
+  }
+
+  const normalized = amountText.replace(/[^0-9.-]/g, "");
+  const match = normalized.match(/^(?<sign>-?)(?<integer>\d+)\.(?<decimal>\d{2})$/);
+  if (!match?.groups?.integer || !match.groups.decimal) {
+    return null;
+  }
+
+  for (let splitIndex = 1; splitIndex < match.groups.integer.length; splitIndex += 1) {
+    const tailInteger = match.groups.integer.slice(splitIndex).replace(/^0+(?=\d)/, "");
+    if (!tailInteger) {
+      continue;
+    }
+
+    const candidate = Number(`${match.groups.sign}${tailInteger}.${match.groups.decimal}`);
+    if (approxMoney(Math.abs(candidate), Math.abs(targetAmount))) {
+      return candidate;
+    }
+  }
+
+  return null;
+};
+
+const splitGenericOverflowBlock = (
+  block: string[],
+  previousBalance: number | null
+) => {
+  if (previousBalance === null) {
+    return [block];
+  }
+
+  const rowText = normalizeWhitespace(block.join(" ")).replace(/\u00a0/g, " ");
+  const dateMatch = rowText.match(
+    new RegExp(
+      `^(?:-\\s*)?(?<date>(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{2}[-/]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\s+(?<body>.+)$`,
+      "i"
+    )
+  );
+  if (!dateMatch?.groups?.date || !dateMatch.groups.body) {
+    return [block];
+  }
+
+  const bodyWithoutPostedDate = dateMatch.groups.body.replace(
+    new RegExp(`^(?:${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\s+`, "i"),
+    ""
+  );
+  const bodyWithoutTimePrefix = bodyWithoutPostedDate.replace(/^\d{3,6}\s+/, "").trim();
+  const moneyMatches = Array.from(bodyWithoutTimePrefix.matchAll(/-?(?:PHP|P|₱)?\s*[0-9][0-9,]*\.\d{2}/gi));
+  if (moneyMatches.length < 3) {
+    return [block];
+  }
+
+  const numericValues = moneyMatches.map((match) => parseMoney(match[0]?.replace(/^PHP\s*/i, "") ?? null));
+  if (numericValues.some((value) => value === null)) {
+    return [block];
+  }
+
+  for (let index = 0; index < numericValues.length - 1; index += 1) {
+    const candidateAmount = numericValues[index] ?? null;
+    const candidateBalance = numericValues[index + 1] ?? null;
+    if (!approxMoney(Math.abs((candidateBalance ?? 0) - previousBalance), candidateAmount)) {
+      continue;
+    }
+
+    const balanceMatch = moneyMatches[index + 1];
+    const balanceMatchEnd = (balanceMatch.index ?? 0) + balanceMatch[0].length;
+    const headBody = bodyWithoutTimePrefix.slice(0, balanceMatchEnd).trim();
+    let tailBody = bodyWithoutTimePrefix.slice(balanceMatchEnd).trim();
+    if (!tailBody) {
+      continue;
+    }
+
+    const leadingMonthMatch = dateMatch.groups.date.match(new RegExp(`^(?<month>${monthNamePattern})\\b`, "i"));
+    if (leadingMonthMatch?.groups?.month && /^\d{1,2}\s+/.test(tailBody)) {
+      tailBody = normalizeWhitespace(`${leadingMonthMatch.groups.month} ${tailBody}`);
+    }
+
+    if (!/^(?:\d{1,2}\s+|[A-Za-z])/.test(tailBody) || /^(?:balance\s+this\s+statement|ending\s+balance|total\s*debit|total\s*credit)\b/i.test(tailBody)) {
+      continue;
+    }
+
+    return [[normalizeWhitespace(`${dateMatch.groups.date} ${headBody}`)], [tailBody]];
+  }
+
+  return [block];
+};
+
 const parseGenericStatementTransactionBlock = (
   block: string[],
   state: {
     accountName: string;
     institution: string | null;
     yearHint: number | null;
+    startDate: Date | null;
+    endDate: Date | null;
     amountMode: GenericStatementAmountMode | null;
     previousBalance: number | null;
   },
@@ -7981,12 +8293,16 @@ const parseGenericStatementTransactionBlock = (
   if (!date) {
     return null;
   }
+  const anchoredDate = anchorGenericTransactionDateToStatementRange(date, state.startDate, state.endDate);
 
   const bodyWithoutPostedDate = dateMatch.groups.body.replace(
     new RegExp(`^(?:${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\s+`, "i"),
     ""
   );
-  const bodyWithoutTimePrefix = bodyWithoutPostedDate.replace(/^\d{3,6}\s+/, "");
+  const bodyWithoutTimePrefix = bodyWithoutPostedDate
+    .replace(/^\d{3,6}\s+/, "")
+    .replace(/\b(?:BALANCE\s+THIS\s+STATEMENT|ENDING\s+BALANCE|TOTAL\s*DEBIT|TOTAL\s*CREDIT)\b[\s\S]*$/i, "")
+    .trim();
 
   const moneyMatches = Array.from(bodyWithoutTimePrefix.matchAll(/-?(?:PHP|P|₱)?\s*[0-9][0-9,]*\.\d{2}/gi));
   if (moneyMatches.length === 0) {
@@ -8007,13 +8323,20 @@ const parseGenericStatementTransactionBlock = (
     for (let index = 0; index < numericValues.length - 1; index += 1) {
       const candidateAmount = numericValues[index] ?? null;
       const candidateBalance = numericValues[index + 1] ?? null;
-      if (approxMoney(Math.abs((candidateBalance ?? 0) - state.previousBalance), candidateAmount)) {
-        explicitAmount = candidateAmount;
+      const balanceDelta = Math.abs((candidateBalance ?? 0) - state.previousBalance);
+      const recoveredAmountText = moneyMatches[index]?.[0] ?? null;
+      const repairedAmount =
+        candidateAmount !== null && !approxMoney(balanceDelta, candidateAmount) && recoveredAmountText
+          ? recoverMergedOcrAmountFromText(recoveredAmountText, balanceDelta)
+          : null;
+      const resolvedAmount = repairedAmount ?? candidateAmount;
+      if (approxMoney(balanceDelta, resolvedAmount)) {
+        explicitAmount = resolvedAmount;
         balance = candidateBalance;
         if (candidateBalance !== null && candidateBalance >= state.previousBalance) {
-          credit = candidateAmount;
+          credit = resolvedAmount;
         } else {
-          debit = candidateAmount;
+          debit = resolvedAmount;
         }
         break;
       }
@@ -8047,6 +8370,25 @@ const parseGenericStatementTransactionBlock = (
     explicitAmount = numericValues[0] ?? null;
   }
 
+  if (state.previousBalance !== null && balance !== null) {
+    const balanceDelta = Math.abs(balance - state.previousBalance);
+    if (
+      balanceDelta > 0 &&
+      explicitAmount !== null &&
+      explicitAmount > balanceDelta * 10 &&
+      approxMoney(balanceDelta, recoverMergedOcrAmountFromText(moneyMatches[0]?.[0] ?? "", balanceDelta) ?? balanceDelta)
+    ) {
+      explicitAmount = balanceDelta;
+      if (balance >= state.previousBalance) {
+        credit = balanceDelta;
+        debit = null;
+      } else {
+        debit = balanceDelta;
+        credit = null;
+      }
+    }
+  }
+
   const firstMatchedMoneyIndex =
     explicitAmount !== null && balance !== null && state.previousBalance !== null
       ? moneyMatches.find((match, index) => numericValues[index] === explicitAmount)?.index
@@ -8057,10 +8399,15 @@ const parseGenericStatementTransactionBlock = (
   let description = normalizeWhitespace(bodyWithoutTimePrefix.slice(0, descriptionEnd));
   description = description
     .replace(/\b(?:account|acct)\s+no\.?\s*[•.\s\d-]+/gi, "Account")
+    .replace(/\s+[0-9][0-9,]*\.\d{2}(?:[0-9,]*\.\d{2})+$/g, "")
     .replace(/\s{2,}/g, " ")
     .trim();
 
-  if (/date\s+and\s+time\s+description\s+reference\s+no/i.test(description) || /^starting\s+balance$/i.test(description)) {
+  if (
+    /date\s+and\s+time\s+description\s+reference\s+no/i.test(description) ||
+    /^starting\s+balance$/i.test(description) ||
+    /^(?:balance\s+this\s+statement|ending\s+balance|total\s*debit|total\s*credit)$/i.test(description)
+  ) {
     return null;
   }
 
@@ -8083,7 +8430,7 @@ const parseGenericStatementTransactionBlock = (
   }
 
   return {
-    date: date.toISOString().slice(0, 10),
+    date: anchoredDate.toISOString().slice(0, 10),
     amount: amount.toFixed(2),
     merchantRaw: humanizeMerchantText(description),
     merchantClean: summarizeMerchantText(description, options.institutionAwareNormalization === false ? null : state.institution),
@@ -8237,19 +8584,65 @@ export const parseGenericBankStatementText = (
   if (!metadata) {
     return null;
   }
+  const compactGenericText = compactWhitespace(genericText);
+  const tableHeaderIndex = (() => {
+    const normalizedLines = genericText
+      .replace(/\u00a0/g, " ")
+      .split(/\r?\n/)
+      .map((line) => normalizeWhitespace(line))
+      .filter(Boolean);
+    return normalizedLines.findIndex((line) => isGenericStatementTableHeaderLine(line));
+  })();
+  if ((/proof\s+of\s+account/i.test(genericText) || /PROOFOFACCOUNT/.test(compactGenericText)) && tableHeaderIndex < 0) {
+    return { metadata, rows: [] };
+  }
 
-  const lines = genericText
+  const baseLines = genericText
     .replace(/\u00a0/g, " ")
     .split(/\r?\n/)
     .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
+  const lines: string[] = [];
+  for (let index = 0; index < baseLines.length; index += 1) {
+    const current = baseLines[index];
+    const next = baseLines[index + 1] ?? null;
+
+    const splitMonthDayCodeMatch = current.match(new RegExp(`^(?<month>${monthNamePattern})\\s+(?<code>\\d{4}\\b.+)$`, "i"));
+    if (splitMonthDayCodeMatch?.groups?.month && splitMonthDayCodeMatch.groups.code && next && /^\d{1,2}$/.test(next)) {
+      lines.push(normalizeWhitespace(`${splitMonthDayCodeMatch.groups.month} ${next} ${splitMonthDayCodeMatch.groups.code}`));
+      index += 1;
+      continue;
+    }
+
+    const monthOnlyMatch = current.match(new RegExp(`^(?<month>${monthNamePattern})$`, "i"));
+    if (monthOnlyMatch?.groups?.month && next && /^\d{1,2}\s+.+$/.test(next)) {
+      lines.push(normalizeWhitespace(`${monthOnlyMatch.groups.month} ${next}`));
+      index += 1;
+      continue;
+    }
+
+    const compactDayCodeMatch = current.match(/^(?<day>\d{1,2})(?<rest>\d{4}\b.+)$/);
+    if (compactDayCodeMatch?.groups?.day && compactDayCodeMatch.groups.rest) {
+      lines.push(normalizeWhitespace(`${compactDayCodeMatch.groups.day} ${compactDayCodeMatch.groups.rest}`));
+      continue;
+    }
+
+    lines.push(current);
+  }
   const yearHint = metadata.endDate
     ? new Date(metadata.endDate).getUTCFullYear()
     : metadata.startDate
       ? new Date(metadata.startDate).getUTCFullYear()
       : new Date().getUTCFullYear();
 
-  const firstDateIndex = lines.findIndex((line) => genericStatementDateStartPattern.test(line) && !isGenericStatementBoilerplateLine(line));
+  const normalizedTableHeaderIndex = lines.findIndex((line) => isGenericStatementTableHeaderLine(line));
+  const firstDateIndex = lines.findIndex(
+    (line, index) =>
+      index > (normalizedTableHeaderIndex >= 0 ? normalizedTableHeaderIndex : -1) &&
+      genericStatementDateStartPattern.test(line) &&
+      !isGenericStatementBoilerplateLine(line) &&
+      !isGenericStatementRangeHeaderLine(line)
+  );
   if (firstDateIndex < 0) {
     return { metadata, rows: [] };
   }
@@ -8257,22 +8650,54 @@ export const parseGenericBankStatementText = (
 
   const blocks: string[][] = [];
   let current: string[] = [];
+  let lastLeadingMonth: string | null = null;
+  let lastLeadingDay: string | null = null;
 
   for (const line of lines.slice(firstDateIndex)) {
     if (isGenericStatementBoilerplateLine(line)) {
+      if (current.length > 0) {
+        blocks.push(current);
+        current = [];
+      }
       continue;
     }
 
-    if (genericStatementDateStartPattern.test(line)) {
+    const feeWithInheritedDayLine: string | null =
+      lastLeadingMonth && lastLeadingDay && /^fee\b/i.test(line)
+        ? normalizeWhitespace(`${lastLeadingMonth} ${lastLeadingDay} ${line}`)
+        : null;
+    const monthFeeLineMatch = line.match(new RegExp(`^(?<month>${monthNamePattern})\\s+Fee\\b(?<rest>.*)$`, "i"));
+    const feeNormalizedLine: string =
+      monthFeeLineMatch?.groups?.month && lastLeadingDay
+        ? normalizeWhitespace(`${monthFeeLineMatch.groups.month} ${lastLeadingDay} Fee${monthFeeLineMatch.groups.rest ?? ""}`)
+        : feeWithInheritedDayLine ?? line;
+    const inheritedMonthLine: string | null =
+      lastLeadingMonth && /^\d{1,2}\s+.+$/.test(feeNormalizedLine) && !genericStatementDateStartPattern.test(feeNormalizedLine)
+        ? normalizeWhitespace(`${lastLeadingMonth} ${feeNormalizedLine}`)
+        : null;
+    const normalizedLine: string = inheritedMonthLine ?? feeNormalizedLine;
+
+    if (genericStatementDateStartPattern.test(normalizedLine) && !isGenericStatementRangeHeaderLine(normalizedLine)) {
       if (current.length > 0) {
         blocks.push(current);
       }
-      current = [line];
+      current = [normalizedLine];
+      const leadingMonthMatch: RegExpMatchArray | null = normalizedLine.match(
+        new RegExp(`^(?<month>${monthNamePattern})\\s+(?<day>\\d{1,2})\\b`, "i")
+      );
+      if (leadingMonthMatch?.groups?.day) {
+        lastLeadingDay = leadingMonthMatch.groups.day;
+      }
+      const fallbackDayMatch: RegExpMatchArray | null = normalizedLine.match(/^(\d{1,2})[/-]\d{1,2}(?:[/-]\d{2,4})?\b/);
+      if (!leadingMonthMatch?.groups?.day && fallbackDayMatch?.[1]) {
+        lastLeadingDay = fallbackDayMatch[1];
+      }
+      lastLeadingMonth = leadingMonthMatch?.groups?.month ?? lastLeadingMonth;
       continue;
     }
 
     if (current.length > 0) {
-      current.push(line);
+      current.push(normalizedLine);
     }
   }
 
@@ -8283,27 +8708,32 @@ export const parseGenericBankStatementText = (
   let previousBalance = metadata.openingBalance ?? null;
   const rows: ParsedImportRow[] = [];
   for (const block of blocks) {
-    const parsed = parseGenericStatementTransactionBlock(
-      block,
-      {
-        accountName: metadata.accountName ?? metadata.institution ?? "Account",
-        institution: metadata.institution,
-        yearHint,
-        amountMode,
-        previousBalance,
-      },
-      options
-    );
-    if (!parsed) {
-      continue;
-    }
+    const expandedBlocks = splitGenericOverflowBlock(block, previousBalance);
+    for (const expandedBlock of expandedBlocks) {
+      const parsed = parseGenericStatementTransactionBlock(
+        expandedBlock,
+        {
+          accountName: metadata.accountName ?? metadata.institution ?? "Account",
+          institution: metadata.institution,
+          yearHint,
+          startDate: metadata.startDate ? new Date(metadata.startDate) : null,
+          endDate: metadata.endDate ? new Date(metadata.endDate) : null,
+          amountMode,
+          previousBalance,
+        },
+        options
+      );
+      if (!parsed) {
+        continue;
+      }
 
-    rows.push(parsed);
-    const nextBalance = parseMoney(
-      typeof parsed.rawPayload === "object" && parsed.rawPayload !== null ? (parsed.rawPayload.balanceText as string | null | undefined) : null
-    );
-    if (nextBalance !== null) {
-      previousBalance = nextBalance;
+      rows.push(parsed);
+      const nextBalance = parseMoney(
+        typeof parsed.rawPayload === "object" && parsed.rawPayload !== null ? (parsed.rawPayload.balanceText as string | null | undefined) : null
+      );
+      if (nextBalance !== null) {
+        previousBalance = nextBalance;
+      }
     }
   }
 

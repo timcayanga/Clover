@@ -4,6 +4,7 @@ import { syncClerkUser } from "@/lib/clerk";
 import { ensureStarterWorkspace, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getCurrentUserEnvironment, resolvePersistedUserEnvironment } from "@/lib/user-environment";
+import { capturePostHogServerEvent } from "@/lib/analytics";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -86,6 +87,12 @@ export async function POST(request: Request) {
         name,
         type: type === "shared" || type === "business" ? type : "personal",
       },
+    });
+
+    void capturePostHogServerEvent("workspace_created", userId, {
+      workspace_id: workspace.id,
+      workspace_name: workspace.name,
+      workspace_type: workspace.type,
     });
 
     await seedWorkspaceDefaults(workspace.id);

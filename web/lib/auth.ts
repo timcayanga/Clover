@@ -19,13 +19,13 @@ export const isStagingHost = async () => stagingHosts.has(await getHostname());
 
 export const isLocalDevHost = async () => {
   const hostname = await getHostname();
-  return process.env.NODE_ENV !== "production" && localDevHosts.has(hostname);
+  return localDevHosts.has(hostname);
 };
 
 export const getSessionContext = async (options?: { preferGuestOnStaging?: boolean }) => {
   const stagingHost = await isStagingHost();
   const hostname = await getHostname();
-  const localDevHost = process.env.NODE_ENV !== "production" && localDevHosts.has(hostname);
+  const localDevHost = localDevHosts.has(hostname);
   let session;
 
   try {

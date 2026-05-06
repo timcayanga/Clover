@@ -81,6 +81,22 @@ function formatNumber(value: number | null) {
   return value === null ? "—" : value.toLocaleString();
 }
 
+function trainingStatusLabel(status: string) {
+  switch (status) {
+    case "completed":
+      return "Completed";
+    case "processing":
+      return "Auto-QA running";
+    case "failed":
+    case "needs_retry":
+      return "Needs parser improvement";
+    case "testing":
+      return "Auto-learning";
+    default:
+      return "Pending first scan";
+  }
+}
+
 function scoreTone(score: number) {
   if (score >= 85) {
     return "admin-users__pill--success";
@@ -1001,6 +1017,10 @@ export function AdminDataQaConsole() {
             Track parser quality, speed regressions, and feedback coverage across imported statements and local training
             runs.
           </p>
+          <p className="panel-muted">
+            Auto-learning means Clover is still applying QA feedback automatically. Needs parser improvement means the
+            automatic loop stalled and likely needs stronger parser logic or manual review.
+          </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
             <Link className="button button-secondary button-small" href="/admin">
               Back to admin
@@ -1171,7 +1191,7 @@ export function AdminDataQaConsole() {
               ref={uploadInputRef}
               className="hidden-file-input"
               type="file"
-              accept=".csv,.tsv,.pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.txt"
+              accept=".csv,.pdf,.json"
               multiple
               onChange={(event) => {
                 const nextFiles = Array.from(event.target.files ?? []);
@@ -1422,7 +1442,7 @@ export function AdminDataQaConsole() {
                   </div>
                   <div className="admin-data-qa__run-meta">
                     <span className={`admin-users__pill ${statusTone(run.trainingStatus)}`}>
-                      {run.trainingStatus.replace(/_/g, " ")}
+                      {trainingStatusLabel(run.trainingStatus)}
                     </span>
                     <span className={`admin-users__pill ${scoreTone(run.latestScore ?? 0)}`}>
                       Latest score {run.latestScore ?? "—"}

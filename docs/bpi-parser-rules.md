@@ -16,6 +16,7 @@ Use these rules for BPI savings and related statement imports.
 - The parsed suffix may vary by statement, for example `9001`, `8556`, or `8705`, depending on the card's customer number.
 - BPI savings account numbers can be line-wrapped in OCR, so a split pattern like `3189-2104-84` should still resolve to the full account number and a visible suffix of `0484`, not `2104`.
 - When the account number is split across lines, the parser should join the trailing 2-digit suffix back onto the `4-4` prefix before deriving the visible suffix.
+- When a BPI savings account number is available, store the full formatted account number in the statement metadata using the `####-####-##` style that the source JSON fixtures expect.
 
 ## Parsing Guidance
 
@@ -23,11 +24,14 @@ Use these rules for BPI savings and related statement imports.
 - Compact BPI labels often remove spaces, so parser checks should handle normalized and compact forms.
 - Fee rows that are clearly transfer-related should stay in the transfer flow instead of falling back to generic expense handling.
 - BPI OCR can merge adjacent month, day, and merchant tokens; parsing should decompact those tokens before extracting the date and merchant text.
+- Ignore footer / compliance boilerplate such as `Regulated by Bangko Sentral ng Pilipinas`, `consumeraffairs@bsp.gov.ph`, and similar BSP contact lines. These are not transaction rows even when OCR merges them into ledger text.
 - BPI Signature credit-card rows are two-date ledger lines: sale date, post date, merchant, amount.
 - For BPI Signature credit-card rows, normalize the transaction date to the post date.
 - Use the PHP equivalent as the primary amount when a foreign-currency line shows both the source currency and the PHP conversion.
 - Keep the original source-currency amount in notes or raw payload metadata instead of making it a second transaction row.
 - Treat `Payment - Thank You` as a card payment / transfer-style credit, not an expense.
+- Treat `Beginning balance` as statement metadata, not a regular transaction row. Clover should surface at most one opening-balance row per statement.
+- Do not emit the synthetic `Beginning balance` row as a transaction row for BPI savings imports; keep the balance only in statement metadata.
 - The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable BPI simplifications such as `Payroll Credit`, `GCash Cash In`, `ATM Withdrawal`, `Merchant Payment`, and `Bank Transfer`.
 
 ## Notes Handling

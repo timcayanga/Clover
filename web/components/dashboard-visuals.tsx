@@ -1,5 +1,7 @@
 "use client";
 
+import { formatCurrencyAmount } from "@/lib/currency-format";
+
 type MonthPoint = {
   key: string;
   label: string;
@@ -17,6 +19,7 @@ type CategoryRow = {
 type DashboardVisualsProps = {
   currentNetDelta: number;
   currentExpense: number;
+  currency?: string | null;
   monthPoints: MonthPoint[];
   linePath: string;
   chartWidth: number;
@@ -25,18 +28,14 @@ type DashboardVisualsProps = {
   topCategoryRows: CategoryRow[];
 };
 
-const currencyFormatter = new Intl.NumberFormat("en-PH", {
-  style: "currency",
-  currency: "PHP",
-  maximumFractionDigits: 2,
-});
-
-const formatSignedCurrency = (value: number) => `${value < 0 ? "-" : ""}${currencyFormatter.format(Math.abs(value))}`;
+const formatSignedCurrency = (value: number, currency?: string | null) =>
+  `${value < 0 ? "-" : ""}${formatCurrencyAmount(Math.abs(value), currency ?? "PHP")}`;
 const formatCompactPercentage = (value: number) => `${Math.round(value)}%`;
 
 export function DashboardVisuals({
   currentNetDelta,
   currentExpense,
+  currency = "PHP",
   monthPoints,
   linePath,
   chartWidth,
@@ -54,7 +53,7 @@ export function DashboardVisuals({
             <p className="eyebrow">Trend</p>
             <h4>Six-month net cash flow</h4>
           </div>
-          <span className={`dashboard-visual-pill ${currentNetTrend}`}>{formatSignedCurrency(currentNetDelta)}</span>
+          <span className={`dashboard-visual-pill ${currentNetTrend}`}>{formatSignedCurrency(currentNetDelta, currency)}</span>
         </div>
         <div className="dashboard-line-chart" role="img" aria-label="Net cash flow over the last six months">
           <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
@@ -77,8 +76,8 @@ export function DashboardVisuals({
             {monthPoints.map((point) => (
               <div key={point.key} className="dashboard-line-chart__label">
                 <strong>{point.label}</strong>
-                <span className={point.net >= 0 ? "positive" : "negative"} aria-label={`${point.label} net ${formatSignedCurrency(point.net)}`}>
-                  {formatSignedCurrency(point.net)}
+                <span className={point.net >= 0 ? "positive" : "negative"} aria-label={`${point.label} net ${formatSignedCurrency(point.net, currency)}`}>
+                  {formatSignedCurrency(point.net, currency)}
                 </span>
               </div>
             ))}
@@ -92,7 +91,7 @@ export function DashboardVisuals({
             <p className="eyebrow">Mix</p>
             <h4>Where the money went</h4>
           </div>
-          <span className="dashboard-visual-pill">{formatSignedCurrency(currentExpense)}</span>
+          <span className="dashboard-visual-pill">{formatSignedCurrency(currentExpense, currency)}</span>
         </div>
         <div className="dashboard-category-bars">
           {topCategoryRows.length > 0 ? (
@@ -103,7 +102,7 @@ export function DashboardVisuals({
                   <div className="dashboard-category-bars__meta">
                     <strong>{category.name}</strong>
                     <span>
-                      {formatSignedCurrency(category.amount)} · {formatCompactPercentage(category.share)}
+                      {formatSignedCurrency(category.amount, currency)} · {formatCompactPercentage(category.share)}
                     </span>
                   </div>
                   <div className="dashboard-category-bars__track" aria-hidden="true">

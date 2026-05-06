@@ -1524,6 +1524,23 @@ export const processImportFileText = async (
   const autoRerunAttempt = Number(options.autoRerunAttempt ?? 0);
   const autoRerunEnabled = options.qaSource === "import_processing" || options.qaSource === "import_confirmation";
   const importFile = await fetchImportFileCompat(importFileId);
+  const emitImportProcessingEvent = (
+    event: "import_processing_started" | "import_processing_completed" | "import_processing_stalled",
+    properties: Record<string, unknown> = {}
+  ) => {
+    if (!options.actorUserId) {
+      return;
+    }
+
+    void capturePostHogServerEvent(event, options.actorUserId, {
+      workspace_id: importFile?.workspaceId ?? null,
+      import_file_id: importFileId,
+      import_mode: options.importMode ?? null,
+      auto_rerun_attempt: autoRerunAttempt,
+      qa_source: options.qaSource ?? null,
+      ...properties,
+    }).catch(() => null);
+  };
 
   if (!importFile) {
     throw new Error("Import file not found");
@@ -1550,7 +1567,10 @@ export const processImportFileText = async (
     processingMessage:
       autoRerunAttempt > 0
         ? `Auto-rerun ${autoRerunAttempt}/${AUTO_REPARSE_MAX_ATTEMPTS} running...`
-        : "Parsing file...",
+      : "Parsing file...",
+  });
+  emitImportProcessingEvent("import_processing_started", {
+    processing_phase: autoRerunAttempt > 0 ? "auto_rerunning" : "parsing",
   });
 
   const fileType = String(importFile.fileType ?? "");
@@ -2383,6 +2403,11 @@ export const processImportFileText = async (
             processingPhase: "staged",
             processingMessage: "Clover is still lining things up.",
           });
+          emitImportProcessingEvent("import_processing_completed", {
+            processing_status: "staged",
+            processing_phase: "staged",
+            imported_rows: confirmedImportResult.imported,
+          });
 
           return {
             imported: confirmedImportResult.imported,
@@ -2408,7 +2433,12 @@ export const processImportFileText = async (
                   ? "Portfolio snapshot saved."
                   : importMode === "account_detail"
                     ? "Account detail snapshot saved."
-                    : "Document import saved.",
+              : "Document import saved.",
+          });
+          emitImportProcessingEvent("import_processing_completed", {
+            processing_status: "done",
+            processing_phase: "complete",
+            imported_rows: rows.length,
           });
 
           return {
@@ -2427,6 +2457,11 @@ export const processImportFileText = async (
           status: "failed",
           processingPhase: "needs_retry",
           processingMessage: "Clover couldn't finish saving the import.",
+        });
+        emitImportProcessingEvent("import_processing_stalled", {
+          processing_status: "failed",
+          processing_phase: "needs_retry",
+          reason: "confirm_import_failed",
         });
         throw error;
       }
@@ -2452,6 +2487,23 @@ export const processImportFileText = async (
             ? `Automatic reruns plateaued at score ${qaRunResult.evaluation.score}. Manual parser fixes are needed before rerunning again.`
             : `Automatic reruns stopped below the ${AUTO_REPARSE_SCORE_TARGET} target. Latest score ${qaRunResult.evaluation.score}.`,
     });
+    if (shouldMarkDone) {
+      emitImportProcessingEvent("import_processing_completed", {
+        processing_status: "done",
+        processing_phase:
+          autoRerunEnabled && autoRerunAttempt > 0
+            ? "complete"
+            : "complete",
+        imported_rows: rows.length,
+        final_score: qaRunResult.evaluation.score,
+      });
+    } else {
+      emitImportProcessingEvent("import_processing_stalled", {
+        processing_status: plateaued ? "plateaued" : "failed",
+        processing_phase: plateaued ? "plateaued" : "needs_retry",
+        final_score: qaRunResult.evaluation.score,
+      });
+    }
   } catch (error) {
     console.warn("Data QA recording failed after import processing", {
       importFileId,
@@ -3113,6 +3165,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
       import_file_id: importFileId,
       transaction_id: entry.transactionId,
       amount,
+      amount_signed: Number(insertRow.amount ?? 0),
       currency: String(insertRow.currency ?? "PHP"),
       transaction_type: String(entry.insightRow.type ?? "expense"),
       review_status: typeof insertRow.reviewStatus === "string" ? insertRow.reviewStatus : null,

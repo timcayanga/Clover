@@ -2,6 +2,7 @@
 
 import Script from "next/script";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
 declare global {
   interface Window {
@@ -36,6 +37,7 @@ type PayPalSubscribeButtonProps = {
   buyerCountry?: string | null;
   className?: string;
   disabled?: boolean;
+  onStart?: () => void;
   onApproved?: () => void;
   onCancelled?: () => void;
   fundingSource?: "paypal" | "card";
@@ -48,6 +50,7 @@ export function PayPalSubscribeButton({
   buyerCountry,
   className,
   disabled = false,
+  onStart,
   onApproved,
   onCancelled,
   fundingSource = "paypal",
@@ -112,11 +115,19 @@ export function PayPalSubscribeButton({
           label: fundingSource === "card" ? "pay" : "subscribe",
           height: fundingSource === "card" ? 40 : 45,
         },
-        createSubscription: (_data, actions) =>
-          actions.subscription.create({
+        createSubscription: async (_data, actions) => {
+          onStart?.();
+          capturePostHogClientEvent("billing_started", {
+            billing_action: "create_subscription",
             plan_id: planId,
             custom_id: customId,
-          }),
+            funding_source: fundingSource,
+          });
+          return actions.subscription.create({
+            plan_id: planId,
+            custom_id: customId,
+          });
+        },
         onApprove: async () => {
           if (cancelled) {
             return;
@@ -165,7 +176,7 @@ export function PayPalSubscribeButton({
         containerRef.current.innerHTML = "";
       }
     };
-  }, [customId, disabled, fundingSource, onApproved, onCancelled, planId, scriptReady]);
+  }, [customId, disabled, fundingSource, onApproved, onCancelled, onStart, planId, scriptReady]);
 
   return (
     <div className={className}>

@@ -1,5 +1,7 @@
 "use client";
 
+import { pdfjsStandardFontDataUrl } from "@/lib/pdfjs-config";
+
 type ProgressCallback = (progress: {
   pageNumber: number;
   totalPages: number;
@@ -27,7 +29,9 @@ export const extractTextFromFile = async (
   if (lowerName.endsWith(".pdf")) {
     const { pdfjs } = await import("@/lib/pdfjs");
     const data = new Uint8Array(await file.arrayBuffer());
-    const options = password ? { data, password } : { data };
+    const options = password
+      ? { data, password, standardFontDataUrl: pdfjsStandardFontDataUrl }
+      : { data, standardFontDataUrl: pdfjsStandardFontDataUrl };
     const loadingTask = pdfjs.getDocument(options as any);
     const pdf = await loadingTask.promise;
     const pages: string[] = [];

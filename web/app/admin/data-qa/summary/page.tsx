@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CloverShell } from "@/components/clover-shell";
+import { AdminPageChrome } from "@/components/admin-page-chrome";
 import { AdminDataQaSummary } from "@/components/admin-data-qa-summary";
 import { getAdminDataQaBankSummary } from "@/lib/admin-data-qa-summary";
 import { requireAdminAuth } from "@/lib/admin";
@@ -17,8 +17,8 @@ export default async function AdminDataQaSummaryPage() {
   const data = await getAdminDataQaBankSummary();
 
   return (
-    <CloverShell
-      active="admin"
+    <AdminPageChrome
+      active="data-qa"
       title="Data QA summary"
       kicker="Internal tools"
       subtitle="See which banks Clover has tested, how many unique files were used, and whether they are ready at a glance."
@@ -29,6 +29,6 @@ export default async function AdminDataQaSummaryPage() {
       }
     >
       <AdminDataQaSummary data={data} />
-    </CloverShell>
+    </AdminPageChrome>
   );
 }

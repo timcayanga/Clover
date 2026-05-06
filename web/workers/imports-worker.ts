@@ -1,6 +1,7 @@
 import { Worker } from "bullmq";
 import { getRedisConnection } from "@/lib/import-queue";
 import { updateImportFileCompat } from "@/lib/data-engine";
+import { getConfiguredPdfJsBaseUrl } from "@/lib/import-file-text.server";
 import { processImportFileText } from "@/workers/import-processor";
 import { summarizeErrorForLog } from "@/lib/security-logging";
 
@@ -9,11 +10,14 @@ const connection = getRedisConnection();
 const worker = new Worker(
   "import-processing",
   async (job) => {
-    const { importFileId, password, allowDuplicateStatement, bankName } = job.data;
+    const { importFileId, actorUserId, password, allowDuplicateStatement, bankName, importMode, pdfJsBaseUrl } = job.data;
     return processImportFileText(importFileId, {
+      actorUserId: actorUserId ?? null,
       password,
       allowDuplicateStatement,
+      importMode,
       qaSource: "import_processing",
+      pdfJsBaseUrl: pdfJsBaseUrl ?? getConfiguredPdfJsBaseUrl(),
       statementMetadataOverride: bankName
         ? {
             institution: bankName,

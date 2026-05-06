@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { CloverShell } from "@/components/clover-shell";
-import { AdminUsersConsole } from "@/components/admin-users-console";
+import { AdminPageChrome } from "@/components/admin-page-chrome";
+import { AdminCommandCenter } from "@/components/admin-command-center";
 import { requireAdminAuth } from "@/lib/admin";
+import { getAdminCommandCenterSnapshot } from "@/lib/admin-command-center";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -16,27 +16,16 @@ export default async function AdminPage() {
     redirect("/dashboard");
   }
 
+  const snapshot = await getAdminCommandCenterSnapshot();
+
   return (
-    <CloverShell
-      active="admin"
+    <AdminPageChrome
+      active="home"
       title="Admin"
       kicker="Internal tools"
-      subtitle="Operate Clover from one place: user editing, analytics, error visibility, and drill-downs. Production users only."
-      actions={
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-          <Link className="button button-secondary button-small" href="/admin/inquiries">
-            Inquiries
-          </Link>
-          <Link className="button button-secondary button-small" href="/admin/data-qa">
-            Data QA
-          </Link>
-          <Link className="button button-secondary button-small" href="/admin/data-qa/summary">
-            Bank summary
-          </Link>
-        </div>
-      }
+      subtitle="Repository for operations, analytics, user management, data QA, support, and production error review."
     >
-      <AdminUsersConsole />
-    </CloverShell>
+      <AdminCommandCenter snapshot={snapshot} />
+    </AdminPageChrome>
   );
 }

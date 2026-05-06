@@ -20,11 +20,13 @@ This document captures the Maya parsing rules learned from the synthetic trainin
 
 ## Savings Rules
 
+- Treat Maya Savings as a bank savings account, not a wallet.
 - Use running balance as a first-class field.
 - Keep `Salary Credit` as `Income`.
 - Keep `Interest Earned` as `Income`.
 - Keep `Tax Withheld` as `Financial`.
 - Keep `Adjustment Reversal` as a review-worthy adjustment entry.
+- When the statement exposes a table with `Date & Time`, `Transaction Type & Details`, `Transaction No.`, `Amount (PHP)`, and `Running Balance`, parse the row from the date/time, details, amount, and running balance columns, and ignore the transaction number column.
 
 ## Credit Card Rules
 
@@ -48,6 +50,7 @@ This document captures the Maya parsing rules learned from the synthetic trainin
 - Prefer deterministic parsing from the statement text before any AI fallback.
 - Keep raw statement data, parsed rows, and normalized transactions separate.
 - Preserve bank-specific transfer, fee, sweep, and adjustment wording instead of collapsing it into generic spend.
+- For Maya Savings, use the statement date or coverage period to fill in missing row years, and keep transaction number/reference columns out of the parsed description.
 - The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable Maya simplifications such as `Base Interest`, `Boost Interest`, `Transfer to BancNet`, `Credit Drawdown`, `Repayment`, and `Documentary Stamp Tax`.
 - Ignore statement-shell rows like `Statement Date`, `Period Covered`, `Previous Statement Balance`, and other summary lines when they are not actual wallet movements.
 

@@ -7,6 +7,7 @@ import { useUser } from "@clerk/nextjs";
 import {
   analyticsOnceKey,
   getPostHogClientHost,
+  scopeAnalyticsDistinctId,
   shouldTrackAnalytics,
   type AnalyticsEventName,
   type AnalyticsProperties,
@@ -86,6 +87,18 @@ const runWhenPostHogReady = (callback: () => void) => {
   window.__posthogQueue.push(callback);
 };
 
+const getClientAnalyticsEnvironment = () => {
+  if (typeof document === "undefined") {
+    return "production";
+  }
+
+  const rawEnvironment = document.body.dataset.environment ?? "production";
+  return rawEnvironment === "preview" ? "staging" : rawEnvironment;
+};
+
+const SESSION_STARTED_KEY = "clover.posthog.session-started.v1";
+const SESSION_RETURNED_KEY = "clover.posthog.session-returned.v1";
+
 function PostHogBootstrap({ token, host }: PostHogScriptProps) {
   const apiHost = normalizeHost(host);
 
@@ -128,6 +141,40 @@ function PostHogPageViews() {
   return null;
 }
 
+function PostHogSessionSignals() {
+  useEffect(() => {
+    if (!shouldTrackAnalytics()) {
+      return;
+    }
+
+    const sessionStartedKey = SESSION_STARTED_KEY;
+    const sessionReturnedKey = SESSION_RETURNED_KEY;
+
+    runWhenPostHogReady(() => {
+      try {
+        const sessionHasStarted = window.sessionStorage.getItem(sessionStartedKey) === "1";
+        if (sessionHasStarted) {
+          return;
+        }
+
+        const returning = window.localStorage.getItem(sessionReturnedKey) === "1";
+        window.posthog?.capture(returning ? "session_returned" : "session_started", {
+          $current_url: window.location.href,
+          $pathname: window.location.pathname,
+          $search: window.location.search,
+        });
+
+        window.sessionStorage.setItem(sessionStartedKey, "1");
+        window.localStorage.setItem(sessionReturnedKey, "1");
+      } catch {
+        // Ignore storage failures and still let analytics continue.
+      }
+    });
+  }, []);
+
+  return null;
+}
+
 function PostHogIdentity() {
   const { isLoaded, user } = useUser();
 
@@ -138,7 +185,10 @@ function PostHogIdentity() {
 
     runWhenPostHogReady(() => {
       if (user) {
-        window.posthog?.identify(user.id, getPostHogPersonProperties(user));
+        window.posthog?.identify(
+          scopeAnalyticsDistinctId(user.id, getClientAnalyticsEnvironment()),
+          getPostHogPersonProperties(user)
+        );
         return;
       }
 
@@ -161,6 +211,7 @@ export function PostHogAnalytics() {
     <>
       <PostHogBootstrap token={token} host={host} />
       <PostHogPageViews />
+      <PostHogSessionSignals />
     </>
   );
 }
@@ -182,7 +233,7 @@ export function PostHogPersonProperties({ distinctId, properties }: PostHogPerso
     }
 
     runWhenPostHogReady(() => {
-      window.posthog?.identify(distinctId, properties);
+      window.posthog?.identify(scopeAnalyticsDistinctId(distinctId, getClientAnalyticsEnvironment()), properties);
     });
   }, [distinctId, properties]);
 

@@ -241,25 +241,6 @@ async function GoalsPageStream({
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const requestedSection = normalizeGoalsSection(resolvedSearchParams?.section);
   const selectedSection = requestedSection && availableSections.includes(requestedSection) ? requestedSection : "overview";
-  const titleAddon = (
-    <nav className="goals-tabs" aria-label="Goal sections">
-      {availableSections.map((section) => {
-        const isActive = section === selectedSection;
-        return (
-          <Link
-            key={section}
-            id={`goals-tab-${section}`}
-            className={`goals-tab ${isActive ? "goals-tab--active" : ""}`}
-            href={section === "overview" ? "/goals" : `/goals?section=${section}`}
-            aria-current={isActive ? "page" : undefined}
-          >
-            {section === "overview" ? "Overview" : section === "progress" ? "Progress" : section === "drivers" ? "Drivers" : "History"}
-          </Link>
-        );
-      })}
-    </nav>
-  );
-
   const cookieStore = await cookies();
   const selectedWorkspaceCookieId = cookieStore.get(selectedWorkspaceKey)?.value ?? "";
   const workspaceSelect = {
@@ -764,7 +745,6 @@ async function GoalsPageStream({
     <CloverShell
       active="goals"
       title="Goals"
-      titleAddon={titleAddon}
     >
       {isEmptyWorkspace ? (
         <div style={{ marginBottom: 20 }}>
@@ -781,7 +761,7 @@ async function GoalsPageStream({
         </div>
       ) : null}
 
-      <GoalsSubtabs activeSection={selectedSection} beginnerMode={isBeginnerMode}>
+      <GoalsSubtabs initialSection={selectedSection} availableSections={availableSections} beginnerMode={isBeginnerMode}>
         <section className="goals-section goals-section--overview">
           <article className="goals-hero glass">
             <div className="goals-hero__copy">
@@ -846,6 +826,27 @@ async function GoalsPageStream({
                     target_source: goalTargetSource ?? null,
                     progress_percent: goalProgress.progressPercent ?? null,
                     current_amount: goalProgress.currentAmount,
+                  }}
+                />
+              ) : null}
+
+              {hasGoalTarget ? (
+                <PostHogEvent
+                  event="goal_progress_updated"
+                  onceKey={analyticsOnceKey(
+                    "goal_progress_updated",
+                    `user:${user.id}:goal:${selectedGoalKey ?? "none"}:${toIsoMonth(new Date())}:${Math.round(
+                      goalProgress.progressPercent ?? 0
+                    )}`
+                  )}
+                  properties={{
+                    user_id: user.id,
+                    primary_goal: selectedGoalKey ?? null,
+                    target_amount: goalTargetAmount ?? null,
+                    target_source: goalTargetSource ?? null,
+                    progress_percent: goalProgress.progressPercent ?? null,
+                    current_amount: goalProgress.currentAmount,
+                    goal_plan_key: currentGoalPlan?.goalKey ?? null,
                   }}
                 />
               ) : null}

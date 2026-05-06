@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { PlanTier } from "@prisma/client";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
+import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import { PLAN_FEATURES } from "@/lib/plan-features";
 import { formatLimitValue, type UserLimits } from "@/lib/user-limits";
 
@@ -60,7 +61,17 @@ export function PlanTierBanner({
       </ul>
 
       <div className="plan-tier-banner__actions">
-        <Link className="button button-primary button-small" href={ctaHref}>
+        <Link
+          className="button button-primary button-small"
+          href={ctaHref}
+          onClick={() =>
+            capturePostHogClientEvent("upgrade_cta_clicked", {
+              cta_location: "plan_tier_banner",
+              plan_tier: planTier,
+              cta_href: ctaHref,
+            })
+          }
+        >
           {primaryLabel}
         </Link>
         {secondaryHref && secondaryLabel ? (

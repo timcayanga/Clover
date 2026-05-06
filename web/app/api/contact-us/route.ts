@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createContactInquiry } from "@/lib/contact-inquiries";
+import { capturePostHogServerEvent } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,12 @@ export async function POST(request: Request) {
       attachment: payload.attachment ?? null,
       sourcePage: payload.sourcePage ?? request.headers.get("referer") ?? null,
       userAgent: request.headers.get("user-agent"),
+    });
+
+    void capturePostHogServerEvent("support_contacted", payload.email, {
+      inquiry_source_page: payload.sourcePage ?? request.headers.get("referer") ?? null,
+      has_attachment: Boolean(payload.attachment),
+      attachment_size_bytes: payload.attachment?.size ?? null,
     });
 
     return NextResponse.json({ ok: true, inquiry });

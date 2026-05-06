@@ -4,13 +4,9 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { GoalDefinition, GoalPlan, GoalTargetCadence, GoalTargetMode } from "@/lib/goals";
 import { GoalGlyph } from "@/components/goals-visuals";
+import { formatCurrencyAmount } from "@/lib/currency-format";
 import { getGoalMoneyLabel, getGoalPlanSummary, goalPurposeSuggestions, goalTargetCadenceLabels, goalTargetModeLabels } from "@/lib/goals";
-
-const currencyFormatter = new Intl.NumberFormat("en-PH", {
-  style: "currency",
-  currency: "PHP",
-  minimumFractionDigits: 2,
-});
+import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
 type GoalsEditorProps = {
   goals: GoalDefinition[];
@@ -20,14 +16,10 @@ type GoalsEditorProps = {
   monthlyIncome?: number | null;
   suggestedTargetAmount?: number | null;
   beginnerMode?: boolean;
+  currency?: string | null;
 };
 
-const formatCurrency = (value: number) =>
-  new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-    minimumFractionDigits: 2,
-  }).format(value);
+const formatCurrency = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
 
 const getPlanDefaults = (goalKey: string | null): { targetMode: GoalTargetMode; cadence: GoalTargetCadence; purpose: string } => ({
   targetMode: goalKey === "invest_better" ? "percent" : "amount",
@@ -43,6 +35,7 @@ export function GoalsEditor({
   monthlyIncome = null,
   suggestedTargetAmount = null,
   beginnerMode = false,
+  currency = "PHP",
 }: GoalsEditorProps) {
   const router = useRouter();
   const [selectedGoal, setSelectedGoal] = useState(currentGoal ?? goals[0]?.value ?? null);
@@ -212,7 +205,7 @@ export function GoalsEditor({
             {status ??
               currentPlanSummary?.detail ??
               (targetAmount
-                ? `${getGoalMoneyLabel(selectedGoalMeta?.value ?? null)} is set to ${currencyFormatter.format(Number(targetAmount || 0))}.`
+                ? `${getGoalMoneyLabel(selectedGoalMeta?.value ?? null)} is set to ${formatCurrency(Number(targetAmount || 0), currency)}.`
                 : "Your current goal is saved in Clover.")}
           </span>
         </div>
@@ -266,19 +259,19 @@ export function GoalsEditor({
                 ? "10"
                 : "Percent"
               : suggestedTargetAmount
-                ? currencyFormatter.format(suggestedTargetAmount)
+                ? formatCurrency(suggestedTargetAmount, currency)
                 : "Optional for now"
           }
         />
         <small>
           {targetMode === "percent"
             ? monthlyIncome !== null
-              ? `That is about ${formatCurrency(resolvedMonthlyTarget ?? 0)} per month based on recent income.`
+              ? `That is about ${formatCurrency(resolvedMonthlyTarget ?? 0, currency)} per month based on recent income.`
               : "We need recent income before Clover can estimate the monthly peso amount."
             : cadence === "annual"
               ? "Enter the yearly amount and Clover will translate it into a monthly rhythm."
               : suggestedTargetAmount
-                ? `A strong starting point from the last 30 days is ${currencyFormatter.format(suggestedTargetAmount)}.`
+                ? `A strong starting point from the last 30 days is ${formatCurrency(suggestedTargetAmount, currency)}.`
                 : "Set the monthly number you want Clover to coach against."}
         </small>
         {beginnerMode ? <small className="goals-editor__helper">Amount means a fixed peso goal. Percent means a share of salary.</small> : null}
@@ -352,6 +345,9 @@ export function GoalsEditor({
           className="button button-secondary"
           disabled={isPending || (currentGoal === null && currentTargetAmount === null && targetAmount === "")}
           onClick={() => {
+            capturePostHogClientEvent("goal_reset", {
+              reset_scope: "editor_selection",
+            });
             setSelectedGoal(currentGoal ?? goals[0]?.value ?? null);
             const fallbackPlan = currentGoalPlan ?? null;
             const defaults = getPlanDefaults(currentGoal ?? goals[0]?.value ?? null);

@@ -118,6 +118,14 @@ export async function POST(request: Request) {
           parent_category_id: restoredCategory.parentCategoryId,
         });
 
+        void capturePostHogServerEvent("category_rule_created", userId, {
+          workspace_id: payload.workspaceId,
+          category_id: restoredCategory.id,
+          category_name: restoredCategory.name,
+          category_type: restoredCategory.type,
+          parent_category_id: restoredCategory.parentCategoryId,
+        });
+
         return NextResponse.json({ category: restoredCategory }, { status: 200 });
       }
 
@@ -135,6 +143,14 @@ export async function POST(request: Request) {
     });
 
     void capturePostHogServerEvent("category_created", userId, {
+      workspace_id: payload.workspaceId,
+      category_id: category.id,
+      category_name: category.name,
+      category_type: category.type,
+      parent_category_id: category.parentCategoryId,
+    });
+
+    void capturePostHogServerEvent("category_rule_created", userId, {
       workspace_id: payload.workspaceId,
       category_id: category.id,
       category_name: category.name,
@@ -177,6 +193,29 @@ export async function PATCH(request: Request) {
       },
     });
 
+    const categoryChanged =
+      (payload.name !== undefined && payload.name.trim() !== existingCategory.name) ||
+      (payload.type !== undefined && payload.type !== existingCategory.type) ||
+      (payload.isArchived !== undefined && payload.isArchived !== existingCategory.isArchived);
+
+    if (categoryChanged) {
+      void capturePostHogServerEvent("category_updated", userId, {
+        workspace_id: existingCategory.workspaceId,
+        category_id: category.id,
+        category_name: category.name,
+        category_type: category.type,
+        is_archived: category.isArchived,
+      });
+
+      void capturePostHogServerEvent("category_rule_updated", userId, {
+        workspace_id: existingCategory.workspaceId,
+        category_id: category.id,
+        category_name: category.name,
+        category_type: category.type,
+        is_archived: category.isArchived,
+      });
+    }
+
     return NextResponse.json({ category });
   } catch {
     return NextResponse.json({ error: "Unable to update category" }, { status: 400 });
@@ -213,6 +252,16 @@ export async function DELETE(request: Request) {
       data: {
         isArchived: true,
       },
+    });
+
+    void capturePostHogServerEvent("category_deleted", userId, {
+      workspace_id: existingCategory.workspaceId,
+      category_id: category.id,
+    });
+
+    void capturePostHogServerEvent("category_rule_deleted", userId, {
+      workspace_id: existingCategory.workspaceId,
+      category_id: category.id,
     });
 
     return NextResponse.json({ category });

@@ -162,7 +162,7 @@ const comparePair = async (pair: FixturePair) => {
 
   const expectedRows = expected.transactions ?? [];
   const derivedEndingBalance = metadata?.endingBalance ?? getTrailingBalanceFromParsedRows(rows);
-  const derivedType = inferAccountTypeFromStatement(metadata?.institution, metadata?.accountName, "bank");
+  const derivedType = metadata?.accountType ?? inferAccountTypeFromStatement(metadata?.institution, metadata?.accountName, "bank");
 
   const rowDates = rows.map((row) => dateOnly(row.date));
   const expectedDates = expectedRows.map((row) => dateOnly(row.date ?? null));

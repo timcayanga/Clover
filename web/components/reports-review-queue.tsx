@@ -172,6 +172,9 @@ export function ReportsReviewQueue({ items }: ReportsReviewQueueProps) {
                     insight_type: "review_queue",
                     action_label: action.label,
                     action_href: action.href,
+                    review_title: current.title,
+                    review_tag_count: current.tags.length,
+                    has_category_picker: canPickCategory,
                   });
                   capturePostHogClientEvent("feature_used", {
                     feature_name: action.label,

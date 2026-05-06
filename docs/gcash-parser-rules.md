@@ -5,12 +5,18 @@ This document captures the GCash parsing rules learned from the training bundles
 ## Scope
 
 - Applies to GCash wallet history statements.
+- GCash also hosts child products like `GSave`, `GFunds`, `GStocks`, and `GCrypto`, so the parent wallet and each child product should be handled separately when both are visible.
 - Preserve raw and normalized data separately.
 - Keep datetime information when the statement includes it.
 
 ## Wallet History Rules
 
 - Treat GCash as a wallet account, not a bank account.
+- When a screenshot clearly shows a GCash sub-product, create or update the matching child account instead of collapsing everything into one GCash bucket:
+  - `GSave` for savings products like CIMB or UNO
+  - `GFunds` for mutual funds like ATRAM
+  - `GStocks` for brokered stock holdings like AB Capital Securities
+  - `GCrypto` for crypto holdings
 - Use `period_start` and `period_end` when the statement does not provide a single statement date.
 - Preserve transaction time in the normalized date field when available.
 - Keep `Cash In from BPI`, `Cash In from UnionBank`, and other wallet top-ups as `Transfers`.

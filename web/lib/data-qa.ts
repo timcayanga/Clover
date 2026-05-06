@@ -33,6 +33,8 @@ export type DataQaStatementSnapshot = {
   confidence?: number | null;
 };
 
+export type DataQaDocumentType = "statement" | "receipt" | "notes" | "portfolio" | "account_detail";
+
 export type DataQaParsedRow = {
   date?: string | Date | null;
   amount?: string | number | null;
@@ -75,6 +77,7 @@ export type DataQaRunInput = {
   fileName: string;
   fileType: string;
   parserVersion?: string;
+  documentType?: DataQaDocumentType | null;
   parsedRows: DataQaParsedRow[];
   metadata: DataQaStatementSnapshot;
   account?: DataQaAccountSnapshot | null;
@@ -90,9 +93,9 @@ const prismaAny = prisma as typeof prisma & Record<string, any>;
 
 const DEFAULT_DATA_QA_GUIDANCE = {
   clover_output_spec:
-    "Accounts should show the account name, number, balance, type, and institution when known. Transactions should show date, merchant/description, amount, and category, with raw descriptions preserved for traceability. Prefer real Philippine bank statement layouts over synthetic examples and avoid inventing fields that do not exist in the source statement.",
+    "Accounts should show the account name, number, balance, type, and institution when known. Transactions should show date, merchant/description, amount, and category, with raw descriptions preserved for traceability. Portfolio, wallet-history, and account-detail screenshots should preserve the balance, holding, transfer direction, or product summary even when they do not contain transaction rows. Prefer real Philippine statement, receipt, wallet, and screenshot layouts over synthetic examples and avoid inventing fields that do not exist in the source document.",
   qa_instructions:
-    "Review legitimate Statement of Accounts from real Philippine banks, with preference for popular banks like BPI, BDO, Metrobank, RCBC, UnionBank, GCash, Maya, and Security Bank. Do not create synthetic statements. Re-parse older uploaded statements as safe sample files so the parser can learn from real layouts and improve confidence. Upload real files, review the parsed output against the source file, mark the field correct when it matches, add notes when it should improve, and rerun QA after parser or UI fixes.",
+    "Review legitimate Statement of Accounts, receipt photos, wallet histories, investment portfolio screens, and account-detail pages from real Philippine institutions, with preference for popular banks and platforms like BPI, BDO, Metrobank, RCBC, UnionBank, HSBC, GCash, Maya, Wise, PDAX, GoTrade, ATRAM, AB Capital Securities, Security Bank, and similar services. Do not create synthetic documents. Re-parse older uploaded files as safe sample files so the parser can learn from real layouts and improve confidence. Upload real files, review the parsed output against the source file, mark the field correct when it matches, add notes when it should improve, and rerun QA after parser or UI fixes.",
 } as const;
 
 type DataQaGuidanceSnapshot = {
@@ -204,6 +207,8 @@ const loadDataQaGuidanceSnapshot = async (): Promise<DataQaGuidanceSnapshot> => 
 export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
   const rows = input.parsedRows ?? [];
   const rowCount = rows.length;
+  const documentType = String(input.documentType ?? "statement").trim().toLowerCase();
+  const isNonTransactionDocument = documentType !== "statement";
   const parseableDateCount = countParseableDates(rows);
   const dateCoverage = rowCount > 0 ? parseableDateCount / rowCount : 0;
   const statementStart = parseDateValue(typeof input.metadata.startDate === "string" ? input.metadata.startDate : null);
@@ -248,13 +253,11 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
 
   const accountBalance = toNumber(input.account?.balance);
   const checkpointEndingBalance = toNumber(input.checkpoint?.endingBalance);
-  const uiAccountsReady = hasStatementIdentity;
-  const uiDrawerReady = Boolean(accountBalance !== null || checkpointEndingBalance !== null || hasStatementBalances);
-  const uiTransactionsReady =
-    rowCount > 0 &&
-    dateCoverage >= 0.5 &&
-    merchantNormalizationCoverage >= 0.5 &&
-    lowConfidenceRate < 0.5;
+  const uiAccountsReady = isNonTransactionDocument ? true : hasStatementIdentity;
+  const uiDrawerReady = Boolean(accountBalance !== null || checkpointEndingBalance !== null || hasStatementBalances || isNonTransactionDocument);
+  const uiTransactionsReady = isNonTransactionDocument
+    ? true
+    : rowCount > 0 && dateCoverage >= 0.5 && merchantNormalizationCoverage >= 0.5 && lowConfidenceRate < 0.5;
 
   const speed = summarizeFileSpeed({
     totalMs: input.timings?.totalMs,
@@ -264,7 +267,7 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
 
   const findings: DataQaFindingInput[] = [];
 
-  if (rowCount === 0) {
+  if (rowCount === 0 && !isNonTransactionDocument) {
     findings.push({
       code: "transactions.empty",
       severity: "critical",
@@ -277,11 +280,12 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
       metadata: {
         fileType: input.fileType,
         source: input.source,
+        documentType,
       },
     });
   }
 
-  if (!hasStatementIdentity) {
+  if (!hasStatementIdentity && !isNonTransactionDocument) {
     findings.push({
       code: "statement.identity_missing",
       severity: "critical",
@@ -303,6 +307,7 @@ export const evaluateDataQaRun = (input: DataQaRunInput): DataQaEvaluation => {
         fileName: input.fileName,
         fileType: input.fileType,
         source: input.source,
+        documentType,
       },
     });
   }

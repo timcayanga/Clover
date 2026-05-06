@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import { getAppBuildInfo } from "@/lib/build-info";
 
 function useReportError(error: Error & { digest?: string }, source: string) {
@@ -14,6 +15,12 @@ function useReportError(error: Error & { digest?: string }, source: string) {
     sentRef.current = true;
 
     const buildInfo = getAppBuildInfo();
+    capturePostHogClientEvent("error_shown", {
+      error_source: source,
+      error_message: error.message,
+      route: window.location.pathname,
+      environment: document.body.dataset.environment ?? buildInfo.environment,
+    });
     void fetch("/api/error-logs", {
       method: "POST",
       headers: {

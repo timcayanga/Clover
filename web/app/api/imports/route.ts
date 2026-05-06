@@ -13,6 +13,7 @@ import { countWorkspaceImportFilesThisMonth } from "@/lib/plan-access";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { prisma } from "@/lib/prisma";
 import { normalizeBankName } from "@/lib/data-qa-banks";
+import { normalizeImportImageMode } from "@/lib/import-image-mode";
 import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -24,15 +25,21 @@ const prepareSchema = z.object({
   contentType: z.string().min(1),
   skipUpload: z.boolean().optional().default(false),
   bankName: z.string().optional(),
+  trainingMode: z.enum(["bank_context", "generic_parser"]).optional(),
+  importMode: z.enum(["statement", "receipt", "notes", "portfolio", "account_detail"]).optional(),
 });
 
 const upsertUploadBankHint = async (params: {
   importFileId: string;
   workspaceId: string;
   bankName?: string | null;
+  trainingMode?: "bank_context" | "generic_parser";
 }) => {
   const bankName = normalizeBankName(params.bankName ?? "");
-  if (!bankName || bankName === "Unknown") {
+  const hasBankName = Boolean(bankName && bankName !== "Unknown");
+  const isGenericParserTraining = params.trainingMode === "generic_parser";
+
+  if (!hasBankName && !isGenericParserTraining) {
     return;
   }
 
@@ -41,9 +48,15 @@ const upsertUploadBankHint = async (params: {
   }
 
   const sourceMetadata = {
-    institution: bankName,
-    uploadBankHint: bankName,
-    uploadHintSource: "admin_data_qa_bank_upload",
+    ...(hasBankName
+      ? {
+          institution: bankName,
+          uploadBankHint: bankName,
+        }
+      : {}),
+    uploadHintSource: isGenericParserTraining ? "admin_data_qa_generic_json_upload" : "admin_data_qa_bank_upload",
+    trainingMode: params.trainingMode ?? (hasBankName ? "bank_context" : undefined),
+    genericParserTraining: isGenericParserTraining || undefined,
   } as Prisma.InputJsonValue;
 
   await prisma.accountStatementCheckpoint.upsert({
@@ -95,6 +108,7 @@ export async function POST(request: Request) {
     const localDev = await isLocalDevHost();
     const { userId } = localDev ? { userId: "local-admin" } : await requireAuth();
     const payload = prepareSchema.parse(await request.json());
+    const importMode = payload.importMode ? normalizeImportImageMode(payload.importMode) : null;
     if (!localDev) {
       await assertWorkspaceAccess(userId, payload.workspaceId);
 
@@ -121,6 +135,7 @@ export async function POST(request: Request) {
     const validationError = validateImportFileMetadata({
       fileName: payload.fileName,
       contentType: payload.contentType,
+      importMode,
     });
     if (validationError) {
       return NextResponse.json({ error: validationError }, { status: 400 });
@@ -145,6 +160,7 @@ export async function POST(request: Request) {
       importFileId: String(importFile.id),
       workspaceId: payload.workspaceId,
       bankName: payload.bankName ?? null,
+      trainingMode: payload.trainingMode,
     });
 
     return NextResponse.json({

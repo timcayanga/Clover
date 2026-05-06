@@ -31,6 +31,7 @@ This document captures the GoTyme parsing rules learned from the synthetic train
 ## Parsing Guidance
 
 - Prefer deterministic parsing from the statement text before any AI fallback.
+- Prefer the GoTyme parser before any BDO-style savings fallback, because both layouts can look similar at a glance but GoTyme uses its own credits/debits/running-balance semantics.
 - Keep raw statement data, parsed rows, and normalized transactions separate.
 - Preserve bank-specific transfer, fee, sweep, and adjustment wording instead of collapsing it into generic spend.
 - The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable GoTyme simplifications such as `Grab`, `Move It`, `Lazada`, `Shopee`, `Transfer to Go Save`, `Transfer from Go Save`, `Transfer Fee`, and the interbank transfer variants.

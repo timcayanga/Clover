@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
+import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 
 type BillingInterval = "monthly" | "annual";
 
@@ -172,6 +173,13 @@ export function BillingActions({
                   customId={customId as string}
                   buyerCountry={buyerCountry}
                   className="billing-action-card__button"
+                  onStart={() =>
+                    capturePostHogClientEvent("upgrade_cta_clicked", {
+                      cta_location: "billing_actions_monthly",
+                      plan_tier: planTier,
+                      plan_interval: "monthly",
+                    })
+                  }
                 />
               ) : (
                 <p className="billing-helper">Monthly checkout is not configured yet.</p>
@@ -191,6 +199,13 @@ export function BillingActions({
                   customId={customId as string}
                   buyerCountry={buyerCountry}
                   className="billing-action-card__button"
+                  onStart={() =>
+                    capturePostHogClientEvent("upgrade_cta_clicked", {
+                      cta_location: "billing_actions_annual",
+                      plan_tier: planTier,
+                      plan_interval: "annual",
+                    })
+                  }
                 />
               ) : (
                 <p className="billing-helper">Annual checkout is not configured yet.</p>

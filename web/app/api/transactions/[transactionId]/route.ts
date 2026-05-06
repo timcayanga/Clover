@@ -21,6 +21,7 @@ const patchSchema = z.object({
   description: z.string().nullable().optional(),
   date: z.string().optional(),
   amount: z.union([z.string(), z.number()]).optional(),
+  currency: z.string().min(1).optional(),
   reviewStatus: z.enum(["pending_review", "suggested", "confirmed", "edited", "rejected", "duplicate_skipped"]).optional(),
 });
 
@@ -93,7 +94,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       payload.merchantClean !== undefined ||
       payload.description !== undefined ||
       payload.date !== undefined ||
-      payload.amount !== undefined;
+      payload.amount !== undefined ||
+      payload.currency !== undefined;
 
     const updated = await prisma.transaction.update({
       where: { id: transactionId },
@@ -108,6 +110,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         description: payload.description,
         date: payload.date ? new Date(payload.date) : undefined,
         amount: payload.amount === undefined ? undefined : payload.amount.toString(),
+        currency: payload.currency ? payload.currency.toUpperCase() : undefined,
         reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : undefined),
         parserConfidence: transaction.parserConfidence,
         categoryConfidence: payload.categoryId ? 100 : transaction.categoryConfidence,
@@ -128,7 +131,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
               type: payload.type ?? transaction.type,
               date: payload.date ? new Date(payload.date).toISOString() : transaction.date.toISOString(),
               amount: payload.amount === undefined ? transaction.amount.toString() : payload.amount.toString(),
-              currency: transaction.currency,
+              currency: payload.currency ? payload.currency.toUpperCase() : transaction.currency,
               isTransfer: payload.isTransfer ?? transaction.isTransfer,
               isExcluded: payload.isExcluded ?? transaction.isExcluded,
               reviewStatus: payload.reviewStatus ?? (editedFields ? "edited" : transaction.reviewStatus),
@@ -173,6 +176,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
           source: "manual_recategorization",
           confidence: 100,
           notes: payload.categoryId ? "Manual transaction edit from the transaction editor." : "Manual merchant label edit from the transaction editor.",
+          actorUserId: userId,
         }).catch(() => null);
       }
     }
@@ -202,6 +206,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
           isExcluded: updated.isExcluded,
           isTransfer: updated.isTransfer,
           type: updated.type,
+          currency: updated.currency,
           reviewStatus: updated.reviewStatus,
         },
       },
@@ -217,6 +222,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
       workspace_id: transaction.workspaceId,
       transaction_id: updated.id,
       amount: Number(updated.amount),
+      amount_signed: Number(updated.amount),
       currency: updated.currency,
       transaction_type: updated.type,
       is_manual_edit: true,
@@ -237,12 +243,37 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         is_manual_edit: true,
       });
     }
+    if (payload.categoryId !== undefined && payload.categoryId !== transaction.categoryId) {
+      void capturePostHogServerEvent("category_rule_reverted", userId, {
+        workspace_id: transaction.workspaceId,
+        transaction_id: updated.id,
+        old_category_id: transaction.categoryId,
+        new_category_id: payload.categoryId ?? null,
+        is_manual_edit: true,
+      });
+    }
     if (payload.merchantClean || payload.merchantRaw) {
       void capturePostHogServerEvent("transaction_merchant_normalized", userId, {
         workspace_id: transaction.workspaceId,
         transaction_id: updated.id,
         is_manual_edit: true,
       });
+      if ((payload.merchantClean ?? payload.merchantRaw ?? "").trim() !== (transaction.merchantClean ?? transaction.merchantRaw ?? "").trim()) {
+        void capturePostHogServerEvent("merchant_rule_reverted", userId, {
+          workspace_id: transaction.workspaceId,
+          transaction_id: updated.id,
+          old_merchant_clean: transaction.merchantClean ?? transaction.merchantRaw,
+          new_merchant_clean: payload.merchantClean ?? payload.merchantRaw ?? null,
+          is_manual_edit: true,
+        });
+        void capturePostHogServerEvent("merchant_rule_deleted", userId, {
+          workspace_id: transaction.workspaceId,
+          transaction_id: updated.id,
+          old_merchant_clean: transaction.merchantClean ?? transaction.merchantRaw,
+          new_merchant_clean: payload.merchantClean ?? payload.merchantRaw ?? null,
+          is_manual_edit: true,
+        });
+      }
     }
 
     return NextResponse.json({
@@ -268,6 +299,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ tr
         description: updated.description,
         isTransfer: updated.isTransfer,
         isExcluded: updated.isExcluded,
+        rawPayload: updated.rawPayload,
         createdAt: updated.createdAt.toISOString(),
         updatedAt: updated.updatedAt.toISOString(),
       },

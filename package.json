@@ -2,10 +2,16 @@
   "name": "clover",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "web"
+  ],
   "main": "main.js",
   "scripts": {
+    "sync:assets": "npm --prefix web exec tsx web/scripts/sync-public-assets.ts",
+    "predev": "npm run sync:assets",
     "start": "electron .",
     "dev": "electron .",
+    "prestart": "npm run sync:assets",
     "check": "node scripts/check.mjs",
     "qa:renderer": "node scripts/renderer-check.mjs"
   },

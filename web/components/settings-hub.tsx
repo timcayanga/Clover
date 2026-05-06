@@ -7,6 +7,7 @@ import { useUser } from "@clerk/nextjs";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { BillingActions } from "@/components/billing-actions";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
+import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import { SettingsCategoriesPanel } from "@/components/settings-categories-panel";
 import { type BillingInterval } from "@/lib/billing-plans";
 import { applyHelperTextPreference, HELPER_TEXT_STORAGE_KEY, readStoredHelperTextPreference } from "@/lib/helper-text-preference";
@@ -1257,6 +1258,13 @@ export function SettingsHub({
                                 buyerCountry={paypalBuyerCountry}
                                 className="settings-plan-card__paypal"
                                 fundingSource="card"
+                                onStart={() =>
+                                  capturePostHogClientEvent("upgrade_cta_clicked", {
+                                    cta_location: "settings_billing_annual",
+                                    plan_tier: planTier,
+                                    plan_interval: "annual",
+                                  })
+                                }
                               />
                             ) : option.value === "monthly" && monthlyCheckoutReady ? (
                               <PayPalSubscribeButton
@@ -1266,6 +1274,13 @@ export function SettingsHub({
                                 buyerCountry={paypalBuyerCountry}
                                 className="settings-plan-card__paypal"
                                 fundingSource="card"
+                                onStart={() =>
+                                  capturePostHogClientEvent("upgrade_cta_clicked", {
+                                    cta_location: "settings_billing_monthly",
+                                    plan_tier: planTier,
+                                    plan_interval: "monthly",
+                                  })
+                                }
                               />
                             ) : (
                               <p className="settings-helper">PayPal checkout is not configured yet.</p>

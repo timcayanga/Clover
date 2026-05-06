@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { buildBillingReturnUrl, normalizeBillingReturnPath } from "@/lib/billing-urls";
 import { getBillingPlanByInterval, type BillingInterval } from "@/lib/billing-plans";
+import { capturePostHogServerEvent } from "@/lib/analytics";
 import {
   getUserBillingSubscription,
   revisePayPalSubscription,
@@ -41,6 +42,12 @@ export async function POST(request: Request) {
     }
 
     const returnPath = normalizeBillingReturnPath(payload.returnPath, "/settings");
+    void capturePostHogServerEvent("billing_started", userId, {
+      billing_action: "revise_subscription",
+      plan_tier: user.planTier,
+      interval: targetInterval,
+      return_path: returnPath,
+    });
     const returnUrl = buildBillingReturnUrl(request, returnPath, {
       billing: "success",
       interval: targetInterval,

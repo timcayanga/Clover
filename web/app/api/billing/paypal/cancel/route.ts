@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { cancelPayPalSubscription, syncBillingSubscriptionFromPayPal } from "@/lib/paypal-billing";
 import { prisma } from "@/lib/prisma";
+import { capturePostHogServerEvent } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,13 @@ export async function POST() {
     await prisma.user.update({
       where: { id: user.id },
       data: user.planTierLocked ? {} : { planTier: "free" },
+    });
+
+    void capturePostHogServerEvent("billing_cancelled", userId, {
+      billing_action: "cancel_subscription",
+      plan_tier: "free",
+      interval: subscription.interval ?? null,
+      provider_subscription_id: subscription.providerSubscriptionId,
     });
 
     return NextResponse.json({

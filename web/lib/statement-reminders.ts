@@ -9,6 +9,7 @@ export type StatementReminder = {
   accountId: string | null;
   accountName: string;
   institution: string | null;
+  currency: string | null;
   statementStartDate: string | null;
   statementEndDate: string | null;
   paymentDueDate: string;
@@ -99,14 +100,15 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
       endingBalance: true,
       createdAt: true,
       sourceMetadata: true,
-      account: {
-        select: {
-          id: true,
-          name: true,
-          institution: true,
-          type: true,
-        },
+    account: {
+      select: {
+        id: true,
+        name: true,
+        institution: true,
+        type: true,
+        currency: true,
       },
+    },
       importFile: {
         select: {
           fileName: true,
@@ -166,6 +168,10 @@ export const getUpcomingStatementReminders = async (workspaceId: string): Promis
       accountId: checkpoint.accountId,
       accountName,
       institution,
+      currency:
+        typeof sourceMetadata?.currency === "string" && sourceMetadata.currency.trim()
+          ? sourceMetadata.currency.trim().toUpperCase()
+          : checkpoint.account?.currency ?? null,
       statementStartDate: checkpoint.statementStartDate?.toISOString() ?? null,
       statementEndDate: checkpoint.statementEndDate?.toISOString() ?? null,
       paymentDueDate: paymentDueDate.toISOString(),

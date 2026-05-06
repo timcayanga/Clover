@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminDataQaRunDetail } from "@/components/admin-data-qa-run-detail";
-import { CloverShell } from "@/components/clover-shell";
+import { AdminPageChrome } from "@/components/admin-page-chrome";
 import { requireAdminAuth } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
@@ -16,8 +16,8 @@ export default async function AdminDataQaRunPage({ params }: { params: Promise<{
   const { runId } = await params;
 
   return (
-    <CloverShell
-      active="admin"
+    <AdminPageChrome
+      active="data-qa"
       title="Data QA run"
       kicker="Internal tools"
       subtitle="Review a single imported statement, inspect the uploaded file, and leave granular feedback for the Data Engine."
@@ -28,6 +28,6 @@ export default async function AdminDataQaRunPage({ params }: { params: Promise<{
       }
     >
       <AdminDataQaRunDetail runId={runId} />
-    </CloverShell>
+    </AdminPageChrome>
   );
 }

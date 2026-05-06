@@ -90,7 +90,7 @@ export function AdminDataQaFileDetail({ importFileId }: { importFileId: string }
   const [detailPayload, setDetailPayload] = useState<FileDetailPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [running, setRunning] = useState(false);
+  const [runningAction, setRunningAction] = useState<"scan" | "improve" | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,7 +118,7 @@ export function AdminDataQaFileDetail({ importFileId }: { importFileId: string }
           }
 
           const shouldPoll =
-            running ||
+            runningAction !== null ||
             data.importFile?.status === "processing" ||
             data.importFile?.status === "queued" ||
             data.importFile?.processingPhase === "auto_rerunning";
@@ -148,16 +148,17 @@ export function AdminDataQaFileDetail({ importFileId }: { importFileId: string }
         window.clearInterval(intervalId);
       }
     };
-  }, [importFileId, running]);
+  }, [importFileId, runningAction]);
 
   const importFile = detailPayload?.importFile ?? null;
   const latestRun = detailPayload?.run ?? null;
   const parsedRows = detailPayload?.parsedRows ?? [];
   const checkpoint = detailPayload?.statementCheckpoint ?? null;
   const fileName = importFile?.fileName ?? "Imported file";
+  const canImproveParser = Boolean(latestRun && (latestRun.score ?? 0) < 95);
 
   const runScan = async () => {
-    setRunning(true);
+    setRunningAction("scan");
     setError(null);
 
     try {
@@ -186,7 +187,44 @@ export function AdminDataQaFileDetail({ importFileId }: { importFileId: string }
     } catch (scanError) {
       setError(scanError instanceof Error ? scanError.message : "Unable to scan file.");
     } finally {
-      setRunning(false);
+      setRunningAction(null);
+    }
+  };
+
+  const improveParser = async () => {
+    if (!latestRun) {
+      return;
+    }
+
+    setRunningAction("improve");
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/admin/data-qa/${latestRun.id}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reparse: true,
+          improveParser: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || "Unable to improve the parser for this file.");
+      }
+
+      const payload = (await response.json().catch(() => ({}))) as { runId?: string };
+      if (payload.runId) {
+        router.push(`/admin/data-qa/${payload.runId}`);
+        return;
+      }
+
+      router.refresh();
+    } catch (improveError) {
+      setError(improveError instanceof Error ? improveError.message : "Unable to improve the parser for this file.");
+    } finally {
+      setRunningAction(null);
     }
   };
 
@@ -212,9 +250,24 @@ export function AdminDataQaFileDetail({ importFileId }: { importFileId: string }
             <a className="button button-secondary button-small" href={`/api/imports/${importFileId}/file`} target="_blank" rel="noreferrer">
               Open original file
             </a>
-            <button className="button button-primary button-small" type="button" onClick={() => void runScan()} disabled={running}>
-              {running ? "Scanning..." : "Scan file now"}
+            <button
+              className="button button-primary button-small"
+              type="button"
+              onClick={() => void runScan()}
+              disabled={runningAction !== null}
+            >
+              {runningAction === "scan" ? "Scanning..." : "Scan file now"}
             </button>
+            {canImproveParser ? (
+              <button
+                className="button button-secondary button-small"
+                type="button"
+                onClick={() => void improveParser()}
+                disabled={runningAction !== null}
+              >
+                {runningAction === "improve" ? "Improving parser..." : "Improve parser"}
+              </button>
+            ) : null}
           </div>
         </div>
 

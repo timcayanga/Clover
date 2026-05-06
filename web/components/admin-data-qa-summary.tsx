@@ -6,15 +6,15 @@ const statusLabel = (status: string) => {
     case "completed":
       return "Completed";
     case "processing":
-      return "Processing";
+      return "Auto-QA running";
     case "failed":
-      return "Needs retry";
+      return "Needs parser improvement";
     case "needs_retry":
-      return "Needs retry";
+      return "Needs parser improvement";
     case "testing":
-      return "Testing";
+      return "Auto-learning";
     default:
-      return "Pending";
+      return "Pending first scan";
   }
 };
 
@@ -74,6 +74,10 @@ export function AdminDataQaSummary({ data }: Props) {
             bank is ready to trust yet.
           </p>
           <p className="panel-muted">A file only shows as Completed when its latest QA score is 95 or higher.</p>
+          <p className="panel-muted">
+            Auto-learning means Clover is still applying QA feedback on its own. Needs parser improvement means the
+            automatic loop stalled and likely needs stronger parser logic or manual review.
+          </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
             <Link className="button button-secondary button-small" href="/admin/data-qa">
               Back to QA cards
@@ -102,15 +106,15 @@ export function AdminDataQaSummary({ data }: Props) {
           </div>
           <div className="admin-users__stat">
             <strong>{data.overview.testingFiles.toLocaleString()}</strong>
-            <span>Testing</span>
+            <span>Auto-learning</span>
           </div>
           <div className="admin-users__stat">
             <strong>{data.overview.processingFiles.toLocaleString()}</strong>
-            <span>Processing</span>
+            <span>Auto-QA running</span>
           </div>
           <div className="admin-users__stat">
             <strong>{data.overview.failedFiles.toLocaleString()}</strong>
-            <span>Needs retry</span>
+            <span>Needs parser improvement</span>
           </div>
           <div className="admin-users__stat">
             <strong>{formatDate(data.overview.latestUpdatedAt)}</strong>
@@ -145,15 +149,15 @@ export function AdminDataQaSummary({ data }: Props) {
               </div>
               <div>
                 <strong>{bank.testingCount.toLocaleString()}</strong>
-                <span>Testing</span>
+                <span>Auto-learning</span>
               </div>
               <div>
                 <strong>{bank.processingCount.toLocaleString()}</strong>
-                <span>Processing</span>
+                <span>Auto-QA running</span>
               </div>
               <div>
                 <strong>{bank.failedCount.toLocaleString()}</strong>
-                <span>Needs retry</span>
+                <span>Needs parser improvement</span>
               </div>
             </div>
 

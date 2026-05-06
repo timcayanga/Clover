@@ -16,19 +16,26 @@ Clover is a personal finance app focused on statement import, transaction parsin
 10. `docs/maya-parser-rules.md` when working on Maya imports
 11. `docs/landbank-parser-rules.md` when working on LandBank imports
 12. `docs/wise-parser-rules.md` when working on Wise imports
-13. `docs/maribank-parser-rules.md` when working on MariBank imports
-14. `docs/psbank-parser-rules.md` when working on PS Bank imports
-15. `docs/chinabank-parser-rules.md` when working on China Bank imports
-16. `docs/hsbc-parser-rules.md` when working on HSBC imports
-17. `docs/eastwest-parser-rules.md` when working on EastWest imports
-18. `docs/gotyme-parser-rules.md` when working on GoTyme imports
-19. `docs/bank-of-commerce-parser-rules.md` when working on Bank of Commerce imports
-20. `docs/bank-of-china-parser-rules.md` when working on Bank of China imports
-21. `docs/cimb-parser-rules.md` when working on CIMB imports
-22. `web/prisma/schema.prisma`
-23. `web/lib/import-parser.ts`
-24. `web/lib/data-engine.ts`
-25. `web/workers/import-processor.ts`
+13. `docs/atram-parser-rules.md` when working on ATRAM imports
+14. `docs/uno-parser-rules.md` when working on UNO Digital Bank imports
+15. `docs/ab-capital-securities-parser-rules.md` when working on AB Capital Securities imports
+16. `docs/gcrypto-parser-rules.md` when working on GCrypto imports
+17. `docs/maribank-parser-rules.md` when working on MariBank imports
+18. `docs/psbank-parser-rules.md` when working on PS Bank imports
+19. `docs/chinabank-parser-rules.md` when working on China Bank imports
+20. `docs/hsbc-parser-rules.md` when working on HSBC imports
+21. `docs/eastwest-parser-rules.md` when working on EastWest imports
+22. `docs/gotyme-parser-rules.md` when working on GoTyme imports
+23. `docs/bank-of-commerce-parser-rules.md` when working on Bank of Commerce imports
+24. `docs/bank-of-china-parser-rules.md` when working on Bank of China imports
+25. `docs/aub-parser-rules.md` when working on AUB imports
+26. `docs/pnb-parser-rules.md` when working on PNB imports
+27. `docs/ucpb-parser-rules.md` when working on UCPB imports
+28. `docs/cimb-parser-rules.md` when working on CIMB imports
+29. `web/prisma/schema.prisma`
+30. `web/lib/import-parser.ts`
+31. `web/lib/data-engine.ts`
+32. `web/workers/import-processor.ts`
 
 If `docs/product-spec.md` is added later, it should become the primary product spec and supersede `docs/user-management-spec.md` for implementation guidance.
 

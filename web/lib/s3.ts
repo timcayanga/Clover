@@ -1,10 +1,24 @@
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { mkdir, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
 import { getEnv } from "./env";
 
 let client: S3Client | null = null;
 
+const localImportStorageRoot = join(tmpdir(), "clover-import-objects");
+
+const isLocalImportStorageFallback = () => process.env.NODE_ENV !== "production";
+
+const sanitizeStorageKey = (key: string) => key.replace(/[^a-zA-Z0-9._-]/g, "_");
+
+export const getLocalImportObjectPath = (key: string) => join(localImportStorageRoot, sanitizeStorageKey(key));
+
 export const getR2Client = () => {
+  if (isLocalImportStorageFallback()) {
+    throw new Error("Local import storage fallback active");
+  }
   if (client) return client;
   const env = getEnv();
   if (!env.R2_ACCOUNT_ID || !env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY) {
@@ -24,6 +38,15 @@ export const getR2Client = () => {
 };
 
 export const createUploadUrl = async (key: string, contentType: string) => {
+  if (isLocalImportStorageFallback()) {
+    return {
+      url: `file://${getLocalImportObjectPath(key)}`,
+      key,
+      bucket: "local",
+      expiresInSeconds: 600,
+    };
+  }
+
   const env = getEnv();
   if (!env.R2_BUCKET_NAME) {
     throw new Error("Missing bucket name");
@@ -46,6 +69,13 @@ export const createUploadUrl = async (key: string, contentType: string) => {
 };
 
 export const uploadObject = async (key: string, body: Uint8Array | Buffer, contentType: string) => {
+  if (isLocalImportStorageFallback()) {
+    const filePath = getLocalImportObjectPath(key);
+    await mkdir(dirname(filePath), { recursive: true });
+    await writeFile(filePath, body);
+    return;
+  }
+
   const env = getEnv();
   if (!env.R2_BUCKET_NAME) {
     throw new Error("Missing bucket name");

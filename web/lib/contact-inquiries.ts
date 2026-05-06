@@ -35,7 +35,13 @@ export async function createContactInquiry(input: {
   sourcePage?: string | null;
   userAgent?: string | null;
 }) {
-  return prisma.contactInquiry.create({
+  const contactInquiry = (prisma as unknown as { contactInquiry?: { create: (args: { data: Record<string, unknown> }) => Promise<ContactInquiry> } }).contactInquiry;
+
+  if (!contactInquiry) {
+    return null;
+  }
+
+  return contactInquiry.create({
     data: {
       name: input.name.trim(),
       email: input.email.trim().toLowerCase(),
@@ -52,48 +58,88 @@ export async function getAdminContactInquiries(filters: ContactInquiryFilters = 
   const page = Math.max(1, filters.page ?? 1);
   const pageSize = Math.min(50, Math.max(1, filters.pageSize ?? 20));
   const query = normalizeQuery(filters.query).toLowerCase();
+  const contactInquiry = (prisma as unknown as {
+    contactInquiry?: {
+      findMany: (args: Prisma.ContactInquiryFindManyArgs) => Promise<ContactInquiry[]>;
+      count: (args: Prisma.ContactInquiryCountArgs) => Promise<number>;
+    };
+  }).contactInquiry;
 
-  const where: Prisma.ContactInquiryWhereInput = {
-    ...(filters.status && filters.status !== "all" ? { status: filters.status } : {}),
-    ...(query
-      ? {
-          OR: [
-            { name: { contains: query, mode: "insensitive" } },
-            { email: { contains: query, mode: "insensitive" } },
-            { message: { contains: query, mode: "insensitive" } },
-            { sourcePage: { contains: query, mode: "insensitive" } },
-            { adminReplySubject: { contains: query, mode: "insensitive" } },
-            { adminReplyBody: { contains: query, mode: "insensitive" } },
-          ],
-        }
-      : {}),
-  };
+  if (!contactInquiry) {
+    return {
+      items: [],
+      page,
+      pageSize,
+      total: 0,
+      totalPages: 1,
+      openCount: 0,
+      inProgressCount: 0,
+      respondedCount: 0,
+    };
+  }
 
-  const [items, total, openCount, respondedCount] = await prisma.$transaction([
-    prisma.contactInquiry.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.contactInquiry.count({ where }),
-    prisma.contactInquiry.count({ where: { status: "open" } }),
-    prisma.contactInquiry.count({ where: { status: "responded" } }),
-  ]);
+  try {
+    const where: Prisma.ContactInquiryWhereInput = {
+      ...(filters.status && filters.status !== "all" ? { status: filters.status } : {}),
+      ...(query
+        ? {
+            OR: [
+              { name: { contains: query, mode: "insensitive" } },
+              { email: { contains: query, mode: "insensitive" } },
+              { message: { contains: query, mode: "insensitive" } },
+              { sourcePage: { contains: query, mode: "insensitive" } },
+              { adminReplySubject: { contains: query, mode: "insensitive" } },
+              { adminReplyBody: { contains: query, mode: "insensitive" } },
+            ],
+          }
+        : {}),
+    };
 
-  return {
-    items,
-    page,
-    pageSize,
-    total,
-    totalPages: Math.max(1, Math.ceil(total / pageSize)),
-    openCount,
-    respondedCount,
-  };
+    const [items, total, openCount, inProgressCount, respondedCount] = await Promise.all([
+      contactInquiry.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      contactInquiry.count({ where }),
+      contactInquiry.count({ where: { status: "open" } }),
+      contactInquiry.count({ where: { status: "in_progress" } }),
+      contactInquiry.count({ where: { status: "responded" } }),
+    ]);
+
+    return {
+      items,
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      openCount,
+      inProgressCount,
+      respondedCount,
+    };
+  } catch {
+    return {
+      items: [],
+      page,
+      pageSize,
+      total: 0,
+      totalPages: 1,
+      openCount: 0,
+      inProgressCount: 0,
+      respondedCount: 0,
+    };
+  }
 }
 
 export async function updateContactInquiry(id: string, input: ContactInquiryUpdateInput) {
-  return prisma.contactInquiry.update({
+  const contactInquiry = (prisma as unknown as { contactInquiry?: { update: (args: { where: { id: string }; data: Record<string, unknown> }) => Promise<ContactInquiry> } }).contactInquiry;
+
+  if (!contactInquiry) {
+    throw new Error("Contact inquiry storage is unavailable in this database.");
+  }
+
+  return contactInquiry.update({
     where: { id },
     data: {
       ...(input.status ? { status: input.status } : {}),

@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import type { AccountType, TransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { capturePostHogServerEvent } from "@/lib/analytics";
 import {
   detectStatementMetadata,
   type DetectedStatementMetadata,
@@ -1874,7 +1875,7 @@ export const upsertMerchantRule = async (params: {
   const merchantKey = normalizeMerchantText(params.merchantText);
 
   try {
-    return await prisma.merchantRule.upsert({
+    const rule = await prisma.merchantRule.upsert({
       where: {
         workspaceId_merchantKey: {
           workspaceId: params.workspaceId,
@@ -1904,6 +1905,8 @@ export const upsertMerchantRule = async (params: {
         lastUsedAt: new Date(),
       },
     });
+
+    return rule;
   } catch (error) {
     if (isMissingDatabaseRelationError(error, "MerchantRule")) {
       return null;
@@ -2333,6 +2336,7 @@ export const recordTrainingSignal = async (params: {
   source: "import_confirmation" | "manual_recategorization" | "training_upload" | "manual_transaction_creation";
   confidence?: number;
   notes?: string | null;
+  actorUserId?: string | null;
 }) => {
   const merchantKey = normalizeMerchantText(params.merchantText);
   const merchantTokens = tokenizeMerchant(params.merchantText);
@@ -2397,6 +2401,18 @@ export const recordTrainingSignal = async (params: {
   });
 
   if (category) {
+    const existingRule = await prisma.merchantRule.findUnique({
+      where: {
+        workspaceId_merchantKey: {
+          workspaceId: params.workspaceId,
+          merchantKey,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
     await upsertMerchantRule({
       workspaceId: params.workspaceId,
       merchantText: params.merchantText,
@@ -2406,6 +2422,35 @@ export const recordTrainingSignal = async (params: {
       source: params.source,
       confidence: params.confidence ?? 100,
     });
+
+    if (params.actorUserId) {
+      void capturePostHogServerEvent(existingRule ? "merchant_rule_updated" : "merchant_rule_created", params.actorUserId, {
+        workspace_id: params.workspaceId,
+        merchant_key: merchantKey,
+        category_id: params.categoryId,
+        category_name: params.categoryName ?? category.name,
+        source: params.source,
+        confidence: params.confidence ?? 100,
+        times_confirmed: 1,
+      });
+
+      void capturePostHogServerEvent("merchant_rule_applied", params.actorUserId, {
+        workspace_id: params.workspaceId,
+        merchant_key: merchantKey,
+        category_id: params.categoryId,
+        category_name: params.categoryName ?? category.name,
+        source: params.source,
+        confidence: params.confidence ?? 100,
+      });
+
+      void capturePostHogServerEvent("category_rule_applied", params.actorUserId, {
+        workspace_id: params.workspaceId,
+        category_id: params.categoryId,
+        category_name: params.categoryName ?? category.name,
+        source: params.source,
+        confidence: params.confidence ?? 100,
+      });
+    }
   }
 
   return signal;
@@ -2671,6 +2716,7 @@ export const applyDataQaReviewLearning = async (params: {
         notes:
           readReviewString(reviewRow, "feedback") ??
           "Confirmed through Data QA review.",
+        actorUserId: params.actorUserId ?? null,
       })
     );
   }
@@ -2705,6 +2751,7 @@ export const applyDataQaReviewLearning = async (params: {
         notes:
           readReviewString(reviewRow, "feedback") ??
           "Added manually from Data QA because the parser missed this transaction.",
+        actorUserId: params.actorUserId ?? null,
       })
     );
   }

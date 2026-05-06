@@ -68,6 +68,14 @@ const BANK_SUGGESTIONS: InstitutionSuggestion[] = [
     supportsInvestments: true,
   },
   {
+    label: "HSBC",
+    category: "bank",
+    description: "Hongkong and Shanghai Banking Corporation",
+    aliases: withAliases(["hsbc philippines"]),
+    popularity: 94,
+    supportsInvestments: true,
+  },
+  {
     label: "RCBC",
     category: "bank",
     description: "Rizal Commercial Banking Corporation",
@@ -253,11 +261,12 @@ const PLATFORM_SUGGESTIONS: InstitutionSuggestion[] = [
     popularity: 81,
   },
   {
-    label: "Uno Bank",
-    category: "investment_platform",
+    label: "UNO Digital Bank",
+    category: "bank",
     description: "Digital bank and time deposits",
-    aliases: withAliases(["uno digital bank", "uno bank philippines"]),
+    aliases: withAliases(["uno bank", "uno bank philippines", "unobank"]),
     popularity: 80,
+    supportsInvestments: true,
   },
   {
     label: "Cebuana Lhuillier",
@@ -272,6 +281,20 @@ const PLATFORM_SUGGESTIONS: InstitutionSuggestion[] = [
     description: "Payments and balance wallet",
     aliases: withAliases(["paypal wallet"]),
     popularity: 78,
+  },
+  {
+    label: "AB Capital Securities",
+    category: "investment_platform",
+    description: "Stock and fund trading platform",
+    aliases: withAliases(["ab capital", "investatrade"]),
+    popularity: 77,
+  },
+  {
+    label: "GCrypto",
+    category: "investment_platform",
+    description: "Crypto trading and holdings platform",
+    aliases: withAliases(["g crypto", "pdax", "gcash crypto"]),
+    popularity: 76,
   },
 ];
 

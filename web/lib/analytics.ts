@@ -8,6 +8,20 @@ export type AnalyticsEventName =
   | "onboarding_started"
   | "onboarding_completed"
   | "first_login"
+  | "workspace_created"
+  | "workspace_updated"
+  | "workspace_deleted"
+  | "workspace_switched"
+  | "account_created"
+  | "account_updated"
+  | "account_deleted"
+  | "account_wiped"
+  | "account_reset"
+  | "category_created"
+  | "category_updated"
+  | "category_deleted"
+  | "merchant_rule_deleted"
+  | "merchant_rule_reverted"
   | "dashboard_viewed"
   | "first_import_started"
   | "first_import_completed"
@@ -20,8 +34,24 @@ export type AnalyticsEventName =
   | "import_parsed_successfully"
   | "import_parsed_with_warnings"
   | "import_failed"
+  | "import_processing_started"
+  | "import_processing_completed"
+  | "import_processing_stalled"
   | "review_queue_opened"
   | "import_confirmed"
+  | "import_retry_started"
+  | "import_retry_succeeded"
+  | "import_retry_failed"
+  | "qa_run_completed"
+  | "qa_run_failed"
+  | "password_provided"
+  | "password_failed"
+  | "statement_identity_resolved"
+  | "statement_identity_confirmed"
+  | "import_duplicate_detected"
+  | "manual_transaction_created"
+  | "bulk_transaction_updated"
+  | "bulk_transaction_deleted"
   | "transaction_imported"
   | "transaction_updated"
   | "transaction_categorized"
@@ -37,7 +67,11 @@ export type AnalyticsEventName =
   | "review_item_rejected"
   | "merchant_rule_created"
   | "merchant_rule_updated"
+  | "merchant_rule_applied"
   | "category_rule_created"
+  | "category_rule_updated"
+  | "category_rule_deleted"
+  | "category_rule_reverted"
   | "category_rule_applied"
   | "ai_suggestion_shown"
   | "ai_suggestion_accepted"
@@ -57,13 +91,40 @@ export type AnalyticsEventName =
   | "feature_used"
   | "settings_updated"
   | "goal_target_saved"
+  | "goal_updated"
   | "goal_target_reached"
+  | "goal_progress_updated"
+  | "goal_reset"
   | "plan_limit_reached"
+  | "billing_started"
+  | "billing_success"
+  | "billing_cancelled"
+  | "upgrade_cta_clicked"
+  | "trial_to_paid_conversion"
   | "upgrade_prompt_viewed"
   | "support_contacted"
   | "error_shown";
 
 const normalizeHost = (host: string) => host.replace(/\/$/, "");
+
+export const getAnalyticsEnvironment = () => {
+  if (process.env.VERCEL_ENV === "production") {
+    return "production";
+  }
+
+  if (process.env.VERCEL_ENV === "preview") {
+    return "staging";
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    return "local";
+  }
+
+  return "production";
+};
+
+export const scopeAnalyticsDistinctId = (distinctId: string, environment = getAnalyticsEnvironment()) =>
+  `${environment}:${distinctId}`;
 
 export const getPostHogConfig = () => {
   const key = process.env.NEXT_PUBLIC_POSTHOG_KEY ?? "";
@@ -94,6 +155,7 @@ export const capturePostHogServerEvent = async (
 ) => {
   const { key } = getPostHogConfig();
   const host = getPostHogServerHost();
+  const scopedDistinctId = scopeAnalyticsDistinctId(distinctId);
 
   if (!key) {
     return;
@@ -107,7 +169,7 @@ export const capturePostHogServerEvent = async (
     body: JSON.stringify({
       api_key: key,
       event,
-      distinct_id: distinctId,
+      distinct_id: scopedDistinctId,
       properties,
       timestamp: new Date().toISOString(),
     }),

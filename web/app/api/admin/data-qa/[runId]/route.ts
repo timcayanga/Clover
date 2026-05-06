@@ -24,6 +24,7 @@ const updateSchema = z.object({
 
 const reparseSchema = updateSchema.extend({
   reparse: z.literal(true),
+  improveParser: z.boolean().optional(),
 });
 
 const resolveReviewPayload = (incoming: unknown, stored: unknown) => {
@@ -45,6 +46,13 @@ const normalizeJson = (value: unknown) => {
 
   return value;
 };
+
+const joinFeedbackLines = (...groups: Array<Array<string | null | undefined>>) =>
+  groups
+    .flat()
+    .map((line) => (typeof line === "string" ? line.trim() : ""))
+    .filter(Boolean)
+    .join("\n");
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -240,10 +248,65 @@ const buildAutoReviewPayload = (params: {
   };
 };
 
+const mergeGeneratedReviewPayload = (
+  existingPayload: Record<string, unknown>,
+  generatedPayload: Record<string, unknown>
+) => {
+  const merged: Record<string, unknown> = { ...generatedPayload, ...existingPayload };
+
+  for (const key of Object.keys(generatedPayload)) {
+    const existingValue = existingPayload[key];
+    const generatedValue = generatedPayload[key];
+
+    if (Array.isArray(existingValue) && existingValue.length > 0) {
+      merged[key] = existingValue;
+      continue;
+    }
+
+    if (isRecord(existingValue) && isRecord(generatedValue)) {
+      merged[key] = { ...generatedValue, ...existingValue };
+      continue;
+    }
+  }
+
+  return merged;
+};
+
+const buildParserImprovementFeedback = (params: {
+  latestScore: number | null;
+  bankName: string | null;
+  fileName: string;
+  findings: Array<{
+    code: string;
+    message: string;
+    suggestion: string | null;
+  }>;
+  existingManualFeedback: string | null;
+}) => {
+  const systemLines = [
+    "System parser-improvement mode was requested for this file.",
+    `File: ${params.fileName}.`,
+    `Bank context: ${params.bankName ?? "Unknown"}.`,
+    params.latestScore !== null
+      ? `Latest QA score before improvement rerun: ${params.latestScore}. Target score: ${AUTO_REPARSE_SCORE_TARGET}.`
+      : `Latest QA score before improvement rerun was unavailable. Target score: ${AUTO_REPARSE_SCORE_TARGET}.`,
+    "Strengthen deterministic extraction for this statement family, prioritize statement metadata, and carry forward confirmed row-level corrections before rerunning.",
+    ...params.findings.slice(0, 12).map((finding) =>
+      `Parser issue: ${finding.code}. ${finding.message}${finding.suggestion ? ` Suggestion: ${finding.suggestion}` : ""}`
+    ),
+  ];
+
+  return joinFeedbackLines(
+    params.existingManualFeedback ? [params.existingManualFeedback] : [],
+    systemLines
+  );
+};
+
 export async function GET(_request: Request, { params }: { params: Promise<{ runId: string }> }) {
   try {
     await requireAdminAuth();
     const { runId } = await params;
+    const pdfJsBaseUrl = new URL(_request.url).origin;
 
     const run = await prisma.dataQaRun.findUnique({
       where: { id: runId },
@@ -300,6 +363,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ run
             fileType: String(importFile.fileType ?? "unknown"),
             fileName: String(importFile.fileName ?? "imported-file"),
           },
+          undefined,
+          pdfJsBaseUrl
         );
         rawFilePreview = text.slice(0, 12_000);
       } catch {
@@ -395,6 +460,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ru
   try {
     await requireAdminAuth();
     const { runId } = await params;
+    const pdfJsBaseUrl = new URL(request.url).origin;
     const payload = updateSchema.parse(await request.json());
 
     const existingRun = await prisma.dataQaRun.findUnique({
@@ -455,6 +521,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ru
         fileType: String(importFile.fileType ?? "unknown"),
         fileName: String(importFile.fileName ?? "imported-file"),
       },
+      undefined,
+      pdfJsBaseUrl
     );
     const detectedMetadata = detectStatementMetadataFromText(extractedText);
     const statementFingerprint = buildStatementFingerprint(
@@ -591,6 +659,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
   try {
     await requireAdminAuth();
     const { runId } = await params;
+    const pdfJsBaseUrl = new URL(request.url).origin;
     const payload = reparseSchema.parse(await request.json());
 
     const existingRun = await prisma.dataQaRun.findUnique({
@@ -625,6 +694,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
         fileType: String(importFile.fileType ?? "unknown"),
         fileName: String(importFile.fileName ?? "imported-file"),
       },
+      undefined,
+      pdfJsBaseUrl
     );
     const detectedMetadata = detectStatementMetadataFromText(extractedText);
     const statementFingerprint = buildStatementFingerprint(
@@ -633,9 +704,61 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
       String(importFile.fileName ?? "imported-file"),
       String(importFile.fileType ?? "unknown")
     );
-    const reviewPayload = isRecord(payload.fieldReviewPayload) ? payload.fieldReviewPayload : {};
+    const parsedRows = existingRun.importFileId ? await fetchParsedTransactionRows(existingRun.importFileId) : [];
+    const latestRunForImprovement = await prisma.dataQaRun.findFirst({
+      where: {
+        importFileId: existingRun.importFileId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      include: {
+        findings: {
+          orderBy: {
+            createdAt: "asc",
+          },
+        },
+      },
+    });
+    const parserImprovementRequested = payload.improveParser === true;
+    const generatedAutoReview = parserImprovementRequested
+      ? buildAutoReviewPayload({
+          latestScore: latestRunForImprovement?.score ?? existingRun.score,
+          findings: (latestRunForImprovement?.findings ?? []).map((finding) => ({
+            code: finding.code,
+            severity: finding.severity,
+            field: finding.field,
+            message: finding.message,
+            suggestion: finding.suggestion,
+          })),
+          parsedRows,
+          detectedMetadata,
+          statementCheckpoint: statementCheckpoint
+            ? {
+                openingBalance: statementCheckpoint.openingBalance?.toString() ?? null,
+                endingBalance: statementCheckpoint.endingBalance?.toString() ?? null,
+              }
+            : null,
+          importAccount: account
+            ? {
+                institution: account.institution ?? null,
+                type: account.type ?? null,
+                name: account.name ?? null,
+                balance: account.balance?.toString() ?? null,
+              }
+            : null,
+        })
+      : null;
+    const requestedReviewPayload = isRecord(payload.fieldReviewPayload) ? payload.fieldReviewPayload : {};
+    const effectiveReviewPayload =
+      parserImprovementRequested && generatedAutoReview
+        ? mergeGeneratedReviewPayload(
+            resolveReviewPayload(requestedReviewPayload, existingRun.fieldReviewPayload),
+            generatedAutoReview.fieldReviewPayload
+          )
+        : resolveReviewPayload(requestedReviewPayload, existingRun.fieldReviewPayload);
     const statementMetadataOverride = buildStatementMetadataOverride({
-      reviewPayload,
+      reviewPayload: effectiveReviewPayload,
       detectedMetadata,
       statementCheckpoint: statementCheckpoint
         ? {
@@ -654,23 +777,34 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
           }
         : null,
     });
+    const effectiveManualFeedback = parserImprovementRequested
+      ? buildParserImprovementFeedback({
+          latestScore: latestRunForImprovement?.score ?? existingRun.score ?? null,
+          bankName: statementMetadataOverride.institution ?? account?.institution ?? detectedMetadata.institution ?? null,
+          fileName: String(importFile.fileName ?? "imported-file"),
+          findings: (latestRunForImprovement?.findings ?? []).map((finding) => ({
+            code: finding.code,
+            message: finding.message,
+            suggestion: finding.suggestion,
+          })),
+          existingManualFeedback: payload.manualFeedback ?? existingRun.manualFeedback ?? null,
+        })
+      : payload.manualFeedback ?? existingRun.manualFeedback ?? null;
 
-    const effectiveManualFeedback = payload.manualFeedback ?? existingRun.manualFeedback ?? null;
-
-    if (payload.manualFeedback !== undefined || payload.fieldReviewPayload !== undefined) {
+    if (payload.manualFeedback !== undefined || payload.fieldReviewPayload !== undefined || parserImprovementRequested) {
       await prisma.dataQaRun.update({
         where: { id: runId },
         data: {
-          ...(payload.manualFeedback !== undefined
+          ...((payload.manualFeedback !== undefined || parserImprovementRequested)
             ? {
-                manualFeedback: payload.manualFeedback,
+                manualFeedback: effectiveManualFeedback,
                 manualFeedbackUpdatedAt: new Date(),
                 manualFeedbackAuthorId: "local-admin",
               }
             : {}),
-          ...(payload.fieldReviewPayload !== undefined
+          ...((payload.fieldReviewPayload !== undefined || parserImprovementRequested)
             ? {
-                fieldReviewPayload: payload.fieldReviewPayload as Prisma.InputJsonValue,
+                fieldReviewPayload: effectiveReviewPayload as Prisma.InputJsonValue,
                 fieldReviewUpdatedAt: new Date(),
                 fieldReviewAuthorId: "local-admin",
               }
@@ -679,11 +813,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
       });
     }
 
-    const parsedRows = existingRun.importFileId ? await fetchParsedTransactionRows(existingRun.importFileId) : [];
-
     const hasSavedReviewContext = Boolean(existingRun.manualFeedback) || isRecord(existingRun.fieldReviewPayload);
 
-    if (payload.manualFeedback !== undefined || payload.fieldReviewPayload !== undefined || hasSavedReviewContext) {
+    if (payload.manualFeedback !== undefined || payload.fieldReviewPayload !== undefined || hasSavedReviewContext || parserImprovementRequested) {
       await applyDataQaReviewLearning({
         workspaceId: existingRun.workspaceId,
         importFileId: existingRun.importFileId,
@@ -746,7 +878,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
               : 0,
         },
         parsedRows,
-        fieldReviewPayload: reviewPayload as unknown as Prisma.JsonValue,
+        fieldReviewPayload: effectiveReviewPayload as unknown as Prisma.JsonValue,
         manualFeedback: effectiveManualFeedback,
         actorUserId: "local-admin",
         statementFingerprint,
@@ -814,6 +946,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
           : null,
       });
 
+      const loopReviewPayload = parserImprovementRequested
+        ? mergeGeneratedReviewPayload(effectiveReviewPayload, autoReview.fieldReviewPayload)
+        : autoReview.fieldReviewPayload;
+      const loopManualFeedback = parserImprovementRequested
+        ? buildParserImprovementFeedback({
+            latestScore: latestRun.score,
+            bankName: statementMetadataOverride.institution ?? account?.institution ?? detectedMetadata.institution ?? null,
+            fileName: String(importFile.fileName ?? "imported-file"),
+            findings: latestRun.findings.map((finding) => ({
+              code: finding.code,
+              message: finding.message,
+              suggestion: finding.suggestion,
+            })),
+            existingManualFeedback: effectiveManualFeedback,
+          })
+        : autoReview.manualFeedback || effectiveManualFeedback;
+
       await applyDataQaReviewLearning({
         workspaceId: existingRun.workspaceId,
         importFileId,
@@ -876,8 +1025,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
               : 0,
         },
         parsedRows,
-        fieldReviewPayload: autoReview.fieldReviewPayload as unknown as Prisma.JsonValue,
-        manualFeedback: autoReview.manualFeedback || effectiveManualFeedback,
+        fieldReviewPayload: loopReviewPayload as unknown as Prisma.JsonValue,
+        manualFeedback: loopManualFeedback,
         actorUserId: "local-admin",
         statementFingerprint,
         statementMetadataOverride,
@@ -912,6 +1061,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ run
     return NextResponse.json({
       ok: true,
       reparse: true,
+      improveParser: parserImprovementRequested,
       runId: latestRun?.id ?? runId,
       importFileId,
       importedRows: result.imported,

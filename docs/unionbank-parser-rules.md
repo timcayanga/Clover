@@ -25,12 +25,14 @@ This document captures the UnionBank parsing rules learned from the synthetic tr
 ## Credit Card Rules
 
 - Detect credit-card statements from the header wording and keep them as `credit_card` accounts, even when the account number still looks like a long UnionBank identifier.
+- Prefer the billing-name block near `Name Purchases and Advances` when the statement includes a fuller cardholder name there, even if the header only shows a shortened client name.
 - Treat month-name date rows like `August 01, 2024` the same way as `MM/DD/YY` rows.
 - Ignore header rows such as `Transactions DATE DESCRIPTION AMOUNT`; they are table labels, not real transactions.
 - Keep `Cash Payment` as a card-payment credit, not income.
 - Normalize common UnionBank card merchants like `Office 365`, `Google One`, `Discord Nitro`, `Foodpanda PH`, and `MLBB Top Up` instead of leaving them as raw OCR caps.
-- Categorize software and subscription merchants like `Office 365` and `Google One` as `Business`.
-- Categorize consumer digital purchases like `Discord Nitro` and `MLBB Top Up` as `Shopping`.
+- Categorize software and subscription merchants like `Office 365` as `Business`.
+- Categorize cloud / productivity subscriptions like `Google One` as `Bills & Utilities`.
+- Categorize consumer digital purchases like `Discord Nitro` and `MLBB Top Up` as `Entertainment`.
 - Categorize `Foodpanda` purchases as `Food & Dining`.
 - Keep merchant rows such as `Grab`, `Starbucks`, `Lazada`, `Airbnb`, `Klook`, `Qantas`, `Cebu Pacific`, `Din Tai Fung`, `Petron`, and `Apple` as learned merchant/category candidates.
 - Keep `OpenAI ChatGPT Subscription` as `Business` for this user.

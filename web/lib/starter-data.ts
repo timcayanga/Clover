@@ -2,6 +2,7 @@ import type { User } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_CATEGORY_ROWS } from "@/lib/default-categories";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
+import { capturePostHogServerEvent } from "@/lib/analytics";
 
 type StarterWorkspaceUser = Pick<User, "id" | "clerkUserId" | "email" | "verified" | "dataWipedAt">;
 
@@ -138,6 +139,13 @@ export const ensureStarterWorkspace = async (
         })),
       },
     },
+  });
+
+  void capturePostHogServerEvent("workspace_created", user.clerkUserId, {
+    workspace_id: workspace.id,
+    workspace_name: workspace.name,
+    workspace_type: workspace.type,
+    source: "starter_workspace",
   });
 
   const createdWorkspace = await prisma.workspace.findUnique({

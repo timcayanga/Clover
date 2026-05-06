@@ -147,6 +147,9 @@ export default async function ReviewPage() {
                 description: transaction.description,
                 isTransfer: transaction.isTransfer,
                 isExcluded: transaction.isExcluded,
+                rawPayload: transaction.rawPayload && typeof transaction.rawPayload === "object" && !Array.isArray(transaction.rawPayload)
+                  ? (transaction.rawPayload as Record<string, unknown>)
+                  : null,
               }))}
             />
           ) : (

@@ -349,9 +349,9 @@ export const helpSections: HelpSection[] = [
         "Supported import file types and passwords",
         "Know what Clover can handle and what to do when a file is password-protected.",
         "Find out which import files Clover supports and how to handle password-protected statements.",
-        ["supported file types", "password protected file", "import troubleshooting"],
+        ["supported file types", "password protected file", "import troubleshooting", "png", "jpg", "jpeg", "webp", "heic", "heif", "pdf", "csv"],
         [
-          "Use statement and receipt files that match Clover’s import flow.",
+          "Use PDF, CSV, or supported image files that match Clover’s import flow.",
           "If prompted, enter the document password.",
           "Re-run the import after unlocking the file.",
         ],
@@ -359,7 +359,7 @@ export const helpSections: HelpSection[] = [
           {
             question: "What file types does Clover support for imports?",
             answer:
-              "Clover is designed around statement and receipt uploads, and the exact supported types depend on the import flow you are using.",
+              "Clover supports PDF, CSV, PNG, JPG, JPEG, WEBP, HEIC, and HEIF imports. The exact behavior still depends on the import flow you are using.",
           },
           {
             question: "What should I do if Clover asks for a file password?",
@@ -426,7 +426,7 @@ export const helpSections: HelpSection[] = [
       {
         question: "What file types does Clover support for imports?",
         answer:
-          "Clover is designed around statement and receipt uploads, and the exact supported types depend on the import flow you are using.",
+          "Clover supports PDF, CSV, PNG, JPG, JPEG, WEBP, HEIC, and HEIF imports. The exact behavior still depends on the import flow you are using.",
       },
       {
         question: "How do I review a parsed statement in Clover?",

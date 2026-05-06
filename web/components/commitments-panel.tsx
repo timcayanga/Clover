@@ -58,7 +58,34 @@ const dateFormatter = new Intl.DateTimeFormat("en-PH", {
 
 const kindOrder = ["planned_payment", "debt", "receivable", "reminder"] as const;
 type CommitmentKind = (typeof kindOrder)[number];
-type CommitmentStatus = keyof typeof commitmentStatusLabels;
+type CommitmentFormKind = CommitmentKind;
+
+type CommitmentFormCopy = {
+  eyebrow: string;
+  headline: string;
+  helper: string;
+  titleLabel: string;
+  titlePlaceholder: string;
+  counterpartyLabel?: string;
+  counterpartyPlaceholder?: string;
+  amountLabel?: string;
+  amountPlaceholder?: string;
+  dueDateLabel?: string;
+  recurrenceLabel?: string;
+  linkedAccountLabel?: string;
+  linkedAccountHelp?: string;
+  transactionLabel?: string;
+  notesLabel?: string;
+  notesPlaceholder?: string;
+  showCounterparty: boolean;
+  showAmount: boolean;
+  showCurrency: boolean;
+  showDueDate: boolean;
+  showRecurrence: boolean;
+  showLinkedAccount: boolean;
+  showTransaction: boolean;
+  showNotes: boolean;
+};
 
 const formatCurrency = (value: string | null) => {
   if (!value) {
@@ -101,6 +128,100 @@ const kindRingTone: Record<CommitmentKind, string> = {
 
 const getCommitmentDateValue = (commitment: FinancialCommitmentSummary) => commitment.nextDueDate ?? commitment.dueDate;
 
+const commitmentFormCopy: Record<CommitmentFormKind, CommitmentFormCopy> = {
+  planned_payment: {
+    eyebrow: "Planned payment",
+    headline: "Track a future payment",
+    helper: "Best for bills, subscriptions, transfers, and anything you expect to pay soon.",
+    titleLabel: "Title",
+    titlePlaceholder: "Rent, tuition, card payment, subscription",
+    counterpartyLabel: "Payee",
+    counterpartyPlaceholder: "Landlord, merchant, lender, service provider",
+    amountLabel: "Amount",
+    amountPlaceholder: "2500.00",
+    dueDateLabel: "Due date",
+    recurrenceLabel: "Repeat cadence",
+    linkedAccountLabel: "Linked account",
+    linkedAccountHelp: "Optional if you want Clover to anchor the reminder to an account.",
+    transactionLabel: "Linked transaction",
+    notesLabel: "Notes",
+    notesPlaceholder: "Add context, reminders, or payoff details.",
+    showCounterparty: true,
+    showAmount: true,
+    showCurrency: true,
+    showDueDate: true,
+    showRecurrence: true,
+    showLinkedAccount: true,
+    showTransaction: true,
+    showNotes: true,
+  },
+  debt: {
+    eyebrow: "Debt",
+    headline: "Track a balance you owe",
+    helper: "Good for loans, mortgages, credit cards, BNPL, and other obligations with an outstanding balance.",
+    titleLabel: "Title",
+    titlePlaceholder: "Mortgage, car loan, credit card, BNPL plan",
+    counterpartyLabel: "Lender",
+    counterpartyPlaceholder: "Bank, lender, card issuer, person",
+    amountLabel: "Balance",
+    amountPlaceholder: "150000.00",
+    dueDateLabel: "Next due date",
+    recurrenceLabel: "Payment cadence",
+    linkedAccountLabel: "Linked account",
+    linkedAccountHelp: "Link the matching liability account if it already exists in Accounts.",
+    notesLabel: "Notes",
+    notesPlaceholder: "Add payoff strategy, minimums, or reminders.",
+    showCounterparty: true,
+    showAmount: true,
+    showCurrency: true,
+    showDueDate: true,
+    showRecurrence: true,
+    showLinkedAccount: true,
+    showTransaction: false,
+    showNotes: true,
+  },
+  receivable: {
+    eyebrow: "Receivable",
+    headline: "Track money owed to you",
+    helper: "Use this for reimbursements, IOUs, client balances, or any amount you expect to receive.",
+    titleLabel: "Title",
+    titlePlaceholder: "Reimbursement, client invoice, friend IOU",
+    counterpartyLabel: "Who owes you",
+    counterpartyPlaceholder: "Client, friend, employer, tenant",
+    amountLabel: "Amount owed",
+    amountPlaceholder: "1200.00",
+    dueDateLabel: "Expected date",
+    linkedAccountLabel: "Linked account",
+    linkedAccountHelp: "Optional if you already track the receivable as an account.",
+    notesLabel: "Notes",
+    notesPlaceholder: "Add context, repayment plan, or follow-up notes.",
+    showCounterparty: true,
+    showAmount: true,
+    showCurrency: true,
+    showDueDate: true,
+    showRecurrence: false,
+    showLinkedAccount: true,
+    showTransaction: false,
+    showNotes: true,
+  },
+  reminder: {
+    eyebrow: "Reminder",
+    headline: "Add a quick reminder",
+    helper: "Fastest option. Just give it a title and the date you want to remember.",
+    titleLabel: "Reminder",
+    titlePlaceholder: "Renew insurance, file taxes, follow up",
+    dueDateLabel: "Reminder date",
+    showCounterparty: false,
+    showAmount: false,
+    showCurrency: false,
+    showDueDate: true,
+    showRecurrence: false,
+    showLinkedAccount: false,
+    showTransaction: false,
+    showNotes: false,
+  },
+};
+
 export function CommitmentsPanel({
   workspaceId,
   commitments,
@@ -123,7 +244,6 @@ export function CommitmentsPanel({
   const [notes, setNotes] = useState("");
   const [accountId, setAccountId] = useState("");
   const [transactionId, setTransactionId] = useState("");
-  const [commitmentStatus, setCommitmentStatus] = useState<CommitmentStatus>("active");
   const [selectedKind, setSelectedKind] = useState<CommitmentKind>(() => {
     for (const entryKind of kindOrder) {
       if (commitments.some((item) => item.kind === entryKind)) {
@@ -198,6 +318,7 @@ export function CommitmentsPanel({
     () => getRecurringKindSuggestionForAccountType(selectedAccount?.type),
     [selectedAccount?.type]
   );
+  const formCopy = commitmentFormCopy[kind];
 
   useEffect(() => {
     if (!suggestedKind) {
@@ -206,18 +327,6 @@ export function CommitmentsPanel({
 
     setKind((currentKind) => (currentKind === "planned_payment" ? suggestedKind : currentKind));
   }, [suggestedKind]);
-
-  const recurringTitlePlaceholder = selectedAccount
-    ? isLiabilityAccountType(selectedAccount.type)
-      ? "Monthly loan payment, mortgage due date, BNPL installment"
-      : selectedAccount.type === "receivable"
-        ? "Client reimbursement, friend loan repayment"
-        : selectedAccount.type === "insurance"
-          ? "Premium reminder, annual policy renewal"
-          : selectedAccount.type === "prepaid"
-            ? "Top-up reminder, prepaid expiry follow-up"
-            : "Rent, Tuition, Friend loan, Credit card due date"
-    : "Rent, Tuition, Friend loan, Credit card due date";
 
   const recurringCounterpartyPlaceholder = selectedAccount
     ? isLiabilityAccountType(selectedAccount.type)
@@ -242,11 +351,19 @@ export function CommitmentsPanel({
     setNotes("");
     setAccountId("");
     setTransactionId("");
-    setCommitmentStatus("active");
   };
 
   const handleCreate = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    const shouldShowCounterparty = formCopy.showCounterparty;
+    const shouldShowAmount = formCopy.showAmount;
+    const shouldShowCurrency = formCopy.showCurrency;
+    const shouldShowDueDate = formCopy.showDueDate;
+    const shouldShowRecurrence = formCopy.showRecurrence;
+    const shouldShowLinkedAccount = formCopy.showLinkedAccount;
+    const shouldShowTransaction = formCopy.showTransaction;
+    const shouldShowNotes = formCopy.showNotes;
 
     setIsSaving(true);
     void fetch("/api/commitments", {
@@ -258,15 +375,15 @@ export function CommitmentsPanel({
         workspaceId,
         kind,
         title,
-        counterparty: counterparty || null,
-        amount: amount.trim() ? amount : null,
-        currency: currency.trim() || "PHP",
-        dueDate: dueDate || null,
-        recurrence,
-        notes: notes || null,
-        accountId: accountId || null,
-        transactionId: transactionId || null,
-        status: commitmentStatus,
+        counterparty: shouldShowCounterparty && counterparty.trim() ? counterparty : null,
+        amount: shouldShowAmount && amount.trim() ? amount : null,
+        currency: shouldShowCurrency ? currency.trim() || "PHP" : "PHP",
+        dueDate: shouldShowDueDate && dueDate ? dueDate : null,
+        recurrence: shouldShowRecurrence ? recurrence : "once",
+        notes: shouldShowNotes && notes.trim() ? notes : null,
+        accountId: shouldShowLinkedAccount && accountId ? accountId : null,
+        transactionId: shouldShowTransaction && transactionId ? transactionId : null,
+        status: "active",
       }),
     })
       .then(async (response) => {
@@ -440,10 +557,12 @@ export function CommitmentsPanel({
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "start" }}>
               <div>
                 <p className="eyebrow">Add recurring</p>
-                <h3 style={{ margin: 0 }}>Save a payment, debt, receivable, or reminder</h3>
               </div>
-              <button className="button button-secondary button-small" type="button" onClick={onCloseAdd}>
-                Close
+              <button className="button button-secondary button-small recurring-modal-close" type="button" onClick={onCloseAdd} aria-label="Close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M6 6l12 12" />
+                  <path d="M18 6 6 18" />
+                </svg>
               </button>
             </div>
 
@@ -465,120 +584,131 @@ export function CommitmentsPanel({
                     ))}
                   </select>
                 </label>
+              </div>
 
-                <label className="settings-field">
-                  <span>Status</span>
-                  <select
-                    value={commitmentStatus}
-                    onChange={(event) => setCommitmentStatus(event.target.value as CommitmentStatus)}
-                    className="settings-select"
-                  >
-                    {Object.entries(commitmentStatusLabels).map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <div style={{ display: "grid", gap: 6 }}>
+                <p className="eyebrow">{formCopy.eyebrow}</p>
+                <h4 style={{ margin: 0 }}>{formCopy.headline}</h4>
+                <p className="panel-muted" style={{ margin: 0 }}>
+                  {formCopy.helper}
+                </p>
               </div>
 
               <label className="settings-field">
-                <span>Title</span>
+                <span>{formCopy.titleLabel}</span>
                 <input
                   className="settings-input"
                   value={title}
                   onChange={(event) => setTitle(event.target.value)}
-                  placeholder={recurringTitlePlaceholder}
+                  placeholder={formCopy.titlePlaceholder}
                   required
                 />
               </label>
 
-              <div
-                style={{
-                  display: "grid",
-                  gap: 12,
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                }}
-              >
-                <label className="settings-field">
-                  <span>Counterparty</span>
-                  <input
-                    className="settings-input"
-                    value={counterparty}
-                    onChange={(event) => setCounterparty(event.target.value)}
-                    placeholder={recurringCounterpartyPlaceholder}
-                  />
-                </label>
+              {formCopy.showCounterparty || formCopy.showAmount ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 12,
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  }}
+                >
+                  {formCopy.showCounterparty ? (
+                    <label className="settings-field">
+                      <span>{formCopy.counterpartyLabel ?? "Counterparty"}</span>
+                      <input
+                        className="settings-input"
+                        value={counterparty}
+                        onChange={(event) => setCounterparty(event.target.value)}
+                        placeholder={formCopy.counterpartyPlaceholder ?? recurringCounterpartyPlaceholder}
+                      />
+                    </label>
+                  ) : null}
 
-                <label className="settings-field">
-                  <span>Amount</span>
-                  <input
-                    className="settings-input"
-                    inputMode="decimal"
-                    value={amount}
-                    onChange={(event) => setAmount(event.target.value)}
-                    placeholder="2500.00"
-                  />
-                </label>
-              </div>
+                  {formCopy.showAmount ? (
+                    <label className="settings-field">
+                      <span>{formCopy.amountLabel ?? "Amount"}</span>
+                      <input
+                        className="settings-input"
+                        inputMode="decimal"
+                        value={amount}
+                        onChange={(event) => setAmount(event.target.value)}
+                        placeholder={formCopy.amountPlaceholder ?? "2500.00"}
+                        required={kind === "debt" || kind === "receivable"}
+                      />
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
 
-              <div
-                style={{
-                  display: "grid",
-                  gap: 12,
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                }}
-              >
-                <label className="settings-field">
-                  <span className="sr-only">Currency</span>
-                  <CurrencySelector
-                    value={currency}
-                    onChange={setCurrency}
-                    options={currencyCatalogCodes}
-                    ariaLabel="Select commitment currency"
-                    className="settings-currency-field__selector"
-                    buttonClassName="settings-currency-field__button"
-                    menuClassName="settings-currency-field__menu"
-                    optionClassName="settings-currency-field__option"
-                    menuAlignment="end"
-                  />
-                </label>
+              {formCopy.showCurrency || formCopy.showDueDate ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 12,
+                    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                  }}
+                >
+                  {formCopy.showCurrency ? (
+                    <label className="settings-field">
+                      <span className="sr-only">Currency</span>
+                      <CurrencySelector
+                        value={currency}
+                        onChange={setCurrency}
+                        options={currencyCatalogCodes}
+                        ariaLabel="Select commitment currency"
+                        className="settings-currency-field__selector"
+                        buttonClassName="settings-currency-field__button"
+                        menuClassName="settings-currency-field__menu"
+                        optionClassName="settings-currency-field__option"
+                        menuAlignment="end"
+                      />
+                    </label>
+                  ) : null}
 
-                <label className="settings-field">
-                  <span>Due date</span>
-                  <input
-                    className="settings-input"
-                    type="date"
-                    value={dueDate}
-                    onChange={(event) => setDueDate(event.target.value)}
-                  />
-                </label>
-              </div>
+                  {formCopy.showDueDate ? (
+                    <label className="settings-field">
+                      <span>{formCopy.dueDateLabel ?? "Due date"}</span>
+                      <input
+                        className="settings-input"
+                        type="date"
+                        value={dueDate}
+                        onChange={(event) => setDueDate(event.target.value)}
+                        required={kind === "reminder"}
+                      />
+                    </label>
+                  ) : null}
+                </div>
+              ) : null}
 
-              <div
-                style={{
-                  display: "grid",
-                  gap: 12,
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                }}
-              >
-                <label className="settings-field">
-                  <span>Recurrence</span>
-                  <select
-                    value={recurrence}
-                    onChange={(event) => setRecurrence(event.target.value as typeof recurrence)}
-                    className="settings-select"
-                  >
-                    {commitmentRecurrenceOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              {formCopy.showRecurrence ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 12,
+                    gridTemplateColumns: formCopy.showLinkedAccount ? "repeat(auto-fit, minmax(220px, 1fr))" : "minmax(0, 1fr)",
+                  }}
+                >
+                  <label className="settings-field">
+                    <span>{formCopy.recurrenceLabel ?? "Repeat cadence"}</span>
+                    <select
+                      value={recurrence}
+                      onChange={(event) => setRecurrence(event.target.value as typeof recurrence)}
+                      className="settings-select"
+                    >
+                      {commitmentRecurrenceOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              ) : null}
 
+              {formCopy.showLinkedAccount ? (
                 <label className="settings-field">
-                  <span>Linked account</span>
+                  <span>{formCopy.linkedAccountLabel ?? "Linked account"}</span>
                   <select value={accountId} onChange={(event) => setAccountId(event.target.value)} className="settings-select">
                     <option value="">None</option>
                     {accounts.map((account) => (
@@ -588,46 +718,47 @@ export function CommitmentsPanel({
                       </option>
                     ))}
                   </select>
+                  {formCopy.linkedAccountHelp ? <span className="panel-muted">{formCopy.linkedAccountHelp}</span> : null}
                 </label>
-              </div>
+              ) : null}
 
-              {selectedAccount && suggestedKind ? (
+              {selectedAccount && suggestedKind && formCopy.showLinkedAccount ? (
                 <p className="panel-muted" style={{ margin: 0 }}>
                   Because <strong>{selectedAccount.name}</strong> is a {formatAccountTypeLabel(selectedAccount.type).toLowerCase()}, Clover suggests the{" "}
                   <strong>{commitmentKindLabels[suggestedKind as CommitmentKind]}</strong> recurring type for this item.
                 </p>
               ) : null}
 
-              <label className="settings-field">
-                <span>Linked transaction</span>
-                <select value={transactionId} onChange={(event) => setTransactionId(event.target.value)} className="settings-select">
-                  <option value="">None</option>
-                  {recentTransactions.map((transaction) => (
-                    <option key={transaction.id} value={transaction.id}>
-                      {formatTransactionLabel(transaction)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {formCopy.showTransaction ? (
+                <label className="settings-field">
+                  <span>{formCopy.transactionLabel ?? "Linked transaction"}</span>
+                  <select value={transactionId} onChange={(event) => setTransactionId(event.target.value)} className="settings-select">
+                    <option value="">None</option>
+                    {recentTransactions.map((transaction) => (
+                      <option key={transaction.id} value={transaction.id}>
+                        {formatTransactionLabel(transaction)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
 
-              <label className="settings-field">
-                <span>Notes</span>
-                <textarea
-                  className="settings-textarea"
-                  value={notes}
-                  onChange={(event) => setNotes(event.target.value)}
-                  placeholder="Add context, due reminders, or payoff details."
-                  rows={4}
-                />
-              </label>
+              {formCopy.showNotes ? (
+                <label className="settings-field">
+                  <span>{formCopy.notesLabel ?? "Notes"}</span>
+                  <textarea
+                    className="settings-textarea"
+                    value={notes}
+                    onChange={(event) => setNotes(event.target.value)}
+                    placeholder={formCopy.notesPlaceholder ?? "Add context, reminders, or payoff details."}
+                    rows={4}
+                  />
+                </label>
+              ) : null}
 
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <p className="panel-muted" style={{ margin: 0, maxWidth: 420 }}>
-                  Clover will keep the item here until you mark it resolved or delete it. If something looks wrong, verify the source in Accounts
-                  or Transactions first.
-                </p>
                 <button className="button button-primary" type="submit" disabled={isSaving}>
-                  {isSaving ? "Saving..." : "Save recurring"}
+                  {isSaving ? "Saving..." : kind === "reminder" ? "Save reminder" : "Save recurring"}
                 </button>
               </div>
             </form>

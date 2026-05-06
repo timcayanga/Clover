@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { AdminDataQaFileDetail } from "@/components/admin-data-qa-file-detail";
+import { AdminPageChrome } from "@/components/admin-page-chrome";
 import { requireAdminAuth } from "@/lib/admin";
 import type { Metadata } from "next";
 
@@ -13,10 +15,20 @@ export default async function AdminDataQaFilePage({ params }: { params: Promise<
   const { importFileId } = await params;
 
   return (
-    <main className="admin-page admin-data-qa-page">
+    <AdminPageChrome
+      active="data-qa"
+      title="Data QA file"
+      kicker="Internal tools"
+      subtitle="Inspect the imported file behind a Data QA run."
+      actions={
+        <Link className="button button-secondary button-small" href="/admin/data-qa">
+          Back to QA list
+        </Link>
+      }
+    >
       <div className="admin-page__content">
         <AdminDataQaFileDetail importFileId={importFileId} />
       </div>
-    </main>
+    </AdminPageChrome>
   );
 }

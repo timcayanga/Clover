@@ -3,6 +3,7 @@ import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { getUpcomingStatementReminders } from "@/lib/statement-reminders";
 import { buildRecurringTransactionSummaries, type RecurringTransactionLike } from "@/lib/recurring";
 import { serializeFinancialCommitment, type FinancialCommitmentSummary } from "@/lib/commitments";
+import { hasCompatibleTable } from "@/lib/data-engine";
 
 export type RecurringPageAccount = {
   id: string;
@@ -29,12 +30,32 @@ export type RecurringPageTransaction = {
   };
 };
 
+export type RecurringPatternSummary = {
+  id: string;
+  merchantRaw: string;
+  merchantClean: string | null;
+  amount: string | null;
+  currency: string;
+  frequency: string | null;
+  firstSeenDate: string | null;
+  lastSeenDate: string | null;
+  nextExpectedDate: string | null;
+  transactionCount: number;
+  confidence: number;
+  account: {
+    id: string;
+    name: string;
+    institution: string | null;
+  } | null;
+};
+
 export type RecurringPageData = {
   reminders: Awaited<ReturnType<typeof getUpcomingStatementReminders>>;
   accounts: RecurringPageAccount[];
   transactions: RecurringPageTransaction[];
   recurringItems: ReturnType<typeof buildRecurringTransactionSummaries>;
   commitments: FinancialCommitmentSummary[];
+  recurringPatterns: RecurringPatternSummary[];
   liabilityAccountCount: number;
 };
 
@@ -83,7 +104,8 @@ export async function getRecurringWorkspaceId(
 }
 
 export async function getRecurringPageData(workspaceId: string): Promise<RecurringPageData> {
-  const [reminders, accounts, transactions, commitments] = await Promise.all([
+  const hasRecurringPatternTable = await hasCompatibleTable("RecurringPattern");
+  const [reminders, accounts, transactions, commitments, recurringPatterns] = await Promise.all([
     getUpcomingStatementReminders(workspaceId),
     prisma.account.findMany({
       where: { workspaceId },
@@ -159,6 +181,33 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
         },
       },
     }),
+    hasRecurringPatternTable
+      ? prisma.recurringPattern.findMany({
+          where: { workspaceId },
+          orderBy: [{ nextExpectedDate: "asc" }, { lastSeenDate: "desc" }, { createdAt: "desc" }],
+          take: 50,
+          select: {
+            id: true,
+            merchantRaw: true,
+            merchantClean: true,
+            amount: true,
+            currency: true,
+            frequency: true,
+            firstSeenDate: true,
+            lastSeenDate: true,
+            nextExpectedDate: true,
+            transactionCount: true,
+            confidence: true,
+            account: {
+              select: {
+                id: true,
+                name: true,
+                institution: true,
+              },
+            },
+          },
+        })
+      : Promise.resolve([]),
   ]);
 
   const recurringItems = buildRecurringTransactionSummaries(transactions as RecurringTransactionLike[]);
@@ -184,6 +233,26 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
       currency: transaction.account.currency ?? null,
     },
   }));
+  const serializedRecurringPatterns = recurringPatterns.map((pattern) => ({
+    id: pattern.id,
+    merchantRaw: pattern.merchantRaw,
+    merchantClean: pattern.merchantClean,
+    amount: pattern.amount?.toString() ?? null,
+    currency: pattern.currency ?? "PHP",
+    frequency: pattern.frequency ?? null,
+    firstSeenDate: pattern.firstSeenDate?.toISOString() ?? null,
+    lastSeenDate: pattern.lastSeenDate?.toISOString() ?? null,
+    nextExpectedDate: pattern.nextExpectedDate?.toISOString() ?? null,
+    transactionCount: pattern.transactionCount,
+    confidence: pattern.confidence,
+    account: pattern.account
+      ? {
+          id: pattern.account.id,
+          name: pattern.account.name,
+          institution: pattern.account.institution,
+        }
+      : null,
+  }));
 
   return {
     reminders,
@@ -191,6 +260,7 @@ export async function getRecurringPageData(workspaceId: string): Promise<Recurri
     transactions: serializedTransactions,
     recurringItems,
     commitments: commitments.map((commitment) => serializeFinancialCommitment(commitment)),
+    recurringPatterns: serializedRecurringPatterns,
     liabilityAccountCount,
   };
 }

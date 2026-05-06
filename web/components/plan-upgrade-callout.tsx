@@ -1,6 +1,9 @@
+"use client";
+
 import Link from "next/link";
 import type { PlanTier } from "@prisma/client";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
+import { analyticsOnceKey, PostHogEvent, capturePostHogClientEvent } from "@/components/posthog-analytics";
 
 type PlanUpgradeCalloutProps = {
   planTier: PlanTier;
@@ -35,6 +38,15 @@ export function PlanUpgradeCallout({
 
   return (
     <section className={`plan-upgrade-callout glass${className ? ` ${className}` : ""}`}>
+      <PostHogEvent
+        event="upgrade_prompt_viewed"
+        onceKey={analyticsOnceKey("upgrade_prompt_viewed", `upgrade-callout:${planTier}:${ctaHref}:${title}`)}
+        properties={{
+          plan_tier: planTier,
+          prompt_location: "plan_upgrade_callout",
+          cta_href: ctaHref,
+        }}
+      />
       <div className="plan-upgrade-callout__copy">
         <p className="eyebrow">Ready for more?</p>
         <h4>{title}</h4>
@@ -48,7 +60,17 @@ export function PlanUpgradeCallout({
       </ul>
 
       <div className="plan-upgrade-callout__actions">
-        <Link className="button button-primary button-small" href={ctaHref}>
+        <Link
+          className="button button-primary button-small"
+          href={ctaHref}
+          onClick={() =>
+            capturePostHogClientEvent("upgrade_cta_clicked", {
+              cta_location: "plan_upgrade_callout",
+              plan_tier: planTier,
+              cta_href: ctaHref,
+            })
+          }
+        >
           {ctaLabel}
         </Link>
         {secondaryHref && secondaryLabel ? (
@@ -60,4 +82,3 @@ export function PlanUpgradeCallout({
     </section>
   );
 }
-

@@ -7,6 +7,7 @@ import { CloverLoadingScreen } from "@/components/clover-loading-screen";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { AccountBrandMark } from "@/components/account-brand-mark";
+import { AnimatedTabs } from "@/components/animated-tabs";
 import { CurrencySelector } from "@/components/currency-selector";
 import { getAccountPath } from "@/lib/account-path";
 import { InfoTip } from "@/components/info-tip";
@@ -397,7 +398,7 @@ export default function InvestmentsPage() {
   const [manualDividendAmount, setManualDividendAmount] = useState("");
   const [manualBalance, setManualBalance] = useState("");
   const [manualCurrency, setManualCurrency] = useState("PHP");
-  const selectedTab = requestedTab;
+  const [selectedTab, setSelectedTab] = useState<InvestmentTab>(requestedTab);
 
   useEffect(() => {
     document.title = "Clover | Investments";
@@ -997,12 +998,6 @@ export default function InvestmentsPage() {
     }
   };
 
-  const buildInvestmentsHref = (tab: InvestmentTab) => {
-    const query = new URLSearchParams(urlSearchParams.toString());
-    query.set("tab", tab);
-    return `?${query.toString()}`;
-  };
-
   if (!hasLoaded) {
     return <CloverLoadingScreen label="investments" />;
   }
@@ -1012,43 +1007,22 @@ export default function InvestmentsPage() {
       active="investments"
       title="Investments"
       titleAddon={
-        <nav className="investments-tabs" aria-label="Investment sections">
-          {INVESTMENT_TABS.map((tab) => {
-            const isLocked = Boolean(tab.proOnly && !canUseProTabs);
-            const isActive = selectedTab === tab.key;
-
-            if (isLocked) {
-              return (
-                <button
-                  key={tab.key}
-                  className={`investments-tab ${isActive ? "is-active" : ""} is-locked`}
-                  type="button"
-                  disabled
-                  aria-current={isActive ? "page" : undefined}
-                  aria-label={`${tab.label}, Pro only`}
-                >
-                  <span>{tab.label}</span>
-                  <span className="investments-tab__badge">Pro</span>
-                </button>
-              );
-            }
-
-            return (
-              <Link
-                key={tab.key}
-                className={`investments-tab ${isActive ? "is-active" : ""}`}
-                href={buildInvestmentsHref(tab.key)}
-                aria-current={isActive ? "page" : undefined}
-              >
-                <span>{tab.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
+        <AnimatedTabs
+          className="investments-tabs"
+          activeKey={selectedTab}
+          onChange={(key) => setSelectedTab(key as InvestmentTab)}
+          tabs={INVESTMENT_TABS.map((tab) => ({
+            key: tab.key,
+            label: tab.label,
+            disabled: Boolean(tab.proOnly && !canUseProTabs),
+            badge: tab.proOnly ? "Pro" : null,
+            ariaLabel: tab.proOnly ? `${tab.label}, Pro only` : tab.label,
+          }))}
+        />
       }
       actions={renderAddInvestmentButton("mobile")}
     >
-      <div className="accounts-page">
+      <div className="accounts-page animate-tab-panel" key={selectedTab}>
         {loading ? <p className="panel-muted">Loading investments...</p> : null}
         {!loading && message ? <p className="panel-muted">{message}</p> : null}
 

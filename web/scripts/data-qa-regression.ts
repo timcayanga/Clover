@@ -90,6 +90,127 @@ const buildBadSample = (): DataQaRunInput => ({
   },
 });
 
+const buildImageSample = (): DataQaRunInput => ({
+  workspaceId: "workspace-test",
+  importFileId: "import-image-statement",
+  source: "local_training",
+  fileName: "statement-screenshot.png",
+  fileType: "image/png",
+  parserVersion: "v2",
+  parsedRows: [
+    {
+      date: "2026-01-09",
+      amount: "-199.00",
+      merchantRaw: "GRAB PH",
+      merchantClean: "Grab",
+      description: "GRAB PH",
+      categoryName: "Transport",
+      type: "expense",
+      confidence: 94,
+      rawPayload: {
+        importMode: "statement",
+      },
+    },
+    {
+      date: "2026-01-10",
+      amount: "5000.00",
+      merchantRaw: "SALARY",
+      merchantClean: "Salary",
+      description: "SALARY",
+      categoryName: "Income",
+      type: "income",
+      confidence: 96,
+      rawPayload: {
+        importMode: "statement",
+      },
+    },
+  ],
+  metadata: {
+    institution: "UnionBank",
+    accountNumber: "123456789012",
+    accountName: "UnionBank 9012",
+    accountType: "bank",
+    openingBalance: 1000,
+    endingBalance: 5801,
+    startDate: "2026-01-01",
+    endDate: "2026-01-31",
+    confidence: 92,
+  },
+  account: {
+    id: "account-image-test",
+    name: "UnionBank 9012",
+    institution: "UnionBank",
+    type: "bank",
+    balance: "5801.00",
+  },
+  checkpoint: {
+    openingBalance: "1000.00",
+    endingBalance: "5801.00",
+    rowCount: 2,
+    status: "reconciled",
+  },
+  timings: {
+    totalMs: 2300,
+    parsingMs: 1800,
+    usedVisionFallback: true,
+    usedOpenAiFallback: true,
+    pageCount: 2,
+  },
+});
+
+const buildReceiptSample = (): DataQaRunInput => ({
+  workspaceId: "workspace-test",
+  importFileId: "import-receipt",
+  source: "local_training",
+  fileName: "receipt-photo.jpg",
+  fileType: "image/jpeg",
+  parserVersion: "v2",
+  parsedRows: [
+    {
+      date: "2026-01-12",
+      amount: "-428.00",
+      merchantRaw: "LUNCHBOX CAFE",
+      merchantClean: "Lunchbox Cafe",
+      description: "LUNCHBOX CAFE",
+      categoryName: "Food & Dining",
+      type: "expense",
+      confidence: 90,
+      rawPayload: {
+        importMode: "receipt",
+      },
+    },
+  ],
+  metadata: {
+    institution: null,
+    accountNumber: "**** 4321",
+    accountName: "Visa 4321",
+    accountType: "credit_card",
+    openingBalance: null,
+    endingBalance: null,
+    startDate: "2026-01-12",
+    endDate: "2026-01-12",
+    confidence: 76,
+  },
+  account: {
+    id: "account-receipt-test",
+    name: "Visa 4321",
+    institution: null,
+    type: "credit_card",
+    balance: null,
+  },
+  checkpoint: {
+    rowCount: 1,
+    status: "parsed",
+  },
+  timings: {
+    totalMs: 1400,
+    parsingMs: 1100,
+    usedVisionFallback: true,
+    usedOpenAiFallback: true,
+    pageCount: 1,
+  },
+});
+
 const loadJsonInput = async (filePath: string): Promise<DataQaRunInput> => {
   const raw = await readFile(resolve(filePath), "utf8");
   return JSON.parse(raw) as DataQaRunInput;
@@ -110,6 +231,25 @@ type DataQaFixture = {
 const loadFixture = async (filePath: string): Promise<DataQaFixture> => {
   const raw = await readFile(resolve(filePath), "utf8");
   return JSON.parse(raw) as DataQaFixture;
+};
+
+const loadFixtureFiles = async (rootDir: string): Promise<string[]> => {
+  const entries = await readdir(rootDir, { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const resolvedPath = `${rootDir}/${entry.name}`;
+    if (entry.isDirectory()) {
+      files.push(...(await loadFixtureFiles(resolvedPath)));
+      continue;
+    }
+
+    if (entry.isFile() && entry.name.endsWith(".json")) {
+      files.push(resolvedPath);
+    }
+  }
+
+  return files.sort();
 };
 
 const assertFixture = (fixture: DataQaFixture) => {
@@ -153,11 +293,11 @@ const main = async () => {
   }
 
   const fixtureDir = resolve("scripts/fixtures/data-qa");
-  const fixtureFiles = (await readdir(fixtureDir)).filter((entry) => entry.endsWith(".json")).sort();
+  const fixtureFiles = await loadFixtureFiles(fixtureDir);
   assert.ok(fixtureFiles.length > 0, "expected at least one Data QA fixture");
 
   for (const entry of fixtureFiles) {
-    const fixture = await loadFixture(`${fixtureDir}/${entry}`);
+    const fixture = await loadFixture(entry);
     assertFixture(fixture);
   }
 
@@ -165,6 +305,20 @@ const main = async () => {
   assert.ok(good.score >= 70, "the healthy sample should score well");
   assert.ok(!good.findings.some((finding) => finding.code === "transactions.empty"), "the healthy sample should have rows");
   assert.ok(good.metrics.uiTransactionsReady, "the healthy sample should be transaction-ready");
+
+  const imageSample = evaluateDataQaRun(buildImageSample());
+  assert.ok(imageSample.score >= 65, "the image statement sample should score reasonably well");
+  assert.ok(
+    imageSample.findings.some((finding) => finding.code === "performance.vision_fallback_used"),
+    "the image statement sample should record the vision fallback"
+  );
+
+  const receiptSample = evaluateDataQaRun(buildReceiptSample());
+  assert.ok(receiptSample.score >= 55, "the receipt sample should still be usable");
+  assert.ok(
+    receiptSample.findings.some((finding) => finding.code === "performance.vision_fallback_used"),
+    "the receipt sample should record the vision fallback"
+  );
 
   const bad = evaluateDataQaRun(buildBadSample());
   assert.ok(bad.findings.some((finding) => finding.code === "statement.identity_missing"), "the broken sample should flag missing identity");

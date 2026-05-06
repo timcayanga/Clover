@@ -21,15 +21,15 @@ const statusLabel = (status: string) => {
     case "completed":
       return "Completed";
     case "processing":
-      return "Processing";
+      return "Auto-QA running";
     case "failed":
-      return "Needs retry";
+      return "Needs parser improvement";
     case "needs_retry":
-      return "Needs retry";
+      return "Needs parser improvement";
     case "testing":
-      return "Testing";
+      return "Auto-learning";
     default:
-      return "Pending";
+      return "Pending first scan";
   }
 };
 
@@ -76,6 +76,8 @@ export function AdminDataQaBankDetail({ bank }: Props) {
   const [cleanupStatus, setCleanupStatus] = useState<string | null>(null);
   const [rerunBusyId, setRerunBusyId] = useState<string | null>(null);
   const [rerunStatus, setRerunStatus] = useState<string | null>(null);
+  const [improveBusyId, setImproveBusyId] = useState<string | null>(null);
+  const [improveStatus, setImproveStatus] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -234,14 +236,15 @@ export function AdminDataQaBankDetail({ bank }: Props) {
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({
-              workspaceId: uploadWorkspaceId,
-              fileName: file.name,
-              fileType: file.type || "unknown",
-              contentType: file.type || "application/octet-stream",
-              skipUpload: false,
-            }),
-          });
+          body: JSON.stringify({
+            workspaceId: uploadWorkspaceId,
+            fileName: file.name,
+            fileType: file.type || "unknown",
+            contentType: file.type || "application/octet-stream",
+            skipUpload: false,
+            bankName: bank.bankName,
+          }),
+        });
 
           if (!prepareResponse.ok) {
             const payload = await prepareResponse.json().catch(() => ({}));
@@ -364,6 +367,52 @@ export function AdminDataQaBankDetail({ bank }: Props) {
     }
   };
 
+  const improveFileParser = async (file: AdminDataQaBankSummary["files"][number]) => {
+    if (!file.latestRunId) {
+      setImproveStatus(`No QA run exists yet for ${file.fileName}. Start with Scan first.`);
+      return;
+    }
+
+    setImproveBusyId(file.id);
+    setImproveStatus(null);
+
+    try {
+      const response = await fetch(`/api/admin/data-qa/${file.latestRunId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          reparse: true,
+          improveParser: true,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.error || `Unable to improve ${file.fileName}.`);
+      }
+
+      const payload = (await response.json().catch(() => ({}))) as { runId?: string };
+      setImproveStatus(
+        payload.runId
+          ? `Parser improvement started for ${file.fileName}. Opening the latest run now.`
+          : `Parser improvement started for ${file.fileName}.`
+      );
+
+      if (payload.runId) {
+        router.push(`/admin/data-qa/${payload.runId}`);
+        return;
+      }
+
+      router.refresh();
+    } catch (error) {
+      setImproveStatus(error instanceof Error ? error.message : `Unable to improve ${file.fileName}.`);
+    } finally {
+      setImproveBusyId(null);
+    }
+  };
+
   return (
     <section className="admin-data-qa-bank-detail">
       <div className="admin-users__hero table-panel">
@@ -373,6 +422,10 @@ export function AdminDataQaBankDetail({ bank }: Props) {
           <p className="panel-muted">
             Upload new files for this bank, review the latest files tested, and clean up any empty entries that do not
             have usable data yet.
+          </p>
+          <p className="panel-muted">
+            Auto-learning means Clover is still applying QA feedback on its own. Needs parser improvement means the
+            automatic loop stalled and likely needs stronger parser logic or manual review.
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 12, marginTop: 16 }}>
             <Link className="button button-secondary button-small" href="/admin/data-qa">
@@ -397,15 +450,15 @@ export function AdminDataQaBankDetail({ bank }: Props) {
           </div>
           <div className="admin-users__stat">
             <strong>{bank.testingCount.toLocaleString()}</strong>
-            <span>Testing</span>
+            <span>Auto-learning</span>
           </div>
           <div className="admin-users__stat">
             <strong>{bank.processingCount.toLocaleString()}</strong>
-            <span>Processing</span>
+            <span>Auto-QA running</span>
           </div>
           <div className="admin-users__stat">
             <strong>{bank.failedCount.toLocaleString()}</strong>
-            <span>Needs retry</span>
+            <span>Needs parser improvement</span>
           </div>
           <div className="admin-users__stat">
             <strong>{statusLabel(bank.testingStatus)}</strong>
@@ -455,7 +508,7 @@ export function AdminDataQaBankDetail({ bank }: Props) {
               ref={uploadInputRef}
               className="hidden-file-input"
               type="file"
-              accept=".csv,.tsv,.pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.txt"
+              accept=".csv,.pdf,.json"
               multiple
               onChange={(event) => {
                 const nextFiles = Array.from(event.target.files ?? []);
@@ -515,6 +568,7 @@ export function AdminDataQaBankDetail({ bank }: Props) {
         {uploadError ? <div className="admin-users__notice admin-users__notice--error">{uploadError}</div> : null}
         {uploadStatus ? <div className="admin-users__notice">{uploadStatus}</div> : null}
         {rerunStatus ? <div className="admin-users__notice">{rerunStatus}</div> : null}
+        {improveStatus ? <div className="admin-users__notice">{improveStatus}</div> : null}
         {cleanupStatus ? <div className="admin-users__notice">{cleanupStatus}</div> : null}
 
         {uploadFiles.length > 0 ? (
@@ -581,10 +635,20 @@ export function AdminDataQaBankDetail({ bank }: Props) {
                         className="button button-secondary button-small"
                         type="button"
                         onClick={() => void rerunFile(file)}
-                        disabled={rerunBusyId === file.id}
+                        disabled={rerunBusyId === file.id || improveBusyId === file.id}
                       >
                         {rerunBusyId === file.id ? "Rerunning..." : file.latestRunId ? "Rerun" : "Scan"}
                       </button>
+                      {file.latestRunId && file.trainingStatus !== "completed" ? (
+                        <button
+                          className="button button-secondary button-small"
+                          type="button"
+                          onClick={() => void improveFileParser(file)}
+                          disabled={Boolean(rerunBusyId || improveBusyId)}
+                        >
+                          {improveBusyId === file.id ? "Improving..." : "Improve parser"}
+                        </button>
+                      ) : null}
                       {isEmpty ? (
                         <button
                           className="button button-secondary button-small"

@@ -1,8 +1,13 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
+import { readFile } from "node:fs/promises";
 import { getEnv } from "@/lib/env";
-import { getR2Client } from "@/lib/s3";
+import { getLocalImportObjectPath, getR2Client } from "@/lib/s3";
 
 export const downloadImportObject = async (storageKey: string) => {
+  if (process.env.NODE_ENV !== "production") {
+    return new Uint8Array(await readFile(getLocalImportObjectPath(storageKey)));
+  }
+
   const env = getEnv();
   if (!env.R2_BUCKET_NAME) {
     throw new Error("Missing bucket name");

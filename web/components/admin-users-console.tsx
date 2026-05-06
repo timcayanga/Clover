@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { formatCurrencyAmount } from "@/lib/currency-format";
 import type {
   AdminUserDetail,
   AdminUserListItem,
@@ -84,6 +85,11 @@ const initialDraft = (user: AdminUserListItem): AdminUserDraft => ({
   onboardingCompletedAt: toDatetimeLocalValue(user.onboardingCompletedAt),
   dataWipedAt: toDatetimeLocalValue(user.dataWipedAt),
 });
+
+export type AdminUsersConsoleProps = {
+  initialData?: AdminUserListResponse;
+  initialErrorLogData?: AdminErrorLogListResponse;
+};
 
 const emptyResponse = (): AdminUserListResponse => ({
   users: [],
@@ -187,11 +193,7 @@ function formatMoney(value: string | null) {
     return value;
   }
 
-  return new Intl.NumberFormat("en-PH", {
-    style: "currency",
-    currency: "PHP",
-    minimumFractionDigits: 2,
-  }).format(amount);
+  return formatCurrencyAmount(amount, "MIXED");
 }
 
 function formatTrendValue(current: number, previous: number) {
@@ -240,15 +242,17 @@ function isDirty(user: AdminUserListItem, draft: AdminUserDraft) {
   );
 }
 
-export function AdminUsersConsole() {
-  const [data, setData] = useState<AdminUserListResponse>(emptyResponse());
-  const [errorLogData, setErrorLogData] = useState<AdminErrorLogListResponse>({
-    logs: [],
-    page: 1,
-    pageSize: 25,
-    totalCount: 0,
-    totalPages: 1,
-  });
+export function AdminUsersConsole({ initialData, initialErrorLogData }: AdminUsersConsoleProps) {
+  const [data, setData] = useState<AdminUserListResponse>(initialData ?? emptyResponse());
+  const [errorLogData, setErrorLogData] = useState<AdminErrorLogListResponse>(
+    initialErrorLogData ?? {
+      logs: [],
+      page: 1,
+      pageSize: 25,
+      totalCount: 0,
+      totalPages: 1,
+    }
+  );
   const [queryInput, setQueryInput] = useState("");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
@@ -262,8 +266,8 @@ export function AdminUsersConsole() {
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [errorRefreshNonce, setErrorRefreshNonce] = useState(0);
   const [drafts, setDrafts] = useState<DraftMap>({});
-  const [loading, setLoading] = useState(true);
-  const [errorLoading, setErrorLoading] = useState(true);
+  const [loading, setLoading] = useState(initialData ? false : true);
+  const [errorLoading, setErrorLoading] = useState(initialErrorLogData ? false : true);
   const [error, setError] = useState<string | null>(null);
   const [errorLogError, setErrorLogError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);

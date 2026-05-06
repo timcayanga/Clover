@@ -1,12 +1,16 @@
 import { Queue } from "bullmq";
 import Redis from "ioredis";
 import { getEnv } from "@/lib/env";
+import type { ImportImageMode } from "@/lib/import-image-mode";
 
 type ImportJobPayload = {
   importFileId: string;
+  actorUserId?: string | null;
   password?: string;
   allowDuplicateStatement?: boolean;
   bankName?: string;
+  importMode?: ImportImageMode | null;
+  pdfJsBaseUrl?: string | null;
 };
 
 const redisUrl = getEnv().REDIS_URL ?? "redis://127.0.0.1:6379";

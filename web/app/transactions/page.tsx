@@ -6421,22 +6421,36 @@ function TransactionsPageContent() {
                   with the same statement label.
                 </p>
               </div>
-              <button
-                className="icon-button"
-                type="button"
-                onClick={() => {
-                  capturePostHogClientEvent("ai_suggestion_rejected", {
-                    workspace_id: selectedWorkspaceId || null,
-                    suggestion_type: "merchant_rename",
-                    source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
-                    source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
-                    target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
-                    transaction_account: null,
-                  });
-                  setMerchantRenameSuggestion(null);
-                }}
-                aria-label="Close merchant rename suggestion"
-              >
+                <button
+                  className="icon-button"
+                  type="button"
+                  onClick={() => {
+                    capturePostHogClientEvent("ai_suggestion_rejected", {
+                      workspace_id: selectedWorkspaceId || null,
+                      suggestion_type: "merchant_rename",
+                      source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+                      source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+                      target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+                      transaction_account: null,
+                    });
+                    capturePostHogClientEvent("merchant_rule_reverted", {
+                      workspace_id: selectedWorkspaceId || null,
+                      suggestion_type: "merchant_rename",
+                      source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+                      source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+                      target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+                    });
+                    capturePostHogClientEvent("merchant_rule_deleted", {
+                      workspace_id: selectedWorkspaceId || null,
+                      suggestion_type: "merchant_rename",
+                      source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+                      source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+                      target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+                    });
+                    setMerchantRenameSuggestion(null);
+                  }}
+                  aria-label="Close merchant rename suggestion"
+                >
                 ×
               </button>
             </div>
@@ -6461,6 +6475,20 @@ function TransactionsPageContent() {
                     source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
                     target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
                     transaction_account: null,
+                  });
+                  capturePostHogClientEvent("merchant_rule_reverted", {
+                    workspace_id: selectedWorkspaceId || null,
+                    suggestion_type: "merchant_rename",
+                    source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+                    source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+                    target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
+                  });
+                  capturePostHogClientEvent("merchant_rule_deleted", {
+                    workspace_id: selectedWorkspaceId || null,
+                    suggestion_type: "merchant_rename",
+                    source_transaction_id: merchantRenameSuggestion.sourceTransactionId,
+                    source_merchant_raw: merchantRenameSuggestion.sourceMerchantRaw,
+                    target_merchant_clean: merchantRenameSuggestion.targetMerchantClean,
                   });
                   setMerchantRenameSuggestion(null);
                 }}
