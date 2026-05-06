@@ -16,6 +16,13 @@ const publicRoot = resolve(webRoot, "public");
 const currencyDestination = resolve(publicRoot, "assets/currency");
 
 const hardlinkFile = async (source: string, destination: string) => {
+  try {
+    await access(source);
+  } catch {
+    await rm(destination, { force: true });
+    return;
+  }
+
   await rm(destination, { force: true });
   await mkdir(dirname(destination), { recursive: true });
   try {
@@ -29,6 +36,13 @@ const hardlinkFile = async (source: string, destination: string) => {
 };
 
 const hardlinkDirectory = async (source: string, destination: string) => {
+  try {
+    await access(source);
+  } catch {
+    await rm(destination, { recursive: true, force: true });
+    return;
+  }
+
   await rm(destination, { recursive: true, force: true });
   const stack: Array<{ sourceDir: string; destinationDir: string }> = [{ sourceDir: source, destinationDir: destination }];
 
@@ -102,12 +116,27 @@ const onboardingIconFiles = [
 ];
 
 const syncCurrencyFlags = async () => {
+  try {
+    await access(sourceCurrency);
+  } catch {
+    await rm(currencyDestination, { recursive: true, force: true });
+    return;
+  }
+
   const directSvgEntries = await readdir(sourceCurrency, { withFileTypes: true });
   const directSvgFiles = directSvgEntries.filter((entry) => entry.isFile() && entry.name.endsWith(".svg")).map((entry) => entry.name);
 
   const sourceCurrencyFlags =
     directSvgFiles.length > 0 ? sourceCurrency : resolve(sourceCurrency, "flag-icons-main", "flags", "4x3");
-  const sourceFlagEntries = directSvgFiles.length > 0 ? directSvgFiles : (await readdir(sourceCurrencyFlags)).filter((entry) => entry.endsWith(".svg"));
+  let sourceFlagEntries = directSvgFiles;
+  if (sourceFlagEntries.length === 0) {
+    try {
+      sourceFlagEntries = (await readdir(sourceCurrencyFlags)).filter((entry) => entry.endsWith(".svg"));
+    } catch {
+      await rm(currencyDestination, { recursive: true, force: true });
+      return;
+    }
+  }
 
   await rm(currencyDestination, { recursive: true, force: true });
   await mkdir(currencyDestination, { recursive: true });
