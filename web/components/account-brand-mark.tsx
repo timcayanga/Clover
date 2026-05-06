@@ -89,7 +89,9 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
     return composite.reduce((sum, value) => sum + value, 0) / composite.length;
   };
 
-  const shouldUseLightFallback = (getBackgroundLuminance(accountBrand.background) ?? getColorLuminance(accountBrand.foreground ?? "#0f172a")) < 0.46;
+  const shouldUseLightFallback =
+    accountBrand.foreground.trim().toLowerCase() === "#f8fafc" ||
+    (getBackgroundLuminance(accountBrand.background) ?? getColorLuminance(accountBrand.foreground ?? "#0f172a")) < 0.46;
 
   useEffect(() => {
     setFailed(false);

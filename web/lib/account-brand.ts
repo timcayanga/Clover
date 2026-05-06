@@ -29,6 +29,24 @@ const parseHexColor = (value: string) => {
   };
 };
 
+const toHexColor = (value: { r: number; g: number; b: number }) =>
+  `#${[value.r, value.g, value.b].map((channel) => Math.max(0, Math.min(255, Math.round(channel))).toString(16).padStart(2, "0")).join("")}`;
+
+const mixHexColors = (primary: string, secondary: string, primaryWeight = 0.5) => {
+  const first = parseHexColor(primary);
+  const second = parseHexColor(secondary);
+  if (!first || !second) {
+    return primary;
+  }
+
+  const weight = Math.max(0, Math.min(1, primaryWeight));
+  return toHexColor({
+    r: first.r * weight + second.r * (1 - weight),
+    g: first.g * weight + second.g * (1 - weight),
+    b: first.b * weight + second.b * (1 - weight),
+  });
+};
+
 const getColorLuminance = (value: string) => {
   const parsed = parseHexColor(value);
   if (!parsed) {
@@ -43,29 +61,95 @@ const getColorLuminance = (value: string) => {
   return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
 };
 
-const inferForeground = (accent: string, background: string) => {
-  const rgbaMatch = background.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
-  if (rgbaMatch) {
-    const rgbHex = `#${[rgbaMatch[1], rgbaMatch[2], rgbaMatch[3]]
-      .map((channel) => Number(channel).toString(16).padStart(2, "0"))
-      .join("")}`;
-    return getColorLuminance(rgbHex) <= 0.46 ? "#f8fafc" : "#0f172a";
+const parseColorToken = (value: string) => {
+  const trimmed = value.trim();
+  const rgbaMatch = trimmed.match(/^rgba?\(([^)]+)\)$/i);
+  if (!rgbaMatch) {
+    const hexMatch = trimmed.match(/#([0-9a-f]{6})/i);
+    return hexMatch?.[1]
+      ? {
+          r: Number.parseInt(hexMatch[1].slice(0, 2), 16),
+          g: Number.parseInt(hexMatch[1].slice(2, 4), 16),
+          b: Number.parseInt(hexMatch[1].slice(4, 6), 16),
+          a: 1,
+        }
+      : null;
   }
 
-  const hexMatch = background.match(/#([0-9a-f]{3,8})/i);
-  if (hexMatch) {
-    const rawHex = hexMatch[0];
-    const normalizedHex =
-      rawHex.length === 4
-        ? `#${rawHex
-            .slice(1)
-            .split("")
-            .map((channel) => `${channel}${channel}`)
-            .join("")}`
-        : rawHex.length >= 7
-          ? rawHex.slice(0, 7)
-          : rawHex;
-    return getColorLuminance(normalizedHex) <= 0.46 ? "#f8fafc" : "#0f172a";
+  const parts = rgbaMatch[1].split(",").map((part) => part.trim());
+  if (parts.length < 3) {
+    return null;
+  }
+
+  const r = Number.parseFloat(parts[0] ?? "");
+  const g = Number.parseFloat(parts[1] ?? "");
+  const b = Number.parseFloat(parts[2] ?? "");
+  const a = parts.length >= 4 ? Number.parseFloat(parts[3] ?? "1") : 1;
+
+  if ([r, g, b, a].some((channel) => Number.isNaN(channel))) {
+    return null;
+  }
+
+  return { r, g, b, a };
+};
+
+const getBackgroundLuminance = (background: string) => {
+  const tokens = Array.from(background.matchAll(/rgba?\([^)]+\)|#[0-9a-f]{6}/gi));
+  const colors = tokens
+    .map((match) => parseColorToken(match[0] ?? ""))
+    .filter((value): value is NonNullable<ReturnType<typeof parseColorToken>> => Boolean(value));
+
+  if (!colors.length) {
+    return null;
+  }
+
+  const composite = colors.map((color) => {
+    const alpha = typeof color.a === "number" ? color.a : 1;
+    const red = Math.round(color.r * alpha + 255 * (1 - alpha));
+    const green = Math.round(color.g * alpha + 255 * (1 - alpha));
+    const blue = Math.round(color.b * alpha + 255 * (1 - alpha));
+    return getColorLuminance(
+      `#${[red, green, blue]
+        .map((channel) => channel.toString(16).padStart(2, "0"))
+        .join("")}`
+    );
+  });
+
+  return composite.reduce((sum, value) => sum + value, 0) / composite.length;
+};
+
+const buildMetallicBackground = (accent: string) => {
+  const luminance = getColorLuminance(accent);
+
+  if (luminance >= 0.58) {
+    const dark = mixHexColors(accent, "#7b8794", 0.7);
+    const base = mixHexColors(accent, "#cfd6de", 0.7);
+    const highlight = mixHexColors(accent, "#f8fafc", 0.45);
+    const edge = mixHexColors(accent, "#a5b1bd", 0.75);
+    return `linear-gradient(145deg, ${edge} 0%, ${base} 34%, ${highlight} 54%, ${base} 76%, ${dark} 100%)`;
+  }
+
+  const shadow = mixHexColors(accent, "#050b14", 0.74);
+  const base = mixHexColors(accent, "#12233c", 0.88);
+  const highlight = mixHexColors(accent, "#ffffff", 0.72);
+  const edge = mixHexColors(accent, "#08111d", 0.8);
+  return `linear-gradient(145deg, ${shadow} 0%, ${base} 34%, ${highlight} 56%, ${base} 76%, ${edge} 100%)`;
+};
+
+const extractAlphaValues = (background: string) =>
+  Array.from(background.matchAll(/rgba\((?:[^,]+,){3}\s*([0-9.]+)\)/gi))
+    .map((match) => Number.parseFloat(match[1] ?? ""))
+    .filter((value) => !Number.isNaN(value));
+
+const usesLegacyTintWash = (background: string) => {
+  const alphaValues = extractAlphaValues(background);
+  return alphaValues.length > 0 && Math.max(...alphaValues) <= 0.3;
+};
+
+const inferForeground = (accent: string, background: string) => {
+  const backgroundLuminance = getBackgroundLuminance(background);
+  if (backgroundLuminance !== null) {
+    return backgroundLuminance <= 0.46 ? "#f8fafc" : "#0f172a";
   }
 
   const accentLuminance = getColorLuminance(accent);
@@ -91,17 +175,23 @@ const makeBrand = (params: {
   logoSrcs?: string[];
   fallbackIconSrc: string;
   accent: string;
-  background: string;
+  background?: string;
   foreground?: string;
-}): AccountBrand => ({
-  label: params.label,
-  logoSrc: params.logoSrc ?? null,
-  logoSrcs: params.logoSrcs ?? (params.logoSrc ? [params.logoSrc] : []),
-  fallbackIconSrc: params.fallbackIconSrc,
-  accent: params.accent,
-  background: params.background,
-  foreground: params.foreground ?? inferForeground(params.accent, params.background),
-});
+}): AccountBrand => {
+  const resolvedBackground =
+    params.background && !usesLegacyTintWash(params.background) ? params.background : buildMetallicBackground(params.accent);
+
+  const resolvedForeground = params.foreground ?? inferForeground(params.accent, resolvedBackground);
+  return {
+    label: params.label,
+    logoSrc: params.logoSrc ?? null,
+    logoSrcs: params.logoSrcs ?? (params.logoSrc ? [params.logoSrc] : []),
+    fallbackIconSrc: params.fallbackIconSrc,
+    accent: params.accent,
+    background: resolvedBackground,
+    foreground: resolvedForeground,
+  };
+};
 
 const bankIcon = iconPath("bank.png");
 const cashIcon = iconPath("cash.png");
@@ -259,8 +349,7 @@ const BANK_BRANDS: Array<{ match: RegExp; brand: AccountBrand }> = [
       label: "GCash",
       logoSrcs: philippinesLogoWithVariants("gcash"),
       fallbackIconSrc: walletIcon,
-      accent: "#118CF0",
-      background: "linear-gradient(135deg, rgba(17, 140, 240, 0.16), rgba(17, 140, 240, 0.06))",
+      accent: "#1479E7",
     }),
   },
   {

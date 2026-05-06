@@ -26,12 +26,6 @@ export function FinancialAccountCard({
   showChevron = true,
 }: FinancialAccountCardProps) {
   const interactive = typeof onOpen === "function";
-  const isMayaCard = accountBrand.label.trim().toLowerCase() === "maya";
-  const cardBackground = isMayaCard
-    ? "linear-gradient(135deg, rgba(3, 6, 10, 0.99), rgba(10, 14, 20, 0.98))"
-    : accountBrand.background;
-  const cardAccent = isMayaCard ? "#05070A" : accountBrand.accent;
-  const cardForeground = isMayaCard ? "#f8fafc" : accountBrand.foreground;
   const handleOpen = () => {
     onOpen?.();
   };
@@ -42,9 +36,9 @@ export function FinancialAccountCard({
       data-brand-label={accountBrand.label}
       style={
         {
-          ["--card-accent" as string]: cardAccent,
-          background: cardBackground,
-          color: cardForeground,
+          ["--card-accent" as string]: accountBrand.accent,
+          background: accountBrand.background,
+          color: accountBrand.foreground,
         } as CSSProperties
       }
       data-state={state}
