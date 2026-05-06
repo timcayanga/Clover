@@ -614,6 +614,32 @@ const inferClientCategoryName = (merchantText: string, type: Transaction["type"]
     }
   }
 
+  if (institutionLower === "gcash") {
+    if (
+      /auto cash-?in|gcash cash in|wallet transfer|gcash transfer|cash in|cash out|send money|received money|received gcash|sent gcash|fund transfer/.test(
+        lower
+      )
+    ) {
+      return "Transfers";
+    }
+
+    if (/buy load|load transaction/.test(lower)) {
+      return "Bills & Utilities";
+    }
+
+    if (/boost campaign|cashback|reward/.test(lower)) {
+      return "Income";
+    }
+
+    if (/interest applied|interest boost reward|transfer fee|service fee|finance charge/.test(lower)) {
+      return "Financial";
+    }
+
+    if (/payment to|bills payment/.test(lower)) {
+      return "Shopping";
+    }
+  }
+
   if (
     /transfer|instapay|fund transfer|wallet transfer|cash[- ]?in|auto cash[- ]?in|pm transfer|incoming transfer|outgoing transfer/.test(
       lower

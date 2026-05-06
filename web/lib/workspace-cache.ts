@@ -222,13 +222,11 @@ const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspace
     entry.amount === null || entry.amount === undefined || entry.amount === ""
       ? ""
       : String(entry.amount).trim();
-  const merchantValue = normalizeMerchantText(
-    typeof entry.merchantClean === "string" && entry.merchantClean.trim()
-      ? entry.merchantClean
-      : typeof entry.merchantRaw === "string"
-        ? entry.merchantRaw
-        : ""
-  );
+  const merchantRawValue =
+    typeof entry.merchantRaw === "string" && entry.merchantRaw.trim() ? entry.merchantRaw : "";
+  const merchantCleanValue =
+    typeof entry.merchantClean === "string" && entry.merchantClean.trim() ? entry.merchantClean : "";
+  const merchantValue = normalizeMerchantText(merchantRawValue || merchantCleanValue);
 
   if (!dateValue && !amountValue && !merchantValue) {
     return "";

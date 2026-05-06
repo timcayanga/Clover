@@ -26,6 +26,7 @@ import {
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
 import {
   getCachedAccountsWorkspace,
+  findCachedTransactionsForAccount,
   syncImportedWorkspaceAccountCaches,
   syncImportedWorkspaceTransactionCaches,
 } from "@/lib/workspace-cache";
@@ -301,6 +302,7 @@ const importedAccountIdentityKey = (name: string | null, institution: string | n
 const findKnownImportedBalance = (
   accounts: AccountOption[],
   params: {
+    workspaceId?: string | null;
     accountId?: string | null;
     accountName?: string | null;
     institution?: string | null;
@@ -308,6 +310,8 @@ const findKnownImportedBalance = (
     accountType?: UploadAccountType;
   }
 ) => {
+  const cachedAccounts = params.workspaceId ? getCachedAccountsWorkspace(params.workspaceId)?.accounts ?? [] : [];
+  const candidateAccounts = [...cachedAccounts, ...accounts];
   const normalizedName = params.accountName
     ? formatUploadAccountDisplayName(
         params.accountName,
@@ -322,7 +326,7 @@ const findKnownImportedBalance = (
   const targetInstitution = (params.institution ?? "").trim().toLowerCase();
   const targetLastFour = extractLastFourDigits(params.accountNumber ?? normalizedName ?? null);
 
-  const matched = accounts.find((account) => {
+  const matched = candidateAccounts.find((account) => {
     if (params.accountId && account.id === params.accountId) {
       return true;
     }
@@ -350,6 +354,39 @@ const findKnownImportedBalance = (
   });
 
   return pickStableBalance((matched as { balance?: unknown } | undefined)?.balance ?? null);
+};
+
+const getKnownPreviewTransactions = (params: {
+  workspaceId: string;
+  accountId: string | null;
+  optimisticAccountId?: string | null;
+  accountName?: string | null;
+  institution?: string | null;
+  accountNumber?: string | null;
+  accountType?: UploadAccountType;
+  previewTransactions?: NonNullable<UploadInsightsSummary["previewTransactions"]>;
+}) => {
+  if (Array.isArray(params.previewTransactions) && params.previewTransactions.length > 0) {
+    return params.previewTransactions;
+  }
+
+  if (!params.workspaceId || !params.accountId) {
+    return [];
+  }
+
+  const cached = findCachedTransactionsForAccount(params.accountId, {
+    optimisticAccountId: params.optimisticAccountId ?? null,
+    name: params.accountName ?? null,
+    institution: params.institution ?? null,
+    accountNumber: params.accountNumber ?? null,
+    type: params.accountType ?? null,
+  });
+
+  if (!cached || !Array.isArray(cached.transactions) || cached.transactions.length === 0) {
+    return [];
+  }
+
+  return cached.transactions as NonNullable<UploadInsightsSummary["previewTransactions"]>;
 };
 
 const PDF_ENCRYPTION_MARKERS = ["/Encrypt", "/Standard", "/V 2", "/V 4", "/V 5"];
@@ -1547,6 +1584,17 @@ export function ImportFilesModal({
           accounts.find((account) => account.id === resolvedAccountId)?.type ??
           inferAccountTypeFromStatement(summaryContext.institution, summaryContext.accountName, "bank")
         ) as UploadInsightsSummary["accountType"];
+        const resolvedBalance = pickStableBalance(
+          accountBalance,
+          findKnownImportedBalance(accounts, {
+            workspaceId,
+            accountId: resolvedAccountId,
+            accountName: summaryContext.accountName,
+            institution: summaryContext.institution ?? null,
+            accountNumber: summaryContext.accountNumber ?? null,
+            accountType: resolvedAccountType,
+          })
+        );
         const summary = {
           fileName: summaryContext.fileName,
           rowsImported: importedRows,
@@ -1555,9 +1603,18 @@ export function ImportFilesModal({
           institution: summaryContext.institution ?? null,
           accountNumber: summaryContext.accountNumber ?? null,
           accountType: resolvedAccountType,
-          balance: accountBalance,
+          balance: resolvedBalance,
           optimisticAccountId: summaryContext.optimisticAccountId ?? null,
-          previewTransactions: summaryContext.previewTransactions ?? [],
+          previewTransactions: getKnownPreviewTransactions({
+            workspaceId,
+            accountId: resolvedAccountId,
+            optimisticAccountId: summaryContext.optimisticAccountId ?? null,
+            accountName: summaryContext.accountName,
+            institution: summaryContext.institution ?? null,
+            accountNumber: summaryContext.accountNumber ?? null,
+            accountType: resolvedAccountType,
+            previewTransactions: summaryContext.previewTransactions,
+          }),
           incomeTotal: Number(insightSummary?.incomeTotal ?? 0),
           expenseTotal: Number(insightSummary?.expenseTotal ?? 0),
           netTotal: Number(insightSummary?.netTotal ?? 0),
@@ -1830,7 +1887,22 @@ export function ImportFilesModal({
                     fallbackAccountId ?? "",
                     resolvedAccountDisplayName,
                     processingIdentity?.institution ?? null
-                  ).catch(() => []);
+                  )
+                    .catch(() => [])
+                    .then((rows) =>
+                      rows.length > 0
+                        ? rows
+                        : getKnownPreviewTransactions({
+                            workspaceId,
+                            accountId: fallbackAccountId,
+                            optimisticAccountId: summaryContext.optimisticAccountId,
+                            accountName: resolvedAccountDisplayName,
+                            institution: processingIdentity?.institution ?? null,
+                            accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
+                            accountType: processingIdentity?.accountType ?? summaryContext.accountType,
+                            previewTransactions: summaryContext.previewTransactions,
+                          })
+                    );
             const fallbackSummary = buildOptimisticUploadSummary(
               summaryContext.fileName,
               parsedRowsCount || 0,
@@ -1967,7 +2039,26 @@ export function ImportFilesModal({
                     completedAccountId,
                     processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName ?? "",
                     processingIdentity?.institution ?? summaryContext.institution ?? null
-                  ).catch(() => [])
+                  )
+                    .catch(() => [])
+                    .then((rows) =>
+                      rows.length > 0
+                        ? rows
+                        : getKnownPreviewTransactions({
+                            workspaceId,
+                            accountId: completedAccountId,
+                            optimisticAccountId: summaryContext.optimisticAccountId,
+                            accountName:
+                              processingIdentity?.accountName ??
+                              summaryContext.accountName ??
+                              summaryContext.fallbackAccountName ??
+                              "",
+                            institution: processingIdentity?.institution ?? summaryContext.institution ?? null,
+                            accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
+                            accountType: processingIdentity?.accountType ?? summaryContext.accountType,
+                            previewTransactions: summaryContext.previewTransactions,
+                          })
+                    )
                 : [];
           const completedSummary = buildOptimisticUploadSummary(
             summaryContext.fileName,
@@ -2071,7 +2162,26 @@ export function ImportFilesModal({
                     fallbackAccountId ?? "",
                     processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName ?? "",
                     processingIdentity?.institution ?? summaryContext.institution ?? null
-                  ).catch(() => []);
+                  )
+                    .catch(() => [])
+                    .then((rows) =>
+                      rows.length > 0
+                        ? rows
+                        : getKnownPreviewTransactions({
+                            workspaceId,
+                            accountId: fallbackAccountId,
+                            optimisticAccountId: summaryContext.optimisticAccountId,
+                            accountName:
+                              processingIdentity?.accountName ??
+                              summaryContext.accountName ??
+                              summaryContext.fallbackAccountName ??
+                              "",
+                            institution: processingIdentity?.institution ?? summaryContext.institution ?? null,
+                            accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
+                            accountType: processingIdentity?.accountType ?? summaryContext.accountType,
+                            previewTransactions: summaryContext.previewTransactions,
+                          })
+                    );
 
             const fallbackSummary = buildOptimisticUploadSummary(
               summaryContext.fileName,
@@ -2394,6 +2504,7 @@ export function ImportFilesModal({
             summaryContext.optimisticAccountId,
             pickStableBalance(
               findKnownImportedBalance(accounts, {
+                workspaceId,
                 accountId: resolvedAccountId,
                 accountName: resolvedIdentity.accountName ?? null,
                 institution: resolvedIdentity.institution ?? null,
@@ -2404,7 +2515,18 @@ export function ImportFilesModal({
               }),
               summaryContext.initialBalance
             ),
-            summaryContext.previewTransactions ?? [],
+            getKnownPreviewTransactions({
+              workspaceId,
+              accountId: resolvedAccountId,
+              optimisticAccountId: summaryContext.optimisticAccountId,
+              accountName: resolvedIdentity.accountName ?? null,
+              institution: resolvedIdentity.institution ?? null,
+              accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
+              accountType:
+                resolvedAccountType ??
+                inferAccountTypeFromStatement(resolvedIdentity.institution, resolvedIdentity.accountName, "bank"),
+              previewTransactions: summaryContext.previewTransactions,
+            }),
             resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null
           );
 
@@ -3273,12 +3395,37 @@ export function ImportFilesModal({
           statementIdentity?.accountType ??
           statementAccountType ??
           inferAccountTypeFromStatement(confirmedInstitution, confirmedAccountName, "bank");
+        const confirmedBalance = pickStableBalance(
+          typeof processPayload.accountBalance === "string" ? processPayload.accountBalance : null,
+          findKnownImportedBalance(accounts, {
+            workspaceId,
+            accountId: serverConfirmedAccountId,
+            accountName: confirmedAccountName ?? null,
+            institution: confirmedInstitution,
+            accountNumber: confirmedAccountNumber,
+            accountType: confirmedAccountType,
+          })
+        );
         const confirmedPreviewTransactions = await loadOptimisticPreviewTransactions(
           importFileId,
           serverConfirmedAccountId,
           confirmedAccountName ?? "",
           confirmedInstitution
-        ).catch(() => []);
+        )
+          .catch(() => [])
+          .then((rows) =>
+            rows.length > 0
+              ? rows
+              : getKnownPreviewTransactions({
+                  workspaceId,
+                  accountId: serverConfirmedAccountId,
+                  optimisticAccountId: item.optimisticAccountId ?? null,
+                  accountName: confirmedAccountName ?? null,
+                  institution: confirmedInstitution,
+                  accountNumber: confirmedAccountNumber,
+                  accountType: confirmedAccountType,
+                })
+          );
         const confirmedInsightSummary =
           processPayload?.insightSummary ??
           {
@@ -3299,7 +3446,7 @@ export function ImportFilesModal({
           institution: confirmedInstitution,
           accountNumber: confirmedAccountNumber,
           accountType: confirmedAccountType,
-          balance: typeof processPayload.accountBalance === "string" ? processPayload.accountBalance : null,
+          balance: confirmedBalance,
           optimisticAccountId: item.optimisticAccountId ?? null,
           previewTransactions: confirmedPreviewTransactions,
           incomeTotal: Number(confirmedInsightSummary.incomeTotal ?? 0),
@@ -3380,6 +3527,18 @@ export function ImportFilesModal({
                 optimisticAccountId,
                 statementIdentity.accountName ?? "",
                 statementIdentity?.institution ?? null
+              ).then((rows) =>
+                rows.length > 0
+                  ? rows
+                  : getKnownPreviewTransactions({
+                      workspaceId,
+                      accountId: optimisticAccountId,
+                      optimisticAccountId: item.optimisticAccountId ?? null,
+                      accountName: statementIdentity.accountName ?? null,
+                      institution: statementIdentity?.institution ?? null,
+                      accountNumber: statementIdentity?.accountNumber ?? null,
+                      accountType: statementIdentity?.accountType ?? statementAccountType,
+                    })
               )
             : [];
         const optimisticIdentity =
@@ -3394,6 +3553,7 @@ export function ImportFilesModal({
               : null;
         const knownOptimisticBalance = optimisticIdentity
           ? findKnownImportedBalance(accounts, {
+              workspaceId,
               accountId: optimisticAccountId,
               accountName: optimisticIdentity.accountName ?? null,
               institution: optimisticIdentity.institution ?? null,
@@ -3495,9 +3655,22 @@ export function ImportFilesModal({
               targetAccountId,
               statementIdentity.accountName ?? "",
               statementIdentity?.institution ?? null
+            ).then((rows) =>
+              rows.length > 0
+                ? rows
+                : getKnownPreviewTransactions({
+                    workspaceId,
+                    accountId: targetAccountId,
+                    optimisticAccountId: item.optimisticAccountId ?? null,
+                    accountName: statementIdentity.accountName ?? null,
+                    institution: statementIdentity?.institution ?? null,
+                    accountNumber: statementIdentity?.accountNumber ?? null,
+                    accountType: statementAccountType,
+                  })
             )
           : [];
       const knownPreviewBalance = findKnownImportedBalance(accounts, {
+        workspaceId,
         accountId: targetAccountId,
         accountName: statementIdentity?.accountName ?? null,
         institution: statementIdentity?.institution ?? null,

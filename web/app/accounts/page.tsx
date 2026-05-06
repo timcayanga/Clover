@@ -244,6 +244,52 @@ const mergeAccountsWithOptimisticImports = (
   return [...preservedCurrentAccounts, ...optimisticAccounts, ...mergedFetchedAccounts];
 };
 
+const mergeOptimisticImportedAccount = (currentAccounts: Account[], optimisticAccount: Account) => {
+  const matchedAccounts = currentAccounts.filter((account) => {
+    if (account.id === optimisticAccount.id) {
+      return true;
+    }
+
+    if (account.source !== "upload") {
+      return false;
+    }
+
+    return matchesImportedAccountIdentity(account, optimisticAccount);
+  });
+
+  const matchedAccount = matchedAccounts[0] ?? null;
+  const existingBalance = typeof matchedAccount?.balance === "string" ? matchedAccount.balance.trim() : "";
+  const optimisticBalance = typeof optimisticAccount.balance === "string" ? optimisticAccount.balance.trim() : "";
+  const shouldPreserveExistingBalance =
+    existingBalance !== "" &&
+    Number(existingBalance) !== 0 &&
+    (optimisticBalance === "" || Number(optimisticBalance) === 0);
+
+  const mergedAccount: Account = matchedAccount
+    ? {
+        ...matchedAccount,
+        ...optimisticAccount,
+        balance: shouldPreserveExistingBalance ? matchedAccount.balance : optimisticAccount.balance ?? matchedAccount.balance,
+        updatedAt: optimisticAccount.updatedAt ?? matchedAccount.updatedAt,
+        createdAt: matchedAccount.createdAt ?? optimisticAccount.createdAt,
+      }
+    : optimisticAccount;
+
+  const remainingAccounts = currentAccounts.filter((account) => {
+    if (account.id === optimisticAccount.id) {
+      return false;
+    }
+
+    if (account.source !== "upload") {
+      return true;
+    }
+
+    return !matchesImportedAccountIdentity(account, optimisticAccount);
+  });
+
+  return [mergedAccount, ...remainingAccounts];
+};
+
 type AccountRule = {
   accountId: string | null;
   accountName: string;
@@ -3385,50 +3431,7 @@ function AccountsPageContent() {
             }
 
             if (optimisticAccount) {
-              setAccounts((current) => {
-                const withoutMatchingUploads = current.filter((account) => {
-                  if (account.id === optimisticAccount.id) {
-                    return true;
-                  }
-
-                  if (account.source !== "upload") {
-                    return true;
-                  }
-
-                  return !matchesImportedAccountIdentity(account, optimisticAccount);
-                });
-                const existingIndex = current.findIndex((account) => {
-                  if (account.id === optimisticAccount.id) {
-                    return true;
-                  }
-
-                  if (account.source !== "upload") {
-                    return false;
-                  }
-
-                  return matchesImportedAccountIdentity(account, optimisticAccount);
-                });
-                if (existingIndex >= 0) {
-                  const existingAccount = current[existingIndex];
-                  const existingBalance = typeof existingAccount.balance === "string" ? existingAccount.balance.trim() : "";
-                  const optimisticBalance = typeof optimisticAccount.balance === "string" ? optimisticAccount.balance.trim() : "";
-                  const shouldPreserveExistingBalance =
-                    existingBalance !== "" &&
-                    Number(existingBalance) !== 0 &&
-                    (optimisticBalance === "" || Number(optimisticBalance) === 0);
-                  return withoutMatchingUploads.map((account) =>
-                    account.id === optimisticAccount.id ||
-                    (account.source === "upload" && matchesImportedAccountIdentity(account, optimisticAccount))
-                      ? {
-                          ...account,
-                          ...optimisticAccount,
-                          balance: shouldPreserveExistingBalance ? existingAccount.balance : optimisticAccount.balance ?? account.balance,
-                        }
-                      : account
-                  );
-                }
-                return [optimisticAccount, ...withoutMatchingUploads];
-              });
+              setAccounts((current) => mergeOptimisticImportedAccount(current, optimisticAccount));
             }
 
             if (

@@ -45,7 +45,7 @@ const getGcashCategoryOverride = (merchantText: string) => {
   const lower = merchantText.toLowerCase();
 
   if (
-    /auto cash-?in|gcash cash in|wallet transfer|gcash transfer|cash in|cash out|send money|received money|received gcash|sent gcash|fund transfer/.test(
+    /auto cash-?in|gcashcashin|gcash cash in|wallet transfer|gcash transfer|cash in|cash out|send money|received money|received gcash|sent gcash|fund transfer|(?:edi\/)?mbpay/.test(
       lower
     )
   ) {
