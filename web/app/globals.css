@@ -2282,6 +2282,32 @@ body.transactions-manual-open .shell-quick-add-button {
   height: 18px;
 }
 
+.shell-back-button {
+  display: none;
+  appearance: none;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text);
+  border-radius: 16px;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-shadow: var(--shadow-soft);
+}
+
+.shell-back-button:hover,
+.shell-back-button:focus-visible {
+  background: rgba(3, 168, 192, 0.08);
+  border-color: rgba(3, 168, 192, 0.18);
+}
+
+.shell-back-button svg {
+  width: 18px;
+  height: 18px;
+}
+
 .content-mobile-bar {
   display: inline-flex;
   align-items: center;
@@ -21496,6 +21522,11 @@ button.accounts-detail__transaction-head-cell {
     order: 1;
   }
 
+  .shell-back-button {
+    display: none;
+    order: 1;
+  }
+
   .shell-compact-bar__copy--hide-mobile {
     display: none;
   }
@@ -21532,11 +21563,11 @@ button.accounts-detail__transaction-head-cell {
     overflow: hidden;
   }
 
-  .topbar-actions > :not(.shell-menu-button) {
+  .topbar-actions > :not(.shell-menu-button):not(.shell-back-button) {
     order: 3;
   }
 
-  .topbar-actions > :not(.shell-menu-button):first-child {
+  .topbar-actions > :not(.shell-menu-button):not(.shell-back-button):first-child {
     margin-left: auto;
   }
 
@@ -22078,6 +22109,16 @@ button.accounts-detail__transaction-head-cell {
   .topbar .shell-menu-button {
     width: 40px;
     height: 40px;
+  }
+
+  .topbar .shell-back-button {
+    display: inline-flex;
+    width: 40px;
+    height: 40px;
+  }
+
+  .shell-compact-bar .shell-back-button {
+    display: inline-flex;
   }
 
   .topbar h1,

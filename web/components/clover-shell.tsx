@@ -269,6 +269,7 @@ type IconName =
   | "insights"
   | "goals"
   | "menu"
+  | "chevron-left"
   | "search"
   | "more"
   | "plus"
@@ -313,6 +314,12 @@ function MenuIcon({ name }: { name: IconName }) {
           <path d="M4 7h16" />
           <path d="M4 12h16" />
           <path d="M4 17h16" />
+        </svg>
+      );
+    case "chevron-left":
+      return (
+        <svg {...common}>
+          <path d="m15 6-6 6 6 6" />
         </svg>
       );
     case "plus":
@@ -491,12 +498,18 @@ export function CloverShell({
   const [searchPlanTier, setSearchPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
   const [searchTicker, setSearchTicker] = useState<SidebarSearchMarket | null>(null);
   const [searchTickerLoading, setSearchTickerLoading] = useState(false);
+  const [previousPathname, setPreviousPathname] = useState<string | null>(null);
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Account";
   const profileImage = user?.imageUrl ?? null;
   const isProfileActive = active === "profile" || pathname?.startsWith("/profile");
   const isMoreActive = active === "more" || pathname?.startsWith("/more");
   const isNotificationsActive = openMenu === "notifications";
   const isProfileMenuOpen = openMenu === "profile";
+  const shouldShowBackButton =
+    !!previousPathname &&
+    !pathname?.startsWith("/dashboard") &&
+    previousPathname !== "/dashboard" &&
+    previousPathname !== pathname;
   const closeChrome = () => {
     setOpenMenu(null);
     setIsSearchOpen(false);
@@ -589,6 +602,31 @@ export function CloverShell({
     setOpenMenu(null);
     setIsSearchOpen(false);
     setSearchQuery("");
+  }, [pathname]);
+
+  useEffect(() => {
+    const prefetchTargets = ["/dashboard", "/transactions", "/split-bill", "/more"];
+
+    for (const href of prefetchTargets) {
+      void router.prefetch(href);
+    }
+  }, [router, pathname]);
+
+  useEffect(() => {
+    if (!pathname || typeof window === "undefined") {
+      return;
+    }
+
+    const storageKey = "clover:last-internal-pathname";
+    const lastPathname = window.sessionStorage.getItem(storageKey);
+
+    if (lastPathname && lastPathname !== pathname) {
+      setPreviousPathname(lastPathname);
+    } else if (!lastPathname) {
+      setPreviousPathname(null);
+    }
+
+    window.sessionStorage.setItem(storageKey, pathname);
   }, [pathname]);
 
   useEffect(() => {
@@ -878,6 +916,10 @@ export function CloverShell({
   const navigateTo = (href: string) => {
     closeChrome();
     router.push(href);
+  };
+
+  const prefetchNavTarget = (href: string) => {
+    void router.prefetch(href);
   };
 
   const openQuickAddTransaction = () => {
@@ -1202,28 +1244,32 @@ export function CloverShell({
       </button>
 
       <nav className="shell-bottom-nav glass" aria-label="Primary mobile navigation">
-        <button
+        <Link
           className={`shell-bottom-nav__item${active === "dashboard" || pathname?.startsWith("/dashboard") ? " is-active" : ""}`}
-          type="button"
           aria-current={active === "dashboard" || pathname?.startsWith("/dashboard") ? "page" : undefined}
-          onClick={() => navigateTo("/dashboard")}
+          href="/dashboard"
+          prefetch
+          onMouseEnter={() => prefetchNavTarget("/dashboard")}
+          onTouchStart={() => prefetchNavTarget("/dashboard")}
         >
           <span className="shell-bottom-nav__icon" aria-hidden="true">
             <MenuIcon name="dashboard" />
           </span>
           <span className="shell-bottom-nav__label">Home</span>
-        </button>
-        <button
+        </Link>
+        <Link
           className={`shell-bottom-nav__item${active === "transactions" || pathname?.startsWith("/transactions") ? " is-active" : ""}`}
-          type="button"
           aria-current={active === "transactions" || pathname?.startsWith("/transactions") ? "page" : undefined}
-          onClick={() => navigateTo("/transactions")}
+          href="/transactions"
+          prefetch
+          onMouseEnter={() => prefetchNavTarget("/transactions")}
+          onTouchStart={() => prefetchNavTarget("/transactions")}
         >
           <span className="shell-bottom-nav__icon" aria-hidden="true">
             <MenuIcon name="transactions" />
           </span>
           <span className="shell-bottom-nav__label">Transaction</span>
-        </button>
+        </Link>
         <button
           className="shell-bottom-nav__add"
           type="button"
@@ -1245,28 +1291,32 @@ export function CloverShell({
         >
           <MenuIcon name="plus" />
         </button>
-        <button
+        <Link
           className={`shell-bottom-nav__item${active === "split-bill" || pathname?.startsWith("/split-bill") ? " is-active" : ""}`}
-          type="button"
           aria-current={active === "split-bill" || pathname?.startsWith("/split-bill") ? "page" : undefined}
-          onClick={() => navigateTo("/split-bill")}
+          href="/split-bill"
+          prefetch
+          onMouseEnter={() => prefetchNavTarget("/split-bill")}
+          onTouchStart={() => prefetchNavTarget("/split-bill")}
         >
           <span className="shell-bottom-nav__icon" aria-hidden="true">
             <MenuIcon name="split-bill" />
           </span>
           <span className="shell-bottom-nav__label">Split Bills</span>
-        </button>
-        <button
+        </Link>
+        <Link
           className={`shell-bottom-nav__item${isMoreActive ? " is-active" : ""}`}
-          type="button"
           aria-current={isMoreActive ? "page" : undefined}
-          onClick={() => navigateTo("/more")}
+          href="/more"
+          prefetch
+          onMouseEnter={() => prefetchNavTarget("/more")}
+          onTouchStart={() => prefetchNavTarget("/more")}
         >
           <span className="shell-bottom-nav__icon" aria-hidden="true">
             <MenuIcon name="more" />
           </span>
           <span className="shell-bottom-nav__label">More</span>
-        </button>
+        </Link>
       </nav>
 
       <main
@@ -1279,19 +1329,33 @@ export function CloverShell({
       >
         {!showTopbar ? (
           <div className="shell-compact-bar glass">
-            <button
-              className="shell-menu-button"
-              type="button"
-              aria-label="Open menu"
-              aria-expanded={isSidebarOpen}
-              aria-controls="primary-navigation"
-              onClick={() => {
-                setOpenMenu(null);
-                setIsSidebarOpen((current) => !current);
-              }}
-            >
-              <MenuIcon name="menu" />
-            </button>
+            {shouldShowBackButton ? (
+              <button
+                className="shell-back-button"
+                type="button"
+                aria-label="Go back"
+                onClick={() => {
+                  closeChrome();
+                  router.back();
+                }}
+              >
+                <MenuIcon name="chevron-left" />
+              </button>
+            ) : (
+              <button
+                className="shell-menu-button"
+                type="button"
+                aria-label="Open menu"
+                aria-expanded={isSidebarOpen}
+                aria-controls="primary-navigation"
+                onClick={() => {
+                  setOpenMenu(null);
+                  setIsSidebarOpen((current) => !current);
+                }}
+              >
+                <MenuIcon name="menu" />
+              </button>
+            )}
             <div
               className={`shell-compact-bar__copy ${hideCompactBarCopyOnMobile ? "shell-compact-bar__copy--hide-mobile" : ""} ${
                 hideCompactBarKickerAndSubtitleOnMobile ? "shell-compact-bar__copy--hide-chrome-on-mobile" : ""
@@ -1309,6 +1373,19 @@ export function CloverShell({
         ) : null}
         {showTopbar ? (
           <header className="topbar glass">
+            {shouldShowBackButton ? (
+              <button
+                className="shell-back-button"
+                type="button"
+                aria-label="Go back"
+                onClick={() => {
+                  closeChrome();
+                  router.back();
+                }}
+              >
+                <MenuIcon name="chevron-left" />
+              </button>
+            ) : null}
             <div className="topbar__title-wrap">
               {kicker ? <p className="eyebrow">{kicker}</p> : null}
               <div className="topbar__title-row">

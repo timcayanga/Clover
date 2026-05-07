@@ -169,7 +169,7 @@ async function MorePageContent() {
               <p className="more-page__section-label">{section.title}</p>
               <div className="more-page__links">
                 {section.items.map((item) => (
-                  <Link key={item.href} className="more-page__link" href={item.href}>
+                  <Link key={item.href} className="more-page__link" href={item.href} prefetch>
                     <span className="more-page__link-icon" aria-hidden="true">
                       <PageIcon name={item.icon} />
                     </span>
