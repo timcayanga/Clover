@@ -115,9 +115,8 @@ export default function HomePage() {
         }
         copy={
           <p>
-            Upload your bank statements and Clover helps extract transactions automatically, so you can skip the manual entry and get straight to
-            reviewing your finances. Your imported data feeds directly into <span className="landing-highlight">budget tracking</span>, so you can
-            see where money goes without reconciling everything by hand.
+            Upload statements, receipts, screenshots, or enter transactions manually. Clover turns your financial records into usable data, so you
+            can prefill months of spending without starting from scratch.
           </p>
         }
         visual={
@@ -134,20 +133,20 @@ export default function HomePage() {
         id="budget-tracking"
         title={
           <>
-            See where your <span className="landing-highlight">money</span> goes.
+            See what your <span className="landing-highlight">money</span> is telling you.
           </>
         }
         copy={
           <p>
-            Clover turns imported transaction data into clear spending views by <span className="landing-highlight">category</span>, account, and
-            time period, helping you spot patterns, compare months, and stay on top of your budget.
+            Clover turns the data you upload into reports and insights that help you understand your spending, spot patterns, and make better
+            progress toward your goals.
           </p>
         }
         visual={
           <SectionVisual
-            eyebrow="Reporting"
-            title="$1,842"
-            body="A tidy monthly snapshot with category breakdowns and room to compare the last few cycles."
+            eyebrow="Insights"
+            title="Clear visibility"
+            body="Turn uploaded records into reports that show patterns, trends, and progress over time."
             tone="dark"
             className="landing-visual--report"
           />
@@ -212,8 +211,7 @@ export default function HomePage() {
         }
         copy={
           <p>
-            Pro gives you access to advanced tools like deeper reporting, more powerful tracking, and expanded import capabilities so you can manage
-            your finances with more control and flexibility.
+            Pro gives you advanced reporting, higher limits, and investment tools for people who want a more complete view of their finances.
           </p>
         }
         visual={
