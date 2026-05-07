@@ -36,13 +36,12 @@ type CloverShellProps = {
   | "transactions"
   | "recurring"
   | "reports"
-    | "insights"
-    | "goals"
-    | "more"
-    | "settings"
+  | "insights"
+  | "goals"
+  | "more"
+  | "settings"
   | "profile"
   | "notifications"
-  | "more"
   | "admin";
   title: string;
   kicker?: string;
@@ -249,13 +248,10 @@ const formatSidebarMoney = (value: number, currency?: string | null) => formatCu
 
 const navItems = [
   { href: "/dashboard", label: "Home", key: "dashboard" as const },
-  { href: "/accounts", label: "Accounts", key: "accounts" as const },
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
-  { href: "/recurring", label: "Recurring", key: "recurring" as const },
   { href: "/split-bill", label: "Split Bills", key: "split-bill" as const },
-  { href: "/reports", label: "Reports", key: "reports" as const },
-  { href: "/insights", label: "Insights", key: "insights" as const },
-  { href: "/goals", label: "Goals", key: "goals" as const },
+  { href: "/accounts", label: "Accounts", key: "accounts" as const },
+  { href: "/recurring", label: "Recurring", key: "recurring" as const },
   { href: "/more", label: "More", key: "more" as const },
 ];
 
@@ -490,8 +486,11 @@ export function CloverShell({
   const profilePopoverRef = useRef<HTMLDivElement | null>(null);
   const notificationsButtonRef = useRef<HTMLButtonElement | null>(null);
   const notificationsPopoverRef = useRef<HTMLDivElement | null>(null);
-  const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | null>(null);
+  const quickAddButtonRef = useRef<HTMLButtonElement | null>(null);
+  const quickAddPopoverRef = useRef<HTMLDivElement | null>(null);
+  const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | "more" | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchWorkspaceId, setSearchWorkspaceId] = useState(() => readSelectedWorkspaceId());
@@ -550,6 +549,14 @@ export function CloverShell({
         setOpenMenu(null);
       }
 
+      if (
+        isQuickAddOpen &&
+        !quickAddButtonRef.current?.contains(target) &&
+        !quickAddPopoverRef.current?.contains(target)
+      ) {
+        setIsQuickAddOpen(false);
+      }
+
       if (openMenu === "more" && !shellRef.current.querySelector(".sidebar-nav__more")?.contains(target)) {
         setOpenMenu(null);
       }
@@ -576,7 +583,7 @@ export function CloverShell({
       document.removeEventListener("mousedown", handlePointerDown, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [pathname, isSearchOpen, openMenu]);
+  }, [pathname, isSearchOpen, openMenu, isQuickAddOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -608,6 +615,7 @@ export function CloverShell({
     setOpenMenu(null);
     setIsSearchOpen(false);
     setSearchQuery("");
+    setIsQuickAddOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -929,23 +937,7 @@ export function CloverShell({
   };
 
   const openQuickAddTransaction = () => {
-    closeChrome();
-    if (pathname?.startsWith("/recurring")) {
-      window.dispatchEvent(new Event("clover:open-recurring-add"));
-      return;
-    }
-
-    if (pathname?.startsWith("/investments")) {
-      window.dispatchEvent(new Event("clover:open-investment-add"));
-      return;
-    }
-
-    if (pathname?.startsWith("/split-bill")) {
-      window.dispatchEvent(new Event("clover:open-split-bill-add"));
-      return;
-    }
-
-    window.dispatchEvent(new Event("clover:open-transaction-add"));
+    setIsQuickAddOpen((current) => !current);
   };
 
   const handleSignOut = () => {
@@ -1131,17 +1123,6 @@ export function CloverShell({
                   {isMoreMenuOpen ? (
                     <div className="sidebar-nav__submenu" role="menu" aria-label="More products">
                       <button
-                        className={`sidebar-nav__submenu-link${active === "split-bill" || pathname?.startsWith("/split-bill") ? " is-active" : ""}`}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => navigateTo("/split-bill")}
-                      >
-                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="split-bill" />
-                        </span>
-                        Split Bills
-                      </button>
-                      <button
                         className={`sidebar-nav__submenu-link${active === "investments" || pathname?.startsWith("/investments") ? " is-active" : ""}`}
                         type="button"
                         role="menuitem"
@@ -1151,6 +1132,61 @@ export function CloverShell({
                           <MenuIcon name="investments" />
                         </span>
                         Investments
+                      </button>
+                      <button
+                        className={`sidebar-nav__submenu-link${active === "reports" || pathname?.startsWith("/reports") ? " is-active" : ""}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => navigateTo("/reports")}
+                      >
+                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                          <MenuIcon name="reports" />
+                        </span>
+                        Reports
+                      </button>
+                      <button
+                        className={`sidebar-nav__submenu-link${active === "insights" || pathname?.startsWith("/insights") ? " is-active" : ""}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => navigateTo("/insights")}
+                      >
+                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                          <MenuIcon name="insights" />
+                        </span>
+                        Insights
+                      </button>
+                      <button
+                        className={`sidebar-nav__submenu-link${active === "goals" || pathname?.startsWith("/goals") ? " is-active" : ""}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => navigateTo("/goals")}
+                      >
+                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                          <MenuIcon name="goals" />
+                        </span>
+                        Goals
+                      </button>
+                      <button
+                        className={`sidebar-nav__submenu-link${active === "settings" || pathname?.startsWith("/settings") ? " is-active" : ""}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => navigateTo("/settings")}
+                      >
+                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                          <MenuIcon name="settings" />
+                        </span>
+                        Settings
+                      </button>
+                      <button
+                        className={`sidebar-nav__submenu-link${pathname?.startsWith("/help") ? " is-active" : ""}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => navigateTo("/help")}
+                      >
+                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                          <MenuIcon name="help" />
+                        </span>
+                        Help
                       </button>
                     </div>
                   ) : null}
@@ -1285,26 +1321,43 @@ export function CloverShell({
       </aside>
 
       <button
+        ref={quickAddButtonRef}
         className="shell-quick-add-button"
         type="button"
-        aria-label={
-          pathname?.startsWith("/recurring")
-            ? "Add recurring"
-            : pathname?.startsWith("/split-bill")
-              ? "Add split bill"
-              : "Add transaction"
-        }
-        title={
-          pathname?.startsWith("/recurring")
-            ? "Add recurring"
-            : pathname?.startsWith("/split-bill")
-              ? "Add split bill"
-              : "Add transaction"
-        }
+        aria-label={isQuickAddOpen ? "Close quick add" : "Open quick add"}
+        title={isQuickAddOpen ? "Close quick add" : "Open quick add"}
         onClick={openQuickAddTransaction}
       >
         <MenuIcon name="plus" />
       </button>
+      {isQuickAddOpen ? (
+        <div className="shell-quick-add-popover glass" ref={quickAddPopoverRef} role="menu" aria-label="Quick add">
+          <button
+            className="shell-quick-add-popover__item"
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setIsQuickAddOpen(false);
+              router.push("/transactions?manual=1");
+            }}
+          >
+            <strong>Add Transaction</strong>
+            <span>Open the manual transaction field.</span>
+          </button>
+          <button
+            className="shell-quick-add-popover__item"
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setIsQuickAddOpen(false);
+              router.push("/dashboard?import=1");
+            }}
+          >
+            <strong>Import Files</strong>
+            <span>Upload statements, CSVs, and screenshots.</span>
+          </button>
+        </div>
+      ) : null}
 
       <nav className="shell-bottom-nav glass" aria-label="Primary mobile navigation">
         <Link
@@ -1331,25 +1384,14 @@ export function CloverShell({
           <span className="shell-bottom-nav__icon" aria-hidden="true">
             <MenuIcon name="transactions" />
           </span>
-          <span className="shell-bottom-nav__label">Transaction</span>
+          <span className="shell-bottom-nav__label">Transactions</span>
         </Link>
         <button
+          ref={quickAddButtonRef}
           className="shell-bottom-nav__add"
           type="button"
-          aria-label={
-            pathname?.startsWith("/recurring")
-              ? "Add recurring"
-              : pathname?.startsWith("/split-bill")
-                ? "Add split bill"
-                : "Add transaction"
-          }
-          title={
-            pathname?.startsWith("/recurring")
-              ? "Add recurring"
-              : pathname?.startsWith("/split-bill")
-                ? "Add split bill"
-                : "Add transaction"
-          }
+          aria-label={isQuickAddOpen ? "Close quick add" : "Open quick add"}
+          title={isQuickAddOpen ? "Close quick add" : "Open quick add"}
           onClick={openQuickAddTransaction}
         >
           <MenuIcon name="plus" />
