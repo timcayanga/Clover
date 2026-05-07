@@ -4,22 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CloverShell } from "@/components/clover-shell";
 import { SplitBillAvatarPicker } from "@/components/split-bill-avatar-picker";
+import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import { SplitBillHome } from "@/components/split-bill-home";
 import { SplitBillPageActions } from "@/components/split-bill-page-actions";
 import { formatSplitBillAmount, normalizeCurrencyCode, type SplitBillSerializedBill } from "@/lib/split-bill";
-
-type SplitBillGroupSummary = {
-  id: string;
-  name: string;
-  avatarUrl: string | null;
-  members: Array<{ id: string; name: string; sortOrder: number }>;
-};
-
-type SplitBillPersonSummary = {
-  id: string;
-  name: string;
-  avatarUrl: string | null;
-};
+import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
 
 type SplitBillWorkspaceProps = {
   bills: SplitBillSerializedBill[];
@@ -142,6 +131,44 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
     setPeople((current) => current.map((entry) => (entry.id === personId ? { ...entry, avatarUrl } : entry)));
   };
 
+  const removeGroup = async (groupId: string) => {
+    const group = groups.find((entry) => entry.id === groupId);
+    if (!group || !window.confirm(`Remove ${group.name}?`)) {
+      return;
+    }
+
+    const response = await fetch(`/api/split-bill-groups/${groupId}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      return;
+    }
+
+    setGroups((current) => current.filter((entry) => entry.id !== groupId));
+    if (selected?.kind === "group" && selected.id === groupId) {
+      setSelected(null);
+    }
+  };
+
+  const removePerson = async (personId: string) => {
+    const person = people.find((entry) => entry.id === personId);
+    if (!person || !window.confirm(`Remove ${person.name}?`)) {
+      return;
+    }
+
+    const response = await fetch(`/api/split-bill-people/${personId}`, {
+      method: "DELETE",
+    });
+    if (!response.ok) {
+      return;
+    }
+
+    setPeople((current) => current.filter((entry) => entry.id !== personId));
+    if (selected?.kind === "person" && selected.id === personId) {
+      setSelected(null);
+    }
+  };
+
   const selectedDetailLabel = useMemo(() => {
     if (selectedBill) {
       return selectedBill.title;
@@ -238,6 +265,13 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
                   onChange={(value) => void updateGroupAvatar(selectedGroup.id, value)}
                   defaultToSuggestedAvatar
                 />
+                <div className="split-bill-detail-modal__identity">
+                  <SplitBillEntityAvatar name={selectedGroup.name} avatarUrl={selectedGroup.avatarUrl} sizeClass="split-bill-person-avatar--medium" />
+                  <div>
+                    <strong>{selectedGroup.name}</strong>
+                    <p>Change the group look here, then keep using the same picker anywhere else.</p>
+                  </div>
+                </div>
                 <p>People: {selectedGroup.members.length}</p>
                 <p>Bills: {bills.filter((bill) => bill.group?.id === selectedGroup.id).length}</p>
                 <p>Total: {buildSummaryTotal(bills.filter((bill) => bill.group?.id === selectedGroup.id))}</p>
@@ -260,12 +294,24 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
                     </button>
                   ))}
                 </div>
+                <div className="split-bill-detail-modal__actions">
+                  <button className="button button-danger button-small" type="button" onClick={() => void removeGroup(selectedGroup.id)}>
+                    Delete group
+                  </button>
+                </div>
               </div>
             ) : null}
 
             {selectedPerson ? (
               <div className="split-bill-detail-modal__body">
                 <SplitBillAvatarPicker name={selectedPerson.name} value={selectedPerson.avatarUrl} onChange={(value) => void updatePersonAvatar(selectedPerson.id, value)} />
+                <div className="split-bill-detail-modal__identity">
+                  <SplitBillEntityAvatar name={selectedPerson.name} avatarUrl={selectedPerson.avatarUrl} sizeClass="split-bill-person-avatar--medium" />
+                  <div>
+                    <strong>{selectedPerson.name}</strong>
+                    <p>Use initials, a built-in avatar, or upload a fresh photo.</p>
+                  </div>
+                </div>
                 <p>Bill count: {bills.filter((bill) => bill.participants.some((participant) => participant.name === selectedPerson.name)).length}</p>
                 <div className="split-bill-detail-modal__list">
                   {bills
@@ -276,6 +322,11 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
                         <span>{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</span>
                       </button>
                     ))}
+                </div>
+                <div className="split-bill-detail-modal__actions">
+                  <button className="button button-danger button-small" type="button" onClick={() => void removePerson(selectedPerson.id)}>
+                    Delete person
+                  </button>
                 </div>
               </div>
             ) : null}

@@ -2,22 +2,10 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CurrencySelector } from "@/components/currency-selector";
-import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
+import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import type { SplitBillSerializedBill } from "@/lib/split-bill";
-
-type SplitBillPersonSummary = {
-  id: string;
-  name: string;
-  avatarUrl: string | null;
-};
-
-type SplitBillGroupSummary = {
-  id: string;
-  name: string;
-  avatarUrl: string | null;
-  members: Array<{ id: string; name: string; sortOrder: number }>;
-};
+import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
 
 type SplitBillManualModalProps = {
   open: boolean;
@@ -296,9 +284,7 @@ export function SplitBillManualModal({ open, people, groups, onClose, onSaved }:
                 <p>People</p>
                 {suggestions.people.map((person) => (
                   <button key={person.id} type="button" className="split-bill-manual-modal__suggestion" onClick={() => addPerson(person.name)}>
-                    <span className="split-bill-person-avatar split-bill-person-avatar--small" style={getAvatarBackgroundStyle(person.name)}>
-                      {getAvatarInitials(person.name)}
-                    </span>
+                    <SplitBillEntityAvatar name={person.name} avatarUrl={null} />
                     <span>{person.name}</span>
                   </button>
                 ))}
@@ -309,12 +295,7 @@ export function SplitBillManualModal({ open, people, groups, onClose, onSaved }:
                 <p>Groups</p>
                 {suggestions.groups.map((group) => (
                   <button key={group.id} type="button" className="split-bill-manual-modal__suggestion" onClick={() => addPeopleFromGroup(group)}>
-                    <span
-                      className="split-bill-person-avatar split-bill-person-avatar--small"
-                      style={group.avatarUrl ? undefined : getAvatarBackgroundStyle(group.name)}
-                    >
-                      {group.avatarUrl ? <img className="split-bill-person-avatar__image" src={group.avatarUrl} alt="" /> : getAvatarInitials(group.name)}
-                    </span>
+                    <SplitBillEntityAvatar name={group.name} avatarUrl={group.avatarUrl} />
                     <span>{group.name}</span>
                   </button>
                 ))}

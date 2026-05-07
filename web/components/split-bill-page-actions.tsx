@@ -6,19 +6,7 @@ import { SplitBillImportModal } from "@/components/split-bill-import-modal";
 import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
 import { SplitBillPersonModal } from "@/components/split-bill-person-modal";
 import type { SplitBillSerializedBill } from "@/lib/split-bill";
-
-type SplitBillPersonSummary = {
-  id: string;
-  name: string;
-  avatarUrl: string | null;
-};
-
-type SplitBillGroupSummary = {
-  id: string;
-  name: string;
-  avatarUrl: string | null;
-  members: Array<{ id: string; name: string; sortOrder: number }>;
-};
+import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
 
 type SplitBillPageActionsProps = {
   people: SplitBillPersonSummary[];

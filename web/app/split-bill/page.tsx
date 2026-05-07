@@ -6,21 +6,9 @@ import {
   splitBillItemOrderBy,
 } from "@/lib/split-bill";
 import { SplitBillWorkspace } from "@/components/split-bill-workspace";
+import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
 
 export const dynamic = "force-dynamic";
-
-type SplitBillGroupSummary = {
-  id: string;
-  name: string;
-  avatarUrl: string | null;
-  members: Array<{ id: string; name: string; sortOrder: number }>;
-};
-
-type SplitBillPersonSummary = {
-  id: string;
-  name: string;
-  avatarUrl: string | null;
-};
 
 const billInclude = {
   group: {

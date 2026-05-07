@@ -1,21 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 import { formatSplitBillAmount, normalizeCurrencyCode, type SplitBillSerializedBill } from "@/lib/split-bill";
-
-type SplitBillGroupSummary = {
-  id: string;
-  name: string;
-  avatarUrl: string | null;
-  members: Array<{ id: string; name: string; sortOrder: number }>;
-};
-
-type SplitBillPersonSummary = {
-  id: string;
-  name: string;
-  avatarUrl: string | null;
-};
+import { SplitBillEntityAvatar } from "@/components/split-bill-entity-avatar";
+import type { SplitBillGroupSummary, SplitBillPersonSummary } from "@/lib/split-bill-entities";
 
 type SplitBillHomeProps = {
   bills: SplitBillSerializedBill[];
@@ -46,22 +34,6 @@ const groupBillsByCurrency = (items: SplitBillSerializedBill[]) =>
     acc[key].push(bill);
     return acc;
   }, {});
-
-const renderAvatar = (name: string, avatarUrl: string | null, sizeClass = "split-bill-person-avatar--small") => {
-  if (avatarUrl) {
-    return (
-      <span className={`split-bill-person-avatar ${sizeClass}`}>
-        <img className="split-bill-person-avatar__image" src={avatarUrl} alt="" />
-      </span>
-    );
-  }
-
-  return (
-    <span className={`split-bill-person-avatar ${sizeClass}`} style={getAvatarBackgroundStyle(name)}>
-      {getAvatarInitials(name)}
-    </span>
-  );
-};
 
 export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, onOpenPerson }: SplitBillHomeProps) {
   const [showAllBills, setShowAllBills] = useState(false);
@@ -127,7 +99,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
                       {bill.participants.length > 0 ? (
                         bill.participants.map((participant) => (
                           <span key={participant.id} className="split-bill-table__chip" title={participant.name}>
-                            {getAvatarInitials(participant.name)}
+                            <SplitBillEntityAvatar name={participant.name} avatarUrl={null} sizeClass="split-bill-person-avatar--small" />
                           </span>
                         ))
                       ) : (
@@ -168,7 +140,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
               {people.length > 0 ? (
                 people.map((person) => (
                   <button key={person.id} type="button" className="split-bill-mobile-home__person-button" onClick={() => onOpenPerson(person.id)}>
-                    {renderAvatar(person.name, person.avatarUrl)}
+                    <SplitBillEntityAvatar name={person.name} avatarUrl={person.avatarUrl} />
                     <span>{person.name}</span>
                   </button>
                 ))
@@ -194,7 +166,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
                   <button key={group.id} type="button" className="split-bill-mobile-group-card" onClick={() => onOpenGroup(group.id)}>
                     <div className="split-bill-mobile-group-card__head">
                       <strong className="split-bill-mobile-group-card__name">
-                        {group.avatarUrl ? <img className="split-bill-person-avatar__image" src={group.avatarUrl} alt="" /> : null}
+                        <SplitBillEntityAvatar name={group.name} avatarUrl={group.avatarUrl} />
                         <span>{group.name}</span>
                       </strong>
                       <span>{group.total}</span>
@@ -206,14 +178,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
                     <div className="split-bill-mobile-group-card__avatars">
                       {group.members.length > 0 ? (
                         group.members.map((member) => (
-                          <span
-                            key={member.id}
-                            className="split-bill-person-avatar split-bill-person-avatar--small"
-                            title={member.name}
-                            style={getAvatarBackgroundStyle(member.name)}
-                          >
-                            {getAvatarInitials(member.name)}
-                          </span>
+                          <SplitBillEntityAvatar key={member.id} name={member.name} avatarUrl={null} title={member.name} />
                         ))
                       ) : (
                         <span className="split-bill-subtle-empty">No people yet</span>
@@ -264,12 +229,12 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
                   </div>
                   <div role="cell">{formatDate(bill.billDate)}</div>
                   <div role="cell" className="split-bill-table__chips">
-                      {bill.participants.length > 0 ? (
-                        bill.participants.map((participant) => (
-                          <span key={participant.id} className="split-bill-table__chip" title={participant.name}>
-                            {getAvatarInitials(participant.name)}
-                          </span>
-                        ))
+                    {bill.participants.length > 0 ? (
+                      bill.participants.map((participant) => (
+                        <span key={participant.id} className="split-bill-table__chip" title={participant.name}>
+                          <SplitBillEntityAvatar name={participant.name} avatarUrl={null} sizeClass="split-bill-person-avatar--small" />
+                        </span>
+                      ))
                     ) : (
                       <span className="split-bill-subtle-empty">No people yet</span>
                     )}
@@ -332,12 +297,12 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
 
           <div className="split-bill-home__people-list">
             {people.length > 0 ? (
-              people.map((person) => (
-                <button key={person.id} type="button" className="split-bill-home__person-button" onClick={() => onOpenPerson(person.id)}>
-                  {renderAvatar(person.name, person.avatarUrl)}
-                  <span>{person.name}</span>
-                </button>
-              ))
+                people.map((person) => (
+                  <button key={person.id} type="button" className="split-bill-home__person-button" onClick={() => onOpenPerson(person.id)}>
+                    <SplitBillEntityAvatar name={person.name} avatarUrl={person.avatarUrl} />
+                    <span>{person.name}</span>
+                  </button>
+                ))
             ) : (
               <span className="split-bill-subtle-empty">No saved names yet</span>
             )}

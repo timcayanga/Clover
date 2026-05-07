@@ -30313,6 +30313,12 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   font-size: 0.72rem;
 }
 
+.split-bill-person-avatar--medium {
+  width: 44px;
+  height: 44px;
+  font-size: 0.92rem;
+}
+
 .split-bill-person-avatar__image {
   width: 100%;
   height: 100%;
@@ -30551,6 +30557,27 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
 .split-bill-detail__payment-list {
   display: grid;
   gap: 14px;
+}
+
+.split-bill-detail-modal__identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.04);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.split-bill-detail-modal__identity strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.split-bill-detail-modal__identity p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
 }
 
 .split-bill-card,

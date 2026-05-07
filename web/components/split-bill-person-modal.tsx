@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
+import { SplitBillAvatarPicker } from "@/components/split-bill-avatar-picker";
+import type { SplitBillPersonSummary } from "@/lib/split-bill-entities";
 
 type SplitBillPersonModalProps = {
   open: boolean;
   onClose: () => void;
-  onSaved?: (person: { id: string; name: string; avatarUrl: string | null }) => void;
+  onSaved?: (person: SplitBillPersonSummary) => void;
   avatarUrl: string | null;
   onAvatarUrlChange: (value: string | null) => void;
 };
@@ -18,20 +20,10 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   return payload;
 }
 
-const readFileAsDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(reader.error ?? new Error("Unable to read file"));
-    reader.readAsDataURL(file);
-  });
-
 export function SplitBillPersonModal({ open, onClose, onSaved, avatarUrl, onAvatarUrlChange }: SplitBillPersonModalProps) {
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -66,19 +58,6 @@ export function SplitBillPersonModal({ open, onClose, onSaved, avatarUrl, onAvat
     onClose();
   };
 
-  const handleAvatarUpload = async (file: File | null) => {
-    if (!file) {
-      return;
-    }
-
-    setIsUploadingAvatar(true);
-    try {
-      onAvatarUrlChange(await readFileAsDataUrl(file));
-    } finally {
-      setIsUploadingAvatar(false);
-    }
-  };
-
   const savePerson = async () => {
     const nextName = name.trim();
 
@@ -96,7 +75,7 @@ export function SplitBillPersonModal({ open, onClose, onSaved, avatarUrl, onAvat
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: nextName, avatarUrl }),
       });
-      const result = await readJsonResponse<{ person: { id: string; name: string; avatarUrl: string | null } }>(response);
+      const result = await readJsonResponse<{ person: SplitBillPersonSummary }>(response);
       onSaved?.(result.person);
       onClose();
     } catch (saveError) {
@@ -131,27 +110,8 @@ export function SplitBillPersonModal({ open, onClose, onSaved, avatarUrl, onAvat
         </label>
 
         <label className="settings-field">
-          <span>Photo</span>
-          <div className="split-bill-person-modal__photo-row">
-            <button className="button button-secondary button-small" type="button" onClick={() => avatarInputRef.current?.click()} disabled={isUploadingAvatar}>
-              {avatarUrl ? "Change photo" : "Add photo"}
-            </button>
-            {avatarUrl ? (
-              <button className="button button-secondary button-small" type="button" onClick={() => onAvatarUrlChange(null)}>
-                Remove photo
-              </button>
-            ) : null}
-            <input
-              ref={avatarInputRef}
-              type="file"
-              accept="image/*"
-              className="split-bill-manual-modal__file-input"
-              onChange={(event) => {
-                void handleAvatarUpload(event.target.files?.[0] ?? null);
-                event.currentTarget.value = "";
-              }}
-            />
-          </div>
+          <span>Photo or avatar</span>
+          <SplitBillAvatarPicker name={name} value={avatarUrl} onChange={onAvatarUrlChange} />
         </label>
 
         {error ? <p className="split-bill-editor__error">{error}</p> : null}
