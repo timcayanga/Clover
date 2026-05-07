@@ -1014,138 +1014,132 @@ export function SettingsHub({
               </article>
             </div>
 
-            <div className="settings-data-delete">
-              <article className="settings-action-card">
-                <div>
-                  <h5>Delete transaction history</h5>
-                  <p>Remove transactions before a chosen date from this profile.</p>
-                </div>
-                <div className="settings-action-card__row">
-                  <label className="settings-inline-field">
-                    <span>Before date</span>
-                    <input type="date" value={historyCutoff} onChange={(event) => setHistoryCutoff(event.target.value)} />
-                  </label>
-                  <button
-                    type="button"
-                    className="button button-danger button-small"
-                    disabled={isPending}
-                    onClick={() =>
-                      handleAction(async () => {
-                        if (!window.confirm("Delete transaction history before the selected date? This only removes transactions and leaves your accounts in place.")) {
-                          return;
-                        }
-                        const deleted = await runDelete("transactions");
-                        setStatusMessage(`Deleted ${deleted} transaction${deleted === 1 ? "" : "s"}.`);
-                      })
-                    }
-                  >
-                    Delete transactions
-                  </button>
-                </div>
-              </article>
+            <article className="settings-action-card settings-data-delete settings-data-delete--single">
+              <div>
+                <h5>Delete data</h5>
+              </div>
 
-              <article className="settings-action-card">
-                <div>
-                  <h5>Delete accounts</h5>
-                  <p>Remove non-cash accounts in this profile together with their linked transactions.</p>
+              <div className="settings-data-delete__list">
+                <div className="settings-data-delete__item">
+                  <div className="settings-data-delete__item-copy">Transaction history</div>
+                  <div className="settings-data-delete__controls">
+                    <label className="settings-inline-field">
+                      <span>Before date</span>
+                      <input type="date" value={historyCutoff} onChange={(event) => setHistoryCutoff(event.target.value)} />
+                    </label>
+                    <button
+                      type="button"
+                      className="button button-danger button-small"
+                      disabled={isPending}
+                      onClick={() =>
+                        handleAction(async () => {
+                          if (!window.confirm("Delete transaction history before the selected date? This only removes transactions and leaves your accounts in place.")) {
+                            return;
+                          }
+                          const deleted = await runDelete("transactions");
+                          setStatusMessage(`Deleted ${deleted} transaction${deleted === 1 ? "" : "s"}.`);
+                        })
+                      }
+                    >
+                      Delete transactions
+                    </button>
+                  </div>
                 </div>
-                <div className="settings-action-card__row">
-                  <button
-                    type="button"
-                    className="button button-danger button-small"
-                    disabled={isPending}
-                    onClick={() =>
-                      handleAction(async () => {
-                        if (
-                          !window.confirm(
-                            "Delete all non-cash accounts in this profile? Their linked transactions will be removed too. Clover can recreate the default Cash account later if needed."
-                          )
-                        ) {
-                          return;
-                        }
-                        const deleted = await runDelete("accounts");
-                        setStatusMessage(`Deleted ${deleted} account${deleted === 1 ? "" : "s"} from this profile.`);
-                      })
-                    }
-                  >
-                    Delete accounts
-                  </button>
-                </div>
-              </article>
 
-              <article className="settings-action-card">
-                <div>
-                  <h5>Delete all Clover data</h5>
-                  <p>Start fresh by removing app data across all of your profiles while keeping your login.</p>
+                <div className="settings-data-delete__item">
+                  <div className="settings-data-delete__item-copy">Accounts</div>
+                  <div className="settings-data-delete__controls">
+                    <button
+                      type="button"
+                      className="button button-danger button-small"
+                      disabled={isPending}
+                      onClick={() =>
+                        handleAction(async () => {
+                          if (
+                            !window.confirm(
+                              "Delete all non-cash accounts in this profile? Their linked transactions will be removed too. Clover can recreate the default Cash account later if needed."
+                            )
+                          ) {
+                            return;
+                          }
+                          const deleted = await runDelete("accounts");
+                          setStatusMessage(`Deleted ${deleted} account${deleted === 1 ? "" : "s"} from this profile.`);
+                        })
+                      }
+                    >
+                      Delete accounts
+                    </button>
+                  </div>
                 </div>
-                <div className="settings-action-card__row">
-                  <button
-                    type="button"
-                    className="button button-danger button-small"
-                    disabled={isPending}
-                    onClick={() =>
-                      handleAction(async () => {
-                        if (
-                          !window.confirm(
-                            "Delete all Clover data across every profile? This removes your accounts, transactions, imports, and learned data, but keeps your Clover login."
-                          )
-                        ) {
-                          return;
-                        }
 
-                        const response = await fetch("/api/account/wipe-data", {
-                          method: "POST",
-                          headers: {
-                            "Content-Type": "application/json",
-                          },
-                        });
+                <div className="settings-data-delete__item">
+                  <div className="settings-data-delete__item-copy">All Clover data</div>
+                  <div className="settings-data-delete__controls">
+                    <button
+                      type="button"
+                      className="button button-danger button-small"
+                      disabled={isPending}
+                      onClick={() =>
+                        handleAction(async () => {
+                          if (
+                            !window.confirm(
+                              "Delete all Clover data across every profile? This removes your accounts, transactions, imports, and learned data, but keeps your Clover login."
+                            )
+                          ) {
+                            return;
+                          }
 
-                        const payload = (await response.json().catch(() => ({}))) as { error?: string };
-                        if (!response.ok) {
-                          throw new Error(payload.error ?? "Unable to delete Clover data.");
-                        }
+                          const response = await fetch("/api/account/wipe-data", {
+                            method: "POST",
+                            headers: {
+                              "Content-Type": "application/json",
+                            },
+                          });
 
-                        persistSelectedWorkspaceId("");
-                        syncSelectedWorkspaceCookie();
-                        clearAllWorkspaceCaches();
-                        window.location.assign("/dashboard");
-                      })
-                    }
-                  >
-                    Delete all data
-                  </button>
+                          const payload = (await response.json().catch(() => ({}))) as { error?: string };
+                          if (!response.ok) {
+                            throw new Error(payload.error ?? "Unable to delete Clover data.");
+                          }
+
+                          persistSelectedWorkspaceId("");
+                          syncSelectedWorkspaceCookie();
+                          clearAllWorkspaceCaches();
+                          window.location.assign("/dashboard");
+                        })
+                      }
+                    >
+                      Delete all data
+                    </button>
+                  </div>
                 </div>
-              </article>
 
-              <article className="settings-action-card">
-                <div>
-                  <h5>Delete balance history</h5>
-                  <p>Remove older statement checkpoints before the chosen date without deleting the accounts themselves.</p>
+                <div className="settings-data-delete__item">
+                  <div className="settings-data-delete__item-copy">Balance history</div>
+                  <div className="settings-data-delete__controls">
+                    <label className="settings-inline-field">
+                      <span>Before date</span>
+                      <input type="date" value={historyCutoff} onChange={(event) => setHistoryCutoff(event.target.value)} />
+                    </label>
+                    <button
+                      type="button"
+                      className="button button-danger button-small"
+                      disabled={isPending}
+                      onClick={() =>
+                        handleAction(async () => {
+                          if (!window.confirm("Delete balance history before the selected date? This only removes old statement checkpoints.")) {
+                            return;
+                          }
+                          const deleted = await runDelete("balances");
+                          setStatusMessage(`Deleted ${deleted} balance record${deleted === 1 ? "" : "s"}.`);
+                        })
+                      }
+                    >
+                      Delete balance history
+                    </button>
+                  </div>
                 </div>
-                <div className="settings-action-card__row">
-                  <label className="settings-inline-field">
-                    <span>Before date</span>
-                    <input type="date" value={historyCutoff} onChange={(event) => setHistoryCutoff(event.target.value)} />
-                  </label>
-                  <button
-                    type="button"
-                    className="button button-danger button-small"
-                    disabled={isPending}
-                    onClick={() =>
-                      handleAction(async () => {
-                        if (!window.confirm("Delete balance history before the selected date? This only removes old statement checkpoints.")) {
-                          return;
-                        }
-                        const deleted = await runDelete("balances");
-                        setStatusMessage(`Deleted ${deleted} balance record${deleted === 1 ? "" : "s"}.`);
-                      })
-                    }
-                  >
-                    Delete balance history
-                  </button>
-                </div>
-              </article>
-            </div>
+              </div>
+            </article>
           </section>
         ) : null}
 

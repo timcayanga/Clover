@@ -27061,6 +27061,39 @@ button.accounts-detail__transaction-head-cell {
   justify-content: space-between;
 }
 
+.settings-data-delete--single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-data-delete__list {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-data-delete__item {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.settings-data-delete__item-copy {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+
+.settings-data-delete__controls {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
 .settings-category-manager {
   display: grid;
   gap: 18px;
