@@ -23,20 +23,20 @@ export const TRACKED_ASSET_ACCOUNT_TYPES = ["receivable", "prepaid", "insurance"
 
 export const ACCOUNT_TYPE_SECTIONS = [
   {
-    label: "Credit Cards",
-    options: ["credit_card", "loan", "mortgage", "line_of_credit", "bnpl", "payable"] as const,
+    label: "Banks & savings",
+    options: ["bank", "credit_card", "wallet", "cash"] as const,
   },
   {
-    label: "Everyday money",
-    options: ["bank", "wallet", "cash", "prepaid"] as const,
+    label: "Liabilities",
+    options: ["loan", "mortgage", "line_of_credit", "bnpl", "payable"] as const,
   },
   {
-    label: "Growth & protection",
+    label: "Investments & protection",
     options: ["investment", "insurance"] as const,
   },
   {
-    label: "Tracking & reconciliation",
-    options: ["receivable", "other"] as const,
+    label: "Receivables & other",
+    options: ["receivable", "prepaid", "other"] as const,
   },
 ] as const;
 
@@ -55,9 +55,9 @@ export const isTrackedAssetAccountType = (value: string | null | undefined) =>
 export const formatAccountTypeLabel = (value: string | null | undefined) => {
   switch (value) {
     case "credit_card":
-      return "Credit Card";
+      return "Credit card";
     case "line_of_credit":
-      return "Line of Credit";
+      return "Line of credit";
     case "loan":
       return "Loan";
     case "mortgage":
