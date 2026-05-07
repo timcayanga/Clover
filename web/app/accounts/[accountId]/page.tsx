@@ -13,6 +13,7 @@ import { deriveReconciledBalance } from "@/lib/account-balance";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { extractAccountIdFromPathSegment, getAccountPath } from "@/lib/account-path";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
+import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
@@ -578,84 +579,6 @@ const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => 
 const detailDraftTypeToTransactionType = (type: TransactionDetailDraft["type"]) =>
   type === "credit" ? "income" : type === "transfer" ? "transfer" : "expense";
 
-const isMeaningfulCategoryName = (value?: string | null) => {
-  const normalized = (value ?? "").trim().toLowerCase();
-  return Boolean(normalized && normalized !== "other");
-};
-
-const getRawPayloadCategoryName = (rawPayload: unknown) => {
-  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
-    return null;
-  }
-
-  const payload = rawPayload as Record<string, unknown>;
-  const candidate = payload.categoryName ?? payload.category ?? payload.normalizedCategory;
-  return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
-};
-
-const inferClientCategoryName = (merchantText: string, type: Transaction["type"], institution?: string | null) => {
-  const lower = merchantText.trim().toLowerCase();
-  const institutionLower = (institution ?? "").trim().toLowerCase();
-
-  if (!lower) {
-    return type === "income" ? "Income" : type === "transfer" ? "Transfers" : "Other";
-  }
-
-  if (institutionLower === "aub") {
-    if (
-      /internal clearing|encashment|check issued|atm withdrawal|atm fee inquiry|finance charge|tax withheld|service fee|debit movement/.test(
-        lower
-      )
-    ) {
-      return "Financial";
-    }
-
-    if (/cash deposit|check deposit|interest earned|credit movement/.test(lower)) {
-      return "Income";
-    }
-  }
-
-  if (institutionLower === "gcash") {
-    if (
-      /auto cash-?in|gcash cash in|wallet transfer|gcash transfer|cash in|cash out|send money|received money|received gcash|sent gcash|fund transfer/.test(
-        lower
-      )
-    ) {
-      return "Transfers";
-    }
-
-    if (/buy load|load transaction/.test(lower)) {
-      return "Bills & Utilities";
-    }
-
-    if (/boost campaign|cashback|reward/.test(lower)) {
-      return "Income";
-    }
-
-    if (/interest applied|interest boost reward|transfer fee|service fee|finance charge/.test(lower)) {
-      return "Financial";
-    }
-
-    if (/payment to|bills payment/.test(lower)) {
-      return "Shopping";
-    }
-  }
-
-  if (
-    /transfer|instapay|fund transfer|wallet transfer|cash[- ]?in|auto cash[- ]?in|pm transfer|incoming transfer|outgoing transfer/.test(
-      lower
-    )
-  ) {
-    return "Transfers";
-  }
-
-  if (/finance charge|service charge|processing fee|documentary stamp|annual fee|interest/.test(lower)) {
-    return "Financial";
-  }
-
-  return type === "income" ? "Income" : type === "transfer" ? "Transfers" : "Other";
-};
-
 const getDisplayTransactionCategoryName = (
   transaction: Transaction,
   categories: Category[],
@@ -665,18 +588,16 @@ const getDisplayTransactionCategoryName = (
     transaction.categoryId && transaction.categoryId.trim()
       ? categories.find((category) => category.id === transaction.categoryId)?.name ?? null
       : null;
-  const directCategory = categoryById ?? transaction.categoryName;
-  if (isMeaningfulCategoryName(directCategory)) {
-    return directCategory ?? "Other";
-  }
-
-  const rawPayloadCategory = getRawPayloadCategoryName(transaction.rawPayload);
-  if (isMeaningfulCategoryName(rawPayloadCategory)) {
-    return rawPayloadCategory ?? "Other";
-  }
-
-  const merchantText = transaction.merchantClean?.trim() || transaction.merchantRaw.trim();
-  return inferClientCategoryName(merchantText, transaction.type, institution);
+  return (
+    getEffectiveTransactionCategoryName({
+      categoryName: categoryById ?? transaction.categoryName,
+      rawPayload: transaction.rawPayload as never,
+      merchantRaw: transaction.merchantRaw,
+      merchantClean: transaction.merchantClean,
+      institution,
+      type: transaction.type,
+    }) ?? "Other"
+  );
 };
 
 const getTransactionSortFieldValue = (transaction: Transaction, field: AccountTransactionSortField) => {
@@ -1038,7 +959,7 @@ function AccountDetailPageContent() {
           router.replace(canonicalPath);
         }
 
-        const accountTransactionSearchParams = buildTransactionQuerySearchParams(
+        const transactionsSearchParams = buildTransactionQuerySearchParams(
           mergedAccount.workspaceId,
           {
             accountIds: [mergedAccount.id],
@@ -1048,8 +969,8 @@ function AccountDetailPageContent() {
             pageSize: TRANSACTION_PAGE_SIZE,
           }
         );
-        accountTransactionSearchParams.set("summaryMode", "light");
-        const transactionsPromise = fetch(`/api/transactions?${accountTransactionSearchParams.toString()}`);
+        transactionsSearchParams.set("summaryMode", "light");
+        const transactionsPromise = fetch(`/api/transactions?${transactionsSearchParams.toString()}`);
 
         void Promise.all([
           fetch(`/api/imports?workspaceId=${nextAccount.workspaceId}`),
