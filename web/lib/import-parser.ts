@@ -9053,6 +9053,7 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
   const hasCurrentBalanceShell =
     /\bcurrent\s+[0-9][0-9,]*\.\d{2}\b/i.test(normalized) &&
     /\bavail(?:able)?\s+today\s+[0-9][0-9,]*\.\d{2}\b/i.test(normalized);
+  const isAubTeller360Shell = /AUB\s+Teller\s+360/i.test(text);
   const hasExplicitOpeningCue =
     /\b(?:opening|beginning|starting|previous)(?:\s+statement)?\s+balance\b/i.test(normalized) ||
     /\b(?:opening|beginning|starting|previous)(?:\s+statement)?\s+balance\b/i.test(signalText);
@@ -9065,6 +9066,66 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
   const explicitEndingBalance = rawEndingBalance ?? signalEndingBalance;
   const denseNormalized = normalizeWhitespace(text).replace(/\s+/g, "").toUpperCase();
   const repeatedStatementSummary = extractLatestRepeatedStatementSummary(text);
+  const transactionSummaryHeaderIndex = lines.findIndex((line) => /BEGINNING BALANCE\s+TOTAL CREDITS\s+TOTAL DEBITS\s+ENDING BALANCE/i.test(line));
+  const transactionSummaryValues =
+    transactionSummaryHeaderIndex >= 0
+      ? lines[transactionSummaryHeaderIndex + 1]?.match(createGenericMoneyTokenPattern()) ?? []
+      : [];
+  const summaryTableOpeningBalance = parseMoney(transactionSummaryValues[0] ?? null);
+  const summaryTableEndingBalance = parseMoney(transactionSummaryValues[3] ?? null);
+  const aubTeller360CurrentBalance =
+    isAubTeller360Shell
+      ? parseMoney(
+          lines.find((line) => /^Current Balance\b/i.test(line))?.match(createGenericMoneyTokenPattern())?.at(-1) ?? null
+        ) ??
+        parseMoney(
+          lines.find((line) => /^Available Balance\b/i.test(line))?.match(createGenericMoneyTokenPattern())?.at(-1) ?? null
+        )
+      : null;
+  const aubTeller360ExplicitEndDateBalance =
+    isAubTeller360Shell && explicitIsoPeriodEndDate
+      ? (() => {
+          const endDateLabel = explicitIsoPeriodEndDate.toISOString().slice(0, 10);
+          const moneyPattern = new RegExp(
+            `^(?<debit>${genericMoneyTokenPatternSource})\\s+(?<credit>${genericMoneyTokenPatternSource})(?:\\s+(?<balance>${genericMoneyTokenPatternSource}))?$`,
+            "i"
+          );
+          const endIndex = lines.findIndex((line) => line.startsWith(endDateLabel));
+          if (endIndex < 0) {
+            return null;
+          }
+          const nextLine = normalizeWhitespace(lines[endIndex + 1] ?? "");
+          const match = nextLine.match(moneyPattern);
+          return parseMoney(match?.groups?.balance ?? null);
+        })()
+      : null;
+  const aubTeller360RangeBalances =
+    isAubTeller360Shell && explicitIsoPeriodStartDate && explicitIsoPeriodEndDate
+      ? transactionBalanceCandidates.filter((entry) => {
+          if (!entry.parsedDate || entry.moneyMatches.length < 2) {
+            return false;
+          }
+          return (
+            entry.parsedDate.getTime() >= explicitIsoPeriodStartDate.getTime() &&
+            entry.parsedDate.getTime() <= explicitIsoPeriodEndDate.getTime()
+          );
+        })
+      : [];
+  const aubTeller360FinalDateBalances =
+    explicitIsoPeriodEndDate !== null
+      ? aubTeller360RangeBalances.filter(
+          (entry) =>
+            entry.parsedDate?.toISOString().slice(0, 10) === explicitIsoPeriodEndDate.toISOString().slice(0, 10)
+        )
+      : [];
+  const aubTeller360EndingBalance =
+    aubTeller360ExplicitEndDateBalance ??
+    aubTeller360CurrentBalance ??
+    (aubTeller360FinalDateBalances.length > 0
+      ? aubTeller360FinalDateBalances.at(-1)?.moneyMatches.at(-1) ?? null
+      : aubTeller360RangeBalances.length > 0
+        ? aubTeller360RangeBalances.at(-1)?.moneyMatches.at(-1) ?? null
+        : null);
   const fragmentedTransferClusterEndingBalance =
     /ELINKTRANSFER/.test(denseNormalized) && /INSTAPAY/.test(denseNormalized) && /BRANCHOVER-THE-COUNTER/.test(denseNormalized)
       ? parseMoney(denseNormalized.match(/MAYFEE3445INSTAPAY([0-9,]+\.\d{2})(?:\d{1,2})?TRANSFERBRANCHOVER-THE-COUNTER/i)?.[1] ?? null)
@@ -9076,6 +9137,8 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
       ? derivedEndingBalanceFromLastRow
       : explicitEndingBalance ?? derivedEndingBalanceFromLastRow;
   const endingBalance =
+    aubTeller360EndingBalance ??
+    summaryTableEndingBalance ??
     repeatedStatementSummary?.endingBalance ??
     fragmentedTransferClusterEndingBalance ??
     fallbackEndingBalance;
@@ -9231,7 +9294,7 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
       ? candidateOpeningBalance
       : hasCurrentBalanceShell && previousStatementBalance === null && !hasExplicitOpeningCue
         ? null
-        : repeatedStatementSummary?.openingBalance ?? candidateBankOpeningBalance;
+        : repeatedStatementSummary?.openingBalance ?? summaryTableOpeningBalance ?? candidateBankOpeningBalance;
   const walletSafeAccountNumber =
     inferredAccountType === "wallet" && !isLikelyWalletAccountNumber(accountNumberCandidate)
       ? null
@@ -9358,12 +9421,16 @@ export const parseGenericStatementMetadata = (text: string, context: ImportParse
   const returnedStartDate =
     inferredAccountType === "credit_card"
       ? null
+      : isAubTeller360Shell && explicitIsoPeriodStartDate
+        ? explicitIsoPeriodStartDate
       : repeatedStatementSummary?.startDate ??
         (statementPeriodEndingDate !== null && lineStartDate !== null && lineStartDate.getUTCFullYear() >= 2010
       ? lineStartDate
       : saneNormalizedFinalStartDate);
   const returnedEndDate =
-    repeatedStatementSummary?.endDate ??
+    isAubTeller360Shell && explicitIsoPeriodEndDate
+      ? explicitIsoPeriodEndDate
+    : repeatedStatementSummary?.endDate ??
     (statementPeriodEndingDate !== null && statementPeriodEndingDate.getUTCFullYear() >= 2010
       ? statementPeriodEndingDate
       : normalizedFinalEndDate);
@@ -10193,6 +10260,121 @@ const reconstructGenericSparseSummaryRows = (
   };
 };
 
+const reconstructGenericSecurityBankAtmLedger = (
+  sourceText: string,
+  metadata: DetectedStatementMetadata,
+  institutionAwareNormalization: boolean
+) => {
+  if (
+    metadata.institution !== "Security Bank Corporation" ||
+    !/TRANSACTION DETAILS/i.test(sourceText) ||
+    !/(?:ATRC|ATRO)\s+ATM\/B\s*2\s*C\s+ACCOUNT/i.test(sourceText)
+  ) {
+    return null;
+  }
+
+  const lines = sourceText
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+  const headerIndex = lines.findIndex((line) => /TRANSACTION DATE\s+TRANSACTION DESCRIPTION\s+DEBIT\s+CREDIT\s+BALANCE/i.test(line));
+  if (headerIndex < 0) {
+    return null;
+  }
+
+  const summaryValuesIndex = lines.findIndex((line) =>
+    /^(?:PHP|P|₱)?\s*[0-9][0-9,]*\.\d{2}\s+(?:PHP|P|₱)?\s*[0-9][0-9,]*\.\d{2}\s+(?:PHP|P|₱)?\s*[0-9][0-9,]*\.\d{2}\s+(?:PHP|P|₱)?\s*[0-9][0-9,]*\.\d{2}$/i.test(
+      line
+    )
+  );
+  const summaryValues = summaryValuesIndex >= 0 ? lines[summaryValuesIndex].match(createGenericMoneyTokenPattern()) ?? [] : [];
+  const summaryOpeningBalance = parseMoney(summaryValues[0] ?? null);
+  const summaryEndingBalance = parseMoney(summaryValues[3] ?? null);
+  const accountName = metadata.accountName ?? metadata.institution ?? "Account";
+  const institution = metadata.institution ?? undefined;
+  const datedMoneyPattern = new RegExp(
+    `^(?<date>\\d{2}[A-Za-z]{3}\\d{2})\\s+(?<amount>${genericMoneyTokenPatternSource})\\s+(?<balance>${genericMoneyTokenPatternSource})$`,
+    "i"
+  );
+  const moneyPattern = new RegExp(
+    `^(?<amount>${genericMoneyTokenPatternSource})\\s+(?<balance>${genericMoneyTokenPatternSource})$`,
+    "i"
+  );
+  let activeDescription: string | null = null;
+  let activeDate: string | null = null;
+  const rows: ParsedImportRow[] = [];
+
+  for (const line of lines.slice(headerIndex + 1)) {
+    if (/^Beginning Balance\b/i.test(line) || /^Page \d+ of \d+$/i.test(line) || /thank you for banking/i.test(line)) {
+      continue;
+    }
+    if (/^(ATRC|ATRO)\s+ATM\/B\s*2\s*C\s+ACCOUNT/i.test(line)) {
+      activeDescription = line.replace(/\s+/g, " ").trim();
+      continue;
+    }
+    if (/^C\d+[_\dA-Z]*$/i.test(line)) {
+      continue;
+    }
+    const datedMatch = line.match(datedMoneyPattern);
+    const undatedMatch = !datedMatch ? line.match(moneyPattern) : null;
+    if (!datedMatch && !undatedMatch) {
+      continue;
+    }
+
+    if (datedMatch?.groups?.date) {
+      const parsedDate = parseGenericStatementDateText(datedMatch.groups.date);
+      activeDate = parsedDate ? parsedDate.toISOString().slice(0, 10) : activeDate;
+    }
+    if (!activeDate || !activeDescription) {
+      continue;
+    }
+
+    const amount = parseMoney(datedMatch?.groups?.amount ?? undatedMatch?.groups?.amount ?? null);
+    const balance = parseMoney(datedMatch?.groups?.balance ?? undatedMatch?.groups?.balance ?? null);
+    if (amount === null || balance === null) {
+      continue;
+    }
+
+    rows.push({
+      date: activeDate,
+      amount: amount.toFixed(2),
+      merchantRaw: humanizeMerchantText(activeDescription),
+      merchantClean: summarizeMerchantText(activeDescription, institutionAwareNormalization ? metadata.institution : null),
+      description: activeDescription,
+      categoryName: "Cash & ATM",
+      accountName,
+      institution,
+      type: "expense",
+      confidence: 82,
+      rawPayload: {
+        bank: metadata.institution ?? "Unknown",
+        kind: "generic_bank_statement_transaction",
+        line,
+        amountText: amount.toFixed(2),
+        balanceText: balance.toFixed(2),
+        balance,
+      },
+    });
+  }
+
+  if (rows.length < 6) {
+    return null;
+  }
+
+  return {
+    metadata: {
+      ...metadata,
+      openingBalance: summaryOpeningBalance ?? metadata.openingBalance,
+      endingBalance:
+        summaryEndingBalance ??
+        ((rows.at(-1)?.rawPayload && typeof rows.at(-1)?.rawPayload === "object")
+          ? parseMoney(((rows.at(-1)?.rawPayload as Record<string, unknown>).balanceText as string | null | undefined) ?? null)
+          : metadata.endingBalance),
+    },
+    rows,
+  };
+};
+
 const reconstructGenericPairedTransferSummaryRows = (
   genericText: string,
   metadata: DetectedStatementMetadata,
@@ -10863,6 +11045,15 @@ export const parseGenericBankStatementText = (
   })();
   if ((/proof\s+of\s+account/i.test(genericText) || /PROOFOFACCOUNT/.test(compactGenericText)) && tableHeaderIndex < 0) {
     return { metadata, rows: [] };
+  }
+
+  const reconstructedSecurityBankAtmLedger = reconstructGenericSecurityBankAtmLedger(
+    text,
+    metadata,
+    options.institutionAwareNormalization !== false
+  );
+  if (reconstructedSecurityBankAtmLedger) {
+    return reconstructedSecurityBankAtmLedger;
   }
 
   const baseLines = genericText
