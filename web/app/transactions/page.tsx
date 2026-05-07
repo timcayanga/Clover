@@ -727,6 +727,28 @@ const splitMerchantFilters = (value: string) =>
     .map((entry) => entry.trim())
     .filter(Boolean);
 
+const normalizeTransactionSearch = (value: string) => value.trim().toLowerCase();
+
+const matchesTransactionSearch = (transaction: Transaction, searchText: string) => {
+  if (!searchText) {
+    return true;
+  }
+
+  const haystack = [
+    transaction.merchantClean ?? "",
+    transaction.merchantRaw,
+    transaction.accountName,
+    transaction.categoryName ?? "",
+    transaction.date,
+    transaction.currency,
+    String(transaction.amount),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes(searchText);
+};
+
 const getLocalStorage = () => {
   if (typeof window === "undefined") {
     return null;
@@ -1148,6 +1170,14 @@ const transactionsToolbarSearchStyle = {
   flex: "0 1 180px",
 } as const;
 
+const transactionsToolbarSearchCompactStyle = {
+  ...transactionsToolbarSearchStyle,
+  width: "min(220px, 48vw)",
+  minWidth: "140px",
+  maxWidth: "220px",
+  flex: "0 1 auto",
+} as const;
+
 const transactionsShellActionsStyle = {
   display: "flex",
   alignItems: "center",
@@ -1549,13 +1579,13 @@ function TransactionsPageContent() {
   const [isWorkspaceDataReady, setIsWorkspaceDataReady] = useState(false);
   const [, setHasInitialTransactionsLoaded] = useState(false);
   const [hasLoadedWorkspaceList, setHasLoadedWorkspaceList] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [workspaceCurrencyCodes, setWorkspaceCurrencyCodes] = useState<string[]>(() => ["PHP"]);
   const [undoStack, setUndoStack] = useState<TransactionHistoryEntry[]>([]);
   const [redoStack, setRedoStack] = useState<TransactionHistoryEntry[]>([]);
   const [isApplyingHistory, setIsApplyingHistory] = useState(false);
   const [merchantRenameSuggestion, setMerchantRenameSuggestion] = useState<MerchantRenameSuggestion | null>(null);
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
+  const searchText = useMemo(() => normalizeTransactionSearch(query), [query]);
 
   useEffect(() => {
     transactionsRef.current = transactions;
@@ -2139,7 +2169,6 @@ function TransactionsPageContent() {
     void loadTransactionsPage(selectedWorkspaceId);
   }, [
     selectedWorkspaceId,
-    query,
     currencyFilter,
     categoryFilters,
     accountFilters,
@@ -2429,11 +2458,15 @@ function TransactionsPageContent() {
     setAccounts([data.account]);
     return accountId;
   };
-  const totalTransactionPages = Math.max(1, Math.ceil(transactionsSummary.totalCount / Math.max(transactionsPageSize, 1)));
+  const visibleTransactions = useMemo(
+    () => transactions.filter((transaction) => !transaction.isExcluded && matchesTransactionSearch(transaction, searchText)),
+    [searchText, transactions]
+  );
+  const totalTransactionCountForDisplay = searchText ? visibleTransactions.length : transactionsSummary.totalCount;
+  const totalTransactionPages = Math.max(1, Math.ceil(totalTransactionCountForDisplay / Math.max(transactionsPageSize, 1)));
   const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);
   const pageStartIndex = (currentTransactionPage - 1) * transactionsPageSize;
   const pageEndIndex = pageStartIndex + transactionsPageSize;
-  const visibleTransactions = useMemo(() => transactions.filter((transaction) => !transaction.isExcluded), [transactions]);
   const mobileVisibleTransactions = useMemo(
     () => visibleTransactions.slice(0, Math.max(mobileVisibleCount, MOBILE_TRANSACTIONS_BATCH_SIZE)),
     [mobileVisibleCount, visibleTransactions]
@@ -2455,22 +2488,23 @@ function TransactionsPageContent() {
 
     return groups;
   }, [mobileVisibleTransactions]);
-  const hasVisibleTransactions = transactionsSummary.totalCount > 0;
+  const hasVisibleTransactions = visibleTransactions.length > 0;
   const visibleTransactionIds = useMemo(() => visibleTransactions.map((transaction) => transaction.id), [visibleTransactions]);
   const allVisibleSelected =
     visibleTransactionIds.length > 0 && visibleTransactionIds.every((transactionId) => selectedTransactionIds.includes(transactionId));
   const someVisibleSelected = visibleTransactionIds.some((transactionId) => selectedTransactionIds.includes(transactionId));
   const hasMoreMobileTransactions =
     isCompactViewport &&
+    !searchText &&
     (mobileVisibleTransactions.length < visibleTransactions.length || transactions.length < transactionsSummary.totalCount);
 
   const currentPageLabel = useMemo(() => {
-    if (transactionsSummary.totalCount === 0) {
+    if (totalTransactionCountForDisplay === 0) {
       return "0 of 0";
     }
 
-    return `${pageStartIndex + 1}-${Math.min(pageEndIndex, transactionsSummary.totalCount)} of ${transactionsSummary.totalCount}`;
-  }, [pageEndIndex, pageStartIndex, transactionsSummary.totalCount]);
+    return `${pageStartIndex + 1}-${Math.min(pageEndIndex, totalTransactionCountForDisplay)} of ${totalTransactionCountForDisplay}`;
+  }, [pageEndIndex, pageStartIndex, totalTransactionCountForDisplay]);
 
   const paginationPages = useMemo(() => {
     if (totalTransactionPages <= 1) {
@@ -2601,31 +2635,6 @@ function TransactionsPageContent() {
       window.removeEventListener("resize", checkScrollPosition);
     };
   }, [isCompactViewport, loadMoreMobileTransactions]);
-
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-
-    if (query.trim()) {
-      count += 1;
-    }
-
-    if (currencyFilter.trim()) {
-      count += 1;
-    }
-
-    if (dateFilterMode !== "ltd") {
-      count += 1;
-    }
-
-    count += categoryFilters.length;
-    count += expandedAccountFilters.length;
-    count += typeFilters.length;
-    if (amountMin.trim() || amountMax.trim()) {
-      count += 1;
-    }
-
-    return count;
-  }, [accountFilters.length, amountMax, amountMin, categoryFilters.length, currencyFilter, dateFilterMode, expandedAccountFilters.length, query, typeFilters.length]);
 
   useEffect(() => {
     if (!selectAllRef.current) {
@@ -4670,7 +4679,7 @@ function TransactionsPageContent() {
       </div>
     </div>
   ) : null;
-  const isTableLoading = Boolean(selectedWorkspaceId) && !isWorkspaceDataReady;
+  const isTableLoading = Boolean(selectedWorkspaceId) && !isWorkspaceDataReady && transactions.length === 0;
   const transactionsShellActions = (
     <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
       <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef} style={transactionsMenuStyle}>
@@ -4719,73 +4728,24 @@ function TransactionsPageContent() {
         </div>
       </div>
 
-      {isCompactViewport ? (
-        <div className={`transactions-toolbar-search transactions-toolbar-search--mobile${mobileSearchOpen ? " is-open" : ""}`}>
-          <button
-            type="button"
-            className="transactions-toolbar-search__button"
-            onClick={() => {
-              setMobileSearchOpen(true);
-              window.requestAnimationFrame(() => {
-                searchInputRef.current?.focus();
-              });
-            }}
-            aria-label="Search transactions"
-          >
-            <span className="transactions-toolbar-search__icon" aria-hidden="true">
-              <ActionIcon name="search" />
-            </span>
-          </button>
-          {mobileSearchOpen ? (
-            <>
-              <span className="sr-only">Search transactions</span>
-              <input
-                ref={searchInputRef}
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search"
-                aria-label="Search transactions"
-                aria-keyshortcuts="/"
-                onBlur={() => {
-                  if (!query.trim()) {
-                    setMobileSearchOpen(false);
-                  }
-                }}
-              />
-            </>
-          ) : null}
-        </div>
-      ) : (
-        <label className="transactions-toolbar-search" style={transactionsToolbarSearchStyle}>
-          <span className="transactions-toolbar-search__icon" aria-hidden="true">
-            <ActionIcon name="search" />
-          </span>
-          <span className="sr-only">Search transactions</span>
-          <input
-            ref={searchInputRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search"
-            aria-label="Search transactions"
-            aria-keyshortcuts="/"
-          />
-        </label>
-      )}
-
-      <button
-        className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
-        style={toolbarChipStyle}
-        type="button"
-        title={dateFilterLabel}
-        onClick={(event) => openHeaderMenu("date", event)}
-        aria-label="Open date filter"
-        aria-expanded={headerMenuOpen === "date"}
-        >
-          <span className="button-icon" aria-hidden="true">
-            <ActionIcon name="calendar" />
-          </span>
-          {!isCompactViewport ? <span>Date</span> : null}
-        </button>
+      <label
+        className="transactions-toolbar-search"
+        style={isCompactViewport ? transactionsToolbarSearchCompactStyle : transactionsToolbarSearchStyle}
+      >
+        <span className="transactions-toolbar-search__icon" aria-hidden="true">
+          <ActionIcon name="search" />
+        </span>
+        <span className="sr-only">Search transactions</span>
+        <input
+          ref={searchInputRef}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search"
+          aria-label="Search transactions"
+          aria-keyshortcuts="/"
+          style={isCompactViewport ? { width: "auto", opacity: 1 } : undefined}
+        />
+      </label>
 
       <CurrencySelector
         value={currencyFilter}
@@ -4802,23 +4762,6 @@ function TransactionsPageContent() {
         showChevron={false}
       />
 
-      <button
-        className="button button-secondary button-small transactions-action-button transactions-toolbar-chip"
-        style={toolbarChipStyle}
-        type="button"
-        title={activeFilterCount > 0 ? `Filters (F) · ${activeFilterCount} active` : "Filters (F)"}
-        onClick={toggleFiltersPanel}
-        aria-label={activeFilterCount > 0 ? `Open filters, ${activeFilterCount} active` : "Open filters"}
-        aria-expanded={filterOpen}
-        aria-keyshortcuts="f"
-        >
-        <span className="button-icon" aria-hidden="true">
-          <ActionIcon name="filters" />
-        </span>
-        {!isCompactViewport ? <span>Filters</span> : null}
-        {activeFilterCount > 0 ? <span className="transactions-filter-count-badge">{activeFilterCount}</span> : null}
-      </button>
-
       <div className="transactions-download-menu" id="transactions-download-menu" ref={downloadMenuRef} style={transactionsMenuStyle}>
         <button
           className="button button-secondary button-small transactions-action-button transactions-toolbar-chip transactions-download-menu__toggle"
@@ -4831,16 +4774,11 @@ function TransactionsPageContent() {
           }}
           title="Download"
           aria-label="Download transactions"
-        >
+          >
           <span className="button-icon" aria-hidden="true">
             <ActionIcon name="download" />
           </span>
           {!isCompactViewport ? <span>Download</span> : null}
-          {!isCompactViewport ? (
-            <span className="button-icon" aria-hidden="true">
-              <ActionIcon name="chevron-down" />
-            </span>
-          ) : null}
         </button>
         <div className="transactions-download-menu__panel" hidden={!downloadMenuOpen}>
           <button
@@ -4917,12 +4855,6 @@ function TransactionsPageContent() {
       mediaQuery.removeEventListener("change", updateViewport);
     };
   }, []);
-
-  useEffect(() => {
-    if (!isCompactViewport) {
-      setMobileSearchOpen(false);
-    }
-  }, [isCompactViewport]);
 
   return (
     <CloverShell active="transactions" title="Transactions" actions={transactionsShellActions}>
