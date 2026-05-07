@@ -2005,36 +2005,9 @@ function AccountDetailPageContent() {
               }
             />
 
-            {account.type !== "investment" ? (
+            {account.type !== "investment" && accountIdentityEditorOpen ? (
               <div className="accounts-inline-edit accounts-detail__account-identity-editor glass">
-                <div className="accounts-detail__reconciliation-head">
-                  <div>
-                    <p className="eyebrow">Account details</p>
-                    <h4>{accountIdentityEditorOpen ? "Edit name and account number" : "Click the account card to edit"}</h4>
-                  </div>
-                  <div className="accounts-detail__transactions-actions">
-                    <span className="accounts-detail__autosave-state">
-                      {accountEditSaveState === "saving"
-                        ? "Saving..."
-                        : accountEditSaveState === "saved"
-                          ? "Saved"
-                          : accountEditSaveState === "error"
-                            ? "Needs attention"
-                            : "Autosaves as you type"}
-                    </span>
-                    {accountIdentityEditorOpen ? (
-                      <button
-                        className="button button-secondary button-small"
-                        type="button"
-                        onClick={() => setAccountIdentityEditorOpen(false)}
-                      >
-                        Close
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-
-                {accountIdentityEditorOpen ? (
+                <div className="accounts-detail__account-identity-editor-body">
                   <div className="accounts-inline-edit__grid">
                     <label>
                       Name
@@ -2048,9 +2021,21 @@ function AccountDetailPageContent() {
                       />
                     </label>
                   </div>
-                ) : (
-                  <p className="panel-muted">Open the card to change the displayed name or account number.</p>
-                )}
+                  <div className="accounts-inline-edit__actions">
+                    <span className="accounts-detail__autosave-state">
+                      {accountEditSaveState === "saving"
+                        ? "Saving..."
+                        : accountEditSaveState === "saved"
+                          ? "Saved"
+                          : accountEditSaveState === "error"
+                            ? "Needs attention"
+                            : ""}
+                    </span>
+                    <button className="button button-secondary button-small" type="button" onClick={() => setAccountIdentityEditorOpen(false)}>
+                      Close
+                    </button>
+                  </div>
+                </div>
               </div>
             ) : null}
           </div>

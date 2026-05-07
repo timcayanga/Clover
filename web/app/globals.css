@@ -12131,13 +12131,18 @@ input.transaction-inline-edit--amount::placeholder {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(9, 15, 20, 0.28);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  background: rgba(9, 15, 20, 0.36);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
   display: grid;
   place-items: center;
   padding: 20px;
-  z-index: 180;
+  z-index: 1000;
+}
+
+body[data-clover-page-modal] .sidebar,
+body[data-clover-page-modal] .shell-quick-add-button {
+  pointer-events: none;
 }
 
 .modal-backdrop--transactions-content {

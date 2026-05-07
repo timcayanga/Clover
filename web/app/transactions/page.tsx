@@ -1623,6 +1623,24 @@ function TransactionsPageContent() {
       ),
     [accounts]
   );
+
+  useEffect(() => {
+    const sources = new Set<string>();
+    for (const brand of accountBrandById.values()) {
+      for (const source of [...brand.logoSrcs, brand.logoSrc, brand.fallbackIconSrc]) {
+        if (source) {
+          sources.add(source);
+        }
+      }
+    }
+
+    for (const source of sources) {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = source;
+    }
+  }, [accountBrandById]);
+
   const accountKeyById = useMemo(
     () =>
       new Map(
