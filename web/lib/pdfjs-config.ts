@@ -1,1 +1,1 @@
-export const pdfjsStandardFontDataUrl = "/pdfjs/standard_fonts/";
+export { pdfjsStandardFontDataUrl } from "@/lib/pdfjs";

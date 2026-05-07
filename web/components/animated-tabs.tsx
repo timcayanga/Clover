@@ -1,68 +1,55 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
-export type AnimatedTabItem = {
+type AnimatedTab = {
   key: string;
-  label: ReactNode;
+  label: string;
+  badge?: string | null;
   disabled?: boolean;
-  badge?: ReactNode;
-  ariaLabel?: string;
+  ariaLabel?: string | null;
 };
 
 type AnimatedTabsProps = {
-  tabs: AnimatedTabItem[];
+  className?: string;
   activeKey: string;
   onChange: (key: string) => void;
-  className?: string;
+  tabs: AnimatedTab[];
 };
 
-export function AnimatedTabs({ tabs, activeKey, onChange, className }: AnimatedTabsProps) {
-  const tabRefs = useRef(new Map<string, HTMLButtonElement | HTMLAnchorElement>());
-  const [indicator, setIndicator] = useState({ left: 0, width: 0, visible: false });
+export function AnimatedTabs({ className, activeKey, onChange, tabs }: AnimatedTabsProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const tabRefs = useRef(new Map<string, HTMLButtonElement>());
+  const [indicator, setIndicator] = useState({ left: 0, width: 0, opacity: 0 });
 
   const activeTab = useMemo(() => tabs.find((tab) => tab.key === activeKey) ?? tabs[0] ?? null, [activeKey, tabs]);
 
   useLayoutEffect(() => {
-    const activeElement = activeKey ? tabRefs.current.get(activeKey) : null;
-    if (!activeElement) {
-      setIndicator((current) => ({ ...current, visible: false }));
+    const container = containerRef.current;
+    const activeButton = activeTab ? tabRefs.current.get(activeTab.key) ?? null : null;
+
+    if (!container || !activeButton) {
+      setIndicator((current) => ({ ...current, opacity: 0 }));
       return;
     }
 
+    const containerRect = container.getBoundingClientRect();
+    const buttonRect = activeButton.getBoundingClientRect();
     setIndicator({
-      left: activeElement.offsetLeft,
-      width: activeElement.offsetWidth,
-      visible: true,
+      left: buttonRect.left - containerRect.left,
+      width: buttonRect.width,
+      opacity: 1,
     });
-  }, [activeKey, tabs]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      const activeElement = activeKey ? tabRefs.current.get(activeKey) : null;
-      if (!activeElement) {
-        return;
-      }
-
-      setIndicator({
-        left: activeElement.offsetLeft,
-        width: activeElement.offsetWidth,
-        visible: true,
-      });
-    };
-
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, [activeKey]);
+  }, [activeTab, tabs]);
 
   return (
-    <nav className={["animated-tabs", className].filter(Boolean).join(" ")} aria-label={activeTab?.ariaLabel ?? "Tabs"}>
+    <div ref={containerRef} className={`animated-tabs${className ? ` ${className}` : ""}`}>
       <span
         className="animated-tabs__indicator"
         style={{
-          width: indicator.width,
           transform: `translateX(${indicator.left}px)`,
-          opacity: indicator.visible ? 1 : 0,
+          width: indicator.width,
+          opacity: indicator.opacity,
         }}
         aria-hidden="true"
       />
@@ -79,21 +66,21 @@ export function AnimatedTabs({ tabs, activeKey, onChange, className }: AnimatedT
               }
             }}
             type="button"
-            className={`animated-tabs__tab${isActive ? " is-active" : ""}${tab.disabled ? " is-disabled" : ""}`}
+            className={`animated-tabs__tab${isActive ? " is-active" : ""}`}
             onClick={() => {
               if (!tab.disabled) {
                 onChange(tab.key);
               }
             }}
             disabled={tab.disabled}
-            aria-current={isActive ? "page" : undefined}
-            aria-label={tab.ariaLabel}
+            aria-pressed={isActive}
+            aria-label={tab.ariaLabel ?? tab.label}
           >
-            <span className="animated-tabs__label">{tab.label}</span>
+            <span>{tab.label}</span>
             {tab.badge ? <span className="animated-tabs__badge">{tab.badge}</span> : null}
           </button>
         );
       })}
-    </nav>
+    </div>
   );
 }

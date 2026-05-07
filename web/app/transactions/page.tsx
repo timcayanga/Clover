@@ -2743,7 +2743,7 @@ function TransactionsPageContent() {
       return null;
     }
 
-    return null;
+  return null;
   };
 
   const isDuplicateWarningTransaction = (transaction: Transaction) => transaction.warningReason === "Possible duplicate";
@@ -5273,7 +5273,6 @@ function TransactionsPageContent() {
                     : transaction.source === "upload"
                       ? "line-item--imported"
                       : "line-item--other";
-                const rowStateClass = warningReason ? "line-item--warning" : "line-item--clear";
                 return (
                   <div
                     key={transaction.id}
@@ -5285,7 +5284,7 @@ function TransactionsPageContent() {
 
                       transactionRowRefs.current.delete(transaction.id);
                     }}
-                    className={`line-item ${sourceClass} ${rowStateClass} ${transaction.isExcluded ? "is-muted" : ""} ${
+                    className={`line-item ${sourceClass} ${transaction.isExcluded ? "is-muted" : ""} ${
                       selectedTransactionIds.includes(transaction.id) ? "is-selected" : ""
                     }`}
                     tabIndex={0}
@@ -5603,7 +5602,6 @@ function TransactionsPageContent() {
           {!isCompactViewport ? (
             <div className="transactions-footer" style={{ ...transactionsFooterStyle, marginTop: "auto" }}>
               <div className="table-footer__summary">
-                <span className="pill pill-neutral">{transactionsSummary.totalCount} transactions</span>
                 {transactionsSummary.totalCount > 0 ? (
                   <span className="pill pill-subtle">Showing {currentPageLabel}</span>
                 ) : null}

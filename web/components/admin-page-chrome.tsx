@@ -1,42 +1,47 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
-import { CloverShell } from "@/components/clover-shell";
-import { AdminSectionNav, type AdminSectionKey } from "@/components/admin-section-nav";
 
 type AdminPageChromeProps = {
-  active: AdminSectionKey;
+  active: "home" | "inquiries" | "data-qa";
   title: string;
   kicker?: string;
   subtitle?: string;
-  titleAddon?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
 };
 
-export function AdminPageChrome({
-  active,
-  title,
-  kicker = "Internal tools",
-  subtitle,
-  titleAddon,
-  actions,
-  children,
-}: AdminPageChromeProps) {
+const adminNavItems = [
+  { key: "home", href: "/admin", label: "Home" },
+  { key: "inquiries", href: "/admin/inquiries", label: "Inquiries" },
+  { key: "data-qa", href: "/admin/data-qa", label: "Data QA" },
+] as const;
+
+export function AdminPageChrome({ active, title, kicker, subtitle, actions, children }: AdminPageChromeProps) {
   return (
-    <CloverShell
-      active="admin"
-      title={title}
-      kicker={kicker}
-      subtitle={subtitle}
-      titleAddon={titleAddon}
-      actions={
-        <div className="admin-page-chrome__actions">
-          <AdminSectionNav active={active} />
-          {actions}
+    <div className="admin-hub">
+      <section className="admin-hub__nav-card glass">
+        <div className="admin-hub__nav-copy">
+          {kicker ? <p className="eyebrow">{kicker}</p> : null}
+          <h1>{title}</h1>
+          {subtitle ? <p className="panel-muted">{subtitle}</p> : null}
         </div>
-      }
-    >
-      {children}
-    </CloverShell>
+        <div className="admin-hub__nav-actions">
+          <nav className="admin-section-nav" aria-label="Admin sections">
+            {adminNavItems.map((item) => (
+              <Link
+                key={item.key}
+                href={item.href}
+                className={`admin-section-nav__link${item.key === active ? " is-active" : ""}`}
+                aria-current={item.key === active ? "page" : undefined}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+          {actions ? <div className="admin-page-chrome__actions">{actions}</div> : null}
+        </div>
+      </section>
+      <div className="admin-page__content">{children}</div>
+    </div>
   );
 }
-

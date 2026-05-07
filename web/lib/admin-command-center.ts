@@ -1,34 +1,85 @@
-import type { AdminDataQaSummaryResponse } from "@/lib/admin-data-qa-summary";
-import type { AdminErrorLogListResponse } from "@/lib/admin-error-logs";
-import type { AdminUserListResponse } from "@/lib/admin-users";
-import type { AppBuildInfo } from "@/lib/build-info";
-import { getAppBuildInfo } from "@/lib/build-info";
-import { getAdminContactInquiries } from "@/lib/contact-inquiries";
-import { getAdminDataQaBankSummary } from "@/lib/admin-data-qa-summary";
-import { getAdminErrorLogs } from "@/lib/admin-error-logs";
-import { getAdminUsers } from "@/lib/admin-users";
+import { prisma } from "@/lib/prisma";
+import type { AdminCommandCenterSnapshot } from "@/components/admin-command-center";
 
-export type AdminCommandCenterSnapshot = {
-  buildInfo: AppBuildInfo;
-  users: AdminUserListResponse;
-  dataQa: AdminDataQaSummaryResponse;
-  errors: AdminErrorLogListResponse;
-  inquiries: Awaited<ReturnType<typeof getAdminContactInquiries>>;
-};
+const formatCount = (value: number) => value.toLocaleString();
 
 export async function getAdminCommandCenterSnapshot(): Promise<AdminCommandCenterSnapshot> {
-  const [users, dataQa, errors, inquiries] = await Promise.all([
-    getAdminUsers({ pageSize: 25 }),
-    getAdminDataQaBankSummary(),
-    getAdminErrorLogs({ pageSize: 50 }),
-    getAdminContactInquiries({ pageSize: 20 }),
+  const [users, workspaces, bankAccounts, transactions, imports, errors] = await Promise.all([
+    prisma.user.count({
+      where: {
+        environment: "production",
+      },
+    }),
+    prisma.workspace.count({
+      where: {
+        user: {
+          environment: "production",
+        },
+      },
+    }),
+    prisma.account.count({
+      where: {
+        workspace: {
+          user: {
+            environment: "production",
+          },
+        },
+      },
+    }),
+    prisma.transaction.count({
+      where: {
+        deletedAt: null,
+        workspace: {
+          user: {
+            environment: "production",
+          },
+        },
+      },
+    }),
+    prisma.importFile.count({
+      where: {
+        status: {
+          not: "deleted",
+        },
+        workspace: {
+          user: {
+            environment: "production",
+          },
+        },
+      },
+    }),
+    prisma.appErrorLog.count({
+      where: {
+        environment: "production",
+      },
+    }),
   ]);
 
   return {
-    buildInfo: getAppBuildInfo(),
-    users,
-    dataQa,
-    errors,
-    inquiries,
+    metrics: [
+      { label: "Production users", value: formatCount(users), href: "/admin/users" },
+      { label: "Workspaces", value: formatCount(workspaces), href: "/admin/users" },
+      { label: "Bank accounts", value: formatCount(bankAccounts), href: "/admin/users" },
+      { label: "Transactions", value: formatCount(transactions), href: "/admin/users" },
+      { label: "Imports", value: formatCount(imports), href: "/admin/data-qa" },
+      { label: "Recent errors", value: formatCount(errors), href: "/admin/users" },
+    ],
+    cards: [
+      {
+        title: "Users",
+        body: "Review production users, plan tiers, account limits, and activity signals.",
+        href: "/admin/users",
+      },
+      {
+        title: "Inquiries",
+        body: "Triage support requests and keep customer conversations moving.",
+        href: "/admin/inquiries",
+      },
+      {
+        title: "Data QA",
+        body: "Inspect imported statement quality, parser output, and training coverage.",
+        href: "/admin/data-qa",
+      },
+    ],
   };
 }
