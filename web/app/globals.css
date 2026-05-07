@@ -50,7 +50,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  overflow-x: hidden;
+  overflow-x: clip;
   overflow-y: auto;
   font-family: var(--font-body);
   font-size: 16px;
@@ -195,9 +195,10 @@ label {
   display: grid;
   grid-template-columns: 236px minmax(0, 1fr);
   gap: 0;
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
+  min-height: 100dvh;
+  height: auto;
+  overflow-x: clip;
+  overflow-y: visible;
   background:
     radial-gradient(circle at 12% 8%, rgba(3, 168, 192, 0.05), transparent 20%),
     linear-gradient(180deg, #ffffff 0%, #f5f8fa 100%);
@@ -2217,7 +2218,7 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 18px;
   min-width: 0;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
   background:
     radial-gradient(circle at top right, rgba(3, 168, 192, 0.04), transparent 22%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(245, 248, 250, 0.96));
@@ -2393,7 +2394,7 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 16px;
   min-width: 0;
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
   padding-top: 2px;
   padding-right: 2px;
   padding-bottom: 4px;
@@ -2895,9 +2896,10 @@ body.transactions-manual-open .shell-quick-add-button {
 @media (max-width: 920px) {
   .app-shell {
     grid-template-columns: 1fr;
-    height: 100dvh;
     min-height: 100dvh;
-    overflow: hidden;
+    height: auto;
+    overflow-x: clip;
+    overflow-y: visible;
   }
 
   .sidebar {
@@ -2949,6 +2951,7 @@ body.transactions-manual-open .shell-quick-add-button {
   .content {
     padding: 18px 18px calc(108px + env(safe-area-inset-bottom));
     min-height: 0;
+    overflow: visible;
   }
 
   .topbar {
@@ -21453,9 +21456,10 @@ button.accounts-detail__transaction-head-cell {
 @media (max-width: 1180px) {
   .app-shell {
     grid-template-columns: 1fr;
-    height: 100dvh;
     min-height: 100dvh;
-    overflow: hidden;
+    height: auto;
+    overflow-x: clip;
+    overflow-y: visible;
   }
 
   .sidebar {
@@ -21502,6 +21506,7 @@ button.accounts-detail__transaction-head-cell {
   .content {
     padding: 12px 14px 18px;
     min-height: 0;
+    overflow: visible;
   }
 
   .topbar {
@@ -22301,9 +22306,10 @@ button.accounts-detail__transaction-head-cell {
   .app-shell {
     padding: 14px;
     gap: 14px;
-    height: 100dvh;
     min-height: 100dvh;
-    overflow: hidden;
+    height: auto;
+    overflow-x: clip;
+    overflow-y: visible;
   }
 
   .content {
