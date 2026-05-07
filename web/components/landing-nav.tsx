@@ -18,8 +18,6 @@ export function LandingNav() {
   const pathname = usePathname();
   const currentPathname = pathname ?? "";
   const [isScrolled, setIsScrolled] = useState(false);
-  const [featuresOpen, setFeaturesOpen] = useState(currentPathname.startsWith("/features"));
-  const [mobileFeaturesOpen, setMobileFeaturesOpen] = useState(currentPathname.startsWith("/features"));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -36,8 +34,6 @@ export function LandingNav() {
   }, []);
 
   useEffect(() => {
-    setFeaturesOpen(currentPathname.startsWith("/features"));
-    setMobileFeaturesOpen(currentPathname.startsWith("/features"));
     setMobileMenuOpen(false);
   }, [currentPathname]);
 
@@ -48,7 +44,6 @@ export function LandingNav() {
     };
   }, [mobileMenuOpen]);
 
-  const isFeaturesRoute = currentPathname.startsWith("/features");
   const navClassName = `landing-nav landing-nav--sticky ${isScrolled ? "landing-nav--scrolled" : ""}`.trim();
 
   return (
@@ -58,45 +53,6 @@ export function LandingNav() {
           <img className="landing-brand__mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
           <img className="landing-brand__wordmark" src="/clover-name-teal.svg" alt="Clover" />
         </Link>
-
-        <div className="landing-nav__desktop-center">
-          <div className="landing-nav__menu">
-            <button
-              type="button"
-              className={`landing-nav__link landing-nav__menu-trigger ${isFeaturesRoute ? "is-active" : ""}`.trim()}
-              aria-expanded={featuresOpen}
-              aria-controls="landing-features-menu"
-              onClick={() => setFeaturesOpen((current) => !current)}
-            >
-              Features
-              <span className="landing-nav__chevron" aria-hidden="true">
-                ▾
-              </span>
-            </button>
-            {featuresOpen ? (
-              <div className="landing-nav__submenu" id="landing-features-menu" role="menu" aria-label="Features submenu">
-                <Link href="/features" prefetch={false} role="menuitem">
-                  Overview
-                </Link>
-                <Link href="/features#tracking" prefetch={false} role="menuitem">
-                  Tracking
-                </Link>
-                <Link href="/features#understanding" prefetch={false} role="menuitem">
-                  Understand
-                </Link>
-                <Link href="/features#planning" prefetch={false} role="menuitem">
-                  Plan
-                </Link>
-              </div>
-            ) : null}
-          </div>
-          <Link className="landing-nav__link" href="/pricing" prefetch={false} aria-current={currentPathname === "/pricing" ? "page" : undefined}>
-            Pricing
-          </Link>
-          <Link className="landing-nav__link" href="/help" prefetch={false} aria-current={currentPathname === "/help" ? "page" : undefined}>
-            Help
-          </Link>
-        </div>
 
         <div className="landing-nav__desktop-actions">
           <Link className="landing-nav__link" href="/sign-in" prefetch={false} aria-current={currentPathname === "/sign-in" ? "page" : undefined}>
@@ -144,34 +100,9 @@ export function LandingNav() {
               <Link href="/" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
                 Home
               </Link>
-              <button
-                type="button"
-                className="landing-nav__mobile-menu-toggle"
-                aria-expanded={mobileFeaturesOpen}
-                aria-controls="landing-mobile-features"
-                onClick={() => setMobileFeaturesOpen((current) => !current)}
-              >
-                <span>Features</span>
-                <span aria-hidden="true" className="landing-nav__mobile-menu-toggle-chevron">
-                  ▾
-                </span>
-              </button>
-              {mobileFeaturesOpen ? (
-                <div className="landing-nav__mobile-menu-subgroup" id="landing-mobile-features">
-                  <Link href="/features" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
-                    Overview
-                  </Link>
-                  <Link href="/features#tracking" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
-                    Tracking
-                  </Link>
-                  <Link href="/features#understanding" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
-                    Understand
-                  </Link>
-                  <Link href="/features#planning" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
-                    Plan
-                  </Link>
-                </div>
-              ) : null}
+              <Link href="/features" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
+                Features
+              </Link>
               <Link href="/pricing" prefetch={false} onClick={() => setMobileMenuOpen(false)}>
                 Pricing
               </Link>

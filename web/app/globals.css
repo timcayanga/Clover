@@ -23413,19 +23413,10 @@ button.accounts-detail__transaction-head-cell {
 
 .landing-nav__desktop {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto auto;
   align-items: center;
   gap: 18px;
   width: 100%;
-}
-
-.landing-nav__desktop-center {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 18px;
-  position: relative;
-  min-width: 0;
 }
 
 .landing-nav__desktop-actions {
@@ -26953,6 +26944,18 @@ button.accounts-detail__transaction-head-cell {
 .settings-account-photo-actions p {
   margin: 0;
   color: var(--muted);
+}
+
+.profile-avatar-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-avatar-editor__label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 600;
 }
 
 .settings-account-form {
@@ -30500,6 +30503,13 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   overflow: hidden;
   border: 1px solid rgba(15, 23, 42, 0.1);
   background: rgba(3, 168, 192, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
 }
 
 .split-bill-avatar-picker__image {
@@ -30507,6 +30517,10 @@ html[data-theme="dark"] .goals-editor__purpose-chip {
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.split-bill-avatar-picker__initials {
+  padding: 0 6px;
 }
 
 .split-bill-avatar-picker__actions {
@@ -30915,20 +30929,22 @@ body[data-split-bill-modal-open="true"] .app-shell {
     inset 0 1px 0 rgba(255, 255, 255, 0.86);
 }
 
-.landing-hero-card__eyebrow {
-  margin: 0;
+.landing-hero-card__image-placeholder {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  border-radius: 24px;
+  border: 1px dashed rgba(3, 168, 192, 0.28);
+  background:
+    radial-gradient(circle at top left, rgba(3, 168, 192, 0.08), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(110, 231, 183, 0.1), transparent 30%),
+    rgba(3, 168, 192, 0.04);
   color: var(--accent);
-  font-size: 12px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  font-weight: 700;
-}
-
-.landing-hero-card h2 {
-  max-width: 18ch;
-  font-size: clamp(1.7rem, 3vw, 2.35rem);
-  line-height: 1.05;
-  letter-spacing: -0.05em;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-align: center;
 }
 
 .landing-hero-card__stack {
@@ -30946,15 +30962,14 @@ body[data-split-bill-modal-open="true"] .app-shell {
 }
 
 .landing-hero-card__row span {
-  color: var(--muted-2);
-  font-size: 12px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .landing-hero-card__row strong {
   color: var(--text);
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.45;
   letter-spacing: -0.02em;
 }
@@ -30986,10 +31001,6 @@ body[data-split-bill-modal-open="true"] .app-shell {
 .landing-feature__copy {
   display: grid;
   gap: 14px;
-}
-
-.landing-feature__eyebrow {
-  margin-bottom: 2px;
 }
 
 .landing-feature__title {
@@ -31178,7 +31189,12 @@ body[data-split-bill-modal-open="true"] .app-shell {
 .landing-footer--expanded {
   display: grid;
   justify-items: stretch;
-  padding: 24px 0 8px;
+  padding: 24px;
+  margin-top: 18px;
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(3, 168, 192, 0.98), rgba(2, 137, 160, 0.98));
+  color: white;
+  box-shadow: 0 24px 48px rgba(3, 168, 192, 0.2);
 }
 
 .landing-footer__columns {
@@ -31196,7 +31212,7 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
 .landing-footer__heading {
   margin: 0;
-  color: var(--accent);
+  color: rgba(255, 255, 255, 0.9);
   font-size: 12px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -31204,13 +31220,13 @@ body[data-split-bill-modal-open="true"] .app-shell {
 }
 
 .landing-footer--expanded a {
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.92);
   transition: color 160ms ease;
 }
 
 .landing-footer--expanded a:hover,
 .landing-footer--expanded a:focus-visible {
-  color: var(--text);
+  color: white;
 }
 
 @media (max-width: 980px) {
@@ -31314,12 +31330,18 @@ body[data-split-bill-modal-open="true"] .app-shell {
     padding: 22px 0 6px;
   }
 
+  .landing-footer--expanded {
+    padding: 22px 18px;
+    margin-top: 16px;
+    border-radius: 24px;
+  }
+
   .landing-footer__columns {
     grid-template-columns: 1fr 1fr;
     gap: 16px 12px;
   }
 
-  .landing-footer--expanded {
-    padding-top: 18px;
+  .landing-footer__heading {
+    letter-spacing: 0.14em;
   }
 }

@@ -32,14 +32,12 @@ function SectionVisual({
 }
 
 function FeatureSection({
-  eyebrow,
   title,
   copy,
   visual,
   reverse = false,
   id,
 }: {
-  eyebrow: string;
   title: ReactNode;
   copy: ReactNode;
   visual: ReactNode;
@@ -49,7 +47,6 @@ function FeatureSection({
   return (
     <ScrollReveal as="section" className={`landing-feature ${reverse ? "landing-feature--reverse" : ""}`.trim()} id={id}>
       <div className="landing-feature__copy">
-        <p className="eyebrow landing-feature__eyebrow">{eyebrow}</p>
         <h2 className="landing-feature__title">{title}</h2>
         <div className="landing-feature__body">{copy}</div>
       </div>
@@ -92,20 +89,13 @@ export default function HomePage() {
         </div>
 
         <article className="landing-hero-card glass">
-          <p className="landing-hero-card__eyebrow">Built for clarity</p>
-          <h2>One app for the everyday money work that usually gets split across tools.</h2>
+          <div className="landing-hero-card__image-placeholder" aria-hidden="true">
+            <span>Image goes here</span>
+          </div>
           <div className="landing-hero-card__stack">
             <div className="landing-hero-card__row">
-              <span>Import statements</span>
-              <strong>Review transactions faster</strong>
-            </div>
-            <div className="landing-hero-card__row">
-              <span>Budget tracking</span>
-              <strong>See spending by category</strong>
-            </div>
-            <div className="landing-hero-card__row">
-              <span>Split bills</span>
-              <strong>Settle up without the back-and-forth</strong>
+              <strong>Space for a product image or animation</strong>
+              <span>Use this area to show Clover in action.</span>
             </div>
           </div>
         </article>
@@ -113,17 +103,16 @@ export default function HomePage() {
 
       <FeatureSection
         id="statement-import"
-        eyebrow="01. Statement import"
         title={
           <>
-            Turn <span className="landing-highlight">statements</span> into usable data.
+            Turn <span className="landing-highlight">statements</span> into usable spending data.
           </>
         }
         copy={
           <p>
             Upload your bank statements and Clover helps extract transactions automatically, so you can skip the manual entry and get straight to
-            reviewing your finances. The <span className="landing-highlight">raw file</span> stays separate from your confirmed records, which keeps
-            everything traceable and easy to audit.
+            reviewing your finances. Your imported data feeds directly into <span className="landing-highlight">budget tracking</span>, so you can
+            see where money goes without reconciling everything by hand.
           </p>
         }
         visual={
@@ -138,7 +127,6 @@ export default function HomePage() {
 
       <FeatureSection
         id="budget-tracking"
-        eyebrow="02. Budget tracking"
         title={
           <>
             See where your <span className="landing-highlight">money</span> goes.
@@ -146,8 +134,8 @@ export default function HomePage() {
         }
         copy={
           <p>
-            Clover turns transaction data into clear spending views by <span className="landing-highlight">category</span>, account, and time
-            period, helping you spot patterns, compare months, and stay on top of your budget.
+            Clover turns imported transaction data into clear spending views by <span className="landing-highlight">category</span>, account, and
+            time period, helping you spot patterns, compare months, and stay on top of your budget.
           </p>
         }
         visual={
@@ -164,7 +152,6 @@ export default function HomePage() {
 
       <FeatureSection
         id="split-bills"
-        eyebrow="03. Split bills"
         title={
           <>
             Share expenses without the <span className="landing-highlight">hassle</span>.
@@ -187,8 +174,32 @@ export default function HomePage() {
       />
 
       <FeatureSection
+        id="reporting"
+        title={
+          <>
+            Build <span className="landing-highlight">awareness</span> with reporting and insights.
+          </>
+        }
+        copy={
+          <p>
+            Clover turns your statements and transactions into reports that make trends easier to spot, so you can understand what changed, what is
+            growing, and where you may want to pay closer attention.
+          </p>
+        }
+        visual={
+          <SectionVisual
+            eyebrow="Insights"
+            title="Clear visibility"
+            body="See the shape of your spending over time with simple reporting that helps you make more informed decisions."
+            tone="dark"
+            className="landing-visual--report"
+          />
+        }
+        reverse
+      />
+
+      <FeatureSection
         id="pro"
-        eyebrow="04. Pro"
         title={
           <>
             Unlock <span className="landing-highlight">Pro</span> features when you need more.
@@ -214,23 +225,22 @@ export default function HomePage() {
 
       <FeatureSection
         id="trust"
-        eyebrow="05. Trust and control"
         title={
           <>
-            Keep every step <span className="landing-highlight">reviewable</span>.
+            Keep your data <span className="landing-highlight">safe and secure</span>.
           </>
         }
         copy={
           <p>
-            Clover is designed to preserve your source files, parsed rows, and final transactions as separate stages, so you can review, confirm,
-            and correct data without losing the original record.
+            Clover is built with security in mind, so your files, transactions, and account data stay protected as you import, review, and manage
+            your finances. We keep the workflow transparent while making sure your data remains private and secure.
           </p>
         }
         visual={
           <SectionVisual
-            eyebrow="Audit trail"
-            title="Source → Parse → Confirm"
-            body="Each stage stays separate so your records remain transparent from upload to final transaction."
+            eyebrow="Security"
+            title="Protected by design"
+            body="A secure workflow keeps your financial information private while preserving the audit trail you need."
             className="landing-visual--trust"
           />
         }
