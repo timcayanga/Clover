@@ -2116,6 +2116,12 @@ function TransactionsPageContent() {
       return;
     }
 
+    if (hydrateWorkspaceFromCache(selectedWorkspaceId)) {
+      void loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });
+      void loadTransactionsPage(selectedWorkspaceId, { background: true });
+      return;
+    }
+
     setAccounts([]);
     setCategories([]);
     setTransactions([]);

@@ -41,6 +41,7 @@ import {
 } from "@/lib/workspace-cache";
 import { getAccountBrand } from "@/lib/account-brand";
 import { inferAccountTypeFromStatement } from "@/lib/import-parser";
+import { getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import { chooseWorkspaceId, persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { mergeImportedWorkspaceTransactions } from "@/lib/workspace-cache";
 import {
@@ -1119,11 +1120,15 @@ function AccountsPageContent() {
                                 checkpoints: accountCheckpoints,
                               });
                         const normalizedBalance = normalizeAccountBalance(effectiveType, parseAmount(reconciledBalance ?? account.balance));
+                        const preservedImportedBalance =
+                          shouldPreserveImportedBalance && currentAccountBalanceIsNonZero
+                            ? account.balance
+                            : null;
 
         return {
           ...account,
           type: effectiveType,
-          balance: String(normalizedBalance),
+          balance: preservedImportedBalance ?? String(normalizedBalance),
         };
       }),
     [accounts, drawerAccountId, drawerStatementCheckpoints, drawerTransactions, statementCheckpoints, transactions]
@@ -3095,7 +3100,13 @@ function AccountsPageContent() {
                   selectedAccountTransactions.slice(0, 5).map((transaction) => (
                     <div key={transaction.id} className="accounts-drawer__transaction">
                       <div>
-                        <strong>{transaction.merchantClean ?? transaction.merchantRaw}</strong>
+                        <strong>
+                          {getEffectiveTransactionMerchantName({
+                            merchantClean: transaction.merchantClean,
+                            merchantRaw: transaction.merchantRaw,
+                            rawPayload: transaction.rawPayload as never,
+                          }) ?? transaction.merchantRaw}
+                        </strong>
                         <span>
                           {formatDate(transaction.date)} · {transaction.type}
                           {transaction.merchantClean && transaction.merchantClean !== transaction.merchantRaw

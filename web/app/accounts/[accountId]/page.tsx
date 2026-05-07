@@ -13,7 +13,7 @@ import { deriveReconciledBalance } from "@/lib/account-balance";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { extractAccountIdFromPathSegment, getAccountPath } from "@/lib/account-path";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
-import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
+import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
@@ -563,10 +563,19 @@ const buildImportSummaries = (transactions: Transaction[], importFiles: ImportFi
 };
 
 const getTransactionSortLabel = (transaction: Transaction) =>
-  transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
+  getEffectiveTransactionMerchantName({
+    merchantClean: transaction.merchantClean,
+    merchantRaw: transaction.merchantRaw,
+    rawPayload: transaction.rawPayload as never,
+  }) ?? "Transaction";
 
 const createDetailDraft = (transaction: Transaction): TransactionDetailDraft => ({
-  merchantClean: transaction.merchantClean ?? transaction.merchantRaw,
+  merchantClean:
+    getEffectiveTransactionMerchantName({
+      merchantClean: transaction.merchantClean,
+      merchantRaw: transaction.merchantRaw,
+      rawPayload: transaction.rawPayload as never,
+    }) ?? transaction.merchantRaw,
   date: transaction.date.slice(0, 10),
   categoryId: transaction.categoryId ?? "",
   amount: transaction.amount,
@@ -2487,7 +2496,12 @@ function AccountDetailPageContent() {
                     const amountToneClass = transaction.type === "transfer" ? "neutral" : transaction.type === "income" ? "positive" : "negative";
                     const categoryValue = transaction.categoryId ?? "";
                     const categoryLabel = getDisplayTransactionCategoryName(transaction, categories, account?.institution);
-                    const normalizedName = transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
+                    const normalizedName =
+                      getEffectiveTransactionMerchantName({
+                        merchantClean: transaction.merchantClean,
+                        merchantRaw: transaction.merchantRaw,
+                        rawPayload: transaction.rawPayload as never,
+                      }) ?? "Transaction";
 
                     return (
                       <div
@@ -2580,7 +2594,12 @@ function AccountDetailPageContent() {
                             const isTransferTransaction =
                               transaction.type === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
                             const amountToneClass = isTransferTransaction ? "neutral" : transaction.type === "income" ? "positive" : "negative";
-                            const normalizedName = transaction.merchantClean?.trim() || transaction.merchantRaw.trim() || "Transaction";
+                            const normalizedName =
+                              getEffectiveTransactionMerchantName({
+                                merchantClean: transaction.merchantClean,
+                                merchantRaw: transaction.merchantRaw,
+                                rawPayload: transaction.rawPayload as never,
+                              }) ?? "Transaction";
 
                             return (
                               <article
@@ -2799,14 +2818,18 @@ function AccountDetailPageContent() {
                   />
                 </label>
 
-                <label className="transaction-drawer-form__notes">
-                  <span className="transaction-drawer-field-label">
+                <label
+                  className="transaction-drawer-form__notes"
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}
+                >
+                  <span className="transaction-drawer-field-label" style={{ marginBottom: 0 }}>
                     <span>Exclude from totals</span>
                   </span>
                   <input
                     type="checkbox"
                     checked={detailDraft?.isExcluded ?? selectedTransaction.isExcluded}
                     onChange={(event) => setDetailDraft((current) => (current ? { ...current, isExcluded: event.target.checked } : current))}
+                    style={{ width: 16, height: 16, margin: 0, flex: "0 0 auto" }}
                   />
                 </label>
 

@@ -59,6 +59,7 @@ type TransactionApiRow = {
 
 type TransactionSummaryRow = {
   id: string;
+  importFileId?: string | null;
   date: Date;
   amount: Prisma.Decimal | bigint | number | string;
   type: "income" | "expense" | "transfer";
@@ -177,6 +178,19 @@ const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefin
 
 const getTransactionWarningReason = (transaction: TransactionSummaryRow, duplicateCounts: Map<string, number>) => {
   if (isResolvedReviewStatus(transaction.reviewStatus)) {
+    return null;
+  }
+
+  const importedFromStatement =
+    Boolean(transaction.importFileId) ||
+    ((transaction.rawPayload &&
+      typeof transaction.rawPayload === "object" &&
+      !Array.isArray(transaction.rawPayload) &&
+      ("importFileId" in (transaction.rawPayload as Record<string, unknown>) ||
+        "source" in (transaction.rawPayload as Record<string, unknown>))) ||
+      false);
+
+  if (importedFromStatement) {
     return null;
   }
 
@@ -404,6 +418,7 @@ export async function GET(request: Request) {
             type: true,
             merchantRaw: true,
             merchantClean: true,
+            importFileId: true,
             categoryId: true,
             rawPayload: true,
             reviewStatus: true,
@@ -520,6 +535,7 @@ export async function GET(request: Request) {
       select: {
         id: true,
         accountId: true,
+        importFileId: true,
         date: true,
         amount: true,
         type: true,
