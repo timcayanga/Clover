@@ -677,6 +677,7 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
   const router = useRouter();
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
 
@@ -760,6 +761,18 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
     };
   }, []);
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 720px)");
+    const updateViewport = () => setIsCompactViewport(mediaQuery.matches);
+
+    updateViewport();
+    mediaQuery.addEventListener("change", updateViewport);
+
+    return () => {
+      mediaQuery.removeEventListener("change", updateViewport);
+    };
+  }, []);
+
   const closeManual = () => {
     setManualOpen(false);
     setMenuOpen(false);
@@ -783,6 +796,10 @@ export function DashboardTopActions({ workspaceId, accounts }: DashboardTopActio
     setManualOpen(false);
     setImportOpen(true);
   };
+
+  if (isCompactViewport) {
+    return null;
+  }
 
   return (
     <>

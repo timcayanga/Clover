@@ -686,12 +686,7 @@ async function DashboardStream({
           style={{ background: "linear-gradient(135deg, #03A8C0 0%, #5ED3D0 100%)" }}
         >
           <div className="dashboard-home__hero-main">
-            <div className="dashboard-home__hero-main-row">
-              <p className="eyebrow">My balance</p>
-              <Link className="button button-secondary button-small dashboard-home__hero-add" href="/transactions?manual=1">
-                Add
-              </Link>
-            </div>
+            <p className="eyebrow">My balance</p>
             <strong>{totalBalanceLabel}</strong>
           </div>
           <div className="dashboard-home__hero-aside" aria-label="Monthly balance summary">
