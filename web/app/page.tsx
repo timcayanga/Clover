@@ -300,19 +300,6 @@ export default function HomePage() {
           </div>
 
           <div className="landing-footer__column">
-            <p className="landing-footer__heading">Company</p>
-            <Link href="/" prefetch={false}>
-              Home
-            </Link>
-            <Link href="/sign-in" prefetch={false}>
-              Log in
-            </Link>
-            <Link href="/sign-up" prefetch={false}>
-              Sign up
-            </Link>
-          </div>
-
-          <div className="landing-footer__column">
             <p className="landing-footer__heading">Legal</p>
             <Link href="/privacy-policy" prefetch={false}>
               Privacy Policy
