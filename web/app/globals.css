@@ -1320,6 +1320,12 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 4px;
 }
 
+.sidebar-popover__separator {
+  height: 1px;
+  margin: 2px 2px 0;
+  background: linear-gradient(90deg, transparent, var(--stroke), transparent);
+}
+
 .sidebar-popover__link,
 .sidebar-popover__item {
   display: grid;

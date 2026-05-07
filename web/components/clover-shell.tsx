@@ -248,10 +248,10 @@ const formatSidebarMoney = (value: number, currency?: string | null) => formatCu
 
 const navItems = [
   { href: "/dashboard", label: "Home", key: "dashboard" as const },
-  { href: "/transactions", label: "Transactions", key: "transactions" as const },
-  { href: "/split-bill", label: "Split Bills", key: "split-bill" as const },
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
+  { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/recurring", label: "Recurring", key: "recurring" as const },
+  { href: "/split-bill", label: "Split Bills", key: "split-bill" as const },
   { href: "/more", label: "More", key: "more" as const },
 ];
 
@@ -1167,17 +1167,6 @@ export function CloverShell({
                         Goals
                       </button>
                       <button
-                        className={`sidebar-nav__submenu-link${active === "settings" || pathname?.startsWith("/settings") ? " is-active" : ""}`}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => navigateTo("/settings")}
-                      >
-                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                          <MenuIcon name="settings" />
-                        </span>
-                        Settings
-                      </button>
-                      <button
                         className={`sidebar-nav__submenu-link${pathname?.startsWith("/help") ? " is-active" : ""}`}
                         type="button"
                         role="menuitem"
@@ -1270,14 +1259,15 @@ export function CloverShell({
                 <button
                   className="sidebar-popover__link sidebar-popover__button sidebar-popover__link--bare"
                   type="button"
-                  onClick={() => navigateTo("/help")}
+                  onClick={() => navigateTo("/settings")}
                   role="menuitem"
                 >
                   <span className="sidebar-popover__link-icon" aria-hidden="true">
-                    <MenuIcon name="help" />
+                    <MenuIcon name="settings" />
                   </span>
-                  <span>Help</span>
+                  <span>Settings</span>
                 </button>
+                <div className="sidebar-popover__separator" aria-hidden="true" />
                 <button
                   className="sidebar-popover__link sidebar-popover__button sidebar-popover__button--danger sidebar-popover__link--bare"
                   type="button"
@@ -1287,7 +1277,7 @@ export function CloverShell({
                   <span className="sidebar-popover__link-icon" aria-hidden="true">
                     <MenuIcon name="sign-out" />
                   </span>
-                  <span>Sign Out</span>
+                  <span>Log Out</span>
                 </button>
               </div>
             </div>
