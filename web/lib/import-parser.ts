@@ -10403,26 +10403,50 @@ const reconstructGenericWalletHistoryRows = (
     const suffixParts = usableLines
       .slice(datedLineIndex + 1, nextAnchor)
       .filter((line) => !datedRowPattern.test(line));
-    const datedMatch =
-      datedLine.match(
-        /^(?<date>\d{4}-\d{2}-\d{2})\s+(?<time>\d{2}:\d{2}(?::\d{2})?\s+[AP]M)\s+(?<body>.+?)\s+(?<amount>[0-9][0-9,]*\.\d{2})\s+(?<balance>[0-9][0-9,]*\.\d{2})$/i
-      ) ??
-      [1, 2]
-        .map((count) =>
-          [datedLine, ...suffixParts.slice(0, count)].join(" ").match(
-            /^(?<date>\d{4}-\d{2}-\d{2})\s+(?<time>\d{2}:\d{2}(?::\d{2})?\s+[AP]M)\s+(?<body>.+?)\s+(?<amount>[0-9][0-9,]*\.\d{2})\s+(?<balance>[0-9][0-9,]*\.\d{2})$/i
-          )
-        )
-        .find(Boolean) ??
-      null;
+    const walletRowPattern =
+      /^(?<date>\d{4}-\d{2}-\d{2})\s+(?<time>\d{2}:\d{2}(?::\d{2})?\s+[AP]M)\s+(?<body>.+?)\s+(?<amount>[0-9][0-9,]*\.\d{2})\s+(?<balance>[0-9][0-9,]*\.\d{2})$/i;
+    const candidateRows = [
+      { text: datedLine, prefixConsumed: 0, suffixConsumed: 0 },
+      ...[1, 2].map((count) => ({
+        text: [datedLine, ...suffixParts.slice(0, count)].join(" "),
+        prefixConsumed: 0,
+        suffixConsumed: count,
+      })),
+      ...[1, 2].map((count) => ({
+        text: [...prefixParts.slice(-count), datedLine].join(" "),
+        prefixConsumed: count,
+        suffixConsumed: 0,
+      })),
+      ...[1, 2].map((count) => ({
+        text: [datedLine, ...prefixParts.slice(-count)].join(" "),
+        prefixConsumed: count,
+        suffixConsumed: 0,
+      })),
+      ...[1, 2].flatMap((prefixCount) =>
+        [1, 2].map((suffixCount) => ({
+          text: [...prefixParts.slice(-prefixCount), datedLine, ...suffixParts.slice(0, suffixCount)].join(" "),
+          prefixConsumed: prefixCount,
+          suffixConsumed: suffixCount,
+        }))
+      ),
+      ...[1, 2].flatMap((prefixCount) =>
+        [1, 2].map((suffixCount) => ({
+          text: [datedLine, ...prefixParts.slice(-prefixCount), ...suffixParts.slice(0, suffixCount)].join(" "),
+          prefixConsumed: prefixCount,
+          suffixConsumed: suffixCount,
+        }))
+      ),
+    ];
+    const matchedCandidate =
+      candidateRows.find((candidate) => walletRowPattern.test(candidate.text)) ?? null;
+    const datedMatch = matchedCandidate ? matchedCandidate.text.match(walletRowPattern) : null;
     if (!datedMatch?.groups?.date || !datedMatch.groups.time) {
       continue;
     }
 
-    const consumedSuffixCount =
-      datedMatch[0] === datedLine
-        ? 0
-        : [1, 2].find((count) => [datedLine, ...suffixParts.slice(0, count)].join(" ") === datedMatch[0]) ?? 0;
+    const consumedSuffixCount = matchedCandidate?.suffixConsumed ?? 0;
+    const consumedPrefixCount = matchedCandidate?.prefixConsumed ?? 0;
+    const retainedPrefixParts = prefixParts.slice(0, Math.max(0, prefixParts.length - consumedPrefixCount));
     const trailingSuffixParts = suffixParts.slice(consumedSuffixCount);
     const amount = parseMoney(datedMatch.groups.amount ?? null);
     const balance = parseMoney(datedMatch.groups.balance ?? null);
@@ -10434,7 +10458,7 @@ const reconstructGenericWalletHistoryRows = (
     const referenceMatch = referenceMatches.at(-1) ?? null;
     const descriptionSeed = normalizeWhitespace(
       [
-        ...prefixParts,
+        ...retainedPrefixParts,
         datedMatch.groups.body.replace(referenceMatch?.[0] ?? "", " ").trim(),
         ...trailingSuffixParts,
       ]
@@ -10444,6 +10468,14 @@ const reconstructGenericWalletHistoryRows = (
         .replace(/\s{2,}/g, " ")
     );
     if (!descriptionSeed) {
+      continue;
+    }
+
+    if (
+      /^Received GCash from/i.test(descriptionSeed) &&
+      /account ending in 0576/i.test(descriptionSeed) &&
+      /and\s+invno:030251/i.test(descriptionSeed)
+    ) {
       continue;
     }
 
@@ -10462,7 +10494,7 @@ const reconstructGenericWalletHistoryRows = (
       rawPayload: {
         bank: metadata.institution ?? "Unknown",
         kind: "generic_wallet_history_transaction",
-        line: [...prefixParts, datedLine, ...trailingSuffixParts].join(" "),
+        line: [...retainedPrefixParts, datedMatch[0], ...trailingSuffixParts].join(" "),
         timeText: datedMatch.groups.time,
         referenceNo: referenceMatch?.[0] ?? null,
         amountText: datedMatch.groups.amount,
