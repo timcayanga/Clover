@@ -6,7 +6,7 @@ import { formatUploadAccountDisplayName } from "@/lib/account-display";
 import { recordDataQaRun, type DataQaParsedRow, type DataQaSource } from "@/lib/data-qa";
 import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/account-balance";
 import { countNonCashAccounts, getWorkspaceOwnerLimits } from "@/lib/plan-access";
-import { parseAmountValue, parseDateValue, parseImportText } from "@/lib/import-parser";
+import { normalizeInstitutionCurrency, parseAmountValue, parseDateValue, parseImportText } from "@/lib/import-parser";
 import { readImportedFileImageDataUrls, readImportedFileText, readImportedPdfPageImages } from "@/lib/import-file-text.server";
 import {
   DATA_ENGINE_VERSION,
@@ -38,6 +38,7 @@ import {
 import { getTrailingBalanceFromParsedRows, inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { parseImportTextWithOpenAIFallback, transcribeImportImagesWithOpenAI } from "@/lib/openai-import-parser";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
+import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
@@ -1184,6 +1185,8 @@ const resolveConfirmationAccount = async (params: {
     accountType?: unknown;
     accountNumber?: unknown;
     currency?: unknown;
+    openingBalance?: unknown;
+    endingBalance?: unknown;
   } | null;
   parsedRows: Array<{
     accountName?: unknown;
@@ -1205,6 +1208,7 @@ const resolveConfirmationAccount = async (params: {
       type: AccountType;
       source?: string | null;
       currency: string | null;
+      balance?: { toString: () => string } | null;
     },
     next: {
       name?: string | null;
@@ -1212,6 +1216,7 @@ const resolveConfirmationAccount = async (params: {
       accountNumber?: string | null;
       type?: AccountType | null;
       currency?: string | null;
+      balance?: number | null;
     }
   ) => {
     const data: Record<string, unknown> = {};
@@ -1238,6 +1243,13 @@ const resolveConfirmationAccount = async (params: {
     }
     if (next.currency && next.currency !== account.currency && account.source !== "manual") {
       data.currency = next.currency;
+    }
+    if (typeof next.balance === "number" && Number.isFinite(next.balance) && account.source !== "manual") {
+      const currentBalance =
+        account.balance && typeof account.balance.toString === "function" ? Number(account.balance.toString()) : Number.NaN;
+      if (!Number.isFinite(currentBalance) || currentBalance === 0 || Math.abs(currentBalance - next.balance) > 0.000001) {
+        data.balance = next.balance.toString();
+      }
     }
 
     if (Object.keys(data).length === 0) {
@@ -1297,10 +1309,28 @@ const resolveConfirmationAccount = async (params: {
     ["bank", "wallet", "credit_card", "cash", "investment", "other"].includes(params.statementMetadata.accountType)
       ? (params.statementMetadata.accountType as "bank" | "wallet" | "credit_card" | "cash" | "investment" | "other")
       : null;
-  const inferredCurrency =
+  const inferredCurrency = normalizeInstitutionCurrency(
+    inferredInstitution,
     typeof params.statementMetadata?.currency === "string" && params.statementMetadata.currency.trim()
       ? params.statementMetadata.currency.trim().toUpperCase()
-      : null;
+      : null,
+    inferredAccountName
+  );
+  const parsedTrailingBalance = getTrailingBalanceFromParsedRows(
+    params.parsedRows as Array<{
+      amount?: string | undefined;
+      rawPayload?: Record<string, unknown> | undefined;
+    }>
+  );
+  const parsedCheckpointBalance =
+    typeof params.statementMetadata?.endingBalance === "number" && Number.isFinite(params.statementMetadata.endingBalance)
+      ? params.statementMetadata.endingBalance
+      : typeof params.statementMetadata?.openingBalance === "number" && Number.isFinite(params.statementMetadata.openingBalance)
+        ? params.statementMetadata.openingBalance
+        : null;
+  const inferredBalance =
+    parsedCheckpointBalance ??
+    (parsedTrailingBalance !== null && Number.isFinite(parsedTrailingBalance) ? parsedTrailingBalance : null);
 
   const providedAccountId = typeof params.accountId === "string" && params.accountId.trim() ? params.accountId.trim() : null;
   const isOptimisticId = providedAccountId ? providedAccountId.startsWith("optimistic-") : false;
@@ -1311,13 +1341,17 @@ const resolveConfirmationAccount = async (params: {
       })
     : null;
   if (directAccount) {
-    return updateAccountIdentity(directAccount, {
+    const updatedAccount = await updateAccountIdentity(directAccount, {
       name: inferredAccountName,
       institution: inferredInstitution,
       accountNumber: inferredAccountNumber,
       type: inferredAccountType,
       currency: inferredCurrency,
+      balance: inferredBalance,
     });
+
+    await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    return updatedAccount;
   }
 
   const accountIdentityType =
@@ -1337,13 +1371,17 @@ const resolveConfirmationAccount = async (params: {
     (account) => normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === candidateKey
   );
   if (existingByKey) {
-    return updateAccountIdentity(existingByKey, {
+    const updatedAccount = await updateAccountIdentity(existingByKey, {
       name: inferredAccountName,
       institution: inferredInstitution,
       accountNumber: inferredAccountNumber,
       type: accountIdentityType,
       currency: inferredCurrency,
+      balance: inferredBalance,
     });
+
+    await ensureWorkspaceCashAccount(workspaceId, updatedAccount.currency ?? inferredCurrency ?? "PHP");
+    return updatedAccount;
   }
 
   if (inferredAccountName || inferredAccountNumber) {
@@ -1365,6 +1403,7 @@ const resolveConfirmationAccount = async (params: {
         type: accountIdentityType,
         currency: inferredCurrency ?? "PHP",
         source: "upload",
+        ...(inferredBalance !== null ? { balance: inferredBalance.toString() } : {}),
       };
 
       if (!accountData.name) {
@@ -1372,16 +1411,22 @@ const resolveConfirmationAccount = async (params: {
       }
 
     try {
-      return await prisma.account.create({
+      const createdAccount = await prisma.account.create({
         data: accountData,
         select: getCompatibleAccountSelect(compatibleAccountColumns),
       });
+
+      await ensureWorkspaceCashAccount(workspaceId, createdAccount.currency ?? inferredCurrency ?? "PHP");
+      return createdAccount;
     } catch (error) {
       if (Object.prototype.hasOwnProperty.call(accountData, "accountNumber") && isMissingAccountNumberColumnError(error)) {
-        return prisma.account.create({
+        const createdAccount = await prisma.account.create({
           data: omitAccountNumberField(accountData),
           select: getCompatibleAccountSelect(compatibleAccountColumns),
         });
+
+        await ensureWorkspaceCashAccount(workspaceId, createdAccount.currency ?? inferredCurrency ?? "PHP");
+        return createdAccount;
       }
 
       throw error;
@@ -1921,6 +1966,11 @@ export const processImportFileText = async (
   const parsedEndingBalance = getTrailingBalanceFromParsedRows(effectiveRows);
   const resolvedMetadata = {
     ...effectiveMetadataSource,
+    currency: normalizeInstitutionCurrency(
+      effectiveMetadataSource.institution,
+      effectiveMetadataSource.currency ?? null,
+      effectiveMetadataSource.accountName ?? null
+    ),
     endingBalance: effectiveMetadataSource.endingBalance ?? parsedEndingBalance,
   };
   let confirmedImportResult:
@@ -2755,6 +2805,10 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         typeof statementMetadata?.accountType === "string" ? statementMetadata.accountType : null,
       currency:
         typeof statementMetadata?.currency === "string" ? statementMetadata.currency : null,
+      openingBalance:
+        typeof statementMetadata?.openingBalance === "number" ? statementMetadata.openingBalance : null,
+      endingBalance:
+        typeof statementMetadata?.endingBalance === "number" ? statementMetadata.endingBalance : null,
     },
     parsedRows,
     accountId,
@@ -3073,7 +3127,12 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
           ? row.date
           : parseDateValue(typeof row.date === "string" ? row.date : null)) ?? new Date(),
       amount: parseAmountValue(coerceAmountToString(row.amount)) ?? 0,
-      currency: typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : "PHP",
+      currency:
+        normalizeInstitutionCurrency(
+          statementInstitution,
+          typeof row.currency === "string" && row.currency.trim() ? row.currency.trim().toUpperCase() : account.currency ?? "PHP",
+          account.name
+        ) ?? "PHP",
       type: (rowType ?? "expense") as TransactionType,
       merchantRaw: typeof row.merchantRaw === "string" ? row.merchantRaw : "Imported transaction",
       merchantClean: typeof row.merchantClean === "string" ? row.merchantClean : typeof row.merchantRaw === "string" ? row.merchantRaw : null,

@@ -6,12 +6,13 @@ import { NextResponse } from "next/server";
 import { hasCompatibleTable, loadAccountRules, normalizeAccountRuleKey, upsertAccountRule } from "@/lib/data-engine";
 import { INVESTMENT_SUBTYPES, isFixedIncomeInvestmentSubtype, type InvestmentSubtype } from "@/lib/investments";
 import { countNonCashAccounts } from "@/lib/plan-access";
-import { seedWorkspaceDefaults } from "@/lib/starter-data";
+import { ensureWorkspaceCashAccount, seedWorkspaceDefaults } from "@/lib/starter-data";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { isSupportedAccountType } from "@/lib/account-types";
+import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 
 export const dynamic = "force-dynamic";
 
@@ -69,8 +70,20 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   createdAt: true,
 });
 
+const normalizeAccountCurrency = (account: {
+  institution?: string | null;
+  currency?: string | null;
+  name?: string | null;
+}) =>
+  normalizeInstitutionCurrency(account.institution ?? null, account.currency ?? null, account.name ?? null) ??
+  account.currency ??
+  "PHP";
+
 const serializeAccount = <T extends {
   accountNumber?: string | null;
+  currency?: string | null;
+  institution?: string | null;
+  name?: string | null;
   balance: { toString: () => string } | null;
   investmentQuantity: { toString: () => string } | null;
   investmentCostBasis: { toString: () => string } | null;
@@ -84,6 +97,7 @@ const serializeAccount = <T extends {
 }>(account: T) => ({
   ...account,
   accountNumber: account.accountNumber ?? null,
+  currency: normalizeAccountCurrency(account),
   balance: account.balance?.toString() ?? null,
   investmentQuantity: account.investmentQuantity?.toString() ?? null,
   investmentCostBasis: account.investmentCostBasis?.toString() ?? null,
@@ -229,6 +243,11 @@ export async function POST(request: Request) {
     const investmentPurchaseNote = parseNullableText(body?.investmentPurchaseNote);
     const investmentDividendNote = parseNullableText(body?.investmentDividendNote);
     const balance = parseNullableDecimal(body?.balance);
+    const normalizedCurrency = normalizeInstitutionCurrency(
+      institution,
+      body?.currency ? String(body.currency).trim().toUpperCase() : null,
+      name
+    ) ?? "PHP";
 
     if (!workspaceId || !name) {
       return NextResponse.json({ error: "workspaceId and name are required" }, { status: 400 });
@@ -275,7 +294,7 @@ export async function POST(request: Request) {
                 purchasedAt: investmentPurchaseDate ?? new Date(),
                 quantity: investmentQuantity,
                 totalCost: purchaseTotal,
-                currency: body?.currency ? String(body.currency).toUpperCase() : "PHP",
+                currency: normalizedCurrency,
                 note: investmentPurchaseNote ?? investmentSymbol,
               },
             });
@@ -306,7 +325,7 @@ export async function POST(request: Request) {
               accountId,
               paidAt: investmentDividendDate ?? new Date(),
               amount: investmentDividendAmount,
-              currency: body?.currency ? String(body.currency).toUpperCase() : "PHP",
+              currency: normalizedCurrency,
               note: investmentDividendNote,
             },
           });
@@ -315,6 +334,10 @@ export async function POST(request: Request) {
     };
 
     if (existingAccount) {
+      if (normalizedCurrency) {
+        await ensureWorkspaceCashAccount(workspaceId, normalizedCurrency);
+      }
+
       if (compatibleColumns.has("accountNumber") && accountNumber && (existingAccount.accountNumber ?? null) !== accountNumber) {
         const accountUpdate = (data: Record<string, unknown>) =>
           prisma.account.update({
@@ -402,7 +425,7 @@ export async function POST(request: Request) {
       investmentInterestRate: type === "investment" ? investmentInterestRate : null,
       investmentMaturityValue: type === "investment" ? investmentMaturityValue : null,
       type,
-      currency: body?.currency ? String(body.currency).toUpperCase() : "PHP",
+      currency: normalizedCurrency,
       source: body?.source ? String(body.source) : "upload",
       balance,
     };
@@ -422,6 +445,10 @@ export async function POST(request: Request) {
         data: omitAccountNumberField(accountCreateData),
         select: getCompatibleAccountSelect(compatibleColumns),
       });
+    }
+
+    if (normalizedCurrency) {
+      await ensureWorkspaceCashAccount(workspaceId, normalizedCurrency);
     }
 
     await createInitialInvestmentHistory(account.id, account.investmentSubtype, false);

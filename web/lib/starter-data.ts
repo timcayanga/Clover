@@ -55,12 +55,15 @@ const starterWorkspaceSelect = {
   },
 } as const;
 
-const ensureStarterCashAccount = async (workspaceId: string) => {
+export const ensureWorkspaceCashAccount = async (workspaceId: string, currency = "PHP") => {
+  const normalizedCurrency = String(currency || "PHP").trim().toUpperCase() || "PHP";
+
   await prisma.account.updateMany({
     where: {
       workspaceId,
       name: "Cash on hand",
       type: "cash",
+      currency: normalizedCurrency,
     },
     data: {
       name: "Cash",
@@ -72,6 +75,7 @@ const ensureStarterCashAccount = async (workspaceId: string) => {
     where: {
       workspaceId,
       type: "cash",
+      currency: normalizedCurrency,
     },
     select: { id: true },
   });
@@ -84,13 +88,17 @@ const ensureStarterCashAccount = async (workspaceId: string) => {
           name: "Cash",
           institution: "Cash",
           type: "cash",
-          currency: "PHP",
+          currency: normalizedCurrency,
           source: "manual",
           balance: 0,
         },
       ],
     });
   }
+};
+
+const ensureStarterCashAccount = async (workspaceId: string) => {
+  await ensureWorkspaceCashAccount(workspaceId, "PHP");
 };
 
 export const ensureStarterWorkspace = async (
