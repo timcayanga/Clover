@@ -4341,7 +4341,7 @@ export function ImportFilesModal({
         onClose={onClose}
         />
     ) : (
-    <div className="modal-backdrop" role="presentation" onClick={onClose}>
+    <div className="modal-backdrop modal-backdrop--import-fullscreen" role="presentation" onClick={onClose}>
       <section
         className="modal-card modal-card--wide accounts-import-modal glass"
         role="dialog"

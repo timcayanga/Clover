@@ -12221,13 +12221,20 @@ input.transaction-inline-edit--amount::placeholder {
   z-index: 3000;
 }
 
+.modal-backdrop--import-fullscreen {
+  left: 0;
+  width: 100vw;
+}
+
 body[data-clover-page-modal] .sidebar,
 body[data-clover-page-modal] .shell-quick-add-button {
   pointer-events: none;
+  z-index: 0;
 }
 
 body[data-clover-page-modal] .app-shell {
   pointer-events: none;
+  z-index: 0;
 }
 
 .modal-backdrop--transactions-content {
