@@ -6420,6 +6420,8 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
   if (!dateMatch || dateMatch.index === undefined) {
     return null;
   }
+  const timeTextMatch = dateMatch[0].match(/\b(\d{2}:\d{2})(?::\d{2})?\s*([AP]M)?\b/i);
+  const timeText = timeTextMatch ? `${timeTextMatch[1]}${timeTextMatch[2] ? ` ${timeTextMatch[2].toUpperCase()}` : ""}` : null;
 
   const moneyMatches = Array.from(normalized.matchAll(/\b\d[\d,]*\.\d{2}\b/g));
   if (moneyMatches.length < 2) {
@@ -6493,6 +6495,7 @@ const parseGcashTransactionRecord = (record: string, institution?: string | null
       referenceNo,
       amountText,
       balanceText,
+      timeText,
       balance: parseMoney(balanceText),
       transferFromAccountNumber: transferMatch?.[1] ?? null,
       transferToAccountNumber: transferMatch?.[2] ?? null,
@@ -9478,6 +9481,30 @@ const classifyGenericStatementTransaction = (description: string, credit: number
     return { type: "expense" as TransactionType, categoryName: "Financial" };
   }
 
+  if (/^buy load transaction for\b/.test(lower)) {
+    return { type: "expense" as TransactionType, categoryName: "Bills & Utilities" };
+  }
+
+  if (/^bills payment to\b/.test(lower)) {
+    return { type: "expense" as TransactionType, categoryName: "Bills & Utilities" };
+  }
+
+  if (/^received gcash from\b|^received money\b|^cash in\b|^add money\b/.test(lower)) {
+    return { type: "income" as TransactionType, categoryName: "Income" };
+  }
+
+  if (/^sent gcash to\b|^deposit to gsave\b|^withdraw from gsave\b/.test(lower)) {
+    return { type: "transfer" as TransactionType, categoryName: "Transfers" };
+  }
+
+  if (/^payment to\b/.test(lower)) {
+    if (/(?:bank|credit|loan|wallet|gsave|ggives|gcredit|seamoney)/.test(lower)) {
+      return { type: "transfer" as TransactionType, categoryName: "Transfers" };
+    }
+
+    return { type: "expense" as TransactionType, categoryName: guessCategoryName(description, "expense") };
+  }
+
   if (/withdrawal|wdrawal|cash out|atmwd|\bw\/d\b|atm\b/.test(lower)) {
     return { type: "expense" as TransactionType, categoryName: "Cash & ATM" };
   }
@@ -9505,7 +9532,7 @@ const classifyGenericStatementTransaction = (description: string, credit: number
     return { type: "income" as TransactionType, categoryName: "Income" };
   }
 
-  if (/transfer|instapay|pesonet|payment/.test(lower)) {
+  if (/transfer|instapay|pesonet/.test(lower)) {
     return { type: "transfer" as TransactionType, categoryName: "Transfers" };
   }
 
@@ -9728,7 +9755,7 @@ const splitGenericOverflowBlock = (
   const rowText = normalizeWhitespace(block.join(" ")).replace(/\u00a0/g, " ");
   const dateMatch = rowText.match(
     new RegExp(
-      `^(?:-\\s*)?(?<date>(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{2}[-/]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))\\s+(?<body>.+)$`,
+      `^(?:-\\s*)?(?<date>(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{2}[-/]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?))(?:\\s+(?<timeText>\\d{1,2}:\\d{2}(?::\\d{2})?\\s*(?:AM|PM)?))?\\s+(?<body>.+)$`,
       "i"
     )
   );
@@ -9859,12 +9886,23 @@ const parseGenericStatementTransactionBlock = (
     return null;
   }
   const anchoredDate = anchorGenericTransactionDateToStatementRange(date, state.startDate, state.endDate);
+  const timeText =
+    normalizeWhitespace(dateMatch.groups.timeText ?? "") ||
+    normalizeWhitespace(
+      rowText.match(
+        new RegExp(
+          `^(?:-\\s*)?(?:\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}|\\d{2}[-/]\\d{2}[-/]\\d{4}|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{2}[-/]\\d{2}|${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\s+(\\d{1,2}:\\d{2}(?::\\d{2})?\\s*(?:AM|PM)?)\\b`,
+          "i"
+        )
+      )?.[1] ?? ""
+    );
 
   const bodyWithoutPostedDate = dateMatch.groups.body.replace(
     new RegExp(`^(?:${monthNamePattern}\\s+\\d{1,2}(?:,?\\s+\\d{4})?|\\d{1,2}[-/]\\d{1,2}[-/]\\d{2,4}|\\d{1,2}\\s+${monthNamePattern}(?:\\s+\\d{2,4})?)\\s+`, "i"),
     ""
   );
   const bodyWithoutTimePrefix = bodyWithoutPostedDate
+    .replace(/^\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?\s+/i, "")
     .replace(/^\d{3,6}\s+/, "")
     .replace(/\b(?:BALANCE\s+THIS\s+STATEMENT|ENDING\s+BALANCE|CLOSING\s+BALANCE|TOTAL\s*DEBIT|TOTAL\s*CREDIT)\b[\s\S]*$/i, "")
     .trim();
@@ -10123,6 +10161,7 @@ const parseGenericStatementTransactionBlock = (
       bank: state.institution ?? "Unknown",
       kind: "generic_bank_statement_transaction",
       line: rowText,
+      timeText: timeText || null,
       creditText: moneyMatches.length >= 3 ? moneyMatches.at(-3)?.[0] ?? null : null,
       debitText: moneyMatches.length >= 3 ? moneyMatches.at(-2)?.[0] ?? null : null,
       amountText:
