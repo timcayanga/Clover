@@ -10299,6 +10299,199 @@ const reconstructGenericSparseSummaryRows = (
   };
 };
 
+const classifyGenericWalletHistoryTransaction = (description: string, previousBalance: number | null, balance: number | null) => {
+  const lower = description.toLowerCase();
+  const balanceDelta = previousBalance !== null && balance !== null ? balance - previousBalance : null;
+
+  if (/^buy load transaction for\b/.test(lower) || /^bills payment to\b/.test(lower)) {
+    return { type: "expense" as TransactionType, categoryName: "Bills & Utilities" };
+  }
+
+  if (/^received gcash from\b|^received money\b|^cash in\b|^add money\b/.test(lower)) {
+    return { type: "income" as TransactionType, categoryName: "Income" };
+  }
+
+  if (/^deposit to gsave\b|^withdraw from gsave\b|^sent gcash to\b/.test(lower)) {
+    return { type: "transfer" as TransactionType, categoryName: "Transfers" };
+  }
+
+  if (/^payment to\b/.test(lower)) {
+    if (/(?:bank|credit|loan|wallet|gsave|ggives|gcredit|seamoney)/.test(lower)) {
+      return { type: "transfer" as TransactionType, categoryName: "Transfers" };
+    }
+
+    return { type: "expense" as TransactionType, categoryName: guessCategoryName(description, "expense") };
+  }
+
+  if (/^transfer from\b|^transfer to\b|^send money\b|^cash out\b/.test(lower)) {
+    if (balanceDelta !== null) {
+      return {
+        type: balanceDelta > 0 ? ("income" as TransactionType) : ("transfer" as TransactionType),
+        categoryName: balanceDelta > 0 ? "Income" : "Transfers",
+      };
+    }
+
+    return { type: "transfer" as TransactionType, categoryName: "Transfers" };
+  }
+
+  if (/refund|reversal|cashback|reward|rebate|interest/.test(lower)) {
+    return { type: "income" as TransactionType, categoryName: "Income" };
+  }
+
+  if (balanceDelta !== null) {
+    return {
+      type: balanceDelta > 0 ? ("income" as TransactionType) : ("expense" as TransactionType),
+      categoryName: guessCategoryName(description, balanceDelta > 0 ? "income" : "expense"),
+    };
+  }
+
+  return { type: "expense" as TransactionType, categoryName: guessCategoryName(description, "expense") };
+};
+
+const reconstructGenericWalletHistoryRows = (
+  sourceText: string,
+  metadata: DetectedStatementMetadata,
+  institutionAwareNormalization: boolean
+) => {
+  if (
+    metadata.accountType !== "wallet" ||
+    !/Date and Time\s+Description\s+Reference No\.?\s+Debit\s+Credit\s+Balance/i.test(sourceText)
+  ) {
+    return null;
+  }
+
+  const lines = sourceText
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => normalizeWhitespace(line))
+    .filter(Boolean);
+  const headerIndex = lines.findIndex((line) => /Date and Time\s+Description\s+Reference No\.?\s+Debit\s+Credit\s+Balance/i.test(line));
+  if (headerIndex < 0) {
+    return null;
+  }
+
+  const usableLines = lines.slice(headerIndex + 1).filter((line) => {
+    if (/^STARTING BALANCE(?:\s+[0-9,]+\.\d{2})?$/i.test(line)) return false;
+    if (/^Date and Time\s+Description\s+Reference No\.?\s+Debit\s+Credit\s+Balance$/i.test(line)) return false;
+    if (/^ENDING BALANCE(?:\s+[0-9,]+\.\d{2})?$/i.test(line)) return false;
+    if (/^Total Debit(?:\s+[0-9,]+\.\d{2})?$/i.test(line)) return false;
+    if (/^Total Credit(?:\s+[0-9,]+\.\d{2})?$/i.test(line)) return false;
+    if (/^Page\s+\d+\s+of\s+\d+$/i.test(line)) return false;
+    return true;
+  });
+  const datedRowPattern = /^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}(?::\d{2})?\s+[AP]M\b/i;
+  const datedIndexes = usableLines
+    .map((line, index) => (datedRowPattern.test(line) ? index : -1))
+    .filter((index) => index >= 0);
+  if (datedIndexes.length === 0) {
+    return null;
+  }
+
+  const accountName = metadata.accountName ?? metadata.institution ?? "Account";
+  const institution = metadata.institution ?? undefined;
+  const rows: ParsedImportRow[] = [];
+  let previousBalance = metadata.openingBalance ?? null;
+
+  for (let anchorIndex = 0; anchorIndex < datedIndexes.length; anchorIndex += 1) {
+    const datedLineIndex = datedIndexes[anchorIndex];
+    const previousAnchor = anchorIndex > 0 ? datedIndexes[anchorIndex - 1] : -1;
+    const nextAnchor = datedIndexes[anchorIndex + 1] ?? usableLines.length;
+    const datedLine = usableLines[datedLineIndex];
+    const prefixParts = usableLines
+      .slice(previousAnchor + 1, datedLineIndex)
+      .filter((line) => !datedRowPattern.test(line));
+    const suffixParts = usableLines
+      .slice(datedLineIndex + 1, nextAnchor)
+      .filter((line) => !datedRowPattern.test(line));
+    const datedMatch =
+      datedLine.match(
+        /^(?<date>\d{4}-\d{2}-\d{2})\s+(?<time>\d{2}:\d{2}(?::\d{2})?\s+[AP]M)\s+(?<body>.+?)\s+(?<amount>[0-9][0-9,]*\.\d{2})\s+(?<balance>[0-9][0-9,]*\.\d{2})$/i
+      ) ??
+      [1, 2]
+        .map((count) =>
+          [datedLine, ...suffixParts.slice(0, count)].join(" ").match(
+            /^(?<date>\d{4}-\d{2}-\d{2})\s+(?<time>\d{2}:\d{2}(?::\d{2})?\s+[AP]M)\s+(?<body>.+?)\s+(?<amount>[0-9][0-9,]*\.\d{2})\s+(?<balance>[0-9][0-9,]*\.\d{2})$/i
+          )
+        )
+        .find(Boolean) ??
+      null;
+    if (!datedMatch?.groups?.date || !datedMatch.groups.time) {
+      continue;
+    }
+
+    const consumedSuffixCount =
+      datedMatch[0] === datedLine
+        ? 0
+        : [1, 2].find((count) => [datedLine, ...suffixParts.slice(0, count)].join(" ") === datedMatch[0]) ?? 0;
+    const trailingSuffixParts = suffixParts.slice(consumedSuffixCount);
+    const amount = parseMoney(datedMatch.groups.amount ?? null);
+    const balance = parseMoney(datedMatch.groups.balance ?? null);
+    if (amount === null || balance === null) {
+      continue;
+    }
+
+    const referenceMatches = Array.from(datedMatch.groups.body.matchAll(/\b\d{12,}\b/g));
+    const referenceMatch = referenceMatches.at(-1) ?? null;
+    const descriptionSeed = normalizeWhitespace(
+      [
+        ...prefixParts,
+        datedMatch.groups.body.replace(referenceMatch?.[0] ?? "", " ").trim(),
+        ...trailingSuffixParts,
+      ]
+        .join(" ")
+        .replace(/\bTransaction Number:\s*[A-Z0-9-]+\b/gi, " ")
+        .replace(/\bNo\.GC[A-Z0-9]+\b/gi, " ")
+        .replace(/\s{2,}/g, " ")
+    );
+    if (!descriptionSeed) {
+      continue;
+    }
+
+    const { type, categoryName } = classifyGenericWalletHistoryTransaction(descriptionSeed, previousBalance, balance);
+    rows.push({
+      date: datedMatch.groups.date,
+      amount: amount.toFixed(2),
+      merchantRaw: humanizeMerchantText(descriptionSeed),
+      merchantClean: summarizeMerchantText(descriptionSeed, institutionAwareNormalization ? metadata.institution : null),
+      description: descriptionSeed,
+      categoryName,
+      accountName,
+      institution,
+      type,
+      confidence: 84,
+      rawPayload: {
+        bank: metadata.institution ?? "Unknown",
+        kind: "generic_wallet_history_transaction",
+        line: [...prefixParts, datedLine, ...trailingSuffixParts].join(" "),
+        timeText: datedMatch.groups.time,
+        referenceNo: referenceMatch?.[0] ?? null,
+        amountText: datedMatch.groups.amount,
+        balanceText: datedMatch.groups.balance,
+        balance,
+      },
+    });
+    previousBalance = balance;
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return {
+    metadata: {
+      ...metadata,
+      endingBalance:
+        metadata.endingBalance ??
+        parseMoney(
+          (rows.at(-1)?.rawPayload && typeof rows.at(-1)?.rawPayload === "object"
+            ? ((rows.at(-1)?.rawPayload as Record<string, unknown>).balanceText as string | null | undefined)
+            : null) ?? null
+        ),
+    },
+    rows,
+  };
+};
+
 const reconstructGenericSecurityBankAtmLedger = (
   sourceText: string,
   metadata: DetectedStatementMetadata,
@@ -11093,6 +11286,14 @@ export const parseGenericBankStatementText = (
   );
   if (reconstructedSecurityBankAtmLedger) {
     return reconstructedSecurityBankAtmLedger;
+  }
+  const reconstructedWalletHistoryRows = reconstructGenericWalletHistoryRows(
+    text,
+    metadata,
+    options.institutionAwareNormalization !== false
+  );
+  if (reconstructedWalletHistoryRows) {
+    return reconstructedWalletHistoryRows;
   }
 
   const baseLines = genericText
