@@ -808,10 +808,10 @@ async function DashboardPageStream() {
   const workspaceSummary = await resolveDashboardWorkspaceSummary(user);
 
   return (
-    <CloverShell
-      active="dashboard"
-      title="Dashboard"
-      actions={
+      <CloverShell
+        active="dashboard"
+        title="Home"
+        actions={
         <DashboardTopActions
           workspaceId={workspaceSummary.id}
           accounts={workspaceSummary.accounts.map((account) => ({
@@ -831,10 +831,14 @@ async function DashboardPageStream() {
   );
 }
 
-export default function DashboardPage() {
+export function DashboardPageContent() {
   return (
-    <RouteSplash label="dashboard">
+    <RouteSplash label="home">
       <DashboardPageStream />
     </RouteSplash>
   );
+}
+
+export default function DashboardPage() {
+  redirect("/home");
 }
