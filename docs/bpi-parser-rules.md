@@ -33,6 +33,7 @@ Use these rules for BPI savings and related statement imports.
 - Treat `Beginning balance` as statement metadata, not a regular transaction row. Clover should surface at most one opening-balance row per statement.
 - Do not emit the synthetic `Beginning balance` row as a transaction row for BPI savings imports; keep the balance only in statement metadata.
 - The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable BPI simplifications such as `Payroll Credit`, `GCash Cash In`, `ATM Withdrawal`, `Merchant Payment`, and `Bank Transfer`.
+- Treat `EPSATEN` and `eL/ESPay` as payroll-credit style income rows unless another statement field proves otherwise.
 
 ## Notes Handling
 

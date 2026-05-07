@@ -124,7 +124,7 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
   BPI: [
     {
       patterns: [/\bepsaten\b/i, /\bepsaten\s*0+\s*from:\s*non-bpi\s*terminal\b/i],
-      replacement: "EPSATEN",
+      replacement: "Payroll Credit",
     },
     {
       patterns: [/\bel\/?espay\b/i, /\bespay\b/i],

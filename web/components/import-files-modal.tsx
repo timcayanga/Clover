@@ -1577,6 +1577,7 @@ export function ImportFilesModal({
         }
 
         const confirmed = await confirmResponse.json();
+        const importedRows = Number(confirmed.result?.imported ?? 0);
         if (confirmed.result?.status === "staged") {
           updateItem(itemId, {
             status: "importing",
@@ -1598,11 +1599,13 @@ export function ImportFilesModal({
             summary: null,
             errorMessage: null,
           });
-          await new Promise((resolve) => window.setTimeout(resolve, 1000));
-          continue;
+          return {
+            status: "staged",
+            importedRows,
+            summary: null,
+          };
         }
 
-        const importedRows = Number(confirmed.result?.imported ?? 0);
         const accountBalance = typeof confirmed.result?.accountBalance === "string" ? confirmed.result.accountBalance : null;
         const insightSummary = confirmed.result?.insightSummary ?? null;
         const resolvedAccountType = (
@@ -1749,7 +1752,7 @@ export function ImportFilesModal({
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
     let seededFallbackSummary = false;
     const startedAt = Date.now();
-    const MAX_WAIT_MS = 180_000;
+    const MAX_WAIT_MS = 75_000;
     let latestResolvedAccountId: string | null = accountId && !accountId.startsWith("optimistic-") ? accountId : null;
     for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
@@ -4247,27 +4250,6 @@ export function ImportFilesModal({
     autoStartRef.current = false;
     void handleStartImport();
   }, [busy, handleStartImport, items, workspaceId]);
-
-  useEffect(() => {
-    if (!open || !autoCloseAfterStartRef.current || backgroundOnly || launchInBackground) {
-      return;
-    }
-
-    if (passwordItems.some((item) => item.status === "needs_password")) {
-      return;
-    }
-
-    const hasStartedUpload = items.some(
-      (item) => item.status === "parsing" || item.status === "importing" || item.confirmationState === "staged"
-    );
-
-    if (!hasStartedUpload) {
-      return;
-    }
-
-    autoCloseAfterStartRef.current = false;
-    onClose();
-  }, [backgroundOnly, items, launchInBackground, onClose, open, passwordItems]);
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {

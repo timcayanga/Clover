@@ -39,7 +39,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         : "";
     const isDocumentImportMode = checkpointImportMode.length > 0 && checkpointImportMode !== "statement";
     const checkpointRowCount = Number(statementCheckpoint?.rowCount ?? 0);
-    const selfHealDelayMs = isImageImport || isDocumentImportMode ? 2_000 : 15_000;
+    const selfHealDelayMs = isImageImport || isDocumentImportMode ? 2_000 : 3_000;
     const hasParsedRows = parsedRowsCountBefore > 0 || checkpointRowCount > 0;
     const hasConfirmedRows = confirmedTransactionsCountBefore > 0 || statementCheckpoint?.status === "reconciled";
     const shouldSelfHeal =

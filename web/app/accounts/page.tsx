@@ -216,12 +216,16 @@ const mergeAccountsWithOptimisticImports = (
       return account;
     }
 
+    const optimisticBalance = typeof optimistic.balance === "string" ? optimistic.balance.trim() : "";
+    const accountBalance = typeof account.balance === "string" ? account.balance.trim() : "";
+    const optimisticBalanceValue = optimisticBalance ? Number(optimisticBalance) : Number.NaN;
+    const accountBalanceValue = accountBalance ? Number(accountBalance) : Number.NaN;
+    const shouldPreserveExistingBalance =
+      Number.isFinite(optimisticBalanceValue) && optimisticBalanceValue !== 0 && (!Number.isFinite(accountBalanceValue) || accountBalanceValue === 0);
+
     return {
       ...account,
-      balance:
-        account.balance && Number(account.balance) !== 0
-          ? account.balance
-          : optimistic.balance ?? account.balance,
+      balance: shouldPreserveExistingBalance ? optimistic.balance : account.balance && Number(account.balance) !== 0 ? account.balance : optimistic.balance ?? account.balance,
       source: optimistic.source ?? account.source,
     };
   });
@@ -2064,7 +2068,8 @@ function AccountsPageContent() {
         : null;
     const fallbackAccountNumber =
       row.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null;
-    const hasVisibleBalance = row.balance !== null && row.balance.trim() !== "";
+    const hasVisibleBalance = row.balance !== null && row.balance.trim() !== "" && Number(row.balance) !== 0;
+    const hasLoadedTransactions = transactions.some((transaction) => transactionMatchesAccount(transaction, row));
     const shouldPreferCheckpointBalance =
       row.source === "upload" &&
       checkpointBalance !== null &&
@@ -2074,7 +2079,8 @@ function AccountsPageContent() {
     const isLoading =
       row.source === "upload" &&
       (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
-      !hasVisibleBalance;
+      !hasVisibleBalance &&
+      !hasLoadedTransactions;
     const accountBrand = getAccountBrand({
       institution: row.institution,
       name: row.name,
@@ -2096,7 +2102,7 @@ function AccountsPageContent() {
         accountBrand={accountBrand}
         name={accountCardName}
         accountNumber={accountCardNumber}
-        amount={formatAccountAmount(balanceValue, row.currency)}
+        amount={isLoading ? "Loading..." : formatAccountAmount(balanceValue, row.currency)}
         onOpen={() => openAccountDrawer(row)}
         openLabel={`Open ${accountCardName} account`}
         state={isDeleting ? "deleting" : isLoading ? "loading" : undefined}
@@ -2142,6 +2148,14 @@ function AccountsPageContent() {
       type: getEffectiveAccountType(row),
     });
     const accountDisplayName = getAccountDisplayName(row);
+    const hasLoadedTransactions = transactions.some((transaction) => transactionMatchesAccount(transaction, row));
+    const isLoading =
+      row.source === "upload" &&
+      (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
+      row.balance !== null &&
+      row.balance.trim() !== "" &&
+      Number(row.balance) === 0 &&
+      !hasLoadedTransactions;
 
     return (
       <button
@@ -2158,7 +2172,11 @@ function AccountsPageContent() {
           </span>
         </span>
         <span className="accounts-mobile-list-row__end">
-          <strong>{formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}</strong>
+          <strong>
+            {isLoading
+              ? "Loading..."
+              : formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}
+          </strong>
           <span className="accounts-mobile-list-row__chevron" aria-hidden="true">
             ›
           </span>
@@ -2743,7 +2761,15 @@ function AccountsPageContent() {
             <div className="accounts-drawer__overview">
               <div>
                 <span>Current balance</span>
-                <strong>{formatAccountAmount(parseAmount(selectedAccount.balance), selectedAccount.currency)}</strong>
+                <strong>
+                  {selectedAccount.source === "upload" &&
+                  selectedAccount.balance !== null &&
+                  Number(selectedAccount.balance) === 0 &&
+                  selectedAccountTransactions.length === 0 &&
+                  (!latestCheckpoint || latestCheckpoint.status !== "reconciled")
+                    ? "Loading..."
+                    : formatAccountAmount(parseAmount(selectedAccount.balance), selectedAccount.currency)}
+                </strong>
               </div>
               <div>
                 <span>Last updated</span>

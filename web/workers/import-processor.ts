@@ -1620,9 +1620,9 @@ export const processImportFileText = async (
 
   const fileType = String(importFile.fileType ?? "");
   const fileName = String(importFile.fileName ?? "");
+  let text = options.text ?? "";
   const imageImport = isImageImportFile(fileType, fileName);
   const isDocumentImport = isDocumentImportMode || (imageImport && importMode !== "statement");
-  let text = options.text ?? "";
   let pageImages: Array<{ page: number; dataUrl: string }> | null = null;
 
   if (imageImport || !text) {
@@ -1767,8 +1767,8 @@ export const processImportFileText = async (
             fileName,
           },
           options.password,
-          !text.trim() ? 6 : looksCharacterSpacedOcr || genericParseLooksSuspicious ? 4 : gcashSuspiciouslySparse ? 3 : 2,
-          !text.trim() ? 2.0 : looksCharacterSpacedOcr || genericParseLooksSuspicious ? 1.6 : gcashSuspiciouslySparse ? 1.35 : 1.1,
+          !text.trim() ? 6 : importMode === "receipt" ? 4 : looksCharacterSpacedOcr || genericParseLooksSuspicious ? 4 : gcashSuspiciouslySparse ? 3 : 2,
+          !text.trim() ? 2.0 : importMode === "receipt" ? 1.35 : looksCharacterSpacedOcr || genericParseLooksSuspicious ? 1.6 : gcashSuspiciouslySparse ? 1.35 : 1.1,
           options.pdfJsBaseUrl,
           !text.trim() || imageImport
         );
@@ -1832,7 +1832,10 @@ export const processImportFileText = async (
     (importMode === "statement" && (openAiParsed.rows.length === 0 || !openAiMetadata?.accountNumber)) ||
     (importMode === "receipt" &&
       (!openAiParsed.receiptDetails ||
-        (!openAiParsed.receiptDetails.merchant_raw && !openAiParsed.receiptDetails.total && openAiParsed.receiptDetails.line_items.length === 0))) ||
+        (!openAiParsed.receiptDetails.merchant_raw &&
+          !openAiParsed.receiptDetails.total &&
+          openAiParsed.receiptDetails.line_items.length === 0 &&
+          openAiParsed.receiptDetails.split_allocations.length === 0))) ||
     ((importMode === "portfolio" || importMode === "account_detail") &&
       (!openAiParsed.holdings.length || !openAiMetadata?.accountName));
 
@@ -1877,13 +1880,15 @@ export const processImportFileText = async (
             Number(openAiParsed.receiptDetails?.merchant_clean ? 1 : 0) +
             Number(openAiParsed.receiptDetails?.total !== null ? 1 : 0) +
             Number(openAiParsed.receiptDetails?.transaction_date ? 1 : 0) +
-            Number((openAiParsed.receiptDetails?.line_items.length ?? 0) > 0 ? 1 : 0);
+            Number((openAiParsed.receiptDetails?.line_items.length ?? 0) > 0 ? 1 : 0) +
+            Number((openAiParsed.receiptDetails?.split_allocations.length ?? 0) > 0 ? 1 : 0);
           const transcriptScore =
             Number(transcriptParsed.receiptDetails?.merchant_raw ? 1 : 0) +
             Number(transcriptParsed.receiptDetails?.merchant_clean ? 1 : 0) +
             Number(transcriptParsed.receiptDetails?.total !== null ? 1 : 0) +
             Number(transcriptParsed.receiptDetails?.transaction_date ? 1 : 0) +
-            Number((transcriptParsed.receiptDetails?.line_items.length ?? 0) > 0 ? 1 : 0);
+            Number((transcriptParsed.receiptDetails?.line_items.length ?? 0) > 0 ? 1 : 0) +
+            Number((transcriptParsed.receiptDetails?.split_allocations.length ?? 0) > 0 ? 1 : 0);
           return transcriptScore > existingScore;
         }
 
@@ -2743,7 +2748,7 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
   }
 
   let parsedRows: Array<Record<string, unknown>> = [];
-  const MAX_WAIT_MS = 30_000;
+  const MAX_WAIT_MS = 8_000;
   while (Date.now() - startedAt < MAX_WAIT_MS) {
     parsedRows = await fetchParsedTransactionRows(importFileId);
     if (parsedRows.length > 0) {

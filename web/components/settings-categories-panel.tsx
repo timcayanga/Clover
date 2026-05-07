@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { TransactionType } from "@/lib/domain-types";
+import { getCategoryIconTone } from "@/lib/category-icons";
 
 type CategoryRecord = {
   id: string;
@@ -48,15 +49,6 @@ type CategoryIconVariant =
 
 const CUSTOM_CATEGORY_ICON_VARIANTS: CategoryIconVariant[] = ["spark", "star", "tag", "leaf", "business", "shopping", "health", "travel"];
 
-const CATEGORY_ICON_STYLE_TONES = [
-  { background: "rgba(3, 168, 192, 0.12)", color: "var(--accent)" },
-  { background: "rgba(110, 231, 183, 0.18)", color: "rgb(5, 150, 105)" },
-  { background: "rgba(15, 23, 42, 0.08)", color: "rgb(71, 85, 105)" },
-  { background: "rgba(56, 189, 248, 0.14)", color: "rgb(2, 132, 199)" },
-  { background: "rgba(167, 139, 250, 0.16)", color: "rgb(109, 40, 217)" },
-  { background: "rgba(251, 191, 36, 0.16)", color: "rgb(180, 83, 9)" },
-] as const;
-
 function hashString(value: string) {
   let hash = 0;
 
@@ -90,19 +82,6 @@ function getCategoryIconVariant(category: CategoryRecord): CategoryIconVariant {
   if (normalized === "cash & atm") return "cash";
   if (normalized === "transfers") return "transfer";
   return "other";
-}
-
-function getCategoryIconTone(category: CategoryRecord) {
-  const base = CATEGORY_ICON_STYLE_TONES[hashString(category.name) % CATEGORY_ICON_STYLE_TONES.length];
-  if (category.isSystem) {
-    return category.type === "income"
-      ? { background: "rgba(34, 197, 94, 0.14)", color: "rgb(22, 101, 52)" }
-      : category.type === "transfer"
-        ? { background: "rgba(99, 102, 241, 0.14)", color: "rgb(67, 56, 202)" }
-        : { background: "rgba(3, 168, 192, 0.12)", color: "var(--accent)" };
-  }
-
-  return base;
 }
 
 function CategoryIconPath({ variant }: { variant: CategoryIconVariant }) {
@@ -274,7 +253,7 @@ function CategoryIconPath({ variant }: { variant: CategoryIconVariant }) {
 
 function CategoryIcon({ category }: { category: CategoryRecord }) {
   const variant = getCategoryIconVariant(category);
-  const tone = getCategoryIconTone(category);
+  const tone = getCategoryIconTone(category.name);
 
   return (
     <span className="settings-category-table__icon" aria-hidden="true" style={tone}>

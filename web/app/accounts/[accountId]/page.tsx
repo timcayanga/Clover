@@ -8,6 +8,7 @@ import { AccountBrandMark } from "@/components/account-brand-mark";
 import { FinancialAccountCard } from "@/components/financial-account-card";
 import { getAccountCardName } from "@/lib/account-display";
 import { getAccountBrand } from "@/lib/account-brand";
+import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
 import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { formatCurrencyAmount } from "@/lib/currency-format";
@@ -434,95 +435,6 @@ const getCheckpointDocumentFamily = (checkpoint: StatementCheckpoint | null | un
     label: "Latest statement checkpoint",
     pendingLabel: "statement",
   };
-};
-
-const getCategoryIconSrc = (categoryName: string | null | undefined) => {
-  switch ((categoryName ?? "").trim().toLowerCase()) {
-    case "income":
-      return "/category-icons/income.svg";
-    case "food & dining":
-      return "/category-icons/food.svg";
-    case "transport":
-      return "/category-icons/transport.svg";
-    case "housing":
-      return "/category-icons/housing.svg";
-    case "bills & utilities":
-    case "utilities":
-      return "/category-icons/utilities.svg";
-    case "travel & lifestyle":
-      return "/category-icons/travel.svg";
-    case "entertainment":
-      return "/category-icons/entertainment.svg";
-    case "shopping":
-      return "/category-icons/shopping.svg";
-    case "health & wellness":
-      return "/category-icons/health.svg";
-    case "education":
-      return "/category-icons/education.svg";
-    case "financial":
-      return "/category-icons/financial.png";
-    case "gifts & donations":
-      return "/category-icons/gift.svg";
-    case "business":
-      return "/category-icons/business.png";
-    case "transfers":
-      return "/category-icons/transfer.svg";
-    case "groceries":
-      return "/category-icons/groceries.svg";
-    case "medical":
-      return "/category-icons/medical.svg";
-    case "salary":
-      return "/category-icons/salary.svg";
-    case "investments":
-    case "investment":
-      return "/category-icons/investments.svg";
-    case "other":
-    default:
-      return "/category-icons/default.svg";
-  }
-};
-
-const getCategoryIconTone = (categoryName: string | null | undefined) => {
-  switch ((categoryName ?? "").trim().toLowerCase()) {
-    case "income":
-    case "salary":
-      return { backgroundColor: "rgba(34, 197, 94, 0.14)", borderColor: "rgba(34, 197, 94, 0.24)" };
-    case "food & dining":
-    case "groceries":
-      return { backgroundColor: "rgba(249, 115, 22, 0.14)", borderColor: "rgba(249, 115, 22, 0.24)" };
-    case "transport":
-      return { backgroundColor: "rgba(59, 130, 246, 0.14)", borderColor: "rgba(59, 130, 246, 0.24)" };
-    case "housing":
-      return { backgroundColor: "rgba(168, 85, 247, 0.14)", borderColor: "rgba(168, 85, 247, 0.24)" };
-    case "bills & utilities":
-    case "utilities":
-      return { backgroundColor: "rgba(14, 165, 233, 0.14)", borderColor: "rgba(14, 165, 233, 0.24)" };
-    case "travel & lifestyle":
-      return { backgroundColor: "rgba(236, 72, 153, 0.14)", borderColor: "rgba(236, 72, 153, 0.24)" };
-    case "entertainment":
-      return { backgroundColor: "rgba(245, 158, 11, 0.14)", borderColor: "rgba(245, 158, 11, 0.24)" };
-    case "shopping":
-      return { backgroundColor: "rgba(244, 63, 94, 0.14)", borderColor: "rgba(244, 63, 94, 0.24)" };
-    case "health & wellness":
-    case "medical":
-      return { backgroundColor: "rgba(20, 184, 166, 0.14)", borderColor: "rgba(20, 184, 166, 0.24)" };
-    case "education":
-      return { backgroundColor: "rgba(234, 179, 8, 0.14)", borderColor: "rgba(234, 179, 8, 0.24)" };
-    case "financial":
-      return { backgroundColor: "rgba(37, 99, 235, 0.14)", borderColor: "rgba(37, 99, 235, 0.24)" };
-    case "gifts & donations":
-      return { backgroundColor: "rgba(190, 24, 93, 0.14)", borderColor: "rgba(190, 24, 93, 0.24)" };
-    case "business":
-      return { backgroundColor: "rgba(100, 116, 139, 0.14)", borderColor: "rgba(100, 116, 139, 0.24)" };
-    case "transfers":
-      return { backgroundColor: "rgba(6, 182, 212, 0.14)", borderColor: "rgba(6, 182, 212, 0.24)" };
-    case "investments":
-    case "investment":
-      return { backgroundColor: "rgba(124, 58, 237, 0.14)", borderColor: "rgba(124, 58, 237, 0.24)" };
-    case "other":
-    default:
-      return { backgroundColor: "rgba(148, 163, 184, 0.14)", borderColor: "rgba(148, 163, 184, 0.24)" };
-  }
 };
 
 const buildImportSummaries = (transactions: Transaction[], importFiles: ImportFile[]) => {
@@ -1263,6 +1175,7 @@ function AccountDetailPageContent() {
     },
     [account?.balance, account?.source, account?.type, latestCheckpoint, transactions]
   );
+  const hasLoadedTransactions = transactions.some((transaction) => transaction.accountId === account.id);
   const accountCardNumber = account
     ? formatCardAccountNumber(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null)
     : "";
@@ -1276,7 +1189,12 @@ function AccountDetailPageContent() {
       })
     : "Account";
   const liveCardNumber = formatCardAccountNumber(accountEditDraft.accountNumber || accountCardNumber);
-  const hasVisibleBalance = account?.balance !== null && account?.balance !== undefined && String(account.balance).trim() !== "";
+  const hasVisibleBalance = account?.balance !== null && account?.balance !== undefined && String(account.balance).trim() !== "" && Number(account.balance) !== 0;
+  const isPendingBalance =
+    account?.source === "upload" &&
+    !hasVisibleBalance &&
+    !hasLoadedTransactions &&
+    (!latestCheckpoint || latestCheckpoint.status !== "reconciled");
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {
       return null;
@@ -2051,7 +1969,7 @@ function AccountDetailPageContent() {
 
         {account ? (
           <div className="accounts-detail__hero">
-            {account?.source === "upload" && (!latestCheckpoint || latestCheckpoint.status !== "reconciled") && !hasVisibleBalance ? (
+            {isPendingBalance ? (
               <div className="accounts-detail__loading-chip-wrap">
                 <span className="accounts-summary-chip is-neutral">Loading</span>
                 <p className="panel-muted">Clover is still reading this {latestCheckpointFamily?.pendingLabel ?? "statement"} and filling in the rest.</p>
@@ -2063,7 +1981,7 @@ function AccountDetailPageContent() {
               accountBrand={accountBrand}
               name={accountCardName}
               accountNumber={liveCardNumber}
-              amount={formatAccountAmount(Math.abs(currentBalance), account.currency)}
+              amount={isPendingBalance ? "Loading..." : formatAccountAmount(Math.abs(currentBalance), account.currency)}
               showChevron={false}
             />
 

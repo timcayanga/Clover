@@ -7,6 +7,7 @@ import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
 import { getAccountBrand } from "@/lib/account-brand";
 import { getAccountDisplayName } from "@/lib/account-display";
+import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 
 type DashboardTopActionsProps = {
@@ -58,95 +59,6 @@ const normalizeName = (value: string | null | undefined) => value?.trim().toLowe
 
 const getOtherCategoryId = (categories: DashboardCategory[]) =>
   categories.find((category) => normalizeName(category.name) === "other")?.id ?? "";
-
-const getCategoryIconSrc = (categoryName: string | null | undefined) => {
-  switch (normalizeName(categoryName)) {
-    case "income":
-      return "/category-icons/income.svg";
-    case "food & dining":
-      return "/category-icons/food.svg";
-    case "transport":
-      return "/category-icons/transport.svg";
-    case "housing":
-      return "/category-icons/housing.svg";
-    case "bills & utilities":
-    case "utilities":
-      return "/category-icons/utilities.svg";
-    case "travel & lifestyle":
-      return "/category-icons/travel.svg";
-    case "entertainment":
-      return "/category-icons/entertainment.svg";
-    case "shopping":
-      return "/category-icons/shopping.svg";
-    case "health & wellness":
-      return "/category-icons/health.svg";
-    case "education":
-      return "/category-icons/education.svg";
-    case "financial":
-      return "/category-icons/financial.png";
-    case "gifts & donations":
-      return "/category-icons/gift.svg";
-    case "business":
-      return "/category-icons/business.png";
-    case "transfers":
-      return "/category-icons/transfer.svg";
-    case "other":
-      return "/category-icons/other.svg";
-    case "groceries":
-      return "/category-icons/groceries.svg";
-    case "medical":
-      return "/category-icons/medical.svg";
-    case "salary":
-      return "/category-icons/salary.svg";
-    case "investments":
-    case "investment":
-      return "/category-icons/investments.svg";
-    default:
-      return "/category-icons/default.svg";
-  }
-};
-
-const getCategoryIconTone = (categoryName: string | null | undefined) => {
-  switch (normalizeName(categoryName)) {
-    case "income":
-    case "salary":
-      return { backgroundColor: "rgba(34, 197, 94, 0.14)", borderColor: "rgba(34, 197, 94, 0.24)" };
-    case "food & dining":
-    case "groceries":
-      return { backgroundColor: "rgba(249, 115, 22, 0.14)", borderColor: "rgba(249, 115, 22, 0.24)" };
-    case "transport":
-      return { backgroundColor: "rgba(59, 130, 246, 0.14)", borderColor: "rgba(59, 130, 246, 0.24)" };
-    case "housing":
-      return { backgroundColor: "rgba(168, 85, 247, 0.14)", borderColor: "rgba(168, 85, 247, 0.24)" };
-    case "bills & utilities":
-    case "utilities":
-      return { backgroundColor: "rgba(14, 165, 233, 0.14)", borderColor: "rgba(14, 165, 233, 0.24)" };
-    case "travel & lifestyle":
-      return { backgroundColor: "rgba(236, 72, 153, 0.14)", borderColor: "rgba(236, 72, 153, 0.24)" };
-    case "entertainment":
-      return { backgroundColor: "rgba(245, 158, 11, 0.14)", borderColor: "rgba(245, 158, 11, 0.24)" };
-    case "shopping":
-      return { backgroundColor: "rgba(244, 63, 94, 0.14)", borderColor: "rgba(244, 63, 94, 0.24)" };
-    case "health & wellness":
-    case "medical":
-      return { backgroundColor: "rgba(16, 185, 129, 0.14)", borderColor: "rgba(16, 185, 129, 0.24)" };
-    case "education":
-      return { backgroundColor: "rgba(99, 102, 241, 0.14)", borderColor: "rgba(99, 102, 241, 0.24)" };
-    case "financial":
-      return { backgroundColor: "rgba(14, 165, 233, 0.14)", borderColor: "rgba(14, 165, 233, 0.24)" };
-    case "gifts & donations":
-      return { backgroundColor: "rgba(217, 70, 239, 0.14)", borderColor: "rgba(217, 70, 239, 0.24)" };
-    case "business":
-      return { backgroundColor: "rgba(20, 184, 166, 0.14)", borderColor: "rgba(20, 184, 166, 0.24)" };
-    case "transfers":
-      return { backgroundColor: "rgba(3, 168, 192, 0.14)", borderColor: "rgba(3, 168, 192, 0.24)" };
-    case "investments":
-    case "investment":
-      return { backgroundColor: "rgba(124, 58, 237, 0.14)", borderColor: "rgba(124, 58, 237, 0.24)" };
-    default:
-      return { backgroundColor: "rgba(3, 168, 192, 0.12)", borderColor: "rgba(3, 168, 192, 0.18)" };
-  }
-};
 
 function DashboardManualTransactionModal({
   workspaceId,
