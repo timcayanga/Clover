@@ -71,6 +71,32 @@ const getGcashCategoryOverride = (merchantText: string) => {
   return null;
 };
 
+const getGenericCategoryOverride = (merchantText: string) => {
+  const lower = merchantText.toLowerCase();
+
+  if (
+    /fund transfer|bank transfer|instapay transfer|transfer to other bank|transfer from other bank|gcash cash in|gcashcashin|wallet transfer|cash in|cash out|send money|received money/.test(
+      lower
+    )
+  ) {
+    return "Transfers";
+  }
+
+  if (/payroll credit|interest earned|interest applied|cash deposit|check deposit/.test(lower)) {
+    return "Income";
+  }
+
+  if (/atm withdrawal|atmwdl|cash withdrawal/.test(lower)) {
+    return "Cash & ATM";
+  }
+
+  if (/buy load|load transaction|bills payment/.test(lower)) {
+    return "Bills & Utilities";
+  }
+
+  return null;
+};
+
 export const getEffectiveTransactionMerchantName = (params: {
   merchantClean?: string | null;
   merchantRaw: string;
@@ -124,6 +150,10 @@ export const getEffectiveTransactionCategoryName = (params: {
     }
   }
 
+  const genericOverride = getGenericCategoryOverride(effectiveMerchantName || params.merchantRaw);
+  if (genericOverride) {
+    return genericOverride;
+  }
   const heuristic = guessCategoryName(effectiveMerchantName || params.merchantRaw, params.type);
   return heuristic || directCategory || rawPayloadCategory || null;
 };

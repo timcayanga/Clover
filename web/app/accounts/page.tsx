@@ -32,6 +32,7 @@ import {
   getDeletedWorkspaceAccountIds,
   getDeletingWorkspaceAccountIds,
   persistAccountsWorkspaceCache,
+  persistTransactionsWorkspaceCache,
   markDeletedWorkspaceAccount,
   markDeletingWorkspaceAccount,
   clearDeletingWorkspaceAccount,
@@ -3426,12 +3427,14 @@ function AccountsPageContent() {
             summary.accountNumber ?? null,
             summary.accountType ?? null
           );
+          let nextAccountsSnapshot: Account[] | null = null;
+          let nextTransactionsSnapshot: Transaction[] | null = null;
 
           flushSync(() => {
             setAccountsLoading(false);
             if (summary.optimisticAccountId && optimisticAccount) {
               setAccounts((current) =>
-                current.filter((account) => {
+                (nextAccountsSnapshot = current.filter((account) => {
                   if (account.id === summary.optimisticAccountId) {
                     return false;
                   }
@@ -3443,26 +3446,47 @@ function AccountsPageContent() {
                   }
 
                   return true;
-                })
+                }))
               );
             }
 
             if (importedAccountId) {
               setTransactions((current) => {
                 if (previewTransactions.length === 0) {
+                  nextTransactionsSnapshot = current;
                   return current;
                 }
                 const withoutImportedPlaceholders = current.filter(
                   (transaction) => !(transaction.source === "upload" && transaction.accountId === importedAccountId)
                 );
-                return mergeImportedPreviewTransactions(withoutImportedPlaceholders, previewTransactions);
+                const next = mergeImportedPreviewTransactions(withoutImportedPlaceholders, previewTransactions);
+                nextTransactionsSnapshot = next;
+                return next;
               });
             } else if (previewTransactions.length > 0) {
-              setTransactions((current) => mergeImportedPreviewTransactions(current, previewTransactions));
+              setTransactions((current) => {
+                const next = mergeImportedPreviewTransactions(current, previewTransactions);
+                nextTransactionsSnapshot = next;
+                return next;
+              });
+            } else {
+              setTransactions((current) => {
+                nextTransactionsSnapshot = current;
+                return current;
+              });
             }
 
             if (optimisticAccount) {
-              setAccounts((current) => mergeOptimisticImportedAccount(current, optimisticAccount));
+              setAccounts((current) => {
+                const next = mergeOptimisticImportedAccount(current, optimisticAccount);
+                nextAccountsSnapshot = next;
+                return next;
+              });
+            } else {
+              setAccounts((current) => {
+                nextAccountsSnapshot = current;
+                return current;
+              });
             }
 
             if (
@@ -3473,6 +3497,16 @@ function AccountsPageContent() {
               setDrawerTransactions((current) => mergeImportedPreviewTransactions(current, previewTransactions));
             }
           });
+
+          if (selectedWorkspaceId && nextAccountsSnapshot && nextTransactionsSnapshot) {
+            const cachedTransactionsWorkspace = getCachedTransactionsWorkspace(selectedWorkspaceId);
+            persistTransactionsWorkspaceCache(selectedWorkspaceId, {
+              accounts: nextAccountsSnapshot,
+              categories: cachedTransactionsWorkspace?.categories ?? [],
+              transactions: nextTransactionsSnapshot,
+              imports: cachedTransactionsWorkspace?.imports ?? [],
+            });
+          }
 
           if (!summary.optimistic) {
             setImportRefreshInFlight(true);
