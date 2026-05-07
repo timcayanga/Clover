@@ -3016,6 +3016,10 @@ body.transactions-manual-open .shell-quick-add-button {
     display: none !important;
   }
 
+  .shell-menu-button {
+    display: none !important;
+  }
+
   .shell-bottom-nav {
     position: fixed;
     left: 12px;
@@ -3120,15 +3124,28 @@ body.transactions-manual-open .shell-quick-add-button {
   }
 
   .more-page__link {
-    min-height: 96px;
-    padding: 12px 8px 10px;
-    gap: 8px;
-    border-radius: 16px;
+    min-height: 0;
+    padding: 8px 0 4px;
+    gap: 6px;
+    border-radius: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .more-page__link:hover,
+  .more-page__link:focus-visible {
+    border-color: transparent;
+    background: transparent;
+    transform: none;
   }
 
   .more-page__link-icon {
-    width: 38px;
-    height: 38px;
+    width: auto;
+    height: auto;
+    border-radius: 0;
+    background: transparent;
+    color: var(--accent);
   }
 
   .more-page__link-icon svg {
@@ -3137,7 +3154,7 @@ body.transactions-manual-open .shell-quick-add-button {
   }
 
   .more-page__link strong {
-    font-size: 11px;
+    font-size: 12px;
   }
 }
 
@@ -12120,21 +12137,7 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   place-items: center;
   padding: 20px;
-  z-index: 80;
-}
-
-body[data-clover-page-modal] .modal-backdrop,
-body.dashboard-modal-open .modal-backdrop {
-  left: 236px;
-  width: calc(100vw - 236px);
-}
-
-@media (max-width: 960px) {
-  body[data-clover-page-modal] .modal-backdrop,
-  body.dashboard-modal-open .modal-backdrop {
-    left: 0;
-    width: 100vw;
-  }
+  z-index: 180;
 }
 
 .modal-backdrop--transactions-content {
@@ -22156,8 +22159,7 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .topbar .shell-menu-button {
-    width: 40px;
-    height: 40px;
+    display: none !important;
   }
 
   .topbar .shell-back-button {
