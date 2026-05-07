@@ -12768,7 +12768,7 @@ body[data-clover-page-modal] .app-shell {
 .page-file-drop-zone {
   position: fixed;
   inset: 12px;
-  z-index: 58;
+  z-index: 4200;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -12865,6 +12865,15 @@ body[data-clover-page-modal] .app-shell {
   color: var(--muted);
   font-size: clamp(0.98rem, 1.4vw, 1.2rem);
   line-height: 1.45;
+}
+
+body[data-clover-drop-active="true"] .app-shell {
+  z-index: 0;
+}
+
+body[data-clover-drop-active="true"] .sidebar,
+body[data-clover-drop-active="true"] .shell-quick-add-button {
+  pointer-events: none;
 }
 
 .accounts-import-close {

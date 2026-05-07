@@ -25,6 +25,24 @@ export function PageFileDropZone({
   const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    if (dragging) {
+      document.body.dataset.cloverDropActive = "true";
+    } else {
+      delete document.body.dataset.cloverDropActive;
+    }
+
+    return () => {
+      if (document.body.dataset.cloverDropActive === "true") {
+        delete document.body.dataset.cloverDropActive;
+      }
+    };
+  }, [dragging]);
+
+  useEffect(() => {
     if (!enabled) {
       setDragging(false);
       return;
