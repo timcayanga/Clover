@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { SplitBillAvatarPicker } from "@/components/split-bill-avatar-picker";
 import { SplitBillImportModal } from "@/components/split-bill-import-modal";
 import { SplitBillManualModal } from "@/components/split-bill-manual-modal";
 import { SplitBillPersonModal } from "@/components/split-bill-person-modal";
@@ -23,17 +24,9 @@ type SplitBillPageActionsProps = {
   people: SplitBillPersonSummary[];
   groups: SplitBillGroupSummary[];
   onBillSaved?: (bill: SplitBillSerializedBill) => void;
-  onGroupSaved?: (group: SplitBillGroupSummary) => void;
+  onGroupSaved?: (group: SplitBillGroupSummary, people?: SplitBillPersonSummary[]) => void;
   onPersonSaved?: (person: SplitBillPersonSummary) => void;
 };
-
-const readFileAsDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(reader.error ?? new Error("Unable to read file"));
-    reader.readAsDataURL(file);
-  });
 
 function SplitBillPeoplePicker({
   people,
@@ -114,7 +107,6 @@ export function SplitBillPageActions({ people, groups, onBillSaved, onGroupSaved
   const [groupAvatarUrl, setGroupAvatarUrl] = useState<string | null>(null);
   const [isSavingGroup, setIsSavingGroup] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
-  const [isUploadingGroupAvatar, setIsUploadingGroupAvatar] = useState(false);
   const [personAvatarUrl, setPersonAvatarUrl] = useState<string | null>(null);
   const isModalOpen = Boolean(openAddMode || isGroupModalOpen || isPersonModalOpen);
 
@@ -130,7 +122,6 @@ export function SplitBillPageActions({ people, groups, onBillSaved, onGroupSaved
     setGroupPeople([]);
     setGroupAvatarUrl(null);
     setGroupError(null);
-    setIsUploadingGroupAvatar(false);
   };
 
   const closePersonModal = () => {
@@ -192,12 +183,12 @@ export function SplitBillPageActions({ people, groups, onBillSaved, onGroupSaved
         }),
       });
 
-      const payload = (await response.json()) as { group?: SplitBillGroupSummary; error?: string };
+      const payload = (await response.json()) as { group?: SplitBillGroupSummary; people?: SplitBillPersonSummary[]; error?: string };
       if (!response.ok || !payload.group) {
         throw new Error(payload?.error ?? "Unable to save group");
       }
 
-      onGroupSaved?.(payload.group);
+      onGroupSaved?.(payload.group, payload.people ?? []);
       closeGroupModal();
     } catch (error) {
       setGroupError(error instanceof Error ? error.message : "Unable to save group");
@@ -205,20 +196,6 @@ export function SplitBillPageActions({ people, groups, onBillSaved, onGroupSaved
       setIsSavingGroup(false);
     }
   };
-
-  const handleGroupAvatarUpload = async (file: File | null) => {
-    if (!file) {
-      return;
-    }
-
-    setIsUploadingGroupAvatar(true);
-    try {
-      setGroupAvatarUrl(await readFileAsDataUrl(file));
-    } finally {
-      setIsUploadingGroupAvatar(false);
-    }
-  };
-
   return (
     <>
       {!isModalOpen ? (
@@ -283,27 +260,8 @@ export function SplitBillPageActions({ people, groups, onBillSaved, onGroupSaved
             </label>
 
             <label className="settings-field">
-              <span>Photo</span>
-              <div className="split-bill-person-modal__photo-row">
-                <button className="button button-secondary button-small" type="button" onClick={() => document.getElementById("split-bill-group-avatar-input")?.click()} disabled={isUploadingGroupAvatar}>
-                  {groupAvatarUrl ? "Change photo" : "Add photo"}
-                </button>
-                {groupAvatarUrl ? (
-                  <button className="button button-secondary button-small" type="button" onClick={() => setGroupAvatarUrl(null)}>
-                    Remove photo
-                  </button>
-                ) : null}
-                <input
-                  id="split-bill-group-avatar-input"
-                  type="file"
-                  accept="image/*"
-                  className="split-bill-manual-modal__file-input"
-                  onChange={(event) => {
-                    void handleGroupAvatarUpload(event.target.files?.[0] ?? null);
-                    event.currentTarget.value = "";
-                  }}
-                />
-              </div>
+              <span>Photo or avatar</span>
+              <SplitBillAvatarPicker name={groupName} value={groupAvatarUrl} onChange={setGroupAvatarUrl} defaultToSuggestedAvatar />
             </label>
 
             <label className="settings-field">

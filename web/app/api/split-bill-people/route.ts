@@ -41,7 +41,18 @@ export async function POST(request: Request) {
     });
 
     if (existing) {
-      return NextResponse.json({ person: existing }, { status: 200 });
+      const nextAvatarUrl = body.avatarUrl === undefined ? existing.avatarUrl ?? null : body.avatarUrl?.trim() || null;
+      const person =
+        existing.avatarUrl === nextAvatarUrl
+          ? existing
+          : await prisma.splitBillPerson.update({
+              where: { id: existing.id },
+              data: {
+                avatarUrl: nextAvatarUrl,
+              },
+            });
+
+      return NextResponse.json({ person }, { status: 200 });
     }
 
     const person = await prisma.splitBillPerson.create({

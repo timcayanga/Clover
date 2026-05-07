@@ -31,7 +31,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ pe
       where: { id: personId },
       data: {
         name: body.name,
-        avatarUrl: body.avatarUrl?.trim() || null,
+        avatarUrl: body.avatarUrl === undefined ? existing.avatarUrl ?? null : body.avatarUrl?.trim() || null,
       },
     });
 

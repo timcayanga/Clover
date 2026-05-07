@@ -6,6 +6,8 @@ import { useEffect, useState, useTransition } from "react";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { persistSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches } from "@/lib/workspace-cache";
+import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
+import { UserAvatarEditor } from "@/components/user-avatar-editor";
 
 type ProfileCenterProps = {
   canSignOut?: boolean;
@@ -27,7 +29,6 @@ export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
     setDisplayName(currentDisplayName);
   }, [currentDisplayName]);
 
-  const initial = displayName.trim().slice(0, 1).toUpperCase();
   const helpHref = pathname ? `/help?returnTo=${encodeURIComponent(pathname)}` : "/help";
 
   const handleSave = () => {
@@ -73,7 +74,11 @@ export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
       <article className="panel profile-hero">
         <div className="profile-hero__identity">
           <span className="profile-hero__avatar" aria-hidden="true">
-            {avatar ? <img src={avatar} alt="" /> : <span>{initial}</span>}
+            {avatar ? (
+              <img src={avatar} alt="" />
+            ) : (
+              <span style={{ ...getAvatarBackgroundStyle(displayName), color: "#fff" }}>{getAvatarInitials(displayName)}</span>
+            )}
           </span>
           <div>
             <p className="eyebrow">Account hub</p>
@@ -104,6 +109,10 @@ export function ProfileCenter({ canSignOut = true }: ProfileCenterProps) {
         <article className="panel">
           <p className="eyebrow">Identity</p>
           <div className="profile-list">
+            <div className="profile-avatar-editor">
+              <p className="profile-avatar-editor__label">Profile photo</p>
+              <UserAvatarEditor displayName={displayName} avatarUrl={avatar} />
+            </div>
             <label className="profile-edit-field">
               <span>Display name</span>
               <input

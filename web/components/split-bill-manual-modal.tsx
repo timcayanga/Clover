@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CurrencySelector } from "@/components/currency-selector";
+import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
 import type { SplitBillSerializedBill } from "@/lib/split-bill";
 
@@ -46,14 +47,6 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   }
   return payload;
 }
-
-const getInitials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("")
-    .slice(0, 2) || "?";
 
 export function SplitBillManualModal({ open, people, groups, onClose, onSaved }: SplitBillManualModalProps) {
   const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
@@ -303,7 +296,9 @@ export function SplitBillManualModal({ open, people, groups, onClose, onSaved }:
                 <p>People</p>
                 {suggestions.people.map((person) => (
                   <button key={person.id} type="button" className="split-bill-manual-modal__suggestion" onClick={() => addPerson(person.name)}>
-                    <span className="split-bill-person-avatar split-bill-person-avatar--small">{getInitials(person.name)}</span>
+                    <span className="split-bill-person-avatar split-bill-person-avatar--small" style={getAvatarBackgroundStyle(person.name)}>
+                      {getAvatarInitials(person.name)}
+                    </span>
                     <span>{person.name}</span>
                   </button>
                 ))}
@@ -314,8 +309,11 @@ export function SplitBillManualModal({ open, people, groups, onClose, onSaved }:
                 <p>Groups</p>
                 {suggestions.groups.map((group) => (
                   <button key={group.id} type="button" className="split-bill-manual-modal__suggestion" onClick={() => addPeopleFromGroup(group)}>
-                    <span className="split-bill-person-avatar split-bill-person-avatar--small" style={group.avatarUrl ? undefined : getAvatarStyle(group.name)}>
-                      {group.avatarUrl ? <img className="split-bill-person-avatar__image" src={group.avatarUrl} alt="" /> : getInitials(group.name)}
+                    <span
+                      className="split-bill-person-avatar split-bill-person-avatar--small"
+                      style={group.avatarUrl ? undefined : getAvatarBackgroundStyle(group.name)}
+                    >
+                      {group.avatarUrl ? <img className="split-bill-person-avatar__image" src={group.avatarUrl} alt="" /> : getAvatarInitials(group.name)}
                     </span>
                     <span>{group.name}</span>
                   </button>
@@ -417,19 +415,3 @@ export function SplitBillManualModal({ open, people, groups, onClose, onSaved }:
     </div>
   );
 }
-
-const getAvatarStyle = (name: string) => {
-  const seed = name
-    .split("")
-    .reduce((sum, char) => sum + char.charCodeAt(0), 0);
-
-  return {
-    background: [
-      "linear-gradient(135deg, rgba(3, 168, 192, 0.9), rgba(94, 211, 208, 0.9))",
-      "linear-gradient(135deg, rgba(94, 211, 208, 0.92), rgba(110, 231, 183, 0.88))",
-      "linear-gradient(135deg, rgba(110, 231, 183, 0.94), rgba(3, 168, 192, 0.16))",
-      "linear-gradient(135deg, rgba(31, 41, 51, 0.18), rgba(3, 168, 192, 0.84))",
-      "linear-gradient(135deg, rgba(181, 246, 239, 0.96), rgba(3, 168, 192, 0.3))",
-    ][seed % 5],
-  };
-};

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 import { formatSplitBillAmount, normalizeCurrencyCode, type SplitBillSerializedBill } from "@/lib/split-bill";
 
 type SplitBillGroupSummary = {
@@ -32,32 +33,6 @@ const formatDate = (value: string) =>
     year: "numeric",
   });
 
-const getInitials = (name: string) =>
-  name
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part[0]?.toUpperCase() ?? "")
-    .join("")
-    .slice(0, 2) || "?";
-
-const avatarTones = [
-  "linear-gradient(135deg, rgba(3, 168, 192, 0.9), rgba(94, 211, 208, 0.9))",
-  "linear-gradient(135deg, rgba(94, 211, 208, 0.92), rgba(110, 231, 183, 0.88))",
-  "linear-gradient(135deg, rgba(110, 231, 183, 0.94), rgba(3, 168, 192, 0.16))",
-  "linear-gradient(135deg, rgba(31, 41, 51, 0.18), rgba(3, 168, 192, 0.84))",
-  "linear-gradient(135deg, rgba(181, 246, 239, 0.96), rgba(3, 168, 192, 0.3))",
-] as const;
-
-const getAvatarStyle = (name: string) => {
-  const seed = name
-    .split("")
-    .reduce((sum, char) => sum + char.charCodeAt(0), 0);
-
-  return {
-    background: avatarTones[seed % avatarTones.length],
-  };
-};
-
 const buildRowStatus = (transfers: SplitBillSerializedBill["settlement"]["transfers"]) =>
   transfers.length > 0 ? `${transfers.length} transfer${transfers.length === 1 ? "" : "s"}` : "Settled";
 
@@ -82,8 +57,8 @@ const renderAvatar = (name: string, avatarUrl: string | null, sizeClass = "split
   }
 
   return (
-    <span className={`split-bill-person-avatar ${sizeClass}`} style={getAvatarStyle(name)}>
-      {getInitials(name)}
+    <span className={`split-bill-person-avatar ${sizeClass}`} style={getAvatarBackgroundStyle(name)}>
+      {getAvatarInitials(name)}
     </span>
   );
 };
@@ -152,7 +127,7 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
                       {bill.participants.length > 0 ? (
                         bill.participants.map((participant) => (
                           <span key={participant.id} className="split-bill-table__chip" title={participant.name}>
-                            {getInitials(participant.name)}
+                            {getAvatarInitials(participant.name)}
                           </span>
                         ))
                       ) : (
@@ -231,8 +206,13 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
                     <div className="split-bill-mobile-group-card__avatars">
                       {group.members.length > 0 ? (
                         group.members.map((member) => (
-                          <span key={member.id} className="split-bill-person-avatar split-bill-person-avatar--small" title={member.name} style={getAvatarStyle(member.name)}>
-                            {getInitials(member.name)}
+                          <span
+                            key={member.id}
+                            className="split-bill-person-avatar split-bill-person-avatar--small"
+                            title={member.name}
+                            style={getAvatarBackgroundStyle(member.name)}
+                          >
+                            {getAvatarInitials(member.name)}
                           </span>
                         ))
                       ) : (
@@ -284,12 +264,12 @@ export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, 
                   </div>
                   <div role="cell">{formatDate(bill.billDate)}</div>
                   <div role="cell" className="split-bill-table__chips">
-                    {bill.participants.length > 0 ? (
-                      bill.participants.map((participant) => (
-                        <span key={participant.id} className="split-bill-table__chip" title={participant.name}>
-                          {getInitials(participant.name)}
-                        </span>
-                      ))
+                      {bill.participants.length > 0 ? (
+                        bill.participants.map((participant) => (
+                          <span key={participant.id} className="split-bill-table__chip" title={participant.name}>
+                            {getAvatarInitials(participant.name)}
+                          </span>
+                        ))
                     ) : (
                       <span className="split-bill-subtle-empty">No people yet</span>
                     )}

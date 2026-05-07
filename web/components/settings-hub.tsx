@@ -1,12 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useTransition, type ChangeEvent, type ReactNode } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
 import { PayPalSubscribeButton } from "@/components/paypal-subscribe-button";
 import { BillingActions } from "@/components/billing-actions";
 import { PlanFeatureItem } from "@/components/plan-feature-item";
+import { UserAvatarEditor } from "@/components/user-avatar-editor";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import { SettingsCategoriesPanel } from "@/components/settings-categories-panel";
 import { type BillingInterval } from "@/lib/billing-plans";
@@ -279,7 +280,6 @@ export function SettingsHub({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [accountMessage, setAccountMessage] = useState<string | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
-  const [photoMessage, setPhotoMessage] = useState<string | null>(null);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [newProfileName, setNewProfileName] = useState("");
   const [profileRenameDrafts, setProfileRenameDrafts] = useState<Record<string, string>>({});
@@ -290,11 +290,9 @@ export function SettingsHub({
   const [passwordNewDraft, setPasswordNewDraft] = useState("");
   const [passwordConfirmDraft, setPasswordConfirmDraft] = useState("");
   const [isPending, startTransition] = useTransition();
-  const profileImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const activeProfile = profiles.find((profile) => profile.id === activeProfileId) ?? profiles[0] ?? null;
   const primaryEmail = user?.primaryEmailAddress?.emailAddress ?? email;
-  const profileImage = user?.imageUrl ?? null;
   const connectedAccounts = user?.externalAccounts ?? [];
 
   useEffect(() => {
@@ -404,27 +402,6 @@ export function SettingsHub({
         setPasswordMessage("Password updated.");
       } catch (error) {
         setPasswordMessage(error instanceof Error ? error.message : "Unable to update your password.");
-      }
-    });
-  };
-
-  const handleProfileImageChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0] ?? null;
-    event.currentTarget.value = "";
-
-    if (!file || !isLoaded || !isSignedIn || !user) {
-      return;
-    }
-
-    startTransition(async () => {
-      setPhotoMessage(null);
-
-      try {
-        await user.setProfileImage({ file });
-        await user.reload();
-        setPhotoMessage("Profile picture updated.");
-      } catch (error) {
-        setPhotoMessage(error instanceof Error ? error.message : "Unable to update your profile picture.");
       }
     });
   };
@@ -683,30 +660,7 @@ export function SettingsHub({
                 <div className="settings-account-card__head">
                   <h5>Picture</h5>
                 </div>
-                <div className="settings-account-photo-row">
-                  <span className="settings-account-photo" aria-hidden="true">
-                    {profileImage ? <img src={profileImage} alt="" /> : <span>{(firstNameDraft || workspaceName).trim().slice(0, 1).toUpperCase()}</span>}
-                  </span>
-                  <div className="settings-account-photo-actions">
-                    <p>Update the photo used across Clover.</p>
-                    <input
-                      ref={profileImageInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="sr-only"
-                      onChange={handleProfileImageChange}
-                    />
-                    <button
-                      type="button"
-                      className="button button-secondary button-small"
-                      onClick={() => profileImageInputRef.current?.click()}
-                      disabled={isPending}
-                    >
-                      Change picture
-                    </button>
-                    {photoMessage ? <p className="settings-helper">{photoMessage}</p> : null}
-                  </div>
-                </div>
+                <UserAvatarEditor displayName={`${firstNameDraft} ${lastNameDraft}`.trim() || workspaceName} avatarUrl={user?.imageUrl ?? null} />
               </article>
 
               <article className="settings-action-card settings-account-card">

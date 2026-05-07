@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { CloverShell } from "@/components/clover-shell";
+import { SplitBillAvatarPicker } from "@/components/split-bill-avatar-picker";
 import { SplitBillHome } from "@/components/split-bill-home";
 import { SplitBillPageActions } from "@/components/split-bill-page-actions";
 import { formatSplitBillAmount, normalizeCurrencyCode, type SplitBillSerializedBill } from "@/lib/split-bill";
@@ -48,14 +49,6 @@ const buildSummaryTotal = (bills: SplitBillSerializedBill[]) => {
   return "Mixed";
 };
 
-const readFileAsDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(reader.error ?? new Error("Unable to read file"));
-    reader.readAsDataURL(file);
-  });
-
 export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups, people: initialPeople }: SplitBillWorkspaceProps) {
   const [bills, setBills] = useState(initialBills);
   const [groups, setGroups] = useState(initialGroups);
@@ -88,18 +81,12 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
     setSelected({ kind: "bill", id: bill.id });
   };
 
-  const handleGroupSaved = (group: SplitBillGroupSummary) => {
+  const handleGroupSaved = (group: SplitBillGroupSummary, people: SplitBillPersonSummary[] = []) => {
     setGroups((current) => {
       const next = current.filter((entry) => entry.id !== group.id);
       return [group, ...next];
     });
-    upsertPeople(
-      group.members.map((member) => ({
-        id: member.id,
-        name: member.name,
-        avatarUrl: null,
-      }))
-    );
+    upsertPeople(people);
     setSelected({ kind: "group", id: group.id });
   };
 
@@ -245,40 +232,12 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
 
             {selectedGroup ? (
               <div className="split-bill-detail-modal__body">
-                <div className="split-bill-detail-modal__photo-actions">
-                  {selectedGroup.avatarUrl ? (
-                    <img className="split-bill-detail-modal__avatar" src={selectedGroup.avatarUrl} alt="" />
-                  ) : (
-                    <span className="split-bill-detail-modal__avatar split-bill-detail-modal__avatar--placeholder">
-                      {selectedGroup.name
-                        .split(/\s+/)
-                        .filter(Boolean)
-                        .map((part) => part[0]?.toUpperCase() ?? "")
-                        .join("")
-                        .slice(0, 2) || "?"}
-                    </span>
-                  )}
-                  <div className="split-bill-detail-modal__actions">
-                    <label className="button button-secondary button-small split-bill-detail-modal__file-button">
-                      Change photo
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0] ?? null;
-                          if (!file) {
-                            return;
-                          }
-                          void readFileAsDataUrl(file).then((dataUrl) => void updateGroupAvatar(selectedGroup.id, dataUrl));
-                          event.currentTarget.value = "";
-                        }}
-                      />
-                    </label>
-                    <button className="button button-secondary button-small" type="button" onClick={() => void updateGroupAvatar(selectedGroup.id, null)}>
-                      Remove photo
-                    </button>
-                  </div>
-                </div>
+                <SplitBillAvatarPicker
+                  name={selectedGroup.name}
+                  value={selectedGroup.avatarUrl}
+                  onChange={(value) => void updateGroupAvatar(selectedGroup.id, value)}
+                  defaultToSuggestedAvatar
+                />
                 <p>People: {selectedGroup.members.length}</p>
                 <p>Bills: {bills.filter((bill) => bill.group?.id === selectedGroup.id).length}</p>
                 <p>Total: {buildSummaryTotal(bills.filter((bill) => bill.group?.id === selectedGroup.id))}</p>
@@ -306,40 +265,7 @@ export function SplitBillWorkspace({ bills: initialBills, groups: initialGroups,
 
             {selectedPerson ? (
               <div className="split-bill-detail-modal__body">
-                <div className="split-bill-detail-modal__photo-actions">
-                  {selectedPerson.avatarUrl ? (
-                    <img className="split-bill-detail-modal__avatar" src={selectedPerson.avatarUrl} alt="" />
-                  ) : (
-                    <span className="split-bill-detail-modal__avatar split-bill-detail-modal__avatar--placeholder">
-                      {selectedPerson.name
-                        .split(/\s+/)
-                        .filter(Boolean)
-                        .map((part) => part[0]?.toUpperCase() ?? "")
-                        .join("")
-                        .slice(0, 2) || "?"}
-                    </span>
-                  )}
-                  <div className="split-bill-detail-modal__actions">
-                    <label className="button button-secondary button-small split-bill-detail-modal__file-button">
-                      Change photo
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0] ?? null;
-                          if (!file) {
-                            return;
-                          }
-                          void readFileAsDataUrl(file).then((dataUrl) => void updatePersonAvatar(selectedPerson.id, dataUrl));
-                          event.currentTarget.value = "";
-                        }}
-                      />
-                    </label>
-                    <button className="button button-secondary button-small" type="button" onClick={() => void updatePersonAvatar(selectedPerson.id, null)}>
-                      Remove photo
-                    </button>
-                  </div>
-                </div>
+                <SplitBillAvatarPicker name={selectedPerson.name} value={selectedPerson.avatarUrl} onChange={(value) => void updatePersonAvatar(selectedPerson.id, value)} />
                 <p>Bill count: {bills.filter((bill) => bill.participants.some((participant) => participant.name === selectedPerson.name)).length}</p>
                 <div className="split-bill-detail-modal__list">
                   {bills

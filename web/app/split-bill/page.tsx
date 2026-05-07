@@ -74,6 +74,11 @@ export default async function SplitBillPage() {
     prisma.splitBillPerson.findMany({
       where: { userId: user.id },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        name: true,
+        avatarUrl: true,
+      },
     }),
   ]);
 
