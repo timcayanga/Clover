@@ -9,6 +9,32 @@ import { clearImportActivity, readImportActivity, subscribeImportActivity, type 
 const isCompletedSummary = (activity: ImportActivitySnapshot | null) =>
   Boolean(activity && activity.status === "done" && activity.summary);
 
+const getImportErrorNextSteps = (code: string) => {
+  const normalized = code.trim().toUpperCase();
+
+  if (normalized === "I-107") {
+    return [
+      "Stay on the import screen a little longer, or re-upload the original statement if Clover stops tracking it again.",
+      "If the account details already look right, open the account and continue with any missing rows manually.",
+      "If the transactions still do not appear, add the missing entries in Transactions and use Review to verify the totals.",
+    ];
+  }
+
+  if (normalized === "I-105" || normalized === "I-104") {
+    return [
+      "Re-upload the original PDF or CSV.",
+      "If Clover still stalls, add the missing transactions manually in Transactions.",
+      "If the statement looks off after import, check Review before confirming anything.",
+    ];
+  }
+
+  return [
+    "Re-upload the original PDF or CSV.",
+    "If Clover still stalls, add the missing transactions manually in Transactions.",
+    "If the statement looks off after import, check Review before confirming anything.",
+  ];
+};
+
 export function GlobalImportActivity() {
   const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
 
@@ -45,16 +71,13 @@ export function GlobalImportActivity() {
   const isError = activity.status === "error";
 
   if (isError) {
+    const code = activity.errorCode ?? "I-199";
     return (
       <ImportErrorToast
-        code={activity.errorCode ?? "I-199"}
+        code={code}
         title={activity.detail || "Clover hit an import snag"}
         message={activity.errorMessage ?? "Clover wasn't able to finish this file."}
-        nextSteps={[
-          "Re-upload the original PDF or CSV.",
-          "If Clover still stalls, add the missing transactions manually in Transactions.",
-          "If the statement looks off after import, check Review before confirming anything.",
-        ]}
+        nextSteps={getImportErrorNextSteps(code)}
         onClose={handleClose}
       />
     );

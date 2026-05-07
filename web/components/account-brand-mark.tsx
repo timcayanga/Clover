@@ -108,6 +108,8 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
     const sources = [...new Set([...logoCandidates, accountBrand.fallbackIconSrc].filter((source): source is string => Boolean(source)))];
     for (const source of sources) {
       const image = new Image();
+      image.loading = "eager";
+      image.fetchPriority = "high";
       image.decoding = "async";
       image.src = source;
     }

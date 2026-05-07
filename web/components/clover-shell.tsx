@@ -95,7 +95,7 @@ const sidebarSearchPages: Array<{
   {
     key: "dashboard",
     title: "Home",
-    href: "/dashboard",
+    href: "/home",
     icon: "dashboard",
     detail: "Overview and quick actions.",
     terms: ["dashboard", "overview", "home", "summary"],
@@ -247,7 +247,7 @@ const getSidebarSearchBlob = (account: SidebarSearchAccount) =>
 const formatSidebarMoney = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "MIXED");
 
 const navItems = [
-  { href: "/dashboard", label: "Home", key: "dashboard" as const },
+  { href: "/home", label: "Home", key: "dashboard" as const },
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/recurring", label: "Recurring", key: "recurring" as const },
@@ -508,8 +508,8 @@ export function CloverShell({
   const isMoreMenuOpen = openMenu === "more";
   const shouldShowBackButton =
     !!previousPathname &&
-    !pathname?.startsWith("/dashboard") &&
-    previousPathname !== "/dashboard" &&
+    !pathname?.startsWith("/home") &&
+    previousPathname !== "/home" &&
     previousPathname !== pathname;
   const closeChrome = () => {
     setOpenMenu(null);
@@ -619,7 +619,7 @@ export function CloverShell({
   }, [pathname]);
 
   useEffect(() => {
-    const prefetchTargets = ["/dashboard", "/transactions", "/split-bill", "/more"];
+    const prefetchTargets = ["/home", "/transactions", "/split-bill", "/more"];
 
     for (const href of prefetchTargets) {
       void router.prefetch(href);
@@ -924,7 +924,7 @@ export function CloverShell({
     accountSearchResults[0]?.href ??
     searchResults.ticker?.href ??
     pageSearchResults[0]?.href ??
-    "/dashboard";
+    "/home";
 
   const notificationCount = notifications.length;
   const navigateTo = (href: string) => {
@@ -964,11 +964,11 @@ export function CloverShell({
           <button
             type="button"
             aria-label="Clover home"
-            aria-current={pathname === "/dashboard" ? "page" : undefined}
+            aria-current={pathname === "/home" ? "page" : undefined}
             className="sidebar-brand-link sidebar-brand-link--centered"
             onClick={() => {
-              if (pathname !== "/dashboard") {
-                navigateTo("/dashboard");
+              if (pathname !== "/home") {
+                navigateTo("/home");
               }
             }}
           >
@@ -1329,7 +1329,7 @@ export function CloverShell({
             role="menuitem"
             onClick={() => {
               setIsQuickAddOpen(false);
-              router.push("/dashboard?import=1");
+              router.push("/home?import=1");
             }}
           >
             <strong>Import Files</strong>
@@ -1340,12 +1340,12 @@ export function CloverShell({
 
       <nav className="shell-bottom-nav glass" aria-label="Primary mobile navigation">
         <Link
-          className={`shell-bottom-nav__item${active === "dashboard" || pathname?.startsWith("/dashboard") ? " is-active" : ""}`}
-          aria-current={active === "dashboard" || pathname?.startsWith("/dashboard") ? "page" : undefined}
-          href="/dashboard"
+          className={`shell-bottom-nav__item${active === "dashboard" || pathname?.startsWith("/home") ? " is-active" : ""}`}
+          aria-current={active === "dashboard" || pathname?.startsWith("/home") ? "page" : undefined}
+          href="/home"
           prefetch
-          onMouseEnter={() => prefetchNavTarget("/dashboard")}
-          onTouchStart={() => prefetchNavTarget("/dashboard")}
+          onMouseEnter={() => prefetchNavTarget("/home")}
+          onTouchStart={() => prefetchNavTarget("/home")}
         >
           <span className="shell-bottom-nav__icon" aria-hidden="true">
             <MenuIcon name="dashboard" />

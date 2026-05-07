@@ -3069,7 +3069,7 @@ body.transactions-manual-open .shell-quick-add-button {
     z-index: 111;
     display: grid;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    align-items: end;
+    align-items: center;
     gap: 4px;
     padding: 10px 8px 8px;
     border-radius: 24px;
@@ -3131,7 +3131,7 @@ body.transactions-manual-open .shell-quick-add-button {
   .shell-bottom-nav__add {
     width: 54px;
     height: 54px;
-    margin: -24px auto 0;
+    margin: 0 auto;
     border-radius: 999px;
     grid-column: 3;
     align-self: center;
@@ -12778,6 +12778,15 @@ body[data-clover-page-modal] .app-shell {
   font-size: 11px;
 }
 
+.import-upload-dock__phase {
+  margin: 4px 0 2px;
+  color: var(--accent-hover);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .page-file-drop-zone {
   position: fixed;
   inset: 12px;
@@ -12887,6 +12896,12 @@ body[data-clover-drop-active="true"] .app-shell {
 body[data-clover-drop-active="true"] .sidebar,
 body[data-clover-drop-active="true"] .shell-quick-add-button {
   pointer-events: none;
+  z-index: 0;
+}
+
+body[data-clover-drop-active="true"] .page-file-drop-zone {
+  inset: 0;
+  z-index: 7000;
 }
 
 .accounts-import-close {

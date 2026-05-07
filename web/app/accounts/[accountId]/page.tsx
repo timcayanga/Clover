@@ -663,6 +663,9 @@ function AccountDetailPageContent() {
       const activeWorkspaceId = selectedWorkspaceId ?? "";
       const cachedAccountsWorkspace = getCachedAccountsWorkspace(activeWorkspaceId);
       const cachedTransactionsWorkspace = getCachedTransactionsWorkspace(activeWorkspaceId);
+      const cachedCategories = Array.isArray(cachedTransactionsWorkspace?.categories)
+        ? (cachedTransactionsWorkspace.categories as Category[])
+        : [];
       const cachedAccountLookup = findCachedImportedAccount(accountId);
       const cachedWorkspaceId = cachedAccountLookup?.workspaceId ?? activeWorkspaceId;
       let cachedTransactions: Transaction[] = [];
@@ -775,6 +778,7 @@ function AccountDetailPageContent() {
           setAccount(cachedAccount);
           setTransactions(cachedTransactions);
           setImportFiles(cachedImportFiles);
+          setCategories(cachedCategories);
           setTransactionPage(1);
           setTransactionTotalCount(accountTransactionsLookup?.totalCount ?? cachedTransactions.length);
           setTransactionsError(null);
@@ -934,15 +938,19 @@ function AccountDetailPageContent() {
 
             if (categoriesResponse.ok) {
               const categoriesPayload = (await categoriesResponse.json()) as { categories?: Category[] } | null;
-              setCategories(Array.isArray(categoriesPayload?.categories) ? categoriesPayload.categories : []);
+              const nextCategories =
+                Array.isArray(categoriesPayload?.categories) && categoriesPayload.categories.length > 0
+                  ? categoriesPayload.categories
+                  : cachedCategories;
+              setCategories(nextCategories);
             } else {
-              setCategories([]);
+              setCategories((current) => (current.length > 0 ? current : cachedCategories));
             }
           })
           .catch(() => {
             if (!cancelled) {
               setImportFiles([]);
-              setCategories([]);
+              setCategories((current) => (current.length > 0 ? current : cachedCategories));
             }
           });
 
@@ -976,7 +984,7 @@ function AccountDetailPageContent() {
                 : [];
               const mergedTransactions =
                 nextTransactions.length > 0
-                  ? mergeImportedWorkspaceTransactions(cachedTransactions, nextTransactions)
+                  ? mergeImportedWorkspaceTransactions(cachedTransactions.length > 0 ? cachedTransactions : [], nextTransactions)
                   : cachedTransactions.length > 0
                     ? cachedTransactions
                     : [];
@@ -996,7 +1004,7 @@ function AccountDetailPageContent() {
           .catch(() => {
             if (!cancelled) {
               if (cachedTransactions.length > 0) {
-                setTransactions(cachedTransactions);
+                setTransactions((current) => (current.length > 0 ? current : cachedTransactions));
                 setTransactionTotalCount(Math.max(cachedTransactions.length, accountTransactionsLookup?.totalCount ?? cachedTransactions.length));
                 setTransactionsError(null);
                 setMessage("");
@@ -1132,6 +1140,11 @@ function AccountDetailPageContent() {
     () => buildImportSummaries(transactions, importFiles),
     [importFiles, transactions]
   );
+  const cachedImportedAccount = useMemo(
+    () => (account ? (findCachedImportedAccount(account.id)?.account as Account | null) ?? null : null),
+    [account]
+  );
+  const cachedImportedBalance = typeof cachedImportedAccount?.balance === "string" ? cachedImportedAccount.balance.trim() : "";
 
   const accountBrand = useMemo(
     () => {
@@ -1171,7 +1184,7 @@ function AccountDetailPageContent() {
         checkpoint?.endingBalance !== null && checkpoint?.endingBalance !== undefined
           ? String(checkpoint.endingBalance)
           : null;
-      const currentAccountBalance = parseAmount(account?.balance ?? null);
+      const currentAccountBalance = parseAmount(account?.balance ?? cachedImportedBalance ?? null);
       const currentAccountBalanceIsNonZero =
         currentAccountBalance !== null && Number.isFinite(currentAccountBalance) && currentAccountBalance !== 0;
       const shouldPreserveImportedBalance =
@@ -1183,16 +1196,16 @@ function AccountDetailPageContent() {
       const reconciledValue = checkpointBalance && !(shouldPreserveImportedBalance && currentAccountBalanceIsNonZero)
         ? checkpointBalance
         : shouldPreserveImportedBalance
-          ? account?.balance ?? null
+          ? account?.balance ?? cachedImportedBalance ?? null
           : deriveReconciledBalance({
-              balance: account?.balance ?? null,
+              balance: account?.balance ?? cachedImportedBalance ?? null,
               transactions,
               checkpoints: checkpoint ? [checkpoint] : [],
             });
 
       return normalizeAccountBalance(account?.type ?? null, parseAmount(reconciledValue));
     },
-    [account?.balance, account?.source, account?.type, latestCheckpoint, transactions]
+    [account?.balance, account?.source, account?.type, cachedImportedBalance, latestCheckpoint, transactions]
   );
   const checkpointBalance = latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
     ? String(latestCheckpoint.endingBalance)
@@ -1248,8 +1261,8 @@ function AccountDetailPageContent() {
   const displayBalance =
     isPendingBalance && hasMeaningfulBalance(checkpointBalance)
       ? checkpointBalance
-      : account?.source === "upload" && !hasMeaningfulBalance(account?.balance) && stableBalanceRef.current
-        ? stableBalanceRef.current
+      : account?.source === "upload" && !hasMeaningfulBalance(account?.balance) && (stableBalanceRef.current || cachedImportedBalance)
+        ? stableBalanceRef.current || cachedImportedBalance
         : currentBalance.toString();
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {

@@ -20,7 +20,7 @@ import { selectedWorkspaceKey } from "@/lib/workspace-selection";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
-  title: "Dashboard",
+  title: "Home",
 };
 
 const currencyFormatter = new Intl.NumberFormat("en-PH", {
@@ -406,7 +406,7 @@ async function resolveDashboardWorkspaceSummary(user: Awaited<ReturnType<typeof 
   }
 
   if (!workspaceSummary) {
-    redirect("/dashboard");
+    redirect("/home");
   }
 
   return workspaceSummary;

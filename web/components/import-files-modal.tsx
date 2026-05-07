@@ -788,6 +788,40 @@ const combineUploadInsightsSummaries = (summaries: UploadInsightsSummary[]): Upl
   };
 };
 
+const friendlyImportPhaseLabel = (label: string, fileName?: string | null) => {
+  const fileSuffix = fileName ? ` ${fileName}` : "";
+
+  switch (label) {
+    case "Starting upload":
+    case "Uploading the file":
+      return "Uploading file";
+    case "Password needed":
+      return "Password needed";
+    case "Waiting for account details":
+    case "Waiting for statement identity":
+    case "Reading locally":
+    case "Reading statement details":
+      return "Reading account details";
+    case "Preview ready":
+      return "Account details ready";
+    case "Queued for background processing":
+      return "Queued for background processing";
+    case "Finalizing in background":
+    case "Finalizing import":
+      return "Reconciling imported data";
+    case "Parsing in background":
+      return "Identifying transactions";
+    case "Import failed":
+      return "Import failed";
+    case "Done":
+      return "Import complete";
+    case "Queued":
+      return "Queued";
+    default:
+      return `${label}${fileSuffix}`.trim();
+  }
+};
+
 const friendlyImportProgressLabel = (label: string, fileName?: string | null) => {
   const fileSuffix = fileName ? ` ${fileName}` : "";
 
@@ -805,14 +839,14 @@ const friendlyImportProgressLabel = (label: string, fileName?: string | null) =>
     case "Reading locally":
       return "Clover is reading the document locally";
     case "Preview ready":
-      return "Clover found a document";
+      return "Clover found the account details";
     case "Queued for background processing":
       return "Clover is lining up the rest";
     case "Finalizing in background":
     case "Finalizing import":
-      return "Clover is wrapping things up";
+      return "Clover is reconciling totals and saving the imported data";
     case "Parsing in background":
-      return "Clover is reading the account details, balances, and transactions";
+      return "Clover is identifying transactions and categories";
     case "Reading statement details":
       return "Clover is reading the account details, balances, and transactions";
     case "Import failed":
@@ -4328,16 +4362,8 @@ export function ImportFilesModal({
         fileTotal={items.length}
         completedFiles={completedFileCount}
         progress={overallProgress}
-        detail={
-          friendlyImportProgressLabel(
-            activeProgressItem
-              ? activeProgressItem.progressLabel
-              : completedFileCount > 0
-                ? "Done"
-                : "Queued",
-            activeProgressItem?.file.name ?? null
-          )
-        }
+        detail={friendlyImportProgressLabel(activeProgressItem ? activeProgressItem.progressLabel : completedFileCount > 0 ? "Done" : "Queued", activeProgressItem?.file.name ?? null)}
+        phaseLabel={activeProgressItem ? friendlyImportPhaseLabel(activeProgressItem.progressLabel, activeProgressItem.file.name) : null}
         onClose={onClose}
         />
     ) : (

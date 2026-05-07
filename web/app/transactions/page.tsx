@@ -1637,6 +1637,8 @@ function TransactionsPageContent() {
 
     for (const source of sources) {
       const image = new Image();
+      image.loading = "eager";
+      image.fetchPriority = "high";
       image.decoding = "async";
       image.src = source;
     }
@@ -1723,7 +1725,13 @@ function TransactionsPageContent() {
       if (accountsResponse.ok) {
         const payload = await accountsResponse.json();
         const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
-        setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current));
+        const cachedWorkspaceAccounts = getCachedTransactionsWorkspace(workspaceId)?.accounts as Account[] | undefined;
+        setAccounts((current) =>
+          mergeAccountsWithOptimisticImports(
+            fetchedAccounts,
+            current.length > 0 ? current : cachedWorkspaceAccounts ?? []
+          )
+        );
       }
 
       if (categoriesResponse.ok) {
@@ -1821,9 +1829,18 @@ function TransactionsPageContent() {
 
       const payload = await response.json();
       const fetchedTransactions = Array.isArray(payload.transactions) ? payload.transactions : [];
+      const cachedWorkspaceTransactions = getCachedTransactionsWorkspace(workspaceId)?.transactions as Transaction[] | undefined;
       const mergedTransactions = options?.append
-        ? appendUniqueTransactions(transactionsRef.current, fetchedTransactions)
-        : fetchedTransactions;
+        ? appendUniqueTransactions(
+            transactionsRef.current.length > 0
+              ? transactionsRef.current
+              : cachedWorkspaceTransactions ?? [],
+            fetchedTransactions
+          )
+        : mergeImportedWorkspaceTransactions(
+            transactionsRef.current.length > 0 ? transactionsRef.current : cachedWorkspaceTransactions ?? [],
+            fetchedTransactions
+          );
       const responseCurrencyCodes = Array.isArray(payload.currencyCodes)
         ? payload.currencyCodes.map((value: unknown) => formatCurrencyCode(String(value ?? ""))).filter(Boolean)
         : [];

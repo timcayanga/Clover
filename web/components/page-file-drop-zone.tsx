@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 type PageFileDropZoneProps = {
   enabled?: boolean;
@@ -122,7 +123,12 @@ export function PageFileDropZone({
     return null;
   }
 
-  return (
+  const portalTarget = typeof document === "undefined" ? null : document.body;
+  if (!portalTarget) {
+    return null;
+  }
+
+  return createPortal(
     <div className="page-file-drop-zone" aria-hidden="true">
       <div className="page-file-drop-zone__frame" />
       <div className="page-file-drop-zone__corner page-file-drop-zone__corner--tl" />
@@ -137,6 +143,7 @@ export function PageFileDropZone({
         <strong>{title}</strong>
         <span>{subtitle}</span>
       </div>
-    </div>
+    </div>,
+    portalTarget
   );
 }
