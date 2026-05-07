@@ -4774,7 +4774,7 @@ function TransactionsPageContent() {
           }}
           title="Download"
           aria-label="Download transactions"
-          >
+        >
           <span className="button-icon" aria-hidden="true">
             <ActionIcon name="download" />
           </span>
