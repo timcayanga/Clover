@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
 
 type CategoryBrandMarkProps = {
@@ -65,6 +66,14 @@ export function CategoryBrandMark({ categoryName, size = 24, radius = 8, classNa
   const useLightForeground = getColorLuminance(tone.backgroundColor) < 0.28;
   const iconSrc = getCategoryIconSrc(categoryName);
 
+  useEffect(() => {
+    const image = new Image();
+    image.loading = "eager";
+    image.fetchPriority = "high";
+    image.decoding = "async";
+    image.src = iconSrc;
+  }, [iconSrc]);
+
   return (
     <span
       className={`category-brand-mark${useLightForeground ? " is-light-foreground" : ""}${className ? ` ${className}` : ""}`}
@@ -78,7 +87,7 @@ export function CategoryBrandMark({ categoryName, size = 24, radius = 8, classNa
       title={categoryName}
       aria-hidden="true"
     >
-      <img src={iconSrc} alt="" aria-hidden="true" loading="lazy" />
+      <img src={iconSrc} alt="" aria-hidden="true" loading="eager" fetchPriority="high" decoding="async" />
     </span>
   );
 }

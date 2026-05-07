@@ -1240,6 +1240,19 @@ function AccountDetailPageContent() {
     !hasMeaningfulBalance(checkpointBalance) &&
     !hasLoadedTransactions &&
     (!latestCheckpoint || latestCheckpoint.status !== "reconciled");
+  const stableDisplayBalance = useMemo(() => {
+    const candidates = [stableBalanceRef.current, cachedImportedBalance, account?.balance, checkpointBalance, String(currentBalance)];
+    for (const candidate of candidates) {
+      const normalized = typeof candidate === "string" ? candidate.trim() : "";
+      if (!hasMeaningfulBalance(normalized)) {
+        continue;
+      }
+
+      return normalized;
+    }
+
+    return String(currentBalance);
+  }, [account?.balance, cachedImportedBalance, checkpointBalance, currentBalance]);
   useEffect(() => {
     if (!account || account.source !== "upload") {
       stableBalanceRef.current = null;
@@ -1261,8 +1274,8 @@ function AccountDetailPageContent() {
   const displayBalance =
     isPendingBalance && hasMeaningfulBalance(checkpointBalance)
       ? checkpointBalance
-      : account?.source === "upload" && !hasMeaningfulBalance(account?.balance) && (stableBalanceRef.current || cachedImportedBalance)
-        ? stableBalanceRef.current || cachedImportedBalance
+      : !hasMeaningfulBalance(account?.balance) && stableDisplayBalance
+        ? stableDisplayBalance
         : currentBalance.toString();
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {

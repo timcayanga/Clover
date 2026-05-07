@@ -794,7 +794,7 @@ const friendlyImportPhaseLabel = (label: string, fileName?: string | null) => {
   switch (label) {
     case "Starting upload":
     case "Uploading the file":
-      return "Uploading file";
+      return "Uploading statement";
     case "Password needed":
       return "Password needed";
     case "Waiting for account details":
@@ -827,28 +827,28 @@ const friendlyImportProgressLabel = (label: string, fileName?: string | null) =>
 
   switch (label) {
     case "Starting upload":
-      return "Clover is getting your file ready";
+      return "Clover is preparing your statement";
     case "Uploading the file":
-      return "Clover is uploading the file";
+      return "Clover is sending the statement to the server";
     case "Password needed":
       return "This file needs a password";
     case "Waiting for account details":
-      return "Clover is reading the bank name and account number";
+      return "Clover is extracting the account name, number, and balance";
     case "Waiting for statement identity":
-      return "Clover is reading the document";
+      return "Clover is reading the statement";
     case "Reading locally":
-      return "Clover is reading the document locally";
+      return "Clover is reading the statement locally";
     case "Preview ready":
       return "Clover found the account details";
     case "Queued for background processing":
       return "Clover is lining up the rest";
     case "Finalizing in background":
     case "Finalizing import":
-      return "Clover is reconciling totals and saving the imported data";
+      return "Clover is reconciling totals and saving the import";
     case "Parsing in background":
       return "Clover is identifying transactions and categories";
     case "Reading statement details":
-      return "Clover is reading the account details, balances, and transactions";
+      return "Clover is reading the account details, balance, and transactions";
     case "Import failed":
       return "That file needs another try";
     case "Done":

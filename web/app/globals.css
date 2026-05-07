@@ -11694,7 +11694,7 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 4px;
   justify-items: end;
   min-width: min(100%, 260px);
-  margin-right: 72px;
+  margin-right: 104px;
   flex: 0 0 auto;
 }
 
@@ -22087,6 +22087,12 @@ button.accounts-detail__transaction-head-cell {
   .transactions-mobile-view {
     display: grid;
     gap: 12px;
+    padding-bottom: calc(160px + env(safe-area-inset-bottom));
+  }
+
+  .transactions-page .content-body {
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .transactions-layout,
