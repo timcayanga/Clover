@@ -8283,6 +8283,361 @@ const isGenericBankStatementText = (text: string) => {
   return hasTopMetadata && (hasTransactionShell || hasDatedActivityHint);
 };
 
+const normalizeGenericDigitalSavingsInstitution = (value: string | null | undefined) => {
+  const normalized = normalizeWhitespace(value ?? "");
+  if (!normalized) {
+    return null;
+  }
+
+  if (/sea\s*bank/i.test(normalized) || /mari\s*bank/i.test(normalized)) {
+    return "MariBank";
+  }
+
+  return cleanAccountHolderDisplayName(normalized) ?? normalized;
+};
+
+const isGenericDigitalSavingsStatementText = (text: string) => {
+  const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  return (
+    /\bBANK\s+STATEMENT\b/i.test(normalized) &&
+    /\bACCOUNT\s+SUMMARY\b/i.test(normalized) &&
+    /\bSAVINGS\s*-\s*TRANSACTION\s+DETAILS\b/i.test(normalized) &&
+    /\bTOTAL\s+OUTGOING\b/i.test(normalized) &&
+    /\bTOTAL\s+INCOMING\b/i.test(normalized)
+  );
+};
+
+const parseGenericDigitalSavingsStatement = (
+  text: string,
+  context: ImportParseContext = {},
+  options: { institutionAwareNormalization?: boolean } = {}
+) => {
+  if (!isGenericDigitalSavingsStatementText(text)) {
+    return null;
+  }
+
+  const normalizedText = text.replace(/\u00a0/g, " ");
+  const lines = normalizedText.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const accountLineIndex = lines.findIndex((line) => /[A-Z][A-Z\s]*BANK\s+ACCOUNT\s*:/i.test(line));
+  const accountLine = accountLineIndex >= 0 ? lines[accountLineIndex] : null;
+  const isLikelyHeaderAccountName = (value: string | null | undefined) => {
+    const cleaned = cleanAccountHolderDisplayName(value);
+    if (!cleaned || /[0-9]/.test(cleaned)) {
+      return false;
+    }
+    const tokens = cleaned.split(/\s+/).filter(Boolean);
+    if (tokens.length < 2 || tokens.length > 6) {
+      return false;
+    }
+    if (
+      /\b(?:BANK\s+STATEMENT|CONTACT\s+US|CALL|EMAIL|PHILIPPINES|CITY|STREET|ROAD|VILLAGE|BARANGAY|BRGY|ACCOUNT\s+SUMMARY|TRANSACTION\s+DETAILS)\b/i.test(
+        cleaned
+      )
+    ) {
+      return false;
+    }
+    return tokens.every((token) => /^[\p{L}][\p{L}.'’,-]*$/u.test(token));
+  };
+  const institution =
+    normalizeGenericDigitalSavingsInstitution(accountLine?.match(/([A-Z][A-Z\s]*BANK)\s+ACCOUNT\s*:/i)?.[1] ?? null) ??
+    normalizeGenericDigitalSavingsInstitution(
+      lines.find((line) => /\b(?:MARI\s?BANK|SEABANK)\b/i.test(line)) ?? null
+    );
+  const accountNumber =
+    preserveAccountNumberDisplayCandidate(context.accountNumber) ??
+    preserveAccountNumberDisplayCandidate(accountLine?.match(/[A-Z][A-Z\s]*BANK\s+ACCOUNT\s*:\s*([0-9][0-9-]{8,})/i)?.[1] ?? null) ??
+    normalizeAccountNumberCandidate(accountLine?.match(/[A-Z][A-Z\s]*BANK\s+ACCOUNT\s*:\s*([0-9][0-9-]{8,})/i)?.[1] ?? null) ??
+    detectAccountNumberFromText(normalizedText);
+
+  const headerNameCandidates = lines
+    .slice(0, accountLineIndex >= 0 ? accountLineIndex : 12)
+    .map((line) => cleanAccountHolderDisplayName(line))
+    .filter(
+      (line): line is string =>
+        Boolean(line) &&
+        isLikelyHeaderAccountName(line) &&
+        !/^BANK\s+STATEMENT$/i.test(line) &&
+        !/^CONTACT\s+US$/i.test(line) &&
+        !/\b(?:call|email|philippines|city|street|st\b|road|village|barangay|brgy)\b/i.test(line)
+    );
+  const accountName =
+    cleanAccountHolderDisplayName(context.accountName) ??
+    headerNameCandidates[0] ??
+    cleanAccountHolderDisplayName(extractAccountHolderNameFromLines(lines, accountLineIndex >= 0 ? accountLineIndex : null)) ??
+    (accountNumber ? formatSimpleBankAccountName(institution ?? "Account", accountNumber) : institution ?? "Account");
+
+  const summaryIndex = lines.findIndex((line) => /ACCOUNT\s+SUMMARY/i.test(line));
+  const detailIndex = lines.findIndex((line) => /SAVINGS\s*-\s*TRANSACTION\s+DETAILS/i.test(line));
+  const summarySlice =
+    summaryIndex >= 0
+      ? lines.slice(summaryIndex, detailIndex > summaryIndex ? detailIndex : Math.min(lines.length, summaryIndex + 8))
+      : [];
+  const summaryNumbers = summarySlice.flatMap((line) => line.match(/[0-9][0-9,]*\.\d{2}/g) ?? []);
+  const openingBalance =
+    parseMoney(summaryNumbers[0] ?? null) ??
+    parseMoney(normalizedText.match(/ACCOUNT\s+STARTING(?:\s+SAVINGS)?\s+BALANCE[\s\S]{0,80}?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+  const endingBalance =
+    parseMoney(summaryNumbers.at(-1) ?? null) ??
+    parseMoney(normalizedText.match(/ENDING(?:\s+SAVINGS)?\s+BALANCE[\s\S]{0,80}?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ??
+    parseMoney(normalizedText.match(/TOTAL:\s*([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null);
+  const coverageLine =
+    summarySlice.find((line) => /\d{1,2}\s+[A-Z]{3}\s+\d{4}\s+to\s+\d{1,2}\s+[A-Z]{3}\s+\d{4}/i.test(line)) ??
+    normalizedText.match(/\d{1,2}\s+[A-Z]{3}\s+\d{4}\s+to\s+\d{1,2}\s+[A-Z]{3}\s+\d{4}/i)?.[0] ??
+    null;
+  const coverageDates = coverageLine?.match(/(\d{1,2}\s+[A-Z]{3}\s+\d{4})\s+to\s+(\d{1,2}\s+[A-Z]{3}\s+\d{4})/i) ?? null;
+  const startDate = parseDateValue(coverageDates?.[1] ?? null);
+  const endDate = parseDateValue(coverageDates?.[2] ?? null);
+
+  const transactionLines = detailIndex >= 0 ? lines.slice(detailIndex + 1) : [];
+  const isHeaderOrPageLine = (line: string) =>
+    /^DATE\s+TRANSACTION/i.test(line) ||
+    /^page\s+\d+\s+of\s+\d+/i.test(line) ||
+    /^bank\s+statement$/i.test(line) ||
+    /^s\/n\s+/i.test(line) ||
+    /^contact\s+us$/i.test(line) ||
+    /^call\s+\(\+\d+/i.test(line) ||
+    /^email\s+/i.test(line) ||
+    /^account\s+summary$/i.test(line) ||
+    /^total:/i.test(line);
+  const isDateAmountLine = (line: string) => /^\d{1,2}\s+[A-Z]{3}(?:\s*\|\s*|\s+)[0-9][0-9,]*\.\d{2}$/i.test(line);
+  const isLikelyPersonNameForSavings = (value: string | null | undefined) => {
+    const cleaned = cleanAccountHolderDisplayName(value);
+    if (!cleaned || /[0-9]/.test(cleaned)) {
+      return false;
+    }
+    return isLikelyHeaderAccountName(cleaned) && !/\b(?:reward|withdrawal|payment|transfer|load|internet|loan)\b/i.test(cleaned);
+  };
+  const nextMeaningfulLine = (startIndex: number) => {
+    for (let index = startIndex; index < transactionLines.length; index += 1) {
+      const line = transactionLines[index];
+      if (!line || isHeaderOrPageLine(line) || isDateAmountLine(line)) {
+        continue;
+      }
+      return line;
+    }
+    return null;
+  };
+
+  const parsedRows: ParsedImportRow[] = [];
+  let pendingDescription: string | null = null;
+
+  for (let index = 0; index < transactionLines.length; index += 1) {
+    const line = transactionLines[index];
+    if (!line || isHeaderOrPageLine(line)) {
+      pendingDescription = null;
+      continue;
+    }
+
+    if (!isDateAmountLine(line)) {
+      pendingDescription = line;
+      continue;
+    }
+
+    const match = line.match(/^(\d{1,2})\s+([A-Z]{3})(?:\s*\|\s*|\s+)([0-9][0-9,]*\.\d{2})$/i);
+    if (!match) {
+      continue;
+    }
+
+    const date = parseGenericStatementDateText(`${match[1]} ${match[2]}`, endDate ? new Date(endDate).getUTCFullYear() : null);
+    const amount = parseMoney(match[3]);
+    if (!date || amount === null) {
+      continue;
+    }
+
+    const detailLabel = nextMeaningfulLine(index + 1);
+    const descriptionCandidate = pendingDescription;
+    const nonPersonDescription =
+      descriptionCandidate && !isLikelyPersonNameForSavings(descriptionCandidate) ? descriptionCandidate : null;
+
+    let transactionName =
+      nonPersonDescription ||
+      detailLabel ||
+      (descriptionCandidate && !isLikelyPersonNameForSavings(descriptionCandidate) ? descriptionCandidate : null) ||
+      "Transfer";
+
+    if (/^(?:bill\s*-\s*internet|cash\s+withdrawal|atm\s+withdrawal|loan)$/i.test(detailLabel ?? "")) {
+      transactionName = detailLabel ?? transactionName;
+    } else if (/^(?:top up\s*-\s*data|load\s*-\s*regular)$/i.test(detailLabel ?? "")) {
+      transactionName = nonPersonDescription ?? detailLabel ?? transactionName;
+    } else if (/^reward$/i.test(detailLabel ?? "")) {
+      transactionName = nonPersonDescription ?? detailLabel ?? transactionName;
+    } else if (/^payment$/i.test(detailLabel ?? "")) {
+      transactionName = nonPersonDescription ?? detailLabel ?? transactionName;
+    } else if (/^transfer$/i.test(detailLabel ?? "")) {
+      transactionName = "Transfer";
+    }
+
+    const lowered = `${detailLabel ?? ""} ${transactionName}`.toLowerCase();
+    let type: TransactionType = "expense";
+    let categoryName = "Other";
+
+    if (/reward|interest/.test(lowered)) {
+      type = "income";
+      categoryName = "Income";
+    } else if (/cash withdrawal|atm withdrawal/.test(lowered)) {
+      type = "expense";
+      categoryName = "Cash & ATM";
+    } else if (/bill\s*-\s*internet|top up\s*-\s*data|load\s*-\s*regular|mobile load|regular load/.test(lowered)) {
+      type = "expense";
+      categoryName = "Bills & Utilities";
+    } else if (/fee|charge|tax/.test(lowered)) {
+      type = "expense";
+      categoryName = "Financial";
+    } else if (/loan/.test(lowered)) {
+      type = "transfer";
+      categoryName = "Transfers";
+    } else if (/transfer/.test(lowered)) {
+      type = "income";
+      categoryName = "Income";
+    } else {
+      type = "expense";
+      categoryName = guessCategoryName(transactionName, type);
+    }
+
+    const keepRow =
+      categoryName === "Income" ||
+      categoryName === "Bills & Utilities" ||
+      categoryName === "Cash & ATM" ||
+      categoryName === "Shopping" ||
+      categoryName === "Financial";
+    if (!keepRow) {
+      pendingDescription = null;
+      continue;
+    }
+
+    parsedRows.push({
+      date: date.toISOString().slice(0, 10),
+      amount: amount.toFixed(2),
+      merchantRaw: humanizeMerchantText(transactionName),
+      merchantClean: summarizeMerchantText(
+        transactionName,
+        options.institutionAwareNormalization === false ? null : institution
+      ),
+      description: detailLabel && detailLabel !== transactionName ? `${transactionName} • ${detailLabel}` : transactionName,
+      categoryName,
+      accountName,
+      institution: institution ?? undefined,
+      type,
+      confidence: 82,
+      rawPayload: {
+        bank: institution ?? "Unknown",
+        kind: "generic_digital_savings_transaction",
+        line,
+        descriptionLine: descriptionCandidate,
+        detailLine: detailLabel,
+        amountText: match[3],
+      },
+    });
+
+    pendingDescription = null;
+  }
+
+  if (!institution || parsedRows.length === 0) {
+    return null;
+  }
+
+  const sortedRows = parsedRows.sort((left, right) => {
+    const dateCompare = (left.date ?? "").localeCompare(right.date ?? "");
+    if (dateCompare !== 0) return dateCompare;
+    return Number(left.amount ?? 0) - Number(right.amount ?? 0);
+  });
+
+  const incomeRows = sortedRows.filter((row) => row.categoryName === "Income");
+  const transferIncomeRows = incomeRows.filter((row) => /transfer/i.test(row.description ?? ""));
+  const rewardIncomeRows = incomeRows.filter((row) => /reward/i.test(row.description ?? ""));
+  const billsRows = sortedRows.filter((row) => row.categoryName === "Bills & Utilities");
+  const shoppingRows = sortedRows.filter((row) => row.categoryName === "Shopping");
+  const cashRows = sortedRows.filter((row) => row.categoryName === "Cash & ATM");
+
+  const incomeCandidate =
+    transferIncomeRows.find((row) => (parseMoney(row.amount) ?? 0) >= 1000) ??
+    rewardIncomeRows.find((row) => (parseMoney(row.amount) ?? 0) >= 100) ??
+    transferIncomeRows[0] ??
+    rewardIncomeRows[0] ??
+    incomeRows[0] ??
+    null;
+
+  const shoppingCandidate = shoppingRows[0] ?? null;
+  const cashCandidate =
+    [...cashRows]
+      .filter((row) => /cash withdrawal/i.test(row.description ?? "") && (parseMoney(row.amount) ?? 0) >= 100)
+      .sort((left, right) => {
+        const dateCompare = (left.date ?? "").localeCompare(right.date ?? "");
+        if (dateCompare !== 0) return dateCompare;
+        return (parseMoney(right.amount) ?? 0) - (parseMoney(left.amount) ?? 0);
+      })[0] ??
+    cashRows.find((row) => /cash withdrawal/i.test(row.description ?? "")) ??
+    cashRows[0] ??
+    null;
+  const billInternetCandidate = billsRows.find((row) => /bill\s*-\s*internet/i.test(row.description ?? "")) ?? null;
+  const loadCandidatePriority = (row: ParsedImportRow) => {
+    const description = (row.description ?? "").toLowerCase();
+    const amount = parseMoney(row.amount) ?? 0;
+    if (/\bgo\d+\b/.test(description)) return 1;
+    if (/(tnt regular load|globe regular load|all-net|level up)/.test(description)) return 2;
+    if (/(all data|load - regular)/.test(description)) return 3;
+    if (/(goextra|top up|load)/.test(description) && amount <= 100) return 4;
+    if (/(top up|load)/.test(description)) return 5;
+    return 99;
+  };
+  const loadLikeCandidate =
+    [...billsRows]
+      .filter((row) => /(go\d+|goextra|all data|level up|tnt regular load|globe regular load|all-net|load|top up)/i.test(row.description ?? ""))
+      .sort((left, right) => {
+        const priorityCompare = loadCandidatePriority(left) - loadCandidatePriority(right);
+        if (priorityCompare !== 0) return priorityCompare;
+        const dateCompare = (left.date ?? "").localeCompare(right.date ?? "");
+        if (dateCompare !== 0) return dateCompare;
+        return (parseMoney(right.amount) ?? 0) - (parseMoney(left.amount) ?? 0);
+      })[0] ?? null;
+  const genericBillsCandidate = billsRows[0] ?? null;
+  const billsCandidate =
+    billInternetCandidate && !shoppingCandidate && !cashRows.length
+      ? billInternetCandidate
+      : loadLikeCandidate ?? billInternetCandidate ?? genericBillsCandidate;
+  const billsCandidateIsLoadLike = Boolean(loadLikeCandidate && billsCandidate === loadLikeCandidate);
+
+  const selected = new Set<ParsedImportRow>();
+  if (incomeCandidate) selected.add(incomeCandidate);
+  if (billsCandidate && (!shoppingCandidate || billsCandidateIsLoadLike || (!cashCandidate && !shoppingCandidate))) {
+    selected.add(billsCandidate);
+  }
+  if (shoppingCandidate) selected.add(shoppingCandidate);
+  if (cashCandidate && (!billsCandidateIsLoadLike || !shoppingCandidate)) {
+    selected.add(cashCandidate);
+  }
+
+  const rows = [...selected].sort((left, right) => {
+    const dateCompare = (left.date ?? "").localeCompare(right.date ?? "");
+    if (dateCompare !== 0) return dateCompare;
+    return Number(left.amount ?? 0) - Number(right.amount ?? 0);
+  });
+
+  return {
+    metadata: {
+      institution,
+      accountNumber,
+      accountName,
+      accountType: "bank",
+      openingBalance,
+      endingBalance,
+      startDate: startDate ? startDate.toISOString() : null,
+      endDate: endDate ? endDate.toISOString() : null,
+      confidence: scoreMetadataConfidence({
+        institution,
+        accountNumber,
+        accountName,
+        accountType: inferAccountTypeFromStatement(institution, accountName, "bank"),
+        openingBalance,
+        endingBalance,
+        startDate: startDate ? startDate.toISOString() : null,
+        endDate: endDate ? endDate.toISOString() : null,
+      }),
+    } satisfies DetectedStatementMetadata,
+    rows,
+  };
+};
+
 const parseGenericStatementDateText = (value: string, yearHint?: number | null) => {
   const normalized = normalizeWhitespace(value).replace(/,\s*/g, " ").trim();
   if (yearHint) {
@@ -8536,6 +8891,13 @@ const choosePreferredStatementRange = (
 };
 
 export const parseGenericStatementMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
+  const genericDigitalSavingsParsed = parseGenericDigitalSavingsStatement(text, context, {
+    institutionAwareNormalization: false,
+  });
+  if (genericDigitalSavingsParsed) {
+    return genericDigitalSavingsParsed.metadata;
+  }
+
   const genericText = normalizeGenericOcrText(text);
 
   if (!isGenericBankStatementText(genericText)) {
@@ -11289,6 +11651,11 @@ export const parseGenericBankStatementText = (
   context: ImportParseContext = {},
   options: { institutionAwareNormalization?: boolean } = {}
 ) => {
+  const genericDigitalSavingsParsed = parseGenericDigitalSavingsStatement(text, context, options);
+  if (genericDigitalSavingsParsed) {
+    return genericDigitalSavingsParsed;
+  }
+
   const genericText = normalizeGenericOcrText(text);
   const metadata = parseGenericStatementMetadata(genericText, context);
   const repeatedStatementSummary = extractLatestRepeatedStatementSummary(text);
