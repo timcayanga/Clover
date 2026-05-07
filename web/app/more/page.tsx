@@ -160,13 +160,8 @@ async function MorePageContent() {
   await ensureOnboardingAccess();
 
   return (
-    <CloverShell active="more" title="More" subtitle="The rest of Clover, grouped by the jobs people do most often.">
+    <CloverShell active="more" title="More">
       <section className="more-page">
-        <div className="more-page__hero">
-          <p className="eyebrow">Navigation hub</p>
-          <h2>Everything that is not on the bottom bar lives here.</h2>
-        </div>
-
         <div className="more-page__sections">
           {moreSections.map((section) => (
             <section key={section.title} className="more-page__section">
