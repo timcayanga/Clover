@@ -1,5 +1,5 @@
-import { CloverLoadingScreen } from "@/components/clover-loading-screen";
+import { CloverRouteLoadingScreen } from "@/components/clover-route-loading-screen";
 
 export default function Loading() {
-  return <CloverLoadingScreen label="dashboard" />;
+  return <CloverRouteLoadingScreen label="dashboard" />;
 }

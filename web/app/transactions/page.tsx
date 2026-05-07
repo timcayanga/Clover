@@ -4647,7 +4647,7 @@ function TransactionsPageContent() {
       </div>
     </div>
   ) : null;
-  const isTableLoading = false;
+  const isTableLoading = Boolean(selectedWorkspaceId) && !isWorkspaceDataReady;
   const transactionsShellActions = (
     <div className="transactions-shell-actions" style={transactionsShellActionsStyle}>
       <div className="transactions-add-menu" id="transactions-add-menu" ref={addMenuRef} style={transactionsMenuStyle}>

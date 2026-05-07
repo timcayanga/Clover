@@ -2609,9 +2609,9 @@ function AccountsPageContent() {
   };
 
   const showColdLoadGuard =
-    Boolean(selectedWorkspaceId) &&
     accounts.length === 0 &&
-    (workspacesLoading || accountsLoading || !hasInitialWorkspaceDataLoaded);
+    ((selectedWorkspaceId && (accountsLoading || !hasInitialWorkspaceDataLoaded)) ||
+      (!selectedWorkspaceId && (workspacesLoading || accountsLoading || !hasInitialWorkspaceDataLoaded)));
 
   if (!hasInitialWorkspaceDataLoaded || showColdLoadGuard) {
     return <CloverLoadingScreen label="accounts" />;

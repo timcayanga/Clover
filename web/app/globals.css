@@ -25106,6 +25106,10 @@ button.accounts-detail__transaction-head-cell {
   transform: scale(0.78) translateY(5px);
 }
 
+.clover-loading-screen__leaf--animated {
+  animation: clover-loading-screen-leaf 1.8s ease-in-out infinite;
+}
+
 .clover-loading-screen__leaf.is-visible {
   opacity: 1;
   transform: scale(1) translateY(0);
@@ -25149,6 +25153,21 @@ button.accounts-detail__transaction-head-cell {
   max-width: 32ch;
   color: var(--muted);
   line-height: 1.6;
+}
+
+@keyframes clover-loading-screen-leaf {
+  0%,
+  100% {
+    opacity: 0.22;
+    transform: scale(0.82) translateY(4px);
+    filter: saturate(0.9);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: saturate(1.08);
+  }
 }
 
 .pricing-page .legal-page__inner {
