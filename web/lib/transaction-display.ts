@@ -86,7 +86,11 @@ const getGenericCategoryOverride = (merchantText: string) => {
     return "Income";
   }
 
-  if (/atm withdrawal|atmwdl|cash withdrawal/.test(lower)) {
+  if (/service\s*charge|servicecharge|bank charge|dhl duty collection/.test(lower)) {
+    return "Financial";
+  }
+
+  if (/expressnet|megalinkw?|\/drw\b|atm withdrawal|atmwdl|cash withdrawal/.test(lower)) {
     return "Cash & ATM";
   }
 

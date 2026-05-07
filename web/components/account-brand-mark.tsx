@@ -1,15 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AccountBrand } from "@/lib/account-brand";
 
 export function AccountBrandMark({ accountBrand, label }: { accountBrand: AccountBrand; label: string }) {
   const [failed, setFailed] = useState(false);
   const [logoIndex, setLogoIndex] = useState(0);
-  const logoCandidates = accountBrand.logoSrcs.length ? accountBrand.logoSrcs : accountBrand.logoSrc ? [accountBrand.logoSrc] : [];
+  const logoCandidates = useMemo(
+    () => (accountBrand.logoSrcs.length ? accountBrand.logoSrcs : accountBrand.logoSrc ? [accountBrand.logoSrc] : []),
+    [accountBrand.logoSrc, accountBrand.logoSrcs]
+  );
   const currentLogoSrc = logoCandidates[logoIndex] ?? null;
   const hasBrandLogo = Boolean(accountBrand.logoSrcs.length || accountBrand.logoSrc);
-  const logoResetKey = `${accountBrand.logoSrc ?? ""}::${accountBrand.logoSrcs.join("|")}::${accountBrand.fallbackIconSrc}::${label}`;
+  const logoResetKey = useMemo(
+    () => `${accountBrand.logoSrc ?? ""}::${accountBrand.logoSrcs.join("|")}::${accountBrand.fallbackIconSrc}::${label}`,
+    [accountBrand.fallbackIconSrc, accountBrand.logoSrc, accountBrand.logoSrcs, label]
+  );
   const parseHexColor = (value: string) => {
     const normalized = value.trim().replace("#", "");
     if (!/^[0-9a-f]{6}$/i.test(normalized)) {
@@ -97,6 +103,15 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
     setFailed(false);
     setLogoIndex(0);
   }, [logoResetKey]);
+
+  useEffect(() => {
+    const sources = [...new Set([...logoCandidates, accountBrand.fallbackIconSrc].filter((source): source is string => Boolean(source)))];
+    for (const source of sources) {
+      const image = new Image();
+      image.decoding = "async";
+      image.src = source;
+    }
+  }, [accountBrand.fallbackIconSrc, logoCandidates, logoResetKey]);
 
   return (
     <span

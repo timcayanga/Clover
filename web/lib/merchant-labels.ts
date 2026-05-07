@@ -143,6 +143,10 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "ATM Withdrawal",
     },
     {
+      patterns: [/service\s*charge/i, /servicecharge/i, /\bsvc\s*chg\b/i],
+      replacement: "Service Charge",
+    },
+    {
       patterns: [/tax\s*withheld/i, /taxwithheld/i, /withheld\s*tax/i],
       replacement: "Tax Withheld",
     },
@@ -165,6 +169,10 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
     {
       patterns: [/payment\s+to\s+merchant/i],
       replacement: "Merchant Payment",
+    },
+    {
+      patterns: [/\bexpressnet\/megalinkw?\/drw\b/i, /expressnet.*megalink.*drw/i],
+      replacement: "ATM Withdrawal",
     },
     {
       patterns: [/transfer\s+to\s+other\s+bank/i],

@@ -11,6 +11,8 @@ Use these rules for BPI savings and related statement imports.
 - `InstaPay Transfer` and `Fund Transfer` map to `Transfers`.
 - `Interest Earned` maps to `Income`.
 - `Bills Payment` maps to `Bills & Utilities`.
+- `Service Charge` maps to `Financial`.
+- `EXPRESSNET/MEGALINKW/DRW` and compact variants map to `ATM Withdrawal` and should classify as `Cash & ATM`.
 - BPI credit card statements should infer the visible account suffix from the customer/account number on the statement and resolve to `BPI <last4>` rather than falling back to a generic account.
 - `BPI Signature` and other BPI card statements should be treated as `credit_card`, not bank savings, even when the OCR text is compacted, but the visible account name should stay bank-simple as `BPI <last4>`.
 - The parsed suffix may vary by statement, for example `9001`, `8556`, or `8705`, depending on the card's customer number.
@@ -32,7 +34,7 @@ Use these rules for BPI savings and related statement imports.
 - Treat `Payment - Thank You` as a card payment / transfer-style credit, not an expense.
 - Treat `Beginning balance` as statement metadata, not a regular transaction row. Clover should surface at most one opening-balance row per statement.
 - Do not emit the synthetic `Beginning balance` row as a transaction row for BPI savings imports; keep the balance only in statement metadata.
-- The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable BPI simplifications such as `Payroll Credit`, `GCash Cash In`, `ATM Withdrawal`, `Merchant Payment`, and `Bank Transfer`.
+- The code-level title lookup lives in `web/lib/merchant-labels.ts`; use it for durable BPI simplifications such as `Payroll Credit`, `GCash Cash In`, `ATM Withdrawal`, `Service Charge`, `Merchant Payment`, and `Bank Transfer`.
 - Treat `EPSATEN` and `eL/ESPay` as payroll-credit style income rows unless another statement field proves otherwise.
 
 ## Notes Handling

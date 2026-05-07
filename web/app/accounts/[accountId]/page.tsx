@@ -575,6 +575,7 @@ function AccountDetailPageContent() {
   const [transactionSortField, setTransactionSortField] = useState<AccountTransactionSortField>("date");
   const [transactionSortDirection, setTransactionSortDirection] = useState<AccountTransactionSortDirection>("desc");
   const [accountEditDraft, setAccountEditDraft] = useState({ name: "", accountNumber: "" });
+  const [accountIdentityEditorOpen, setAccountIdentityEditorOpen] = useState(false);
   const [accountEditSaveState, setAccountEditSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
@@ -601,6 +602,7 @@ function AccountDetailPageContent() {
   const [purchaseDeleteBusy, setPurchaseDeleteBusy] = useState<string | null>(null);
   const [dividendDeleteBusy, setDividendDeleteBusy] = useState<string | null>(null);
   const [hasInitialDataLoaded, setHasInitialDataLoaded] = useState(false);
+  const loadedAccountIdRef = useRef<string | null>(null);
   const selectAllTransactionsRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -626,14 +628,20 @@ function AccountDetailPageContent() {
   useEffect(() => {
     if (!account) {
       setAccountEditDraft({ name: "", accountNumber: "" });
+      setAccountIdentityEditorOpen(false);
       setAccountEditSaveState("idle");
+      loadedAccountIdRef.current = null;
       return;
     }
 
-    setAccountEditDraft({
-      name: account.name ?? "",
-      accountNumber: account.accountNumber ?? "",
-    });
+    if (loadedAccountIdRef.current !== account.id) {
+      loadedAccountIdRef.current = account.id;
+      setAccountEditDraft({
+        name: account.name ?? "",
+        accountNumber: account.accountNumber ?? "",
+      });
+      setAccountIdentityEditorOpen(false);
+    }
   }, [account?.accountNumber, account?.id, account?.name]);
 
   useEffect(() => {
@@ -1988,7 +1996,63 @@ function AccountDetailPageContent() {
               accountNumber={liveCardNumber}
               amount={isPendingBalance ? "Loading..." : formatAccountAmount(Math.abs(parseAmount(displayBalance)), account.currency)}
               showChevron={false}
+              onOpen={
+                account.type === "investment"
+                  ? undefined
+                  : () => {
+                      setAccountIdentityEditorOpen((open) => !open);
+                    }
+              }
             />
+
+            {account.type !== "investment" ? (
+              <div className="accounts-inline-edit accounts-detail__account-identity-editor glass">
+                <div className="accounts-detail__reconciliation-head">
+                  <div>
+                    <p className="eyebrow">Account details</p>
+                    <h4>{accountIdentityEditorOpen ? "Edit name and account number" : "Click the account card to edit"}</h4>
+                  </div>
+                  <div className="accounts-detail__transactions-actions">
+                    <span className="accounts-detail__autosave-state">
+                      {accountEditSaveState === "saving"
+                        ? "Saving..."
+                        : accountEditSaveState === "saved"
+                          ? "Saved"
+                          : accountEditSaveState === "error"
+                            ? "Needs attention"
+                            : "Autosaves as you type"}
+                    </span>
+                    {accountIdentityEditorOpen ? (
+                      <button
+                        className="button button-secondary button-small"
+                        type="button"
+                        onClick={() => setAccountIdentityEditorOpen(false)}
+                      >
+                        Close
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                {accountIdentityEditorOpen ? (
+                  <div className="accounts-inline-edit__grid">
+                    <label>
+                      Name
+                      <input value={accountEditDraft.name} onChange={(event) => setAccountEditDraft((current) => ({ ...current, name: event.target.value }))} />
+                    </label>
+                    <label>
+                      Account number
+                      <input
+                        value={accountEditDraft.accountNumber}
+                        onChange={(event) => setAccountEditDraft((current) => ({ ...current, accountNumber: event.target.value }))}
+                      />
+                    </label>
+                  </div>
+                ) : (
+                  <p className="panel-muted">Open the card to change the displayed name or account number.</p>
+                )}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
