@@ -1736,7 +1736,13 @@ function TransactionsPageContent() {
 
       if (categoriesResponse.ok) {
         const payload = await categoriesResponse.json();
-        setCategories(Array.isArray(payload.categories) ? payload.categories : []);
+        const cachedWorkspaceCategories = getCachedTransactionsWorkspace(workspaceId)?.categories as Category[] | undefined;
+        const nextCategories =
+          Array.isArray(payload.categories) && payload.categories.length > 0 ? (payload.categories as Category[]) : cachedWorkspaceCategories ?? [];
+        setCategories(nextCategories);
+      } else {
+        const cachedWorkspaceCategories = getCachedTransactionsWorkspace(workspaceId)?.categories as Category[] | undefined;
+        setCategories((current) => (current.length > 0 ? current : cachedWorkspaceCategories ?? current));
       }
 
       if (importResponse && importResponse.ok) {

@@ -2062,7 +2062,8 @@ function AccountDetailPageContent() {
             />
 
             {account.type !== "investment" && accountIdentityEditorOpen ? (
-              <div className="accounts-inline-edit accounts-detail__account-identity-editor glass">
+              <div className="accounts-detail__account-identity-editor accounts-detail__account-identity-editor--inline">
+                <p className="accounts-detail__account-identity-editor-title">Edit account details</p>
                 <div className="accounts-detail__account-identity-editor-body">
                   <div className="accounts-inline-edit__grid">
                     <label>

@@ -3195,7 +3195,7 @@ export function ImportFilesModal({
         });
           updateItem(itemId, {
             progress: IMPORT_PROGRESS.preparing + progress * ((IMPORT_PROGRESS.uploading - IMPORT_PROGRESS.preparing) / 100),
-            progressLabel: `Uploading ${item.file.name}`,
+            progressLabel: "Uploading the file",
             status: "importing",
           });
         }

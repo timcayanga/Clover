@@ -10100,6 +10100,8 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 
 .transactions-page {
   display: block;
+  overscroll-behavior-y: auto;
+  touch-action: pan-y;
 }
 
 .transactions-layout {
@@ -10126,6 +10128,12 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   border: 0;
   box-shadow: none;
   padding: 0;
+}
+
+.transactions-layout,
+.transactions-main-panel,
+.transactions-mobile-view {
+  touch-action: pan-y;
 }
 
 .transactions-topbar {
@@ -11686,7 +11694,7 @@ input.transaction-inline-edit--amount::placeholder {
   gap: 4px;
   justify-items: end;
   min-width: min(100%, 260px);
-  margin-right: 0;
+  margin-right: 72px;
   flex: 0 0 auto;
 }
 
@@ -14955,6 +14963,21 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 .accounts-inline-edit {
   display: grid;
   gap: 12px;
+}
+
+.accounts-detail__account-identity-editor--inline {
+  display: grid;
+  gap: 10px;
+  padding: 0 4px 2px;
+}
+
+.accounts-detail__account-identity-editor-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
 }
 
 .accounts-inline-edit__grid {
@@ -22132,6 +22155,7 @@ button.accounts-detail__transaction-head-cell {
     min-width: 0;
     width: 100%;
     justify-items: stretch;
+    margin-right: 0;
   }
 
   .transactions-footer-snapshot__metrics {
@@ -22286,6 +22310,7 @@ button.accounts-detail__transaction-head-cell {
     min-width: 0;
     width: 100%;
     justify-items: stretch;
+    margin-right: 0;
   }
 
   .transactions-footer-snapshot__metrics {
@@ -22824,16 +22849,7 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .dashboard-top-actions {
-    width: 100%;
-  }
-
-  .dashboard-top-actions__toggle {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .dashboard-top-actions__menu {
-    width: min(280px, calc(100vw - 28px));
+    display: none;
   }
 
   .dashboard-manual-modal__backdrop {
