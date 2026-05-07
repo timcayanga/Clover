@@ -14,6 +14,7 @@ import { deriveReconciledBalance } from "@/lib/account-balance";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { extractAccountIdFromPathSegment, getAccountPath } from "@/lib/account-path";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
+import { guessCategoryName } from "@/lib/import-parser";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
@@ -517,7 +518,16 @@ const getDisplayTransactionCategoryName = (
       merchantClean: transaction.merchantClean,
       institution,
       type: transaction.type,
-    }) ?? "Other"
+    }) ??
+    guessCategoryName(
+      getEffectiveTransactionMerchantName({
+        merchantClean: transaction.merchantClean,
+        merchantRaw: transaction.merchantRaw,
+        institution,
+      }) || transaction.description || transaction.merchantRaw,
+      transaction.type
+    ) ??
+    "Other"
   );
 };
 
@@ -577,6 +587,7 @@ function AccountDetailPageContent() {
   const [accountEditDraft, setAccountEditDraft] = useState({ name: "", accountNumber: "" });
   const [accountIdentityEditorOpen, setAccountIdentityEditorOpen] = useState(false);
   const [accountEditSaveState, setAccountEditSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const stableBalanceRef = useRef<string | null>(null);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
   const [isSavingTransactionDetail, setIsSavingTransactionDetail] = useState(false);
@@ -1200,14 +1211,46 @@ function AccountDetailPageContent() {
       })
     : "Account";
   const liveCardNumber = formatCardAccountNumber(accountEditDraft.accountNumber || accountCardNumber);
-  const hasVisibleBalance = account?.balance !== null && account?.balance !== undefined && String(account.balance).trim() !== "" && Number(account.balance) !== 0;
+  const hasMeaningfulBalance = (value: string | null | undefined) => {
+    const normalized = typeof value === "string" ? value.trim() : "";
+    if (!normalized) {
+      return false;
+    }
+
+    const numeric = Number(normalized);
+    return Number.isFinite(numeric) && numeric !== 0;
+  };
+  const hasVisibleBalance = hasMeaningfulBalance(account?.balance);
   const isPendingBalance =
     account?.source === "upload" &&
     !hasVisibleBalance &&
-    !checkpointBalance &&
+    !hasMeaningfulBalance(checkpointBalance) &&
     !hasLoadedTransactions &&
     (!latestCheckpoint || latestCheckpoint.status !== "reconciled");
-  const displayBalance = isPendingBalance && checkpointBalance ? checkpointBalance : currentBalance;
+  useEffect(() => {
+    if (!account || account.source !== "upload") {
+      stableBalanceRef.current = null;
+      return;
+    }
+
+    const candidates = [account.balance, checkpointBalance, String(currentBalance), stableBalanceRef.current];
+    for (const candidate of candidates) {
+      const normalized = typeof candidate === "string" ? candidate.trim() : "";
+      if (!normalized || Number(normalized) === 0) {
+        continue;
+      }
+
+      stableBalanceRef.current = normalized;
+      return;
+    }
+  }, [account, currentBalance, checkpointBalance]);
+
+  const displayBalance =
+    isPendingBalance && hasMeaningfulBalance(checkpointBalance)
+      ? checkpointBalance
+      : account?.source === "upload" && !hasMeaningfulBalance(account?.balance) && stableBalanceRef.current
+        ? stableBalanceRef.current
+        : currentBalance.toString();
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {
       return null;

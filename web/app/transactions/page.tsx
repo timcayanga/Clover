@@ -33,6 +33,7 @@ import { getAccountBrand } from "@/lib/account-brand";
 import { guessCategoryName, inferAccountTypeFromStatement } from "@/lib/import-parser";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
+import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
 import {
@@ -4165,7 +4166,16 @@ function TransactionsPageContent() {
         ),
         formatDate(transaction.date),
         transaction.accountName,
-        transaction.categoryName ?? "Other",
+        getEffectiveTransactionCategoryName({
+          categoryName: transaction.categoryName ?? categories.find((category) => category.id === (transaction.categoryId ?? otherCategoryId))?.name ?? null,
+          rawPayload: transaction.rawPayload as never,
+          merchantRaw: transaction.merchantRaw,
+          merchantClean: transaction.merchantClean,
+          institution: accountInstitutionById.get(transaction.accountId) ?? null,
+          type: transaction.type,
+        }) ??
+          guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
+          "Other",
         transaction.amount,
         transaction.type === "income" ? "Credit" : "Debit",
         transaction.description ?? "",
@@ -4210,7 +4220,17 @@ function TransactionsPageContent() {
           const warningReason = warningReasonFor(transaction);
           const amount = Number(transaction.amount);
           const categoryValue = transaction.categoryId ?? otherCategoryId;
-          const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+          const categoryLabel =
+            getEffectiveTransactionCategoryName({
+              categoryName: transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? null,
+              rawPayload: transaction.rawPayload as never,
+              merchantRaw: transaction.merchantRaw,
+              merchantClean: transaction.merchantClean,
+              institution: accountInstitutionById.get(transaction.accountId) ?? null,
+              type: transaction.type,
+            }) ??
+            guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
+            "Other";
           const categoryIconSrc = new URL(
             getCategoryIconSrc(categoryLabel),
             window.location.origin
@@ -5186,11 +5206,21 @@ function TransactionsPageContent() {
                 const amount = Number(transaction.amount);
                 const isPositive = transaction.type === "income";
                 const categoryValue = transaction.categoryId ?? otherCategoryId;
-                const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+                const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
+                const categoryLabel =
+                  getEffectiveTransactionCategoryName({
+                    categoryName: transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? null,
+                    rawPayload: transaction.rawPayload as never,
+                    merchantRaw: transaction.merchantRaw,
+                    merchantClean: transaction.merchantClean,
+                    institution: accountInstitution,
+                    type: transaction.type,
+                  }) ??
+                  guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
+                  "Other";
                 const isTransferTransaction =
                   transaction.isTransfer || transaction.type === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
                 const amountToneClass = isTransferTransaction ? "neutral" : isPositive ? "positive" : "negative";
-                const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
                 const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
                 const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
                   institution: accountInstitution,
@@ -5422,19 +5452,30 @@ function TransactionsPageContent() {
                       {group.transactions.map((transaction) => {
                         const amount = Number(transaction.amount);
                         const categoryValue = transaction.categoryId ?? otherCategoryId;
-                        const categoryLabel = transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? "Other";
+                        const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
+                        const categoryLabel =
+                          getEffectiveTransactionCategoryName({
+                            categoryName: transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? null,
+                            rawPayload: transaction.rawPayload as never,
+                            merchantRaw: transaction.merchantRaw,
+                            merchantClean: transaction.merchantClean,
+                            institution: accountInstitution,
+                            type: transaction.type,
+                          }) ??
+                          guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
+                          "Other";
                         const isTransferTransaction =
                           transaction.isTransfer || transaction.type === "transfer" || normalizeCategoryName(categoryLabel) === "transfers";
                         const amountToneClass = isTransferTransaction ? "neutral" : transaction.type === "income" ? "positive" : "negative";
                         const merchantSummary =
                           transaction.merchantClean?.trim() ||
                           summarizeTransactionMerchantText(transaction.merchantClean ?? transaction.merchantRaw);
-                const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
-                const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
-                  institution: accountInstitutionById.get(transaction.accountId) ?? null,
-                  name: accountDisplayName,
-                  type: transaction.type === "transfer" ? "bank" : transaction.type === "income" ? "bank" : "other",
-                });
+                        const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
+                        const accountBrand = accountBrandById.get(transaction.accountId) ?? getAccountBrand({
+                          institution: accountInstitution,
+                          name: accountDisplayName,
+                          type: transaction.type === "transfer" ? "bank" : transaction.type === "income" ? "bank" : "other",
+                        });
 
                         return (
                           <article
@@ -5464,7 +5505,7 @@ function TransactionsPageContent() {
                           >
                             <div className="transactions-mobile-simple-row__name">
                               <CategoryBrandMark
-                                categoryName={transaction.categoryName ?? categories.find((category) => category.id === (transaction.categoryId ?? otherCategoryId))?.name ?? "Other"}
+                                categoryName={categoryLabel}
                                 size={24}
                                 radius={8}
                                 className="transactions-mobile-simple-row__category-icon"

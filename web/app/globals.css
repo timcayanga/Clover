@@ -3767,6 +3767,13 @@ body.transactions-manual-open .shell-quick-add-button {
   padding: 2px 4px 2px 2px;
 }
 
+.dashboard-home__hero-main-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .dashboard-home__hero-main .eyebrow {
   color: rgba(255, 255, 255, 0.82);
 }
@@ -3776,6 +3783,21 @@ body.transactions-manual-open .shell-quick-add-button {
   font-size: clamp(1.55rem, 3vw, 2.2rem);
   line-height: 0.98;
   letter-spacing: -0.06em;
+}
+
+.dashboard-home__hero-add {
+  flex: none;
+  min-height: 34px;
+  padding-inline: 14px;
+  border-color: rgba(255, 255, 255, 0.38);
+  background: rgba(255, 255, 255, 0.88);
+  color: #0f172a;
+}
+
+.dashboard-home__hero-add:hover,
+.dashboard-home__hero-add:focus-visible {
+  border-color: rgba(255, 255, 255, 0.6);
+  color: #0f172a;
 }
 
 .dashboard-home__hero-aside {
@@ -12196,7 +12218,7 @@ input.transaction-inline-edit--amount::placeholder {
   display: grid;
   place-items: center;
   padding: 20px;
-  z-index: 1000;
+  z-index: 3000;
 }
 
 body[data-clover-page-modal] .sidebar,
@@ -22660,6 +22682,15 @@ button.accounts-detail__transaction-head-cell {
   .dashboard-home__hero-main {
     min-height: 0;
     padding: 0 0 4px;
+  }
+
+  .dashboard-home__hero-main-row {
+    align-items: flex-start;
+  }
+
+  .dashboard-home__hero-add {
+    min-height: 30px;
+    padding-inline: 12px;
   }
 
   .dashboard-home__hero-aside {

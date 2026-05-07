@@ -1028,6 +1028,7 @@ function AccountsPageContent() {
   const downloadMenuRef = useRef<HTMLDivElement>(null);
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
+  const stableAccountBalancesRef = useRef(new Map<string, string>());
   const isLocalDevBrowser =
     typeof window !== "undefined" && /^(localhost|127\.0\.0\.1|\[::1\]|::1)$/i.test(window.location.hostname);
   const [deletingAccountIds, setDeletingAccountIds] = useState<string[]>(
@@ -1137,6 +1138,15 @@ function AccountsPageContent() {
       }),
     [accounts, drawerAccountId, drawerStatementCheckpoints, drawerTransactions, statementCheckpoints, transactions]
   );
+
+  useEffect(() => {
+    for (const account of reconciledAccounts) {
+      const balance = typeof account.balance === "string" ? account.balance.trim() : "";
+      if (balance && Number(balance) !== 0) {
+        stableAccountBalancesRef.current.set(account.id, balance);
+      }
+    }
+  }, [reconciledAccounts]);
 
   const deletingAccountIdsSet = useMemo(
     () => new Set([...deletingAccountIds, ...getDeletingWorkspaceAccountIds(selectedWorkspaceId)]),
@@ -2068,18 +2078,32 @@ function AccountsPageContent() {
         : null;
     const fallbackAccountNumber =
       row.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null;
-    const hasVisibleBalance = row.balance !== null && row.balance.trim() !== "" && Number(row.balance) !== 0;
+    const hasMeaningfulBalance = (value: string | null | undefined) => {
+      const normalized = typeof value === "string" ? value.trim() : "";
+      if (!normalized) {
+        return false;
+      }
+
+      const numeric = Number(normalized);
+      return Number.isFinite(numeric) && numeric !== 0;
+    };
+    const hasVisibleBalance = hasMeaningfulBalance(row.balance);
     const hasLoadedTransactions = transactions.some((transaction) => transactionMatchesAccount(transaction, row));
     const shouldPreferCheckpointBalance =
       row.source === "upload" &&
-      checkpointBalance !== null &&
-      checkpointBalance.trim() !== "";
-    const displayedBalance = shouldPreferCheckpointBalance ? checkpointBalance : row.balance ?? checkpointBalance;
+      hasMeaningfulBalance(checkpointBalance);
+    const stableBalance = stableAccountBalancesRef.current.get(row.id) ?? null;
+    const displayedBalance = shouldPreferCheckpointBalance
+      ? checkpointBalance
+      : hasMeaningfulBalance(row.balance)
+        ? row.balance
+        : stableBalance ?? checkpointBalance;
     const isLoading =
       row.source === "upload" &&
       (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
       !hasVisibleBalance &&
-      !checkpointBalance &&
+      !hasMeaningfulBalance(checkpointBalance) &&
+      !stableBalance &&
       !hasLoadedTransactions;
     const accountBrand = getAccountBrand({
       institution: row.institution,

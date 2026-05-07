@@ -1522,7 +1522,7 @@ export function ImportFilesModal({
     });
 
     try {
-      for (let stagedAttempt = 0; stagedAttempt < 30; stagedAttempt += 1) {
+      for (let stagedAttempt = 0; stagedAttempt < 15; stagedAttempt += 1) {
         const confirmResponse = await fetch(`/api/imports/${importFileId}/confirm`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1561,7 +1561,7 @@ export function ImportFilesModal({
               summary: null,
               errorMessage: null,
             });
-            await new Promise((resolve) => window.setTimeout(resolve, 1000));
+            await new Promise((resolve) => window.setTimeout(resolve, 750));
             continue;
           }
 
@@ -1752,7 +1752,7 @@ export function ImportFilesModal({
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
     let seededFallbackSummary = false;
     const startedAt = Date.now();
-    const MAX_WAIT_MS = 75_000;
+    const MAX_WAIT_MS = 20_000;
     let latestResolvedAccountId: string | null = accountId && !accountId.startsWith("optimistic-") ? accountId : null;
     for (let attempt = 0; attempt < 120; attempt += 1) {
       try {
@@ -2934,7 +2934,7 @@ export function ImportFilesModal({
   ) => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
     const startedAt = Date.now();
-    const MAX_WAIT_MS = 120_000;
+    const MAX_WAIT_MS = 20_000;
     const progressLabel =
       importMode === "receipt"
         ? "Reading receipt in background"
@@ -3861,7 +3861,19 @@ export function ImportFilesModal({
           recoverableIdentity?.accountType ??
             inferAccountTypeFromStatement(recoverableIdentity?.institution, recoverableIdentity?.accountName, "bank"),
           item.optimisticAccountId ?? null,
-          toBalanceString(recoverableStatus?.statementCheckpoint?.endingBalance),
+          pickStableBalance(
+            toBalanceString(recoverableStatus?.statementCheckpoint?.endingBalance),
+            findKnownImportedBalance(accounts, {
+              workspaceId,
+              accountId: fallbackAccountId,
+              accountName: recoverableIdentity?.accountName ?? item.file.name,
+              institution: recoverableIdentity?.institution ?? null,
+              accountNumber: recoverableIdentity?.accountNumber ?? null,
+              accountType:
+                recoverableIdentity?.accountType ??
+                inferAccountTypeFromStatement(recoverableIdentity?.institution, recoverableIdentity?.accountName, "bank"),
+            })
+          ),
           recoverablePreviewTransactions,
           recoverableIdentity?.accountNumber ?? null
         );
