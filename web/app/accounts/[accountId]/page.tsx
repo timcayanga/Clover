@@ -1175,6 +1175,9 @@ function AccountDetailPageContent() {
     },
     [account?.balance, account?.source, account?.type, latestCheckpoint, transactions]
   );
+  const checkpointBalance = latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
+    ? String(latestCheckpoint.endingBalance)
+    : null;
   const hasLoadedTransactions = transactions.some((transaction) => transaction.accountId === account.id);
   const accountCardNumber = account
     ? formatCardAccountNumber(account.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null)
@@ -1193,8 +1196,10 @@ function AccountDetailPageContent() {
   const isPendingBalance =
     account?.source === "upload" &&
     !hasVisibleBalance &&
+    !checkpointBalance &&
     !hasLoadedTransactions &&
     (!latestCheckpoint || latestCheckpoint.status !== "reconciled");
+  const displayBalance = isPendingBalance && checkpointBalance ? checkpointBalance : currentBalance;
   const investmentGainLoss = useMemo(() => {
     if (account?.type !== "investment" || investmentPurchaseValue === null) {
       return null;
@@ -1981,39 +1986,9 @@ function AccountDetailPageContent() {
               accountBrand={accountBrand}
               name={accountCardName}
               accountNumber={liveCardNumber}
-              amount={isPendingBalance ? "Loading..." : formatAccountAmount(Math.abs(currentBalance), account.currency)}
+              amount={isPendingBalance ? "Loading..." : formatAccountAmount(Math.abs(parseAmount(displayBalance)), account.currency)}
               showChevron={false}
             />
-
-            {account.type !== "investment" ? (
-              <div className="accounts-detail__identity-edit">
-                <label className="accounts-detail__identity-field">
-                  <span>Name</span>
-                  <input
-                    value={accountEditDraft.name}
-                    onChange={(event) => setAccountEditDraft((current) => ({ ...current, name: event.target.value }))}
-                    placeholder="Account name"
-                  />
-                </label>
-                <label className="accounts-detail__identity-field">
-                  <span>Account number</span>
-                  <input
-                    value={accountEditDraft.accountNumber}
-                    onChange={(event) => setAccountEditDraft((current) => ({ ...current, accountNumber: event.target.value }))}
-                    placeholder="Add account number"
-                  />
-                </label>
-                <span className="accounts-detail__identity-status" aria-live="polite">
-                  {accountEditSaveState === "saving"
-                    ? "Saving..."
-                    : accountEditSaveState === "saved"
-                      ? "Saved"
-                      : accountEditSaveState === "error"
-                        ? "Needs attention"
-                        : ""}
-                </span>
-              </div>
-            ) : null}
           </div>
         ) : null}
 

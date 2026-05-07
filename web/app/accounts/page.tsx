@@ -2073,13 +2073,13 @@ function AccountsPageContent() {
     const shouldPreferCheckpointBalance =
       row.source === "upload" &&
       checkpointBalance !== null &&
-      checkpointBalance.trim() !== "" &&
-      (!hasVisibleBalance || Number(row.balance) === 0);
-    const displayedBalance = shouldPreferCheckpointBalance ? checkpointBalance : row.balance;
+      checkpointBalance.trim() !== "";
+    const displayedBalance = shouldPreferCheckpointBalance ? checkpointBalance : row.balance ?? checkpointBalance;
     const isLoading =
       row.source === "upload" &&
       (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
       !hasVisibleBalance &&
+      !checkpointBalance &&
       !hasLoadedTransactions;
     const accountBrand = getAccountBrand({
       institution: row.institution,
@@ -2155,6 +2155,7 @@ function AccountsPageContent() {
       row.balance !== null &&
       row.balance.trim() !== "" &&
       Number(row.balance) === 0 &&
+      !latestCheckpoint?.endingBalance &&
       !hasLoadedTransactions;
 
     return (

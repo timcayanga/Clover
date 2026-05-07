@@ -204,29 +204,11 @@ label {
 }
 
 body[data-clover-page-modal] .app-shell {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 236px minmax(0, 1fr);
 }
 
 body.dashboard-modal-open .app-shell {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-body[data-clover-page-modal] .sidebar,
-body[data-clover-page-modal] .sidebar-backdrop {
-  display: none;
-}
-
-body.dashboard-modal-open .sidebar,
-body.dashboard-modal-open .sidebar-backdrop {
-  display: none;
-}
-
-body[data-clover-page-modal] .shell-quick-add-button {
-  display: none !important;
-}
-
-body.dashboard-modal-open .shell-quick-add-button {
-  display: none !important;
+  grid-template-columns: 236px minmax(0, 1fr);
 }
 
 .sidebar-backdrop {
@@ -12056,6 +12038,20 @@ input.transaction-inline-edit--amount::placeholder {
   place-items: center;
   padding: 20px;
   z-index: 80;
+}
+
+body[data-clover-page-modal] .modal-backdrop,
+body.dashboard-modal-open .modal-backdrop {
+  left: 236px;
+  width: calc(100vw - 236px);
+}
+
+@media (max-width: 960px) {
+  body[data-clover-page-modal] .modal-backdrop,
+  body.dashboard-modal-open .modal-backdrop {
+    left: 0;
+    width: 100vw;
+  }
 }
 
 .modal-backdrop--transactions-content {

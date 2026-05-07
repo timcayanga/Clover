@@ -113,7 +113,9 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
           className="accounts-brand-mark__logo"
           src={currentLogoSrc}
           alt={label}
-          loading="lazy"
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
           referrerPolicy="no-referrer"
           onError={() => {
             if (logoIndex < logoCandidates.length - 1) {
@@ -129,7 +131,8 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
           src={accountBrand.fallbackIconSrc}
           alt=""
           aria-hidden="true"
-          loading="lazy"
+          loading="eager"
+          decoding="async"
           onError={() => setFailed(true)}
         />
       ) : (
