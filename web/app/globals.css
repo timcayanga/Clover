@@ -974,6 +974,40 @@ body.transactions-manual-open .shell-quick-add-button {
   height: 18px;
 }
 
+.shell-quick-add-popover {
+  position: fixed;
+  right: 18px;
+  bottom: 78px;
+  z-index: 112;
+  display: grid;
+  gap: 6px;
+  min-width: 232px;
+  padding: 10px;
+  border-radius: 18px;
+}
+
+.shell-quick-add-popover__item {
+  display: grid;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.shell-quick-add-popover__item strong {
+  font-size: 14px;
+  letter-spacing: -0.02em;
+}
+
+.shell-quick-add-popover__item span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .shell-bottom-nav {
   display: none;
 }
@@ -2267,6 +2301,7 @@ body.transactions-manual-open .shell-quick-add-button {
     radial-gradient(circle at top right, rgba(3, 168, 192, 0.04), transparent 22%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(245, 248, 250, 0.96));
   padding: 18px 20px 20px;
+  scroll-padding-bottom: 160px;
 }
 
 .shell-compact-bar {
@@ -2441,7 +2476,7 @@ body.transactions-manual-open .shell-quick-add-button {
   overflow: visible;
   padding-top: 2px;
   padding-right: 2px;
-  padding-bottom: 4px;
+  padding-bottom: 12px;
 }
 
 .content-body > * {
@@ -2993,7 +3028,7 @@ body.transactions-manual-open .shell-quick-add-button {
   }
 
   .content {
-    padding: 18px 18px calc(108px + env(safe-area-inset-bottom));
+    padding: 18px 18px calc(156px + env(safe-area-inset-bottom));
     min-height: 0;
     overflow: visible;
   }
@@ -3092,6 +3127,7 @@ body.transactions-manual-open .shell-quick-add-button {
     height: 54px;
     margin: -24px auto 0;
     border-radius: 999px;
+    grid-column: 3;
     align-self: center;
     background: var(--brand-gradient);
     color: #fff;
@@ -3112,6 +3148,13 @@ body.transactions-manual-open .shell-quick-add-button {
   .shell-bottom-nav__add svg {
     width: 18px;
     height: 18px;
+  }
+
+  .shell-quick-add-popover {
+    left: 12px;
+    right: 12px;
+    bottom: calc(86px + env(safe-area-inset-bottom));
+    min-width: 0;
   }
 
   .more-page__sections {
@@ -21883,6 +21926,15 @@ button.accounts-detail__transaction-head-cell {
     gap: 12px;
   }
 
+  .transactions-layout,
+  .transactions-main-panel {
+    height: auto;
+  }
+
+  .transactions-main-panel {
+    overflow: visible;
+  }
+
   .line-item-header,
   .transactions-table-wrap {
     display: none;
@@ -21922,6 +21974,10 @@ button.accounts-detail__transaction-head-cell {
 
   .transactions-page .transactions-footer-snapshot {
     margin-right: 0;
+  }
+
+  .transactions-mobile-view {
+    overflow: visible;
   }
 
   .transactions-pagination {
@@ -25153,6 +25209,24 @@ button.accounts-detail__transaction-head-cell {
   padding-bottom: 12px;
 }
 
+.help-page__back-button {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow-soft);
+  color: var(--text);
+  flex: none;
+}
+
+.help-page__back-button svg {
+  width: 18px;
+  height: 18px;
+}
+
 .help-page__nav-links {
   display: inline-flex;
   align-items: center;
@@ -25422,6 +25496,12 @@ button.accounts-detail__transaction-head-cell {
   flex: 0 0 auto;
   object-fit: contain;
   filter: drop-shadow(0 6px 10px rgba(15, 23, 42, 0.14));
+}
+
+.help-page__footer-cta {
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
 }
 
 .help-card h3 {
@@ -26979,6 +27059,14 @@ button.accounts-detail__transaction-head-cell {
   align-items: start;
 }
 
+.settings-hub--menu-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.settings-hub--panel-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .settings-hub__menu {
   position: sticky;
   top: 24px;
@@ -27078,6 +27166,15 @@ button.accounts-detail__transaction-head-cell {
   display: grid;
   gap: 18px;
   padding: 24px;
+}
+
+.settings-hub__panel-back {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.settings-hub__back-button {
+  margin-bottom: 2px;
 }
 
 .settings-section {
@@ -28362,13 +28459,22 @@ html[data-helper-text="hidden"] .settings-helper {
   }
 
   .help-card__image {
-    width: 44px;
-    height: 44px;
+    width: 60px;
+    height: 60px;
   }
 
   .help-section-panel__head,
   .help-page__nav {
     align-items: start;
+  }
+
+  .help-page__nav {
+    gap: 10px;
+  }
+
+  .help-page__back-button {
+    width: 40px;
+    height: 40px;
   }
 
   .help-article-hero__actions,
@@ -28383,8 +28489,10 @@ html[data-helper-text="hidden"] .settings-helper {
   }
 
   .help-search--hero input {
-    min-height: 70px;
-    border-radius: 24px;
+    min-height: 52px;
+    border-radius: 20px;
+    padding-top: 0;
+    padding-bottom: 0;
   }
 
   .help-section-page__intro {
@@ -31205,9 +31313,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
 .landing-page--snap {
   min-height: 100dvh;
   height: auto;
-  overflow-y: auto;
+  overflow: visible;
   overscroll-behavior-y: contain;
-  scroll-snap-type: y mandatory;
   scroll-padding-top: 0;
 }
 
@@ -31235,10 +31342,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 0.98fr);
   gap: 24px;
   align-items: center;
-  min-height: calc(100dvh - 32px);
-  padding: 20px 0 12px;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
+  min-height: auto;
+  padding: 28px 0 18px;
 }
 
 .landing-page .landing-hero__copy {
@@ -31339,10 +31444,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
   grid-template-columns: minmax(0, 1fr) minmax(300px, 0.9fr);
   gap: 28px;
   align-items: center;
-  min-height: calc(100dvh - 32px);
-  padding: 40px 0;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
+  min-height: auto;
+  padding: 64px 0;
   box-sizing: border-box;
 }
 
@@ -31530,8 +31633,6 @@ body[data-split-bill-modal-open="true"] .app-shell {
 .landing-cta {
   margin-top: 16px;
   padding: 28px 0 10px;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
 }
 
 .landing-page .landing-cta {
@@ -31542,7 +31643,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
   border: 0;
   box-shadow: none;
   border-radius: 0;
-  min-height: calc(100dvh - 32px);
+  min-height: auto;
+  padding-block: 56px 12px;
 }
 
 .landing-page .landing-cta__inner {
@@ -31562,8 +31664,6 @@ body[data-split-bill-modal-open="true"] .app-shell {
   background: linear-gradient(135deg, rgba(3, 168, 192, 0.98), rgba(2, 137, 160, 0.98));
   color: white;
   box-shadow: 0 24px 48px rgba(3, 168, 192, 0.2);
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
 }
 
 .landing-footer__columns {
@@ -31655,17 +31755,19 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .landing-hero-card {
+    display: flex;
+    flex-direction: column;
     padding: 20px;
     border-radius: 26px;
   }
 
   .landing-hero-card__image-placeholder {
-    order: 1;
+    order: 0;
     min-height: 210px;
   }
 
   .landing-hero-card__stack {
-    order: 2;
+    order: 1;
   }
 
   .landing-hero-card h2 {
@@ -31680,8 +31782,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
 
   .landing-feature {
     gap: 16px;
-    min-height: calc(100dvh - 20px);
-    padding: 18px 0;
+    min-height: auto;
+    padding: 34px 0;
   }
 
   .landing-feature__copy {
@@ -31716,8 +31818,8 @@ body[data-split-bill-modal-open="true"] .app-shell {
   }
 
   .landing-page .landing-cta {
-    padding: 18px 0 6px;
-    min-height: calc(100dvh - 20px);
+    padding: 22px 0 6px;
+    min-height: auto;
   }
 
   .landing-footer--expanded {
