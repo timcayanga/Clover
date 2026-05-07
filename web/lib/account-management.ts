@@ -1,10 +1,11 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { ensureStarterWorkspace } from "@/lib/starter-data";
 
 export const wipeLocalUserData = async (clerkUserId: string) => {
   const user = await prisma.user.findUnique({
     where: { clerkUserId },
-    select: { id: true },
+    select: { id: true, clerkUserId: true, email: true, verified: true, dataWipedAt: true },
   });
 
   if (!user) {
@@ -31,6 +32,8 @@ export const wipeLocalUserData = async (clerkUserId: string) => {
       },
     });
   });
+
+  await ensureStarterWorkspace(user);
 
   return true;
 };
