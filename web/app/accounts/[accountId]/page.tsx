@@ -12,6 +12,7 @@ import { getInvestmentAssetBrand } from "@/lib/investment-assets";
 import { deriveReconciledBalance } from "@/lib/account-balance";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { extractAccountIdFromPathSegment, getAccountPath } from "@/lib/account-path";
+import { buildTransactionQuerySearchParams } from "@/lib/transaction-query";
 import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
@@ -956,7 +957,6 @@ function AccountDetailPageContent() {
       try {
         const resolvedAccountId = cachedAccount?.id && !cachedAccount.id.startsWith("optimistic-") ? cachedAccount.id : accountId;
         const accountPromise = fetch(`/api/accounts/${resolvedAccountId}`);
-        const transactionsPromise = fetch(`/api/accounts/${resolvedAccountId}/transactions?page=1&pageSize=${TRANSACTION_PAGE_SIZE}`);
         const checkpointsPromise = fetch(`/api/accounts/${resolvedAccountId}/statement-checkpoints`);
 
         const accountResponse = await accountPromise;
@@ -1037,6 +1037,19 @@ function AccountDetailPageContent() {
         if (!cancelled && canonicalPath !== `/accounts/${accountPathSegment}`) {
           router.replace(canonicalPath);
         }
+
+        const accountTransactionSearchParams = buildTransactionQuerySearchParams(
+          mergedAccount.workspaceId,
+          {
+            accountIds: [mergedAccount.id],
+          },
+          {
+            page: 1,
+            pageSize: TRANSACTION_PAGE_SIZE,
+          }
+        );
+        accountTransactionSearchParams.set("summaryMode", "light");
+        const transactionsPromise = fetch(`/api/transactions?${accountTransactionSearchParams.toString()}`);
 
         void Promise.all([
           fetch(`/api/imports?workspaceId=${nextAccount.workspaceId}`),
@@ -1460,7 +1473,18 @@ function AccountDetailPageContent() {
     const nextPage = transactionPage + 1;
     setTransactionsLoadingMore(true);
     try {
-      const response = await fetch(`/api/accounts/${accountId}/transactions?page=${nextPage}&pageSize=${TRANSACTION_PAGE_SIZE}`);
+      const searchParams = buildTransactionQuerySearchParams(
+        account.workspaceId,
+        {
+          accountIds: [account.id],
+        },
+        {
+          page: nextPage,
+          pageSize: TRANSACTION_PAGE_SIZE,
+        }
+      );
+      searchParams.set("summaryMode", "light");
+      const response = await fetch(`/api/transactions?${searchParams.toString()}`);
       if (!response.ok) {
         throw new Error("Unable to load more transactions.");
       }

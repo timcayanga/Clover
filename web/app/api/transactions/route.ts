@@ -11,6 +11,7 @@ import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
 import { normalizeInstitutionCurrency } from "@/lib/import-parser";
+import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import {
   buildTransactionQueryWhere,
   buildTransactionQueryOrderBy,
@@ -84,6 +85,85 @@ const isResolvedReviewStatus = (status: string | null) =>
   status === "confirmed" || status === "rejected" || status === "duplicate_skipped";
 
 const normalizeTransactionKey = (value: string | null | undefined) => value?.trim().toLowerCase() ?? "";
+
+const getLastFourDigits = (value?: string | null) => {
+  if (!value) {
+    return null;
+  }
+
+  const digits = String(value).replace(/\D/g, "");
+  return digits.length >= 4 ? digits.slice(-4) : null;
+};
+
+const expandImportedAccountFilters = async (workspaceId: string, accountIds: string[] | undefined) => {
+  const requestedAccountIds = (accountIds ?? []).filter(Boolean);
+  if (requestedAccountIds.length === 0) {
+    return requestedAccountIds;
+  }
+
+  const siblingAccounts = await prisma.account.findMany({
+    where: {
+      workspaceId,
+    },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      type: true,
+      accountNumber: true,
+    },
+  });
+
+  const requestedAccounts = siblingAccounts.filter((candidate) => requestedAccountIds.includes(candidate.id));
+  if (requestedAccounts.length === 0) {
+    return requestedAccountIds;
+  }
+
+  const expandedAccountIds = new Set(requestedAccountIds);
+  const requestedDescriptors = requestedAccounts.map((account) => ({
+    id: account.id,
+    key: normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type),
+    institution: (account.institution ?? "").trim().toLowerCase(),
+    lastFour: getLastFourDigits(account.accountNumber ?? account.name),
+    type: account.type,
+  }));
+
+  for (const candidate of siblingAccounts) {
+    const candidateDescriptor = {
+      id: candidate.id,
+      key: normalizeImportedAccountKey(candidate.name, candidate.institution, candidate.accountNumber, candidate.type),
+      institution: (candidate.institution ?? "").trim().toLowerCase(),
+      lastFour: getLastFourDigits(candidate.accountNumber ?? candidate.name),
+      type: candidate.type,
+    };
+
+    if (
+      requestedDescriptors.some((requested) => {
+        if (candidateDescriptor.id === requested.id) {
+          return true;
+        }
+
+        if (candidateDescriptor.key === requested.key) {
+          return true;
+        }
+
+        return Boolean(
+          requested.institution &&
+            candidateDescriptor.institution &&
+            requested.institution === candidateDescriptor.institution &&
+            requested.lastFour &&
+            candidateDescriptor.lastFour &&
+            requested.lastFour === candidateDescriptor.lastFour &&
+            requested.type === candidateDescriptor.type
+        );
+      })
+    ) {
+      expandedAccountIds.add(candidate.id);
+    }
+  }
+
+  return Array.from(expandedAccountIds);
+};
 
 const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefined) => {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
@@ -270,7 +350,12 @@ export async function GET(request: Request) {
     await assertWorkspaceAccess(userId, workspaceId);
     await normalizeLegacyTransactionVisibility(workspaceId);
 
-    const filters: TransactionQueryFilters = parseTransactionQueryFilters(searchParams);
+    const parsedFilters: TransactionQueryFilters = parseTransactionQueryFilters(searchParams);
+    const expandedAccountIds = await expandImportedAccountFilters(workspaceId, parsedFilters.accountIds);
+    const filters: TransactionQueryFilters = {
+      ...parsedFilters,
+      accountIds: expandedAccountIds,
+    };
     const where = buildTransactionQueryWhere(workspaceId, filters);
     const visibleWhere = { ...where, isExcluded: false };
     const orderBy = buildTransactionQueryOrderBy(filters);

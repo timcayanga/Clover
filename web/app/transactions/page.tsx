@@ -1599,7 +1599,7 @@ function TransactionsPageContent() {
   const [transactionsPageSize, setTransactionsPageSize] = useState(25);
   const [transactionsPage, setTransactionsPage] = useState(1);
   const [query, setQuery] = useState("");
-  const [currencyFilter, setCurrencyFilter] = useState("PHP");
+  const [currencyFilter, setCurrencyFilter] = useState("");
   const [sortField, setSortField] = useState<TransactionSortField>("date");
   const [sortDirection, setSortDirection] = useState<TransactionSortDirection>("desc");
   const [amountMin, setAmountMin] = useState("");
@@ -2401,7 +2401,7 @@ function TransactionsPageContent() {
 
       drilldownParamRef.current = drilldownSignature;
       setQuery("");
-      setCurrencyFilter("PHP");
+      setCurrencyFilter("");
       setCategoryFilters([]);
       setAccountFilters([]);
       setTypeFilters([]);
@@ -2425,7 +2425,7 @@ function TransactionsPageContent() {
       .filter(Boolean);
 
     setQuery(q);
-    setCurrencyFilter(currencyFromUrl ? formatCurrencyCode(currencyFromUrl) : "PHP");
+    setCurrencyFilter(currencyFromUrl ? formatCurrencyCode(currencyFromUrl) : "");
     setCategoryFilters(nextCategoryFilters);
     setAccountFilters(nextAccountFilters);
     setTypeFilters([]);
@@ -2651,7 +2651,7 @@ function TransactionsPageContent() {
       count += 1;
     }
 
-    if (currencyFilter.trim().toUpperCase() !== "PHP") {
+    if (currencyFilter.trim()) {
       count += 1;
     }
 
@@ -3101,7 +3101,7 @@ function TransactionsPageContent() {
 
   const clearAllTransactionFilters = () => {
     setQuery("");
-    setCurrencyFilter("PHP");
+    setCurrencyFilter("");
     setCategoryFilters([]);
     setAccountFilters([]);
     setTypeFilters([]);
@@ -4812,8 +4812,10 @@ function TransactionsPageContent() {
 
       <CurrencySelector
         value={currencyFilter}
-        onChange={(next) => setCurrencyFilter(formatCurrencyCode(next || "PHP"))}
+        onChange={(next) => setCurrencyFilter(next && next.toLowerCase() !== "all" ? formatCurrencyCode(next) : "")}
         options={workspaceCurrencyCodes}
+        includeAllOption
+        allLabel="All currencies"
         ariaLabel="Filter transactions by currency"
         className="transactions-currency-filter"
         buttonClassName="transactions-currency-filter__button transactions-action-button transactions-toolbar-chip"
