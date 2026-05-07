@@ -7,6 +7,7 @@ import { useClerk, useUser } from "@clerk/nextjs";
 import { formatCurrencyAmount } from "@/lib/currency-format";
 import { persistSelectedWorkspaceId, readSelectedWorkspaceId, syncSelectedWorkspaceCookie } from "@/lib/workspace-selection";
 import { clearAllWorkspaceCaches, clearLegacyWorkspaceCaches } from "@/lib/workspace-cache";
+import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 
 type CloverChromeActions = {
   closeChrome: () => void;
@@ -37,6 +38,7 @@ type CloverShellProps = {
   | "reports"
     | "insights"
     | "goals"
+    | "more"
     | "settings"
     | "profile"
     | "notifications"
@@ -82,14 +84,6 @@ type SidebarSearchResult = {
   badge?: string;
 };
 
-const avatarBackgrounds = [
-  "linear-gradient(135deg, rgba(3, 168, 192, 0.92), rgba(94, 211, 208, 0.88))",
-  "linear-gradient(135deg, rgba(3, 168, 192, 0.82), rgba(110, 231, 183, 0.86))",
-  "linear-gradient(135deg, rgba(110, 231, 183, 0.9), rgba(94, 211, 208, 0.9))",
-  "linear-gradient(135deg, rgba(181, 246, 239, 0.95), rgba(3, 168, 192, 0.22))",
-  "linear-gradient(135deg, rgba(15, 23, 42, 0.16), rgba(3, 168, 192, 0.84))",
-] as const;
-
 const sidebarSearchPages: Array<{
   key: string;
   title: string;
@@ -100,7 +94,7 @@ const sidebarSearchPages: Array<{
 }> = [
   {
     key: "dashboard",
-    title: "Dashboard",
+    title: "Home",
     href: "/dashboard",
     icon: "dashboard",
     detail: "Overview and quick actions.",
@@ -140,7 +134,7 @@ const sidebarSearchPages: Array<{
   },
   {
     key: "split-bill",
-    title: "Split Bill",
+    title: "Split Bills",
     href: "/split-bill",
     icon: "split-bill",
     detail: "Share receipts and settle balances.",
@@ -169,6 +163,14 @@ const sidebarSearchPages: Array<{
     icon: "goals",
     detail: "Save, pay down debt, or track milestones.",
     terms: ["goals", "goal", "savings", "save", "debt", "milestone"],
+  },
+  {
+    key: "settings",
+    title: "Settings",
+    href: "/settings",
+    icon: "settings",
+    detail: "Theme, data, account, and billing options.",
+    terms: ["settings", "preferences", "account", "billing", "theme", "data"],
   },
   {
     key: "help",
@@ -245,13 +247,15 @@ const getSidebarSearchBlob = (account: SidebarSearchAccount) =>
 const formatSidebarMoney = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "MIXED");
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", key: "dashboard" as const },
+  { href: "/dashboard", label: "Home", key: "dashboard" as const },
   { href: "/accounts", label: "Accounts", key: "accounts" as const },
   { href: "/transactions", label: "Transactions", key: "transactions" as const },
   { href: "/recurring", label: "Recurring", key: "recurring" as const },
+  { href: "/split-bill", label: "Split Bills", key: "split-bill" as const },
   { href: "/reports", label: "Reports", key: "reports" as const },
   { href: "/insights", label: "Insights", key: "insights" as const },
   { href: "/goals", label: "Goals", key: "goals" as const },
+  { href: "/more", label: "More", key: "more" as const },
 ];
 
 type IconName =
@@ -436,16 +440,6 @@ function MenuIcon({ name }: { name: IconName }) {
   }
 }
 
-function hashString(value: string) {
-  let hash = 0;
-
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
-  }
-
-  return hash;
-}
-
 const notifications = [
   {
     title: "Import finished",
@@ -484,14 +478,11 @@ export function CloverShell({
   const shellRef = useRef<HTMLDivElement | null>(null);
   const searchWrapRef = useRef<HTMLDivElement | null>(null);
   const searchResultsRef = useRef<HTMLDivElement | null>(null);
-  const moreButtonRef = useRef<HTMLButtonElement | null>(null);
-  const morePopoverRef = useRef<HTMLDivElement | null>(null);
   const profileButtonRef = useRef<HTMLButtonElement | null>(null);
   const profilePopoverRef = useRef<HTMLDivElement | null>(null);
   const notificationsButtonRef = useRef<HTMLButtonElement | null>(null);
   const notificationsPopoverRef = useRef<HTMLDivElement | null>(null);
   const [openMenu, setOpenMenu] = useState<"notifications" | "profile" | null>(null);
-  const [isMoreMenuOpen, setIsMoreMenuOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
@@ -501,11 +492,9 @@ export function CloverShell({
   const [searchTicker, setSearchTicker] = useState<SidebarSearchMarket | null>(null);
   const [searchTickerLoading, setSearchTickerLoading] = useState(false);
   const displayName = user?.firstName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress?.split("@")[0] ?? "Account";
-  const profileInitial = displayName.trim().slice(0, 1).toUpperCase();
   const profileImage = user?.imageUrl ?? null;
-  const profileBackground = avatarBackgrounds[hashString(displayName) % avatarBackgrounds.length];
   const isProfileActive = active === "profile" || pathname?.startsWith("/profile");
-  const isMoreActive = pathname?.startsWith("/investments") || pathname?.startsWith("/split-bill") || isMoreMenuOpen;
+  const isMoreActive = active === "more" || pathname?.startsWith("/more");
   const isNotificationsActive = openMenu === "notifications";
   const isProfileMenuOpen = openMenu === "profile";
   const closeChrome = () => {
@@ -546,14 +535,9 @@ export function CloverShell({
         setOpenMenu(null);
       }
 
-      if (isMoreMenuOpen && !moreButtonRef.current?.contains(target) && !morePopoverRef.current?.contains(target)) {
-        setIsMoreMenuOpen(false);
-      }
-
       if (!shellRef.current.contains(target)) {
         setOpenMenu(null);
         setIsSearchOpen(false);
-        setIsMoreMenuOpen(false);
       }
     };
 
@@ -605,7 +589,6 @@ export function CloverShell({
     setOpenMenu(null);
     setIsSearchOpen(false);
     setSearchQuery("");
-    setIsMoreMenuOpen(pathname?.startsWith("/investments") ?? false);
   }, [pathname]);
 
   useEffect(() => {
@@ -894,7 +877,7 @@ export function CloverShell({
   const notificationCount = notifications.length;
   const navigateTo = (href: string) => {
     closeChrome();
-    window.location.assign(href);
+    router.push(href);
   };
 
   const openQuickAddTransaction = () => {
@@ -1083,51 +1066,8 @@ export function CloverShell({
                 <MenuIcon name={item.key} />
               </span>
               {item.label}
-              </button>
-            ))}
-
-          <div className="sidebar-nav__more" ref={morePopoverRef}>
-            <button
-              ref={moreButtonRef}
-              className={`nav-link nav-link--more${isMoreActive ? " is-active" : ""}`}
-              type="button"
-              aria-expanded={isMoreMenuOpen}
-              aria-haspopup="menu"
-              onClick={() => setIsMoreMenuOpen((current) => !current)}
-            >
-              <span className="nav-link__icon" aria-hidden="true">
-                <MenuIcon name="more" />
-              </span>
-              More
             </button>
-
-            {isMoreMenuOpen ? (
-              <div className="sidebar-nav__submenu" role="menu" aria-label="More navigation">
-                <button
-                  type="button"
-                  className={`sidebar-nav__submenu-link${pathname?.startsWith("/split-bill") ? " is-active" : ""}`}
-                  role="menuitem"
-                  onClick={() => navigateTo("/split-bill")}
-                >
-                  <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                    <MenuIcon name="split-bill" />
-                  </span>
-                  <span>Split Bill</span>
-                </button>
-                <button
-                  type="button"
-                  className={`sidebar-nav__submenu-link${pathname?.startsWith("/investments") ? " is-active" : ""}`}
-                  role="menuitem"
-                  onClick={() => navigateTo("/investments")}
-                >
-                  <span className="sidebar-nav__submenu-icon" aria-hidden="true">
-                    <MenuIcon name="investments" />
-                  </span>
-                  <span>Investments</span>
-                </button>
-              </div>
-            ) : null}
-          </div>
+          ))}
         </nav>
 
         <div className="sidebar-footer">
@@ -1151,8 +1091,8 @@ export function CloverShell({
             {profileImage ? (
               <img className="sidebar-profile__photo" src={profileImage} alt="" aria-hidden="true" />
             ) : (
-              <span className="sidebar-profile__avatar" aria-hidden="true" style={{ backgroundColor: profileBackground }}>
-                <span>{profileInitial}</span>
+              <span className="sidebar-profile__avatar" aria-hidden="true" style={getAvatarBackgroundStyle(displayName)}>
+                <span style={{ color: "#fff" }}>{getAvatarInitials(displayName)}</span>
               </span>
             )}
             <span className="sr-only">{displayName}</span>
@@ -1260,6 +1200,74 @@ export function CloverShell({
       >
         <MenuIcon name="plus" />
       </button>
+
+      <nav className="shell-bottom-nav glass" aria-label="Primary mobile navigation">
+        <button
+          className={`shell-bottom-nav__item${active === "dashboard" || pathname?.startsWith("/dashboard") ? " is-active" : ""}`}
+          type="button"
+          aria-current={active === "dashboard" || pathname?.startsWith("/dashboard") ? "page" : undefined}
+          onClick={() => navigateTo("/dashboard")}
+        >
+          <span className="shell-bottom-nav__icon" aria-hidden="true">
+            <MenuIcon name="dashboard" />
+          </span>
+          <span className="shell-bottom-nav__label">Home</span>
+        </button>
+        <button
+          className={`shell-bottom-nav__item${active === "transactions" || pathname?.startsWith("/transactions") ? " is-active" : ""}`}
+          type="button"
+          aria-current={active === "transactions" || pathname?.startsWith("/transactions") ? "page" : undefined}
+          onClick={() => navigateTo("/transactions")}
+        >
+          <span className="shell-bottom-nav__icon" aria-hidden="true">
+            <MenuIcon name="transactions" />
+          </span>
+          <span className="shell-bottom-nav__label">Transaction</span>
+        </button>
+        <button
+          className="shell-bottom-nav__add"
+          type="button"
+          aria-label={
+            pathname?.startsWith("/recurring")
+              ? "Add recurring"
+              : pathname?.startsWith("/split-bill")
+                ? "Add split bill"
+                : "Add transaction"
+          }
+          title={
+            pathname?.startsWith("/recurring")
+              ? "Add recurring"
+              : pathname?.startsWith("/split-bill")
+                ? "Add split bill"
+                : "Add transaction"
+          }
+          onClick={openQuickAddTransaction}
+        >
+          <MenuIcon name="plus" />
+        </button>
+        <button
+          className={`shell-bottom-nav__item${active === "split-bill" || pathname?.startsWith("/split-bill") ? " is-active" : ""}`}
+          type="button"
+          aria-current={active === "split-bill" || pathname?.startsWith("/split-bill") ? "page" : undefined}
+          onClick={() => navigateTo("/split-bill")}
+        >
+          <span className="shell-bottom-nav__icon" aria-hidden="true">
+            <MenuIcon name="split-bill" />
+          </span>
+          <span className="shell-bottom-nav__label">Split Bills</span>
+        </button>
+        <button
+          className={`shell-bottom-nav__item${isMoreActive ? " is-active" : ""}`}
+          type="button"
+          aria-current={isMoreActive ? "page" : undefined}
+          onClick={() => navigateTo("/more")}
+        >
+          <span className="shell-bottom-nav__icon" aria-hidden="true">
+            <MenuIcon name="more" />
+          </span>
+          <span className="shell-bottom-nav__label">More</span>
+        </button>
+      </nav>
 
       <main
         className="content"
