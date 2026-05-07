@@ -7,6 +7,7 @@ import {
   type DetectedStatementMetadata,
   type ImportedAccountType,
   inferAccountTypeFromStatement,
+  normalizeInstitutionCurrency,
   parseAmountValue,
   parseDateValue,
   type ParsedImportRow,
@@ -1703,7 +1704,12 @@ export const buildParsedTransactionInsertData = async (params: {
     if (amount === null) {
       return [];
     }
-    const currency = (row.currency ?? params.metadata.currency ?? "PHP").trim().toUpperCase();
+    const currency =
+      normalizeInstitutionCurrency(
+        params.metadata.institution,
+        row.currency ?? params.metadata.currency ?? "PHP",
+        row.accountName ?? params.metadata.accountName ?? null
+      ) ?? "PHP";
 
     const record: Record<string, unknown> = {};
     if (columns.has("id")) record.id = crypto.randomUUID();

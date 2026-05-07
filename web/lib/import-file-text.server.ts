@@ -345,10 +345,16 @@ const loadPdfJsRender = async () => {
   return import("./pdfjs.server");
 };
 
+const clonePdfBytes = (data: Uint8Array) => {
+  const copy = new Uint8Array(data.length);
+  copy.set(data);
+  return copy;
+};
+
 const createPdfJsLoadOptions = (data: Uint8Array, password?: string, baseUrl?: string | null, disableWorker = true) => {
   const standardFontDataUrl = getPdfJsStandardFontDataUrl(baseUrl);
   return {
-    data,
+    data: clonePdfBytes(data),
     ...(password ? { password } : {}),
     disableWorker,
     useWorkerFetch: false,
@@ -625,9 +631,12 @@ const renderPdfPageImagesFromBytes = async (
   const pdfjsModule = await loadPdfJsRender();
   const pdfjs = (pdfjsModule as any).pdfjs ?? pdfjsModule;
   const options = {
-    data,
+    data: clonePdfBytes(data),
     ...(password ? { password } : {}),
     disableWorker: true,
+    useWorkerFetch: false,
+    isOffscreenCanvasSupported: false,
+    isImageDecoderSupported: false,
   };
   const loadingTask = pdfjs.getDocument(options as any);
   const pdf = await loadingTask.promise;

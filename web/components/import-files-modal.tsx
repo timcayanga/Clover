@@ -21,6 +21,7 @@ import {
   detectStatementMetadata,
   getTrailingBalanceFromParsedRows,
   inferAccountTypeFromStatement,
+  normalizeInstitutionCurrency,
   parseImportText,
 } from "@/lib/import-parser";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
@@ -44,6 +45,8 @@ type AccountOption = {
   name: string;
   institution: string | null;
   accountNumber?: string | null;
+  balance?: string | null;
+  currency?: string | null;
   type: string;
 };
 
@@ -1137,9 +1140,12 @@ export function ImportFilesModal({
     name: string,
     institution: string | null,
     accountType?: UploadInsightsSummary["accountType"],
-    accountNumber?: string | null
+    accountNumber?: string | null,
+    balance?: string | null,
+    currency?: string | null
   ) => {
     const inferredType = accountType ?? inferAccountTypeFromStatement(institution, name, "bank");
+    const normalizedCurrency = normalizeInstitutionCurrency(institution, currency ?? "PHP", name) ?? "PHP";
     const response = await fetch("/api/accounts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1149,7 +1155,8 @@ export function ImportFilesModal({
         institution,
         accountNumber: accountNumber?.trim() || null,
         type: inferredType,
-        currency: "PHP",
+        currency: normalizedCurrency,
+        balance: balance?.trim() || null,
         source: "upload",
       }),
     });
@@ -1194,7 +1201,9 @@ export function ImportFilesModal({
     name: string,
     institution: string | null,
     accountType?: UploadInsightsSummary["accountType"],
-    accountNumber?: string | null
+    accountNumber?: string | null,
+    balance?: string | null,
+    currency?: string | null
   ) => {
     const normalizedName = formatUploadAccountDisplayName(name, institution, accountNumber ?? null, accountType ?? null);
     const expectedType = accountType ?? inferAccountTypeFromStatement(institution, normalizedName, "bank");
@@ -1213,6 +1222,23 @@ export function ImportFilesModal({
     const normalizedAccountNumber = accountNumber?.trim() || null;
     if ((current.accountNumber ?? null) !== normalizedAccountNumber) {
       nextPayload.accountNumber = normalizedAccountNumber;
+    }
+    const inferredCurrency = normalizeInstitutionCurrency(institution, currency ?? current.currency ?? null, normalizedName);
+    if (inferredCurrency && (current.currency ?? "").toUpperCase() !== inferredCurrency) {
+      nextPayload.currency = inferredCurrency;
+    }
+    const normalizedBalance = balance?.trim() || null;
+    const currentBalance =
+      typeof current.balance === "string" && current.balance.trim()
+        ? Number(current.balance)
+        : Number.NaN;
+    const nextBalance = normalizedBalance === null ? Number.NaN : Number(normalizedBalance);
+    if (
+      normalizedBalance &&
+      Number.isFinite(nextBalance) &&
+      (!Number.isFinite(currentBalance) || currentBalance === 0 || Math.abs(currentBalance - nextBalance) > 0.000001)
+    ) {
+      nextPayload.balance = normalizedBalance;
     }
 
     if (Object.keys(nextPayload).length === 1) {
@@ -1875,8 +1901,10 @@ export function ImportFilesModal({
                   : await ensureTargetAccountId(
                       processingIdentity?.accountName ?? summaryContext.fallbackAccountName,
                       processingIdentity?.institution ?? null,
-                  processingIdentity?.accountType ?? summaryContext.accountType ?? null,
-                      processingIdentity?.accountNumber ?? null
+                      processingIdentity?.accountType ?? summaryContext.accountType ?? null,
+                      processingIdentity?.accountNumber ?? null,
+                      stableOptimisticBalance,
+                      null
                     );
             latestResolvedAccountId = fallbackAccountId;
             const fallbackPreviewTransactions =
@@ -2001,7 +2029,9 @@ export function ImportFilesModal({
                 fallbackAccountName,
                 fallbackInstitution,
                 processingIdentity?.accountType ?? summaryContext.accountType ?? null,
-                fallbackAccountNumber
+                fallbackAccountNumber,
+                stableOptimisticBalance,
+                null
               );
             }
           }
@@ -2027,7 +2057,9 @@ export function ImportFilesModal({
                       processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName,
                       processingIdentity?.institution ?? summaryContext.institution ?? null,
                       processingIdentity?.accountType ?? summaryContext.accountType ?? null,
-                      processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null
+                      processingIdentity?.accountNumber ?? summaryContext.accountNumber ?? null,
+                      stableOptimisticBalance,
+                      null
                     )
                   : null;
           const fallbackPreviewTransactions =
@@ -2151,7 +2183,9 @@ export function ImportFilesModal({
                     processingIdentity?.accountName ?? summaryContext.accountName ?? summaryContext.fallbackAccountName,
                     processingIdentity?.institution ?? summaryContext.institution ?? null,
                     processingIdentity?.accountType ?? summaryContext.accountType ?? null,
-                    processingIdentity?.accountNumber ?? null
+                    processingIdentity?.accountNumber ?? null,
+                    stableOptimisticBalance,
+                    null
                   );
 
             const fallbackPreviewTransactions =
@@ -2437,7 +2471,9 @@ export function ImportFilesModal({
               syncAccountName,
               syncInstitution,
               resolvedAccountType,
-              resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null
+              resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
+              summaryContext.initialBalance ?? null,
+              null
             ).catch(() => null);
           }
 
@@ -2448,7 +2484,9 @@ export function ImportFilesModal({
               accountName,
               institution,
               resolvedAccountType,
-              resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null
+              resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
+              summaryContext.initialBalance ?? null,
+              null
             );
           }
           if (!resolvedAccountId) {
@@ -2672,7 +2710,9 @@ export function ImportFilesModal({
     statementAccountName?: string | null,
     institution?: string | null,
     accountType?: UploadInsightsSummary["accountType"],
-    accountNumber?: string | null
+    accountNumber?: string | null,
+    balance?: string | null,
+    currency?: string | null
   ) => {
     if (statementAccountName) {
       const normalizedStatementAccountName = formatUploadAccountDisplayName(
@@ -2687,7 +2727,15 @@ export function ImportFilesModal({
         accounts.find((account) => accountKey(account.name, account.institution, account.accountNumber) === key)?.id;
       if (existing) {
         accountIdByKeyRef.current.set(key, existing);
-        await syncStatementAccountIdentity(existing, normalizedStatementAccountName, institution ?? null, accountType, accountNumber);
+        await syncStatementAccountIdentity(
+          existing,
+          normalizedStatementAccountName,
+          institution ?? null,
+          accountType,
+          accountNumber,
+          balance,
+          currency
+        );
         return existing;
       }
 
@@ -2699,7 +2747,15 @@ export function ImportFilesModal({
           accountKey(genericMatch.name, genericMatch.institution, genericMatch.accountNumber),
           genericMatch.id
         );
-        await syncStatementAccountIdentity(genericMatch.id, normalizedStatementAccountName, institution ?? null, accountType, accountNumber);
+        await syncStatementAccountIdentity(
+          genericMatch.id,
+          normalizedStatementAccountName,
+          institution ?? null,
+          accountType,
+          accountNumber,
+          balance,
+          currency
+        );
         return genericMatch.id;
       }
 
@@ -2713,12 +2769,27 @@ export function ImportFilesModal({
             accountKey(matchedAccount.name, matchedAccount.institution, matchedAccount.accountNumber),
             matchedAccount.id
           );
-          await syncStatementAccountIdentity(matchedAccount.id, normalizedStatementAccountName, institution ?? null, accountType, accountNumber);
+          await syncStatementAccountIdentity(
+            matchedAccount.id,
+            normalizedStatementAccountName,
+            institution ?? null,
+            accountType,
+            accountNumber,
+            balance,
+            currency
+          );
           return matchedAccount.id;
         }
       }
 
-      return createStatementAccount(normalizedStatementAccountName, institution ?? null, accountType, accountNumber);
+      return createStatementAccount(
+        normalizedStatementAccountName,
+        institution ?? null,
+        accountType,
+        accountNumber,
+        balance,
+        currency
+      );
     }
 
     return null;
@@ -3510,12 +3581,24 @@ export function ImportFilesModal({
         const hasStatementIdentity = Boolean(
           statementIdentity?.accountName && statementIdentity?.institution && statementIdentity?.accountNumber
         );
+        const knownOptimisticBalance = statementIdentity
+          ? findKnownImportedBalance(accounts, {
+              workspaceId,
+              accountId: item.optimisticAccountId ?? null,
+              accountName: statementIdentity.accountName ?? null,
+              institution: statementIdentity?.institution ?? null,
+              accountNumber: statementIdentity?.accountNumber ?? null,
+              accountType: statementIdentity?.accountType ?? statementAccountType,
+            })
+          : null;
         const optimisticAccountId = hasStatementIdentity
           ? await ensureTargetAccountId(
               statementIdentity?.accountName ?? null,
               statementIdentity?.institution ?? null,
               statementAccountType,
-              statementIdentity?.accountNumber ?? null
+              statementIdentity?.accountNumber ?? null,
+              knownOptimisticBalance,
+              null
             )
           : canUseOptimisticGuess
             ? item.optimisticAccountId ?? null
@@ -3544,23 +3627,13 @@ export function ImportFilesModal({
         const optimisticIdentity =
           statementIdentity?.accountNumber
             ? statementIdentity
-            : canUseOptimisticGuess && guessedIdentity
+              : canUseOptimisticGuess && guessedIdentity
               ? {
                   ...guessedIdentity,
                   accountNumber: null,
                   accountType: inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank"),
                 }
               : null;
-        const knownOptimisticBalance = optimisticIdentity
-          ? findKnownImportedBalance(accounts, {
-              workspaceId,
-              accountId: optimisticAccountId,
-              accountName: optimisticIdentity.accountName ?? null,
-              institution: optimisticIdentity.institution ?? null,
-              accountNumber: statementIdentity?.accountNumber ?? null,
-              accountType: optimisticIdentity.accountType ?? statementAccountType,
-            })
-          : null;
         const optimisticSummary = optimisticIdentity
           ? ({
               ...buildOptimisticUploadSummary(
@@ -3644,7 +3717,9 @@ export function ImportFilesModal({
             statementIdentity.accountName ?? null,
             statementIdentity.institution ?? null,
             statementAccountType,
-            statementIdentity.accountNumber ?? null
+            statementIdentity.accountNumber ?? null,
+            null,
+            null
           )
         : null;
 
@@ -3843,7 +3918,9 @@ export function ImportFilesModal({
                 recoverableIdentity?.institution ?? null,
                 recoverableIdentity?.accountType ??
                   inferAccountTypeFromStatement(recoverableIdentity?.institution, recoverableIdentity?.accountName, "bank"),
-                recoverableIdentity?.accountNumber ?? null
+                recoverableIdentity?.accountNumber ?? null,
+                null,
+                null
               );
 
         const recoverablePreviewTransactions =
