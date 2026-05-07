@@ -3981,6 +3981,18 @@ body.transactions-manual-open .shell-quick-add-button {
   gap: 12px;
 }
 
+.dashboard-home__story-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.dashboard-home__hero-side {
+  display: grid;
+  gap: 12px;
+}
+
 .dashboard-home__goal-card,
 .dashboard-home__starter-card {
   display: grid;
@@ -22441,6 +22453,10 @@ button.accounts-detail__transaction-head-cell {
     grid-template-columns: 1fr;
   }
 
+  .dashboard-home__story-row {
+    grid-template-columns: 1fr;
+  }
+
   .dashboard-home__movement-grid,
   .dashboard-home__activity-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -22625,6 +22641,10 @@ button.accounts-detail__transaction-head-cell {
   .dashboard-home__hero-metrics,
   .dashboard-home__reports-grid,
   .dashboard-home__insight-footer {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-home__story-row {
     grid-template-columns: 1fr;
   }
 

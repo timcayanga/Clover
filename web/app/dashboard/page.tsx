@@ -686,7 +686,12 @@ async function DashboardStream({
           style={{ background: "linear-gradient(135deg, #03A8C0 0%, #5ED3D0 100%)" }}
         >
           <div className="dashboard-home__hero-main">
-            <p className="eyebrow">My balance</p>
+            <div className="dashboard-home__hero-main-row">
+              <p className="eyebrow">My balance</p>
+              <Link className="button button-secondary button-small dashboard-home__hero-add" href="/transactions?manual=1">
+                Add
+              </Link>
+            </div>
             <strong>{totalBalanceLabel}</strong>
           </div>
           <div className="dashboard-home__hero-aside" aria-label="Monthly balance summary">
@@ -718,31 +723,31 @@ async function DashboardStream({
           ))}
         </section>
 
-        <article className="dashboard-home__activity-card glass">
-          <div className="dashboard-home__summary-card-head">
-            <div>
-              <p className="eyebrow">Activity</p>
-              <h4>Transactions per day</h4>
+        <div className="dashboard-home__story-row">
+          <article className="dashboard-home__activity-card glass">
+            <div className="dashboard-home__summary-card-head">
+              <div>
+                <p className="eyebrow">Activity</p>
+                <h4>Transactions per day</h4>
+              </div>
+              <span className="dashboard-visual-pill">{activitySummaryLabel}</span>
             </div>
-            <span className="dashboard-visual-pill">{activitySummaryLabel}</span>
-          </div>
-          <div className="dashboard-home__activity-chart" aria-label="Transactions per day over the last seven days">
-            {activitySeries.map((point) => {
-              const height = Math.max((point.count / maxActivityCount) * 100, point.count > 0 ? 16 : 6);
-              return (
-                <div key={point.key} className="dashboard-home__activity-bar">
-                  <span className="dashboard-home__activity-bar-count">{point.count > 0 ? point.count : ""}</span>
-                  <div className="dashboard-home__activity-bar-track" aria-hidden="true">
-                    <div className="dashboard-home__activity-bar-fill" style={{ height: `${height}%` }} />
+            <div className="dashboard-home__activity-chart" aria-label="Transactions per day over the last seven days">
+              {activitySeries.map((point) => {
+                const height = Math.max((point.count / maxActivityCount) * 100, point.count > 0 ? 16 : 6);
+                return (
+                  <div key={point.key} className="dashboard-home__activity-bar">
+                    <span className="dashboard-home__activity-bar-count">{point.count > 0 ? point.count : ""}</span>
+                    <div className="dashboard-home__activity-bar-track" aria-hidden="true">
+                      <div className="dashboard-home__activity-bar-fill" style={{ height: `${height}%` }} />
+                    </div>
+                    <span className="dashboard-home__activity-bar-label">{point.label}</span>
                   </div>
-                  <span className="dashboard-home__activity-bar-label">{point.label}</span>
-                </div>
-              );
-            })}
-          </div>
-        </article>
+                );
+              })}
+            </div>
+          </article>
 
-        <div className="dashboard-home__bottom-stack">
           <div className="dashboard-home__hero-side">
             {shouldShowStarterCard ? (
               <div className="dashboard-home__starter-card">
