@@ -10,6 +10,7 @@ import { countWorkspaceTransactions } from "@/lib/plan-access";
 import { getOrCreateCurrentUser } from "@/lib/user-context";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
+import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 import {
   buildTransactionQueryWhere,
   buildTransactionQueryOrderBy,
@@ -151,43 +152,52 @@ const mapTransactionRow = (transaction: {
   isExcluded: boolean;
   warningReason: string | null;
   rawPayload: Prisma.JsonValue;
-}): TransactionApiRow => ({
-  id: transaction.id,
-  workspaceId: transaction.workspaceId,
-  accountId: transaction.accountId,
-  accountName: transaction.account.name,
-  categoryId: transaction.categoryId,
-  reviewStatus: transaction.reviewStatus,
-  parserConfidence: transaction.parserConfidence,
-  categoryConfidence: transaction.categoryConfidence,
-  accountMatchConfidence: transaction.accountMatchConfidence,
-  duplicateConfidence: transaction.duplicateConfidence,
-  transferConfidence: transaction.transferConfidence,
-  date: transaction.date.toISOString(),
-  amount: transaction.amount.toString(),
-  currency: transaction.currency,
-  type: transaction.type,
-  merchantRaw: transaction.merchantRaw,
-  merchantClean: getEffectiveTransactionMerchantName({
-    merchantClean: transaction.merchantClean,
-    merchantRaw: transaction.merchantRaw,
-    institution: transaction.account.institution,
-  }),
-  description: transaction.description,
-  isTransfer: transaction.isTransfer,
-  isExcluded: transaction.isExcluded,
-  createdAt: transaction.createdAt.toISOString(),
-  warningReason: transaction.warningReason,
-  rawPayload: transaction.rawPayload,
-  categoryName: getEffectiveTransactionCategoryName({
-    categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
-    rawPayload: transaction.rawPayload,
-    merchantRaw: transaction.merchantRaw,
-    merchantClean: transaction.merchantClean,
-    institution: transaction.account.institution,
+}): TransactionApiRow => {
+  const normalizedCurrency =
+    normalizeInstitutionCurrency(
+      transaction.account.institution,
+      transaction.currency,
+      transaction.account.name
+    ) ?? transaction.currency;
+
+  return {
+    id: transaction.id,
+    workspaceId: transaction.workspaceId,
+    accountId: transaction.accountId,
+    accountName: transaction.account.name,
+    categoryId: transaction.categoryId,
+    reviewStatus: transaction.reviewStatus,
+    parserConfidence: transaction.parserConfidence,
+    categoryConfidence: transaction.categoryConfidence,
+    accountMatchConfidence: transaction.accountMatchConfidence,
+    duplicateConfidence: transaction.duplicateConfidence,
+    transferConfidence: transaction.transferConfidence,
+    date: transaction.date.toISOString(),
+    amount: transaction.amount.toString(),
+    currency: normalizedCurrency,
     type: transaction.type,
-  }),
-});
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: getEffectiveTransactionMerchantName({
+      merchantClean: transaction.merchantClean,
+      merchantRaw: transaction.merchantRaw,
+      institution: transaction.account.institution,
+    }),
+    description: transaction.description,
+    isTransfer: transaction.isTransfer,
+    isExcluded: transaction.isExcluded,
+    createdAt: transaction.createdAt.toISOString(),
+    warningReason: transaction.warningReason,
+    rawPayload: transaction.rawPayload,
+    categoryName: getEffectiveTransactionCategoryName({
+      categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
+      rawPayload: transaction.rawPayload,
+      merchantRaw: transaction.merchantRaw,
+      merchantClean: transaction.merchantClean,
+      institution: transaction.account.institution,
+      type: transaction.type,
+    }),
+  };
+};
 
 const receiptLineItemSchema = z.object({
   description: z.string().min(1),

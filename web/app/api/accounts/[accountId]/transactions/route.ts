@@ -6,6 +6,7 @@ import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { buildTransactionQueryWhere } from "@/lib/transaction-query";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 import { getEffectiveTransactionCategoryName, getEffectiveTransactionMerchantName } from "@/lib/transaction-display";
+import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 
 export const dynamic = "force-dynamic";
 
@@ -53,35 +54,45 @@ const mapTransactionRow = (transaction: {
   importFileId: string | null;
   createdAt: Date;
   institution?: string | null;
-}): TransactionApiRow => ({
-  id: transaction.id,
-  accountId: transaction.accountId,
-  categoryId: transaction.category?.id ?? null,
-  amount: transaction.amount.toString(),
-  currency: transaction.currency,
-  type: transaction.type,
-  date: transaction.date.toISOString(),
-  merchantRaw: transaction.merchantRaw,
-  merchantClean: getEffectiveTransactionMerchantName({
-    merchantClean: transaction.merchantClean,
-    merchantRaw: transaction.merchantRaw,
-    institution: transaction.institution ?? null,
-  }),
-  categoryName: getEffectiveTransactionCategoryName({
-    categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
-    rawPayload: transaction.rawPayload,
-    merchantRaw: transaction.merchantRaw,
-    merchantClean: transaction.merchantClean,
-    institution: transaction.institution ?? null,
+  accountName?: string | null;
+}): TransactionApiRow => {
+  const normalizedCurrency =
+    normalizeInstitutionCurrency(
+      transaction.institution ?? null,
+      transaction.currency,
+      transaction.accountName ?? null
+    ) ?? transaction.currency;
+
+  return {
+    id: transaction.id,
+    accountId: transaction.accountId,
+    categoryId: transaction.category?.id ?? null,
+    amount: transaction.amount.toString(),
+    currency: normalizedCurrency,
     type: transaction.type,
-  }),
-  description: transaction.description,
-  isExcluded: transaction.isExcluded,
-  importFileId: transaction.importFileId,
-  source: transaction.importFileId ? "upload" : "manual",
-  rawPayload: transaction.rawPayload,
-  createdAt: transaction.createdAt.toISOString(),
-});
+    date: transaction.date.toISOString(),
+    merchantRaw: transaction.merchantRaw,
+    merchantClean: getEffectiveTransactionMerchantName({
+      merchantClean: transaction.merchantClean,
+      merchantRaw: transaction.merchantRaw,
+      institution: transaction.institution ?? null,
+    }),
+    categoryName: getEffectiveTransactionCategoryName({
+      categoryName: transaction.category?.name ?? getRawPayloadCategoryName(transaction.rawPayload) ?? null,
+      rawPayload: transaction.rawPayload,
+      merchantRaw: transaction.merchantRaw,
+      merchantClean: transaction.merchantClean,
+      institution: transaction.institution ?? null,
+      type: transaction.type,
+    }),
+    description: transaction.description,
+    isExcluded: transaction.isExcluded,
+    importFileId: transaction.importFileId,
+    source: transaction.importFileId ? "upload" : "manual",
+    rawPayload: transaction.rawPayload,
+    createdAt: transaction.createdAt.toISOString(),
+  };
+};
 
 const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefined) => {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
@@ -136,7 +147,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
     const siblingAccounts = await prisma.account.findMany({
       where: {
         workspaceId: account.workspaceId,
-        deletedAt: null,
       },
       select: {
         id: true,
@@ -214,6 +224,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ acco
         mapTransactionRow({
           ...row,
           institution: row.account?.institution ?? account.institution ?? null,
+          accountName: account.name,
         })
       ),
       page,

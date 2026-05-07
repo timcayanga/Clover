@@ -8,6 +8,7 @@ import { INVESTMENT_SUBTYPES, type InvestmentSubtype } from "@/lib/investments";
 import { capturePostHogServerEvent } from "@/lib/analytics";
 import { isMissingAccountNumberColumnError, omitAccountNumberField } from "@/lib/account-column-compat";
 import { ACCOUNT_TYPES } from "@/lib/account-types";
+import { normalizeInstitutionCurrency } from "@/lib/import-parser";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,15 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   createdAt: true,
 });
 
+const normalizeAccountCurrency = (account: {
+  institution?: string | null;
+  currency?: string | null;
+  name?: string | null;
+}) =>
+  normalizeInstitutionCurrency(account.institution ?? null, account.currency ?? null, account.name ?? null) ??
+  account.currency ??
+  "PHP";
+
 const accountPatchSchema = z.object({
   workspaceId: z.string().min(1),
   name: z.string().min(1).optional(),
@@ -87,6 +97,9 @@ const accountPatchSchema = z.object({
 
 const serializeAccount = <T extends {
   accountNumber?: string | null;
+  currency?: string | null;
+  institution?: string | null;
+  name?: string | null;
   balance: { toString: () => string } | null;
   investmentQuantity: { toString: () => string } | null;
   investmentCostBasis: { toString: () => string } | null;
@@ -100,6 +113,7 @@ const serializeAccount = <T extends {
 }>(account: T) => ({
   ...account,
   accountNumber: account.accountNumber ?? null,
+  currency: normalizeAccountCurrency(account),
   balance: account.balance?.toString() ?? null,
   investmentQuantity: account.investmentQuantity?.toString() ?? null,
   investmentCostBasis: account.investmentCostBasis?.toString() ?? null,
@@ -165,6 +179,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
     const { accountId } = await params;
     const payload = accountPatchSchema.parse(await request.json());
     const compatibleColumns = await getCompatibleAccountColumns();
+    const normalizedCurrency = payload.currency
+      ? normalizeInstitutionCurrency(
+          payload.institution ?? payload.name ?? null,
+          payload.currency.trim().toUpperCase(),
+          payload.name ?? null
+        ) ?? payload.currency.trim().toUpperCase()
+      : undefined;
 
     await assertWorkspaceAccess(userId, payload.workspaceId);
 
@@ -196,7 +217,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
         investmentMaturityValue:
           payload.investmentMaturityValue === undefined ? undefined : parseNullableDecimal(payload.investmentMaturityValue),
         type: payload.type,
-        currency: payload.currency ? payload.currency.toUpperCase() : undefined,
+        currency: normalizedCurrency,
         source: payload.source,
         balance: payload.balance === undefined ? undefined : payload.balance === null || payload.balance === "" ? null : payload.balance.toString(),
       };

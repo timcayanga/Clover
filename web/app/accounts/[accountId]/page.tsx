@@ -811,12 +811,79 @@ function AccountDetailPageContent() {
         const optimisticId = typeof entry.optimisticAccountId === "string" ? entry.optimisticAccountId : "";
         return entryId === accountId || optimisticId === accountId;
       }) ?? cachedAccountLookup?.account) as Account | undefined;
-      const cachedAccount = cachedAccountEntry
+      let cachedAccount = cachedAccountEntry
         ? ({
             ...cachedAccountEntry,
             workspaceId: cachedWorkspaceId,
           } as Account)
         : null;
+      const resolvePersistedImportedAccount = async (baseAccount: Account) => {
+        const identityKey = normalizeImportedAccountKey(
+          baseAccount.name,
+          baseAccount.institution,
+          baseAccount.accountNumber,
+          baseAccount.type
+        );
+
+        const findReplacementInSnapshot = (snapshot?: { accounts?: unknown[] } | null) => {
+          const accounts = Array.isArray(snapshot?.accounts) ? (snapshot.accounts as Account[]) : [];
+          return (
+            accounts.find((entry) => {
+              if (!entry?.id || entry.id === accountId || entry.id.startsWith("optimistic-")) {
+                return false;
+              }
+
+              return (
+                normalizeImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type) === identityKey
+              );
+            }) ?? null
+          );
+        };
+
+        const cachedReplacement =
+          findReplacementInSnapshot(cachedAccountsWorkspace) ??
+          (cachedWorkspaceId && cachedWorkspaceId !== activeWorkspaceId
+            ? findReplacementInSnapshot(getCachedAccountsWorkspace(cachedWorkspaceId))
+            : null);
+
+        if (cachedReplacement) {
+          return cachedReplacement;
+        }
+
+        if (!baseAccount.workspaceId) {
+          return null;
+        }
+
+        for (let attempt = 0; attempt < 5; attempt += 1) {
+          try {
+            const response = await fetch(`/api/accounts?workspaceId=${encodeURIComponent(baseAccount.workspaceId)}`);
+            if (response.ok) {
+              const payload = (await response.json()) as { accounts?: Account[] } | null;
+              const fetchedAccounts = Array.isArray(payload?.accounts) ? payload.accounts : [];
+              const replacement =
+                fetchedAccounts.find((entry) => {
+                  if (!entry?.id || entry.id === accountId || entry.id.startsWith("optimistic-")) {
+                    return false;
+                  }
+
+                  return (
+                    normalizeImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type) === identityKey
+                  );
+                }) ?? null;
+
+              if (replacement) {
+                return replacement;
+              }
+            }
+          } catch {
+            // Keep polling briefly; upload-backed accounts can settle a moment later.
+          }
+
+          await new Promise((resolve) => setTimeout(resolve, 750));
+        }
+
+        return null;
+      };
       if (
         !cachedAccount &&
         (getDeletingWorkspaceAccountIds(cachedWorkspaceId).includes(accountId) ||
@@ -860,14 +927,45 @@ function AccountDetailPageContent() {
         }
       }
 
+      if (cachedAccount && accountId.startsWith("optimistic-")) {
+        const replacementAccount = await resolvePersistedImportedAccount(cachedAccount);
+        if (replacementAccount) {
+          cachedAccount = replacementAccount;
+          const replacementTransactionsLookup = findCachedTransactionsForAccount(replacementAccount.id, replacementAccount);
+          const replacementTransactions = (replacementTransactionsLookup?.transactions as Transaction[] | undefined) ?? [];
+          const replacementPath = getAccountPath(replacementAccount);
+
+          if (!cancelled) {
+            setAccount(replacementAccount);
+            if (replacementTransactions.length > 0) {
+              setTransactions(replacementTransactions);
+              setTransactionTotalCount(
+                replacementTransactionsLookup?.totalCount ?? replacementTransactions.length
+              );
+              setTransactionsError(null);
+              setTransactionsLoading(false);
+              setHasInitialDataLoaded(true);
+            }
+            if (replacementPath !== `/accounts/${accountPathSegment}`) {
+              router.replace(replacementPath);
+            }
+          }
+        }
+      }
+
       try {
-        const accountPromise = fetch(`/api/accounts/${accountId}`);
-        const transactionsPromise = fetch(`/api/accounts/${accountId}/transactions?page=1&pageSize=${TRANSACTION_PAGE_SIZE}`);
-        const checkpointsPromise = fetch(`/api/accounts/${accountId}/statement-checkpoints`);
+        const resolvedAccountId = cachedAccount?.id && !cachedAccount.id.startsWith("optimistic-") ? cachedAccount.id : accountId;
+        const accountPromise = fetch(`/api/accounts/${resolvedAccountId}`);
+        const transactionsPromise = fetch(`/api/accounts/${resolvedAccountId}/transactions?page=1&pageSize=${TRANSACTION_PAGE_SIZE}`);
+        const checkpointsPromise = fetch(`/api/accounts/${resolvedAccountId}/statement-checkpoints`);
 
         const accountResponse = await accountPromise;
         if (!accountResponse.ok) {
           if (cachedAccount) {
+            const replacementAccount = await resolvePersistedImportedAccount(cachedAccount);
+            if (replacementAccount && !cancelled) {
+              router.replace(getAccountPath(replacementAccount));
+            }
             return;
           }
           throw new Error("Unable to load this account.");
@@ -1204,7 +1302,9 @@ function AccountDetailPageContent() {
         currentAccountBalance !== null && Number.isFinite(currentAccountBalance) && currentAccountBalance !== 0;
       const shouldPreserveImportedBalance =
         account?.source === "upload" &&
-        (!checkpoint || checkpoint.status !== "reconciled");
+        (!checkpoint ||
+          checkpoint.status !== "reconciled" ||
+          checkpointBalance === null);
 
       const reconciledValue = checkpointBalance && !(shouldPreserveImportedBalance && currentAccountBalanceIsNonZero)
         ? checkpointBalance

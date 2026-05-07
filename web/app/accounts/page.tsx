@@ -1105,7 +1105,9 @@ function AccountsPageContent() {
                           currentAccountBalance !== null && Number.isFinite(currentAccountBalance) && currentAccountBalance !== 0;
                         const shouldPreserveImportedBalance =
                           account.source === "upload" &&
-                          (!latestCheckpoint || latestCheckpoint.status !== "reconciled");
+                          (!latestCheckpoint ||
+                            latestCheckpoint.status !== "reconciled" ||
+                            checkpointBalance === null);
                         const reconciledBalance = checkpointBalance && !(shouldPreserveImportedBalance && currentAccountBalanceIsNonZero)
                           ? checkpointBalance
                           : shouldPreserveImportedBalance
