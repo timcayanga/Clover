@@ -8638,6 +8638,231 @@ const parseGenericDigitalSavingsStatement = (
   };
 };
 
+const isGenericEastWestTemplateStatement = (text: string) => {
+  const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  return (
+    /\bEASTWEST\b/i.test(normalized) &&
+    /\bBalance at Period|Balance al Paficd\b/i.test(normalized) &&
+    /\bCash Dep(?:osit|oait|osil|oslt|esit|enit)\b/i.test(normalized) &&
+    /\b(?:Outward|Cutward|Oubwas'?d)\s+Chequ/i.test(normalized)
+  );
+};
+
+const parseEastWestOcrDateToken = (value: string | null | undefined) => {
+  const normalized = normalizeWhitespace(value ?? "");
+  if (!normalized) {
+    return null;
+  }
+
+  const match = normalized.match(/^([A-Za-z0-9.]{1,4})\s+([A-Za-z]{3,5})\s+(\d{2})$/i);
+  if (!match) {
+    return parseDateValue(normalized);
+  }
+
+  const rawDay = match[1].replace(/[^A-Za-z0-9]/g, "");
+  const month = match[2];
+  const year = match[3];
+  const replacements: Record<string, string> = {
+    O: "0",
+    o: "0",
+    Q: "0",
+    D: "0",
+    I: "1",
+    l: "1",
+    i: "1",
+    T: "1",
+    Z: "2",
+    z: "2",
+    S: "5",
+    s: "5",
+    B: "8",
+    b: "6",
+    F: "7",
+    f: "7",
+    y: "4",
+    Y: "4",
+  };
+  const cleanedDayToken = rawDay
+    .split("")
+    .map((char) => replacements[char] ?? char)
+    .join("");
+  const numericMatch = cleanedDayToken.match(/\d{1,2}/);
+  const fallbackNumeric = rawDay.match(/\d{1,2}/);
+  const numericDay = Number(numericMatch?.[0] ?? fallbackNumeric?.[0] ?? NaN);
+  if (!Number.isFinite(numericDay) || numericDay < 1 || numericDay > 31) {
+    return parseDateValue(`${month} ${rawDay} 20${year}`);
+  }
+
+  return parseDateValue(`${numericDay} ${month} 20${year}`);
+};
+
+const parseGenericEastWestTemplateStatement = (
+  text: string,
+  context: ImportParseContext = {},
+  options: { institutionAwareNormalization?: boolean } = {}
+) => {
+  if (!isGenericEastWestTemplateStatement(text)) {
+    return null;
+  }
+
+  const normalizedText = text.replace(/\u00a0/g, " ");
+  const lines = normalizedText.split(/\r?\n/).map((line) => normalizeWhitespace(line)).filter(Boolean);
+  const accountName =
+    cleanAccountHolderDisplayName(context.accountName) ??
+    cleanAccountHolderDisplayName(lines.find((line) => /\bJOH[MN]\s+CITIZEN\b/i.test(line))?.match(/\b(JOH[MN]\s+CITIZEN)\b/i)?.[1] ?? null) ??
+    cleanAccountHolderDisplayName(
+      lines.find((line) => /\bCustomer|Customet|Cusbornes\b/i.test(line))?.match(/\b([A-Z]{3,}\s+[A-Z]{3,}(?:\s+[A-Z]{3,})*)\b/i)?.[1] ?? null
+    ) ??
+    "EastWest Bank";
+  const openingBalance =
+    parseMoney(normalizedText.match(/Balance at Period(?:\s+Start)?[\s\S]{0,40}?([0-9][0-9,]*\.\d{2})/i)?.[1] ?? null) ?? 0;
+  const institution = "EastWest Bank";
+  const dateLinePattern = /^[A-Za-z0-9.]{1,4}\s+[A-Za-z]{3,5}\s+\d{2}\b/i;
+  const isTransactionSeedLine = (line: string) =>
+    dateLinePattern.test(line) ||
+    ((/cash dep(?:osit|oait|osil|oslt|esit|enit)|(?:outward|cutward|oubwas'?d)\s+chequ|trans(?:fer|les|ter)/i.test(line) ||
+      /successful/i.test(line)) &&
+      ((line.match(/[0-9][0-9,]*\.\d{2}/g) ?? []).length >= 1));
+
+  const blocks: string[][] = [];
+  let current: string[] = [];
+  for (const line of lines) {
+    if (/^Page\s+\d+/i.test(line) || /^EASTWEST BANK$/i.test(line) || /^Address:/i.test(line) || /^Phone:/i.test(line)) {
+      if (current.length > 0) {
+        blocks.push(current);
+        current = [];
+      }
+      continue;
+    }
+
+    if (isTransactionSeedLine(line)) {
+      if (current.length > 0) {
+        blocks.push(current);
+      }
+      current = [line];
+      continue;
+    }
+
+    if (current.length > 0) {
+      current.push(line);
+    }
+  }
+
+  if (current.length > 0) {
+    blocks.push(current);
+  }
+
+  const rows: ParsedImportRow[] = [];
+  let previousBalance = openingBalance;
+
+  for (const block of blocks) {
+    const blockText = normalizeWhitespace(block.join(" "));
+    const dateTokens = Array.from(blockText.matchAll(/\b([A-Za-z0-9.]{1,4}\s+[A-Za-z]{3,5}\s+\d{2})\b/g), (match) => match[1]);
+    const parsedDates = dateTokens
+      .map((token) => parseEastWestOcrDateToken(token))
+      .filter((value): value is Date => Boolean(value) && !Number.isNaN(value.getTime()))
+      .sort((left, right) => left.getTime() - right.getTime());
+    const date = parsedDates.at(-1) ?? null;
+    if (!date) {
+      continue;
+    }
+
+    const moneyMatches = blockText.match(/[0-9][0-9,]*\.\d{2}/g) ?? [];
+    const closingBalance = parseMoney(moneyMatches.at(-1) ?? null);
+    if (closingBalance === null) {
+      continue;
+    }
+
+    const lower = blockText.toLowerCase();
+    let description = "";
+    let type: TransactionType = "expense";
+    let categoryName = "Other";
+
+    if (/cash dep(?:osit|oait|osil|oslt|esit|enit)/i.test(blockText)) {
+      description = "Cash Deposit";
+      type = "income";
+      categoryName = "Income";
+    } else if (/(?:outward|cutward|oubwas'?d)\s+chequ/i.test(blockText)) {
+      description = /dr\b/i.test(blockText) ? "Outward Cheque Dr / Cheque Enlistment" : "Outward Cheque / Cheque Enlistment";
+      type = "expense";
+      categoryName = "Financial";
+    } else if (/trans(?:fer|les|ter)/i.test(blockText) || /successful/i.test(blockText)) {
+      description = "Transfer SUCCESSFUL";
+      type = "transfer";
+      categoryName = "Transfers";
+    } else {
+      continue;
+    }
+
+    let amount = Math.abs(closingBalance - previousBalance);
+    if (!(amount > 0)) {
+      const fallbackAmount = parseMoney(moneyMatches.at(-2) ?? null);
+      amount = fallbackAmount ?? amount;
+    }
+    if (!(amount > 0)) {
+      previousBalance = closingBalance;
+      continue;
+    }
+
+    rows.push({
+      date: date.toISOString().slice(0, 10),
+      amount: amount.toFixed(2),
+      merchantRaw: description,
+      merchantClean: summarizeMerchantText(
+        description,
+        options.institutionAwareNormalization === false ? null : institution
+      ),
+      description,
+      categoryName,
+      accountName,
+      institution,
+      type,
+      confidence: 78,
+      rawPayload: {
+        bank: institution,
+        kind: "generic_eastwest_template_transaction",
+        line: blockText,
+        amountText: amount.toFixed(2),
+        balanceText: closingBalance.toFixed(2),
+        balance: closingBalance,
+      },
+    });
+
+    previousBalance = closingBalance;
+  }
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const startDate = rows[0]?.date ? new Date(`${rows[0].date}T12:00:00.000Z`) : null;
+  const endDate = rows.at(-1)?.date ? new Date(`${rows.at(-1)?.date}T12:00:00.000Z`) : null;
+
+  return {
+    metadata: {
+      institution,
+      accountNumber: preserveAccountNumberDisplayCandidate(context.accountNumber) ?? null,
+      accountName,
+      accountType: "bank",
+      openingBalance,
+      endingBalance: previousBalance,
+      startDate: startDate ? startDate.toISOString() : null,
+      endDate: endDate ? endDate.toISOString() : null,
+      confidence: scoreMetadataConfidence({
+        institution,
+        accountNumber: preserveAccountNumberDisplayCandidate(context.accountNumber) ?? null,
+        accountName,
+        accountType: inferAccountTypeFromStatement(institution, accountName, "bank"),
+        openingBalance,
+        endingBalance: previousBalance,
+        startDate: startDate ? startDate.toISOString() : null,
+        endDate: endDate ? endDate.toISOString() : null,
+      }),
+    } satisfies DetectedStatementMetadata,
+    rows,
+  };
+};
+
 const parseGenericStatementDateText = (value: string, yearHint?: number | null) => {
   const normalized = normalizeWhitespace(value).replace(/,\s*/g, " ").trim();
   if (yearHint) {
@@ -8891,6 +9116,13 @@ const choosePreferredStatementRange = (
 };
 
 export const parseGenericStatementMetadata = (text: string, context: ImportParseContext = {}): DetectedStatementMetadata | null => {
+  const genericEastWestParsed = parseGenericEastWestTemplateStatement(text, context, {
+    institutionAwareNormalization: false,
+  });
+  if (genericEastWestParsed) {
+    return genericEastWestParsed.metadata;
+  }
+
   const genericDigitalSavingsParsed = parseGenericDigitalSavingsStatement(text, context, {
     institutionAwareNormalization: false,
   });
@@ -11651,6 +11883,11 @@ export const parseGenericBankStatementText = (
   context: ImportParseContext = {},
   options: { institutionAwareNormalization?: boolean } = {}
 ) => {
+  const genericEastWestParsed = parseGenericEastWestTemplateStatement(text, context, options);
+  if (genericEastWestParsed) {
+    return genericEastWestParsed;
+  }
+
   const genericDigitalSavingsParsed = parseGenericDigitalSavingsStatement(text, context, options);
   if (genericDigitalSavingsParsed) {
     return genericDigitalSavingsParsed;
