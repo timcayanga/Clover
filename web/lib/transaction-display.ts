@@ -1,5 +1,5 @@
 import type { Prisma } from "@prisma/client";
-import { guessCategoryFallback } from "@/lib/data-engine";
+import { guessCategoryName } from "@/lib/import-parser";
 import { summarizeMerchantText } from "@/lib/merchant-labels";
 
 type TransactionType = "income" | "expense" | "transfer";
@@ -124,6 +124,6 @@ export const getEffectiveTransactionCategoryName = (params: {
     }
   }
 
-  const heuristic = guessCategoryFallback(effectiveMerchantName || params.merchantRaw, params.type);
+  const heuristic = guessCategoryName(effectiveMerchantName || params.merchantRaw, params.type);
   return heuristic || directCategory || rawPayloadCategory || null;
 };
