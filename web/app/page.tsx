@@ -1,120 +1,60 @@
-import { ScrollReveal } from "../components/scroll-reveal";
-import { LandingNav } from "../components/landing-nav";
-import { MobileCarousel } from "../components/mobile-carousel";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import Script from "next/script";
+import { LandingNav } from "../components/landing-nav";
+import { ScrollReveal } from "../components/scroll-reveal";
 
-function StepIcon({ name }: { name: "upload" | "insights" | "decision" }) {
-  const icons = {
-    upload: "/landing-icons/upload3d.png",
-    insights: "/landing-icons/analyze.png",
-    decision: "/landing-icons/plan.png",
-  } as const;
-
-  return <img src={icons[name]} alt="" aria-hidden="true" loading="lazy" decoding="async" />;
-}
-
-function HeroImage() {
+function SectionVisual({
+  eyebrow,
+  title,
+  body,
+  tone = "light",
+  className = "",
+}: {
+  eyebrow: string;
+  title: string;
+  body: string;
+  tone?: "light" | "dark";
+  className?: string;
+}) {
   return (
-    <figure className="landing-photo landing-photo--hero" aria-hidden="true">
-      <img src="/landing-images/hero.jpg" alt="" />
-      <div className="landing-photo__overlay">
-        <div className="landing-photo__chips" aria-hidden="true">
-          <span>Upload PDFs</span>
-          <span>Review reports</span>
-          <span>AI insights</span>
-        </div>
+    <div className={`landing-visual ${tone === "dark" ? "landing-visual--dark" : ""} ${className}`.trim()} aria-hidden="true">
+      <div className="landing-visual__top">
+        <span className="landing-visual__chip">{eyebrow}</span>
+        <span className="landing-visual__pulse" />
       </div>
-      <figcaption className="landing-photo__badge">Clear, confident, and in control</figcaption>
-    </figure>
-  );
-}
-
-function VisualGallery() {
-  return (
-    <div className="landing-gallery">
-      <div className="landing-gallery__layout">
-        <figure className="landing-photo landing-photo--gallery">
-          <img src="/landing-images/statement-upload.jpg" alt="" />
-          <figcaption className="landing-photo__badge">Upload statements</figcaption>
-        </figure>
-
-        <figure className="landing-photo landing-photo--gallery">
-          <img src="/landing-images/reports-ai.jpg" alt="" />
-          <figcaption className="landing-photo__badge">Reports and AI</figcaption>
-        </figure>
-
-        <figure className="landing-photo landing-photo--gallery">
-          <img src="/landing-images/smart-overview.jpg" alt="" />
-          <figcaption className="landing-photo__badge">A smarter overview</figcaption>
-        </figure>
+      <div className="landing-visual__content">
+        <strong>{title}</strong>
+        <p>{body}</p>
       </div>
     </div>
   );
 }
 
-function VisualGalleryCarousel() {
+function FeatureSection({
+  eyebrow,
+  title,
+  copy,
+  visual,
+  reverse = false,
+  id,
+}: {
+  eyebrow: string;
+  title: ReactNode;
+  copy: ReactNode;
+  visual: ReactNode;
+  reverse?: boolean;
+  id: string;
+}) {
   return (
-    <MobileCarousel
-      className="landing-gallery__mobile"
-      ariaLabel="Visual overview carousel"
-      labels={["Upload statements", "Reports and AI", "A smarter overview"]}
-      slides={[
-        <figure className="landing-photo landing-photo--gallery" key="statement-upload">
-          <img src="/landing-images/statement-upload.jpg" alt="" />
-          <figcaption className="landing-photo__badge">Upload statements</figcaption>
-        </figure>,
-        <figure className="landing-photo landing-photo--gallery" key="reports-ai">
-          <img src="/landing-images/reports-ai.jpg" alt="" />
-          <figcaption className="landing-photo__badge">Reports and AI</figcaption>
-        </figure>,
-        <figure className="landing-photo landing-photo--gallery" key="smart-overview">
-          <img src="/landing-images/smart-overview.jpg" alt="" />
-          <figcaption className="landing-photo__badge">A smarter overview</figcaption>
-        </figure>,
-      ]}
-    />
-  );
-}
-
-function StepIconMobile({ name }: { name: "upload" | "insights" | "decision" }) {
-  return <StepIcon name={name} />;
-}
-
-function HowItWorksCarousel() {
-  return (
-    <MobileCarousel
-      className="landing-flow__mobile"
-      ariaLabel="How Clover works carousel"
-      labels={["Upload", "Analyze", "Plan"]}
-      controlsPlacement="footer"
-      slides={[
-        <article className="landing-flow__step" key="upload">
-          <span className="landing-flow__icon">
-            <StepIconMobile name="upload" />
-          </span>
-          <span className="landing-flow__number">01</span>
-          <h3>Upload</h3>
-          <p>Add your statements and receipts so Clover can start organizing them for you.</p>
-        </article>,
-        <article className="landing-flow__step" key="analyze">
-          <span className="landing-flow__icon">
-            <StepIconMobile name="insights" />
-          </span>
-          <span className="landing-flow__number">02</span>
-          <h3>Analyze</h3>
-          <p>Clover spots patterns in your money and shows what changed in a simple way.</p>
-        </article>,
-        <article className="landing-flow__step" key="plan">
-          <span className="landing-flow__icon">
-            <StepIconMobile name="decision" />
-          </span>
-          <span className="landing-flow__number">03</span>
-          <h3>Plan</h3>
-          <p>Use reports and insights to make smarter money decisions going forward.</p>
-        </article>,
-      ]}
-    />
+    <ScrollReveal as="section" className={`landing-feature ${reverse ? "landing-feature--reverse" : ""}`.trim()} id={id}>
+      <div className="landing-feature__copy">
+        <p className="eyebrow landing-feature__eyebrow">{eyebrow}</p>
+        <h2 className="landing-feature__title">{title}</h2>
+        <div className="landing-feature__body">{copy}</div>
+      </div>
+      <div className="landing-feature__visual">{visual}</div>
+    </ScrollReveal>
   );
 }
 
@@ -135,10 +75,10 @@ export default function HomePage() {
 
       <ScrollReveal as="section" className="landing-hero">
         <div className="landing-hero__copy">
-          <h1>Turn money clutter into clarity in minutes.</h1>
+          <p className="eyebrow">Clover</p>
+          <h1>Track spending. Split bills. Stay in control.</h1>
           <p className="landing-hero__lede">
-            Clover helps you gather statements, receipts, and accounts so you can understand what is happening without digging through folders,
-            PDFs, and spreadsheets.
+            Clover helps you understand your money by importing statements, organizing transactions, and making shared expenses easier to settle.
           </p>
 
           <div className="landing-hero__actions">
@@ -149,97 +89,163 @@ export default function HomePage() {
               Log in
             </Link>
           </div>
-
-          <p className="landing-hero__note">Less guesswork. More confidence about what comes next.</p>
         </div>
 
-        <HeroImage />
+        <article className="landing-hero-card glass">
+          <p className="landing-hero-card__eyebrow">Built for clarity</p>
+          <h2>One app for the everyday money work that usually gets split across tools.</h2>
+          <div className="landing-hero-card__stack">
+            <div className="landing-hero-card__row">
+              <span>Import statements</span>
+              <strong>Review transactions faster</strong>
+            </div>
+            <div className="landing-hero-card__row">
+              <span>Budget tracking</span>
+              <strong>See spending by category</strong>
+            </div>
+            <div className="landing-hero-card__row">
+              <span>Split bills</span>
+              <strong>Settle up without the back-and-forth</strong>
+            </div>
+          </div>
+        </article>
       </ScrollReveal>
 
-      <ScrollReveal as="section" className="landing-gallery-section">
-        <div className="landing-gallery__copy">
-          <p className="eyebrow">Visual overview</p>
-          <h2>From scattered files to a clear picture.</h2>
+      <FeatureSection
+        id="statement-import"
+        eyebrow="01. Statement import"
+        title={
+          <>
+            Turn <span className="landing-highlight">statements</span> into usable data.
+          </>
+        }
+        copy={
           <p>
-            Upload the things you already have. Clover organizes them into an overview that makes your finances easier to understand.
+            Upload your bank statements and Clover helps extract transactions automatically, so you can skip the manual entry and get straight to
+            reviewing your finances. The <span className="landing-highlight">raw file</span> stays separate from your confirmed records, which keeps
+            everything traceable and easy to audit.
           </p>
-        </div>
+        }
+        visual={
+          <SectionVisual
+            eyebrow="Upload"
+            title="Statement.pdf"
+            body="Imported, parsed, and ready for review with the original source preserved."
+            className="landing-visual--upload"
+          />
+        }
+      />
 
-        <VisualGallery />
-        <VisualGalleryCarousel />
-      </ScrollReveal>
+      <FeatureSection
+        id="budget-tracking"
+        eyebrow="02. Budget tracking"
+        title={
+          <>
+            See where your <span className="landing-highlight">money</span> goes.
+          </>
+        }
+        copy={
+          <p>
+            Clover turns transaction data into clear spending views by <span className="landing-highlight">category</span>, account, and time
+            period, helping you spot patterns, compare months, and stay on top of your budget.
+          </p>
+        }
+        visual={
+          <SectionVisual
+            eyebrow="Reporting"
+            title="$1,842"
+            body="A tidy monthly snapshot with category breakdowns and room to compare the last few cycles."
+            tone="dark"
+            className="landing-visual--report"
+          />
+        }
+        reverse
+      />
 
-      <ScrollReveal as="section" className="landing-flow">
-        <div className="landing-flow__copy">
-          <h2>How It Works</h2>
-        </div>
+      <FeatureSection
+        id="split-bills"
+        eyebrow="03. Split bills"
+        title={
+          <>
+            Share expenses without the <span className="landing-highlight">hassle</span>.
+          </>
+        }
+        copy={
+          <p>
+            Track shared costs with friends, family, roommates, or travel groups and quickly see who owes what. Clover keeps the math simple so
+            settling up feels less awkward.
+          </p>
+        }
+        visual={
+          <SectionVisual
+            eyebrow="Split"
+            title="3 people"
+            body="Add expenses, assign shares, and see balances at a glance before anyone asks for a reminder."
+            className="landing-visual--split"
+          />
+        }
+      />
 
-        <div className="landing-flow__steps" aria-label="How Clover works">
-          <div className="landing-flow__step">
-            <span className="landing-flow__icon">
-              <StepIcon name="upload" />
-            </span>
-            <span className="landing-flow__number">01</span>
-            <h3>Upload</h3>
-            <p>Bring in the statements and receipts you have been putting off. Clover starts the cleanup for you.</p>
-          </div>
-          <div className="landing-flow__step">
-            <span className="landing-flow__icon">
-              <StepIcon name="insights" />
-            </span>
-            <span className="landing-flow__number">02</span>
-            <h3>Analyze</h3>
-            <p>See what changed, what stands out, and what needs attention in a way that feels easy to follow.</p>
-          </div>
-          <div className="landing-flow__step">
-            <span className="landing-flow__icon">
-              <StepIcon name="decision" />
-            </span>
-            <span className="landing-flow__number">03</span>
-            <h3>Plan</h3>
-            <p>Know your next move so the next month feels more intentional and less reactive.</p>
-          </div>
-        </div>
+      <FeatureSection
+        id="pro"
+        eyebrow="04. Pro"
+        title={
+          <>
+            Unlock <span className="landing-highlight">Pro</span> features when you need more.
+          </>
+        }
+        copy={
+          <p>
+            Pro gives you access to advanced tools like deeper reporting, more powerful tracking, and expanded import capabilities so you can manage
+            your finances with more control and flexibility.
+          </p>
+        }
+        visual={
+          <SectionVisual
+            eyebrow="Pro"
+            title="More room"
+            body="Designed for people who want richer reports, higher limits, and extra control as their finances grow."
+            tone="dark"
+            className="landing-visual--pro"
+          />
+        }
+        reverse
+      />
 
-        <HowItWorksCarousel />
-      </ScrollReveal>
-
-      <ScrollReveal as="section" className="landing-trust">
-        <div className="landing-trust__copy">
-          <div className="landing-trust__statement">
-            <img src="/help-icons/privacy-security-data.png" alt="" aria-hidden="true" />
-            <h2>Your uploads stay private, are only visible to your account, and can be deleted anytime after processing.</h2>
-          </div>
-        </div>
-
-        <p className="landing-trust__note">
-          Want the details? Read our{" "}
-          <Link href="/privacy-policy" prefetch={false}>
-            Privacy Policy
-          </Link>{" "}
-          and{" "}
-          <Link href="/terms-of-service" prefetch={false}>
-            Terms of Service
-          </Link>
-          .
-        </p>
-      </ScrollReveal>
+      <FeatureSection
+        id="trust"
+        eyebrow="05. Trust and control"
+        title={
+          <>
+            Keep every step <span className="landing-highlight">reviewable</span>.
+          </>
+        }
+        copy={
+          <p>
+            Clover is designed to preserve your source files, parsed rows, and final transactions as separate stages, so you can review, confirm,
+            and correct data without losing the original record.
+          </p>
+        }
+        visual={
+          <SectionVisual
+            eyebrow="Audit trail"
+            title="Source → Parse → Confirm"
+            body="Each stage stays separate so your records remain transparent from upload to final transaction."
+            className="landing-visual--trust"
+          />
+        }
+      />
 
       <ScrollReveal as="section" className="landing-cta">
         <div className="landing-cta__inner">
           <div className="landing-cta__copy">
             <p className="eyebrow">Ready when you are</p>
-            <h2>Start with clarity. Grow into more control.</h2>
-            <p>
-              Begin free, then move to Pro when you want more accounts, more uploads, and deeper reports that help you stay ahead.
-            </p>
+            <h2>Make money management feel simpler.</h2>
+            <p>Import statements, track spending, and split bills with Clover.</p>
           </div>
           <div className="landing-cta__actions">
             <Link className="button button-primary button-pill" href="/sign-up" prefetch={false}>
-              Sign up
-            </Link>
-            <Link className="button button-secondary button-pill" href="/pricing" prefetch={false}>
-              Pricing
+              Get started
             </Link>
             <Link className="button button-secondary button-pill" href="/sign-in" prefetch={false}>
               Log in
@@ -248,18 +254,60 @@ export default function HomePage() {
         </div>
       </ScrollReveal>
 
-      <footer className="landing-footer" aria-label="Legal links">
-        <nav className="landing-footer__nav" aria-label="Legal">
-          <Link href="/contact-us" prefetch={false}>
-            Contact Us
-          </Link>
-          <Link href="/privacy-policy" prefetch={false}>
-            Privacy Policy
-          </Link>
-          <Link href="/terms-of-service" prefetch={false}>
-            Terms of Service
-          </Link>
-        </nav>
+      <footer className="landing-footer landing-footer--expanded" aria-label="Site footer">
+        <div className="landing-footer__columns">
+          <div className="landing-footer__column">
+            <p className="landing-footer__heading">Features</p>
+            <Link href="/features" prefetch={false}>
+              Overview
+            </Link>
+            <Link href="/features#tracking" prefetch={false}>
+              Tracking
+            </Link>
+            <Link href="/features#understanding" prefetch={false}>
+              Understanding
+            </Link>
+            <Link href="/features#planning" prefetch={false}>
+              Planning
+            </Link>
+          </div>
+
+          <div className="landing-footer__column">
+            <p className="landing-footer__heading">Product</p>
+            <Link href="/pricing" prefetch={false}>
+              Pricing
+            </Link>
+            <Link href="/help" prefetch={false}>
+              Help
+            </Link>
+            <Link href="/contact-us" prefetch={false}>
+              Contact
+            </Link>
+          </div>
+
+          <div className="landing-footer__column">
+            <p className="landing-footer__heading">Company</p>
+            <Link href="/" prefetch={false}>
+              Home
+            </Link>
+            <Link href="/sign-in" prefetch={false}>
+              Log in
+            </Link>
+            <Link href="/sign-up" prefetch={false}>
+              Sign up
+            </Link>
+          </div>
+
+          <div className="landing-footer__column">
+            <p className="landing-footer__heading">Legal</p>
+            <Link href="/privacy-policy" prefetch={false}>
+              Privacy Policy
+            </Link>
+            <Link href="/terms-of-service" prefetch={false}>
+              Terms of Service
+            </Link>
+          </div>
+        </div>
       </footer>
     </main>
   );
