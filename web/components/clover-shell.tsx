@@ -40,9 +40,10 @@ type CloverShellProps = {
     | "goals"
     | "more"
     | "settings"
-    | "profile"
-    | "notifications"
-    | "admin";
+  | "profile"
+  | "notifications"
+  | "more"
+  | "admin";
   title: string;
   kicker?: string;
   subtitle?: string;
@@ -505,6 +506,7 @@ export function CloverShell({
   const isMoreActive = active === "more" || pathname?.startsWith("/more");
   const isNotificationsActive = openMenu === "notifications";
   const isProfileMenuOpen = openMenu === "profile";
+  const isMoreMenuOpen = openMenu === "more";
   const shouldShowBackButton =
     !!previousPathname &&
     !pathname?.startsWith("/dashboard") &&
@@ -545,6 +547,10 @@ export function CloverShell({
         !notificationsButtonRef.current?.contains(target) &&
         !notificationsPopoverRef.current?.contains(target)
       ) {
+        setOpenMenu(null);
+      }
+
+      if (openMenu === "more" && !shellRef.current.querySelector(".sidebar-nav__more")?.contains(target)) {
         setOpenMenu(null);
       }
 
@@ -1096,20 +1102,77 @@ export function CloverShell({
         </div>
 
         <nav className="sidebar-nav" aria-label="Primary" id="primary-navigation">
-          {navItems.map((item) => (
-            <button
-              key={item.key}
-              className={`nav-link ${active === item.key ? "is-active" : ""}`}
-              type="button"
-              aria-current={active === item.key ? "page" : undefined}
-              onClick={() => navigateTo(item.href)}
-            >
-              <span className="nav-link__icon" aria-hidden="true">
-                <MenuIcon name={item.key} />
-              </span>
-              {item.label}
-            </button>
-          ))}
+          {navItems.map((item) => {
+            if (item.key === "more") {
+              return (
+                <div key={item.key} className="sidebar-nav__more">
+                  <button
+                    className={`nav-link ${isMoreActive || isMoreMenuOpen ? "is-active" : ""}`}
+                    type="button"
+                    aria-current={pathname?.startsWith("/more") ? "page" : undefined}
+                    aria-haspopup="menu"
+                    aria-expanded={isMoreMenuOpen}
+                    onClick={() =>
+                      setOpenMenu((current) => {
+                        if (current === "more") {
+                          return null;
+                        }
+
+                        return "more";
+                      })
+                    }
+                  >
+                    <span className="nav-link__icon" aria-hidden="true">
+                      <MenuIcon name={item.key} />
+                    </span>
+                    {item.label}
+                  </button>
+
+                  {isMoreMenuOpen ? (
+                    <div className="sidebar-nav__submenu" role="menu" aria-label="More products">
+                      <button
+                        className={`sidebar-nav__submenu-link${active === "split-bill" || pathname?.startsWith("/split-bill") ? " is-active" : ""}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => navigateTo("/split-bill")}
+                      >
+                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                          <MenuIcon name="split-bill" />
+                        </span>
+                        Split Bills
+                      </button>
+                      <button
+                        className={`sidebar-nav__submenu-link${active === "investments" || pathname?.startsWith("/investments") ? " is-active" : ""}`}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => navigateTo("/investments")}
+                      >
+                        <span className="sidebar-nav__submenu-icon" aria-hidden="true">
+                          <MenuIcon name="investments" />
+                        </span>
+                        Investments
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            }
+
+            return (
+              <button
+                key={item.key}
+                className={`nav-link ${active === item.key ? "is-active" : ""}`}
+                type="button"
+                aria-current={active === item.key ? "page" : undefined}
+                onClick={() => navigateTo(item.href)}
+              >
+                <span className="nav-link__icon" aria-hidden="true">
+                  <MenuIcon name={item.key} />
+                </span>
+                {item.label}
+              </button>
+            );
+          })}
         </nav>
 
         <div className="sidebar-footer">
