@@ -786,6 +786,7 @@ model SplitBillGroup {
   id        String                @id @default(cuid())
   userId    String
   name      String
+  avatarUrl String?               @db.Text
   createdAt DateTime              @default(now())
   updatedAt DateTime              @updatedAt
   user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -799,11 +800,13 @@ model SplitBillPerson {
   id        String   @id @default(cuid())
   userId    String
   name      String
+  avatarUrl String?  @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@unique([userId, name])
 }
 
 model SplitBillGroupMember {

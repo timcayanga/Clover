@@ -1,19 +1,28 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { formatSplitBillAmount, normalizeCurrencyCode, type SplitBillSerializedBill } from "@/lib/split-bill";
 
 type SplitBillGroupSummary = {
   id: string;
   name: string;
+  avatarUrl: string | null;
   members: Array<{ id: string; name: string; sortOrder: number }>;
+};
+
+type SplitBillPersonSummary = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
 };
 
 type SplitBillHomeProps = {
   bills: SplitBillSerializedBill[];
   groups: SplitBillGroupSummary[];
-  people: string[];
+  people: SplitBillPersonSummary[];
+  onOpenBill: (billId: string) => void;
+  onOpenGroup: (groupId: string) => void;
+  onOpenPerson: (personId: string) => void;
 };
 
 const formatDate = (value: string) =>
@@ -63,7 +72,23 @@ const groupBillsByCurrency = (items: SplitBillSerializedBill[]) =>
     return acc;
   }, {});
 
-export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
+const renderAvatar = (name: string, avatarUrl: string | null, sizeClass = "split-bill-person-avatar--small") => {
+  if (avatarUrl) {
+    return (
+      <span className={`split-bill-person-avatar ${sizeClass}`}>
+        <img className="split-bill-person-avatar__image" src={avatarUrl} alt="" />
+      </span>
+    );
+  }
+
+  return (
+    <span className={`split-bill-person-avatar ${sizeClass}`} style={getAvatarStyle(name)}>
+      {getInitials(name)}
+    </span>
+  );
+};
+
+export function SplitBillHome({ bills, groups, people, onOpenBill, onOpenGroup, onOpenPerson }: SplitBillHomeProps) {
   const [showAllBills, setShowAllBills] = useState(false);
 
   const recentBills = showAllBills ? bills : bills.slice(0, 4);
@@ -91,17 +116,12 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
     });
   }, [bills, groups]);
 
-  const hasMoreBills = bills.length > recentBills.length;
-
   return (
     <div className="split-bill-home">
       <section className="split-bill-mobile-home">
         <section className="split-bill-panel panel glass">
           <div className="split-bill-panel__head">
-            <div>
-              <p className="eyebrow">Bills</p>
-              <h2>Recent bills</h2>
-            </div>
+            <h2>Bills</h2>
           </div>
 
           <div className="split-bill-table split-bill-table--bills" role="table" aria-label="Split bills">
@@ -111,6 +131,7 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
               <span role="columnheader">People</span>
               <span role="columnheader">Total</span>
               <span role="columnheader">Status</span>
+              <span role="columnheader" aria-hidden="true" />
             </div>
             {recentBills.length > 0 ? (
               recentBills.map((bill) => {
@@ -118,23 +139,15 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
                 const sourceLabel = bill.sourceType === "receipt" ? "Receipt" : "Manual";
 
                 return (
-                  <div key={bill.id} className="split-bill-table__row" role="row">
+                  <div key={bill.id} className="split-bill-table__row split-bill-table__row--interactive" role="row">
                     <div role="cell" className="split-bill-table__bill">
-                      <strong>
-                        <Link href={`/split-bill/${bill.id}/edit`} prefetch={false}>
-                          {bill.title}
-                        </Link>
-                      </strong>
+                      <strong>{bill.title}</strong>
                       <span>
                         {sourceLabel}
                         {bill.group?.name ? ` · ${bill.group.name}` : ""}
                       </span>
                     </div>
-                    <div role="cell">
-                      <Link className="split-bill-table__inline-link" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
-                        {formatDate(bill.billDate)}
-                      </Link>
-                    </div>
+                    <div role="cell">{formatDate(bill.billDate)}</div>
                     <div role="cell" className="split-bill-table__chips">
                       {bill.participants.length > 0 ? (
                         bill.participants.map((participant) => (
@@ -146,15 +159,12 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
                         <span className="split-bill-subtle-empty">No people yet</span>
                       )}
                     </div>
-                    <div role="cell">
-                      <Link className="split-bill-table__inline-link" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
-                        {bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}
-                      </Link>
-                    </div>
-                    <div role="cell">
-                      <Link className="split-bill-table__inline-link" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
-                        {status}
-                      </Link>
+                    <div role="cell">{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</div>
+                    <div role="cell">{status}</div>
+                    <div role="cell" className="split-bill-table__row-action">
+                      <button className="split-bill-table__chevron" type="button" aria-label={`View ${bill.title}`} onClick={() => onOpenBill(bill.id)}>
+                        ›
+                      </button>
                     </div>
                   </div>
                 );
@@ -176,21 +186,16 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
         <div className="split-bill-mobile-home__sections">
           <section className="split-bill-mobile-home__section">
             <div className="split-bill-mobile-home__section-head">
-              <div>
-                <p className="eyebrow">People</p>
-                <h3>Saved names</h3>
-              </div>
+              <h3>People</h3>
             </div>
 
             <div className="split-bill-mobile-home__people">
               {people.length > 0 ? (
                 people.map((person) => (
-                  <span key={person} className="split-bill-mobile-home__person">
-                    <span className="split-bill-person-avatar split-bill-person-avatar--small" style={getAvatarStyle(person)}>
-                      {getInitials(person)}
-                    </span>
-                    <span>{person}</span>
-                  </span>
+                  <button key={person.id} type="button" className="split-bill-mobile-home__person-button" onClick={() => onOpenPerson(person.id)}>
+                    {renderAvatar(person.name, person.avatarUrl)}
+                    <span>{person.name}</span>
+                  </button>
                 ))
               ) : (
                 <span className="split-bill-subtle-empty">No saved names yet</span>
@@ -205,18 +210,18 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
 
           <section className="split-bill-mobile-home__section">
             <div className="split-bill-mobile-home__section-head">
-              <div>
-                <p className="eyebrow">Groups</p>
-                <h3>Saved groups</h3>
-              </div>
+              <h3>Groups</h3>
             </div>
 
             <div className="split-bill-mobile-home__groups">
               {visibleGroups.length > 0 ? (
                 visibleGroups.map((group) => (
-                  <Link key={group.id} href={`/split-bill/groups/${group.id}`} prefetch={false} className="split-bill-mobile-group-card">
+                  <button key={group.id} type="button" className="split-bill-mobile-group-card" onClick={() => onOpenGroup(group.id)}>
                     <div className="split-bill-mobile-group-card__head">
-                      <strong>{group.name}</strong>
+                      <strong className="split-bill-mobile-group-card__name">
+                        {group.avatarUrl ? <img className="split-bill-person-avatar__image" src={group.avatarUrl} alt="" /> : null}
+                        <span>{group.name}</span>
+                      </strong>
                       <span>{group.total}</span>
                     </div>
                     <div className="split-bill-mobile-group-card__meta">
@@ -234,7 +239,7 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
                         <span className="split-bill-subtle-empty">No people yet</span>
                       )}
                     </div>
-                  </Link>
+                  </button>
                 ))
               ) : (
                 <span className="split-bill-subtle-empty">No groups yet</span>
@@ -251,10 +256,7 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
 
       <section className="split-bill-panel panel glass split-bill-desktop-home">
         <div className="split-bill-panel__head">
-          <div>
-            <p className="eyebrow">Bills</p>
-            <h2>Recent bills</h2>
-          </div>
+          <h2>Bills</h2>
         </div>
 
         <div className="split-bill-table split-bill-table--bills" role="table" aria-label="Split bills">
@@ -264,6 +266,7 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
             <span role="columnheader">People</span>
             <span role="columnheader">Total</span>
             <span role="columnheader">Status</span>
+            <span role="columnheader" aria-hidden="true" />
           </div>
           {recentBills.length > 0 ? (
             recentBills.map((bill) => {
@@ -271,23 +274,15 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
               const sourceLabel = bill.sourceType === "receipt" ? "Receipt" : "Manual";
 
               return (
-                <div key={bill.id} className="split-bill-table__row" role="row">
+                <div key={bill.id} className="split-bill-table__row split-bill-table__row--interactive" role="row">
                   <div role="cell" className="split-bill-table__bill">
-                    <strong>
-                      <Link href={`/split-bill/${bill.id}/edit`} prefetch={false}>
-                        {bill.title}
-                      </Link>
-                    </strong>
+                    <strong>{bill.title}</strong>
                     <span>
                       {sourceLabel}
                       {bill.group?.name ? ` · ${bill.group.name}` : ""}
                     </span>
                   </div>
-                  <div role="cell">
-                    <Link className="split-bill-table__inline-link" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
-                      {formatDate(bill.billDate)}
-                    </Link>
-                  </div>
+                  <div role="cell">{formatDate(bill.billDate)}</div>
                   <div role="cell" className="split-bill-table__chips">
                     {bill.participants.length > 0 ? (
                       bill.participants.map((participant) => (
@@ -299,15 +294,12 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
                       <span className="split-bill-subtle-empty">No people yet</span>
                     )}
                   </div>
-                  <div role="cell">
-                    <Link className="split-bill-table__inline-link" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
-                      {bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}
-                    </Link>
-                  </div>
-                  <div role="cell">
-                    <Link className="split-bill-table__inline-link" href={`/split-bill/${bill.id}/edit`} prefetch={false}>
-                      {status}
-                    </Link>
+                  <div role="cell">{bill.total ? formatSplitBillAmount(Number(bill.total), bill.currency) : "No total"}</div>
+                  <div role="cell">{status}</div>
+                  <div role="cell" className="split-bill-table__row-action">
+                    <button className="split-bill-table__chevron" type="button" aria-label={`View ${bill.title}`} onClick={() => onOpenBill(bill.id)}>
+                      ›
+                    </button>
                   </div>
                 </div>
               );
@@ -329,21 +321,18 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
       <div className="split-bill-desktop-home split-bill-desktop-home__secondary">
         <section className="split-bill-panel panel glass">
           <div className="split-bill-panel__head">
-            <div>
-              <p className="eyebrow">Groups</p>
-              <h2>Saved groups</h2>
-            </div>
+            <h2>Groups</h2>
           </div>
 
           <div className="split-bill-home__groups-list">
             {visibleGroups.length > 0 ? (
               visibleGroups.map((group) => (
-                <Link key={group.id} href={`/split-bill/groups/${group.id}`} prefetch={false} className="split-bill-home__group-row">
+                <button key={group.id} type="button" className="split-bill-home__group-row" onClick={() => onOpenGroup(group.id)}>
                   <strong>{group.name}</strong>
                   <span>
                     {group.members.length} member{group.members.length === 1 ? "" : "s"} · {group.total} · {group.status}
                   </span>
-                </Link>
+                </button>
               ))
             ) : (
               <span className="split-bill-subtle-empty">No groups yet</span>
@@ -358,21 +347,16 @@ export function SplitBillHome({ bills, groups, people }: SplitBillHomeProps) {
 
         <section className="split-bill-panel panel glass">
           <div className="split-bill-panel__head">
-            <div>
-              <p className="eyebrow">People</p>
-              <h2>Saved names</h2>
-            </div>
+            <h2>People</h2>
           </div>
 
           <div className="split-bill-home__people-list">
             {people.length > 0 ? (
               people.map((person) => (
-                <span key={person} className="split-bill-home__person">
-                  <span className="split-bill-person-avatar split-bill-person-avatar--small" style={getAvatarStyle(person)}>
-                    {getInitials(person)}
-                  </span>
-                  <span>{person}</span>
-                </span>
+                <button key={person.id} type="button" className="split-bill-home__person-button" onClick={() => onOpenPerson(person.id)}>
+                  {renderAvatar(person.name, person.avatarUrl)}
+                  <span>{person.name}</span>
+                </button>
               ))
             ) : (
               <span className="split-bill-subtle-empty">No saved names yet</span>

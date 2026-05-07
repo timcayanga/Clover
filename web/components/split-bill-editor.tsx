@@ -374,8 +374,8 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
         body: JSON.stringify(payload),
       });
       const result = await readJsonResponse<{ bill: SplitBillSerializedBill }>(response);
-      router.push(`/split-bill/${result.bill.id}`);
-      router.refresh();
+      sessionStorage.setItem("split-bill:created-bill", JSON.stringify(result.bill));
+      router.push("/split-bill");
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save split bill");
     } finally {

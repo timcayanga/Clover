@@ -1,13 +1,29 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { CurrencySelector } from "@/components/currency-selector";
 import { getCurrencyCatalogCodes } from "@/lib/currencies";
+import type { SplitBillSerializedBill } from "@/lib/split-bill";
+
+type SplitBillPersonSummary = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+};
+
+type SplitBillGroupSummary = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  members: Array<{ id: string; name: string; sortOrder: number }>;
+};
 
 type SplitBillManualModalProps = {
   open: boolean;
+  people: SplitBillPersonSummary[];
+  groups: SplitBillGroupSummary[];
   onClose: () => void;
+  onSaved?: (bill: SplitBillSerializedBill) => void;
 };
 
 type SplitMode = "you-paid" | "you-owed" | "person-paid" | "person-owed";
@@ -31,33 +47,40 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   return payload;
 }
 
-export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProps) {
-  const router = useRouter();
-  const [people, setPeople] = useState<string[]>([]);
-  const [draftPerson, setDraftPerson] = useState("");
-  const [isAddingPeople, setIsAddingPeople] = useState(false);
+const getInitials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("")
+    .slice(0, 2) || "?";
+
+export function SplitBillManualModal({ open, people, groups, onClose, onSaved }: SplitBillManualModalProps) {
+  const [selectedPeople, setSelectedPeople] = useState<string[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("PHP");
   const [splitMode, setSplitMode] = useState<SplitMode>("you-paid");
-  const [selectedPerson, setSelectedPerson] = useState("");
+  const [selectedPayer, setSelectedPayer] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  const personInputRef = useRef<HTMLInputElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!open) {
       return;
     }
 
-    setPeople([]);
-    setDraftPerson("");
-    setIsAddingPeople(false);
+    setSelectedPeople([]);
+    setSelectedGroupId(null);
+    setQuery("");
     setDescription("");
     setAmount("");
     setCurrency("PHP");
     setSplitMode("you-paid");
-    setSelectedPerson("");
+    setSelectedPayer("");
     setError(null);
     setIsSaving(false);
   }, [open]);
@@ -77,48 +100,69 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
   }, [open]);
 
   useEffect(() => {
-    if (!selectedPerson && people.length > 0 && splitMode.startsWith("person")) {
-      setSelectedPerson(people[0]);
+    if (!selectedPayer && selectedPeople.length > 0 && splitMode.startsWith("person")) {
+      setSelectedPayer(selectedPeople[0]);
     }
-    if (selectedPerson && !people.includes(selectedPerson) && splitMode.startsWith("person")) {
-      setSelectedPerson(people[0] ?? "");
+    if (selectedPayer && !selectedPeople.includes(selectedPayer) && splitMode.startsWith("person")) {
+      setSelectedPayer(selectedPeople[0] ?? "");
     }
-  }, [people, selectedPerson, splitMode]);
+  }, [selectedPeople, selectedPayer, splitMode]);
 
   useEffect(() => {
-    if (isAddingPeople) {
-      personInputRef.current?.focus();
-    }
-  }, [isAddingPeople]);
+    inputRef.current?.focus();
+  }, [open]);
 
-  const payerName = useMemo(() => {
-    if (splitMode === "you-paid" || splitMode === "you-owed") {
-      return "You";
-    }
-    return selectedPerson.trim();
-  }, [selectedPerson, splitMode]);
+  const selectedGroup = useMemo(() => groups.find((group) => group.id === selectedGroupId) ?? null, [groups, selectedGroupId]);
 
-  const addPerson = () => {
-    const nextPerson = draftPerson.trim();
-    if (!nextPerson) {
+  const suggestions = useMemo(() => {
+    const search = query.trim().toLowerCase();
+    const matchedPeople = people.filter((person) => {
+      if (!search) return true;
+      return person.name.toLowerCase().includes(search);
+    });
+    const matchedGroups = groups.filter((group) => {
+      if (!search) return true;
+      return group.name.toLowerCase().includes(search) || group.members.some((member) => member.name.toLowerCase().includes(search));
+    });
+
+    return {
+      people: matchedPeople.slice(0, 6),
+      groups: matchedGroups.slice(0, 4),
+    };
+  }, [groups, people, query]);
+
+  const payerOptions = useMemo(() => {
+    return selectedPeople.map((person) => ({ label: person, value: person }));
+  }, [selectedPeople]);
+
+  const addPeopleFromGroup = (group: SplitBillGroupSummary) => {
+    setSelectedGroupId(group.id);
+    setSelectedPeople((current) => Array.from(new Set([...current, ...group.members.map((member) => member.name)])));
+    setQuery("");
+  };
+
+  const addPerson = (name: string) => {
+    const next = name.trim();
+    if (!next) {
       return;
     }
 
-    setPeople((current) => Array.from(new Set([...current, nextPerson])));
-    setDraftPerson("");
-    setIsAddingPeople(true);
+    setSelectedPeople((current) => Array.from(new Set([...current, next])));
+    setQuery("");
   };
 
   const removePerson = (name: string) => {
-    setPeople((current) => current.filter((entry) => entry !== name));
-    if (selectedPerson === name) {
-      setSelectedPerson("");
+    setSelectedPeople((current) => current.filter((entry) => entry !== name));
+    if (selectedPayer === name) {
+      setSelectedPayer("");
     }
   };
 
-  const closeModal = () => {
-    onClose();
+  const removeGroup = () => {
+    setSelectedGroupId(null);
   };
+
+  const closeModal = () => onClose();
 
   const saveBill = async () => {
     const trimmedDescription = description.trim();
@@ -134,12 +178,12 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
       return;
     }
 
-    if (people.length === 0) {
+    if (selectedPeople.length === 0) {
       setError("Add at least one person.");
       return;
     }
 
-    if ((splitMode.startsWith("person") && !payerName) || !payerName) {
+    if (splitMode.startsWith("person") && !selectedPayer) {
       setError("Choose who paid or is owed.");
       return;
     }
@@ -148,26 +192,18 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
     setError(null);
 
     try {
-      const participantNames = new Set<string>(people);
-      if (payerName) {
-        participantNames.add(payerName);
-      }
+      const payerName = splitMode.startsWith("you") ? "You" : selectedPayer;
+      const participantEntries = Array.from(new Set([...selectedPeople, payerName].filter(Boolean)))
+        .filter(Boolean)
+        .map((name) => ({
+          id: createId(),
+          name,
+        }));
+      const payerParticipant = participantEntries.find((participant) => participant.name === payerName) ?? null;
+      const peopleParticipantIds = participantEntries.filter((participant) => participant.name !== payerName).map((participant) => participant.id);
 
-      const participantEntries = Array.from(participantNames).map((name) => ({
-        id: createId(),
-        name,
-      }));
-      const payerParticipant = participantEntries.find((participant) => participant.name === payerName);
-      const peopleParticipantIds = participantEntries
-        .filter((participant) => participant.name !== payerName)
-        .map((participant) => participant.id);
-
-      if (!payerParticipant) {
+      if (splitMode.startsWith("person") && !payerParticipant) {
         throw new Error("Choose who paid or is owed.");
-      }
-
-      if (peopleParticipantIds.length === 0) {
-        throw new Error("Add at least one person besides the payer.");
       }
 
       const payload = {
@@ -175,6 +211,7 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
         billDate: new Date().toISOString(),
         currency,
         sourceType: "manual" as const,
+        groupId: selectedGroupId,
         participants: participantEntries,
         items: [
           {
@@ -184,14 +221,17 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
             participantIds: peopleParticipantIds,
           },
         ],
-        payments: [
-          {
-            id: createId(),
-            participantId: payerParticipant.id,
-            amount: trimmedAmount,
-            note: null,
-          },
-        ],
+        payments:
+          splitMode === "you-paid" || splitMode === "person-paid"
+            ? [
+                {
+                  id: createId(),
+                  participantId: payerParticipant?.id ?? "",
+                  amount: trimmedAmount,
+                  note: null,
+                },
+              ]
+            : [],
         total: trimmedAmount,
         rawPayload: {
           splitMode,
@@ -206,9 +246,9 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
         },
         body: JSON.stringify(payload),
       });
-      const result = await readJsonResponse<{ bill: { id: string } }>(response);
-      router.push(`/split-bill/${result.bill.id}`);
-      router.refresh();
+      const result = await readJsonResponse<{ bill: SplitBillSerializedBill }>(response);
+      onSaved?.(result.bill);
+      onClose();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Unable to save bill");
     } finally {
@@ -231,6 +271,77 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
           <button className="split-bill-icon-button" type="button" onClick={closeModal} aria-label="Close manual bill window">
             ×
           </button>
+        </div>
+
+        <label className="settings-field">
+          <span>Add people or group</span>
+          <input
+            ref={inputRef}
+            className="settings-input"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search saved people or groups"
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                const firstPerson = suggestions.people[0];
+                const firstGroup = suggestions.groups[0];
+                if (firstPerson) {
+                  addPerson(firstPerson.name);
+                } else if (firstGroup) {
+                  addPeopleFromGroup(firstGroup);
+                }
+              }
+            }}
+          />
+        </label>
+
+        {(suggestions.people.length > 0 || suggestions.groups.length > 0) && query.trim() ? (
+          <div className="split-bill-manual-modal__suggestions" role="listbox" aria-label="People and groups suggestions">
+            {suggestions.people.length > 0 ? (
+              <div className="split-bill-manual-modal__suggestion-section">
+                <p>People</p>
+                {suggestions.people.map((person) => (
+                  <button key={person.id} type="button" className="split-bill-manual-modal__suggestion" onClick={() => addPerson(person.name)}>
+                    <span className="split-bill-person-avatar split-bill-person-avatar--small">{getInitials(person.name)}</span>
+                    <span>{person.name}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {suggestions.groups.length > 0 ? (
+              <div className="split-bill-manual-modal__suggestion-section">
+                <p>Groups</p>
+                {suggestions.groups.map((group) => (
+                  <button key={group.id} type="button" className="split-bill-manual-modal__suggestion" onClick={() => addPeopleFromGroup(group)}>
+                    <span className="split-bill-person-avatar split-bill-person-avatar--small" style={group.avatarUrl ? undefined : getAvatarStyle(group.name)}>
+                      {group.avatarUrl ? <img className="split-bill-person-avatar__image" src={group.avatarUrl} alt="" /> : getInitials(group.name)}
+                    </span>
+                    <span>{group.name}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="split-bill-manual-modal__chips">
+          {selectedGroup ? (
+            <span className="split-bill-manual-modal__chip">
+              <span>{selectedGroup.name}</span>
+              <button type="button" className="split-bill-table__chip-remove" aria-label={`Remove ${selectedGroup.name}`} onClick={removeGroup}>
+                ×
+              </button>
+            </span>
+          ) : null}
+          {selectedPeople.map((person) => (
+            <span key={person} className="split-bill-manual-modal__chip">
+              <span>{person}</span>
+              <button type="button" className="split-bill-table__chip-remove" aria-label={`Remove ${person}`} onClick={() => removePerson(person)}>
+                ×
+              </button>
+            </span>
+          ))}
         </div>
 
         <label className="settings-field">
@@ -258,79 +369,37 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
                 optionClassName="transactions-currency-filter__option"
                 menuAlignment="start"
                 showGroupedSections
-                portalMenu
               />
               <input
                 className="settings-input"
-                inputMode="decimal"
                 value={amount}
                 onChange={(event) => setAmount(event.target.value)}
+                inputMode="decimal"
                 placeholder="0.00"
               />
             </div>
           </label>
-
-          <label className="settings-field">
-            <span>Split as</span>
-            <select className="settings-input" value={splitMode} onChange={(event) => setSplitMode(event.target.value as SplitMode)}>
-              {splitModeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
 
-        <div className="split-bill-manual-modal__people">
-          <label className="settings-field">
-            <span>People</span>
-            <div className="split-bill-manual-modal__people-stack">
-              <div className="split-bill-manual-modal__chips">
-                {people.map((person) => (
-                  <button key={person} className="split-bill-manual-modal__chip" type="button" onClick={() => removePerson(person)}>
-                    {person}
-                    <span aria-hidden="true">×</span>
-                  </button>
-                ))}
-              </div>
-              <div className="split-bill-manual-modal__people-row">
-                <button className="button button-secondary" type="button" onClick={() => setIsAddingPeople(true)}>
-                  +
-                </button>
-                {isAddingPeople ? (
-                  <>
-                    <input
-                      ref={personInputRef}
-                      className="settings-input"
-                      value={draftPerson}
-                      onChange={(event) => setDraftPerson(event.target.value)}
-                      placeholder="Type a name"
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          addPerson();
-                        }
-                      }}
-                    />
-                    <button className="button button-secondary" type="button" onClick={addPerson}>
-                      Add
-                    </button>
-                  </>
-                ) : null}
-              </div>
-            </div>
-          </label>
-        </div>
+        <label className="settings-field">
+          <span>Split as</span>
+          <select className="settings-input" value={splitMode} onChange={(event) => setSplitMode(event.target.value as SplitMode)}>
+            {splitModeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
 
         {splitMode.startsWith("person") ? (
           <label className="settings-field">
-            <span>Person</span>
-            <select className="settings-input" value={selectedPerson} onChange={(event) => setSelectedPerson(event.target.value)}>
+            <span>Payer</span>
+            <select className="settings-input" value={selectedPayer} onChange={(event) => setSelectedPayer(event.target.value)}>
               <option value="">Choose a person</option>
-              {people.map((person) => (
-                <option key={person} value={person}>
-                  {person}
+              {payerOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -348,3 +417,19 @@ export function SplitBillManualModal({ open, onClose }: SplitBillManualModalProp
     </div>
   );
 }
+
+const getAvatarStyle = (name: string) => {
+  const seed = name
+    .split("")
+    .reduce((sum, char) => sum + char.charCodeAt(0), 0);
+
+  return {
+    background: [
+      "linear-gradient(135deg, rgba(3, 168, 192, 0.9), rgba(94, 211, 208, 0.9))",
+      "linear-gradient(135deg, rgba(94, 211, 208, 0.92), rgba(110, 231, 183, 0.88))",
+      "linear-gradient(135deg, rgba(110, 231, 183, 0.94), rgba(3, 168, 192, 0.16))",
+      "linear-gradient(135deg, rgba(31, 41, 51, 0.18), rgba(3, 168, 192, 0.84))",
+      "linear-gradient(135deg, rgba(181, 246, 239, 0.96), rgba(3, 168, 192, 0.3))",
+    ][seed % 5],
+  };
+};

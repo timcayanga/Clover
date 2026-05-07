@@ -9,6 +9,19 @@ import { SplitBillWorkspace } from "@/components/split-bill-workspace";
 
 export const dynamic = "force-dynamic";
 
+type SplitBillGroupSummary = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  members: Array<{ id: string; name: string; sortOrder: number }>;
+};
+
+type SplitBillPersonSummary = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+};
+
 const billInclude = {
   group: {
     include: {
@@ -39,9 +52,17 @@ export default async function SplitBillPage() {
     prisma.splitBillGroup.findMany({
       where: { userId: user.id },
       orderBy: [{ updatedAt: "desc" }, { createdAt: "desc" }],
-      include: {
+      select: {
+        id: true,
+        name: true,
+        avatarUrl: true,
         members: {
           orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          select: {
+            id: true,
+            name: true,
+            sortOrder: true,
+          },
         },
         _count: {
           select: {
@@ -59,8 +80,8 @@ export default async function SplitBillPage() {
   return (
     <SplitBillWorkspace
       bills={bills.map((bill) => serializeSplitBillRecord(bill as Parameters<typeof serializeSplitBillRecord>[0]))}
-      groups={groups}
-      people={people.map((person) => person.name)}
+      groups={groups as SplitBillGroupSummary[]}
+      people={people as SplitBillPersonSummary[]}
     />
   );
 }

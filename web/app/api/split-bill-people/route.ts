@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 const createPersonSchema = z.object({
   name: z.string().trim().min(1),
+  avatarUrl: z.string().trim().nullable().optional(),
 });
 
 export async function GET() {
@@ -47,6 +48,7 @@ export async function POST(request: Request) {
       data: {
         userId: user.id,
         name,
+        avatarUrl: body.avatarUrl?.trim() || null,
       },
     });
 

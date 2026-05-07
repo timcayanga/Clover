@@ -13,6 +13,7 @@ const groupMemberSchema = z.object({
 
 const updateGroupSchema = z.object({
   name: z.string().trim().min(1),
+  avatarUrl: z.string().trim().nullable().optional(),
   members: z.array(groupMemberSchema).default([]),
 });
 
@@ -36,7 +37,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
     const group = await prisma.$transaction(async (tx) => {
       await tx.splitBillGroup.update({
         where: { id: groupId },
-        data: { name: body.name },
+        data: {
+          name: body.name,
+          avatarUrl: body.avatarUrl?.trim() || null,
+        },
       });
 
       await tx.splitBillGroupMember.deleteMany({
@@ -50,6 +54,24 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ gr
           sortOrder: member.sortOrder ?? index,
         })),
       });
+
+      await Promise.all(
+        body.members.map((member) =>
+          tx.splitBillPerson.upsert({
+            where: {
+              userId_name: {
+                userId: user.id,
+                name: member.name,
+              },
+            },
+            create: {
+              userId: user.id,
+              name: member.name,
+            },
+            update: {},
+          })
+        )
+      );
 
       return tx.splitBillGroup.findUniqueOrThrow({
         where: { id: groupId },

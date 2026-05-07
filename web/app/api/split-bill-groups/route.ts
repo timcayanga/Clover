@@ -12,6 +12,7 @@ const groupMemberSchema = z.object({
 
 const createGroupSchema = z.object({
   name: z.string().trim().min(1),
+  avatarUrl: z.string().trim().nullable().optional(),
   members: z.array(groupMemberSchema).default([]),
 });
 
@@ -48,6 +49,7 @@ export async function POST(request: Request) {
       data: {
         userId: user.id,
         name: body.name,
+        avatarUrl: body.avatarUrl?.trim() || null,
         members: {
           create: body.members.map((member) => ({
             name: member.name,
@@ -66,6 +68,24 @@ export async function POST(request: Request) {
         },
       },
     });
+
+    await prisma.$transaction(
+      body.members.map((member) =>
+        prisma.splitBillPerson.upsert({
+          where: {
+            userId_name: {
+              userId: user.id,
+              name: member.name,
+            },
+          },
+          create: {
+            userId: user.id,
+            name: member.name,
+          },
+          update: {},
+        })
+      )
+    );
 
     return NextResponse.json({ group }, { status: 201 });
   } catch (error) {
