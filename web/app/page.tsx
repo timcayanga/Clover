@@ -57,7 +57,7 @@ function FeatureSection({
 
 export default function HomePage() {
   return (
-    <main className="landing-page">
+    <main className="landing-page landing-page--snap">
       <Script id="landing-force-light-theme" strategy="beforeInteractive">
         {`
           try {
@@ -73,7 +73,11 @@ export default function HomePage() {
       <ScrollReveal as="section" className="landing-hero">
         <div className="landing-hero__copy">
           <p className="eyebrow">Clover</p>
-          <h1>Track spending. Split bills. Stay in control.</h1>
+          <h1 className="landing-hero__title">
+            <span>Track spending.</span>
+            <span>Split bills.</span>
+            <span>Stay in control.</span>
+          </h1>
           <p className="landing-hero__lede">
             Clover helps you understand your money by importing statements, organizing transactions, and making shared expenses easier to settle.
           </p>
@@ -103,6 +107,7 @@ export default function HomePage() {
 
       <FeatureSection
         id="statement-import"
+        reverse
         title={
           <>
             Turn <span className="landing-highlight">statements</span> into usable spending data.
@@ -147,11 +152,11 @@ export default function HomePage() {
             className="landing-visual--report"
           />
         }
-        reverse
       />
 
       <FeatureSection
         id="split-bills"
+        reverse
         title={
           <>
             Share expenses without the <span className="landing-highlight">hassle</span>.
@@ -195,11 +200,11 @@ export default function HomePage() {
             className="landing-visual--report"
           />
         }
-        reverse
       />
 
       <FeatureSection
         id="pro"
+        reverse
         title={
           <>
             Unlock <span className="landing-highlight">Pro</span> features when you need more.
@@ -220,7 +225,6 @@ export default function HomePage() {
             className="landing-visual--pro"
           />
         }
-        reverse
       />
 
       <FeatureSection
