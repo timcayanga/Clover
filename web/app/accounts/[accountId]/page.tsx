@@ -987,6 +987,11 @@ function AccountDetailPageContent() {
           setInvestmentPurchases([]);
           setInvestmentDividends([]);
         }
+
+        if (!cancelled) {
+          setHasInitialDataLoaded(true);
+        }
+
         const canonicalPath = getAccountPath(mergedAccount);
         if (!cancelled && canonicalPath !== `/accounts/${accountPathSegment}`) {
           router.replace(canonicalPath);
