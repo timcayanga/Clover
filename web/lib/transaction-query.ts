@@ -9,7 +9,7 @@ export type TransactionQueryFilters = {
   currencyFilter?: string;
   categoryIds?: string[];
   accountIds?: string[];
-  typeFilters?: Array<"debit" | "credit">;
+  typeFilters?: Array<"debit" | "credit" | "transfer">;
   merchantFilters?: string[];
   dateFilterMode?: DateFilterMode;
   dateFilterAnchor?: string;
@@ -118,7 +118,7 @@ export const parseTransactionQueryFilters = (searchParams: Pick<URLSearchParams,
   ]
     .flatMap((entry) => splitFilterValues(entry))
     .map((entry) => entry.trim().toLowerCase())
-    .filter((entry): entry is "debit" | "credit" => entry === "debit" || entry === "credit");
+    .filter((entry): entry is "debit" | "credit" | "transfer" => entry === "debit" || entry === "credit" || entry === "transfer");
   const merchantFilters = [
     ...searchParams.getAll("merchant"),
     ...splitFilterValues(searchParams.get("merchants") ?? ""),
@@ -268,12 +268,11 @@ export const buildTransactionQueryWhere = (workspaceId: string, filters: Transac
   }
 
   if (typeFilters.length > 0) {
+    const transactionTypes = typeFilters.map((value) => (value === "credit" ? "income" : value === "debit" ? "expense" : "transfer"));
     where.type =
-      typeFilters.length === 2
-        ? { in: ["income", "expense"] }
-        : typeFilters[0] === "credit"
-          ? "income"
-          : "expense";
+      transactionTypes.length === 1
+        ? transactionTypes[0]
+        : ({ in: transactionTypes } as Prisma.TransactionWhereInput["type"]);
   }
 
   if (merchantFilters.length > 0) {

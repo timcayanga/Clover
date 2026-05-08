@@ -10604,6 +10604,12 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   flex-wrap: wrap;
 }
 
+.transactions-column-menu__options {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .transactions-column-menu__button {
   flex: 0 0 auto;
 }

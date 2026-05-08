@@ -301,6 +301,7 @@ type TransactionsWorkspaceCacheState = {
 type DateFilterMode = "ltd" | "day" | "week" | "month" | "quarter" | "year" | "custom";
 type TransactionSortField = "date" | "name" | "account" | "category" | "amount";
 type TransactionSortDirection = "asc" | "desc";
+type TransactionTypeFilter = "debit" | "credit" | "transfer";
 
 type ManualTransactionForm = {
   date: string;
@@ -1548,7 +1549,7 @@ function TransactionsPageContent() {
   const [amountMax, setAmountMax] = useState("");
   const [categoryFilters, setCategoryFilters] = useState<string[]>([]);
   const [accountFilters, setAccountFilters] = useState<string[]>([]);
-  const [typeFilters, setTypeFilters] = useState<Array<"debit" | "credit">>([]);
+  const [typeFilters, setTypeFilters] = useState<TransactionTypeFilter[]>([]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [message, setMessage] = useState("Select a workspace to review transactions.");
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -1874,10 +1875,7 @@ function TransactionsPageContent() {
               : cachedWorkspaceTransactions ?? [],
             fetchedTransactions
           )
-        : mergeImportedWorkspaceTransactions(
-            transactionsRef.current.length > 0 ? transactionsRef.current : cachedWorkspaceTransactions ?? [],
-            fetchedTransactions
-          );
+        : fetchedTransactions;
       const responseCurrencyCodes = Array.isArray(payload.currencyCodes)
         ? payload.currencyCodes.map((value: unknown) => formatCurrencyCode(String(value ?? ""))).filter(Boolean)
         : [];
@@ -3102,6 +3100,29 @@ function TransactionsPageContent() {
     setBulkEditOpen(true);
   };
 
+  const applyDateFilterMode = (mode: DateFilterMode) => {
+    if (mode === "ltd") {
+      setDateFilterMode("ltd");
+      setDateFilterAnchor(todayIso);
+      setCustomStart("");
+      setCustomEnd("");
+      return;
+    }
+
+    if (mode === "custom") {
+      setDateFilterMode("custom");
+      setDateFilterAnchor(todayIso);
+      setCustomStart((current) => current || todayIso);
+      setCustomEnd((current) => current || todayIso);
+      return;
+    }
+
+    setDateFilterMode(mode);
+    setDateFilterAnchor(todayIso);
+    setCustomStart("");
+    setCustomEnd("");
+  };
+
   const toggleFiltersPanel = () => {
     closeToolbarMenus();
     setFilterOpen((current) => !current);
@@ -3114,7 +3135,7 @@ function TransactionsPageContent() {
 
   const openHeaderMenu = (field: TransactionSortField, event: ReactMouseEvent<HTMLButtonElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    const menuWidth = field === "category" ? 380 : field === "amount" ? 340 : field === "date" ? 360 : 320;
+    const menuWidth = field === "category" ? 380 : field === "amount" ? 400 : field === "date" ? 460 : 320;
     const left = Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8));
     setAddMenuOpen(false);
     setDownloadMenuOpen(false);
@@ -4577,6 +4598,28 @@ function TransactionsPageContent() {
               </button>
             ))}
           </div>
+          <div className="transactions-column-menu__options">
+            {[
+              ["ltd", "Lifetime"],
+              ["day", "Today"],
+              ["week", "This week"],
+              ["month", "This month"],
+              ["quarter", "This quarter"],
+              ["year", "This year"],
+              ["custom", "Custom range"],
+            ].map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                className={`pill pill-interactive transactions-filter-pill ${
+                  dateFilterMode === mode ? "pill-is-selected" : ""
+                }`}
+                onClick={() => applyDateFilterMode(mode as DateFilterMode)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="transactions-column-menu__fields">
             <label className="transactions-column-menu__field">
               <span>Start</span>
@@ -4683,6 +4726,17 @@ function TransactionsPageContent() {
               </button>
             ))}
           </div>
+          <MultiSelectFilterGroup
+            label="Show amounts for"
+            options={[
+              { value: "debit", label: "Debits" },
+              { value: "credit", label: "Credits" },
+              { value: "transfer", label: "Transfers" },
+            ]}
+            selected={typeFilters}
+            onToggle={(value) => setTypeFilters((current) => toggleTypedFilterValue(current, value as TransactionTypeFilter))}
+            onClear={() => setTypeFilters([])}
+          />
           <div className="transactions-column-menu__fields">
             <label className="transactions-column-menu__field">
               <span>Min amount</span>
@@ -4927,7 +4981,7 @@ function TransactionsPageContent() {
       />
       <section className={`transactions-layout ${summaryOpen ? "transactions-layout--summary-open" : ""}`} style={transactionsLayoutStyle}>
         <div className="transactions-main-panel">
-          {filterOpen ? (
+      {filterOpen ? (
             <div className="transactions-inline-filters glass">
               <div className="transactions-inline-filters__head">
                 <div>
@@ -4964,9 +5018,10 @@ function TransactionsPageContent() {
                   options={[
                     { value: "debit", label: "Debit" },
                     { value: "credit", label: "Credit" },
+                    { value: "transfer", label: "Transfer" },
                   ]}
                   selected={typeFilters}
-                  onToggle={(value) => setTypeFilters((current) => toggleTypedFilterValue(current, value as "debit" | "credit"))}
+                  onToggle={(value) => setTypeFilters((current) => toggleTypedFilterValue(current, value as TransactionTypeFilter))}
                   onClear={() => setTypeFilters([])}
                 />
               </div>
