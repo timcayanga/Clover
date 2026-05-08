@@ -12,7 +12,8 @@ import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-conte
 import { RouteSplash } from "@/components/route-splash";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { PostHogEvent } from "@/components/posthog-analytics";
-import { GoalsSubtabs } from "@/components/goals-subtabs";
+import { GoalsSubtabs, GoalsSubtabsTitleAddon } from "@/components/goals-subtabs";
+import { GoalsEditor } from "@/components/goals-editor-modal";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import {
   GOAL_OPTIONS,
@@ -26,10 +27,6 @@ import {
   normalizeGoalPlan,
   type GoalKey,
 } from "@/lib/goals";
-
-const GoalsEditor = nextDynamic(() => import("@/components/goals-editor").then((module) => module.GoalsEditor), {
-  loading: () => <section className="goals-editor glass" aria-label="Loading goal editor" />,
-});
 
 const GoalIllustration = nextDynamic(() => import("@/components/goals-visuals").then((module) => module.GoalIllustration), {
   loading: () => <div className="goal-illustration__art" aria-label="Loading goal illustration" />,
@@ -130,6 +127,44 @@ const toMonthLabel = (date: Date) => monthFormatter.format(date);
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
 const normalizeMerchant = (value: string) => value.trim().toLowerCase();
 const toIsoDate = (date: Date) => date.toISOString().slice(0, 10);
+const formatOrdinalDay = (day: number) => {
+  const remainder = day % 100;
+  if (remainder >= 11 && remainder <= 13) {
+    return `${day}th`;
+  }
+
+  switch (day % 10) {
+    case 1:
+      return `${day}st`;
+    case 2:
+      return `${day}nd`;
+    case 3:
+      return `${day}rd`;
+    default:
+      return `${day}th`;
+  }
+};
+const getMostCommonDayOfMonth = (values: number[]) => {
+  if (values.length === 0) {
+    return null;
+  }
+
+  const counts = new Map<number, number>();
+  for (const value of values) {
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+
+  let winner: number | null = null;
+  let winnerCount = 0;
+  for (const [day, count] of counts.entries()) {
+    if (count > winnerCount || (count === winnerCount && (winner === null || day < winner))) {
+      winner = day;
+      winnerCount = count;
+    }
+  }
+
+  return winner;
+};
 const normalizeGoalsSection = (value: string | undefined | null): GoalsSection | null => {
   if (value === "overview" || value === "progress" || value === "drivers" || value === "history") {
     return value;
@@ -716,6 +751,12 @@ async function GoalsPageStream({
         ];
 
   const recurringMerchantsPreview = recurringMerchants.slice(0, 3);
+  const recentIncomeDays = currentWindowTransactions.filter((transaction) => transaction.type === "income").map((transaction) => transaction.date.getDate());
+  const paydayDay = getMostCommonDayOfMonth(recentIncomeDays);
+  const paydayHint =
+    paydayDay !== null
+      ? `Recent income tends to arrive around the ${formatOrdinalDay(paydayDay)}.`
+      : null;
   const driverCards = [
     {
       label: "Spending pressure",
@@ -746,6 +787,7 @@ async function GoalsPageStream({
     <CloverShell
       active="goals"
       title="Goals"
+      titleAddon={<GoalsSubtabsTitleAddon activeSection={selectedSection} availableSections={availableSections} />}
     >
       {isEmptyWorkspace ? (
         <div style={{ marginBottom: 20 }}>
@@ -762,13 +804,19 @@ async function GoalsPageStream({
         </div>
       ) : null}
 
-      <GoalsSubtabs initialSection={selectedSection} availableSections={availableSections} beginnerMode={isBeginnerMode}>
+      <GoalsSubtabs activeSection={selectedSection} availableSections={availableSections} beginnerMode={isBeginnerMode}>
         <section className="goals-section goals-section--overview">
           <article className="goals-hero glass">
             <div className="goals-hero__copy">
               <p className="goals-hero__eyebrow">{isBeginnerMode ? "Start here" : "Goal coaching"}</p>
               <h3>{heroLead}</h3>
               <p>{heroSupport}</p>
+              {investmentHoldingsCount > 0 ? (
+                <p className="goals-hero__setup-note">
+                  Your Investments page already tracks {formatCurrency(investmentHoldingsValue, goalCurrency)} across {investmentHoldingsCount} holding
+                  {investmentHoldingsCount === 1 ? "" : "s"}. If you want this goal to follow that habit, `Invest better` is the closest fit.
+                </p>
+              ) : null}
               {!hasGoalTarget ? (
                 <>
                   <p className="goals-hero__setup-note">
@@ -922,6 +970,9 @@ async function GoalsPageStream({
               currentGoalPlan={currentGoalPlan}
               monthlyIncome={monthlyIncome}
               suggestedTargetAmount={suggestedGoalTarget}
+              investmentHoldingsCount={investmentHoldingsCount}
+              investmentHoldingsValue={investmentHoldingsValue}
+              paydayHint={paydayHint}
               currency={goalCurrency}
             />
           </div>

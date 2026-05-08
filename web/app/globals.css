@@ -8429,33 +8429,98 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   margin-top: 2px;
 }
 
-.goals-editor__head {
+.goals-editor__summary {
   display: flex;
   justify-content: space-between;
   gap: 16px;
   align-items: flex-start;
 }
 
-.goals-editor__head h4 {
+.goals-editor__summary-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.goals-editor__summary-copy h4 {
   font-size: 22px;
   line-height: 1.15;
 }
 
-.goals-editor__status {
+.goals-editor__summary-copy p {
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 13px;
+}
+
+.goals-editor__summary-actions {
   text-align: right;
   display: grid;
   gap: 2px;
 }
 
-.goals-editor__status strong {
-  font-size: 18px;
-  letter-spacing: -0.03em;
+.goals-editor__chip {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.goals-editor__status span {
+.goals-editor__chip.is-saved {
+  border-color: rgba(3, 168, 192, 0.16);
+  color: var(--accent);
+}
+
+.goals-editor__launch {
+  justify-self: end;
+}
+
+.goals-editor__modal {
+  display: grid;
+  gap: 14px;
+}
+
+.goals-editor__modal-copy {
   color: var(--muted);
-  line-height: 1.45;
   font-size: 13px;
+  line-height: 1.45;
+  margin-top: 4px;
+}
+
+.goals-editor__insights {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.goals-editor__insight {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(3, 168, 192, 0.14);
+  background: rgba(3, 168, 192, 0.06);
+}
+
+.goals-editor__insight span {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+.goals-editor__insight strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .goals-editor__grid {
@@ -8652,6 +8717,26 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+  .goals-editor__summary {
+    grid-template-columns: 1fr;
+  }
+
+  .goals-editor__summary-actions {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .goals-editor__chip,
+  .goals-editor__launch {
+    justify-self: start;
+  }
+
+  .goals-editor__insights {
+    grid-template-columns: 1fr;
+  }
 }
 
 .goals-plan-grid {

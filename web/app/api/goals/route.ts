@@ -42,7 +42,7 @@ export async function GET() {
   }
 }
 
-export async function PUT(request: Request) {
+const saveGoal = async (request: Request) => {
   try {
     const { userId } = await requireAuth();
     const user = await getOrCreateCurrentUser(userId);
@@ -79,31 +79,27 @@ export async function PUT(request: Request) {
               purpose: payload.goalPlan.purpose ?? null,
             };
 
-    const updated = await prisma.$transaction(async (tx) => {
-      const userUpdate = await tx.user.update({
-        where: { id: user.id },
+    const updated = await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        primaryGoal: payload.goal === undefined ? undefined : payload.goal,
+        goalTargetAmount: targetAmount === undefined ? undefined : targetAmount,
+        goalTargetSource: targetAmount === undefined ? undefined : "goals",
+        goalPlan: nextGoalPlan === null ? Prisma.DbNull : (nextGoalPlan as Prisma.InputJsonValue),
+      },
+    });
+
+    if (payload.goal !== undefined || targetAmount !== undefined || payload.goalPlan !== undefined) {
+      await prisma.goalSetting.create({
         data: {
-          primaryGoal: payload.goal === undefined ? undefined : payload.goal,
-          goalTargetAmount: targetAmount === undefined ? undefined : targetAmount,
-          goalTargetSource: targetAmount === undefined ? undefined : "goals",
+          userId: user.id,
+          primaryGoal: nextGoal,
+          targetAmount: nextTargetAmount,
+          source: "goals",
           goalPlan: nextGoalPlan === null ? Prisma.DbNull : (nextGoalPlan as Prisma.InputJsonValue),
         },
       });
-
-      if (payload.goal !== undefined || targetAmount !== undefined || payload.goalPlan !== undefined) {
-        await tx.goalSetting.create({
-          data: {
-            userId: user.id,
-            primaryGoal: nextGoal,
-            targetAmount: nextTargetAmount,
-            source: "goals",
-            goalPlan: nextGoalPlan === null ? Prisma.DbNull : (nextGoalPlan as Prisma.InputJsonValue),
-          },
-        });
-      }
-
-      return userUpdate;
-    });
+    }
 
     void capturePostHogServerEvent("goal_target_saved", userId, {
       primary_goal: nextGoal ?? null,
@@ -144,4 +140,12 @@ export async function PUT(request: Request) {
       { status: 400 }
     );
   }
+};
+
+export async function POST(request: Request) {
+  return saveGoal(request);
+}
+
+export async function PUT(request: Request) {
+  return saveGoal(request);
 }
