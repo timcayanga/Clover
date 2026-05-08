@@ -3761,7 +3761,8 @@ export function ImportFilesModal({
                 optimisticAccountId,
                 knownOptimisticBalance,
                 previewTransactions,
-                statementIdentity?.accountNumber ?? null
+                statementIdentity?.accountNumber ?? null,
+                true
               ),
             } satisfies UploadInsightsSummary)
           : null;
@@ -3935,7 +3936,8 @@ export function ImportFilesModal({
                 targetAccountId.startsWith("optimistic-") ? targetAccountId : null,
                 knownPreviewBalance,
                 previewTransactions,
-                statementIdentity?.accountNumber ?? null
+                statementIdentity?.accountNumber ?? null,
+                true
               ),
             } satisfies UploadInsightsSummary)
           : null;
