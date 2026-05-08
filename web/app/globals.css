@@ -12353,6 +12353,11 @@ body[data-clover-page-modal] .app-shell {
   z-index: 0;
 }
 
+body[data-clover-page-modal] .modal-backdrop,
+body[data-clover-page-modal] .modal-card {
+  pointer-events: auto;
+}
+
 .modal-backdrop--transactions-content {
   left: 236px;
   width: calc(100vw - 236px);
