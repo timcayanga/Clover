@@ -8,6 +8,8 @@ export type SyncedClerkUser = {
   verified: boolean;
 };
 
+const stagingGuestUserId = "staging-guest";
+
 export const syncClerkUser = async (clerkUserId: string): Promise<SyncedClerkUser> => {
   const fallback: SyncedClerkUser = {
     clerkUserId,
@@ -16,6 +18,10 @@ export const syncClerkUser = async (clerkUserId: string): Promise<SyncedClerkUse
     lastName: null as string | null,
     verified: false,
   };
+
+  if (clerkUserId === stagingGuestUserId) {
+    return fallback;
+  }
 
   if (!process.env.CLERK_SECRET_KEY) {
     return fallback;
