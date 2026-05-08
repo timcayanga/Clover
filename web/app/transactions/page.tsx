@@ -93,6 +93,23 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
   };
 };
 
+const resolvePersistedImportedAccountId = (summary: UploadInsightsSummary, accounts: Account[]) => {
+  const importedAccountKey = normalizeImportedAccountKey(
+    summary.accountName,
+    summary.institution,
+    summary.accountNumber ?? null,
+    summary.accountType ?? null
+  );
+
+  return (
+    accounts.find(
+      (account) =>
+        !account.id.startsWith("optimistic-") &&
+        normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === importedAccountKey
+    )?.id ?? null
+  );
+};
+
 const getImportedAccountLastFour = (value?: string | null) => {
   const digits = String(value ?? "").replace(/\D/g, "");
   return digits.length >= 4 ? digits.slice(-4) : null;
@@ -5046,8 +5063,9 @@ function TransactionsPageContent() {
       return;
     }
 
-    const targetAccountId = pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
-    if (!targetAccountId) {
+    const settledAccountId = resolvePersistedImportedAccountId(pendingImportSummary, accounts);
+    const targetAccountId = settledAccountId ?? pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
+    if (!targetAccountId || targetAccountId.startsWith("optimistic-")) {
       return;
     }
 
@@ -6770,13 +6788,10 @@ function TransactionsPageContent() {
           setImportSeedFiles(null);
           setImportBackgroundOnly(false);
         }}
-        onImported={async (summary) => {
-          const previewTransactions = summary.previewTransactions ?? [];
+      onImported={async (summary) => {
           const optimisticAccount = buildOptimisticImportedAccount(summary);
-          const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
           const importedAccountKey = normalizeImportedAccountKey(summary.accountName, summary.institution, summary.accountNumber ?? null, summary.accountType ?? null);
-
-          setPendingImportSummary(summary);
+          const previewTransactions = summary.previewTransactions ?? [];
 
           flushSync(() => {
             setIsWorkspaceDataReady(true);
@@ -6816,11 +6831,24 @@ function TransactionsPageContent() {
             }
           });
 
+          const settledAccountId = resolvePersistedImportedAccountId(summary, accounts);
+          const settledSummary =
+            settledAccountId && settledAccountId !== summary.accountId
+              ? {
+                  ...summary,
+                  accountId: settledAccountId,
+                  optimistic: false,
+                  optimisticAccountId: null,
+                }
+              : summary;
+          setPendingImportSummary(settledSummary);
+          const importedAccountId = settledSummary.accountId ?? settledSummary.optimisticAccountId ?? null;
+
           if (!selectedWorkspaceId) {
             return;
           }
 
-          if (!summary.optimistic) {
+          if (!settledSummary.optimistic) {
             setImportRefreshInFlight(true);
             try {
               await loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });

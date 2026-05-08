@@ -143,6 +143,23 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
   };
 };
 
+const resolvePersistedImportedAccountId = (summary: UploadInsightsSummary, accounts: Account[]) => {
+  const importedAccountKey = getImportedAccountKey(
+    summary.accountName,
+    summary.institution,
+    summary.accountNumber ?? null,
+    summary.accountType ?? null
+  );
+
+  return (
+    accounts.find(
+      (account) =>
+        !account.id.startsWith("optimistic-") &&
+        getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type) === importedAccountKey
+    )?.id ?? null
+  );
+};
+
 const getImportedAccountKey = (
   name: string | null,
   institution: string | null,
@@ -1857,13 +1874,9 @@ function AccountsPageContent() {
       return;
     }
 
-    const targetAccountId = pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
-    if (!targetAccountId) {
-      return;
-    }
-
-    const visibleAccount = accounts.find((account) => account.id === targetAccountId);
-    if (!visibleAccount) {
+    const settledAccountId = resolvePersistedImportedAccountId(pendingImportSummary, accounts);
+    const targetAccountId = settledAccountId ?? pendingImportSummary.accountId ?? pendingImportSummary.optimisticAccountId ?? null;
+    if (!targetAccountId || targetAccountId.startsWith("optimistic-")) {
       return;
     }
 
@@ -3520,10 +3533,7 @@ function AccountsPageContent() {
           setImportSeedFiles(null);
           setImportBackgroundOnly(false);
         }}
-        onImported={async (summary) => {
-          setPendingImportSummary(summary);
-          const importedAccountId = summary.accountId ?? summary.optimisticAccountId ?? null;
-          const previewTransactions = summary.previewTransactions ?? [];
+      onImported={async (summary) => {
           const optimisticAccount = buildOptimisticImportedAccount(summary);
           const importedAccountKey = getImportedAccountKey(
             summary.accountName,
@@ -3531,6 +3541,7 @@ function AccountsPageContent() {
             summary.accountNumber ?? null,
             summary.accountType ?? null
           );
+          const previewTransactions = summary.previewTransactions ?? [];
           let nextAccountsSnapshot: Account[] | null = null;
           let nextTransactionsSnapshot: Transaction[] | null = null;
 
@@ -3602,6 +3613,19 @@ function AccountsPageContent() {
             }
           });
 
+          const settledAccountId = nextAccountsSnapshot ? resolvePersistedImportedAccountId(summary, nextAccountsSnapshot) : null;
+          const settledSummary =
+            settledAccountId && settledAccountId !== summary.accountId
+              ? {
+                  ...summary,
+                  accountId: settledAccountId,
+                  optimistic: false,
+                  optimisticAccountId: null,
+                }
+              : summary;
+          setPendingImportSummary(settledSummary);
+          const importedAccountId = settledSummary.accountId ?? settledSummary.optimisticAccountId ?? null;
+
           if (selectedWorkspaceId && nextAccountsSnapshot && nextTransactionsSnapshot) {
             const cachedTransactionsWorkspace = getCachedTransactionsWorkspace(selectedWorkspaceId);
             persistTransactionsWorkspaceCache(selectedWorkspaceId, {
@@ -3612,7 +3636,7 @@ function AccountsPageContent() {
             });
           }
 
-          if (!summary.optimistic) {
+          if (!settledSummary.optimistic) {
             setImportRefreshInFlight(true);
             try {
               await refreshAll();
