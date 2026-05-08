@@ -148,6 +148,11 @@ type ImportStatusPayload = {
   parsedRowsCount?: number;
   confirmedTransactionsCount?: number;
   confirmationStatus?: string;
+  telemetryPhase?: string | null;
+  telemetryLabel?: string | null;
+  telemetryMessage?: string | null;
+  canResume?: boolean | null;
+  resumeReason?: string | null;
   statementCheckpoint?: {
     sourceMetadata?: Record<string, unknown> | null;
     endingBalance?: string | null;
@@ -193,6 +198,13 @@ const getImportErrorCode = (error: unknown) => {
   }
 
   return "unknown_error";
+};
+
+const RESUMABLE_IMPORT_ERROR_CODES = new Set(["I-104", "I-105", "I-106", "I-107"]);
+
+const isResumableImportErrorCode = (code?: string | null) => {
+  const normalized = (code ?? "").trim().toUpperCase();
+  return RESUMABLE_IMPORT_ERROR_CODES.has(normalized);
 };
 
 const formatImportFailureMessage = (_file: File | string, errorMessage: string) => errorMessage;
@@ -253,6 +265,7 @@ const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null
       : stage === "monitor" || stage === "background" || stage === "confirm"
         ? [
             "The parsed rows were kept, so you can safely go back to Accounts or Transactions.",
+            "If Clover shows Resume import, use it to continue from the saved file.",
             "If the final import never completes, re-upload the file once and let Clover finish in the background.",
             "If anything is still missing, add the transactions manually in Transactions.",
           ]
@@ -328,7 +341,9 @@ const findKnownImportedBalance = (
     accountType?: UploadAccountType;
   }
 ) => {
-  const cachedAccounts = params.workspaceId ? getCachedAccountsWorkspace(params.workspaceId)?.accounts ?? [] : [];
+  const cachedAccounts: AccountOption[] = params.workspaceId
+    ? ((getCachedAccountsWorkspace(params.workspaceId)?.accounts ?? []) as AccountOption[])
+    : [];
   const candidateAccounts = [...cachedAccounts, ...accounts];
   const normalizedName = params.accountName
     ? formatUploadAccountDisplayName(
@@ -358,8 +373,10 @@ const findKnownImportedBalance = (
       return true;
     }
 
-    const accountInstitution = (account.institution ?? "").trim().toLowerCase();
-    const accountLastFour = extractLastFourDigits(account.accountNumber ?? account.name ?? null);
+    const accountInstitution = String(account.institution ?? "").trim().toLowerCase();
+    const accountLastFour = extractLastFourDigits(
+      typeof account.accountNumber === "string" ? account.accountNumber : typeof account.name === "string" ? account.name : null
+    );
 
     return Boolean(
       targetInstitution &&
@@ -952,6 +969,8 @@ export function ImportFilesModal({
           status: ImportActivityStatus;
           workspaceId?: string;
           surface?: ImportActivityLocation;
+          errorTitle?: string | null;
+          errorNextSteps?: string[] | null;
         })
       | null
   ) => {
@@ -978,6 +997,8 @@ export function ImportFilesModal({
       summary: snapshot.summary ?? null,
       errorCode: snapshot.errorCode ?? null,
       errorMessage: snapshot.errorMessage ?? null,
+      errorTitle: snapshot.errorTitle ?? null,
+      errorNextSteps: snapshot.errorNextSteps ?? null,
       updatedAt: Date.now(),
     };
     const previousSnapshot = lastImportActivityRef.current;
@@ -1723,7 +1744,7 @@ export function ImportFilesModal({
           accountNumber: summaryContext.accountNumber ?? null,
           accountType: resolvedAccountType,
           balance: resolvedBalance,
-          optimisticAccountId: summaryContext.optimisticAccountId ?? null,
+          optimisticAccountId: resolvedAccountId.startsWith("optimistic-") ? summaryContext.optimisticAccountId ?? resolvedAccountId : null,
           previewTransactions: getKnownPreviewTransactions({
             workspaceId,
             accountId: resolvedAccountId,
@@ -1817,6 +1838,15 @@ export function ImportFilesModal({
     []
   );
 
+  const getTelemetryDetail = (
+    fallback: string,
+    telemetryMessage?: string | null,
+    telemetryLabel?: string | null,
+    resumeReason?: string | null
+  ) => {
+    return telemetryMessage?.trim() || telemetryLabel?.trim() || resumeReason?.trim() || fallback;
+  };
+
   const monitorQueuedImportAndConfirm = async (
     itemId: string,
     importFileId: string,
@@ -1877,6 +1907,11 @@ export function ImportFilesModal({
         const confirmedTransactionsCount = Number(payload.confirmedTransactionsCount ?? 0);
         const processingPhase = typeof importFile?.processingPhase === "string" ? importFile.processingPhase : null;
         const processingMessage = typeof importFile?.processingMessage === "string" ? importFile.processingMessage : null;
+        const telemetryPhase = typeof payload.telemetryPhase === "string" ? payload.telemetryPhase : null;
+        const telemetryLabel = typeof payload.telemetryLabel === "string" ? payload.telemetryLabel : null;
+        const telemetryMessage = typeof payload.telemetryMessage === "string" ? payload.telemetryMessage : null;
+        const canResume = Boolean(payload.canResume);
+        const resumeReason = typeof payload.resumeReason === "string" ? payload.resumeReason : null;
         const statementCheckpoint = payload.statementCheckpoint && typeof payload.statementCheckpoint === "object" ? payload.statementCheckpoint : null;
         const statementMetadata =
           statementCheckpoint?.sourceMetadata && typeof statementCheckpoint.sourceMetadata === "object"
@@ -1929,7 +1964,9 @@ export function ImportFilesModal({
             checkpointBalance ||
             checkpointAccountId ||
             processingIdentity?.accountName ||
-            processingIdentity?.accountNumber
+            processingIdentity?.accountNumber ||
+            canResume ||
+            telemetryPhase === "repair_needed"
         );
 
         if (importFile?.status === "failed") {
@@ -1937,7 +1974,7 @@ export function ImportFilesModal({
             emitItemUpdate({
               status: "importing",
               progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
-              progressLabel: "Finalizing import",
+              progressLabel: telemetryLabel ?? "Finalizing import",
             });
             emitImportActivity({
               workspaceId,
@@ -1948,7 +1985,12 @@ export function ImportFilesModal({
               fileTotal: items.length,
               completedFiles: completedFileCount,
               progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
-              detail: "Clover is finalizing the imported account",
+              detail: getTelemetryDetail(
+                "Clover is finalizing the imported account",
+                telemetryMessage,
+                telemetryLabel,
+                resumeReason
+              ),
               summary: null,
               errorMessage: null,
             });
@@ -1974,6 +2016,7 @@ export function ImportFilesModal({
             status: "importing",
             progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(79, IMPORT_PROGRESS.parsing + Number(importFile.processingAttempt ?? 0))),
             progressLabel:
+              telemetryLabel ??
               processingMessage ??
               (processingPhase === "auto_rerunning"
                 ? `Auto-rerun ${Number(importFile.processingAttempt ?? 0)}/${Number(importFile.processingTargetScore ?? 95)} in progress`
@@ -1988,10 +2031,9 @@ export function ImportFilesModal({
             fileTotal: items.length,
             completedFiles: completedFileCount,
             progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(79, IMPORT_PROGRESS.parsing + Number(importFile.processingAttempt ?? 0))),
-            detail:
-              processingMessage ??
-              (processingPhase === "auto_rerunning"
-                ? `Clover is rechecking the document`
+            detail: getTelemetryDetail(
+              processingPhase === "auto_rerunning"
+                ? "Clover is rechecking the document"
                 : getProgressDetail(
                     {
                       accountName: processingIdentity?.accountName ?? summaryContext.accountName,
@@ -1999,7 +2041,11 @@ export function ImportFilesModal({
                       accountNumber: processingIdentity?.accountNumber ?? summaryContext.accountNumber,
                     },
                     parsedRowsCount
-                  )),
+                  ),
+              telemetryMessage ?? processingMessage,
+              telemetryLabel,
+              resumeReason
+            ),
             summary: null,
               errorMessage: null,
           });
@@ -2065,7 +2111,7 @@ export function ImportFilesModal({
                 IMPORT_PROGRESS.loadingAccount,
                 Math.min(92, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
               ),
-              progressLabel: "Loading account",
+              progressLabel: telemetryLabel ?? "Loading account",
               targetAccountId: fallbackAccountId,
             });
             emitImportActivity({
@@ -2080,13 +2126,18 @@ export function ImportFilesModal({
                 IMPORT_PROGRESS.loadingAccount,
                 Math.min(92, IMPORT_PROGRESS.loadingAccount + Number(importFile.processingAttempt ?? 0))
               ),
-              detail: getProgressDetail(
-                {
-                  accountName: fallbackSummary.accountName,
-                  institution: fallbackSummary.institution,
-                  accountNumber: fallbackSummary.accountNumber ?? null,
-                },
-                parsedRowsCount
+              detail: getTelemetryDetail(
+                getProgressDetail(
+                  {
+                    accountName: fallbackSummary.accountName,
+                    institution: fallbackSummary.institution,
+                    accountNumber: fallbackSummary.accountNumber ?? null,
+                  },
+                  parsedRowsCount
+                ),
+                telemetryMessage ?? processingMessage,
+                telemetryLabel,
+                resumeReason
               ),
               summary: null,
               errorMessage: null,
@@ -2217,6 +2268,7 @@ export function ImportFilesModal({
           const finalizedSummary: UploadInsightsSummary = {
             ...completedSummary,
             optimistic: false,
+            optimisticAccountId: null,
           };
           seedImportedWorkspaceCaches(workspaceId, finalizedSummary);
           void onImported(finalizedSummary);
@@ -2455,7 +2507,7 @@ export function ImportFilesModal({
               updateItem(itemId, {
                 status: "importing",
                 progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(IMPORT_PROGRESS.loadingAccount, IMPORT_PROGRESS.parsing + attempt * 0.5)),
-                progressLabel: "Reading account details",
+                progressLabel: telemetryLabel ?? "Reading account details",
                 targetAccountId: accountId,
               });
               publishImportActivity({
@@ -2467,7 +2519,8 @@ export function ImportFilesModal({
                 fileTotal: items.length,
                 completedFiles: completedFileCount,
                 progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(IMPORT_PROGRESS.loadingAccount, IMPORT_PROGRESS.parsing + attempt * 0.5)),
-                detail: getProgressDetail(
+              detail: getTelemetryDetail(
+                getProgressDetail(
                   {
                     accountName: summaryContext.accountName,
                     institution: summaryContext.institution,
@@ -2475,9 +2528,13 @@ export function ImportFilesModal({
                   },
                   parsedRowsCount
                 ),
-                summary: null,
-                errorMessage: null,
-              });
+                telemetryMessage ?? processingMessage,
+                telemetryLabel,
+                resumeReason
+              ),
+              summary: null,
+              errorMessage: null,
+            });
             }
             await sleep(parsedRowsCount > 0 ? 300 : 600);
             continue;
@@ -2531,7 +2588,7 @@ export function ImportFilesModal({
             updateItem(itemId, {
               status: "importing",
               progress: Math.max(IMPORT_PROGRESS.loadingAccount, Math.min(98, IMPORT_PROGRESS.loadingAccount + attempt * 0.5)),
-              progressLabel: "Finalizing import",
+              progressLabel: telemetryLabel ?? "Finalizing import",
               targetAccountId: resolvedAccountId,
             });
             publishImportActivity({
@@ -2543,13 +2600,18 @@ export function ImportFilesModal({
               fileTotal: items.length,
               completedFiles: completedFileCount,
               progress: Math.max(IMPORT_PROGRESS.loadingAccount, Math.min(98, IMPORT_PROGRESS.loadingAccount + attempt * 0.5)),
-              detail: getProgressDetail(
-                {
-                  accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
-                  institution: resolvedIdentity.institution ?? summaryContext.institution,
-                  accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber,
-                },
-                parsedRowsCount
+              detail: getTelemetryDetail(
+                getProgressDetail(
+                  {
+                    accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
+                    institution: resolvedIdentity.institution ?? summaryContext.institution,
+                    accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber,
+                  },
+                  parsedRowsCount
+                ),
+                telemetryMessage ?? processingMessage,
+                telemetryLabel,
+                resumeReason
               ),
               summary: null,
               errorMessage: null,
@@ -3079,13 +3141,17 @@ export function ImportFilesModal({
       const importStatus = typeof importFile?.status === "string" ? importFile.status : null;
       const processingPhase = typeof importFile?.processingPhase === "string" ? importFile.processingPhase : null;
       const processingMessage = typeof importFile?.processingMessage === "string" ? importFile.processingMessage : null;
+      const telemetryPhase = typeof payload.telemetryPhase === "string" ? payload.telemetryPhase : null;
+      const telemetryLabel = typeof payload.telemetryLabel === "string" ? payload.telemetryLabel : null;
+      const telemetryMessage = typeof payload.telemetryMessage === "string" ? payload.telemetryMessage : null;
+      const resumeReason = typeof payload.resumeReason === "string" ? payload.resumeReason : null;
 
       if (importStatus === "failed") {
         if ((parsedRowsCount > 0 || confirmedTransactionsCount > 0) && attempt < 239) {
           updateItem(itemId, {
             status: "importing",
             progress: 92,
-            progressLabel: "Finalizing import",
+            progressLabel: telemetryLabel ?? "Finalizing import",
           });
           publishImportActivity({
             workspaceId,
@@ -3096,7 +3162,12 @@ export function ImportFilesModal({
             fileTotal: items.length,
             completedFiles: completedFileCount,
             progress: 92,
-            detail: "Clover is finalizing the imported file",
+            detail: getTelemetryDetail(
+              "Clover is finalizing the imported file",
+              telemetryMessage,
+              telemetryLabel,
+              resumeReason
+            ),
             summary: null,
             errorMessage: null,
           });
@@ -3139,7 +3210,7 @@ export function ImportFilesModal({
       updateItem(itemId, {
         status: "importing",
         progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(92, IMPORT_PROGRESS.parsing + attempt * 0.25)),
-        progressLabel: processingMessage ?? progressLabel,
+        progressLabel: telemetryLabel ?? processingMessage ?? progressLabel,
       });
       publishImportActivity({
         workspaceId,
@@ -3150,13 +3221,18 @@ export function ImportFilesModal({
         fileTotal: items.length,
         completedFiles: completedFileCount,
         progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(92, IMPORT_PROGRESS.parsing + attempt * 0.25)),
-        detail:
-          processingMessage ??
-          (processingPhase === "auto_rerunning"
+        detail: getTelemetryDetail(
+          telemetryPhase === "repair_needed"
+            ? "Clover needs another pass to finish this file"
+            : processingPhase === "auto_rerunning"
             ? "Clover is rechecking the document"
             : parsedRowsCount > 0 || confirmedTransactionsCount > 0
               ? `Clover found ${Math.max(parsedRowsCount, confirmedTransactionsCount)} item(s)`
-              : progressLabel),
+              : progressLabel,
+          telemetryMessage ?? processingMessage,
+          telemetryLabel,
+          resumeReason
+        ),
         summary: null,
         errorMessage: null,
       });
@@ -3835,9 +3911,9 @@ export function ImportFilesModal({
         accountNumber: statementIdentity?.accountNumber ?? null,
         accountType: statementAccountType,
       });
-        const optimisticPreviewSummary =
-          targetAccountId
-            ? ({
+      const optimisticPreviewSummary =
+        targetAccountId
+          ? ({
               ...buildOptimisticUploadSummary(
                 item.file.name,
                 Number(processPayload?.imported ?? 0) || 0,
@@ -3845,7 +3921,7 @@ export function ImportFilesModal({
                 statementIdentity?.accountName ?? null,
                 statementIdentity?.institution ?? null,
                 statementAccountType,
-                targetAccountId,
+                targetAccountId.startsWith("optimistic-") ? targetAccountId : null,
                 knownPreviewBalance,
                 previewTransactions,
                 statementIdentity?.accountNumber ?? null
@@ -4215,6 +4291,8 @@ export function ImportFilesModal({
           "For low-confidence statements, use Transactions to add anything Clover missed manually.",
           "If the import looks wrong but still completes, check Review before confirming changes.",
         ];
+  const canResumeImport = (item: QueuedFile) =>
+    Boolean(item.importFileId && (item.confirmationState === "staged" || isResumableImportErrorCode(item.errorCode)));
 
   useEffect(() => {
     if (!open || !workspaceId) {
@@ -4410,6 +4488,139 @@ export function ImportFilesModal({
 
     setMessage("All passwords saved. Clover is starting the rest.");
     autoStartRef.current = true;
+  };
+
+  const handleResumeImport = async (itemId: string) => {
+    const item = items.find((entry) => entry.id === itemId);
+    if (!item?.importFileId) {
+      setMessage("No stalled import was found to resume.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage("Resuming import...");
+
+    try {
+      capturePostHogClientEvent("import_retry_started", {
+        ...fileAnalyticsBase(item.file, workspaceId),
+        import_file_id: item.importFileId,
+        retry_reason: "resume_import",
+      });
+
+      const response = await fetch(`/api/imports/${item.importFileId}/resume`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        const limitPayload = parsePlanLimitPayload(payload) ?? parsePlanLimitMessage(String(payload.error ?? ""), planTier);
+        if (limitPayload) {
+          showPlanLimitNudge(limitPayload);
+        }
+        const errorMessage = String(payload.error ?? "Unable to resume this import.");
+        capturePostHogClientEvent("import_retry_failed", {
+          ...fileAnalyticsBase(item.file, workspaceId),
+          import_file_id: item.importFileId,
+          retry_reason: "resume_import",
+          error_code: String(payload.error ?? getImportErrorCode(new Error(errorMessage))),
+        });
+        closeImportAfterError(itemId, "monitor", item.file.name, errorMessage);
+        return;
+      }
+
+      const telemetryPhase = typeof payload.telemetryPhase === "string" ? payload.telemetryPhase : null;
+      const telemetryLabel = typeof payload.telemetryLabel === "string" ? payload.telemetryLabel : null;
+      const telemetryMessage = typeof payload.telemetryMessage === "string" ? payload.telemetryMessage : null;
+      const resumedAccountId =
+        typeof payload.accountId === "string" && payload.accountId.trim() ? payload.accountId.trim() : item.targetAccountId;
+
+      if (payload.skipped && telemetryPhase === "complete") {
+        updateItem(itemId, {
+          status: "done",
+          confirmationState: "confirmed",
+          error: null,
+          importFileId: item.importFileId,
+          targetAccountId: resumedAccountId ?? item.targetAccountId,
+          importedRows: item.importedRows ?? 0,
+          progress: 100,
+          progressLabel: "Done",
+        });
+        setMessage("The import was already complete.");
+        router.refresh();
+        capturePostHogClientEvent("import_retry_succeeded", {
+          ...fileAnalyticsBase(item.file, workspaceId),
+          import_file_id: item.importFileId,
+          retry_reason: "resume_import",
+          skipped: true,
+        });
+        return;
+      }
+
+      updateItem(itemId, {
+        status: "importing",
+        confirmationState: "pending",
+        error: null,
+        importFileId: item.importFileId,
+        targetAccountId: resumedAccountId ?? item.targetAccountId,
+        progress: Math.max(item.progress, IMPORT_PROGRESS.loadingAccount),
+        progressLabel: telemetryLabel ?? "Resuming import",
+      });
+      publishImportActivity({
+        workspaceId,
+        surface: importActivitySurfaceRef.current,
+        status: "active",
+        fileName: item.file.name,
+        fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+        fileTotal: items.length,
+        completedFiles: completedFileCount,
+        progress: Math.max(item.progress, IMPORT_PROGRESS.loadingAccount),
+        detail: getTelemetryDetail("Clover is resuming the import", telemetryMessage, telemetryLabel, null),
+        summary: null,
+        errorMessage: null,
+      });
+
+      await monitorQueuedImportAndConfirm(
+        itemId,
+        item.importFileId,
+        resumedAccountId ?? item.targetAccountId ?? null,
+        {
+          fileName: item.file.name,
+          fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
+          guessedAccountName: null,
+          guessedInstitution: null,
+          guessedAccountNumber: null,
+          guessedAccountType: null,
+          accountName: null,
+          institution: null,
+          accountNumber: null,
+          accountType: null,
+          optimisticAccountId: resumedAccountId && !resumedAccountId.startsWith("optimistic-") ? resumedAccountId : item.targetAccountId,
+          initialBalance: null,
+          password: item.password.trim() || undefined,
+          previewTransactions: [],
+        }
+      );
+
+      setMessage(`Resumed ${item.file.name}.`);
+
+      capturePostHogClientEvent("import_retry_succeeded", {
+        ...fileAnalyticsBase(item.file, workspaceId),
+        import_file_id: item.importFileId,
+        retry_reason: "resume_import",
+      });
+    } catch (error) {
+      closeImportAfterError(itemId, "monitor", item.file.name, error instanceof Error ? error.message : null);
+      setMessage("Clover couldn't resume the import.");
+      capturePostHogClientEvent("import_retry_failed", {
+        ...(item ? fileAnalyticsBase(item.file, workspaceId) : {}),
+        import_file_id: item?.importFileId ?? null,
+        retry_reason: "resume_import",
+        error_code: getImportErrorCode(error),
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   const handleReplayConfirm = async (itemId: string) => {
@@ -4759,7 +4970,16 @@ export function ImportFilesModal({
                           </button>
                         </>
                       ) : null}
-                      {item.status === "error" && item.importFileId ? (
+                      {item.status === "error" && item.importFileId && canResumeImport(item) ? (
+                        <button
+                          className="button button-primary button-small"
+                          type="button"
+                          onClick={() => void handleResumeImport(item.id)}
+                          disabled={busy}
+                        >
+                          Resume import
+                        </button>
+                      ) : item.status === "error" && item.importFileId ? (
                         <button
                           className="button button-primary button-small"
                           type="button"
@@ -4813,10 +5033,10 @@ export function ImportFilesModal({
                         <button
                           className="button button-primary button-small"
                           type="button"
-                          onClick={() => void handleReplayConfirm(item.id)}
+                          onClick={() => (canResumeImport(item) ? void handleResumeImport(item.id) : void handleReplayConfirm(item.id))}
                           disabled={busy}
                         >
-                          Confirm now
+                          {canResumeImport(item) ? "Resume import" : "Confirm now"}
                         </button>
                       ) : null}
                     </div>

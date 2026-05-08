@@ -6625,10 +6625,10 @@ function TransactionsPageContent() {
           flushSync(() => {
             setIsWorkspaceDataReady(true);
 
-            if (summary.optimisticAccountId && optimisticAccount) {
+            if (optimisticAccount) {
               setAccounts((current) =>
                 current.filter((account) => {
-                  if (account.id === summary.optimisticAccountId) {
+                  if (summary.optimisticAccountId && account.id === summary.optimisticAccountId) {
                     return false;
                   }
 

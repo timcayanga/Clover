@@ -3483,10 +3483,10 @@ function AccountsPageContent() {
 
           flushSync(() => {
             setAccountsLoading(false);
-            if (summary.optimisticAccountId && optimisticAccount) {
+            if (optimisticAccount) {
               setAccounts((current) =>
                 (nextAccountsSnapshot = current.filter((account) => {
-                  if (account.id === summary.optimisticAccountId) {
+                  if (summary.optimisticAccountId && account.id === summary.optimisticAccountId) {
                     return false;
                   }
 
