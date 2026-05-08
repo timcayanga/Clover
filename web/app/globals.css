@@ -27544,6 +27544,39 @@ button.accounts-detail__transaction-head-cell {
   background: rgba(247, 249, 250, 0.8);
 }
 
+.settings-profile-summary--with-avatar {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+}
+
+.settings-profile-summary__avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 0.95rem;
+  font-weight: 700;
+  flex: none;
+}
+
+.settings-profile-summary__avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+}
+
+.settings-profile-summary__copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
 .settings-profile-summary__label {
   color: var(--muted-2);
   font-size: 12px;
@@ -27556,6 +27589,13 @@ button.accounts-detail__transaction-head-cell {
   line-height: 1.4;
   color: var(--text);
   word-break: break-word;
+}
+
+.settings-profile-summary p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .settings-clerk-frame {
@@ -27662,8 +27702,20 @@ button.accounts-detail__transaction-head-cell {
   gap: 14px;
 }
 
+.settings-account-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
 .settings-account-card {
   gap: 14px;
+}
+
+.settings-account-card--photo,
+.settings-account-card--details {
+  min-width: 0;
 }
 
 .settings-account-card__head {
@@ -27713,6 +27765,33 @@ button.accounts-detail__transaction-head-cell {
 .settings-account-photo-actions p {
   margin: 0;
   color: var(--muted);
+}
+
+.settings-account-password {
+  display: grid;
+  gap: 10px;
+  padding-top: 2px;
+}
+
+.settings-account-password__chip {
+  width: fit-content;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(3, 168, 192, 0.18);
+  background: rgba(3, 168, 192, 0.08);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-account-password__panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 .profile-avatar-editor {
@@ -28753,6 +28832,7 @@ html[data-helper-text="hidden"] .settings-helper {
   .settings-choice-grid,
   .settings-data-grid,
   .settings-data-delete,
+  .settings-account-layout,
   .settings-category-creator__fields,
   .settings-category-card__fields,
   .settings-plan-grid,

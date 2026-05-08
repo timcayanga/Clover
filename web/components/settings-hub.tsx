@@ -11,6 +11,7 @@ import { UserAvatarEditor } from "@/components/user-avatar-editor";
 import { capturePostHogClientEvent } from "@/components/posthog-analytics";
 import { SettingsCategoriesPanel } from "@/components/settings-categories-panel";
 import { type BillingInterval } from "@/lib/billing-plans";
+import { getAvatarBackgroundStyle, getAvatarInitials } from "@/lib/avatar-utils";
 import { applyHelperTextPreference, HELPER_TEXT_STORAGE_KEY, readStoredHelperTextPreference } from "@/lib/helper-text-preference";
 import { getPlanDisplayLabel } from "@/lib/user-limits";
 import { applyThemeMode, readStoredThemeMode, THEME_STORAGE_KEY, type ThemeMode } from "@/lib/theme-preference";
@@ -284,6 +285,7 @@ export function SettingsHub({
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [accountMessage, setAccountMessage] = useState<string | null>(null);
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null);
+  const [passwordEditorOpen, setPasswordEditorOpen] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [newProfileName, setNewProfileName] = useState("");
   const [profileRenameDrafts, setProfileRenameDrafts] = useState<Record<string, string>>({});
@@ -689,15 +691,16 @@ export function SettingsHub({
               </div>
             </div>
 
-            <div className="settings-account-grid">
-              <article className="settings-action-card settings-account-card">
+            <div className="settings-account-layout">
+              <article className="settings-action-card settings-account-card settings-account-card--photo">
                 <div className="settings-account-card__head">
-                  <h5>Picture</h5>
+                  <h5>Photo</h5>
+                  <span className="settings-pill">Account</span>
                 </div>
                 <UserAvatarEditor displayName={`${firstNameDraft} ${lastNameDraft}`.trim() || workspaceName} avatarUrl={user?.imageUrl ?? null} />
               </article>
 
-              <article className="settings-action-card settings-account-card">
+              <article className="settings-action-card settings-account-card settings-account-card--details">
                 <div className="settings-account-card__head">
                   <h5>Account details</h5>
                 </div>
@@ -725,89 +728,96 @@ export function SettingsHub({
                     </button>
                     {accountMessage ? <p className="settings-helper">{accountMessage}</p> : null}
                   </div>
-                </div>
-              </article>
 
-              <article className="settings-action-card settings-account-card">
-                <div className="settings-account-card__head">
-                  <h5>Password</h5>
-                </div>
-                <div className="settings-account-form">
-                  <label className="settings-inline-field">
-                    <span>Current password</span>
-                    <input
-                      type="password"
-                      value={passwordCurrentDraft}
-                      onChange={(event) => setPasswordCurrentDraft(event.target.value)}
-                      placeholder="Enter current password"
-                      autoComplete="current-password"
-                    />
-                  </label>
-                  <label className="settings-inline-field">
-                    <span>New password</span>
-                    <input
-                      type="password"
-                      value={passwordNewDraft}
-                      onChange={(event) => setPasswordNewDraft(event.target.value)}
-                      placeholder="Enter new password"
-                      autoComplete="new-password"
-                    />
-                  </label>
-                  <label className="settings-inline-field">
-                    <span>Confirm new password</span>
-                    <input
-                      type="password"
-                      value={passwordConfirmDraft}
-                      onChange={(event) => setPasswordConfirmDraft(event.target.value)}
-                      placeholder="Confirm new password"
-                      autoComplete="new-password"
-                    />
-                  </label>
-                  <div className="settings-account-form__actions">
+                  <div className="settings-account-password">
                     <button
                       type="button"
-                      className="button button-primary button-small"
-                      onClick={handlePasswordSave}
-                      disabled={isPending}
+                      className="settings-account-password__chip"
+                      aria-expanded={passwordEditorOpen}
+                      onClick={() => setPasswordEditorOpen((current) => !current)}
                     >
-                      Update password
+                      Change password
                     </button>
-                    {passwordMessage ? <p className="settings-helper">{passwordMessage}</p> : null}
+                    {passwordEditorOpen ? (
+                      <div className="settings-account-password__panel">
+                        <label className="settings-inline-field">
+                          <span>Current password</span>
+                          <input
+                            type="password"
+                            value={passwordCurrentDraft}
+                            onChange={(event) => setPasswordCurrentDraft(event.target.value)}
+                            placeholder="Enter current password"
+                            autoComplete="current-password"
+                          />
+                        </label>
+                        <label className="settings-inline-field">
+                          <span>New password</span>
+                          <input
+                            type="password"
+                            value={passwordNewDraft}
+                            onChange={(event) => setPasswordNewDraft(event.target.value)}
+                            placeholder="Enter new password"
+                            autoComplete="new-password"
+                          />
+                        </label>
+                        <label className="settings-inline-field">
+                          <span>Confirm new password</span>
+                          <input
+                            type="password"
+                            value={passwordConfirmDraft}
+                            onChange={(event) => setPasswordConfirmDraft(event.target.value)}
+                            placeholder="Confirm new password"
+                            autoComplete="new-password"
+                          />
+                        </label>
+                        <div className="settings-account-form__actions">
+                          <button
+                            type="button"
+                            className="button button-primary button-small"
+                            onClick={handlePasswordSave}
+                            disabled={isPending}
+                          >
+                            Update password
+                          </button>
+                          {passwordMessage ? <p className="settings-helper">{passwordMessage}</p> : null}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               </article>
-
-              <article className="settings-action-card settings-account-card">
-                <div className="settings-account-card__head">
-                  <h5>Social sign-ins and connected accounts</h5>
-                </div>
-                <div className="settings-account-connected-list">
-                  {connectedAccounts.length ? (
-                    connectedAccounts.map((account) => (
-                      <div key={account.id} className="settings-account-connected-item">
-                        <strong>{account.providerTitle()}</strong>
-                        <span>{account.accountIdentifier()}</span>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="settings-account-connected-item">
-                      <strong>No connected accounts yet</strong>
-                      <span>Sign in with Google, Facebook, or another provider to link it here.</span>
-                    </div>
-                  )}
-                </div>
-              </article>
-
-              <article className="settings-action-card settings-account-card settings-account-card--danger">
-                <div className="settings-account-card__head">
-                  <h5>Delete account</h5>
-                </div>
-                <p>This permanently deletes your Clover account and all data tied to it.</p>
-                <button type="button" className="button button-danger button-small" onClick={handleDeleteAccount} disabled={isPending}>
-                  Delete account
-                </button>
-              </article>
             </div>
+
+            <article className="settings-action-card settings-account-card">
+              <div className="settings-account-card__head">
+                <h5>Social sign-ins and connected accounts</h5>
+              </div>
+              <div className="settings-account-connected-list">
+                {connectedAccounts.length ? (
+                  connectedAccounts.map((account) => (
+                    <div key={account.id} className="settings-account-connected-item">
+                      <strong>{account.providerTitle()}</strong>
+                      <span>{account.accountIdentifier()}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="settings-account-connected-item">
+                    <strong>No connected accounts yet</strong>
+                    <span>Sign in with Google, Facebook, or another provider to link it here.</span>
+                  </div>
+                )}
+              </div>
+            </article>
+
+            <article className="settings-action-card settings-account-card settings-account-card--danger">
+              <div className="settings-account-card__head">
+                <h5>Delete account</h5>
+              </div>
+              <p>This permanently deletes your Clover account and all data tied to it.</p>
+              <button type="button" className="button button-danger button-small" onClick={handleDeleteAccount} disabled={isPending}>
+                Delete account
+              </button>
+            </article>
           </section>
         ) : null}
 
@@ -850,12 +860,22 @@ export function SettingsHub({
               {profiles.map((profile) => {
                 const isActive = profile.id === activeProfileId;
                 const renameDraft = profileRenameDrafts[profile.id] ?? profile.name;
+                const profileAvatar = profile.type === "personal" ? user?.imageUrl ?? null : null;
+                const avatarFallback = profile.name || workspaceName;
 
                 return (
                   <article key={profile.id} className={`settings-action-card${isActive ? " is-active" : ""}`}>
-                    <div>
-                      <h5>{profile.name}</h5>
-                      <p>{profile.type === "shared" ? "Shared profile" : "Personal profile"}</p>
+                    <div className="settings-profile-summary settings-profile-summary--with-avatar">
+                      <span
+                        className="settings-profile-summary__avatar"
+                        style={profileAvatar ? undefined : getAvatarBackgroundStyle(avatarFallback)}
+                      >
+                        {profileAvatar ? <img src={profileAvatar} alt="" /> : <span>{getAvatarInitials(avatarFallback)}</span>}
+                      </span>
+                      <div className="settings-profile-summary__copy">
+                        <strong>{profile.name}</strong>
+                        <p>{profile.type === "shared" ? "Shared profile" : "Personal profile"}</p>
+                      </div>
                     </div>
                     <div className="settings-action-card__row">
                       <label className="settings-inline-field">
