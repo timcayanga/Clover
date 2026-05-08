@@ -1730,7 +1730,7 @@ export const processImportFileText = async (
     metadataForParse.accountName === metadataForParse.institution ||
     /^Account\s+\d{4}$/i.test(metadataForParse.accountName) ||
     /^(CUSTOMER NUMBER|ACCOUNT NUMBER)$/i.test(metadataForParse.accountName);
-  const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank"]);
+  const noisyVisionPreferredInstitutions = new Set(["Landbank", "EastWest", "UCPB", "Chinabank", "China Bank"]);
   const prefersVisionFallbackForInstitution =
     typeof metadataForParse.institution === "string" && noisyVisionPreferredInstitutions.has(metadataForParse.institution);
   const genericParseLooksSuspicious =
@@ -1767,8 +1767,8 @@ export const processImportFileText = async (
             fileName,
           },
           options.password,
-          !text.trim() ? 6 : importMode === "receipt" ? 4 : looksCharacterSpacedOcr || genericParseLooksSuspicious ? 4 : gcashSuspiciouslySparse ? 3 : 2,
-          !text.trim() ? 2.0 : importMode === "receipt" ? 1.35 : looksCharacterSpacedOcr || genericParseLooksSuspicious ? 1.6 : gcashSuspiciouslySparse ? 1.35 : 1.1,
+          !text.trim() ? 8 : importMode === "receipt" ? 4 : looksCharacterSpacedOcr || genericParseLooksSuspicious ? 4 : gcashSuspiciouslySparse ? 3 : prefersVisionFallbackForInstitution ? 6 : 2,
+          !text.trim() ? 2.0 : importMode === "receipt" ? 1.35 : looksCharacterSpacedOcr || genericParseLooksSuspicious ? 1.6 : gcashSuspiciouslySparse ? 1.35 : prefersVisionFallbackForInstitution ? 1.8 : 1.1,
           options.pdfJsBaseUrl,
           !text.trim() || imageImport
         );
@@ -1783,7 +1783,7 @@ export const processImportFileText = async (
   }
   const openAiPrimaryMode = isTruthyEnvValue(getEnv().OPENAI_IMPORT_PARSER_PRIMARY);
   let openAiParsed = await parseImportTextWithOpenAIFallback({
-    textForParse,
+    text: textForParse,
     fileName,
     fileType,
     detectedMetadata: metadataForParse,
@@ -1981,9 +1981,12 @@ export const processImportFileText = async (
   let confirmedImportResult:
     | {
         imported: number;
-        accountId: string;
-        insightSummary: ImportInsightSummary;
-        accountBalance: string | null;
+        accountId?: string | null;
+        insightSummary?: ImportInsightSummary | null;
+        accountBalance?: string | null;
+        status?: string;
+        duplicate?: boolean;
+        confirmedTransactionsCount?: number | null;
       }
     | null = null;
   const duplicateImportFileId = await findExistingImportedStatement({
@@ -2345,11 +2348,7 @@ export const processImportFileText = async (
     const hasUsableParsedRows = rows.length > 0;
     const allowWarningFinalizeForImageStatement =
       imageImport && importMode === "statement" && hasUsableParsedRows && !hasCriticalFindings;
-    const canFinalizeWithWarnings =
-      hasUsableParsedRows &&
-      !hasCriticalFindings &&
-      (allowWarningFinalizeForImageStatement || qaRunResult.evaluation.score >= 90) &&
-      qaRunResult.evaluation.score < AUTO_REPARSE_SCORE_TARGET;
+    const canFinalizeWithWarnings = hasUsableParsedRows && !hasCriticalFindings;
 
     const shouldAutoRerun =
       autoRerunEnabled &&
@@ -2466,7 +2465,7 @@ export const processImportFileText = async (
 
           return {
             imported: confirmedImportResult.imported,
-            duplicate: confirmedImportResult.duplicate,
+            duplicate: Boolean(confirmedImportResult.duplicate),
             metadata: resolvedMetadata,
             accountId: confirmedImportResult.accountId ?? null,
             confirmedTransactionsCount: confirmedImportResult.confirmedTransactionsCount ?? null,
