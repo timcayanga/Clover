@@ -3039,6 +3039,11 @@ body.transactions-manual-open .shell-quick-add-button {
     overflow: visible;
   }
 
+  .transactions-page .content {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
   .topbar {
     border-radius: 24px;
   }
@@ -22087,11 +22092,15 @@ button.accounts-detail__transaction-head-cell {
   .transactions-mobile-view {
     display: grid;
     gap: 12px;
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     padding-bottom: calc(160px + env(safe-area-inset-bottom));
   }
 
   .transactions-page .content-body {
-    overflow-y: auto;
+    overflow: hidden;
     -webkit-overflow-scrolling: touch;
   }
 
@@ -22146,7 +22155,7 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .transactions-mobile-view {
-    overflow: visible;
+    overflow-y: auto;
   }
 
   .transactions-pagination {

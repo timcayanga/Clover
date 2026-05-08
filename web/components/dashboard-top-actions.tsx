@@ -60,7 +60,7 @@ const normalizeName = (value: string | null | undefined) => value?.trim().toLowe
 const getOtherCategoryId = (categories: DashboardCategory[]) =>
   categories.find((category) => normalizeName(category.name) === "other")?.id ?? "";
 
-function DashboardManualTransactionModal({
+export function DashboardManualTransactionModal({
   workspaceId,
   accounts,
   onClose,

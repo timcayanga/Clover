@@ -52,8 +52,8 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/service\s*charge|servicecharge|bank charge|bankcharge/.test(lower) || /servicecharge|bankcharge/.test(compact)) return "Financial";
   if (/instapay\s*transfer\s*fee|instapaytransferfee/.test(lower) || /instapaytransferfee/.test(compact)) return "Transfers";
   if (/expressnet|megalinkw?|\/drw\b|cash\s*(?:withdrawal|out)|atm\b|automated\s+teller|cash\s+advance/.test(lower)) return "Cash & ATM";
-  if (type === "income" || /salary|payroll|income|deposit|cash\s+deposit|credit memo/.test(lower)) return "Income";
-  if (/epsaten|el\/?espay|payroll credit/.test(lower)) return "Income";
+  if (type === "income" || /salary|payroll|income|deposit|cash\s*(?:in|deposit)|credit memo/.test(lower)) return "Income";
+  if (/epsaten|el\/?espay|payroll credit|cash\s*in\b|cashin\b/.test(lower)) return "Income";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut/.test(lower)) return "Food & Dining";
   if (/auntie\s*annes|llaollao/.test(lower)) return "Food & Dining";
@@ -9275,11 +9275,27 @@ const parseGenericDigitalSavingsStatement = (
 
 const isGenericEastWestTemplateStatement = (text: string) => {
   const normalized = normalizeWhitespace(text).replace(/\u00a0/g, " ");
+  const columnSignals =
+    [
+      /\bBook\s+Date\b/i,
+      /\bReference\b/i,
+      /\bDescription\b/i,
+      /\bValue\s+Date\b/i,
+      /\bCheque\s+No\.?\b/i,
+      /\bDebit\b/i,
+      /\bCredit\b/i,
+      /\bClosing\s+Balance\b/i,
+      /\bBalance\s+at\s+Period\s+Start\b/i,
+    ].filter((pattern) => pattern.test(normalized)).length;
   return (
     /\bEASTWEST\b/i.test(normalized) &&
-    /\bBalance at Period|Balance al Paficd\b/i.test(normalized) &&
-    /\bCash Dep(?:osit|oait|osil|oslt|esit|enit)\b/i.test(normalized) &&
-    /\b(?:Outward|Cutward|Oubwas'?d)\s+Chequ/i.test(normalized)
+    columnSignals >= 3 &&
+    (
+      /\bBalance at Period|Balance al Paficd\b/i.test(normalized) ||
+      /\bCash Dep(?:osit|oait|osil|oslt|esit|enit)\b/i.test(normalized) ||
+      /\b(?:Outward|Cutward|Oubwas'?d)\s+Chequ/i.test(normalized) ||
+      /\bTransfer\s+SUCCESSFUL\b/i.test(normalized)
+    )
   );
 };
 
@@ -9450,25 +9466,7 @@ const parseChinaBankImportText = (text: string, context: ImportParseContext = {}
   finalizeBlock(currentBlock);
 
   if (rows.length < 20) {
-    if (process.env.CLOVER_DEBUG_CHINABANK) {
-      console.log("China Bank parser rejected", {
-        sectionStartIndex,
-        sectionLines: sectionLines.length,
-        mergedLines: mergedLines.length,
-        rows: rows.length,
-      });
-    }
     return null;
-  }
-
-  if (process.env.CLOVER_DEBUG_CHINABANK) {
-    console.log("China Bank parser accepted", {
-      sectionStartIndex,
-      sectionLines: sectionLines.length,
-      mergedLines: mergedLines.length,
-      rows: rows.length,
-      firstRow: rows[0] ?? null,
-    });
   }
 
   return {
@@ -9494,6 +9492,23 @@ const parseChinaBankImportText = (text: string, context: ImportParseContext = {}
     } satisfies DetectedStatementMetadata,
     rows,
   };
+};
+
+const isChinaBankLikeStatement = (text: string, context: ImportParseContext = {}) =>
+  isChinaBankStatementText(text) || /\b(?:CHINA\s*BANK|CHINABANK)\b/i.test(normalizeWhitespace(context.institution ?? ""));
+
+const isNoisyOCRBankLikeStatement = (text: string, context: ImportParseContext = {}) => {
+  const institutionHint = normalizeWhitespace(context.institution ?? "");
+  const normalized = normalizeWhitespace(text);
+  return (
+    isChinaBankLikeStatement(text, context) ||
+    /\bLANDBANK\b/i.test(normalized) ||
+    /\bLANDBANK\b/i.test(institutionHint) ||
+    /\bUCPB\b/i.test(normalized) ||
+    /\bUCPB\b/i.test(institutionHint) ||
+    /\bEAST\s*WEST\b/i.test(normalized) ||
+    /\bEAST\s*WEST\b/i.test(institutionHint)
+  );
 };
 
 const parseEastWestOcrDateToken = (value: string | null | undefined) => {
@@ -12794,6 +12809,37 @@ export const parseGenericBankStatementText = (
     return genericDigitalSavingsParsed;
   }
 
+  const landbankParsed = parseLandbankImportText(text, context);
+  if (landbankParsed) {
+    return landbankParsed;
+  }
+
+  const ucpbParsed = parseUcpbImportText(text, context);
+  if (ucpbParsed) {
+    return ucpbParsed;
+  }
+
+  if (isNoisyOCRBankLikeStatement(text, context)) {
+    const institutionName = normalizeWhitespace(context.institution ?? "");
+    return {
+      metadata: {
+        institution: isChinaBankLikeStatement(text, context) ? "China Bank" : institutionName || null,
+        accountNumber:
+          preserveAccountNumberDisplayCandidate(context.accountNumber) ??
+          normalizeAccountNumberCandidate(context.accountNumber) ??
+          null,
+        accountName: cleanAccountHolderDisplayName(context.accountName) ?? (institutionName || "Account"),
+        accountType: "bank",
+        openingBalance: null,
+        endingBalance: null,
+        startDate: null,
+        endDate: null,
+        confidence: 45,
+      } satisfies DetectedStatementMetadata,
+      rows: [],
+    };
+  }
+
   const genericText = normalizeGenericOcrText(text);
   const metadata = parseGenericStatementMetadata(genericText, context);
   const repeatedStatementSummary = extractLatestRepeatedStatementSummary(text);
@@ -13917,6 +13963,27 @@ export const parseImportText = (
   const chinaBankParsed = parseChinaBankImportText(text, context);
   if (chinaBankParsed) {
     return chinaBankParsed.rows;
+  }
+
+  const genericEastWestParsed = parseGenericEastWestTemplateStatement(text, context, {
+    institutionAwareNormalization: true,
+  });
+  if (genericEastWestParsed && genericEastWestParsed.rows.length > 0) {
+    return genericEastWestParsed.rows;
+  }
+
+  const landbankParsed = parseLandbankImportText(text, context);
+  if (landbankParsed && landbankParsed.rows.length > 0) {
+    return landbankParsed.rows;
+  }
+
+  const ucpbParsed = parseUcpbImportText(text, context);
+  if (ucpbParsed && ucpbParsed.rows.length > 0) {
+    return ucpbParsed.rows;
+  }
+
+  if (isNoisyOCRBankLikeStatement(text, context)) {
+    return [];
   }
 
   const gcashParsed = parseGcashImportText(text);

@@ -86,6 +86,10 @@ const getGenericCategoryOverride = (merchantText: string) => {
     return "Income";
   }
 
+  if (/cash\s*in\b|cashin\b/.test(lower)) {
+    return "Income";
+  }
+
   if (/service\s*charge|servicecharge|bank charge|dhl duty collection/.test(lower)) {
     return "Financial";
   }
