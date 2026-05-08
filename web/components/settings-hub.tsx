@@ -39,6 +39,8 @@ type BillingSubscriptionSummary = {
 };
 
 type SettingsHubProps = {
+  mode?: "menu" | "panel" | "full";
+  initialSection?: SettingsSectionKey;
   workspaceId: string;
   workspaceName: string;
   profiles: ProfileSummary[];
@@ -255,6 +257,8 @@ function getUsagePercent(used: number, limit: number | null) {
 }
 
 export function SettingsHub({
+  mode = "full",
+  initialSection = "account",
   workspaceId,
   workspaceName,
   profiles,
@@ -273,7 +277,7 @@ export function SettingsHub({
 }: SettingsHubProps) {
   const router = useRouter();
   const { isLoaded, isSignedIn, user } = useUser();
-  const [activeSection, setActiveSection] = useState<SettingsSectionKey>("account");
+  const [activeSection, setActiveSection] = useState<SettingsSectionKey>(initialSection);
   const [themeMode, setThemeMode] = useState<ThemeMode>("light");
   const [helperTextVisible, setHelperTextVisible] = useState(true);
   const [historyCutoff, setHistoryCutoff] = useState(() => new Date().toISOString().slice(0, 10));
@@ -294,6 +298,10 @@ export function SettingsHub({
   const activeProfile = profiles.find((profile) => profile.id === activeProfileId) ?? profiles[0] ?? null;
   const primaryEmail = user?.primaryEmailAddress?.emailAddress ?? email;
   const connectedAccounts = user?.externalAccounts ?? [];
+
+  useEffect(() => {
+    setActiveSection(initialSection);
+  }, [initialSection]);
 
   useEffect(() => {
     const storedTheme = readStoredThemeMode();
@@ -615,38 +623,64 @@ export function SettingsHub({
   ];
 
   return (
-    <section className="settings-hub">
-      <aside className="settings-hub__menu glass">
-        <Link className="settings-hub__brand" href="/dashboard" aria-label="Go to dashboard">
-          <img className="settings-hub__brand-mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
-          <div className="settings-hub__brand-copy">
-            <strong>Clover</strong>
-            <span>{activeProfile?.name ?? workspaceName}</span>
+    <section className={`settings-hub${mode === "panel" ? " settings-hub--panel-only" : mode === "menu" ? " settings-hub--menu-only" : ""}`}>
+      {mode !== "panel" ? (
+        <aside className="settings-hub__menu glass">
+          <Link className="settings-hub__brand" href="/dashboard" aria-label="Go to dashboard">
+            <img className="settings-hub__brand-mark" src="/clover-mark.svg" alt="" aria-hidden="true" />
+            <div className="settings-hub__brand-copy">
+              <strong>Clover</strong>
+              <span>{activeProfile?.name ?? workspaceName}</span>
+            </div>
+          </Link>
+          <div className="settings-hub__menu-list" role="list" aria-label="Settings sections">
+            {(Object.keys(sectionCopy) as SettingsSectionKey[]).map((sectionKey) => {
+              const section = sectionCopy[sectionKey];
+              const isActive = activeSection === sectionKey;
+
+              if (mode === "full") {
+                return (
+                  <button
+                    key={sectionKey}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    className={`settings-hub__menu-item${isActive ? " is-active" : ""}`}
+                    onClick={() => setActiveSection(sectionKey)}
+                  >
+                    {section.icon}
+                    <strong>{section.title}</strong>
+                  </button>
+                );
+              }
+
+              return (
+                <Link
+                  key={sectionKey}
+                  href={`/settings/${sectionKey}`}
+                  className={`settings-hub__menu-item${isActive ? " is-active" : ""}`}
+                  aria-current={isActive ? "page" : undefined}
+                >
+                  {section.icon}
+                  <strong>{section.title}</strong>
+                </Link>
+              );
+            })}
           </div>
-        </Link>
-        <div className="settings-hub__menu-list" role="tablist" aria-label="Settings sections">
-          {(Object.keys(sectionCopy) as SettingsSectionKey[]).map((sectionKey) => {
-            const section = sectionCopy[sectionKey];
-            const isActive = activeSection === sectionKey;
+        </aside>
+      ) : null}
 
-            return (
-              <button
-                key={sectionKey}
-                type="button"
-                role="tab"
-                aria-selected={isActive}
-                className={`settings-hub__menu-item${isActive ? " is-active" : ""}`}
-                onClick={() => setActiveSection(sectionKey)}
-              >
-                {section.icon}
-                <strong>{section.title}</strong>
-              </button>
-            );
-          })}
-        </div>
-      </aside>
-
+      {mode !== "menu" ? (
       <div className="settings-hub__panel glass">
+        {mode === "panel" ? (
+          <div className="settings-hub__panel-back">
+            <Link className="help-page__back-button settings-hub__back-button" href="/settings" aria-label="Back to settings" prefetch={false}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m15 6-6 6 6 6" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+              </svg>
+            </Link>
+          </div>
+        ) : null}
         {activeSection === "account" ? (
           <section className="settings-section settings-section--profile" role="tabpanel">
             <div className="settings-section__intro settings-section__intro--single">
@@ -968,14 +1002,18 @@ export function SettingsHub({
               </article>
             </div>
 
-            <article className="settings-action-card settings-data-delete settings-data-delete--single">
+            <article className="settings-action-card settings-data-delete settings-data-delete--compact">
               <div>
                 <h5>Delete data</h5>
+                <p>Keep the list short so each delete action is obvious before you tap it.</p>
               </div>
 
               <div className="settings-data-delete__list">
                 <div className="settings-data-delete__item">
-                  <div className="settings-data-delete__item-copy">Transaction history</div>
+                  <div className="settings-data-delete__item-copy">
+                    <strong>Delete transactions before selected date</strong>
+                    <span>Removes old transaction history and keeps accounts in place.</span>
+                  </div>
                   <div className="settings-data-delete__controls">
                     <label className="settings-inline-field">
                       <span>Before date</span>
@@ -1001,7 +1039,10 @@ export function SettingsHub({
                 </div>
 
                 <div className="settings-data-delete__item">
-                  <div className="settings-data-delete__item-copy">Accounts</div>
+                  <div className="settings-data-delete__item-copy">
+                    <strong>Delete accounts and linked transactions</strong>
+                    <span>Removes non-cash accounts together with the transactions tied to them.</span>
+                  </div>
                   <div className="settings-data-delete__controls">
                     <button
                       type="button"
@@ -1027,7 +1068,10 @@ export function SettingsHub({
                 </div>
 
                 <div className="settings-data-delete__item">
-                  <div className="settings-data-delete__item-copy">All Clover data</div>
+                  <div className="settings-data-delete__item-copy">
+                    <strong>Delete all Clover data</strong>
+                    <span>Clears accounts, transactions, imports, and learned data while keeping your login.</span>
+                  </div>
                   <div className="settings-data-delete__controls">
                     <button
                       type="button"
@@ -1061,34 +1105,8 @@ export function SettingsHub({
                           window.location.assign("/dashboard");
                         })
                       }
-                    >
+                      >
                       Delete all data
-                    </button>
-                  </div>
-                </div>
-
-                <div className="settings-data-delete__item">
-                  <div className="settings-data-delete__item-copy">Balance history</div>
-                  <div className="settings-data-delete__controls">
-                    <label className="settings-inline-field">
-                      <span>Before date</span>
-                      <input type="date" value={historyCutoff} onChange={(event) => setHistoryCutoff(event.target.value)} />
-                    </label>
-                    <button
-                      type="button"
-                      className="button button-danger button-small"
-                      disabled={isPending}
-                      onClick={() =>
-                        handleAction(async () => {
-                          if (!window.confirm("Delete balance history before the selected date? This only removes old statement checkpoints.")) {
-                            return;
-                          }
-                          const deleted = await runDelete("balances");
-                          setStatusMessage(`Deleted ${deleted} balance record${deleted === 1 ? "" : "s"}.`);
-                        })
-                      }
-                    >
-                      Delete balance history
                     </button>
                   </div>
                 </div>
@@ -1269,6 +1287,7 @@ export function SettingsHub({
         ) : null}
         {activeSection === "data" && statusMessage ? <p className="settings-status">{statusMessage}</p> : null}
       </div>
+      ) : null}
     </section>
   );
 }
