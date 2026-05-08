@@ -554,6 +554,7 @@ const getDisplayTransactionCategoryName = (
       rawPayload: transaction.rawPayload as never,
       merchantRaw: transaction.merchantRaw,
       merchantClean: transaction.merchantClean,
+      description: transaction.description ?? null,
       institution,
       type: transaction.type,
     }) ??
@@ -708,7 +709,13 @@ function AccountDetailPageContent() {
       const activeWorkspaceId = selectedWorkspaceId ?? "";
       const cachedAccountsWorkspace = getCachedAccountsWorkspace(activeWorkspaceId);
       const cachedTransactionsWorkspace = getCachedTransactionsWorkspace(activeWorkspaceId);
-      const cachedTransactionsForAccount = findCachedTransactionsForAccount(activeWorkspaceId, accountId);
+      const cachedTransactionsForAccount = findCachedTransactionsForAccount(accountId, {
+        optimisticAccountId: cachedAccountLookup?.account?.optimisticAccountId ?? null,
+        name: cachedAccountLookup?.account?.name ?? null,
+        institution: cachedAccountLookup?.account?.institution ?? null,
+        accountNumber: cachedAccountLookup?.account?.accountNumber ?? null,
+        type: cachedAccountLookup?.account?.type ?? null,
+      });
       const cachedTransactionsForAccountRows = Array.isArray(cachedTransactionsForAccount?.transactions)
         ? (cachedTransactionsForAccount.transactions as Transaction[])
         : [];
@@ -2204,7 +2211,23 @@ function AccountDetailPageContent() {
               </div>
             ) : null}
 
-            <div className="accounts-detail__hero-tools">
+            <div className="accounts-detail__hero-card-row">
+              <FinancialAccountCard
+                className="accounts-detail__hero-card"
+                accountBrand={accountBrand}
+                name={accountCardName}
+                accountNumber={liveCardNumber}
+                amount={isPendingBalance ? "Loading..." : formatAccountAmount(Math.abs(parseAmount(displayBalance)), account.currency)}
+                showChevron={false}
+                onOpen={
+                  account.type === "investment"
+                    ? undefined
+                    : () => {
+                        setAccountIdentityEditorOpen((open) => !open);
+                      }
+                }
+              />
+
               <button
                 className={`icon-button accounts-detail__favorite-toggle${account.favorite ? " is-active" : ""}`}
                 type="button"
@@ -2216,22 +2239,6 @@ function AccountDetailPageContent() {
                 <ActionIcon name={account.favorite ? "star-filled" : "star"} />
               </button>
             </div>
-
-            <FinancialAccountCard
-              className="accounts-detail__hero-card"
-              accountBrand={accountBrand}
-              name={accountCardName}
-              accountNumber={liveCardNumber}
-              amount={isPendingBalance ? "Loading..." : formatAccountAmount(Math.abs(parseAmount(displayBalance)), account.currency)}
-              showChevron={false}
-              onOpen={
-                account.type === "investment"
-                  ? undefined
-                  : () => {
-                      setAccountIdentityEditorOpen((open) => !open);
-                    }
-              }
-            />
 
             {account.type !== "investment" && accountIdentityEditorOpen ? (
               <div className="accounts-detail__account-identity-editor accounts-detail__account-identity-editor--inline">

@@ -16691,6 +16691,13 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   gap: 12px;
 }
 
+.accounts-detail__hero-card-row {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: min(100%, 272px);
+}
+
 .accounts-detail__hero-tools {
   display: flex;
   justify-content: flex-end;
@@ -16699,6 +16706,7 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
 .accounts-detail__favorite-toggle {
+  display: none;
   color: #8a97ab;
   transition:
     color 160ms ease,
@@ -16722,6 +16730,13 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
 }
 
   .accounts-detail__hero-card {
+    width: min(100%, 272px);
+  }
+
+  .accounts-detail__hero-card-row {
+    display: grid;
+    justify-items: center;
+    gap: 12px;
     width: min(100%, 272px);
   }
 
@@ -23606,6 +23621,34 @@ button.accounts-detail__transaction-head-cell {
 
   .accounts-detail__hero-card {
     width: min(100%, 272px);
+  }
+
+  .accounts-detail__hero-card-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .accounts-detail__hero-card-row .accounts-detail__hero-card {
+    flex: 0 1 min(100%, 272px);
+  }
+
+  .accounts-detail__hero-tools {
+    display: none;
+  }
+
+  .accounts-detail__favorite-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    margin-top: 14px;
+    background: rgba(255, 255, 255, 0.94);
+    box-shadow: 0 8px 18px rgba(8, 15, 26, 0.08);
   }
 
   .accounts-detail__identity-edit {
