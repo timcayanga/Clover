@@ -139,8 +139,12 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "GCash Cash In",
     },
     {
-      patterns: [/from:\s*non-bpi\s+terminal/i, /atm\s+withdrawal/i, /\bwithdrawal\b/i],
+      patterns: [/from:\s*non-bpi\s+terminal/i, /atm\s+withdrawal/i, /\batmwdl\b/i, /\batm\s*wdl\b/i, /\bwithdrawal\b/i],
       replacement: "ATM Withdrawal",
+    },
+    {
+      patterns: [/\batm\s*cash\s*deposit\b/i, /\batmcashdeposit\b/i, /\batm\s*deposit\b/i],
+      replacement: "Cash Deposit",
     },
     {
       patterns: [/service\s*charge/i, /servicecharge/i, /\bsvc\s*chg\b/i],

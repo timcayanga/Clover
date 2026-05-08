@@ -214,6 +214,8 @@ const createImportedAccountCandidates = (account: ImportedWorkspaceAccount) => {
 const normalizeCategoryName = (value?: string | null) => normalizeMerchantText(value);
 
 const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspaceTransaction) => {
+  const accountId =
+    typeof entry.accountId === "string" && entry.accountId.trim() ? normalizeMerchantText(entry.accountId) : "";
   const dateValue =
     typeof entry.date === "string" && entry.date.trim()
       ? entry.date.slice(0, 10)
@@ -227,12 +229,17 @@ const getImportedTransactionSignature = (entry: CachedRecord | ImportedWorkspace
   const merchantCleanValue =
     typeof entry.merchantClean === "string" && entry.merchantClean.trim() ? entry.merchantClean : "";
   const merchantValue = normalizeMerchantText(merchantRawValue || merchantCleanValue);
+  const currencyValue =
+    typeof entry.currency === "string" && entry.currency.trim() ? normalizeMerchantText(entry.currency) : "";
+  const typeValue = typeof entry.type === "string" && entry.type.trim() ? normalizeMerchantText(entry.type) : "";
+  const descriptionValue =
+    typeof entry.description === "string" && entry.description.trim() ? normalizeMerchantText(entry.description) : "";
 
-  if (!dateValue && !amountValue && !merchantValue) {
+  if (!accountId && !dateValue && !amountValue && !merchantValue && !currencyValue && !typeValue && !descriptionValue) {
     return "";
   }
 
-  return [dateValue, amountValue, merchantValue].join("|");
+  return [accountId, dateValue, amountValue, merchantValue, currencyValue, typeValue, descriptionValue].join("|");
 };
 
 const isGenericCategoryName = (value?: string | null) => {
@@ -407,9 +414,35 @@ const mergeImportedTransactionRecord = <T extends CachedRecord>(current: T, inco
   return merged as T;
 };
 
+const dedupeImportedTransactions = <T extends CachedRecord>(items: T[]) => {
+  if (items.length <= 1) {
+    return items;
+  }
+
+  const mergedBySignature = new Map<string, T>();
+
+  for (const item of items) {
+    const signature = getImportedTransactionSignature(item);
+    if (!signature) {
+      mergedBySignature.set(`__${mergedBySignature.size}`, item);
+      continue;
+    }
+
+    const existing = mergedBySignature.get(signature);
+    if (!existing) {
+      mergedBySignature.set(signature, item);
+      continue;
+    }
+
+    mergedBySignature.set(signature, mergeImportedTransactionRecord(existing, item as ImportedWorkspaceTransaction));
+  }
+
+  return Array.from(mergedBySignature.values());
+};
+
 const mergeImportedTransactions = <T extends CachedRecord>(items: T[], transactions: ImportedWorkspaceTransaction[]) => {
   if (transactions.length === 0) {
-    return items;
+    return dedupeImportedTransactions(items);
   }
 
   const matchedIds = new Set<string>();
@@ -447,7 +480,7 @@ const mergeImportedTransactions = <T extends CachedRecord>(items: T[], transacti
     return !matchedIds.has(id) && !matchedSignatures.has(signature);
   });
 
-  return [...nextTransactions, ...remaining];
+  return dedupeImportedTransactions([...nextTransactions, ...remaining]);
 };
 
 export const mergeImportedWorkspaceTransactions = <T extends CachedRecord>(
@@ -753,11 +786,12 @@ export const findCachedTransactionsForAccount = (
       );
       return entryKey === identityKey;
     });
-    if (transactions.length > 0) {
+    const dedupedTransactions = dedupeImportedTransactions(transactions);
+    if (dedupedTransactions.length > 0) {
       return {
         workspaceId: snapshotLike.workspaceId,
-        transactions,
-        totalCount: typeof snapshotLike.totalCount === "number" ? snapshotLike.totalCount : transactions.length,
+        transactions: dedupedTransactions,
+        totalCount: typeof snapshotLike.totalCount === "number" ? snapshotLike.totalCount : dedupedTransactions.length,
       };
     }
   }

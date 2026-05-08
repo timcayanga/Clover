@@ -1987,11 +1987,13 @@ function TransactionsPageContent() {
       return false;
     }
 
+    const dedupedCachedTransactions = mergeImportedWorkspaceTransactions([], cachedSnapshot.transactions as Transaction[]);
     setAccounts(cachedSnapshot.accounts);
     setCategories(cachedSnapshot.categories);
-    setTransactions(cachedSnapshot.transactions);
+    setTransactions(dedupedCachedTransactions);
     setImports(cachedSnapshot.imports);
-    const cachedCurrencyCodes = cachedSnapshot.summary?.currencyCodes ?? cachedSnapshot.currencyCodes ?? getWorkspaceCurrencyCodes(cachedSnapshot.transactions);
+    const cachedCurrencyCodes =
+      cachedSnapshot.summary?.currencyCodes ?? cachedSnapshot.currencyCodes ?? getWorkspaceCurrencyCodes(dedupedCachedTransactions);
     setTransactionsSummary(
       cachedSnapshot.summary
         ? {
@@ -1999,7 +2001,7 @@ function TransactionsPageContent() {
             currencyCodes: cachedSnapshot.summary.currencyCodes ?? cachedCurrencyCodes,
           }
         : {
-            totalCount: cachedSnapshot.totalCount ?? cachedSnapshot.transactions.length,
+            totalCount: cachedSnapshot.totalCount ?? dedupedCachedTransactions.length,
             income: 0,
             spending: 0,
             transfers: 0,
@@ -2458,10 +2460,65 @@ function TransactionsPageContent() {
     setAccounts([data.account]);
     return accountId;
   };
-  const visibleTransactions = useMemo(
-    () => transactions.filter((transaction) => !transaction.isExcluded && matchesTransactionSearch(transaction, searchText)),
-    [searchText, transactions]
-  );
+  const visibleTransactions = useMemo(() => {
+    const filteredTransactions = transactions.filter(
+      (transaction) => !transaction.isExcluded && matchesTransactionSearch(transaction, searchText)
+    );
+    const directionMultiplier = sortDirection === "asc" ? 1 : -1;
+
+    const getTransactionSortValue = (transaction: Transaction, field: TransactionSortField) => {
+      switch (field) {
+        case "name":
+          return summarizeTransactionMerchantText(
+            transaction.merchantClean ?? transaction.merchantRaw,
+            accountInstitutionById.get(transaction.accountId) ?? null
+          );
+        case "account":
+          return accountNameById.get(transaction.accountId) ?? transaction.accountName;
+        case "category": {
+          const categoryValue = transaction.categoryId ?? otherCategoryId;
+          return (
+            getEffectiveTransactionCategoryName({
+              categoryName: transaction.categoryName ?? categories.find((category) => category.id === categoryValue)?.name ?? null,
+              rawPayload: transaction.rawPayload as never,
+              merchantRaw: transaction.merchantRaw,
+              merchantClean: transaction.merchantClean,
+              institution: accountInstitutionById.get(transaction.accountId) ?? null,
+              type: transaction.type,
+            }) ?? "Other"
+          );
+        }
+        case "amount":
+          return Number(transaction.amount);
+        case "date":
+        default:
+          return new Date(transaction.date).getTime();
+      }
+    };
+
+    return [...filteredTransactions].sort((left, right) => {
+      const leftValue = getTransactionSortValue(left, sortField);
+      const rightValue = getTransactionSortValue(right, sortField);
+
+      if (typeof leftValue === "number" && typeof rightValue === "number") {
+        return (leftValue - rightValue) * directionMultiplier;
+      }
+
+      return (
+        String(leftValue).localeCompare(String(rightValue), undefined, { sensitivity: "base", numeric: true }) *
+        directionMultiplier
+      );
+    });
+  }, [
+    accountInstitutionById,
+    accountNameById,
+    categories,
+    otherCategoryId,
+    searchText,
+    sortDirection,
+    sortField,
+    transactions,
+  ]);
   const totalTransactionCountForDisplay = searchText ? visibleTransactions.length : transactionsSummary.totalCount;
   const totalTransactionPages = Math.max(1, Math.ceil(totalTransactionCountForDisplay / Math.max(transactionsPageSize, 1)));
   const currentTransactionPage = Math.min(transactionsPage, totalTransactionPages);

@@ -763,7 +763,10 @@ function AccountDetailPageContent() {
           const accountTransactionsLookup = findCachedTransactionsForAccount(cachedAccount.id, cachedAccount);
           cachedTransactions = (accountTransactionsLookup?.transactions as Transaction[] | undefined) ?? [];
           if (cachedTransactions.length === 0 && Array.isArray(cachedTransactionsWorkspace?.transactions)) {
-            cachedTransactions = (cachedTransactionsWorkspace.transactions as Transaction[]).filter((transaction) => transaction.accountId === cachedAccount.id);
+            cachedTransactions = mergeImportedWorkspaceTransactions(
+              [],
+              (cachedTransactionsWorkspace.transactions as Transaction[]).filter((transaction) => transaction.accountId === cachedAccount.id)
+            );
           }
           cachedImportFiles = Array.isArray(cachedTransactionsWorkspace?.imports)
             ? (cachedTransactionsWorkspace.imports as ImportFile[]).filter((importFile) => {
@@ -804,7 +807,7 @@ function AccountDetailPageContent() {
           if (!cancelled) {
             setAccount(replacementAccount);
             if (replacementTransactions.length > 0) {
-              setTransactions(replacementTransactions);
+              setTransactions(mergeImportedWorkspaceTransactions([], replacementTransactions));
               setTransactionTotalCount(
                 replacementTransactionsLookup?.totalCount ?? replacementTransactions.length
               );
