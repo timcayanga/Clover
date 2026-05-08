@@ -105,7 +105,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
   }, [logoResetKey]);
 
   useEffect(() => {
-    const sources = [...new Set([...logoCandidates, accountBrand.fallbackIconSrc].filter((source): source is string => Boolean(source)))];
+    const sources = [currentLogoSrc, accountBrand.fallbackIconSrc].filter((source): source is string => Boolean(source));
     for (const source of sources) {
       const image = new Image();
       image.loading = "eager";
@@ -113,7 +113,7 @@ export function AccountBrandMark({ accountBrand, label }: { accountBrand: Accoun
       image.decoding = "async";
       image.src = source;
     }
-  }, [accountBrand.fallbackIconSrc, logoCandidates, logoResetKey]);
+  }, [accountBrand.fallbackIconSrc, currentLogoSrc, logoResetKey]);
 
   return (
     <span
