@@ -45,6 +45,10 @@ const clerkAuthMiddleware = clerkMiddleware(async (auth, request) => {
 });
 
 export default function middleware(request: NextRequest, event: NextFetchEvent) {
+  if (request.method === "OPTIONS") {
+    return NextResponse.next();
+  }
+
   if (
     isStagingHost(request) &&
     (request.nextUrl.pathname.startsWith("/split-bill") || request.nextUrl.pathname.startsWith("/api/split-bill"))
