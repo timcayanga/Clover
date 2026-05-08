@@ -7,10 +7,11 @@ import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { getSessionContext } from "@/lib/auth";
+import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
 import { RouteSplash } from "@/components/route-splash";
 import { getEffectiveUserLimits } from "@/lib/user-limits";
-import { PostHogEvent, analyticsOnceKey } from "@/components/posthog-analytics";
+import { PostHogEvent } from "@/components/posthog-analytics";
 import { GoalsSubtabs } from "@/components/goals-subtabs";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import {
