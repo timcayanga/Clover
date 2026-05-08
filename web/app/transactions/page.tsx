@@ -38,6 +38,7 @@ import { readSelectedWorkspaceId } from "@/lib/workspace-selection";
 import { chooseWorkspaceId, persistSelectedWorkspaceId, selectedWorkspaceKey } from "@/lib/workspace-selection";
 import {
   applyOptimisticWorkspaceTransactionDeletion,
+  deriveCachedCategoriesFromTransactions,
   mergeImportedWorkspaceTransactions,
   normalizeImportedAccountKey,
 } from "@/lib/workspace-cache";
@@ -1989,7 +1990,11 @@ function TransactionsPageContent() {
 
     const dedupedCachedTransactions = mergeImportedWorkspaceTransactions([], cachedSnapshot.transactions as Transaction[]);
     setAccounts(cachedSnapshot.accounts);
-    setCategories(cachedSnapshot.categories);
+    setCategories(
+      cachedSnapshot.categories.length > 0
+        ? cachedSnapshot.categories
+        : (deriveCachedCategoriesFromTransactions(dedupedCachedTransactions) as Category[])
+    );
     setTransactions(dedupedCachedTransactions);
     setImports(cachedSnapshot.imports);
     const cachedCurrencyCodes =

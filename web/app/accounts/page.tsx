@@ -1156,6 +1156,7 @@ function AccountsPageContent() {
 
   const loadWorkspaceData = async (workspaceId: string, options?: { silent?: boolean }) => {
     const loadSeq = ++workspaceLoadSeqRef.current;
+    let fetchedAccounts: Account[] = [];
 
     if (!workspaceId) {
       setAccounts([]);
@@ -1178,7 +1179,7 @@ function AccountsPageContent() {
 
       if (accountsResponse.ok) {
         const payload = await accountsResponse.json();
-        const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+        fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
         const cachedWorkspaceAccounts = getCachedAccountsWorkspace(workspaceId)?.accounts as Account[] | undefined;
         for (const fetchedAccount of fetchedAccounts) {
           clearDeletedWorkspaceAccount(workspaceId, fetchedAccount.id);
@@ -1217,6 +1218,31 @@ function AccountsPageContent() {
       if (!options?.silent) {
         setAccountsLoading(false);
       }
+
+      void (async () => {
+        try {
+          const categoriesResponse = await fetch(`/api/categories?workspaceId=${encodeURIComponent(workspaceId)}`);
+          if (workspaceLoadSeqRef.current !== loadSeq || !categoriesResponse.ok) {
+            return;
+          }
+
+          const payload = (await categoriesResponse.json()) as { categories?: Array<{ id: string; name: string }> } | null;
+          const fetchedCategories = Array.isArray(payload?.categories) ? payload.categories : [];
+          if (fetchedCategories.length === 0) {
+            return;
+          }
+
+          const cachedWorkspaceTransactions = getCachedAccountsWorkspace(workspaceId);
+          persistTransactionsWorkspaceCache(workspaceId, {
+            accounts: (cachedWorkspaceTransactions?.accounts as Account[] | undefined) ?? fetchedAccounts,
+            categories: fetchedCategories,
+            transactions: (cachedWorkspaceTransactions?.transactions as Transaction[] | undefined) ?? [],
+            imports: (cachedWorkspaceTransactions?.imports as ImportFile[] | undefined) ?? [],
+          });
+        } catch {
+          // Categories are best-effort during background hydration.
+        }
+      })();
 
       void (async () => {
         try {

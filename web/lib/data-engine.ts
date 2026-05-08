@@ -121,7 +121,7 @@ const KNOWN_INSTITUTIONS: Array<{ name: string; match: RegExp }> = [
   { name: "RCBC", match: /\bRCBC\b/i },
   { name: "UnionBank", match: /\bUNIONBANK\b/i },
   { name: "Landbank", match: /\bLANDBANK\b/i },
-  { name: "Chinabank", match: /\bCHINABANK\b/i },
+  { name: "Chinabank", match: /\b(CHINABANK|CHINA\s*BANK)\b/i },
   { name: "MariBank", match: /\b(MARIBANK|SEABANK)\b/i },
   { name: "PSBank", match: /\bPSBANK\b/i },
   { name: "UCPB", match: /\b(UCPB|UNITED\s+COCONUT\s+PLANTERS\s+BANK)\b/i },
@@ -505,8 +505,11 @@ export const guessCategoryFallback = (description: string, type: TransactionType
   const lower = description.toLowerCase();
   const override = getHardcodedCategoryOverride(description);
   if (override) return override;
-  if (type === "income" || /salary|payroll|income|deposit|credit memo/.test(lower)) return "Income";
+  if (type === "income" || /salary|payroll|income|deposit|cash\s*in\b|cashin\b|received|credit memo/.test(lower)) return "Income";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
+  if (/expressnet|megalink|withdrawal|atm\b|cash withdrawal|cash out|atmwdl|atm withdrawal/.test(lower)) return "Cash & ATM";
+  if (/service\s*charge|servicecharge|bank\s*charge|bankcharge/.test(lower)) return "Financial";
+  if (/tax withheld|withheld tax|taxwithheld|withheldtax/.test(lower)) return "Financial";
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
   if (/rent|mortgage|apartment|housing/.test(lower)) return "Housing";
@@ -2150,7 +2153,9 @@ export const classifyMerchant = (params: {
   const tokens = tokenizeMerchant(params.merchantText);
   const normalizedMerchant = normalizeMerchantText(params.merchantText);
   const hardcodedOverride = getHardcodedCategoryOverride(params.merchantText);
-  const heuristicCategory = params.categoryName?.trim() || guessCategoryFallback(params.merchantText, params.type);
+  const providedCategory = params.categoryName?.trim();
+  const heuristicCategory =
+    providedCategory && providedCategory.toLowerCase() !== "other" ? providedCategory : guessCategoryFallback(params.merchantText, params.type);
 
   let bestRule: MerchantRuleRow | null = null;
   let bestRuleScore = 0;

@@ -74,12 +74,90 @@ const isCachedRecordArray = (value: unknown): value is CachedRecord[] =>
 
 const normalizeWhitespace = (value: string) => value.replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
 
+const isMeaningfulCategoryName = (value?: string | null) => {
+  const normalized = normalizeWhitespace(String(value ?? "")).toLowerCase();
+  return Boolean(normalized && normalized !== "other");
+};
+
 const normalizeMerchantText = (value?: string | null) =>
   normalizeWhitespace(String(value ?? ""))
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
+const mergeCachedCategories = (existing: CachedRecord[], incoming: CachedRecord[]) => {
+  const next: CachedRecord[] = [];
+  const seen = new Set<string>();
+
+  const pushCategory = (category: CachedRecord) => {
+    if (!category || typeof category !== "object") {
+      return;
+    }
+
+    const name = typeof category.name === "string" ? normalizeWhitespace(category.name) : "";
+    if (!name) {
+      return;
+    }
+
+    const id = typeof category.id === "string" ? normalizeWhitespace(category.id) : "";
+    const key = id || normalizeMerchantText(name);
+    if (!key || seen.has(key)) {
+      return;
+    }
+
+    seen.add(key);
+    next.push({
+      ...category,
+      name,
+    });
+  };
+
+  existing.forEach(pushCategory);
+  incoming.forEach(pushCategory);
+  return next;
+};
+
+export const deriveCachedCategoriesFromTransactions = (transactions: CachedRecord[]) => {
+  const derived: CachedRecord[] = [];
+  const seen = new Set<string>();
+
+  for (const transaction of transactions) {
+    if (!transaction || typeof transaction !== "object" || Array.isArray(transaction)) {
+      continue;
+    }
+
+    const categoryName =
+      typeof transaction.categoryName === "string" && isMeaningfulCategoryName(transaction.categoryName)
+        ? normalizeWhitespace(transaction.categoryName)
+        : null;
+    if (!categoryName) {
+      continue;
+    }
+
+    const categoryId =
+      typeof transaction.categoryId === "string" && transaction.categoryId.trim()
+        ? normalizeWhitespace(transaction.categoryId)
+        : `derived:${normalizeMerchantText(categoryName)}`;
+    const key = `${categoryId}:${categoryName}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    derived.push({
+      id: categoryId,
+      name: categoryName,
+      type:
+        transaction.type === "income" || transaction.type === "expense" || transaction.type === "transfer"
+          ? transaction.type
+          : "expense",
+      isSystem: false,
+    });
+  }
+
+  return derived;
+};
 
 const extractLastFourDigits = (value?: string | null) => {
   if (!value) return null;
@@ -890,7 +968,10 @@ export const syncImportedWorkspaceTransactionCaches = (
     workspaceId,
     updatedAt: Date.now(),
     accounts: transactionsCache?.snapshots[workspaceId]?.accounts ?? [],
-    categories: transactionsCache?.snapshots[workspaceId]?.categories ?? [],
+    categories: mergeCachedCategories(
+      transactionsCache?.snapshots[workspaceId]?.categories ?? [],
+      deriveCachedCategoriesFromTransactions(transactions)
+    ),
     transactions: mergeImportedTransactions(transactionsCache?.snapshots[workspaceId]?.transactions ?? [], transactions),
     imports: transactionsCache?.snapshots[workspaceId]?.imports ?? [],
   };

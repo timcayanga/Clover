@@ -28,6 +28,7 @@ import {
   getDeletingWorkspaceAccountIds,
   findCachedImportedAccount,
   findCachedTransactionsForAccount,
+  deriveCachedCategoriesFromTransactions,
   markDeletedWorkspaceAccount,
   normalizeImportedAccountKey,
   mergeImportedWorkspaceTransactions,
@@ -663,9 +664,15 @@ function AccountDetailPageContent() {
       const activeWorkspaceId = selectedWorkspaceId ?? "";
       const cachedAccountsWorkspace = getCachedAccountsWorkspace(activeWorkspaceId);
       const cachedTransactionsWorkspace = getCachedTransactionsWorkspace(activeWorkspaceId);
-      const cachedCategories = Array.isArray(cachedTransactionsWorkspace?.categories)
+      const cachedTransactionsForAccount = findCachedTransactionsForAccount(activeWorkspaceId, accountId);
+      const derivedCachedCategories = deriveCachedCategoriesFromTransactions(
+        cachedTransactionsForAccount.length > 0
+          ? cachedTransactionsForAccount
+          : (cachedTransactionsWorkspace?.transactions as Transaction[] | undefined) ?? []
+      ) as Category[];
+      const cachedCategories = Array.isArray(cachedTransactionsWorkspace?.categories) && cachedTransactionsWorkspace.categories.length > 0
         ? (cachedTransactionsWorkspace.categories as Category[])
-        : [];
+        : derivedCachedCategories;
       const cachedAccountLookup = findCachedImportedAccount(accountId);
       const cachedWorkspaceId = cachedAccountLookup?.workspaceId ?? activeWorkspaceId;
       let cachedTransactions: Transaction[] = [];
