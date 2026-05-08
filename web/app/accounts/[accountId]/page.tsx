@@ -709,9 +709,12 @@ function AccountDetailPageContent() {
       const cachedAccountsWorkspace = getCachedAccountsWorkspace(activeWorkspaceId);
       const cachedTransactionsWorkspace = getCachedTransactionsWorkspace(activeWorkspaceId);
       const cachedTransactionsForAccount = findCachedTransactionsForAccount(activeWorkspaceId, accountId);
+      const cachedTransactionsForAccountRows = Array.isArray(cachedTransactionsForAccount?.transactions)
+        ? (cachedTransactionsForAccount.transactions as Transaction[])
+        : [];
       const derivedCachedCategories = deriveCachedCategoriesFromTransactions(
-        cachedTransactionsForAccount.length > 0
-          ? cachedTransactionsForAccount
+        cachedTransactionsForAccountRows.length > 0
+          ? cachedTransactionsForAccountRows
           : (cachedTransactionsWorkspace?.transactions as Transaction[] | undefined) ?? []
       ) as Category[];
       const cachedCategories = Array.isArray(cachedTransactionsWorkspace?.categories) && cachedTransactionsWorkspace.categories.length > 0
