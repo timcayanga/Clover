@@ -16691,6 +16691,36 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   gap: 12px;
 }
 
+.accounts-detail__hero-tools {
+  display: flex;
+  justify-content: flex-end;
+  width: min(100%, 272px);
+  margin-bottom: -2px;
+}
+
+.accounts-detail__favorite-toggle {
+  color: #8a97ab;
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.accounts-detail__favorite-toggle:hover,
+.accounts-detail__favorite-toggle:focus-visible {
+  color: #d39b00;
+  border-color: rgba(211, 155, 0, 0.32);
+  background: rgba(255, 248, 225, 0.96);
+  transform: translateY(-1px);
+}
+
+.accounts-detail__favorite-toggle.is-active {
+  color: #d39b00;
+  border-color: rgba(211, 155, 0, 0.32);
+  background: rgba(255, 248, 225, 0.96);
+}
+
   .accounts-detail__hero-card {
     width: min(100%, 272px);
   }
@@ -28262,16 +28292,22 @@ button.accounts-detail__transaction-head-cell {
   display: grid;
   grid-template-rows: auto 1fr;
   width: 100%;
-  overflow: hidden;
+  overflow: visible;
   border-radius: 26px;
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: #ffffff;
   text-align: left;
   transition: border-color 160ms ease, background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  position: relative;
 }
 
 .settings-plan-card:hover {
   transform: translateY(-1px);
+  z-index: 2;
+}
+
+.settings-plan-card:focus-within {
+  z-index: 2;
 }
 
 .settings-plan-card.is-current {
