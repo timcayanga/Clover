@@ -2812,13 +2812,16 @@ export function ImportFilesModal({
         accountType ?? null
       );
       const key = accountKey(normalizedStatementAccountName, institution ?? null, accountNumber ?? null);
-      const existing =
-        accountIdByKeyRef.current.get(key) ??
-        accounts.find((account) => accountKey(account.name, account.institution, account.accountNumber) === key)?.id;
-      if (existing) {
-        accountIdByKeyRef.current.set(key, existing);
+      const persistedExisting =
+        accounts.find(
+          (account) =>
+            !account.id.startsWith("optimistic-") &&
+            accountKey(account.name, account.institution, account.accountNumber) === key
+        )?.id ?? null;
+      if (persistedExisting) {
+        accountIdByKeyRef.current.set(key, persistedExisting);
         await syncStatementAccountIdentity(
-          existing,
+          persistedExisting,
           normalizedStatementAccountName,
           institution ?? null,
           accountType,
@@ -2826,11 +2829,11 @@ export function ImportFilesModal({
           balance,
           currency
         );
-        return existing;
+        return persistedExisting;
       }
 
       const genericMatch = hasStatementSuffix(normalizedStatementAccountName)
-        ? accounts.find((account) => isGenericSameInstitutionAccount(account, institution ?? null))
+        ? accounts.find((account) => !account.id.startsWith("optimistic-") && isGenericSameInstitutionAccount(account, institution ?? null))
         : null;
       if (genericMatch) {
         accountIdByKeyRef.current.set(
@@ -2853,7 +2856,7 @@ export function ImportFilesModal({
         (entry) => accountRuleKey(entry.accountName, entry.institution) === accountRuleKey(normalizedStatementAccountName, institution ?? null)
       );
       if (rule?.accountId) {
-        const matchedAccount = accounts.find((account) => account.id === rule.accountId);
+        const matchedAccount = accounts.find((account) => account.id === rule.accountId && !account.id.startsWith("optimistic-"));
         if (matchedAccount) {
           accountIdByKeyRef.current.set(
             accountKey(matchedAccount.name, matchedAccount.institution, matchedAccount.accountNumber),
@@ -2893,15 +2896,23 @@ export function ImportFilesModal({
     if (statementAccountName) {
       const normalizedStatementAccountName = normalizeStatementAccountName(statementAccountName, institution);
       const key = accountKey(normalizedStatementAccountName, institution ?? null, accountNumber ?? null);
-      const existing =
-        accountIdByKeyRef.current.get(key) ??
-        accounts.find((account) => accountKey(account.name, account.institution, account.accountNumber) === key)?.id;
-      if (existing) {
-        return existing;
+      const persistedExisting =
+        accounts.find(
+          (account) =>
+            !account.id.startsWith("optimistic-") &&
+            accountKey(account.name, account.institution, account.accountNumber) === key
+        )?.id ?? null;
+      if (persistedExisting) {
+        return persistedExisting;
+      }
+
+      const mappedExisting = accountIdByKeyRef.current.get(key);
+      if (mappedExisting && !mappedExisting.startsWith("optimistic-")) {
+        return mappedExisting;
       }
 
       const genericMatch = hasStatementSuffix(normalizedStatementAccountName)
-        ? accounts.find((account) => isGenericSameInstitutionAccount(account, institution ?? null))
+        ? accounts.find((account) => !account.id.startsWith("optimistic-") && isGenericSameInstitutionAccount(account, institution ?? null))
         : null;
       if (genericMatch) {
         return genericMatch.id;
@@ -2911,7 +2922,7 @@ export function ImportFilesModal({
         (entry) => accountRuleKey(entry.accountName, entry.institution) === accountRuleKey(normalizedStatementAccountName, institution ?? null)
       );
       if (rule?.accountId) {
-        const matchedAccount = accounts.find((account) => account.id === rule.accountId);
+        const matchedAccount = accounts.find((account) => account.id === rule.accountId && !account.id.startsWith("optimistic-"));
         if (matchedAccount) {
           return matchedAccount.id;
         }

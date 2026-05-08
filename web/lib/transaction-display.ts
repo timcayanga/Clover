@@ -19,6 +19,39 @@ const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefin
   return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
 };
 
+const getRawPayloadMerchantText = (rawPayload: Prisma.JsonValue | null | undefined) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return null;
+  }
+
+  const payload = rawPayload as Record<string, unknown>;
+  const candidateKeys = [
+    "merchantClean",
+    "merchantRaw",
+    "merchant",
+    "description",
+    "name",
+    "payee",
+    "label",
+    "title",
+    "transactionName",
+    "transaction_name",
+    "narration",
+    "details",
+    "memo",
+    "rawText",
+  ];
+
+  for (const key of candidateKeys) {
+    const candidate = payload[key];
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+};
+
 const getAubCategoryOverride = (merchantText: string) => {
   const lower = merchantText.toLowerCase();
 
@@ -108,12 +141,19 @@ const getGenericCategoryOverride = (merchantText: string) => {
 export const getEffectiveTransactionMerchantName = (params: {
   merchantClean?: string | null;
   merchantRaw: string;
+  rawPayload?: Prisma.JsonValue | null;
   institution?: string | null;
 }) => {
   const cleaned = params.merchantClean?.trim();
   if (cleaned) {
     const summarizedClean = summarizeMerchantText(cleaned, params.institution);
     return summarizedClean || cleaned;
+  }
+
+  const rawPayloadMerchantText = getRawPayloadMerchantText(params.rawPayload);
+  if (rawPayloadMerchantText) {
+    const summarizedRawPayloadText = summarizeMerchantText(rawPayloadMerchantText, params.institution);
+    return summarizedRawPayloadText || rawPayloadMerchantText;
   }
 
   const summarized = summarizeMerchantText(params.merchantRaw, params.institution);
@@ -141,6 +181,7 @@ export const getEffectiveTransactionCategoryName = (params: {
   const effectiveMerchantName = getEffectiveTransactionMerchantName({
     merchantClean: params.merchantClean,
     merchantRaw: params.merchantRaw,
+    rawPayload: params.rawPayload,
     institution: params.institution,
   });
 
