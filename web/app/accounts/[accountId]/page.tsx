@@ -709,6 +709,7 @@ function AccountDetailPageContent() {
       const activeWorkspaceId = selectedWorkspaceId ?? "";
       const cachedAccountsWorkspace = getCachedAccountsWorkspace(activeWorkspaceId);
       const cachedTransactionsWorkspace = getCachedTransactionsWorkspace(activeWorkspaceId);
+      const cachedAccountLookup = findCachedImportedAccount(accountId);
       const cachedTransactionsForAccount = findCachedTransactionsForAccount(accountId, {
         optimisticAccountId: cachedAccountLookup?.account?.optimisticAccountId ?? null,
         name: cachedAccountLookup?.account?.name ?? null,
@@ -727,7 +728,6 @@ function AccountDetailPageContent() {
       const cachedCategories = Array.isArray(cachedTransactionsWorkspace?.categories) && cachedTransactionsWorkspace.categories.length > 0
         ? (cachedTransactionsWorkspace.categories as Category[])
         : derivedCachedCategories;
-      const cachedAccountLookup = findCachedImportedAccount(accountId);
       const cachedWorkspaceId = cachedAccountLookup?.workspaceId ?? activeWorkspaceId;
       const cachedTransactionWorkspaceAccount = Array.isArray(cachedTransactionsWorkspace?.accounts)
         ? ((cachedTransactionsWorkspace.accounts as Account[]).find((entry) => {

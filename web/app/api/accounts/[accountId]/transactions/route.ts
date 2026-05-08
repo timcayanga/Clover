@@ -82,6 +82,7 @@ const mapTransactionRow = (transaction: {
       rawPayload: transaction.rawPayload,
       merchantRaw: transaction.merchantRaw,
       merchantClean: transaction.merchantClean,
+      description: transaction.description,
       institution: transaction.institution ?? null,
       type: transaction.type,
     }),

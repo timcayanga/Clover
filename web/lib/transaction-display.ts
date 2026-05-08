@@ -165,6 +165,7 @@ export const getEffectiveTransactionCategoryName = (params: {
   rawPayload?: Prisma.JsonValue | null;
   merchantRaw: string;
   merchantClean?: string | null;
+  description?: string | null;
   institution?: string | null;
   type: TransactionType;
 }) => {
@@ -185,6 +186,9 @@ export const getEffectiveTransactionCategoryName = (params: {
     institution: params.institution,
   });
 
+  const descriptionText =
+    typeof params.description === "string" && params.description.trim() ? params.description.trim() : null;
+
   if (/\b(?:aub|asia united bank)\b/i.test((params.institution ?? "").trim())) {
     const aubOverride = getAubCategoryOverride(effectiveMerchantName);
     if (aubOverride) {
@@ -203,6 +207,6 @@ export const getEffectiveTransactionCategoryName = (params: {
   if (genericOverride) {
     return genericOverride;
   }
-  const heuristic = guessCategoryName(effectiveMerchantName || params.merchantRaw, params.type);
+  const heuristic = guessCategoryName(effectiveMerchantName || descriptionText || params.merchantRaw, params.type);
   return heuristic || directCategory || rawPayloadCategory || null;
 };

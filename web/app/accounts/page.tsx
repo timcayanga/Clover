@@ -78,6 +78,9 @@ const ACCOUNT_SCHEDULE_RECURRENCE_OPTIONS = [
   { value: "annual", label: "Yearly" },
 ] as const;
 
+const ACCOUNT_LOADING_TIMEOUT_MS = 45_000;
+const ACCOUNT_LOADING_PULSE_MS = 5_000;
+
 type Workspace = {
   id: string;
   name: string;
@@ -105,6 +108,17 @@ type Account = {
   favorite?: boolean;
   updatedAt: string;
   createdAt: string;
+};
+
+type UploadAccountLoadingContext = {
+  latestCheckpoint: StatementCheckpoint | null;
+  checkpointBalance: string | null;
+  stableBalance: string | null;
+  hasVisibleBalance: boolean;
+  hasLoadedTransactions: boolean;
+  displayedBalance: string | null;
+  isLoading: boolean;
+  isTimedOut: boolean;
 };
 
 const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account | null => {
@@ -1033,6 +1047,8 @@ function AccountsPageContent() {
   const [pendingImportSummary, setPendingImportSummary] = useState<UploadInsightsSummary | null>(null);
   const [importRefreshInFlight, setImportRefreshInFlight] = useState(false);
   const stableAccountBalancesRef = useRef(new Map<string, string>());
+  const accountLoadingSinceRef = useRef(new Map<string, number>());
+  const [accountLoadingPulse, setAccountLoadingPulse] = useState(() => Date.now());
   const isLocalDevBrowser =
     typeof window !== "undefined" && /^(localhost|127\.0\.0\.1|\[::1\]|::1)$/i.test(window.location.hostname);
   const [deletingAccountIds, setDeletingAccountIds] = useState<string[]>(
@@ -1687,6 +1703,49 @@ function AccountsPageContent() {
     return Number.isFinite(numeric) && numeric !== 0;
   };
 
+  const getUploadAccountLoadingContext = (account: Account): UploadAccountLoadingContext => {
+    const latestCheckpoint =
+      latestCheckpoints.checkpointsByAccountId.get(account.id) ??
+      latestCheckpoints.checkpointsByAccountKey.get(
+        normalizeImportedAccountKey(account.name, account.institution, account.accountNumber, account.type)
+      ) ??
+      null;
+    const checkpointBalance =
+      latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
+        ? String(latestCheckpoint.endingBalance)
+        : null;
+    const stableBalance = stableAccountBalancesRef.current.get(account.id) ?? null;
+    const hasVisibleBalance = hasMeaningfulBalance(account.balance);
+    const hasLoadedTransactions = transactions.some((transaction) => transactionMatchesAccount(transaction, account));
+    const displayedBalance = hasMeaningfulBalance(account.balance)
+      ? account.balance
+      : stableBalance ?? checkpointBalance;
+    const isLoading =
+      account.source === "upload" &&
+      (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
+      !hasVisibleBalance &&
+      !hasMeaningfulBalance(checkpointBalance) &&
+      !stableBalance &&
+      !hasLoadedTransactions;
+    const loadingSince = accountLoadingSinceRef.current.get(account.id);
+    const isTimedOut =
+      isLoading &&
+      loadingSince !== undefined &&
+      accountLoadingPulse - loadingSince >= ACCOUNT_LOADING_TIMEOUT_MS;
+    const shouldShowLoading = isLoading && !isTimedOut;
+
+    return {
+      latestCheckpoint,
+      checkpointBalance,
+      stableBalance,
+      hasVisibleBalance,
+      hasLoadedTransactions,
+      displayedBalance,
+      isLoading: shouldShowLoading,
+      isTimedOut,
+    };
+  };
+
   const getDisplayedAccountBalance = (account: Account) => {
     const latestCheckpoint = getLatestCheckpointForAccount(account, statementCheckpoints);
     const checkpointBalance =
@@ -1705,6 +1764,41 @@ function AccountsPageContent() {
 
     return stableBalance ?? checkpointBalance;
   };
+
+  const activeUploadLoadingAccountIds = useMemo(() => {
+    return currencyFilteredAccounts.filter((account) => getUploadAccountLoadingContext(account).isLoading).map((account) => account.id);
+  }, [accountLoadingPulse, currencyFilteredAccounts, latestCheckpoints, transactions]);
+
+  useEffect(() => {
+    const activeIds = new Set(activeUploadLoadingAccountIds);
+    const now = Date.now();
+
+    for (const id of activeIds) {
+      if (!accountLoadingSinceRef.current.has(id)) {
+        accountLoadingSinceRef.current.set(id, now);
+      }
+    }
+
+    for (const id of Array.from(accountLoadingSinceRef.current.keys())) {
+      if (!activeIds.has(id)) {
+        accountLoadingSinceRef.current.delete(id);
+      }
+    }
+  }, [activeUploadLoadingAccountIds]);
+
+  useEffect(() => {
+    if (activeUploadLoadingAccountIds.length === 0) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      setAccountLoadingPulse(Date.now());
+    }, ACCOUNT_LOADING_PULSE_MS);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [activeUploadLoadingAccountIds.length]);
 
   const duplicateCounts = useMemo(() => {
     const counts = new Map<string, number>();
@@ -1813,6 +1907,10 @@ function AccountsPageContent() {
   const selectedAccount = useMemo(
     () => reconciledAccounts.find((account) => account.id === drawerAccountId) ?? null,
     [drawerAccountId, reconciledAccounts]
+  );
+  const selectedAccountLoadingContext = useMemo(
+    () => (selectedAccount ? getUploadAccountLoadingContext(selectedAccount) : null),
+    [accountLoadingPulse, selectedAccount, latestCheckpoints, transactions]
   );
   const currencyCatalogCodes = useMemo(() => getCurrencyCatalogCodes(), []);
   const selectedAccountCurrency = selectedAccount?.currency ?? "PHP";
@@ -2136,42 +2234,16 @@ function AccountsPageContent() {
     }
 
     const isDeleting = deletingAccountIdsSet.has(row.id);
-    const latestCheckpoint =
-      latestCheckpoints.checkpointsByAccountId.get(row.id) ??
-      latestCheckpoints.checkpointsByAccountKey.get(
-        normalizeImportedAccountKey(row.name, row.institution, row.accountNumber, row.type)
-      ) ??
-      null;
-    const checkpointBalance =
-      latestCheckpoint?.endingBalance !== null && latestCheckpoint?.endingBalance !== undefined
-        ? String(latestCheckpoint.endingBalance)
-        : null;
+    const loadingContext = getUploadAccountLoadingContext(row);
+    const latestCheckpoint = loadingContext.latestCheckpoint;
     const fallbackAccountNumber =
       row.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null;
-    const hasVisibleBalance = hasMeaningfulBalance(row.balance);
-    const hasLoadedTransactions = transactions.some((transaction) => transactionMatchesAccount(transaction, row));
-    const shouldPreferCheckpointBalance =
-      row.source === "upload" &&
-      hasMeaningfulBalance(checkpointBalance);
-    const stableBalance = stableAccountBalancesRef.current.get(row.id) ?? null;
-    const displayedBalance = shouldPreferCheckpointBalance
-      ? checkpointBalance
-      : hasMeaningfulBalance(row.balance)
-        ? row.balance
-        : stableBalance ?? checkpointBalance;
-    const isLoading =
-      row.source === "upload" &&
-      (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
-      !hasVisibleBalance &&
-      !hasMeaningfulBalance(checkpointBalance) &&
-      !stableBalance &&
-      !hasLoadedTransactions;
     const accountBrand = getAccountBrand({
       institution: row.institution,
       name: row.name,
       type: getEffectiveAccountType(row),
     });
-    const balanceValue = Math.abs(parseAmount(displayedBalance));
+    const balanceValue = Math.abs(parseAmount(loadingContext.displayedBalance));
     const accountCardName = getAccountCardName({
       name: row.name,
       institution: row.institution,
@@ -2187,10 +2259,16 @@ function AccountsPageContent() {
         accountBrand={accountBrand}
         name={accountCardName}
         accountNumber={accountCardNumber}
-        amount={isLoading ? "Loading..." : formatAccountAmount(balanceValue, row.currency)}
+        amount={
+          loadingContext.isLoading
+            ? "Loading..."
+            : loadingContext.isTimedOut
+              ? "Pending review"
+              : formatAccountAmount(balanceValue, row.currency)
+        }
         onOpen={() => openAccountDrawer(row)}
         openLabel={`Open ${accountCardName} account`}
-        state={isDeleting ? "deleting" : isLoading ? "loading" : undefined}
+        state={isDeleting ? "deleting" : loadingContext.isLoading ? "loading" : undefined}
       />
     );
   };
@@ -2233,15 +2311,7 @@ function AccountsPageContent() {
       type: getEffectiveAccountType(row),
     });
     const accountDisplayName = getAccountDisplayName(row);
-    const hasLoadedTransactions = transactions.some((transaction) => transactionMatchesAccount(transaction, row));
-    const isLoading =
-      row.source === "upload" &&
-      (!latestCheckpoint || latestCheckpoint.status !== "reconciled") &&
-      row.balance !== null &&
-      row.balance.trim() !== "" &&
-      Number(row.balance) === 0 &&
-      !latestCheckpoint?.endingBalance &&
-      !hasLoadedTransactions;
+    const loadingContext = getUploadAccountLoadingContext(row);
 
     return (
       <button
@@ -2259,9 +2329,11 @@ function AccountsPageContent() {
         </span>
         <span className="accounts-mobile-list-row__end">
           <strong>
-            {isLoading
+            {loadingContext.isLoading
               ? "Loading..."
-              : formatAccountAmount(Math.abs(parseAmount(row.balance)), row.currency)}
+              : loadingContext.isTimedOut
+                ? "Pending review"
+                : formatAccountAmount(Math.abs(parseAmount(loadingContext.displayedBalance ?? row.balance)), row.currency)}
           </strong>
           <span className="accounts-mobile-list-row__chevron" aria-hidden="true">
             ›
@@ -2307,18 +2379,33 @@ function AccountsPageContent() {
     );
   };
 
+  const resolveNavigableAccount = (account: Account) => {
+    if (!account.id.startsWith("optimistic-")) {
+      return account;
+    }
+
+    const accountKey = getImportedAccountKey(account.name, account.institution, account.accountNumber, account.type);
+    return (
+      accounts.find(
+        (entry) =>
+          !entry.id.startsWith("optimistic-") &&
+          getImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type) === accountKey
+      ) ?? account
+    );
+  };
+
   const openAccountDrawer = (account: Account) => {
     if (deletingAccountIdsSet.has(account.id)) {
       return;
     }
     closeChrome();
-    window.location.assign(getAccountPath(account));
+    window.location.assign(getAccountPath(resolveNavigableAccount(account)));
   };
 
   const openFullAccountPage = () => {
     if (!selectedAccount) return;
     closeChrome();
-    window.location.assign(getAccountPath(selectedAccount));
+    window.location.assign(getAccountPath(resolveNavigableAccount(selectedAccount)));
   };
 
   const openDrawerForWarning = (account: Account, warning: string) => {
@@ -2327,7 +2414,7 @@ function AccountsPageContent() {
       return;
     }
     closeChrome();
-    window.location.assign(getAccountPath(account));
+    window.location.assign(getAccountPath(resolveNavigableAccount(account)));
   };
 
   const saveAccountChanges = async (event?: FormEvent<HTMLFormElement>) => {
@@ -2843,13 +2930,11 @@ function AccountsPageContent() {
               <div>
                 <span>Current balance</span>
                 <strong>
-                  {selectedAccount.source === "upload" &&
-                  selectedAccount.balance !== null &&
-                  Number(selectedAccount.balance) === 0 &&
-                  selectedAccountTransactions.length === 0 &&
-                  (!latestCheckpoint || latestCheckpoint.status !== "reconciled")
+                  {selectedAccountLoadingContext?.isLoading
                     ? "Loading..."
-                    : formatAccountAmount(parseAmount(selectedAccount.balance), selectedAccount.currency)}
+                    : selectedAccountLoadingContext?.isTimedOut
+                      ? "Pending review"
+                      : formatAccountAmount(parseAmount(selectedAccount.balance), selectedAccount.currency)}
                 </strong>
               </div>
               <div>
