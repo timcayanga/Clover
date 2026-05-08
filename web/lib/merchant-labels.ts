@@ -77,7 +77,15 @@ const institutionKeyPatterns: Array<{ key: string; patterns: RegExp[] }> = [
 const simplifierRules: Record<string, SimplifierRule[]> = {
   BDO: [
     {
-      patterns: [/w\/?d\s*fr\s*sav\s*bdo/i, /wdfrsavbdo/i, /\batm\s+withdrawal\b/i, /\bwdrawal\b/i],
+      patterns: [
+        /w\/?d\s*fr\s*sav\s*bdo/i,
+        /wdfrsavbdo/i,
+        /\batrc?\s+atm\/b\s*2\s*c\s*account\b/i,
+        /\batro?\s+atm\/b\s*2\s*c\s*account\b/i,
+        /\batm\/b\s*2\s*c\s*account\b/i,
+        /\batm\s+withdrawal\b/i,
+        /\bwdrawal\b/i,
+      ],
       replacement: "ATM Withdrawal",
     },
     {
@@ -101,7 +109,7 @@ const simplifierRules: Record<string, SimplifierRule[]> = {
       replacement: "Tax Withheld",
     },
     {
-      patterns: [/pob\s+ibft/i, /bank\s+transfer/i, /fund\s+transfer/i],
+      patterns: [/pob\s+ibft/i, /pob\s*ibft\s*bn/i, /\bibft\s*bn\b/i, /bank\s+transfer/i, /fund\s+transfer/i],
       replacement: "Bank Transfer",
     },
     {

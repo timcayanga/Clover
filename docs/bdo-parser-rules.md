@@ -51,10 +51,11 @@ This document captures the BDO parsing rules learned from the synthetic training
 - The code-level lookup lives in `web/lib/merchant-labels.ts` so the same mappings apply automatically during parsing.
 - Common simplifications include:
   - `W/D FR SAV BDO` and similar forms -> `ATM Withdrawal`
+  - `ATRC ATM/B 2 C ACCOUNT` and `ATRO ATM/B 2 C ACCOUNT` -> `ATM Withdrawal`
   - `SERVICE CHARGE DEBIT` -> `Service Charge`
   - `INTEREST PAY SYS-GEN`, `INTEREST EARNED`, `INTEREST CREDITED` -> `Interest Earned`
   - `INTEREST WITHHELD` -> `Tax Withheld`
-  - `POB IBFT`, `BANK TRANSFER`, `Fund Transfer` -> `Bank Transfer`
+  - `POB IBFT`, `IBFT BN`, `BANK TRANSFER`, `Fund Transfer` -> `Bank Transfer`
   - `INTERBANK DEPOSIT`, `Funds Deposited`, `Received A/C` -> `Incoming Transfer`
   - `PAYROLL` -> `Salary Credit`
   - `CASH DEPOSIT` -> `Cash Deposit`
