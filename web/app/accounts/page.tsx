@@ -117,6 +117,7 @@ type UploadAccountLoadingContext = {
   hasVisibleBalance: boolean;
   hasLoadedTransactions: boolean;
   displayedBalance: string | null;
+  baseIsLoading: boolean;
   isLoading: boolean;
   isTimedOut: boolean;
 };
@@ -1741,6 +1742,7 @@ function AccountsPageContent() {
       hasVisibleBalance,
       hasLoadedTransactions,
       displayedBalance,
+      baseIsLoading: isLoading,
       isLoading: shouldShowLoading,
       isTimedOut,
     };
@@ -1766,6 +1768,12 @@ function AccountsPageContent() {
   };
 
   const activeUploadLoadingAccountIds = useMemo(() => {
+    return currencyFilteredAccounts
+      .filter((account) => getUploadAccountLoadingContext(account).baseIsLoading)
+      .map((account) => account.id);
+  }, [accountLoadingPulse, currencyFilteredAccounts, latestCheckpoints, transactions]);
+
+  const visibleUploadLoadingAccountIds = useMemo(() => {
     return currencyFilteredAccounts.filter((account) => getUploadAccountLoadingContext(account).isLoading).map((account) => account.id);
   }, [accountLoadingPulse, currencyFilteredAccounts, latestCheckpoints, transactions]);
 
@@ -1787,7 +1795,7 @@ function AccountsPageContent() {
   }, [activeUploadLoadingAccountIds]);
 
   useEffect(() => {
-    if (activeUploadLoadingAccountIds.length === 0) {
+    if (visibleUploadLoadingAccountIds.length === 0) {
       return;
     }
 
@@ -1798,7 +1806,7 @@ function AccountsPageContent() {
     return () => {
       window.clearInterval(interval);
     };
-  }, [activeUploadLoadingAccountIds.length]);
+  }, [visibleUploadLoadingAccountIds.length]);
 
   const duplicateCounts = useMemo(() => {
     const counts = new Map<string, number>();
