@@ -65,6 +65,7 @@ type Account = {
   currency: string;
   source: string;
   balance: string | null;
+  favorite?: boolean;
   updatedAt: string;
   createdAt: string;
 };
@@ -340,7 +341,7 @@ function InlineEditableCell({
   );
 }
 
-function ActionIcon({ name }: { name: "warning" | "chevron-right" }) {
+function ActionIcon({ name }: { name: "warning" | "chevron-right" | "star" | "star-filled" }) {
   if (name === "warning") {
     return (
       <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -355,6 +356,22 @@ function ActionIcon({ name }: { name: "warning" | "chevron-right" }) {
     return (
       <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round">
         <path d="m8 5 5 5-5 5" />
+      </svg>
+    );
+  }
+
+  if (name === "star") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m12 3.2 2.9 5.87 6.48.94-4.69 4.57 1.11 6.45L12 17.95l-5.8 3.08 1.11-6.45-4.69-4.57 6.48-.94L12 3.2Z" />
+      </svg>
+    );
+  }
+
+  if (name === "star-filled") {
+    return (
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+        <path d="m12 3.2 2.9 5.87 6.48.94-4.69 4.57 1.11 6.45L12 17.95l-5.8 3.08 1.11-6.45-4.69-4.57 6.48-.94L12 3.2Z" />
       </svg>
     );
   }
@@ -385,6 +402,26 @@ const serializeInvestmentEditDraft = (account: Account): InvestmentEditDraft => 
   investmentMaturityValue: account.investmentMaturityValue ?? "",
   balance: account.balance ?? "",
 });
+
+const buildInvestmentDraftSyncKey = (account: Account) =>
+  [
+    account.id,
+    account.name,
+    account.institution ?? "",
+    account.investmentSubtype ?? "",
+    account.investmentSymbol ?? "",
+    account.investmentQuantity ?? "",
+    account.investmentCostBasis ?? "",
+    account.investmentPrincipal ?? "",
+    account.investmentStartDate ?? "",
+    account.investmentMaturityDate ?? "",
+    account.investmentInterestRate ?? "",
+    account.investmentMaturityValue ?? "",
+    account.balance ?? "",
+    account.currency,
+    account.type,
+    account.source,
+  ].join("|");
 
 const formatAccountAmount = (value: number, currency?: string | null) => formatCurrencyAmount(value, currency ?? "PHP");
 
@@ -589,6 +626,8 @@ function AccountDetailPageContent() {
   const [accountIdentityEditorOpen, setAccountIdentityEditorOpen] = useState(false);
   const [accountEditSaveState, setAccountEditSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const stableBalanceRef = useRef<string | null>(null);
+  const accountInvestmentDraftSyncKeyRef = useRef<string | null>(null);
+  const [favoriteSaving, setFavoriteSaving] = useState(false);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [detailDraft, setDetailDraft] = useState<TransactionDetailDraft | null>(null);
   const [isSavingTransactionDetail, setIsSavingTransactionDetail] = useState(false);
@@ -1127,9 +1166,16 @@ function AccountDetailPageContent() {
   useEffect(() => {
     if (account?.type !== "investment") {
       setInvestmentEditDraft(null);
+      accountInvestmentDraftSyncKeyRef.current = null;
       return;
     }
 
+    const nextSyncKey = buildInvestmentDraftSyncKey(account);
+    if (accountInvestmentDraftSyncKeyRef.current === nextSyncKey) {
+      return;
+    }
+
+    accountInvestmentDraftSyncKeyRef.current = nextSyncKey;
     setInvestmentEditDraft(serializeInvestmentEditDraft(account));
   }, [account]);
 
@@ -1861,6 +1907,42 @@ function AccountDetailPageContent() {
     setInvestmentEditDraft((current) => (current ? { ...current, [key]: value } : current));
   };
 
+  const toggleFavoriteAccount = async () => {
+    if (!account || favoriteSaving) {
+      return;
+    }
+
+    const previousFavorite = Boolean(account.favorite);
+    const nextFavorite = !previousFavorite;
+    setFavoriteSaving(true);
+    setAccount((current) => (current ? { ...current, favorite: nextFavorite } : current));
+
+    try {
+      const response = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId: account.workspaceId,
+          favorite: nextFavorite,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Unable to update favorite account.");
+      }
+
+      const payload = await response.json();
+      if (payload.account) {
+        setAccount(payload.account as Account);
+      }
+    } catch (error) {
+      setAccount((current) => (current ? { ...current, favorite: previousFavorite } : current));
+      setMessage(error instanceof Error ? error.message : "Unable to update favorite account.");
+    } finally {
+      setFavoriteSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (!account || account.type === "investment") {
       setAccountEditSaveState("idle");
@@ -2067,6 +2149,19 @@ function AccountDetailPageContent() {
                 <p className="panel-muted">Clover is still reading this {latestCheckpointFamily?.pendingLabel ?? "statement"} and filling in the rest.</p>
               </div>
             ) : null}
+
+            <div className="accounts-detail__hero-tools">
+              <button
+                className={`icon-button accounts-detail__favorite-toggle${account.favorite ? " is-active" : ""}`}
+                type="button"
+                onClick={() => void toggleFavoriteAccount()}
+                aria-pressed={Boolean(account.favorite)}
+                aria-label={account.favorite ? "Remove account from favorites" : "Mark account as favorite"}
+                disabled={favoriteSaving}
+              >
+                <ActionIcon name={account.favorite ? "star-filled" : "star"} />
+              </button>
+            </div>
 
             <FinancialAccountCard
               className="accounts-detail__hero-card"

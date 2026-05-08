@@ -53,6 +53,7 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   name: true,
   institution: true,
   ...(columns.has("accountNumber") ? { accountNumber: true } : {}),
+  ...(columns.has("favorite") ? { favorite: true } : {}),
   investmentSubtype: true,
   investmentSymbol: true,
   investmentQuantity: true,
@@ -84,6 +85,7 @@ const serializeAccount = <T extends {
   currency?: string | null;
   institution?: string | null;
   name?: string | null;
+  favorite?: boolean;
   balance: { toString: () => string } | null;
   investmentQuantity: { toString: () => string } | null;
   investmentCostBasis: { toString: () => string } | null;
@@ -97,6 +99,7 @@ const serializeAccount = <T extends {
 }>(account: T) => ({
   ...account,
   accountNumber: account.accountNumber ?? null,
+  favorite: account.favorite ?? false,
   currency: normalizeAccountCurrency(account),
   balance: account.balance?.toString() ?? null,
   investmentQuantity: account.investmentQuantity?.toString() ?? null,
@@ -428,6 +431,7 @@ export async function POST(request: Request) {
       currency: normalizedCurrency,
       source: body?.source ? String(body.source) : "upload",
       balance,
+      favorite: false,
     };
 
     let account;

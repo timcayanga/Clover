@@ -49,6 +49,7 @@ const getCompatibleAccountSelect = (columns: Set<string>) => ({
   name: true,
   institution: true,
   ...(columns.has("accountNumber") ? { accountNumber: true } : {}),
+  ...(columns.has("favorite") ? { favorite: true } : {}),
   investmentSubtype: true,
   investmentSymbol: true,
   investmentQuantity: true,
@@ -80,6 +81,7 @@ const accountPatchSchema = z.object({
   name: z.string().min(1).optional(),
   institution: z.string().nullable().optional(),
   accountNumber: z.string().nullable().optional(),
+  favorite: z.boolean().optional(),
   investmentSubtype: z.string().nullable().optional(),
   investmentSymbol: z.string().nullable().optional(),
   investmentQuantity: z.union([z.string(), z.number(), z.null()]).optional(),
@@ -100,6 +102,7 @@ const serializeAccount = <T extends {
   currency?: string | null;
   institution?: string | null;
   name?: string | null;
+  favorite?: boolean;
   balance: { toString: () => string } | null;
   investmentQuantity: { toString: () => string } | null;
   investmentCostBasis: { toString: () => string } | null;
@@ -113,6 +116,7 @@ const serializeAccount = <T extends {
 }>(account: T) => ({
   ...account,
   accountNumber: account.accountNumber ?? null,
+  favorite: account.favorite ?? false,
   currency: normalizeAccountCurrency(account),
   balance: account.balance?.toString() ?? null,
   investmentQuantity: account.investmentQuantity?.toString() ?? null,
@@ -195,6 +199,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ac
         ...(compatibleColumns.has("accountNumber")
           ? { accountNumber: payload.accountNumber === undefined ? undefined : payload.accountNumber?.trim() || null }
           : {}),
+        favorite: payload.favorite === undefined ? undefined : payload.favorite,
         investmentSubtype:
           payload.investmentSubtype === undefined ? undefined : normalizeInvestmentSubtype(payload.investmentSubtype),
         investmentSymbol: payload.investmentSymbol === undefined ? undefined : payload.investmentSymbol?.trim() || null,

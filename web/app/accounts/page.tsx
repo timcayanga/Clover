@@ -102,6 +102,7 @@ type Account = {
   currency: string;
   source: string;
   balance: string | null;
+  favorite?: boolean;
   updatedAt: string;
   createdAt: string;
 };
@@ -136,6 +137,7 @@ const buildOptimisticImportedAccount = (summary: UploadInsightsSummary): Account
     currency: summary.previewTransactions?.[0]?.currency ?? "PHP",
     source: "upload",
     balance: summary.balance,
+    favorite: false,
     updatedAt: new Date().toISOString(),
     createdAt: new Date().toISOString(),
   };
@@ -1702,6 +1704,14 @@ function AccountsPageContent() {
     });
   }, [currencyFilteredAccounts]);
 
+  const featuredAccounts = useMemo(
+    () => {
+      const favoriteAccounts = visibleAccounts.filter((account) => Boolean(account.favorite));
+      return favoriteAccounts.length > 0 ? favoriteAccounts : visibleAccounts.slice(0, 4);
+    },
+    [visibleAccounts]
+  );
+
   const totals = useMemo(() => {
     return currencyFilteredAccounts.reduce(
       (accumulator, account) => {
@@ -2716,6 +2726,17 @@ function AccountsPageContent() {
         <section className="accounts-main-grid">
           <div className="accounts-list-column">
             <div className="accounts-sections">
+              {featuredAccounts.length > 0 ? (
+                <section className="accounts-mobile-featured" aria-label="Featured accounts">
+                  <div className="accounts-mobile-featured__head">
+                    <h5>Featured accounts</h5>
+                    <span>Swipe left or right</span>
+                  </div>
+                  <div className="accounts-mobile-featured__rail" aria-label="Featured accounts carousel">
+                    {featuredAccounts.map((row) => renderAccountCard(row, `featured-${row.id}`))}
+                  </div>
+                </section>
+              ) : null}
               {accounts.length === 0 ? (
                 <div className="empty-state accounts-empty-state">
                   <strong>It's quiet in here.</strong>
