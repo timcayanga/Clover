@@ -21,7 +21,7 @@ import { CurrencySelector } from "@/components/currency-selector";
 import { EmptyDataCta } from "@/components/empty-data-cta";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
-import { getCategoryIconSrc, getCategoryIconTone } from "@/lib/category-icons";
+import { getCategoryIconTone } from "@/lib/category-icons";
 import {
   analyticsOnceKey,
   capturePostHogClientEvent,
@@ -603,16 +603,6 @@ const appendUniqueTransactions = <T extends { id: string }>(current: T[], incomi
   const appended = incoming.filter((transaction) => !knownIds.has(transaction.id));
 
   return appended.length > 0 ? [...current, ...appended] : current;
-};
-
-const downloadTextFile = (filename: string, contents: string, mimeType: string) => {
-  const blob = new Blob([contents], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
 };
 
 const escapeHtml = (value: string) =>
@@ -4234,7 +4224,7 @@ function TransactionsPageContent() {
     }
   };
 
-  const fetchAllTransactionsForExport = async () => {
+  const fetchTransactionsForPdf = async () => {
     if (!selectedWorkspaceId) {
       return [];
     }
@@ -4270,63 +4260,16 @@ function TransactionsPageContent() {
     return Array.isArray(payload.transactions) ? (payload.transactions as Transaction[]) : [];
   };
 
-  const downloadCsv = async () => {
-    try {
-      const exportRows = await fetchAllTransactionsForExport();
-      const header = ["Name", "Date", "Account", "Category", "Amount", "Type", "Notes", "Warning"];
-      const rows = exportRows.map((transaction) => [
-        summarizeTransactionMerchantText(
-          transaction.merchantClean ?? transaction.merchantRaw,
-          accountInstitutionById.get(transaction.accountId) ?? null
-        ),
-        formatDate(transaction.date),
-        transaction.accountName,
-        getEffectiveTransactionCategoryName({
-          categoryName: transaction.categoryName ?? categories.find((category) => category.id === (transaction.categoryId ?? otherCategoryId))?.name ?? null,
-          rawPayload: transaction.rawPayload as never,
-          merchantRaw: transaction.merchantRaw,
-          merchantClean: transaction.merchantClean,
-          institution: accountInstitutionById.get(transaction.accountId) ?? null,
-          type: transaction.type,
-        }) ??
-          guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
-          "Other",
-        transaction.amount,
-        transaction.type === "income" ? "Credit" : "Debit",
-        transaction.description ?? "",
-        warningReasonFor(transaction) ?? "",
-      ]);
-
-      const csv = [header, ...rows]
-        .map((row) =>
-          row
-            .map((cell) => `"${String(cell).replaceAll("\"", '""')}"`)
-            .join(",")
-        )
-        .join("\n");
-
-      capturePostHogClientEvent("report_exported", {
-        workspace_id: selectedWorkspaceId || null,
-        export_format: "csv",
-        row_count: exportRows.length,
-        selected_count: selectedTransactionIds.length,
-      });
-      downloadTextFile("clover-transactions.csv", csv, "text/csv;charset=utf-8;");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Unable to export transactions.");
-    }
-  };
-
   const downloadPdf = async () => {
     if (typeof window === "undefined") {
       return;
     }
 
     try {
-      const exportRows = await fetchAllTransactionsForExport();
+      const exportRows = await fetchTransactionsForPdf();
       const report = window.open("", "_blank", "width=1280,height=900");
       if (!report) {
-        window.print();
+        setMessage("Your browser blocked the PDF preview. Please allow popups and try again.");
         return;
       }
 
@@ -4346,161 +4289,329 @@ function TransactionsPageContent() {
             }) ??
             guessCategoryName(transaction.merchantClean ?? transaction.merchantRaw, transaction.type) ??
             "Other";
-          const categoryIconSrc = new URL(
-            getCategoryIconSrc(categoryLabel),
-            window.location.origin
-          ).toString();
           const categoryTone = getCategoryIconTone(categoryLabel);
           const accountInstitution = accountInstitutionById.get(transaction.accountId) ?? null;
           const merchantSummary = summarizeTransactionMerchantText(
             transaction.merchantClean ?? transaction.merchantRaw,
             accountInstitution
           );
+          const typeLabel =
+            transaction.type === "transfer" || transaction.isTransfer
+              ? "Transfer"
+              : transaction.type === "income"
+                ? "Credit"
+                : "Debit";
 
           return `
             <tr>
-              <td class="icon-cell">
-                <span
-                  class="category-icon"
-                  style="background: ${categoryTone.backgroundColor}; border-color: ${categoryTone.borderColor};"
-                >
-                  <img src="${escapeHtml(categoryIconSrc)}" alt="" />
+              <td>${escapeHtml(formatDate(transaction.date))}</td>
+              <td>
+                <div class="transactions-pdf-merchant">
+                  <strong>${escapeHtml(merchantSummary)}</strong>
+                  ${transaction.description ? `<span>${escapeHtml(transaction.description)}</span>` : ""}
+                </div>
+              </td>
+              <td>${escapeHtml(transaction.accountName)}</td>
+              <td>
+                <span class="transactions-pdf-category">
+                  <span
+                    class="transactions-pdf-category__swatch"
+                    style="background: ${categoryTone.backgroundColor}; border-color: ${categoryTone.borderColor};"
+                  ></span>
+                  <span>${escapeHtml(categoryLabel)}</span>
                 </span>
               </td>
               <td>
-                <div class="name-cell">
-                  <div class="name-cell__summary">${escapeHtml(merchantSummary)}</div>
-                </div>
+                <span class="transactions-pdf-type transactions-pdf-type--${transaction.type === "transfer" || transaction.isTransfer ? "transfer" : transaction.type === "income" ? "credit" : "debit"}">
+                  ${escapeHtml(typeLabel)}
+                </span>
               </td>
-              <td>${escapeHtml(formatDate(transaction.date))}</td>
-              <td>${escapeHtml(transaction.accountName)}</td>
-              <td>${escapeHtml(categoryLabel)}</td>
-              <td class="${transaction.type === "income" ? "positive" : "negative"}">${escapeHtml(
+              <td class="${transaction.type === "income" ? "positive" : transaction.type === "transfer" || transaction.isTransfer ? "neutral" : "negative"}">${escapeHtml(
                 formatTransactionAmount(amount, transaction.currency)
               )}</td>
-              <td>${escapeHtml(warningReason ?? "")}</td>
+              <td>${escapeHtml(warningReason ?? "—")}</td>
             </tr>
           `;
         })
         .join("");
 
+      const exportedCount = exportRows.length;
+      const exportTitle = workspace?.name ? `${workspace.name} Transactions` : "Transactions";
+      const summaryCards = [
+        { label: "Rows", value: String(transactionsSummary.totalCount) },
+        { label: "Income", value: formatTransactionAggregate(transactionsSummary.income, exportRows) },
+        { label: "Spending", value: formatTransactionAggregate(transactionsSummary.spending, exportRows) },
+        { label: "Transfers", value: formatTransactionAggregate(transactionsSummary.transfers, exportRows) },
+      ];
+
+      report.document.open();
       report.document.write(`
         <html>
           <head>
-            <title>Transactions</title>
+            <title>${escapeHtml(exportTitle)}</title>
             <style>
-              @page { size: auto; margin: 14mm; }
+              @page { size: auto; margin: 12mm; }
+              :root {
+                color-scheme: light;
+                --clover-teal: #18b4ce;
+                --clover-ink: #10212b;
+                --clover-muted: #5f7280;
+                --clover-stroke: #dbe3e8;
+                --clover-background: #f4fbfd;
+                --clover-positive: #16a34a;
+                --clover-negative: #ef4444;
+                --clover-neutral: #64748b;
+              }
               body {
-                font-family: Arial, sans-serif;
-                color: #111827;
+                font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+                color: var(--clover-ink);
                 margin: 0;
                 padding: 0;
+                background:
+                  radial-gradient(circle at top left, rgba(24, 180, 206, 0.14), transparent 28%),
+                  linear-gradient(180deg, #f8fcfd 0%, #ffffff 30%, #ffffff 100%);
               }
               .page {
-                padding: 0;
+                padding: 16px;
               }
-              h1 {
-                font-size: 20px;
-                margin: 0 0 8px;
+              .sheet {
+                border: 1px solid rgba(219, 227, 232, 0.9);
+                border-radius: 28px;
+                overflow: hidden;
+                background: rgba(255, 255, 255, 0.94);
+                box-shadow: 0 24px 60px rgba(16, 33, 43, 0.12);
               }
-              .meta {
-                color: #6b7280;
+              .hero {
+                padding: 24px 28px 20px;
+                background: linear-gradient(135deg, rgba(24, 180, 206, 0.95) 0%, rgba(15, 196, 176, 0.95) 100%);
+                color: white;
+              }
+              .hero__eyebrow {
+                margin: 0;
+                font-size: 11px;
+                text-transform: uppercase;
+                letter-spacing: 0.22em;
+                opacity: 0.8;
+              }
+              .hero__title {
+                margin: 8px 0 6px;
+                font-size: 28px;
+                line-height: 1.05;
+                letter-spacing: -0.04em;
+              }
+              .hero__meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
                 font-size: 12px;
-                margin-bottom: 18px;
+                color: rgba(255, 255, 255, 0.88);
+              }
+              .hero__pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 7px 10px;
+                border-radius: 999px;
+                background: rgba(255, 255, 255, 0.18);
+                backdrop-filter: blur(12px);
+              }
+              .summary-grid {
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
+                gap: 12px;
+                padding: 18px 20px 10px;
+                background: var(--clover-background);
+                border-bottom: 1px solid var(--clover-stroke);
+              }
+              .summary-card {
+                border: 1px solid rgba(219, 227, 232, 0.9);
+                border-radius: 20px;
+                padding: 14px 16px;
+                background: rgba(255, 255, 255, 0.95);
+              }
+              .summary-card__label {
+                display: block;
+                font-size: 10px;
+                text-transform: uppercase;
+                letter-spacing: 0.16em;
+                color: var(--clover-muted);
+                margin-bottom: 8px;
+              }
+              .summary-card__value {
+                font-size: 18px;
+                font-weight: 700;
+                letter-spacing: -0.02em;
+              }
+              .content {
+                padding: 16px 20px 22px;
               }
               table {
                 width: 100%;
                 border-collapse: collapse;
-                table-layout: fixed;
+                table-layout: auto;
               }
-              tbody tr:nth-child(even) {
-                background: #f8fafc;
-              }
-              th, td {
-                text-align: left;
-                vertical-align: top;
-                padding: 9px 8px;
-                border-bottom: 1px solid var(--stroke);
-                font-size: 11px;
-                word-break: break-word;
-              }
-              td.icon-cell {
-                width: 46px;
-                padding-right: 0;
-              }
-              .category-icon {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                width: 26px;
-                height: 26px;
-                border-radius: 999px;
-                border: 1px solid transparent;
-                overflow: hidden;
-              }
-              .category-icon img {
-                width: 14px;
-                height: 14px;
-                display: block;
-              }
-              .name-cell {
-                display: grid;
-                gap: 2px;
-              }
-              .name-cell__summary {
-                font-size: 12px;
-                font-weight: 700;
-                line-height: 1.25;
-              }
-              .name-cell__subtext {
-                font-size: 9px;
-                color: #9ca3af;
-                line-height: 1.2;
-                letter-spacing: -0.01em;
-              }
-              th {
+              thead th {
                 font-size: 10px;
                 text-transform: uppercase;
-                letter-spacing: 0.04em;
-                color: #6b7280;
+                letter-spacing: 0.14em;
+                color: var(--clover-muted);
+                text-align: left;
+                padding: 10px 8px;
+                border-bottom: 1px solid var(--clover-stroke);
+              }
+              tbody td {
+                text-align: left;
+                vertical-align: top;
+                padding: 12px 8px;
+                border-bottom: 1px solid rgba(219, 227, 232, 0.85);
+                font-size: 12px;
+                word-break: break-word;
+              }
+              tbody tr:nth-child(even) {
+                background: rgba(24, 180, 206, 0.03);
+              }
+              .transactions-pdf-merchant {
+                display: grid;
+                gap: 3px;
+              }
+              .transactions-pdf-merchant strong {
+                font-size: 12.5px;
+                line-height: 1.25;
+              }
+              .transactions-pdf-merchant span {
+                color: var(--clover-muted);
+                font-size: 10.5px;
+                line-height: 1.3;
+              }
+              .transactions-pdf-category {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+              }
+              .transactions-pdf-category__swatch {
+                width: 12px;
+                height: 12px;
+                border-radius: 999px;
+                border: 1px solid transparent;
+                flex: 0 0 auto;
+              }
+              .transactions-pdf-type {
+                display: inline-flex;
+                align-items: center;
+                padding: 6px 10px;
+                border-radius: 999px;
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                border: 1px solid transparent;
+              }
+              .transactions-pdf-type--credit {
+                background: rgba(22, 163, 74, 0.08);
+                color: var(--clover-positive);
+                border-color: rgba(22, 163, 74, 0.16);
+              }
+              .transactions-pdf-type--debit {
+                background: rgba(239, 68, 68, 0.08);
+                color: var(--clover-negative);
+                border-color: rgba(239, 68, 68, 0.16);
+              }
+              .transactions-pdf-type--transfer {
+                background: rgba(100, 116, 139, 0.1);
+                color: var(--clover-neutral);
+                border-color: rgba(100, 116, 139, 0.18);
               }
               .positive {
-                color: #16a34a;
+                color: var(--clover-positive);
               }
               .negative {
-                color: #ef4444;
+                color: var(--clover-negative);
+              }
+              .neutral {
+                color: var(--clover-neutral);
+              }
+              .footer {
+                display: flex;
+                justify-content: space-between;
+                gap: 12px;
+                padding: 14px 20px 20px;
+                color: var(--clover-muted);
+                font-size: 11px;
+              }
+              @media print {
+                body {
+                  background: white;
+                }
+                .page {
+                  padding: 0;
+                }
+                .sheet {
+                  border: none;
+                  border-radius: 0;
+                  box-shadow: none;
+                }
+                .summary-grid {
+                  background: white;
+                }
               }
             </style>
           </head>
           <body>
             <div class="page">
-              <h1>Transactions</h1>
-              <div class="meta">${escapeHtml(transactions.length.toString())} transaction${
-                transactions.length === 1 ? "" : "s"
-              }</div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Date</th>
-                    <th>Account</th>
-                    <th>Category</th>
-                    <th>Amount</th>
-                    <th>Warning</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${rows || `<tr><td colspan="6">No transactions to print.</td></tr>`}
-                </tbody>
-              </table>
+              <section class="sheet">
+                <header class="hero">
+                  <p class="hero__eyebrow">Clover</p>
+                  <h1 class="hero__title">${escapeHtml(exportTitle)}</h1>
+                  <div class="hero__meta">
+                    <span class="hero__pill">${escapeHtml(workspace?.name ?? "Selected workspace")}</span>
+                    <span class="hero__pill">${escapeHtml(String(exportedCount))} transaction${exportedCount === 1 ? "" : "s"}</span>
+                    <span class="hero__pill">PDF export</span>
+                  </div>
+                </header>
+                <section class="summary-grid">
+                  ${summaryCards
+                    .map(
+                      (card) => `
+                        <div class="summary-card">
+                          <span class="summary-card__label">${escapeHtml(card.label)}</span>
+                          <span class="summary-card__value">${escapeHtml(card.value)}</span>
+                        </div>
+                      `
+                    )
+                    .join("")}
+                </section>
+                <div class="content">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Merchant</th>
+                        <th>Account</th>
+                        <th>Category</th>
+                        <th>Type</th>
+                        <th>Amount</th>
+                        <th>Warning</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${rows || `<tr><td colspan="7">No transactions to print.</td></tr>`}
+                    </tbody>
+                  </table>
+                </div>
+                <footer class="footer">
+                  <span>Generated ${escapeHtml(new Date().toLocaleString("en-PH"))}</span>
+                  <span>Clover transactions</span>
+                </footer>
+              </section>
             </div>
-            <script>
-              window.onload = () => window.print();
-            </script>
           </body>
         </html>
       `);
       report.document.close();
+      report.focus();
+      window.setTimeout(() => {
+        report.print();
+      }, 250);
       capturePostHogClientEvent("report_exported", {
         workspace_id: selectedWorkspaceId || null,
         export_format: "pdf",
@@ -4897,16 +5008,6 @@ function TransactionsPageContent() {
           {!isCompactViewport ? <span>Download</span> : null}
         </button>
         <div className="transactions-download-menu__panel" hidden={!downloadMenuOpen}>
-          <button
-            className="transactions-download-menu__item"
-            type="button"
-            onClick={() => {
-              closeToolbarMenus();
-              downloadCsv();
-            }}
-          >
-            CSV
-          </button>
           <button
             className="transactions-download-menu__item"
             type="button"
@@ -5807,8 +5908,8 @@ function TransactionsPageContent() {
             </div>
           </dl>
 
-          <button className="transactions-summary-panel__download" type="button" onClick={downloadCsv}>
-            Download CSV
+          <button className="transactions-summary-panel__download" type="button" onClick={downloadPdf}>
+            Download PDF
           </button>
         </aside>
       </section>
