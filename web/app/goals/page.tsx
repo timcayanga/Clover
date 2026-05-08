@@ -1,4 +1,3 @@
-import nextDynamic from "next/dynamic";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -14,6 +13,7 @@ import { getEffectiveUserLimits } from "@/lib/user-limits";
 import { PostHogEvent } from "@/components/posthog-analytics";
 import { GoalsSubtabs, GoalsSubtabsTitleAddon } from "@/components/goals-subtabs";
 import { GoalsEditor } from "@/components/goals-editor-modal";
+import { GoalGlyph, GoalIllustration } from "@/components/goals-visuals";
 import { formatCurrencyAmount, formatCurrencyCode } from "@/lib/currency-format";
 import {
   GOAL_OPTIONS,
@@ -27,14 +27,6 @@ import {
   normalizeGoalPlan,
   type GoalKey,
 } from "@/lib/goals";
-
-const GoalIllustration = nextDynamic(() => import("@/components/goals-visuals").then((module) => module.GoalIllustration), {
-  loading: () => <div className="goal-illustration__art" aria-label="Loading goal illustration" />,
-});
-
-const GoalGlyph = nextDynamic(() => import("@/components/goals-visuals").then((module) => module.GoalGlyph), {
-  loading: () => <span aria-hidden="true" />,
-});
 
 export const dynamic = "force-dynamic";
 export const metadata = {
