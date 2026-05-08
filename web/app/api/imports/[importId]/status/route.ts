@@ -1,6 +1,8 @@
 import { isLocalDevHost, requireAuth } from "@/lib/auth";
 import { assertWorkspaceAccess } from "@/lib/workspace-access";
 import { fetchImportFileCompat, hasCompatibleTable } from "@/lib/data-engine";
+import { buildImportTelemetrySnapshot } from "@/lib/import-telemetry";
+import { readCheckpointWorkflowStage } from "@/lib/import-workflow";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -39,6 +41,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
         : "";
     const isDocumentImportMode = checkpointImportMode.length > 0 && checkpointImportMode !== "statement";
     const checkpointRowCount = Number(statementCheckpoint?.rowCount ?? 0);
+    const checkpointWorkflowStage = readCheckpointWorkflowStage(statementCheckpoint?.sourceMetadata);
     const selfHealDelayMs = isImageImport || isDocumentImportMode ? 2_000 : 3_000;
     const hasParsedRows = parsedRowsCountBefore > 0 || checkpointRowCount > 0;
     const hasConfirmedRows = confirmedTransactionsCountBefore > 0 || statementCheckpoint?.status === "reconciled";
@@ -50,8 +53,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
     if (shouldSelfHeal) {
       void (async () => {
         try {
-          const { processImportFileText } = await import("@/workers/import-processor");
-          await processImportFileText(importId, { actorUserId: null });
+          const { confirmImportFile, processImportFileText } = await import("@/workers/import-processor");
+          if (hasParsedRows) {
+            await confirmImportFile(importId, importFile.accountId ?? null);
+          } else {
+            await processImportFileText(importId, { actorUserId: null });
+          }
         } catch (error) {
           console.warn("Unable to self-heal stalled import status", {
             importId,
@@ -79,6 +86,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
               : parsedRowsCount > 0
                 ? "staged"
                 : "processing";
+    const telemetry = buildImportTelemetrySnapshot({
+      status: importFile.status,
+      processingPhase: importFile.processingPhase,
+      processingMessage: importFile.processingMessage,
+      parsedRowsCount,
+      confirmedTransactionsCount,
+      confirmationStatus,
+      checkpointStatus: statementCheckpoint?.status ?? null,
+      workflowStage: checkpointWorkflowStage,
+    });
+    const resolvedWorkflowStage = checkpointWorkflowStage ?? telemetry.phase;
 
     return NextResponse.json({
       importFile: {
@@ -99,6 +117,12 @@ export async function GET(_request: Request, { params }: { params: Promise<{ imp
       parsedRowsCount,
       confirmedTransactionsCount,
       confirmationStatus,
+      telemetryPhase: telemetry.phase,
+      telemetryLabel: telemetry.phaseLabel,
+      telemetryMessage: telemetry.message,
+      canResume: telemetry.canResume,
+      resumeReason: telemetry.resumeReason,
+      workflowStage: resolvedWorkflowStage,
       statementCheckpoint,
     });
   } catch {

@@ -42,6 +42,7 @@ import { ensureWorkspaceCashAccount } from "@/lib/starter-data";
 import { toInternalTransactionType } from "@/lib/transaction-directions";
 import { normalizeBankName } from "@/lib/data-qa-banks";
 import { normalizeImportImageMode, type ImportImageMode } from "@/lib/import-image-mode";
+import { mergeCheckpointSourceMetadata } from "@/lib/import-workflow";
 import { normalizeImportedAccountKey } from "@/lib/workspace-cache";
 
 type ImportInsightSummary = {
@@ -1605,17 +1606,17 @@ export const processImportFileText = async (
 
   await updateImportFileCompat(importFileId, {
     status: "processing",
-    processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "parsing",
+    processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "reading_account_details",
     processingAttempt: autoRerunAttempt,
     processingTargetScore: autoRerunEnabled ? AUTO_REPARSE_SCORE_TARGET : null,
     processingCurrentScore: null,
     processingMessage:
       autoRerunAttempt > 0
         ? `Auto-rerun ${autoRerunAttempt}/${AUTO_REPARSE_MAX_ATTEMPTS} running...`
-      : "Parsing file...",
+      : "Reading account details...",
   });
   emitImportProcessingEvent("import_processing_started", {
-    processing_phase: autoRerunAttempt > 0 ? "auto_rerunning" : "parsing",
+    processing_phase: autoRerunAttempt > 0 ? "auto_rerunning" : "reading_account_details",
   });
 
   const fileType = String(importFile.fileType ?? "");
@@ -1715,6 +1716,12 @@ export const processImportFileText = async (
     institution: metadataForParse.institution,
     accountName: metadataForParse.accountName,
     accountNumber: metadataForParse.accountNumber,
+  });
+  await updateImportFileCompat(importFileId, {
+    status: "processing",
+    processingPhase: autoRerunAttempt > 0 ? "auto_rerunning" : "identifying_transactions",
+    processingCurrentScore: null,
+    processingMessage: "Identifying transactions...",
   });
   const hasKnownInstitution = Boolean(metadataForParse.institution && metadataForParse.institution !== "Unknown");
   const gcashSuspiciouslySparse =
@@ -2265,6 +2272,7 @@ export const processImportFileText = async (
         ...resolvedMetadata,
         importMode,
         documentType: importMode,
+        workflowStage: "identifying_transactions",
       } as Prisma.InputJsonValue;
       await prisma.accountStatementCheckpoint.upsert({
         where: { importFileId },
@@ -2509,12 +2517,12 @@ export const processImportFileText = async (
       } catch (error) {
         await updateImportFileCompat(importFileId, {
           status: "failed",
-          processingPhase: "needs_retry",
+          processingPhase: "repair_needed",
           processingMessage: "Clover couldn't finish saving the import.",
         });
         emitImportProcessingEvent("import_processing_stalled", {
           processing_status: "failed",
-          processing_phase: "needs_retry",
+          processing_phase: "repair_needed",
           reason: "confirm_import_failed",
         });
         throw error;
@@ -2528,7 +2536,7 @@ export const processImportFileText = async (
           ? "complete"
           : plateaued
             ? "plateaued"
-            : "needs_retry",
+            : "repair_needed",
       processingCurrentScore: qaRunResult.evaluation.score,
       processingMessage:
         shouldMarkDone
@@ -2554,7 +2562,7 @@ export const processImportFileText = async (
     } else {
       emitImportProcessingEvent("import_processing_stalled", {
         processing_status: plateaued ? "plateaued" : "failed",
-        processing_phase: plateaued ? "plateaued" : "needs_retry",
+        processing_phase: plateaued ? "plateaued" : "repair_needed",
         final_score: qaRunResult.evaluation.score,
       });
     }
@@ -2945,6 +2953,9 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         accountId: resolvedAccountId,
         status: checkpointStatus,
         mismatchReason,
+        sourceMetadata: mergeCheckpointSourceMetadata(statementCheckpoint.sourceMetadata, {
+          workflowStage: checkpointStatus === "reconciled" ? "complete" : checkpointStatus === "mismatch" ? "repair_needed" : "reconciling",
+        }) as Prisma.InputJsonValue,
       },
     });
 
@@ -3200,6 +3211,8 @@ export const confirmImportFile = async (importFileId: string, accountId?: string
         accountId: resolvedAccountId,
         confirmedAt: new Date(),
         status: "done",
+        processingPhase: "complete",
+        processingMessage: "The file is imported and ready.",
         confirmedTransactionsCount: preparedTransactions.length + (openingBalanceInserted ? 1 : 0),
       },
       compatibleImportFileColumns

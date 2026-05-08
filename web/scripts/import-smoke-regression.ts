@@ -29,6 +29,7 @@ type ImportStatusPayload = {
   telemetryPhase?: string | null;
   telemetryLabel?: string | null;
   telemetryMessage?: string | null;
+  workflowStage?: string | null;
   canResume?: boolean | null;
   resumeReason?: string | null;
 };
@@ -147,10 +148,11 @@ const pollImport = async (importId: string, fileName: string) => {
     const confirmationStatus = payload.confirmationStatus ?? "unknown";
     const parsedRowsCount = payload.parsedRowsCount ?? 0;
     const confirmedTransactionsCount = payload.confirmedTransactionsCount ?? 0;
-    const fingerprint = `${status}:${phase}:${confirmationStatus}:${parsedRowsCount}:${confirmedTransactionsCount}`;
+    const workflowStage = payload.workflowStage ?? "unknown";
+    const fingerprint = `${status}:${phase}:${workflowStage}:${confirmationStatus}:${parsedRowsCount}:${confirmedTransactionsCount}`;
     if (transitions[transitions.length - 1] !== fingerprint) {
       transitions.push(fingerprint);
-      console.log(`[${fileName}] status=${status} phase=${phase} confirmation=${confirmationStatus} parsed=${parsedRowsCount} confirmed=${confirmedTransactionsCount}`);
+      console.log(`[${fileName}] status=${status} phase=${phase} workflow=${workflowStage} confirmation=${confirmationStatus} parsed=${parsedRowsCount} confirmed=${confirmedTransactionsCount}`);
       if (payload.telemetryMessage) {
         console.log(`  message: ${payload.telemetryMessage}`);
       }

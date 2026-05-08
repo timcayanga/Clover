@@ -55,6 +55,7 @@ const upsertUploadBankHint = async (params: {
         }
       : {}),
     ...(params.importMode ? { importMode: params.importMode } : {}),
+    workflowStage: "uploading",
     uploadHintSource: isGenericParserTraining
       ? "admin_data_qa_generic_json_upload"
       : hasBankName
@@ -214,6 +215,11 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
       }
 
       stage = "uploading raw file";
+      await updateImportFileCompat(importId, {
+        status: "processing",
+        processingPhase: "uploading",
+        processingMessage: "Uploading statement...",
+      });
       const bytes = new Uint8Array(await file.arrayBuffer());
       await uploadObject(String(importFile.storageKey ?? buildImportKey(importFile.workspaceId as string, importFile.fileName)), bytes, file.type || "application/octet-stream");
       await upsertUploadBankHint({
@@ -369,6 +375,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ im
         stage = "processing statement text";
         await updateImportFileCompat(importId, {
           status: "processing",
+          processingPhase: "reading_account_details",
+          processingMessage: "Reading account details...",
         });
 
         const { processImportFileText } = await import("@/workers/import-processor");
