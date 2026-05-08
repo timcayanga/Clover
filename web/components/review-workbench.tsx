@@ -176,6 +176,34 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
     receiptAccountMatch && typeof receiptAccountMatch.confidence === "number" ? receiptAccountMatch.confidence : null;
   const receiptAccountMatchReason =
     receiptAccountMatch && typeof receiptAccountMatch.reason === "string" ? receiptAccountMatch.reason : null;
+  const receiptAccountResolution = isRecord(currentRawPayload?.receiptAccountResolution)
+    ? currentRawPayload.receiptAccountResolution
+    : null;
+  const receiptAccountResolutionName =
+    receiptAccountResolution && typeof receiptAccountResolution.accountName === "string"
+      ? receiptAccountResolution.accountName
+      : null;
+  const receiptAccountResolutionLast4 =
+    receiptAccountResolution && typeof receiptAccountResolution.accountLast4 === "string"
+      ? receiptAccountResolution.accountLast4
+      : null;
+  const receiptAccountResolutionConfidence =
+    receiptAccountResolution && typeof receiptAccountResolution.confidence === "number"
+      ? receiptAccountResolution.confidence
+      : null;
+  const receiptAccountResolutionReason =
+    receiptAccountResolution && typeof receiptAccountResolution.reason === "string"
+      ? receiptAccountResolution.reason
+      : null;
+  const receiptPaymentMethod = typeof currentRawPayload?.paymentMethod === "string" ? currentRawPayload.paymentMethod : null;
+  const receiptPayerName = typeof currentRawPayload?.receiptPayerName === "string" ? currentRawPayload.receiptPayerName : null;
+  const receiptCurrencyWarning =
+    typeof currentRawPayload?.receiptCurrencyWarning === "string" ? currentRawPayload.receiptCurrencyWarning : null;
+  const receiptAccountMatchLabel = receiptAccountMatchName
+    ? receiptAccountMatchLast4
+      ? `${receiptAccountMatchName} ${receiptAccountMatchLast4}`
+      : receiptAccountMatchName
+    : "No clear account match";
   const draftChanged = (() => {
     if (!current || !currentDraft) {
       return false;
@@ -733,13 +761,7 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
             <div className="review-workbench__image-panel">
               <div>
                 <p className="eyebrow">Receipt match</p>
-                <strong>
-                  {receiptAccountMatchName
-                    ? receiptAccountMatchLast4
-                      ? `${receiptAccountMatchName} ${receiptAccountMatchLast4}`
-                      : receiptAccountMatchName
-                    : "No clear account match"}
-                </strong>
+                <strong>{receiptAccountMatchLabel}</strong>
                 <p className="panel-muted">
                   {receiptAccountMatchReason ??
                     "Clover will keep this row in review if the card or wallet association is not clear enough."}
@@ -748,6 +770,55 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
               <div className="review-workbench__image-score">
                 <span>Match confidence</span>
                 <strong>{receiptAccountMatchConfidence ?? 0}%</strong>
+              </div>
+            </div>
+          ) : null}
+
+          {currentImportMode === "receipt" && receiptAccountResolutionName ? (
+            <div className="review-workbench__image-panel">
+              <div>
+                <p className="eyebrow">Matched account</p>
+                <strong>
+                  {receiptAccountResolutionName}
+                  {receiptAccountResolutionLast4 ? ` ${receiptAccountResolutionLast4}` : ""}
+                </strong>
+                <p className="panel-muted">
+                  {receiptAccountResolutionReason ?? "Resolved against the workspace's saved accounts."}
+                </p>
+              </div>
+              <div className="review-workbench__image-score">
+                <span>Resolution confidence</span>
+                <strong>{receiptAccountResolutionConfidence ?? 0}%</strong>
+              </div>
+            </div>
+          ) : null}
+
+          {currentImportMode === "receipt" && receiptPaymentMethod ? (
+            <div className="review-workbench__image-panel">
+              <div>
+                <p className="eyebrow">Payment method</p>
+                <strong>{receiptPaymentMethod}</strong>
+                <p className="panel-muted">Preserved from the receipt text for confirmation before review decisions are finalized.</p>
+              </div>
+            </div>
+          ) : null}
+
+          {currentImportMode === "receipt" && receiptPayerName ? (
+            <div className="review-workbench__image-panel">
+              <div>
+                <p className="eyebrow">Payer</p>
+                <strong>{receiptPayerName}</strong>
+                <p className="panel-muted">Shown only when the receipt explicitly states who paid.</p>
+              </div>
+            </div>
+          ) : null}
+
+          {currentImportMode === "receipt" && receiptCurrencyWarning ? (
+            <div className="review-workbench__image-panel">
+              <div>
+                <p className="eyebrow">Currency warning</p>
+                <strong>{receiptCurrencyWarning}</strong>
+                <p className="panel-muted">Mixed currencies are preserved as a review signal instead of being forced into one total.</p>
               </div>
             </div>
           ) : null}
@@ -811,6 +882,33 @@ export function ReviewWorkbench({ workspaceId, workspaceName, transactions, acco
                 <strong>{current.accountName}</strong>
                 <span>source account</span>
               </li>
+              {currentImportMode === "receipt" ? (
+                <li>
+                  <strong>{receiptAccountMatchLabel}</strong>
+                  <span>
+                    receipt account match
+                    {receiptAccountMatchConfidence !== null ? ` · ${receiptAccountMatchConfidence}%` : ""}
+                  </span>
+                </li>
+              ) : null}
+              {currentImportMode === "receipt" && receiptPaymentMethod ? (
+                <li>
+                  <strong>{receiptPaymentMethod}</strong>
+                  <span>receipt payment method</span>
+                </li>
+              ) : null}
+              {currentImportMode === "receipt" && receiptPayerName ? (
+                <li>
+                  <strong>{receiptPayerName}</strong>
+                  <span>receipt payer</span>
+                </li>
+              ) : null}
+              {currentImportMode === "receipt" && receiptCurrencyWarning ? (
+                <li>
+                  <strong>Mixed currency</strong>
+                  <span>{receiptCurrencyWarning}</span>
+                </li>
+              ) : null}
               <li>
                 <strong>{currentCategoryName}</strong>
                 <span>current category</span>

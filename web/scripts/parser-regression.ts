@@ -481,6 +481,7 @@ const main = async () => {
   const importFileTextModule = await import("../lib/import-file-text.server");
   const dataEngine = await import("../lib/data-engine");
   const parser = await import("../lib/import-parser");
+  const receiptAccountResolutionModule = await import("../lib/receipt-account-resolution");
   const splitBillModule = await import("../lib/split-bill");
 
   const readUploadedFileText = importFileTextModule.readUploadedFileText as (
@@ -507,6 +508,8 @@ const main = async () => {
     merchantName: string | null;
     billDate: string | null;
     currency: string;
+    currencyMentions: string[];
+    currencyWarning: string | null;
     subtotal: string | null;
     serviceCharge: string | null;
     tax: string | null;
@@ -521,12 +524,39 @@ const main = async () => {
     receiptAccountMatch: { accountName: string | null; accountLast4: string | null; confidence: number; reason: string | null } | null;
     confidence: number;
   };
+  const resolveReceiptAccountHintToAccount = receiptAccountResolutionModule.resolveReceiptAccountHintToAccount as (
+    hint: {
+      accountName: string | null;
+      accountLast4: string | null;
+      confidence: number;
+      reason: string | null;
+    } | null,
+    accounts: Array<{
+      id: string;
+      name: string;
+      institution: string | null;
+      accountNumber: string | null;
+      type: string;
+      currency?: string | null;
+    }>
+  ) =>
+    | {
+        accountId: string;
+        accountName: string;
+        institution: string | null;
+        accountLast4: string | null;
+        confidence: number;
+        reason: string;
+      }
+    | null;
   const splitBillDraftFromReceiptPreview = splitBillModule.splitBillDraftFromReceiptPreview as (
     preview: {
       receiptText: string;
       merchantName: string | null;
       billDate: string | null;
       currency: string;
+      currencyMentions: string[];
+      currencyWarning: string | null;
       subtotal: string | null;
       serviceCharge: string | null;
       tax: string | null;
@@ -1169,6 +1199,12 @@ const main = async () => {
   if (!receiptDraft.rawPayload || receiptDraft.rawPayload.paymentMethod !== "Paid with Visa ending 4321") {
     throw new Error("expected split-bill draft to preserve payment method in raw payload");
   }
+  if (!receiptDraft.rawPayload || receiptDraft.rawPayload.receiptPayerName !== null) {
+    throw new Error("expected split-bill draft to leave payer name unset when no payer line is present");
+  }
+  if (!receiptDraft.rawPayload || receiptDraft.rawPayload.receiptCurrencyWarning !== null) {
+    throw new Error("expected split-bill draft to leave currency warning unset for single-currency receipts");
+  }
 
   const reopenedReceiptDraft = splitBillModule.splitBillDraftFromSerializedBill({
     id: "bill-receipt-test",
@@ -1211,6 +1247,46 @@ const main = async () => {
     throw new Error("expected serialized split-bill draft to preserve payment method raw payload");
   }
 
+  const mixedCurrencyPreview = parseReceiptText([
+    "THE BAKERY",
+    "Coffee PHP 50.00",
+    "Dessert $10.00",
+    "Total PHP 60.00",
+  ].join("\n"));
+  if (mixedCurrencyPreview.currencyMentions.length < 2 || !mixedCurrencyPreview.currencyWarning) {
+    throw new Error(
+      `expected mixed currency receipt to flag a warning, got mentions=${mixedCurrencyPreview.currencyMentions.join(", ") || "none"} warning=${mixedCurrencyPreview.currencyWarning ?? "null"}`
+    );
+  }
+  const mixedCurrencyDraft = splitBillDraftFromReceiptPreview(mixedCurrencyPreview);
+  if (!mixedCurrencyDraft.rawPayload || mixedCurrencyDraft.rawPayload.receiptCurrencyWarning !== mixedCurrencyPreview.currencyWarning) {
+    throw new Error("expected mixed currency warning to persist in split-bill raw payload");
+  }
+
+  const payerReceiptPreview = parseReceiptText([
+    "THE BAKERY",
+    "Paid by Alice",
+    "Sandwich 60.00",
+    "Total 60.00",
+  ].join("\n"));
+  if (payerReceiptPreview.receiptPayerName !== "Alice") {
+    throw new Error(`expected receipt parser to capture payer name Alice, got ${payerReceiptPreview.receiptPayerName ?? "null"}`);
+  }
+  const payerReceiptDraft = splitBillDraftFromReceiptPreview(payerReceiptPreview);
+  if (payerReceiptDraft.participants.length !== 1 || payerReceiptDraft.participants[0]?.name !== "Alice") {
+    throw new Error(
+      `expected payer receipt draft to seed Alice as the sole participant, got ${payerReceiptDraft.participants.map((participant) => participant.name).join(", ") || "none"}`
+    );
+  }
+  if (payerReceiptDraft.payments.length !== 1 || payerReceiptDraft.payments[0]?.amount !== "60.00") {
+    throw new Error(
+      `expected payer receipt draft to seed a 60.00 payment, got ${payerReceiptDraft.payments.map((payment) => payment.amount).join(", ") || "none"}`
+    );
+  }
+  if (!payerReceiptDraft.rawPayload || payerReceiptDraft.rawPayload.receiptPayerName !== "Alice") {
+    throw new Error("expected payer receipt draft to preserve receiptPayerName in raw payload");
+  }
+
   const alternatePaymentMethodPreview = parseReceiptText([
     "THE BAKERY",
     "Method of Payment: GCash",
@@ -1221,6 +1297,62 @@ const main = async () => {
     throw new Error(
       `expected alternate payment method line to be preserved, got ${alternatePaymentMethodPreview.paymentMethod ?? "null"}`
     );
+  }
+
+  const resolvedReceiptAccount = resolveReceiptAccountHintToAccount(
+    {
+      accountName: "Visa",
+      accountLast4: "4321",
+      confidence: 95,
+      reason: "explicit receipt hint",
+    },
+    [
+      {
+        id: "acct-visa-1",
+        name: "Visa 4321",
+        institution: "BPI",
+        accountNumber: "**** 4321",
+        type: "credit_card",
+      },
+      {
+        id: "acct-wallet-1",
+        name: "GCash 9926",
+        institution: "GCash",
+        accountNumber: "09173009926",
+        type: "wallet",
+      },
+    ]
+  );
+  if (!resolvedReceiptAccount || resolvedReceiptAccount.accountId !== "acct-visa-1") {
+    throw new Error(`expected receipt account hint to resolve to Visa 4321, got ${resolvedReceiptAccount?.accountId ?? "null"}`);
+  }
+
+  const ambiguousReceiptAccount = resolveReceiptAccountHintToAccount(
+    {
+      accountName: "Visa",
+      accountLast4: "4321",
+      confidence: 95,
+      reason: "explicit receipt hint",
+    },
+    [
+      {
+        id: "acct-visa-1",
+        name: "Visa 4321",
+        institution: "BPI",
+        accountNumber: "**** 4321",
+        type: "credit_card",
+      },
+      {
+        id: "acct-visa-2",
+        name: "Visa 4321",
+        institution: "BDO",
+        accountNumber: "9999 4321",
+        type: "credit_card",
+      },
+    ]
+  );
+  if (ambiguousReceiptAccount !== null) {
+    throw new Error("expected ambiguous receipt account hint to stay unresolved");
   }
 
   const equalSplitReceiptPreview = parseReceiptText([
@@ -1265,6 +1397,179 @@ const main = async () => {
   const equalSplitMultiNameAmounts = equalSplitMultiNamePreview.splitAllocations.map((allocation) => allocation.paid ?? allocation.charged ?? allocation.due ?? "0.00").sort();
   if (equalSplitMultiNameAmounts.some((amount) => amount !== "33.00")) {
     throw new Error(`expected multi-name equal-split receipt to derive 33.00 shares, got ${equalSplitMultiNameAmounts.join(", ")}`);
+  }
+
+  const namedItemReceiptPreview = parseReceiptText([
+    "THE BAKERY",
+    "Alice Burger 100.00",
+    "Bob Fries 50.00",
+    "Total 150.00",
+    "Share summary",
+    "Alice",
+    "Bob",
+  ].join("\n"));
+  const namedItemDraft = splitBillDraftFromReceiptPreview(namedItemReceiptPreview);
+  const namedItemAssignments = namedItemDraft.items.map((item) => item.participantIds.length);
+  if (namedItemAssignments[0] !== 1 || namedItemAssignments[1] !== 1) {
+    throw new Error(
+      `expected named items to infer individual participant assignments, got ${namedItemAssignments.join(", ")}`
+    );
+  }
+  const namedItemParticipantIds = namedItemDraft.items.map((item) => item.participantIds[0] ?? "");
+  if (namedItemParticipantIds[0] === namedItemParticipantIds[1] || !namedItemParticipantIds[0] || !namedItemParticipantIds[1]) {
+    throw new Error("expected named items to assign different participant ids for Alice and Bob");
+  }
+  const namedItemSettlement = splitBillModule.buildSplitBillSettlement({
+    participants: namedItemDraft.participants.map((participant) => ({
+      id: participant.id ?? "",
+      name: participant.name,
+    })),
+    items: namedItemDraft.items.map((item) => ({
+      amount: item.amount,
+      participantIds: item.participantIds,
+    })),
+    payments: namedItemDraft.payments.map((payment) => ({
+      participantId: payment.participantId,
+      amount: payment.amount,
+    })),
+    serviceCharge: namedItemDraft.serviceCharge,
+    tax: namedItemDraft.tax,
+    tip: namedItemDraft.tip,
+    rounding: namedItemDraft.rounding,
+    discount: namedItemDraft.discount,
+  });
+  const namedItemOwed = namedItemSettlement.participants
+    .map((participant) => participant.owed)
+    .sort((left, right) => left - right);
+  if (namedItemOwed[0] !== 50 || namedItemOwed[1] !== 100) {
+    throw new Error(`expected named item settlement to be uneven, got owed=${namedItemOwed.map((value) => value.toFixed(2)).join(", ")}`);
+  }
+
+  const weightedSummarySettlement = splitBillModule.buildSplitBillSettlement({
+    participants: [
+      { id: "alice", name: "Alice" },
+      { id: "bob", name: "Bob" },
+    ],
+    items: [
+      {
+        amount: "100.00",
+        participantIds: ["alice"],
+      },
+      {
+        amount: "50.00",
+        participantIds: ["bob"],
+      },
+    ],
+    payments: [],
+    serviceCharge: "15.00",
+    tip: "15.00",
+    discount: "0.00",
+  });
+  const weightedSummaryOwed = weightedSummarySettlement.participants
+    .map((participant) => participant.owed)
+    .sort((left, right) => left - right);
+  if (weightedSummaryOwed[0].toFixed(2) !== "60.00" || weightedSummaryOwed[1].toFixed(2) !== "120.00") {
+    throw new Error(
+      `expected weighted summary settlement to distribute service charge and tip proportionally, got owed=${weightedSummaryOwed.map((value) => value.toFixed(2)).join(", ")}`
+    );
+  }
+  if (weightedSummarySettlement.totalOwed.toFixed(2) !== "180.00") {
+    throw new Error(`expected weighted summary settlement total owed to be 180.00, got ${weightedSummarySettlement.totalOwed.toFixed(2)}`);
+  }
+
+  const summarySettlement = splitBillModule.buildSplitBillSettlement({
+    participants: [
+      { id: "alice", name: "Alice" },
+      { id: "bob", name: "Bob" },
+    ],
+    items: [
+      {
+        amount: "100.00",
+        participantIds: ["alice", "bob"],
+      },
+    ],
+    payments: [],
+    serviceCharge: "10.00",
+    tip: "10.00",
+    discount: "0.00",
+  });
+  const summaryOwed = summarySettlement.participants.map((participant) => participant.owed.toFixed(2)).sort();
+  if (summaryOwed[0] !== "60.00" || summaryOwed[1] !== "60.00" || summarySettlement.totalOwed.toFixed(2) !== "120.00") {
+    throw new Error(
+      `expected summary settlement to include service charge and tip, got owed=${summaryOwed.join(", ")} totalOwed=${summarySettlement.totalOwed.toFixed(2)}`
+    );
+  }
+
+  const restoredSummaryDraft = splitBillModule.splitBillDraftFromSerializedBill({
+    id: "summary-bill",
+    userId: "workspace-test",
+    groupId: null,
+    title: "Summary bill",
+    note: null,
+    billDate: "2026-01-12T00:00:00.000Z",
+    currency: "PHP",
+    sourceType: "receipt",
+    merchantName: "THE BAKERY",
+    receiptFileName: null,
+    receiptMimeType: null,
+    receiptText: null,
+    receiptConfidence: 90,
+    subtotal: "100.00",
+    tax: "0.00",
+    tip: "10.00",
+    discount: "0.00",
+    total: "110.00",
+    rawPayload: {
+      receiptSummary: {
+        subtotal: "100.00",
+        serviceCharge: "5.00",
+        rounding: "0.00",
+      },
+    },
+    createdAt: "2026-01-12T00:00:00.000Z",
+    updatedAt: "2026-01-12T00:00:00.000Z",
+    group: null,
+    participants: [],
+    items: [],
+    payments: [],
+    settlement: {
+      participants: [],
+      transfers: [],
+      totalSpent: 0,
+      totalPaid: 0,
+      totalOwed: 0,
+    },
+  });
+  if (restoredSummaryDraft.serviceCharge !== "5.00" || restoredSummaryDraft.rounding !== "0.00") {
+    throw new Error(
+      `expected serialized split bill to restore receipt summary fields, got serviceCharge=${restoredSummaryDraft.serviceCharge ?? "null"} rounding=${restoredSummaryDraft.rounding ?? "null"}`
+    );
+  }
+
+  const mergedReceiptPayload = splitBillModule.mergeSplitBillReceiptSummary(
+    {
+      foo: "bar",
+      receiptSummary: {
+        subtotal: "100.00",
+      },
+    },
+    {
+      serviceCharge: "5.00",
+      rounding: "0.00",
+      total: "105.00",
+    }
+  ) as Record<string, unknown>;
+  if (!mergedReceiptPayload.receiptSummary || typeof mergedReceiptPayload.receiptSummary !== "object") {
+    throw new Error("expected merged receipt payload to include receiptSummary");
+  }
+  const mergedReceiptSummary = mergedReceiptPayload.receiptSummary as Record<string, unknown>;
+  if (
+    mergedReceiptSummary.subtotal !== "100.00" ||
+    mergedReceiptSummary.serviceCharge !== "5.00" ||
+    mergedReceiptSummary.rounding !== "0.00" ||
+    mergedReceiptSummary.total !== "105.00"
+  ) {
+    throw new Error("expected merged receipt summary to preserve and update fields");
   }
 
   const chinaBankProbe = detectStatementMetadataFromText("China Bank Statement of Account\nStatement Period Aug. 01, 2024 To Aug. 31, 2024");

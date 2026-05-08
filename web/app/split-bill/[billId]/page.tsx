@@ -38,6 +38,9 @@ const formatDate = (value: string) =>
     year: "numeric",
   });
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  Boolean(value) && typeof value === "object" && !Array.isArray(value);
+
 export default async function SplitBillDetailPage({ params }: { params: Promise<{ billId: string }> }) {
   const user = await getSplitBillCurrentUser();
   const { billId } = await params;
@@ -55,6 +58,58 @@ export default async function SplitBillDetailPage({ params }: { params: Promise<
   }
 
   const splitBill = serializeSplitBillRecord(bill as Parameters<typeof serializeSplitBillRecord>[0]);
+  const receiptAccountMatch = isRecord(splitBill.rawPayload?.receiptAccountMatch)
+    ? splitBill.rawPayload.receiptAccountMatch
+    : null;
+  const receiptAccountMatchName =
+    receiptAccountMatch && typeof receiptAccountMatch.accountName === "string" ? receiptAccountMatch.accountName : null;
+  const receiptAccountMatchLast4 =
+    receiptAccountMatch && typeof receiptAccountMatch.accountLast4 === "string" ? receiptAccountMatch.accountLast4 : null;
+  const receiptAccountMatchConfidence =
+    receiptAccountMatch && typeof receiptAccountMatch.confidence === "number" ? receiptAccountMatch.confidence : null;
+  const receiptAccountMatchReason =
+    receiptAccountMatch && typeof receiptAccountMatch.reason === "string" ? receiptAccountMatch.reason : null;
+  const receiptAccountResolution = isRecord(splitBill.rawPayload?.receiptAccountResolution)
+    ? splitBill.rawPayload.receiptAccountResolution
+    : null;
+  const receiptAccountResolutionName =
+    receiptAccountResolution && typeof receiptAccountResolution.accountName === "string"
+      ? receiptAccountResolution.accountName
+      : null;
+  const receiptAccountResolutionLast4 =
+    receiptAccountResolution && typeof receiptAccountResolution.accountLast4 === "string"
+      ? receiptAccountResolution.accountLast4
+      : null;
+  const receiptAccountResolutionConfidence =
+    receiptAccountResolution && typeof receiptAccountResolution.confidence === "number"
+      ? receiptAccountResolution.confidence
+      : null;
+  const receiptAccountResolutionReason =
+    receiptAccountResolution && typeof receiptAccountResolution.reason === "string"
+      ? receiptAccountResolution.reason
+      : null;
+  const receiptPaymentMethod =
+    splitBill.rawPayload && typeof splitBill.rawPayload.paymentMethod === "string"
+      ? splitBill.rawPayload.paymentMethod
+      : null;
+  const receiptPayerName =
+    splitBill.rawPayload && typeof splitBill.rawPayload.receiptPayerName === "string"
+      ? splitBill.rawPayload.receiptPayerName
+      : null;
+  const receiptCurrencyWarning =
+    splitBill.rawPayload && typeof splitBill.rawPayload.receiptCurrencyWarning === "string"
+      ? splitBill.rawPayload.receiptCurrencyWarning
+      : null;
+  const receiptSummary = isRecord(splitBill.rawPayload?.receiptSummary) ? splitBill.rawPayload.receiptSummary : null;
+  const receiptSummaryServiceCharge =
+    receiptSummary && typeof receiptSummary.serviceCharge === "string" ? receiptSummary.serviceCharge : null;
+  const receiptSummaryRounding =
+    receiptSummary && typeof receiptSummary.rounding === "string" ? receiptSummary.rounding : null;
+  const receiptAccountMatchLabel = receiptAccountMatchName
+    ? receiptAccountMatchLast4
+      ? `${receiptAccountMatchName} ${receiptAccountMatchLast4}`
+      : receiptAccountMatchName
+    : null;
 
   return (
     <CloverShell
@@ -224,6 +279,97 @@ export default async function SplitBillDetailPage({ params }: { params: Promise<
                 <strong>{formatDate(splitBill.createdAt)}</strong>
               </div>
             </div>
+
+            {(splitBill.subtotal || splitBill.tax || splitBill.tip || splitBill.discount || splitBill.total) ? (
+              <div className="split-bill-detail__receipt-match">
+                <h3>Receipt totals</h3>
+                <div className="split-bill-detail__meta-grid">
+                  <div>
+                    <span>Subtotal</span>
+                    <strong>{splitBill.subtotal ? formatSplitBillAmount(Number(splitBill.subtotal), splitBill.currency) : "—"}</strong>
+                  </div>
+                  <div>
+                    <span>Service charge</span>
+                    <strong>
+                      {receiptSummaryServiceCharge ? formatSplitBillAmount(Number(receiptSummaryServiceCharge), splitBill.currency) : "—"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Tax</span>
+                    <strong>{splitBill.tax ? formatSplitBillAmount(Number(splitBill.tax), splitBill.currency) : "—"}</strong>
+                  </div>
+                  <div>
+                    <span>Tip</span>
+                    <strong>{splitBill.tip ? formatSplitBillAmount(Number(splitBill.tip), splitBill.currency) : "—"}</strong>
+                  </div>
+                  <div>
+                    <span>Rounding</span>
+                    <strong>{receiptSummaryRounding ? formatSplitBillAmount(Number(receiptSummaryRounding), splitBill.currency) : "—"}</strong>
+                  </div>
+                  <div>
+                    <span>Discount</span>
+                    <strong>{splitBill.discount ? formatSplitBillAmount(Number(splitBill.discount), splitBill.currency) : "—"}</strong>
+                  </div>
+                  <div>
+                    <span>Total</span>
+                    <strong>{splitBill.total ? formatSplitBillAmount(Number(splitBill.total), splitBill.currency) : "—"}</strong>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
+            {splitBill.sourceType === "receipt" ? (
+              <div className="split-bill-detail__receipt-match">
+                <h3>Receipt match</h3>
+                <strong>{receiptAccountMatchLabel ?? "No clear account match"}</strong>
+                <p className="panel-muted">
+                  {receiptAccountMatchReason ?? "Clover keeps the receipt account clue in the saved bill for review."}
+                </p>
+                {receiptAccountMatchConfidence !== null ? (
+                  <span className="split-bill-detail__receipt-confidence">{receiptAccountMatchConfidence}% confidence</span>
+                ) : null}
+              </div>
+            ) : null}
+
+            {splitBill.sourceType === "receipt" && receiptAccountResolutionName ? (
+              <div className="split-bill-detail__receipt-match">
+                <h3>Matched account</h3>
+                <strong>
+                  {receiptAccountResolutionName}
+                  {receiptAccountResolutionLast4 ? ` ${receiptAccountResolutionLast4}` : ""}
+                </strong>
+                <p className="panel-muted">{receiptAccountResolutionReason ?? "Resolved against saved accounts."}</p>
+                {receiptAccountResolutionConfidence !== null ? (
+                  <span className="split-bill-detail__receipt-confidence">
+                    {receiptAccountResolutionConfidence}% confidence
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
+
+            {splitBill.sourceType === "receipt" && receiptPaymentMethod ? (
+              <div className="split-bill-detail__receipt-match">
+                <h3>Receipt payment method</h3>
+                <strong>{receiptPaymentMethod}</strong>
+                <p className="panel-muted">Stored from the receipt text so the original payment wording stays visible.</p>
+              </div>
+            ) : null}
+
+            {splitBill.sourceType === "receipt" && receiptPayerName ? (
+              <div className="split-bill-detail__receipt-match">
+                <h3>Receipt payer</h3>
+                <strong>{receiptPayerName}</strong>
+                <p className="panel-muted">Stored from the receipt text when the payer is explicitly stated.</p>
+              </div>
+            ) : null}
+
+            {splitBill.sourceType === "receipt" && receiptCurrencyWarning ? (
+              <div className="split-bill-detail__receipt-match">
+                <h3>Currency warning</h3>
+                <strong>{receiptCurrencyWarning}</strong>
+                <p className="panel-muted">Mixed-currency receipts are kept reviewable instead of being flattened.</p>
+              </div>
+            ) : null}
 
             {splitBill.receiptText ? (
               <div className="split-bill-detail__receipt-text">

@@ -8,6 +8,7 @@ import { deriveReconciledBalance, type BalanceLikeTransaction } from "@/lib/acco
 import { countNonCashAccounts, getWorkspaceOwnerLimits } from "@/lib/plan-access";
 import { normalizeInstitutionCurrency, parseAmountValue, parseDateValue, parseImportText } from "@/lib/import-parser";
 import { readImportedFileImageDataUrls, readImportedFileText, readImportedPdfPageImages } from "@/lib/import-file-text.server";
+import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import {
   DATA_ENGINE_VERSION,
   applyDataQaReviewLearning,
@@ -161,6 +162,128 @@ const shouldRouteToReview = (params: { confidence: number; categoryName?: string
   }
 
   return false;
+};
+
+const assessReceiptExtractionQuality = (params: {
+  receiptDetails: {
+    merchant_raw: string | null;
+    merchant_clean: string | null;
+    transaction_date: string | null;
+    currency: string | null;
+    subtotal: number | null;
+    tax: number | null;
+    service_charge: number | null;
+    discount: number | null;
+    tip: number | null;
+    total: number | null;
+    payment_method: string | null;
+    line_items: Array<unknown>;
+    split_allocations: Array<unknown>;
+  } | null;
+  expectedCurrency?: string | null;
+}) => {
+  const details = params.receiptDetails;
+  if (!details) {
+    return {
+      score: 0,
+      issues: ["missing receipt details"],
+    };
+  }
+
+  const issues: string[] = [];
+  let score = 0;
+
+  if (details.merchant_raw || details.merchant_clean) {
+    score += 2;
+  } else {
+    issues.push("merchant missing");
+  }
+
+  if (details.transaction_date) {
+    score += 2;
+  } else {
+    issues.push("date missing");
+  }
+
+  if (details.total !== null) {
+    score += 2;
+  } else {
+    issues.push("total missing");
+  }
+
+  if (details.line_items.length > 0) {
+    score += 2;
+  }
+
+  if (details.split_allocations.length > 0) {
+    score += 2;
+  }
+
+  if (details.payment_method) {
+    score += 1;
+  }
+
+  if (details.subtotal !== null) {
+    score += 1;
+  }
+
+  if (details.tax !== null) {
+    score += 1;
+  }
+
+  if (details.service_charge !== null) {
+    score += 1;
+  }
+
+  if (details.discount !== null) {
+    score += 1;
+  }
+
+  if (details.tip !== null) {
+    score += 1;
+  }
+
+  if (
+    details.subtotal !== null &&
+    details.total !== null &&
+    Number.isFinite(details.subtotal) &&
+    Number.isFinite(details.total) &&
+    Math.abs(details.subtotal + (details.tax ?? 0) + (details.service_charge ?? 0) + (details.tip ?? 0) - (details.discount ?? 0) - details.total) > 0.1
+  ) {
+    issues.push("summary totals do not reconcile");
+    score -= 2;
+  }
+
+  if (
+    details.line_items.length > 0 &&
+    details.total !== null &&
+    Number.isFinite(details.total) &&
+    details.line_items.length === 1 &&
+    !details.merchant_raw &&
+    !details.merchant_clean
+  ) {
+    issues.push("single line item with weak merchant identity");
+    score -= 1;
+  }
+
+  if (
+    params.expectedCurrency &&
+    details.currency &&
+    params.expectedCurrency.trim().toUpperCase() !== details.currency.trim().toUpperCase()
+  ) {
+    issues.push(`currency mismatch: ${details.currency} vs ${params.expectedCurrency}`);
+    score -= 1;
+  }
+
+  if (!details.merchant_raw && !details.merchant_clean && details.total === null && details.line_items.length === 0 && details.split_allocations.length === 0) {
+    issues.push("sparse receipt parse");
+    score -= 4;
+  }
+
+  return {
+    score: Math.max(0, Math.min(10, score)),
+    issues,
+  };
 };
 
 const countRowsWithParseableDates = (rows: Array<{ date?: string | null }>) =>
@@ -1830,8 +1953,35 @@ export const processImportFileText = async (
           startDate: typeof templateMetadata?.startDate === "string" ? templateMetadata.startDate : null,
           endDate: typeof templateMetadata?.endDate === "string" ? templateMetadata.endDate : null,
         }
-      )
+    )
     : null;
+
+  const openAiReceiptValidation =
+    importMode === "receipt"
+      ? assessReceiptExtractionQuality({
+          receiptDetails: openAiParsed?.receiptDetails ?? null,
+          expectedCurrency: openAiMetadata?.currency ?? metadataForParse.currency ?? null,
+        })
+      : null;
+  const receiptAccountResolution =
+    importMode === "receipt" && openAiParsed?.receiptAccountMatch
+      ? await (async () => {
+          const compatibleAccountColumns = await getCompatibleAccountColumns();
+          const workspaceAccounts = await prisma.account.findMany({
+            where: { workspaceId: importFile.workspaceId },
+            select: getCompatibleAccountSelect(compatibleAccountColumns),
+          });
+          return resolveReceiptAccountHintToAccount(
+            {
+              accountName: openAiParsed.receiptAccountMatch.account_name ?? null,
+              accountLast4: openAiParsed.receiptAccountMatch.account_last4 ?? null,
+              confidence: openAiParsed.receiptAccountMatch.confidence ?? 0,
+              reason: openAiParsed.receiptAccountMatch.reason ?? null,
+            },
+            workspaceAccounts
+          );
+        })()
+      : null;
 
   const imageTranscriptRequiresRetry = Boolean(imageImport && pageImages?.length);
   const openAiResultLooksSparse =
@@ -1839,6 +1989,7 @@ export const processImportFileText = async (
     (importMode === "statement" && (openAiParsed.rows.length === 0 || !openAiMetadata?.accountNumber)) ||
     (importMode === "receipt" &&
       (!openAiParsed.receiptDetails ||
+        (openAiReceiptValidation !== null && openAiReceiptValidation.score < 3) ||
         (!openAiParsed.receiptDetails.merchant_raw &&
           !openAiParsed.receiptDetails.total &&
           openAiParsed.receiptDetails.line_items.length === 0 &&
@@ -1882,20 +2033,30 @@ export const processImportFileText = async (
         }
 
         if (transcriptImportMode === "receipt") {
+          const existingValidation = assessReceiptExtractionQuality({
+            receiptDetails: openAiParsed.receiptDetails ?? null,
+            expectedCurrency: openAiMetadata?.currency ?? metadataForParse.currency ?? null,
+          });
+          const transcriptValidation = assessReceiptExtractionQuality({
+            receiptDetails: transcriptParsed.receiptDetails ?? null,
+            expectedCurrency: openAiMetadata?.currency ?? metadataForParse.currency ?? null,
+          });
           const existingScore =
             Number(openAiParsed.receiptDetails?.merchant_raw ? 1 : 0) +
             Number(openAiParsed.receiptDetails?.merchant_clean ? 1 : 0) +
             Number(openAiParsed.receiptDetails?.total !== null ? 1 : 0) +
             Number(openAiParsed.receiptDetails?.transaction_date ? 1 : 0) +
             Number((openAiParsed.receiptDetails?.line_items.length ?? 0) > 0 ? 1 : 0) +
-            Number((openAiParsed.receiptDetails?.split_allocations.length ?? 0) > 0 ? 1 : 0);
+            Number((openAiParsed.receiptDetails?.split_allocations.length ?? 0) > 0 ? 1 : 0) +
+            existingValidation.score;
           const transcriptScore =
             Number(transcriptParsed.receiptDetails?.merchant_raw ? 1 : 0) +
             Number(transcriptParsed.receiptDetails?.merchant_clean ? 1 : 0) +
             Number(transcriptParsed.receiptDetails?.total !== null ? 1 : 0) +
             Number(transcriptParsed.receiptDetails?.transaction_date ? 1 : 0) +
             Number((transcriptParsed.receiptDetails?.line_items.length ?? 0) > 0 ? 1 : 0) +
-            Number((transcriptParsed.receiptDetails?.split_allocations.length ?? 0) > 0 ? 1 : 0);
+            Number((transcriptParsed.receiptDetails?.split_allocations.length ?? 0) > 0 ? 1 : 0) +
+            transcriptValidation.score;
           return transcriptScore > existingScore;
         }
 
@@ -2056,6 +2217,9 @@ export const processImportFileText = async (
     usedOpenAiFallback: Boolean(useOpenAiParse),
     usedDeterministicParser: !useOpenAiParse,
   } as Prisma.InputJsonValue;
+  const resolvedReceiptAccountId = receiptAccountResolution?.accountId ?? null;
+  const documentImportAccountId =
+    importMode === "receipt" ? importFile.account?.id ?? resolvedReceiptAccountId : importFile.account?.id ?? null;
   const documentImportExtractedPayload = {
     metadata: resolvedMetadata,
     rowCount: rows.length,
@@ -2068,20 +2232,22 @@ export const processImportFileText = async (
       type: row.type ?? null,
       confidence: row.confidence ?? null,
     })),
+    receiptValidation: importMode === "receipt" ? openAiReceiptValidation : null,
+    receiptAccountResolution,
     openAiAudit: openAiParsed?.audit
       ? {
-          model: openAiParsed.model,
+        model: openAiParsed.model,
           promptVersion: openAiParsed.promptVersion,
           confidence: openAiParsed.audit.confidence,
           schemaValidated: openAiParsed.audit.schemaValidated,
           schemaValidationResult: openAiParsed.audit.schemaValidationResult,
         }
       : null,
-  } as Prisma.InputJsonValue;
+    } as Prisma.InputJsonValue;
   const documentImportRecord = await upsertDocumentImportCompat({
     workspaceId: String(importFile.workspaceId),
     importFileId,
-    accountId: importFile.account?.id ?? null,
+    accountId: documentImportAccountId,
     documentFamily: importMode,
     documentSubtype:
       importMode === "receipt"
@@ -2147,10 +2313,11 @@ export const processImportFileText = async (
   if (documentImportRecord && importMode === "receipt") {
     const receiptDetails = openAiParsed?.receiptDetails ?? null;
     const receiptAccountMatch = openAiParsed?.receiptAccountMatch ?? null;
+    const receiptValidation = openAiReceiptValidation;
     await upsertReceiptDocumentCompat({
       workspaceId: String(importFile.workspaceId),
       documentImportId: documentImportRecord.id,
-      accountId: importFile.account?.id ?? null,
+      accountId: documentImportAccountId,
       transactionId: null,
       merchantRaw: receiptDetails?.merchant_raw ?? null,
       merchantClean: receiptDetails?.merchant_clean ?? null,
@@ -2174,7 +2341,9 @@ export const processImportFileText = async (
         documentType: importMode,
         metadata: resolvedMetadata,
         receiptAccountMatch,
+        receiptAccountResolution,
         receiptDetails,
+        receiptValidation,
         rowCount: rows.length,
         pageCount: pageImages?.length ?? 0,
       } as Prisma.InputJsonValue,

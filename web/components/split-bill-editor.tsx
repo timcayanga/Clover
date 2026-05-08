@@ -7,6 +7,7 @@ import {
   buildSplitBillSettlement,
   createBlankSplitBillDraft,
   formatSplitBillAmount,
+  mergeSplitBillReceiptSummary,
   splitBillDraftFromReceiptPreview,
   splitBillDraftFromSerializedBill,
   type ReceiptPreviewResult,
@@ -84,6 +85,16 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
       }
 
       const receiptDraft = splitBillDraftFromReceiptPreview(payload.preview);
+      const receiptParticipants =
+        receiptDraft.participants.length > 0
+          ? receiptDraft.participants.map((participant) => ({
+              ...participant,
+              id: createDraftId(),
+            }))
+          : [];
+      const receiptParticipantIdMap = new Map(
+        receiptDraft.participants.map((participant, index) => [participant.id, receiptParticipants[index]?.id ?? participant.id])
+      );
 
       setDraft((current) => ({
         ...current,
@@ -101,11 +112,30 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
         tip: receiptDraft.tip,
         discount: receiptDraft.discount,
         total: receiptDraft.total,
+        rawPayload: receiptDraft.rawPayload,
+        participants: receiptParticipants.length > 0 ? receiptParticipants : current.participants,
         items: receiptDraft.items.map((item) => ({
           ...item,
           id: createDraftId(),
           participantIds: [],
         })),
+        payments:
+          receiptDraft.payments.length > 0
+            ? receiptDraft.payments.map((payment) => ({
+                ...payment,
+                id: createDraftId(),
+                participantId: receiptParticipantIdMap.get(payment.participantId) ?? payment.participantId,
+              }))
+            : receiptParticipants.length > 0
+              ? [
+                  {
+                    id: createDraftId(),
+                    participantId: receiptParticipants[0]?.id ?? current.payments[0]?.participantId ?? "",
+                    amount: "",
+                    note: "",
+                  },
+                ]
+              : current.payments,
       }));
     } catch {
       // Ignore malformed preview state and fall back to the blank draft.
@@ -115,6 +145,54 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
   }, [initialBill, mode]);
 
   const selectedGroup = groups.find((group) => group.id === draft.groupId) ?? null;
+  const receiptAccountMatch = (() => {
+    const payload = draft.rawPayload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return null;
+    }
+
+    const candidate = (payload as Record<string, unknown>).receiptAccountMatch;
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      return null;
+    }
+
+    return candidate as Record<string, unknown>;
+  })();
+  const receiptAccountMatchName =
+    typeof receiptAccountMatch?.accountName === "string" ? receiptAccountMatch.accountName : null;
+  const receiptAccountMatchLast4 =
+    typeof receiptAccountMatch?.accountLast4 === "string" ? receiptAccountMatch.accountLast4 : null;
+  const receiptAccountMatchConfidence =
+    typeof receiptAccountMatch?.confidence === "number" ? receiptAccountMatch.confidence : null;
+  const receiptAccountMatchReason =
+    typeof receiptAccountMatch?.reason === "string" ? receiptAccountMatch.reason : null;
+  const receiptAccountResolution = (() => {
+    const payload = draft.rawPayload;
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+      return null;
+    }
+
+    const candidate = (payload as Record<string, unknown>).receiptAccountResolution;
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      return null;
+    }
+
+    return candidate as Record<string, unknown>;
+  })();
+  const receiptAccountResolutionName =
+    typeof receiptAccountResolution?.accountName === "string" ? receiptAccountResolution.accountName : null;
+  const receiptAccountResolutionLast4 =
+    typeof receiptAccountResolution?.accountLast4 === "string" ? receiptAccountResolution.accountLast4 : null;
+  const receiptAccountResolutionConfidence =
+    typeof receiptAccountResolution?.confidence === "number" ? receiptAccountResolution.confidence : null;
+  const receiptAccountResolutionReason =
+    typeof receiptAccountResolution?.reason === "string" ? receiptAccountResolution.reason : null;
+  const receiptRawPayload = draft.rawPayload && typeof draft.rawPayload === "object" && !Array.isArray(draft.rawPayload)
+    ? draft.rawPayload
+    : null;
+  const paymentMethod = typeof receiptRawPayload?.paymentMethod === "string" ? receiptRawPayload.paymentMethod : null;
+  const receiptPayerName = typeof receiptRawPayload?.receiptPayerName === "string" ? receiptRawPayload.receiptPayerName : null;
+  const receiptCurrencyWarning = typeof receiptRawPayload?.receiptCurrencyWarning === "string" ? receiptRawPayload.receiptCurrencyWarning : null;
   const settlement = buildSplitBillSettlement({
     participants: draft.participants
       .map((participant) => ({ id: participant.id ?? createDraftId(), name: participant.name.trim() }))
@@ -131,6 +209,11 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
         amount: payment.amount,
       }))
       .filter((payment) => payment.participantId || payment.amount !== ""),
+    serviceCharge: draft.serviceCharge,
+    tax: draft.tax,
+    tip: draft.tip,
+    rounding: draft.rounding,
+    discount: draft.discount,
   });
 
   const participantOptions = draft.participants.filter(
@@ -310,6 +393,7 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
           tip: receiptDraft.tip,
           discount: receiptDraft.discount,
           total: receiptDraft.total,
+          rawPayload: receiptDraft.rawPayload,
           items: receiptDraft.items.map((item) => ({
             ...item,
             id: createDraftId(),
@@ -364,6 +448,15 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
         participants,
         items,
         payments,
+        rawPayload: mergeSplitBillReceiptSummary(draft.rawPayload, {
+          subtotal: draft.subtotal?.trim() || null,
+          serviceCharge: draft.serviceCharge?.trim() || null,
+          tax: draft.tax?.trim() || null,
+          tip: draft.tip?.trim() || null,
+          rounding: draft.rounding?.trim() || null,
+          discount: draft.discount?.trim() || null,
+          total: draft.total?.trim() || null,
+        }),
       };
 
       const response = await fetch(mode === "edit" && initialBill ? `/api/split-bills/${initialBill.id}` : "/api/split-bills", {
@@ -682,6 +775,54 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
                 placeholder="OCR output or manual notes"
               />
             </label>
+
+            {receiptAccountMatchName ? (
+              <div className="split-bill-editor__receipt-match">
+                <span className="panel-muted">Likely paying account</span>
+                <strong>
+                  {receiptAccountMatchName}
+                  {receiptAccountMatchLast4 ? ` ${receiptAccountMatchLast4}` : ""}
+                </strong>
+                <small>
+                  {receiptAccountMatchReason ?? "Detected from the receipt text"}
+                  {receiptAccountMatchConfidence !== null ? ` · ${receiptAccountMatchConfidence}% confidence` : ""}
+                </small>
+              </div>
+            ) : null}
+            {receiptAccountResolutionName ? (
+              <div className="split-bill-editor__receipt-match">
+                <span className="panel-muted">Matched account</span>
+                <strong>
+                  {receiptAccountResolutionName}
+                  {receiptAccountResolutionLast4 ? ` ${receiptAccountResolutionLast4}` : ""}
+                </strong>
+                <small>
+                  {receiptAccountResolutionReason ?? "Resolved against the workspace's saved accounts"}
+                  {receiptAccountResolutionConfidence !== null ? ` · ${receiptAccountResolutionConfidence}% confidence` : ""}
+                </small>
+              </div>
+            ) : null}
+            {paymentMethod ? (
+              <div className="split-bill-editor__receipt-match">
+                <span className="panel-muted">Receipt payment method</span>
+                <strong>{paymentMethod}</strong>
+                <small>Preserved from the receipt text for review and traceability.</small>
+              </div>
+            ) : null}
+            {receiptPayerName ? (
+              <div className="split-bill-editor__receipt-match">
+                <span className="panel-muted">Receipt payer</span>
+                <strong>{receiptPayerName}</strong>
+                <small>Used only when the receipt clearly identifies who paid.</small>
+              </div>
+            ) : null}
+            {receiptCurrencyWarning ? (
+              <div className="split-bill-editor__receipt-match">
+                <span className="panel-muted">Currency warning</span>
+                <strong>{receiptCurrencyWarning}</strong>
+                <small>Mixed-currency receipts stay reviewable instead of being flattened silently.</small>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -736,12 +877,20 @@ export function SplitBillEditor({ mode, initialBill, groups }: SplitBillEditorPr
                 <strong>{draft.subtotal ? formatSplitBillAmount(Number(draft.subtotal), draft.currency) : "—"}</strong>
               </div>
               <div>
+                <span>Service charge</span>
+                <strong>{draft.serviceCharge ? formatSplitBillAmount(Number(draft.serviceCharge), draft.currency) : "—"}</strong>
+              </div>
+              <div>
                 <span>Tax</span>
                 <strong>{draft.tax ? formatSplitBillAmount(Number(draft.tax), draft.currency) : "—"}</strong>
               </div>
               <div>
                 <span>Tip</span>
                 <strong>{draft.tip ? formatSplitBillAmount(Number(draft.tip), draft.currency) : "—"}</strong>
+              </div>
+              <div>
+                <span>Rounding</span>
+                <strong>{draft.rounding ? formatSplitBillAmount(Number(draft.rounding), draft.currency) : "—"}</strong>
               </div>
               <div>
                 <span>Discount</span>

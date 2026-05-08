@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSplitBillCurrentUser } from "@/lib/split-bill-access";
+import { resolveReceiptAccountHintToAccount } from "@/lib/receipt-account-resolution";
 import {
   serializeSplitBillRecord,
   splitBillGroupMemberOrderBy,
@@ -65,6 +66,74 @@ const normalizeOptionalDecimal = (value: string | number | null | undefined) => 
 
   const numericValue = Number(value);
   return Number.isFinite(numericValue) ? numericValue.toFixed(2) : null;
+};
+
+const resolveReceiptAccountResolution = async (
+  userId: string,
+  rawPayload: Record<string, unknown> | null | undefined
+) => {
+  if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
+    return rawPayload ?? null;
+  }
+
+  const receiptAccountMatch = rawPayload.receiptAccountMatch;
+  if (!receiptAccountMatch || typeof receiptAccountMatch !== "object" || Array.isArray(receiptAccountMatch)) {
+    return rawPayload;
+  }
+
+  const accountName = typeof receiptAccountMatch.accountName === "string" ? receiptAccountMatch.accountName : null;
+  const accountLast4 = typeof receiptAccountMatch.accountLast4 === "string" ? receiptAccountMatch.accountLast4 : null;
+  const confidence = typeof receiptAccountMatch.confidence === "number" ? receiptAccountMatch.confidence : 0;
+  const reason = typeof receiptAccountMatch.reason === "string" ? receiptAccountMatch.reason : null;
+
+  if (!accountName && !accountLast4) {
+    return rawPayload;
+  }
+
+  const workspaces = await prisma.workspace.findMany({
+    where: { userId },
+    select: { id: true },
+  });
+
+  if (workspaces.length !== 1) {
+    return rawPayload;
+  }
+
+  const workspace = workspaces[0];
+  if (!workspace) {
+    return rawPayload;
+  }
+
+  const accounts = await prisma.account.findMany({
+    where: { workspaceId: workspace.id },
+    select: {
+      id: true,
+      name: true,
+      institution: true,
+      accountNumber: true,
+      type: true,
+      currency: true,
+    },
+  });
+
+  const resolution = resolveReceiptAccountHintToAccount(
+    {
+      accountName,
+      accountLast4,
+      confidence,
+      reason,
+    },
+    accounts
+  );
+
+  if (!resolution) {
+    return rawPayload;
+  }
+
+  return {
+    ...rawPayload,
+    receiptAccountResolution: resolution,
+  };
 };
 
 const getBillInclude = {
@@ -140,6 +209,7 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
       note: normalizeOptionalString(payment.note ?? null),
     };
   });
+  const resolvedRawPayload = await resolveReceiptAccountResolution(userId, input.rawPayload ?? null);
 
   return {
     groupId,
@@ -162,7 +232,7 @@ const buildBillPayload = async (userId: string, input: z.infer<typeof billSchema
       tip: normalizeOptionalDecimal(input.tip ?? null),
       discount: normalizeOptionalDecimal(input.discount ?? null),
       total: normalizeOptionalDecimal(input.total ?? null),
-      rawPayload: input.rawPayload ?? undefined,
+      rawPayload: resolvedRawPayload ?? undefined,
     } as Omit<Prisma.SplitBillUncheckedUpdateInput, "userId">,
   };
 };
