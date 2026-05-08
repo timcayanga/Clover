@@ -1495,8 +1495,27 @@ export function ImportFilesModal({
       accountType: UploadInsightsSummary["accountType"];
       optimisticAccountId: string | null;
       previewTransactions?: NonNullable<UploadInsightsSummary["previewTransactions"]>;
+    },
+    options?: {
+      backgroundOnly?: boolean;
     }
   ): Promise<ImportProcessResult> => {
+    const backgroundOnly = Boolean(options?.backgroundOnly);
+    const emitItemUpdate = (patch: Partial<QueuedFile>) => {
+      if (!backgroundOnly) {
+        updateItem(itemId, patch);
+      }
+    };
+    const emitImportActivity = (payload: Parameters<typeof publishImportActivity>[0]) => {
+      if (!backgroundOnly) {
+        publishImportActivity(payload);
+      }
+    };
+    const emitImportError = (stage: ImportErrorStage, fileName: string, message: string | null | undefined) => {
+      if (!backgroundOnly) {
+        closeImportAfterError(itemId, stage, fileName, message);
+      }
+    };
     const resolvedAccountId =
       accountId && !accountId.startsWith("optimistic-")
         ? accountId
@@ -1514,13 +1533,13 @@ export function ImportFilesModal({
     let finalizingProgress = 92;
     const finalizingTimer = window.setInterval(() => {
       finalizingProgress = Math.min(98, finalizingProgress + 1);
-      updateItem(itemId, {
+      emitItemUpdate({
         status: "importing",
         progress: finalizingProgress,
         progressLabel: "Finalizing import",
         targetAccountId: resolvedAccountId,
       });
-      publishImportActivity({
+      emitImportActivity({
         workspaceId,
         surface: importActivitySurfaceRef.current,
         status: "active",
@@ -1535,13 +1554,13 @@ export function ImportFilesModal({
       });
     }, 700);
 
-    updateItem(itemId, {
+    emitItemUpdate({
       status: "importing",
       progress: finalizingProgress,
       progressLabel: "Finalizing import",
       targetAccountId: resolvedAccountId,
     });
-    publishImportActivity({
+    emitImportActivity({
       workspaceId,
       surface: importActivitySurfaceRef.current,
       status: "active",
@@ -1575,14 +1594,14 @@ export function ImportFilesModal({
               confirmErrorMessage.toLowerCase()
             );
           if (recoverableConfirmError && stagedAttempt < 29) {
-            updateItem(itemId, {
+            emitItemUpdate({
               status: "importing",
               confirmationState: "pending",
               progress: Math.max(92, finalizingProgress),
               progressLabel: "Finalizing import",
               targetAccountId: resolvedAccountId,
             });
-            publishImportActivity({
+            emitImportActivity({
               workspaceId,
               surface: importActivitySurfaceRef.current,
               status: "active",
@@ -1606,21 +1625,21 @@ export function ImportFilesModal({
             file_name: summaryContext.fileName,
             workspace_id: workspaceId || null,
           });
-          closeImportAfterError(itemId, "confirm", summaryContext.fileName, confirmError);
+          emitImportError("confirm", summaryContext.fileName, confirmError);
           return { status: "error", importedRows: null, summary: null };
         }
 
         const confirmed = await confirmResponse.json();
         const importedRows = Number(confirmed.result?.imported ?? 0);
         if (confirmed.result?.status === "staged") {
-          updateItem(itemId, {
+          emitItemUpdate({
             status: "importing",
             confirmationState: "pending",
             progress: Math.max(92, finalizingProgress),
             progressLabel: "Finalizing import",
             targetAccountId: resolvedAccountId,
           });
-          publishImportActivity({
+          emitImportActivity({
             workspaceId,
             surface: importActivitySurfaceRef.current,
             status: "active",
@@ -1658,7 +1677,7 @@ export function ImportFilesModal({
             accountType: resolvedAccountType,
           })
         );
-        const summary = {
+          const summary = {
           fileName: summaryContext.fileName,
           rowsImported: importedRows,
           accountId: resolvedAccountId,
@@ -1687,7 +1706,7 @@ export function ImportFilesModal({
           topMerchantName: insightSummary?.topMerchantName ?? null,
           topMerchantCount: insightSummary?.topMerchantCount === null ? null : Number(insightSummary?.topMerchantCount ?? 0),
         } satisfies UploadInsightsSummary;
-        updateItem(itemId, {
+        emitItemUpdate({
           status: "done",
           confirmationState: "confirmed",
           error: null,
@@ -1697,7 +1716,7 @@ export function ImportFilesModal({
           progress: 100,
           progressLabel: "Done",
         });
-        publishImportActivity({
+        emitImportActivity({
           workspaceId,
           surface: importActivitySurfaceRef.current,
           status: "done",
@@ -1722,8 +1741,7 @@ export function ImportFilesModal({
         return { status: "done", importedRows, summary };
       }
 
-      closeImportAfterError(
-        itemId,
+      emitImportError(
         "confirm",
         summaryContext.fileName,
         "Clover kept finalizing this import for too long. Try again, or add the account and transactions manually."
@@ -1781,9 +1799,28 @@ export function ImportFilesModal({
       initialBalance?: string | null;
       password?: string;
       previewTransactions?: NonNullable<UploadInsightsSummary["previewTransactions"]>;
+    },
+    options?: {
+      backgroundOnly?: boolean;
     }
   ) => {
     const sleep = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms));
+    const backgroundOnly = Boolean(options?.backgroundOnly);
+    const emitItemUpdate = (patch: Partial<QueuedFile>) => {
+      if (!backgroundOnly) {
+        updateItem(itemId, patch);
+      }
+    };
+    const emitImportActivity = (payload: Parameters<typeof publishImportActivity>[0]) => {
+      if (!backgroundOnly) {
+        publishImportActivity(payload);
+      }
+    };
+    const emitImportError = (stage: ImportErrorStage, fileName: string, message: string | null | undefined) => {
+      if (!backgroundOnly) {
+        closeImportAfterError(itemId, stage, fileName, message);
+      }
+    };
     let seededFallbackSummary = false;
     const startedAt = Date.now();
     const MAX_WAIT_MS = 20_000;
@@ -1860,12 +1897,12 @@ export function ImportFilesModal({
 
         if (importFile?.status === "failed") {
           if (hasRecoverableImportSignal && attempt < 239) {
-            updateItem(itemId, {
+            emitItemUpdate({
               status: "importing",
               progress: Math.max(IMPORT_PROGRESS.loadingAccount, 92),
               progressLabel: "Finalizing import",
             });
-            publishImportActivity({
+            emitImportActivity({
               workspaceId,
               surface: importActivitySurfaceRef.current,
               status: "active",
@@ -1891,12 +1928,12 @@ export function ImportFilesModal({
             error_stage: "background",
             error_code: processingMessage ?? "background_failure",
           });
-          closeImportAfterError(itemId, "background", summaryContext.fileName, processingMessage);
+          emitImportError("background", summaryContext.fileName, processingMessage);
           return;
         }
 
         if (importFile?.status === "processing" && processingPhase) {
-          updateItem(itemId, {
+          emitItemUpdate({
             status: "importing",
             progress: Math.max(IMPORT_PROGRESS.parsing, Math.min(79, IMPORT_PROGRESS.parsing + Number(importFile.processingAttempt ?? 0))),
             progressLabel:
@@ -1905,7 +1942,7 @@ export function ImportFilesModal({
                 ? `Auto-rerun ${Number(importFile.processingAttempt ?? 0)}/${Number(importFile.processingTargetScore ?? 95)} in progress`
                 : "Parsing in background"),
           });
-          publishImportActivity({
+          emitImportActivity({
             workspaceId,
             surface: importActivitySurfaceRef.current,
             status: "active",
@@ -1984,7 +2021,7 @@ export function ImportFilesModal({
             seededFallbackSummary = true;
             seedImportedWorkspaceCaches(workspaceId, fallbackSummary);
             void onImported(fallbackSummary);
-            updateItem(itemId, {
+            emitItemUpdate({
               status: "importing",
               confirmationState: "pending",
               progress: Math.max(
@@ -1994,7 +2031,7 @@ export function ImportFilesModal({
               progressLabel: "Loading account",
               targetAccountId: fallbackAccountId,
             });
-            publishImportActivity({
+            emitImportActivity({
               workspaceId,
               surface: importActivitySurfaceRef.current,
               status: "active",
@@ -2031,7 +2068,7 @@ export function ImportFilesModal({
             hasResolvedIdentity &&
             Boolean(latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-"));
           if (shouldAdvanceToConfirmation) {
-            const confirmResult = await confirmItemImport(
+            void confirmItemImport(
               itemId,
               importFileId,
               latestResolvedAccountId,
@@ -2043,11 +2080,10 @@ export function ImportFilesModal({
                 accountType: processingIdentity?.accountType ?? summaryContext.accountType,
                 optimisticAccountId: summaryContext.optimisticAccountId,
                 previewTransactions: summaryContext.previewTransactions,
-              }
+              },
+              { backgroundOnly: true }
             );
-            if (confirmResult.status !== "error") {
-              return;
-            }
+            return;
           }
           const hasFinalizedAccountId =
             Boolean(latestResolvedAccountId && !latestResolvedAccountId.startsWith("optimistic-")) ||
@@ -2549,31 +2585,32 @@ export function ImportFilesModal({
             errorMessage: null,
           });
 
-          const result = await confirmItemImport(itemId, importFileId, resolvedAccountId, {
-            ...summaryContext,
-            accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
-            institution: resolvedIdentity.institution ?? summaryContext.institution,
-            accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
-            accountType: resolvedAccountType,
-            previewTransactions: summaryContext.previewTransactions ?? [],
-          });
-          if (result.summary) {
-            seedImportedWorkspaceCaches(workspaceId, result.summary);
-            void onImported(result.summary);
-            publishImportActivity({
-              workspaceId,
-              surface: importActivitySurfaceRef.current,
-              status: "done",
-              fileName: summaryContext.fileName,
-              fileIndex: items.findIndex((item) => item.id === itemId) + 1,
-              fileTotal: items.length,
-              completedFiles: completedFileCount + 1,
-              progress: 100,
-              detail: "All set",
-              summary: result.summary,
-              errorMessage: null,
+          void confirmItemImport(
+            itemId,
+            importFileId,
+            resolvedAccountId,
+            {
+              ...summaryContext,
+              accountName: resolvedIdentity.accountName ?? summaryContext.accountName,
+              institution: resolvedIdentity.institution ?? summaryContext.institution,
+              accountNumber: resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
+              accountType: resolvedAccountType,
+              previewTransactions: summaryContext.previewTransactions ?? [],
+            },
+            { backgroundOnly: true }
+          )
+            .then((result) => {
+              if (result.summary) {
+                seedImportedWorkspaceCaches(workspaceId, result.summary);
+                void onImported(result.summary);
+              }
+            })
+            .catch((error) => {
+              console.warn("Background import confirmation failed", {
+                importFileId,
+                error: error instanceof Error ? error.message : String(error),
+              });
             });
-          }
           capturePostHogClientEvent("statement_identity_confirmed", {
             workspace_id: workspaceId,
             import_file_id: importFileId,
@@ -3638,6 +3675,61 @@ export function ImportFilesModal({
         if (optimisticSummary) {
           seedImportedWorkspaceCaches(workspaceId, optimisticSummary);
           void onImported(optimisticSummary);
+
+          updateItem(itemId, {
+            status: "done",
+            confirmationState: "confirmed",
+            error: null,
+            importFileId,
+            targetAccountId: optimisticAccountId,
+            importedRows: Number(processPayload?.imported ?? 0) || 0,
+            progress: 100,
+            progressLabel: "Done",
+          });
+          publishImportActivity({
+            workspaceId,
+            surface: importActivitySurfaceRef.current,
+            status: "done",
+            fileName: item.file.name,
+            fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+            fileTotal: items.length,
+            completedFiles: completedFileCount + 1,
+            progress: 100,
+            detail: "All set",
+            summary: optimisticSummary,
+            errorMessage: null,
+          });
+
+          void monitorQueuedImportAndConfirm(
+            itemId,
+            importFileId,
+            optimisticAccountId,
+            {
+              fileName: item.file.name,
+              fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
+              guessedAccountName: guessedIdentity?.accountName ?? null,
+              guessedInstitution: guessedIdentity?.institution ?? null,
+              guessedAccountNumber: null,
+              guessedAccountType: guessedIdentity
+                ? inferAccountTypeFromStatement(guessedIdentity.institution, guessedIdentity.accountName, "bank")
+                : null,
+              accountName: statementIdentity?.accountName ?? null,
+              institution: statementIdentity?.institution ?? null,
+              accountNumber: statementIdentity?.accountNumber ?? null,
+              accountType: statementIdentity?.accountType ?? null,
+              optimisticAccountId: hasStatementIdentity ? optimisticAccountId : canUseOptimisticGuess ? item.optimisticAccountId : null,
+              initialBalance: optimisticSummary.balance ?? null,
+              password: item.password.trim() || undefined,
+              previewTransactions,
+            },
+            { backgroundOnly: true }
+          );
+
+          return {
+            status: "done",
+            importedRows: Number(processPayload?.imported ?? 0) || 0,
+            summary: optimisticSummary,
+          };
         }
 
         void monitorQueuedImportAndConfirm(itemId, importFileId, optimisticAccountId, {
@@ -3654,7 +3746,7 @@ export function ImportFilesModal({
           accountNumber: statementIdentity?.accountNumber ?? null,
           accountType: statementIdentity?.accountType ?? null,
           optimisticAccountId: hasStatementIdentity ? optimisticAccountId : canUseOptimisticGuess ? item.optimisticAccountId : null,
-          initialBalance: optimisticSummary?.balance ?? null,
+              initialBalance: optimisticSummary ? (optimisticSummary as UploadInsightsSummary).balance : null,
           password: item.password.trim() || undefined,
           previewTransactions,
         });
@@ -3768,13 +3860,43 @@ export function ImportFilesModal({
           accountType: statementIdentity?.accountType ?? statementAccountType,
           optimisticAccountId: targetAccountId,
           previewTransactions,
+        }, {
+          backgroundOnly: true,
         }).then((result) => {
           if (result.summary) {
             seedImportedWorkspaceCaches(workspaceId, result.summary);
             void onImported(result.summary);
           }
+        }).catch((error) => {
+          console.warn("Background import confirmation failed", {
+            importFileId,
+            error: error instanceof Error ? error.message : String(error),
+          });
         });
-        } else {
+        updateItem(itemId, {
+          status: "done",
+          confirmationState: "confirmed",
+          error: null,
+          importFileId,
+          targetAccountId,
+          importedRows: Number(processPayload?.imported ?? 0) || 0,
+          progress: 100,
+          progressLabel: "Done",
+        });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "done",
+          fileName: item.file.name,
+          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount + 1,
+          progress: 100,
+          detail: "All set",
+          summary: optimisticPreviewSummary,
+          errorMessage: null,
+        });
+      } else {
           void monitorQueuedImportAndConfirm(itemId, importFileId, null, {
           fileName: item.file.name,
           fallbackAccountName: deriveFallbackAccountNameFromFileName(item.file.name),
@@ -3789,13 +3911,38 @@ export function ImportFilesModal({
           accountNumber: statementIdentity?.accountNumber ?? null,
           accountType: statementIdentity?.accountType ?? null,
           optimisticAccountId: null,
-          initialBalance: optimisticPreviewSummary?.balance ?? null,
+          initialBalance: optimisticPreviewSummary ? (optimisticPreviewSummary as UploadInsightsSummary).balance : null,
           password: item.password.trim() || undefined,
+        }, {
+          backgroundOnly: true,
+        });
+        updateItem(itemId, {
+          status: "done",
+          confirmationState: "confirmed",
+          error: null,
+          importFileId,
+          targetAccountId: null,
+          importedRows: Number(processPayload?.imported ?? 0) || 0,
+          progress: 100,
+          progressLabel: "Done",
+        });
+        publishImportActivity({
+          workspaceId,
+          surface: importActivitySurfaceRef.current,
+          status: "done",
+          fileName: item.file.name,
+          fileIndex: items.findIndex((entry) => entry.id === itemId) + 1,
+          fileTotal: items.length,
+          completedFiles: completedFileCount + 1,
+          progress: 100,
+          detail: "All set",
+          summary: optimisticPreviewSummary,
+          errorMessage: null,
         });
       }
 
         return {
-          status: "staged",
+          status: "done",
           importedRows: Number(processPayload?.imported ?? 0) || null,
           summary: optimisticPreviewSummary,
         };
@@ -3964,6 +4111,8 @@ export function ImportFilesModal({
             initialBalance: finalizedRecoveredSummary.balance ?? null,
             password: item.password.trim() || undefined,
             previewTransactions: recoverablePreviewTransactions,
+          }, {
+            backgroundOnly: true,
           });
         }
 
