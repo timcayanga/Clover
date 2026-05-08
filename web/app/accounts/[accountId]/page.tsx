@@ -714,6 +714,28 @@ function AccountDetailPageContent() {
         : derivedCachedCategories;
       const cachedAccountLookup = findCachedImportedAccount(accountId);
       const cachedWorkspaceId = cachedAccountLookup?.workspaceId ?? activeWorkspaceId;
+      const cachedTransactionWorkspaceAccount = Array.isArray(cachedTransactionsWorkspace?.accounts)
+        ? ((cachedTransactionsWorkspace.accounts as Account[]).find((entry) => {
+            const entryId = typeof entry.id === "string" ? entry.id : "";
+            const optimisticId = typeof (entry as { optimisticAccountId?: string | null }).optimisticAccountId === "string"
+              ? ((entry as { optimisticAccountId?: string | null }).optimisticAccountId ?? "")
+              : "";
+
+            if (entryId === accountId || optimisticId === accountId) {
+              return true;
+            }
+
+            return (
+              normalizeImportedAccountKey(entry.name, entry.institution, entry.accountNumber, entry.type) ===
+              normalizeImportedAccountKey(
+                cachedAccountLookup?.account?.name ?? null,
+                cachedAccountLookup?.account?.institution ?? null,
+                cachedAccountLookup?.account?.accountNumber ?? null,
+                cachedAccountLookup?.account?.type ?? null
+              )
+            );
+          }) ?? null)
+        : null;
       let cachedTransactions: Transaction[] = [];
       let cachedImportFiles: ImportFile[] = [];
       let cachedCheckpoints: StatementCheckpoint[] = [];
@@ -721,13 +743,14 @@ function AccountDetailPageContent() {
         const entryId = typeof entry.id === "string" ? entry.id : "";
         const optimisticId = typeof entry.optimisticAccountId === "string" ? entry.optimisticAccountId : "";
         return entryId === accountId || optimisticId === accountId;
-      }) ?? cachedAccountLookup?.account) as Account | undefined;
+      }) ?? cachedTransactionWorkspaceAccount ?? cachedAccountLookup?.account) as Account | undefined;
       let cachedAccount = cachedAccountEntry
         ? ({
             ...cachedAccountEntry,
             workspaceId: cachedWorkspaceId,
           } as Account)
         : null;
+      let accountTransactionsLookup: ReturnType<typeof findCachedTransactionsForAccount> | null = null;
       const resolvePersistedImportedAccount = async (baseAccount: Account) => {
         const identityKey = normalizeImportedAccountKey(
           baseAccount.name,
@@ -806,7 +829,7 @@ function AccountDetailPageContent() {
 
       if (cachedAccount) {
         if (!cancelled) {
-          const accountTransactionsLookup = findCachedTransactionsForAccount(cachedAccount.id, cachedAccount);
+          accountTransactionsLookup = findCachedTransactionsForAccount(cachedAccount.id, cachedAccount);
           cachedTransactions = (accountTransactionsLookup?.transactions as Transaction[] | undefined) ?? [];
           if (cachedTransactions.length === 0 && Array.isArray(cachedTransactionsWorkspace?.transactions)) {
             cachedTransactions = mergeImportedWorkspaceTransactions(
@@ -876,6 +899,23 @@ function AccountDetailPageContent() {
         const accountResponse = await accountPromise;
         if (!accountResponse.ok) {
           if (cachedAccount) {
+            // Keep the cached imported account usable even if the live lookup is still
+            // settling or temporarily unavailable. This avoids trapping the page on the
+            // loading screen when the optimistic import has already produced usable rows.
+            if (!cancelled) {
+              setAccount(cachedAccount);
+              setTransactions(cachedTransactions);
+              setImportFiles(cachedImportFiles);
+              setCategories(cachedCategories);
+              setTransactionPage(1);
+              setTransactionTotalCount(accountTransactionsLookup?.totalCount ?? cachedTransactions.length);
+              setTransactionsError(null);
+              setTransactionsLoading(false);
+              setMessage("");
+              setHasInitialDataLoaded(true);
+              setCheckpoints(cachedCheckpoints);
+            }
+
             const replacementAccount = await resolvePersistedImportedAccount(cachedAccount);
             if (replacementAccount && !cancelled) {
               router.replace(getAccountPath(replacementAccount));
