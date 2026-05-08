@@ -99,6 +99,9 @@ type QueuedFile = {
   importedRows: number | null;
   progress: number;
   progressLabel: string;
+  errorCode?: string | null;
+  errorTitle?: string | null;
+  errorNextSteps?: string[] | null;
 };
 
 type ImportProcessResult = {
@@ -232,7 +235,13 @@ const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null
       ? "Unlock the file with its password and try again."
       : stage === "validation"
         ? "Upload a clearer PDF, CSV, or image file."
-        : "Re-upload the original file and keep the tab open while Clover works.";
+        : stage === "monitor"
+          ? "The account details were read, but Clover needed more time to finish saving the import."
+          : stage === "background"
+            ? "Clover parsed the file, but the background reconciliation stalled."
+            : stage === "confirm"
+              ? "Clover could parse the file, but couldn't finish confirming it."
+              : "Re-upload the original file and keep the tab open while Clover works.";
 
   const nextSteps =
     stage === "password"
@@ -241,11 +250,17 @@ const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null
           "If the password keeps failing, re-download the original statement and re-upload it.",
           "You can always add missing transactions manually in Transactions.",
         ]
-      : [
-          "Re-upload the original PDF or CSV.",
-          "If Clover still stalls, add the missing transactions manually in Transactions.",
-          "If the statement looks off after import, check Review before confirming anything.",
-        ];
+      : stage === "monitor" || stage === "background" || stage === "confirm"
+        ? [
+            "The parsed rows were kept, so you can safely go back to Accounts or Transactions.",
+            "If the final import never completes, re-upload the file once and let Clover finish in the background.",
+            "If anything is still missing, add the transactions manually in Transactions.",
+          ]
+        : [
+            "Re-upload the original PDF or CSV.",
+            "If Clover still stalls, add the missing transactions manually in Transactions.",
+            "If the statement looks off after import, check Review before confirming anything.",
+          ];
 
   return {
     code: codeMap[stage],
@@ -801,6 +816,9 @@ const friendlyImportPhaseLabel = (label: string, fileName?: string | null) => {
     case "Waiting for statement identity":
     case "Reading locally":
     case "Reading statement details":
+    case "Clover is getting your file ready":
+    case "Loading account":
+    case "Reading account details":
       return "Reading account details";
     case "Preview ready":
       return "Account details ready";
@@ -808,9 +826,12 @@ const friendlyImportPhaseLabel = (label: string, fileName?: string | null) => {
       return "Queued for background processing";
     case "Finalizing in background":
     case "Finalizing import":
-      return "Reconciling imported data";
+      return "Saving and reconciling";
+    case "Loading transactions":
     case "Parsing in background":
       return "Identifying transactions";
+    case "Clover is reading the document":
+      return "Reading document";
     case "Import failed":
       return "Import failed";
     case "Done":
@@ -827,34 +848,42 @@ const friendlyImportProgressLabel = (label: string, fileName?: string | null) =>
 
   switch (label) {
     case "Starting upload":
-      return "Clover is preparing your statement";
+      return "Clover is preparing the statement for upload";
+    case "Clover is getting your file ready":
+      return "Clover is preparing the statement for upload";
     case "Uploading the file":
       return "Clover is sending the statement to the server";
     case "Password needed":
-      return "This file needs a password";
+      return "This statement needs a password before Clover can continue";
     case "Waiting for account details":
       return "Clover is extracting the account name, number, and balance";
     case "Waiting for statement identity":
-      return "Clover is reading the statement";
+      return "Clover is reading the statement layout";
     case "Reading locally":
-      return "Clover is reading the statement locally";
+      return "Clover is scanning the file locally";
     case "Preview ready":
-      return "Clover found the account details";
+      return "Clover found the account details and is ready to show them";
     case "Queued for background processing":
-      return "Clover is lining up the rest";
+      return "Clover will finish the remaining work in the background";
     case "Finalizing in background":
     case "Finalizing import":
-      return "Clover is reconciling totals and saving the import";
+      return "Clover is matching transactions, categories, and duplicates";
+    case "Loading account":
+      return "Clover already found the account and is matching it to your workspace";
+    case "Loading transactions":
+      return "Clover is identifying transactions and assigning categories";
     case "Parsing in background":
       return "Clover is identifying transactions and categories";
+    case "Reading account details":
+      return "Clover is pulling the account name, number, and balance into preview";
     case "Reading statement details":
       return "Clover is reading the account details, balance, and transactions";
     case "Import failed":
-      return "That file needs another try";
+      return "Clover couldn't finish the import";
     case "Done":
-      return "All set";
+      return "The file is imported and ready";
     case "Queued":
-      return "Waiting in line";
+      return "Clover is waiting to start";
     default:
       return label;
   }
@@ -974,7 +1003,10 @@ export function ImportFilesModal({
     updateItem(itemId, {
       status: "error",
       confirmationState: "staged",
-      error: `${notice.code}: ${notice.message}`,
+      error: notice.message,
+      errorCode: notice.code,
+      errorTitle: notice.title,
+      errorNextSteps: notice.nextSteps,
       progress: 0,
       progressLabel: "Import issue",
     });
@@ -987,10 +1019,12 @@ export function ImportFilesModal({
       fileTotal: items.length,
       completedFiles: completedFileCount,
       progress: 0,
-      detail: notice.title,
+      detail: `${notice.code} ${notice.title}`,
       summary: null,
       errorCode: notice.code,
       errorMessage: notice.message,
+      errorTitle: notice.title,
+      errorNextSteps: notice.nextSteps,
     });
     setBusy(false);
     autoCloseAfterStartRef.current = false;
@@ -1477,6 +1511,9 @@ export function ImportFilesModal({
         return {
           ...item,
           ...patch,
+          ...(patch.error === null || patch.status === "done" || patch.status === "pending" || patch.status === "importing" || patch.status === "needs_password"
+            ? { errorCode: null, errorTitle: null, errorNextSteps: null }
+            : {}),
           ...(nextProgress === undefined ? {} : { progress: nextProgress }),
         };
       })
@@ -4151,23 +4188,28 @@ export function ImportFilesModal({
     ? ((completedFileCount + (activeProgressItem ? activeProgressItem.progress / 100 : 0)) / items.length) * 100
     : 0;
   const hasImportIssue = items.some((item) => item.status === "error" || item.status === "needs_password") || Boolean(validationNotice);
+  const currentErrorItem = items.find((item) => item.status === "error") ?? null;
   const showImportHelp = hasImportIssue || items.some((item) => item.confirmationState === "staged");
   const importHelpTitle = items.some((item) => item.status === "needs_password")
     ? "Password needed"
-    : items.some((item) => item.status === "error")
-      ? "What to do next"
+    : currentErrorItem?.errorTitle
+      ? `${currentErrorItem.errorTitle}`
+      : items.some((item) => item.status === "error")
+        ? "What to do next"
       : "If Clover needs a hand";
   const importHelpItems = items.some((item) => item.status === "needs_password")
     ? [
         "Enter the password for the statement, then unlock the file.",
         "If the password still fails, re-upload the original PDF and try again.",
       ]
-    : items.some((item) => item.status === "error")
-      ? [
-          "Try uploading the original PDF or CSV again, one file at a time.",
-          "If Clover says the file is not confident enough, add the transactions manually in Transactions.",
-          "If the statement imported but still looks off, check the Review queue before confirming anything.",
-        ]
+    : currentErrorItem?.errorNextSteps?.length
+      ? currentErrorItem.errorNextSteps
+      : items.some((item) => item.status === "error")
+        ? [
+            "Try uploading the original PDF or CSV again, one file at a time.",
+            "If Clover says the file is not confident enough, add the transactions manually in Transactions.",
+            "If the statement imported but still looks off, check the Review queue before confirming anything.",
+          ]
       : [
           "If Clover stops on a file, upload the original statement again and keep the browser tab open.",
           "For low-confidence statements, use Transactions to add anything Clover missed manually.",
@@ -4192,6 +4234,7 @@ export function ImportFilesModal({
     const nextDetail = activeProgressItem
       ? friendlyImportProgressLabel(activeProgressItem.progressLabel, activeProgressItem.file.name)
       : validationNotice ?? message;
+    const activeErrorItem = items.find((item) => item.status === "error") ?? null;
     const previousSummary = lastImportActivityRef.current?.summary ?? null;
     const nextSnapshot: ImportActivitySnapshot = {
       workspaceId,
@@ -4204,8 +4247,10 @@ export function ImportFilesModal({
       progress: overallProgress,
       detail: nextDetail,
       summary: nextStatus === "done" ? previousSummary : null,
-      errorCode: items.some((item) => item.status === "error") ? lastImportActivityRef.current?.errorCode ?? null : null,
-      errorMessage: items.find((item) => item.status === "error")?.error ?? validationNotice ?? null,
+      errorCode: activeErrorItem?.errorCode ?? (validationNotice ? lastImportActivityRef.current?.errorCode ?? null : null),
+      errorMessage: activeErrorItem?.error ?? validationNotice ?? null,
+      errorTitle: activeErrorItem?.errorTitle ?? null,
+      errorNextSteps: activeErrorItem?.errorNextSteps ?? null,
       updatedAt: Date.now(),
     };
 
@@ -4350,6 +4395,9 @@ export function ImportFilesModal({
     updateItem(itemId, {
       status: "pending",
       error: null,
+      errorCode: null,
+      errorTitle: null,
+      errorNextSteps: null,
       progress: 0,
       progressLabel: "Clover is getting your file ready",
     });
@@ -4628,7 +4676,20 @@ export function ImportFilesModal({
                     </div>
                   </div>
 
-                  {item.error ? <p className="accounts-import-file__error">{item.error}</p> : null}
+                  {item.error ? (
+                    <div className="accounts-import-file__error">
+                      <strong>{item.errorTitle ?? "Import issue"}</strong>
+                      <p>{item.error}</p>
+                      {item.errorCode ? <p className="accounts-import-file__error-code">Error code {item.errorCode}</p> : null}
+                      {item.errorNextSteps?.length ? (
+                        <ul className="accounts-import-file__error-list">
+                          {item.errorNextSteps.map((step) => (
+                            <li key={step}>{step}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                    </div>
+                  ) : null}
 
                   {isPasswordLocked ? (
                     <div className="accounts-import-password-row">

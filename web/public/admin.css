@@ -13797,9 +13797,34 @@ input.transaction-inline-edit--amount::placeholder {
 }
 
 .accounts-import-file__error {
+  display: grid;
+  gap: 6px;
   color: #b91c1c;
   font-size: 0.88rem;
   line-height: 1.45;
+}
+
+.accounts-import-file__error strong {
+  font-size: 0.9rem;
+}
+
+.accounts-import-file__error p {
+  margin: 0;
+}
+
+.accounts-import-file__error-code {
+  color: #7f1d1d;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.accounts-import-file__error-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 4px;
 }
 
 .accounts-import-password-row {

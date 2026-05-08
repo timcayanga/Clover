@@ -19,6 +19,8 @@ export type ImportActivitySnapshot = {
   summary: UploadInsightsSummary | null;
   errorCode: string | null;
   errorMessage: string | null;
+  errorTitle: string | null;
+  errorNextSteps: string[] | null;
   updatedAt: number;
 };
 
@@ -90,6 +92,10 @@ const readSnapshotFromStorage = (storage: Storage | null): ImportActivitySnapsho
           : null,
       errorCode: typeof parsed.errorCode === "string" ? parsed.errorCode : null,
       errorMessage: typeof parsed.errorMessage === "string" ? parsed.errorMessage : null,
+      errorTitle: typeof parsed.errorTitle === "string" ? parsed.errorTitle : null,
+      errorNextSteps: Array.isArray(parsed.errorNextSteps)
+        ? parsed.errorNextSteps.filter((step): step is string => typeof step === "string" && step.trim().length > 0)
+        : null,
       updatedAt: Number.isFinite(Number(parsed.updatedAt)) ? Number(parsed.updatedAt) : Date.now(),
     };
   } catch {
@@ -120,8 +126,10 @@ const broadcastImportActivityChange = () => {
 
 export const setImportActivity = (
   snapshot:
-    | (Omit<ImportActivitySnapshot, "updatedAt" | "errorCode"> & {
+    | (Omit<ImportActivitySnapshot, "updatedAt" | "errorCode" | "errorTitle" | "errorNextSteps"> & {
         errorCode?: string | null;
+        errorTitle?: string | null;
+        errorNextSteps?: string[] | null;
       })
     | ImportActivitySnapshot
 ) => {
@@ -132,6 +140,8 @@ export const setImportActivity = (
   const nextSnapshot: ImportActivitySnapshot = {
     ...snapshot,
     errorCode: snapshot.errorCode ?? null,
+    errorTitle: snapshot.errorTitle ?? null,
+    errorNextSteps: snapshot.errorNextSteps ?? null,
     updatedAt: "updatedAt" in snapshot && Number.isFinite(Number(snapshot.updatedAt)) ? Number(snapshot.updatedAt) : Date.now(),
   };
 

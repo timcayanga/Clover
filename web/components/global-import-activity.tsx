@@ -75,9 +75,9 @@ export function GlobalImportActivity() {
     return (
       <ImportErrorToast
         code={code}
-        title={activity.detail || "Clover hit an import snag"}
+        title={activity.errorTitle || activity.detail || "Clover hit an import snag"}
         message={activity.errorMessage ?? "Clover wasn't able to finish this file."}
-        nextSteps={getImportErrorNextSteps(code)}
+        nextSteps={activity.errorNextSteps ?? getImportErrorNextSteps(code)}
         onClose={handleClose}
       />
     );
