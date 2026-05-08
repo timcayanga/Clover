@@ -56,6 +56,7 @@ import {
   formatAccountTypeLabel,
   getRecurringKindSuggestionForAccountType,
   isLiabilityAccountType,
+  isSpendableAccountType,
   isTrackedAssetAccountType,
   type SupportedAccountType,
 } from "@/lib/account-types";
@@ -1706,6 +1707,9 @@ function AccountsPageContent() {
       (accumulator, account) => {
         const displayedBalance = getDisplayedAccountBalance(account);
         const signedValue = normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(displayedBalance));
+        if (isSpendableAccountType(getEffectiveAccountType(account)) && signedValue > 0) {
+          accumulator.spendable += signedValue;
+        }
         if (signedValue >= 0) {
           accumulator.assets += signedValue;
         } else {
@@ -1714,7 +1718,7 @@ function AccountsPageContent() {
         accumulator.netWorth += signedValue;
         return accumulator;
       },
-      { assets: 0, liabilities: 0, netWorth: 0 }
+      { assets: 0, liabilities: 0, netWorth: 0, spendable: 0 }
     );
   }, [currencyFilteredAccounts, statementCheckpoints]);
 
@@ -2679,8 +2683,36 @@ function AccountsPageContent() {
           </button>
         </>
       }
-    >
+      >
       <div className="accounts-page">
+        {visibleAccounts.length > 0 ? (
+          <section className="accounts-overview-grid" aria-label="Account summary">
+            <article className="accounts-overview-card glass">
+              <p className="eyebrow">Net Worth</p>
+              <strong className="accounts-overview-card__amount is-neutral">
+                {formatAggregateAmount(totals.netWorth, visibleAccounts)}
+              </strong>
+            </article>
+            <article className="accounts-overview-card glass">
+              <p className="eyebrow">Spendable</p>
+              <strong className="accounts-overview-card__amount is-good">
+                {formatAggregateAmount(totals.spendable, visibleAccounts)}
+              </strong>
+            </article>
+            <article className="accounts-overview-card glass">
+              <p className="eyebrow">Assets</p>
+              <strong className="accounts-overview-card__amount is-good">
+                {formatAggregateAmount(totals.assets, visibleAccounts)}
+              </strong>
+            </article>
+            <article className="accounts-overview-card glass">
+              <p className="eyebrow">Liabilities</p>
+              <strong className="accounts-overview-card__amount is-danger">
+                {formatAggregateAmount(totals.liabilities, visibleAccounts)}
+              </strong>
+            </article>
+          </section>
+        ) : null}
         <section className="accounts-main-grid">
           <div className="accounts-list-column">
             <div className="accounts-sections">

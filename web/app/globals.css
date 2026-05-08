@@ -23236,11 +23236,6 @@ button.accounts-detail__transaction-head-cell {
     order: 3;
   }
 
-  .accounts-overview-grid,
-  .accounts-mobile-featured {
-    display: none !important;
-  }
-
   .accounts-overview-grid {
     display: grid;
     grid-auto-flow: column;
