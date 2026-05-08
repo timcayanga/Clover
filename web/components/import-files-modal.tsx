@@ -2654,7 +2654,8 @@ export function ImportFilesModal({
                 inferAccountTypeFromStatement(resolvedIdentity.institution, resolvedIdentity.accountName, "bank"),
               previewTransactions: summaryContext.previewTransactions,
             }),
-            resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null
+            resolvedIdentity.accountNumber ?? summaryContext.accountNumber ?? null,
+            true
           );
 
           updateItem(itemId, {

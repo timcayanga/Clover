@@ -1,3 +1,6 @@
+import type { Prisma } from "@prisma/client";
+import { getEffectiveTransactionCategoryName } from "@/lib/transaction-display";
+
 type CachedRecord = Record<string, unknown>;
 
 export type AccountsWorkspaceCacheSnapshot = {
@@ -330,6 +333,37 @@ const isGenericCategoryName = (value?: string | null) => {
   );
 };
 
+const deriveCategoryNameFromRecord = (record: CachedRecord) => {
+  const categoryName = getEffectiveTransactionCategoryName({
+    categoryName:
+      typeof record.categoryName === "string" && record.categoryName.trim() ? record.categoryName : null,
+    category:
+      typeof record.category === "string" && record.category.trim() ? record.category : null,
+    rawPayload: (typeof record.rawPayload === "object" && record.rawPayload !== null
+      ? (record.rawPayload as Prisma.JsonValue)
+      : null) as Prisma.JsonValue | null,
+    merchantRaw:
+      typeof record.merchantRaw === "string" && record.merchantRaw.trim()
+        ? record.merchantRaw
+        : typeof record.description === "string" && record.description.trim()
+          ? record.description
+          : typeof record.merchantClean === "string" && record.merchantClean.trim()
+            ? record.merchantClean
+            : "",
+    merchantClean:
+      typeof record.merchantClean === "string" && record.merchantClean.trim() ? record.merchantClean : null,
+    description:
+      typeof record.description === "string" && record.description.trim() ? record.description : null,
+    type:
+      record.type === "income" || record.type === "expense" || record.type === "transfer"
+        ? record.type
+        : "expense",
+    institution: typeof record.institution === "string" ? record.institution : null,
+  });
+
+  return isGenericCategoryName(categoryName) ? null : categoryName;
+};
+
 const mergeJsonPayload = (preferred: unknown, fallback: unknown) => {
   const preferredIsObject = preferred && typeof preferred === "object" && !Array.isArray(preferred);
   const fallbackIsObject = fallback && typeof fallback === "object" && !Array.isArray(fallback);
@@ -443,6 +477,7 @@ const mergeImportedTransactionRecord = <T extends CachedRecord>(current: T, inco
   const currentCategoryName = typeof current.categoryName === "string" ? current.categoryName.trim() : "";
   const incomingCategoryName = typeof incoming.categoryName === "string" ? incoming.categoryName.trim() : "";
   const useCurrentCategory = !isGenericCategoryName(currentCategoryName) && isGenericCategoryName(incomingCategoryName);
+  const derivedCategoryName = deriveCategoryNameFromRecord(incoming) ?? deriveCategoryNameFromRecord(current);
 
   const currentCategoryId = typeof current.categoryId === "string" && current.categoryId.trim() ? current.categoryId.trim() : null;
   const incomingCategoryId = typeof incoming.categoryId === "string" && incoming.categoryId.trim() ? incoming.categoryId.trim() : null;
@@ -456,11 +491,11 @@ const mergeImportedTransactionRecord = <T extends CachedRecord>(current: T, inco
     categoryName:
       useCurrentCategory
         ? currentCategoryName
-        : incomingCategoryName || currentCategoryName || null,
+        : incomingCategoryName || currentCategoryName || derivedCategoryName || null,
     categoryId:
       useCurrentCategory
         ? currentCategoryId
-        : incomingCategoryId ?? currentCategoryId,
+        : incomingCategoryId ?? currentCategoryId ?? (derivedCategoryName ? `derived:${normalizeMerchantText(derivedCategoryName)}` : null),
     rawPayload: mergedRawPayload,
     warningReason:
       typeof incoming.warningReason === "string" && incoming.warningReason.trim()
