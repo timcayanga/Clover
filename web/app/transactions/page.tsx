@@ -6848,7 +6848,8 @@ function TransactionsPageContent() {
             return;
           }
 
-          if (!settledSummary.optimistic) {
+          const shouldRefreshAfterImport = !settledSummary.optimistic && Boolean(settledAccountId);
+          if (shouldRefreshAfterImport) {
             setImportRefreshInFlight(true);
             try {
               await loadWorkspaceMetadata(selectedWorkspaceId, { skipImports: true, background: true });

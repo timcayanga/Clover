@@ -3636,7 +3636,8 @@ function AccountsPageContent() {
             });
           }
 
-          if (!settledSummary.optimistic) {
+          const shouldRefreshAfterImport = !settledSummary.optimistic && Boolean(settledAccountId);
+          if (shouldRefreshAfterImport) {
             setImportRefreshInFlight(true);
             try {
               await refreshAll();
