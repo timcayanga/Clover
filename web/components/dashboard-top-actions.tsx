@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { ImportFilesModal } from "@/components/import-files-modal";
@@ -332,7 +333,7 @@ export function DashboardManualTransactionModal({
     }
   };
 
-  return (
+  return createPortal(
     <div className="modal-backdrop modal-backdrop--centered-mobile" role="presentation" onClick={handleClose}>
       <section
         className="modal-card modal-card--manual glass"
@@ -669,7 +670,8 @@ export function DashboardManualTransactionModal({
           </div>
         </form>
       </section>
-    </div>
+    </div>,
+    document.body
   );
 }
 
