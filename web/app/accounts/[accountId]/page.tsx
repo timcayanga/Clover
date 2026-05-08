@@ -697,6 +697,11 @@ function AccountDetailPageContent() {
 
   useEffect(() => {
     let cancelled = false;
+    const fallbackRenderTimer = window.setTimeout(() => {
+      if (!cancelled) {
+        setHasInitialDataLoaded(true);
+      }
+    }, 5000);
 
     const load = async () => {
       const selectedWorkspaceId = readSelectedWorkspaceId();
@@ -1135,6 +1140,7 @@ function AccountDetailPageContent() {
 
     return () => {
       cancelled = true;
+      window.clearTimeout(fallbackRenderTimer);
     };
   }, [accountId]);
 
