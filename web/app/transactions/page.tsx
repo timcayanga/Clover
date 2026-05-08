@@ -1875,14 +1875,11 @@ function TransactionsPageContent() {
       const payload = await response.json();
       const fetchedTransactions = Array.isArray(payload.transactions) ? payload.transactions : [];
       const cachedWorkspaceTransactions = getCachedTransactionsWorkspace(workspaceId)?.transactions as Transaction[] | undefined;
+      const baseTransactions =
+        transactionsRef.current.length > 0 ? transactionsRef.current : cachedWorkspaceTransactions ?? [];
       const mergedTransactions = options?.append
-        ? appendUniqueTransactions(
-            transactionsRef.current.length > 0
-              ? transactionsRef.current
-              : cachedWorkspaceTransactions ?? [],
-            fetchedTransactions
-          )
-        : fetchedTransactions;
+        ? appendUniqueTransactions(baseTransactions, fetchedTransactions)
+        : mergeImportedWorkspaceTransactions(baseTransactions, fetchedTransactions);
       const responseCurrencyCodes = Array.isArray(payload.currencyCodes)
         ? payload.currencyCodes.map((value: unknown) => formatCurrencyCode(String(value ?? ""))).filter(Boolean)
         : [];
