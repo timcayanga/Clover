@@ -10,7 +10,6 @@ import { EmptyDataCta } from "@/components/empty-data-cta";
 import { AccountBrandMark } from "@/components/account-brand-mark";
 import { CurrencySelector } from "@/components/currency-selector";
 import { FinancialAccountCard } from "@/components/financial-account-card";
-import { InfoTooltip } from "@/components/info-tooltip";
 import { InstitutionAutocomplete } from "@/components/institution-autocomplete";
 import { PlanLimitNudge } from "@/components/plan-limit-nudge";
 import { PageFileDropZone } from "@/components/page-file-drop-zone";
@@ -57,7 +56,6 @@ import {
   formatAccountTypeLabel,
   getRecurringKindSuggestionForAccountType,
   isLiabilityAccountType,
-  isSpendableAccountType,
   isTrackedAssetAccountType,
   type SupportedAccountType,
 } from "@/lib/account-types";
@@ -512,20 +510,6 @@ const getAccountWarning = (account: Account, duplicateCount: number) => {
   if (duplicateCount > 1) return "Possible duplicate";
   return null;
 };
-
-const getSpendableBalance = (account: Account) =>
-  (isSpendableAccountType(getEffectiveAccountType(account)) ? normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(account.balance)) : 0);
-
-const ACCOUNTS_OVERVIEW_COPY = {
-  netWorth:
-    "Net worth = total assets minus total liabilities. Clover adds positive balances from accounts like banks, wallets, cash, and investments, then subtracts owed balances such as credit cards, loans, mortgages, and lines of credit.",
-  spendable:
-    "Spendable = the sum of bank, wallet, and cash balances you can use right away. Investments and credit cards are excluded from this number.",
-  assets:
-    "Assets = the total of positive balances across accounts in this workspace, including banks, wallets, cash, investments, receivables, prepaid balances, insurance values, and any other positive-value holdings.",
-  liabilities:
-    "Liabilities = the total amount owed across liability accounts such as credit cards, loans, mortgages, lines of credit, payables, and BNPL plans.",
-} as const;
 
 const getCheckpointSummary = (checkpoint: StatementCheckpoint | null | undefined) => {
   if (!checkpoint) {
@@ -1195,6 +1179,7 @@ function AccountsPageContent() {
       if (accountsResponse.ok) {
         const payload = await accountsResponse.json();
         const fetchedAccounts = Array.isArray(payload.accounts) ? (payload.accounts as Account[]) : [];
+        const cachedWorkspaceAccounts = getCachedAccountsWorkspace(workspaceId)?.accounts as Account[] | undefined;
         for (const fetchedAccount of fetchedAccounts) {
           clearDeletedWorkspaceAccount(workspaceId, fetchedAccount.id);
           clearDeletingWorkspaceAccount(workspaceId, fetchedAccount.id);
@@ -1210,7 +1195,13 @@ function AccountsPageContent() {
           )
         );
         setDeletingAccountIds(Array.from(deletingAccountIdsRef.current));
-        setAccounts((current) => mergeAccountsWithOptimisticImports(fetchedAccounts, current, deletedAccountIdsRef.current));
+        setAccounts((current) =>
+          mergeAccountsWithOptimisticImports(
+            fetchedAccounts,
+            current.length > 0 ? current : cachedWorkspaceAccounts ?? [],
+            deletedAccountIdsRef.current
+          )
+        );
         setAccountRules(Array.isArray(payload.accountRules) ? payload.accountRules : []);
         setStatementCheckpoints(Array.isArray(payload.statementCheckpoints) ? (payload.statementCheckpoints as StatementCheckpoint[]) : []);
       } else {
@@ -1239,7 +1230,13 @@ function AccountsPageContent() {
           if (transactionsResponse.ok) {
             const payload = await transactionsResponse.json();
             const fetchedTransactions = Array.isArray(payload.transactions) ? payload.transactions : [];
-            setTransactions((current) => mergeImportedWorkspaceTransactions(current, fetchedTransactions));
+            const cachedWorkspaceTransactions = getCachedAccountsWorkspace(workspaceId)?.transactions as Transaction[] | undefined;
+            setTransactions((current) =>
+              mergeImportedWorkspaceTransactions(
+                current.length > 0 ? current : cachedWorkspaceTransactions ?? [],
+                fetchedTransactions
+              )
+            );
           }
         } catch {
           // Background transaction hydration is best-effort.
@@ -1634,6 +1631,35 @@ function AccountsPageContent() {
     [reconciledAccounts, selectedCurrency]
   );
 
+  const hasMeaningfulBalance = (value: string | null | undefined) => {
+    const normalized = typeof value === "string" ? value.trim() : "";
+    if (!normalized) {
+      return false;
+    }
+
+    const numeric = Number(normalized);
+    return Number.isFinite(numeric) && numeric !== 0;
+  };
+
+  const getDisplayedAccountBalance = (account: Account) => {
+    const latestCheckpoint = getLatestCheckpointForAccount(account, statementCheckpoints);
+    const checkpointBalance =
+      latestCheckpoint?.status === "reconciled" && latestCheckpoint.endingBalance !== null
+        ? String(latestCheckpoint.endingBalance)
+        : null;
+    const stableBalance = stableAccountBalancesRef.current.get(account.id) ?? null;
+
+    if (account.source === "upload" && hasMeaningfulBalance(checkpointBalance)) {
+      return checkpointBalance;
+    }
+
+    if (hasMeaningfulBalance(account.balance)) {
+      return account.balance;
+    }
+
+    return stableBalance ?? checkpointBalance;
+  };
+
   const duplicateCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const account of currencyFilteredAccounts) {
@@ -1652,7 +1678,8 @@ function AccountsPageContent() {
   const totals = useMemo(() => {
     return currencyFilteredAccounts.reduce(
       (accumulator, account) => {
-        const signedValue = normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(account.balance));
+        const displayedBalance = getDisplayedAccountBalance(account);
+        const signedValue = normalizeAccountBalance(getEffectiveAccountType(account), parseAmount(displayedBalance));
         if (signedValue >= 0) {
           accumulator.assets += signedValue;
         } else {
@@ -1663,12 +1690,7 @@ function AccountsPageContent() {
       },
       { assets: 0, liabilities: 0, netWorth: 0 }
     );
-  }, [currencyFilteredAccounts]);
-
-  const spendableAmount = useMemo(
-    () => currencyFilteredAccounts.reduce((sum, account) => sum + getSpendableBalance(account), 0),
-    [currencyFilteredAccounts]
-  );
+  }, [currencyFilteredAccounts, statementCheckpoints]);
 
   const accountGroups = useMemo(() => {
     const groups = [
@@ -1730,11 +1752,6 @@ function AccountsPageContent() {
       }))
       .filter((group) => group.rows.length > 0);
   }, [visibleAccounts]);
-
-  const featuredAccountRows = useMemo(
-    () => accountGroups.flatMap((group) => group.rows).slice(0, 8),
-    [accountGroups]
-  );
 
   const selectedAccount = useMemo(
     () => reconciledAccounts.find((account) => account.id === drawerAccountId) ?? null,
@@ -2078,15 +2095,6 @@ function AccountsPageContent() {
         : null;
     const fallbackAccountNumber =
       row.accountNumber ?? latestCheckpoint?.sourceMetadata?.accountNumber ?? null;
-    const hasMeaningfulBalance = (value: string | null | undefined) => {
-      const normalized = typeof value === "string" ? value.trim() : "";
-      if (!normalized) {
-        return false;
-      }
-
-      const numeric = Number(normalized);
-      return Number.isFinite(numeric) && numeric !== 0;
-    };
     const hasVisibleBalance = hasMeaningfulBalance(row.balance);
     const hasLoadedTransactions = transactions.some((transaction) => transactionMatchesAccount(transaction, row));
     const shouldPreferCheckpointBalance =
@@ -2647,50 +2655,6 @@ function AccountsPageContent() {
       }
     >
       <div className="accounts-page">
-        {featuredAccountRows.length > 0 ? (
-          <section className="accounts-mobile-featured" aria-label="Featured accounts">
-            <div className="accounts-mobile-featured__head">
-              <h5>Featured accounts</h5>
-              <span>Swipe left or right</span>
-            </div>
-            <div className="accounts-mobile-featured__rail">
-              {featuredAccountRows.map((row) => renderAccountCard(row, `featured-${row.id}`))}
-            </div>
-          </section>
-        ) : null}
-        <div className="accounts-page__sticky">
-          <section className="accounts-overview-grid">
-            <article className="accounts-overview-card glass">
-              <p className="eyebrow">
-                Net worth
-                <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.netWorth} />
-              </p>
-              <strong className="accounts-overview-card__amount is-neutral">{formatAggregateAmount(totals.netWorth, visibleAccounts)}</strong>
-            </article>
-            <article className="accounts-overview-card glass">
-              <p className="eyebrow">
-                Spendable
-                <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.spendable} />
-              </p>
-              <strong className="accounts-overview-card__amount is-good">{formatAggregateAmount(spendableAmount, visibleAccounts)}</strong>
-            </article>
-            <article className="accounts-overview-card glass">
-              <p className="eyebrow">
-                Assets
-                <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.assets} />
-              </p>
-              <strong className="accounts-overview-card__amount is-good">{formatAggregateAmount(totals.assets, visibleAccounts)}</strong>
-            </article>
-            <article className="accounts-overview-card glass">
-              <p className="eyebrow">
-                Liabilities
-                <InfoTooltip label={ACCOUNTS_OVERVIEW_COPY.liabilities} />
-              </p>
-              <strong className="accounts-overview-card__amount is-danger">{formatAggregateAmount(totals.liabilities, visibleAccounts)}</strong>
-            </article>
-          </section>
-        </div>
-
         <section className="accounts-main-grid">
           <div className="accounts-list-column">
             <div className="accounts-sections">
@@ -2824,8 +2788,7 @@ function AccountsPageContent() {
             <div className="accounts-drawer__guide">
               <strong>Balance guide</strong>
               <p>
-                Current balance is the number on this account now. Spendable amount is the cash-like portion you can use right away.
-                Net worth is tracked at the workspace level.
+                Current balance is the number on this account now.
               </p>
             </div>
 
