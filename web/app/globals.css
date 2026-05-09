@@ -27510,7 +27510,8 @@ button.accounts-detail__transaction-head-cell {
 }
 
 .settings-hub--panel-only {
-  grid-template-columns: minmax(0, 1fr);
+  display: block;
+  width: 100%;
 }
 
 .settings-hub__menu {
@@ -27616,6 +27617,10 @@ button.accounts-detail__transaction-head-cell {
   min-width: 0;
 }
 
+.settings-hub--panel-only .settings-hub__panel {
+  width: 100%;
+}
+
 .settings-hub__panel-back {
   display: flex;
   justify-content: flex-start;
@@ -27646,6 +27651,14 @@ button.accounts-detail__transaction-head-cell {
 
 .settings-section--data .settings-action-card {
   width: 100%;
+}
+
+.settings-hub--panel-only .settings-section {
+  width: 100%;
+}
+
+.settings-hub--panel-only .settings-section--data .settings-data-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .settings-section__intro {
