@@ -9,7 +9,7 @@ type SplitBillImportModalProps = {
 };
 
 const ACCEPTED_TYPES = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
-const MAX_FILE_SIZE = 15 * 1024 * 1024;
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const RECEIPT_PREVIEW_STORAGE_KEY = "split-bill:receipt-preview";
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
@@ -30,7 +30,7 @@ const validateFile = (file: File | null) => {
   }
 
   if (file.size > MAX_FILE_SIZE) {
-    return "Keep the file under 15 MB.";
+    return "Keep the file under 10 MB.";
   }
 
   return null;
@@ -132,7 +132,7 @@ export function SplitBillImportModal({ open, onClose }: SplitBillImportModalProp
 
         <div className="split-bill-import-modal__notes">
           <p>Accepted: PDF, PNG, JPG, or WEBP.</p>
-          <p>Maximum size: 15 MB.</p>
+          <p>Maximum size: 10 MB.</p>
           <p>If you do not have a file yet, close this window and come back later.</p>
         </div>
 

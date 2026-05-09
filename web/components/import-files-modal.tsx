@@ -962,7 +962,7 @@ export function ImportFilesModal({
   const selectedImportMode: ImportImageMode = "statement";
   const [launchInBackground, setLaunchInBackground] = useState(backgroundOnly);
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("Upload PDF, CSV, or image files to import documents and transactions.");
+  const [message, setMessage] = useState("");
   const [validationNotice, setValidationNotice] = useState<string | null>(null);
   const [selectedPasswordItemId, setSelectedPasswordItemId] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<"free" | "pro" | "unknown">("unknown");
@@ -1129,7 +1129,7 @@ export function ImportFilesModal({
       localPreparseStartedRef.current.clear();
       autoCloseAfterStartRef.current = false;
       accountIdByKeyRef.current.clear();
-      setMessage("Upload PDF, CSV, or image files to import documents and transactions.");
+      setMessage("");
       setValidationNotice(null);
       initialFilesSignatureRef.current = null;
       if (!items.some((item) => item.status === "pending" || item.status === "needs_password" || item.status === "parsing" || item.status === "importing")) {
@@ -1163,7 +1163,7 @@ export function ImportFilesModal({
 
       return defaultAccountId ?? "";
     });
-    setMessage("Upload PDF, CSV, or image files to import documents and transactions.");
+    setMessage("");
     setValidationNotice(null);
   }, [accounts, backgroundOnly, defaultAccountId, items, launchInBackground, open]);
 
@@ -1428,8 +1428,8 @@ export function ImportFilesModal({
         });
 
         if (validationError) {
-          if (validationError === "Import files must be 2 MB or smaller.") {
-            validationIssues.push(`${file.name} is larger than 2 MB.`);
+          if (validationError === "Import files must be 10 MB or smaller.") {
+            validationIssues.push(`${file.name} is larger than 10 MB.`);
           } else if (validationError === "Only PDF, CSV, and common image files are supported.") {
             validationIssues.push(`${file.name} has an invalid file extension.`);
           } else {
@@ -5069,7 +5069,7 @@ export function ImportFilesModal({
 
         <div className="accounts-import-footer-copy">
           {validationNotice ? <p className="accounts-import-footer-copy__warning">{validationNotice}</p> : null}
-          <p className="accounts-import-footer-copy__status">{message}</p>
+          {message ? <p className="accounts-import-footer-copy__status">{message}</p> : null}
           <p>
             Accepted files: PDF, CSV, JPG, JPEG, PNG, WEBP, HEIC, and HEIF.
             <br />

@@ -1,7 +1,7 @@
 import { PUBLIC_IMPORT_CONTENT_TYPES, PUBLIC_IMPORT_EXTENSIONS, TRAINING_IMAGE_CONTENT_TYPES, TRAINING_IMAGE_EXTENSIONS } from "@/lib/import-format-policies";
 import type { ImportImageMode } from "@/lib/import-image-mode";
 
-export const MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024;
+export const MAX_IMPORT_FILE_SIZE = 10 * 1024 * 1024;
 
 const getFileExtension = (fileName: string) => {
   const trimmed = fileName.trim().toLowerCase();
@@ -45,7 +45,7 @@ export const validateImportFile = (params: {
   }
 
   if (params.fileSize > MAX_IMPORT_FILE_SIZE) {
-    return "Import files must be 2 MB or smaller.";
+    return "Import files must be 10 MB or smaller.";
   }
 
   if (!isSupportedImportFile(params.fileName, params.contentType, { importMode: params.importMode ?? null })) {
