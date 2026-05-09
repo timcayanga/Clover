@@ -1005,7 +1005,7 @@ const persistTransactionsWorkspaceCache = (
   const localStorageRef = getLocalStorage();
   const sessionStorageRef = getSessionStorage();
   if ((!localStorageRef && !sessionStorageRef) || !workspaceId) {
-    return;
+    return null;
   }
 
   const cache = readTransactionsWorkspaceCache();
@@ -1026,6 +1026,7 @@ const persistTransactionsWorkspaceCache = (
   const serialized = JSON.stringify(nextState);
   localStorageRef?.setItem(transactionsWorkspaceCacheKey, serialized);
   sessionStorageRef?.setItem(transactionsWorkspaceCacheKey, serialized);
+  return nextSnapshot.updatedAt;
 };
 
 const looksLikeJsonBlob = (value: string) => {
@@ -1840,8 +1841,8 @@ function TransactionsPageContent() {
   );
   const accountNameById = useMemo(() => new Map(accounts.map((account) => [account.id, getAccountDisplayName(account)] as const)), [accounts]);
   const accountBrandById = useMemo(
-    () =>
-      new Map(
+    () => {
+      const brandById = new Map(
         accounts.map(
           (account) =>
             [
@@ -1853,8 +1854,27 @@ function TransactionsPageContent() {
               }),
             ] as const
         )
-      ),
-    [accounts]
+      );
+
+      for (const transaction of transactions) {
+        if (brandById.has(transaction.accountId)) {
+          continue;
+        }
+
+        const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
+        brandById.set(
+          transaction.accountId,
+          getAccountBrand({
+            institution: accountInstitutionById.get(transaction.accountId) ?? null,
+            name: accountDisplayName,
+            type: inferAccountTypeFromStatement(accountInstitutionById.get(transaction.accountId) ?? null, accountDisplayName, "bank"),
+          })
+        );
+      }
+
+      return brandById;
+    },
+    [accounts, transactions, accountInstitutionById, accountNameById]
   );
 
   useEffect(() => {

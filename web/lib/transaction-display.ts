@@ -9,6 +9,11 @@ const isMeaningfulCategoryName = (value?: string | null) => {
   return Boolean(normalized && normalized !== "other");
 };
 
+const isBroadCategoryName = (value?: string | null) => {
+  const normalized = (value ?? "").trim().toLowerCase();
+  return normalized === "income" || normalized === "other" || normalized === "transfer" || normalized === "transfers";
+};
+
 const getRawPayloadCategoryName = (rawPayload: Prisma.JsonValue | null | undefined) => {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
     return null;
@@ -115,14 +120,6 @@ const getGenericCategoryOverride = (merchantText: string) => {
     return "Transfers";
   }
 
-  if (/epsaten|el\/?espay|payroll credit|interest earned|interest applied|cash deposit|check deposit/.test(lower)) {
-    return "Income";
-  }
-
-  if (/cash\s*in\b|cashin\b/.test(lower)) {
-    return "Income";
-  }
-
   if (/service\s*charge|servicecharge|bank charge|dhl duty collection/.test(lower)) {
     return "Financial";
   }
@@ -133,6 +130,14 @@ const getGenericCategoryOverride = (merchantText: string) => {
 
   if (/expressnet|megalinkw?|\/drw\b|atm withdrawal|atmwdl|cash withdrawal/.test(lower)) {
     return "Cash & ATM";
+  }
+
+  if (/epsaten|el\/?espay|payroll credit|interest earned|interest applied|cash deposit|check deposit/.test(lower)) {
+    return "Income";
+  }
+
+  if (/cash\s*in\b|cashin\b/.test(lower)) {
+    return "Income";
   }
 
   if (/mercury\s*drug|pharmacy|drug\s*store|health\s*center|hospital|clinic/.test(lower)) {
@@ -182,14 +187,9 @@ export const getEffectiveTransactionCategoryName = (params: {
   type: TransactionType;
 }) => {
   const directCategory = params.categoryName?.trim() ?? null;
-  if (isMeaningfulCategoryName(directCategory)) {
-    return directCategory;
-  }
-
   const rawPayloadCategory = getRawPayloadCategoryName(params.rawPayload);
-  if (isMeaningfulCategoryName(rawPayloadCategory)) {
-    return rawPayloadCategory;
-  }
+  const hasImportedRawPayload =
+    Boolean(params.rawPayload) && typeof params.rawPayload === "object" && !Array.isArray(params.rawPayload);
 
   const effectiveMerchantName = getEffectiveTransactionMerchantName({
     merchantClean: params.merchantClean,
@@ -200,6 +200,23 @@ export const getEffectiveTransactionCategoryName = (params: {
 
   const descriptionText =
     typeof params.description === "string" && params.description.trim() ? params.description.trim() : null;
+  const heuristic = guessCategoryName(effectiveMerchantName || descriptionText || params.merchantRaw, params.type);
+
+  if (isMeaningfulCategoryName(directCategory)) {
+    if (hasImportedRawPayload && isBroadCategoryName(directCategory) && isMeaningfulCategoryName(heuristic) && heuristic !== directCategory) {
+      return heuristic;
+    }
+
+    return directCategory;
+  }
+
+  if (isMeaningfulCategoryName(rawPayloadCategory)) {
+    if (hasImportedRawPayload && isBroadCategoryName(rawPayloadCategory) && isMeaningfulCategoryName(heuristic) && heuristic !== rawPayloadCategory) {
+      return heuristic;
+    }
+
+    return rawPayloadCategory;
+  }
 
   if (/\b(?:aub|asia united bank)\b/i.test((params.institution ?? "").trim())) {
     const aubOverride = getAubCategoryOverride(effectiveMerchantName);
@@ -219,6 +236,5 @@ export const getEffectiveTransactionCategoryName = (params: {
   if (genericOverride) {
     return genericOverride;
   }
-  const heuristic = guessCategoryName(effectiveMerchantName || descriptionText || params.merchantRaw, params.type);
   return heuristic || directCategory || rawPayloadCategory || null;
 };

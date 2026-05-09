@@ -52,9 +52,10 @@ export const guessCategoryName = (text: string, type: TransactionType) => {
   if (/service\s*charge|servicecharge|bank charge|bankcharge/.test(lower) || /servicecharge|bankcharge/.test(compact)) return "Financial";
   if (/instapay\s*transfer\s*fee|instapaytransferfee/.test(lower) || /instapaytransferfee/.test(compact)) return "Transfers";
   if (/expressnet|megalinkw?|\/drw\b|cash\s*(?:withdrawal|out)|atm\b|automated\s+teller|cash\s+advance/.test(lower)) return "Cash & ATM";
-  if (type === "income" || /salary|payroll|income|deposit|cash\s*(?:in|deposit)|credit memo/.test(lower)) return "Income";
-  if (/epsaten|el\/?espay|payroll credit|cash\s*in\b|cashin\b/.test(lower)) return "Income";
   if (/transfer|instapay|pesonet|wise to|to savings|to checking/.test(lower)) return "Transfers";
+  if (/salary|payroll|income|deposit|cash\s*(?:in|deposit)|credit memo/.test(lower)) return "Income";
+  if (/epsaten|el\/?espay|payroll credit|cash\s*in\b|cashin\b/.test(lower)) return "Income";
+  if (type === "income") return "Income";
   if (/grocery|supermarket|market|food|dining|restaurant|coffee|cafe|meal|takeout|starbucks|donut|foodhall|mister donut/.test(lower)) return "Food & Dining";
   if (/auntie\s*annes|llaollao/.test(lower)) return "Food & Dining";
   if (/grab|uber|taxi|bus|train|mrt|mrt3|dotr|parking|gas|fuel|transport|ride/.test(lower)) return "Transport";
