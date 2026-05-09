@@ -970,7 +970,7 @@ export function SettingsHub({
         ) : null}
 
         {activeSection === "data" ? (
-          <section className="settings-section" role="tabpanel">
+          <section className="settings-section settings-section--data" role="tabpanel">
             <div className="settings-section__intro settings-section__intro--single">
               <div>
                 <h4>Data</h4>
