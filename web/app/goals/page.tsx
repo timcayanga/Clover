@@ -196,38 +196,6 @@ const getChecklistIcon = (focus: string) => {
   return "path" as const;
 };
 
-const getCoachMessage = (goalScore: number) => {
-  if (goalScore >= 85) {
-    return {
-      badge: "Strong momentum",
-      title: "You are operating like someone who knows exactly where they are going.",
-      body: "The biggest win now is staying consistent. You already have the structure, so the game is about protecting the streak.",
-    };
-  }
-
-  if (goalScore >= 70) {
-    return {
-      badge: "Good pace",
-      title: "You have a solid rhythm, and the slope is working for you.",
-      body: "Keep tightening one small habit at a time. That is how a good month turns into a reliable pattern.",
-    };
-  }
-
-  if (goalScore >= 50) {
-    return {
-      badge: "Building phase",
-      title: "You are laying the foundation in the right order.",
-      body: "This is the point where a little more clarity and one sharper habit can make the progress feel much lighter.",
-    };
-  }
-
-  return {
-    badge: "Early momentum",
-    title: "You are in the build-up stage, and that is completely fine.",
-    body: "The opportunity is clear: remove one drag, repeat one win, and the trend will start to move in your favor quickly.",
-  };
-};
-
 const createGoalChart = (buckets: MonthBucket[]) => {
   const chartWidth = 520;
   const chartHeight = 170;
@@ -643,38 +611,11 @@ async function GoalsPageStream({
     currentSavingsRate === null ? 16 : clamp(Math.round((currentSavingsRate * 100 / targetRate) * 55), 12, 65);
   const dragPenalty = clamp(Math.round(recurringShare * 100 * 0.35 + Math.max(0, recurringMerchants.length - 1) * 4), 0, 22);
   const goalScore = clamp(Math.round(savingsScore + trendScore + consistencyScore + cleanlinessScore * 0.2 - dragPenalty), 12, 98);
-  const coach = getCoachMessage(goalScore);
   const onboardingDate = user.onboardingCompletedAt ? new Date(user.onboardingCompletedAt) : null;
   const goalMoneyLabel = getGoalMoneyLabel(selectedGoalKey as GoalKey | null);
-  const progressLabel =
-    goalScore >= 85 ? "Coach mode: you are ahead of the curve" : goalScore >= 70 ? "On pace and looking sharp" : goalScore >= 50 ? "Building good momentum" : "Early, but absolutely moving";
-  const coachScoreBreakdown = [
-    {
-      label: "Savings pace",
-      value: `${savingsScore}`,
-      note: currentSavingsRate === null ? "Needs more income data" : "How fast you are saving versus the target rate",
-    },
-    {
-      label: "Trend",
-      value: `${trendScore}`,
-      note: currentNet >= previousNet ? "Net worth is moving up" : "Net worth dipped versus the prior window",
-    },
-    {
-      label: "Consistency",
-      value: `${consistencyScore}`,
-      note: previousSavingsRate !== null && currentSavingsRate !== null && currentSavingsRate >= previousSavingsRate ? "Savings are holding steady" : "The pace is still settling in",
-    },
-    {
-      label: "Cleanup",
-      value: `${Math.round(cleanlinessScore * 0.2)}`,
-      note: uncategorizedShare > 0 ? "Uncategorized rows are weighing the score" : "The transaction list is fairly clean",
-    },
-    {
-      label: "Recurring drag",
-      value: `-${dragPenalty}`,
-      note: recurringShare > 0 ? "Regular spending is trimming momentum" : "Recurring spend is not pulling the score down",
-    },
-  ];
+  const coachScoreRadius = 44;
+  const coachScoreCircumference = 2 * Math.PI * coachScoreRadius;
+  const coachScoreOffset = coachScoreCircumference - (goalScore / 100) * coachScoreCircumference;
 
   const weeklyProgress = clamp(goalScore + (currentSavingsRate !== null && currentSavingsRate >= targetRate / 100 ? 8 : 0) - (recurringShare > 0.25 ? 6 : 0), 12, 100);
   const progressRingPercent = goalProgress.progressPercent !== null ? clamp(goalProgress.progressPercent, 0, 100) : weeklyProgress;
@@ -958,31 +899,24 @@ async function GoalsPageStream({
                   </div>
                 </article>
               ) : (
-                <article className="goals-hero__focus-card glass goals-hero__focus-card--coach">
-                  <div className="goals-panel__head">
-                    <div>
-                      <p className="eyebrow">Coach score</p>
-                      <h4>{goalScore}/100</h4>
-                    </div>
-                    <div className="goals-panel__stat">
-                      <strong>{goalScore >= 70 ? "Strong pace" : goalScore >= 50 ? "Momentum" : "Getting started"}</strong>
-                      <span>{progressLabel}</span>
-                    </div>
-                  </div>
-
-                  <div className="goals-hero__focus-card-body">
-                    <p>{coach.body}</p>
-                    <small>Score basis: savings pace, trend, consistency, cleanup, and recurring drag.</small>
-                    <div className="goals-hero__coach-score-grid" aria-label="Coach score breakdown">
-                      {coachScoreBreakdown.map((item) => (
-                        <div key={item.label} className="goals-hero__coach-score-item">
-                          <strong>
-                            {item.label}
-                            <span>{item.value}</span>
-                          </strong>
-                          <small>{item.note}</small>
-                        </div>
-                      ))}
+                <article className="goals-hero__score-card glass" aria-label="Coach score">
+                  <div className="goals-hero__score-donut" role="img" aria-label={`Coach score ${goalScore} out of 100`}>
+                    <svg viewBox="0 0 120 120" aria-hidden="true">
+                      <circle className="goals-hero__score-donut-track" cx="60" cy="60" r={coachScoreRadius} />
+                      <circle
+                        className="goals-hero__score-donut-progress"
+                        cx="60"
+                        cy="60"
+                        r={coachScoreRadius}
+                        style={{
+                          strokeDasharray: `${coachScoreCircumference} ${coachScoreCircumference}`,
+                          strokeDashoffset: coachScoreOffset,
+                        }}
+                      />
+                    </svg>
+                    <div className="goals-hero__score-donut-center">
+                      <strong>{goalScore}</strong>
+                      <span>/100</span>
                     </div>
                   </div>
                 </article>
