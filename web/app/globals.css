@@ -23293,7 +23293,11 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .accounts-overview-grid {
-    display: none;
+    display: none !important;
+  }
+
+  .accounts-mobile-featured__head {
+    justify-content: flex-start;
   }
 
   .accounts-add-grid {
@@ -23502,10 +23506,11 @@ button.accounts-detail__transaction-head-cell {
   }
 
   .accounts-mobile-featured__head span {
-    font-size: 0.68rem;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--muted);
+    display: none;
+  }
+
+  .accounts-mobile-featured {
+    gap: 8px;
   }
 
   .accounts-mobile-featured__rail {

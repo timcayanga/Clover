@@ -2835,12 +2835,11 @@ function AccountsPageContent() {
           <div className="accounts-list-column">
             <div className="accounts-sections">
               {featuredAccounts.length > 0 ? (
-                <section className="accounts-mobile-featured" aria-label="Featured accounts">
+                <section className="accounts-mobile-featured" aria-label="Favorite accounts">
                   <div className="accounts-mobile-featured__head">
-                    <h5>Featured accounts</h5>
-                    <span>Swipe left or right</span>
+                    <h5>Favorite accounts</h5>
                   </div>
-                  <div className="accounts-mobile-featured__rail" aria-label="Featured accounts carousel">
+                  <div className="accounts-mobile-featured__rail" aria-label="Favorite accounts carousel">
                     {featuredAccounts.map((row) => renderAccountCard(row, `featured-${row.id}`))}
                   </div>
                 </section>
