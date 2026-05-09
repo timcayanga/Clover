@@ -127,8 +127,20 @@ const getGenericCategoryOverride = (merchantText: string) => {
     return "Financial";
   }
 
+  if (/credit-to-cash|cash\s*advance|cashadvance/.test(lower)) {
+    return "Financial";
+  }
+
   if (/expressnet|megalinkw?|\/drw\b|atm withdrawal|atmwdl|cash withdrawal/.test(lower)) {
     return "Cash & ATM";
+  }
+
+  if (/mercury\s*drug|pharmacy|drug\s*store|health\s*center|hospital|clinic/.test(lower)) {
+    return "Health & Wellness";
+  }
+
+  if (/rob\s*supermarket|robinsons?\s*supermarket|supermarket/.test(lower)) {
+    return "Food & Dining";
   }
 
   if (/buy load|load transaction|bills payment/.test(lower)) {
