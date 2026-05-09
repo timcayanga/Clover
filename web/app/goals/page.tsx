@@ -4,7 +4,6 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { ensureStarterWorkspace } from "@/lib/starter-data";
 import { CloverShell } from "@/components/clover-shell";
-import { EmptyDataCta } from "@/components/empty-data-cta";
 import { getSessionContext } from "@/lib/auth";
 import { analyticsOnceKey } from "@/lib/analytics";
 import { getOrCreateCurrentUser, hasCompletedOnboarding } from "@/lib/user-context";
@@ -453,8 +452,6 @@ async function GoalsPageStream({
   const heroSupport = hasGoalSelection
     ? playbook.heroSupport
     : experienceProfile.goalsSupport ?? "If onboarding skipped this step, you can define your first real monthly target right here.";
-  const isEmptyWorkspace =
-    resolvedWorkspace._count.accounts <= 1 && resolvedWorkspace._count.importFiles === 0 && currentWindowTransactions.length === 0;
 
   const currentSummary = currentSummaryRows.reduce<GoalSummary>(
     (accumulator, row) => {
@@ -749,21 +746,6 @@ async function GoalsPageStream({
       title="Goals"
       titleAddon={<GoalsSubtabsTitleAddon activeSection={selectedSection} availableSections={availableSections} />}
     >
-      {isEmptyWorkspace ? (
-        <div style={{ marginBottom: 20 }}>
-          <EmptyDataCta
-            eyebrow={user.dataWipedAt ? "Fresh start" : "No data yet"}
-            title={experienceProfile.emptyStateTitle}
-            copy={experienceProfile.emptyStateCopy}
-            illustration="/illustrations/clover-goals-progress-3d.png"
-            illustrationAlt="A 3D Clover goals progress illustration"
-            importHref="/dashboard?import=1"
-            accountHref="/accounts"
-            transactionHref="/transactions?manual=1"
-          />
-        </div>
-      ) : null}
-
       <GoalsSubtabs activeSection={selectedSection} availableSections={availableSections} beginnerMode={isBeginnerMode}>
         <section className="goals-section goals-section--overview">
           <article className="goals-hero glass">

@@ -5838,6 +5838,11 @@ html[data-theme="dark"] .animated-tabs__tab:focus-visible {
 
 .reports-overview-visual {
   margin-top: 2px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.reports-overview-visual > .report-card--wide {
+  grid-column: 1 / -1;
 }
 
 .report-flow-map {
