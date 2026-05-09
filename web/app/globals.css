@@ -16809,6 +16809,12 @@ body[data-clover-drop-active="true"] .page-file-drop-zone {
   background: rgba(255, 248, 225, 0.96);
 }
 
+@media (min-width: 768px) {
+  .accounts-detail__favorite-toggle {
+    display: none !important;
+  }
+}
+
   .accounts-detail__hero-card {
     width: min(100%, 272px);
   }

@@ -248,6 +248,15 @@ const mergeOptimisticImportedAccount = (currentAccounts: Account[], optimisticAc
 const accountMatchesTransaction = (transaction: Transaction, account: Account) =>
   transaction.accountId === account.id;
 
+const isGenericAccountBrand = (brand: ReturnType<typeof getAccountBrand>) => {
+  const label = brand.label.trim().toLowerCase();
+  return (
+    !brand.logoSrc &&
+    brand.logoSrcs.length === 0 &&
+    (label === "bank" || label === "account" || label === "other" || label === "wallet" || label === "investment")
+  );
+};
+
 type Category = {
   id: string;
   name: string;
@@ -1857,19 +1866,17 @@ function TransactionsPageContent() {
       );
 
       for (const transaction of transactions) {
-        if (brandById.has(transaction.accountId)) {
-          continue;
-        }
-
         const accountDisplayName = accountNameById.get(transaction.accountId) ?? transaction.accountName;
-        brandById.set(
-          transaction.accountId,
-          getAccountBrand({
-            institution: accountInstitutionById.get(transaction.accountId) ?? null,
-            name: accountDisplayName,
-            type: inferAccountTypeFromStatement(accountInstitutionById.get(transaction.accountId) ?? null, accountDisplayName, "bank"),
-          })
-        );
+        const transactionBrand = getAccountBrand({
+          institution: accountInstitutionById.get(transaction.accountId) ?? null,
+          name: accountDisplayName,
+          type: inferAccountTypeFromStatement(accountInstitutionById.get(transaction.accountId) ?? null, accountDisplayName, "bank"),
+        });
+        const currentBrand = brandById.get(transaction.accountId);
+
+        if (!currentBrand || isGenericAccountBrand(currentBrand) || (!currentBrand.logoSrc && transactionBrand.logoSrcs.length > currentBrand.logoSrcs.length)) {
+          brandById.set(transaction.accountId, transactionBrand);
+        }
       }
 
       return brandById;
