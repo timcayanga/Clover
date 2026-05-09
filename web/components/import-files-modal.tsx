@@ -2537,7 +2537,8 @@ export function ImportFilesModal({
         }
 
         if (Date.now() - startedAt >= MAX_WAIT_MS) {
-          const hasRecoverableProgress = parsedRowsCount > 0 || confirmedTransactionsCount > 0 || Boolean(resolvedAccountId);
+          const hasRecoverableProgress =
+            Boolean(importFileId) || parsedRowsCount > 0 || confirmedTransactionsCount > 0 || Boolean(resolvedAccountId);
           if (hasRecoverableProgress) {
             closeImportAsRecoverable(
               itemId,
@@ -3462,7 +3463,8 @@ export function ImportFilesModal({
       });
 
       if (Date.now() - startedAt >= MAX_WAIT_MS) {
-        const hasRecoverableProgress = parsedRowsCount > 0 || confirmedTransactionsCount > 0 || Boolean(resolvedAccountId);
+        const hasRecoverableProgress =
+          Boolean(importFileId) || parsedRowsCount > 0 || confirmedTransactionsCount > 0 || Boolean(resolvedAccountId);
         if (hasRecoverableProgress) {
           closeImportAsRecoverable(
             itemId,
