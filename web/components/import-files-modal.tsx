@@ -25,6 +25,7 @@ import {
   parseImportText,
 } from "@/lib/import-parser";
 import { parsePlanLimitMessage, parsePlanLimitPayload, type PlanLimitPayload } from "@/lib/plan-limit-nudges";
+import { getImportErrorSpec, isResumableImportErrorCode, type ImportErrorStage, type ImportErrorSpec } from "@/lib/import-error-spec";
 import {
   getCachedAccountsWorkspace,
   findCachedTransactionsForAccount,
@@ -200,86 +201,13 @@ const getImportErrorCode = (error: unknown) => {
   return "unknown_error";
 };
 
-const RESUMABLE_IMPORT_ERROR_CODES = new Set(["I-104", "I-105", "I-106", "I-107"]);
-
-const isResumableImportErrorCode = (code?: string | null) => {
-  const normalized = (code ?? "").trim().toUpperCase();
-  return RESUMABLE_IMPORT_ERROR_CODES.has(normalized);
-};
-
 const formatImportFailureMessage = (_file: File | string, errorMessage: string) => errorMessage;
 
-type ImportErrorStage = "validation" | "password" | "upload" | "process" | "confirm" | "background" | "monitor" | "unknown";
-
-type ImportErrorNotice = {
-  code: string;
-  title: string;
-  message: string;
-  nextSteps: string[];
-};
-
-const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null, reason?: string | null): ImportErrorNotice => {
-  const codeMap: Record<ImportErrorStage, string> = {
-    validation: "I-101",
-    password: "I-102",
-    upload: "I-103",
-    process: "I-104",
-    confirm: "I-105",
-    background: "I-106",
-    monitor: "I-107",
-    unknown: "I-199",
-  };
-
-  const titleMap: Record<ImportErrorStage, string> = {
-    validation: "That file needs a quick check",
-    password: "A password is needed",
-    upload: "Clover couldn't upload that file",
-    process: "Clover couldn't finish reading that file",
-    confirm: "Clover couldn't save that import",
-    background: "Clover couldn't finish that file in the background",
-    monitor: "Clover couldn't keep tracking that file",
-    unknown: "Clover hit an import snag",
-  };
-
-  const fileLabel = fileName ? `${fileName}` : "This file";
-  const reasonHint =
-    stage === "password"
-      ? "Unlock the file with its password and try again."
-      : stage === "validation"
-        ? "Upload a clearer PDF, CSV, or image file."
-        : stage === "monitor"
-          ? "The account details were read, but Clover needed more time to finish saving the import."
-          : stage === "background"
-            ? "Clover parsed the file, but the background reconciliation stalled."
-            : stage === "confirm"
-              ? "Clover could parse the file, but couldn't finish confirming it."
-              : "Re-upload the original file and keep the tab open while Clover works.";
-
-  const nextSteps =
-    stage === "password"
-      ? [
-          "Unlock the file with its password, then try again.",
-          "If the password keeps failing, re-download the original statement and re-upload it.",
-          "You can always add missing transactions manually in Transactions.",
-        ]
-      : stage === "monitor" || stage === "background" || stage === "confirm"
-        ? [
-            "The parsed rows were kept, so you can safely go back to Accounts or Transactions.",
-            "If Clover shows Resume import, use it to continue from the saved file.",
-            "If the final import never completes, re-upload the file once and let Clover finish in the background.",
-            "If anything is still missing, add the transactions manually in Transactions.",
-          ]
-        : [
-            "Re-upload the original PDF or CSV.",
-            "If Clover still stalls, add the missing transactions manually in Transactions.",
-            "If the statement looks off after import, check Review before confirming anything.",
-          ];
+const buildImportErrorNotice = (stage: ImportErrorStage, fileName: string | null, reason?: string | null): ImportErrorSpec => {
+  const spec = getImportErrorSpec(stage, fileName, reason);
 
   return {
-    code: codeMap[stage],
-    title: titleMap[stage],
-    message: `${fileLabel}: Clover wasn't able to finish this import.`,
-    nextSteps: [reasonHint, ...nextSteps].filter((value, index, array) => value && array.indexOf(value) === index),
+    ...spec,
   };
 };
 

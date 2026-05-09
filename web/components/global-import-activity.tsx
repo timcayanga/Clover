@@ -5,35 +5,10 @@ import { ImportErrorToast } from "@/components/import-error-toast";
 import { ImportUploadDock } from "@/components/import-upload-dock";
 import { UploadInsightsToast } from "@/components/upload-insights-toast";
 import { clearImportActivity, readImportActivity, subscribeImportActivity, type ImportActivitySnapshot } from "@/lib/import-activity";
+import { getImportErrorNextSteps, getImportErrorSpecForCode } from "@/lib/import-error-spec";
 
 const isCompletedSummary = (activity: ImportActivitySnapshot | null) =>
   Boolean(activity && activity.status === "done" && activity.summary);
-
-const getImportErrorNextSteps = (code: string) => {
-  const normalized = code.trim().toUpperCase();
-
-  if (normalized === "I-107") {
-    return [
-      "Click Resume import if Clover shows it, or stay on the import screen a little longer while Clover finishes in the background.",
-      "If the account details already look right, open the account and continue with any missing rows manually.",
-      "If the transactions still do not appear, add the missing entries in Transactions and use Review to verify the totals.",
-    ];
-  }
-
-  if (normalized === "I-105" || normalized === "I-104") {
-    return [
-      "Click Resume import if Clover shows it, or re-upload the original PDF or CSV.",
-      "If Clover still stalls, add the missing transactions manually in Transactions.",
-      "If the statement looks off after import, check Review before confirming anything.",
-    ];
-  }
-
-  return [
-    "Re-upload the original PDF or CSV.",
-    "If Clover still stalls, add the missing transactions manually in Transactions.",
-    "If the statement looks off after import, check Review before confirming anything.",
-  ];
-};
 
 export function GlobalImportActivity() {
   const [activity, setActivity] = useState<ImportActivitySnapshot | null>(() => readImportActivity());
@@ -72,11 +47,13 @@ export function GlobalImportActivity() {
 
   if (isError) {
     const code = activity.errorCode ?? "I-199";
+    const spec = getImportErrorSpecForCode(code);
     return (
       <ImportErrorToast
         code={code}
-        title={activity.errorTitle || activity.detail || "Clover hit an import snag"}
-        message={activity.errorMessage ?? "Clover wasn't able to finish this file."}
+        category={spec.category}
+        title={activity.errorTitle || spec.title || activity.detail || "Clover hit an import snag"}
+        message={activity.errorMessage ?? spec.message}
         nextSteps={activity.errorNextSteps ?? getImportErrorNextSteps(code)}
         onClose={handleClose}
       />
